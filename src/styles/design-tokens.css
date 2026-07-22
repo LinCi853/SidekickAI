@@ -1,0 +1,363 @@
+/* =====================================================================
+   设计令牌 —— v2 暖砖红主题（亮色 / 暗色双主题）
+   令牌体系对齐 ai-window-uiux-v2/colors_and_type.css，保留旧令牌别名
+   ===================================================================== */
+
+/* ===== 亮色模式（默认） ===== */
+:root {
+  /* === brand 色阶 === */
+  --brand-50:  #fff4ee;
+  --brand-100: #ffe6dc;
+  --brand-200: #ffc8b5;
+  --brand-300: #ffab8f;
+  --brand-400: #ff845f;
+  --brand-500: #f7663c;
+  --brand-600: #f1481e;
+  --brand-700: #d63a14;
+  --brand-800: #ad2f13;
+  --brand-900: #8a2914;
+
+  /* === surface 层级（从底到顶） === */
+  --background: #e3dfd9;
+  --muted:      #ece7e1;
+  --card:       #f3f0eb;
+  --popover:    #f7f4ef;
+
+  /* === 文字 === */
+  --foreground:         #211d1a;
+  --muted-foreground:   #5c5650;
+  --card-foreground:    #211d1a;
+  --popover-foreground: #211d1a;
+  --accent-foreground:  #211d1a;
+  --secondary-foreground: #ffffff;
+
+  /* === 交互色 === */
+  --primary:            var(--brand-600);
+  --primary-foreground: #fff7f3;
+  --accent:             #ded7cf;
+  --input:              #d7d1c9;
+  --border:             #cbc3ba;
+  --secondary:          #1d1e20;
+  --ring:               var(--brand-500);
+
+  /* === feedback === */
+  --destructive:            #ef4444;
+  --destructive-foreground: #ffffff;
+  --success:                var(--highlight-success);
+  --warning:                var(--highlight-warning);
+  /* --info 已在下方语义扩展色块定义为 #6495ed，此处不重复声明 */
+
+  /* === chart === */
+  --chart-1: #f7663c;
+  --chart-2: #aea4fd;
+  --chart-3: #13b15a;
+  --chart-4: #84776e;
+  --chart-5: #fe9a45;
+
+  /* === 高饱和 Highlight 点缀（双主题通用） === */
+  --highlight-recording: #ff3b30;
+  --highlight-success:   #34c759;
+  --highlight-warning:   #ff9f0a;
+  --highlight-active:    #ff6b4a;
+  --highlight-bronze:    #d4a574;
+
+  /* === Typography === */
+  --font-sans:   "Geist", "Exo 2", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif:  "Playfair Display", ui-serif, serif;
+  --font-mono:   "JetBrains Mono", "Roboto Mono", "Cascadia Code", Consolas, monospace;
+
+  /* === Radius === */
+  --radius:    20px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+
+  /* === Spacing === */
+  --spacing: 5px;
+  --space-1: 5px;  --space-2: 9px;   --space-3: 14px; --space-4: 18px;
+  --space-5: 23px; --space-6: 28px;  --space-8: 36px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-20: 80px; --space-24: 96px;
+  /* 半步间距网格：用于 badge、紧凑列表、装饰微间距等场景，与标准 space-* 同步缩放 */
+  --space-0-25: 1px;   /* 装饰微间距（分隔线、badge 边距） */
+  --space-0-5:  2.5px; /* 紧凑间距（badge padding、divider margin） */
+  --space-0-75: 4px;   /* 微间距 */
+  --space-1-25: 6px;   /* badge 内边距 */
+  --space-1-5:  7px;   /* 小间距（移动端、消息元数据） */
+  --space-1-75: 8px;   /* 小间距 */
+  --space-2-25: 10px;  /* 表格单元格 */
+  --space-2-5:  11px;  /* 移动端间距 */
+  --space-2-75: 13px;  /* 窄屏间距 */
+  --space-3-5: 16px;  /* 消息内边距 */
+  --space-4-5: 21px;  /* 大卡片内边距 */
+  --space-5-5: 26px;  /* 列表缩进 */
+
+  /* === 字号 === */
+  --text-xs: 13px;  --text-sm: 14px;  --text-base: 15px;
+  --text-md: 16px;  --text-lg: 18px;  --text-xl: 20px;
+  --text-2xl: 22px; --text-3xl: 26px; --text-4xl: 34px; --text-5xl: 44px;
+
+  /* === 缓动 / 时长 === */
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --duration-fast:   100ms;
+  --duration-normal: 200ms;
+  --duration-slow:   300ms;
+  --duration-slower: 500ms;
+
+  /* === 阴影 === */
+  --shadow-sm: 0 1px 2px rgba(45, 30, 28, 0.18);
+  --shadow-md: 0 2px 8px rgba(45, 30, 28, 0.25);
+  --shadow-lg: 0 4px 16px rgba(45, 30, 28, 0.30);
+  --shadow-glow: 0 0 32px rgba(194, 90, 74, 0.25);
+  --shadow-card: 0 8px 32px rgba(20, 12, 10, 0.45), 0 2px 4px rgba(20, 12, 10, 0.30);
+  --shadow-card-hover: 0 12px 48px rgba(194, 90, 74, 0.20), 0 4px 12px rgba(20, 12, 10, 0.50);
+
+  /* === 玻璃态（亮色无装饰） === */
+  --glass-bg:              rgba(243, 240, 235, 0.72);
+  --glass-bg-2:            rgba(236, 231, 225, 0.60);
+  --glass-bd:              var(--border);
+  --glass-bd-2:            rgba(0, 0, 0, 0.06);
+  --glass-border:          var(--border);
+  --glass-border-subtle:   rgba(0, 0, 0, 0.06);
+
+  /* === 语义扩展色（收敛各页面重复硬编码，值与原字面量一致） === */
+  --danger:               #e57373;
+  --danger-bg:            rgba(229, 115, 115, 0.2);
+  --danger-bg-soft:       rgba(229, 115, 115, 0.15);
+  --success-bg-soft:      rgba(34, 197, 94, 0.15);
+  --destructive-dim:      var(--brand-700);
+  --accent-green:         var(--success);       /* 兼容别名，未来移除 */
+  --accent-red:           var(--danger);        /* 兼容别名，未来移除 */
+  --info-bg-soft:         rgba(100, 149, 237, 0.15);
+  --window-close-bg:      rgba(196, 43, 28, 0.15);
+  --overlay-warm-dim:     rgba(20, 12, 10, 0.6);
+  --overlay-shadow-md:    0 24px 64px rgba(20, 12, 10, 0.6);
+  --window-close:         #c42b1c;
+  --window-close-hover:   #a02318;
+  --foreground-inverse:   #fff;
+  --code-bg:              #0d1117;
+  --code-text:            #c9d1d9;
+  --code-success:         #3fb950;
+  --code-bg-light:        #f6f8fa;
+  --code-text-light:      #24292f;
+  --info:                 #6495ed;
+  --success:              #66bb6a;
+  --avatar-gradient:      linear-gradient(135deg, #6a4a5a, #3a2a3a);
+
+  /* === 语义边框 / 面板阴影扩展（基于 color-mix 自动适配双主题） === */
+  --success-bd:           color-mix(in srgb, var(--success) 30%, transparent);
+  --danger-bd:            color-mix(in srgb, var(--danger) 30%, transparent);
+  --window-close-bd:      color-mix(in srgb, var(--window-close) 30%, transparent);
+  --shadow-panel:         -12px 0 48px rgba(20, 12, 10, 0.5);
+
+  /* === 布局 === */
+  --titlebar-h: 44px;
+  --tabs-h: 36px;
+  /* 顶栏图标按钮容器大小，随 UI 比例缩放（与 --titlebar-h 解耦）。
+     --icon-svg = --titlebar-icon * 0.65，作为所有 SVG 图标的统一尺寸。 */
+  --titlebar-icon: 28px;
+  /* 所有 SVG 图标的统一尺寸来源（顶栏 / 菜单 / 设置面板共用）。
+     跟随 --titlebar-icon 缩放，保证三档视觉比例一致。 */
+  --icon-svg: calc(var(--titlebar-icon) * 0.65);
+  /* 小尺寸 SVG 图标（标签关闭按钮、状态点等） */
+  --icon-svg-sm: calc(var(--icon-svg) * 0.85);
+
+  /* 开关按钮统一尺寸来源（设置面板、外观等处的 toggle 共用） */
+  --toggle-w: calc(var(--titlebar-icon) * 1.85);
+  --toggle-h: calc(var(--titlebar-icon) * 0.9);
+  --btn-h: calc(var(--titlebar-icon) * 0.82);
+  --toggle-pad: calc(var(--toggle-h) * 0.15);
+  --toggle-knob: calc(var(--toggle-h) - var(--toggle-pad) * 2);
+}
+
+/* ===== UI 比例缩放（通过 data-ui-scale 属性控制，三档可选） ===== */
+/* 紧凑档（原中档值上移） */
+[data-ui-scale="small"] {
+  --text-xs: 11px;  --text-sm: 12px;  --text-base: 13px;
+  --text-md: 14px;  --text-lg: 16px;  --text-xl: 18px;
+  --text-2xl: 20px; --text-3xl: 24px; --text-4xl: 32px;
+  --space-1: 4px;  --space-2: 8px;   --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px;  --space-8: 32px;
+  --space-0-25: 1px;   --space-0-5: 2px;   --space-0-75: 3px;
+  --space-1-25: 5px;   --space-1-5: 6px;   --space-1-75: 7px;
+  --space-2-25: 9px;   --space-2-5: 10px;  --space-2-75: 11px;
+  --space-3-5: 14px;   --space-4-5: 18px;
+  --space-5-5: 22px;
+  --titlebar-h: 36px;
+  --tabs-h: 32px;
+  --titlebar-icon: 22px;
+  --radius: 18px; --radius-sm: 8px; --radius-md: 12px;
+}
+/* 中档（默认，与 :root 一致；原大档值上移） */
+[data-ui-scale="medium"] {
+  --text-xs: 13px;  --text-sm: 14px;  --text-base: 15px;
+  --text-md: 16px;  --text-lg: 18px;  --text-xl: 20px;
+  --text-2xl: 22px; --text-3xl: 26px; --text-4xl: 34px;
+  --space-1: 5px;  --space-2: 9px;   --space-3: 14px; --space-4: 18px;
+  --space-5: 23px; --space-6: 28px;  --space-8: 36px;
+  --space-0-25: 1px;   --space-0-5: 2.5px; --space-0-75: 4px;
+  --space-1-25: 6px;   --space-1-5: 7px;   --space-1-75: 8px;
+  --space-2-25: 10px;  --space-2-5: 11px;  --space-2-75: 13px;
+  --space-3-5: 16px;   --space-4-5: 21px;
+  --space-5-5: 26px;
+  --titlebar-h: 44px;
+  --tabs-h: 36px;
+  --titlebar-icon: 28px;
+  --radius: 20px; --radius-sm: 10px; --radius-md: 14px;
+}
+/* 大号档（更大一档：字号 +2px，间距继续递增） */
+[data-ui-scale="large"] {
+  --text-xs: 15px;  --text-sm: 16px;  --text-base: 17px;
+  --text-md: 18px;  --text-lg: 20px;  --text-xl: 22px;
+  --text-2xl: 24px; --text-3xl: 28px; --text-4xl: 36px;
+  --space-1: 6px;  --space-2: 10px;   --space-3: 16px; --space-4: 20px;
+  --space-5: 26px; --space-6: 32px;  --space-8: 40px;
+  --space-0-25: 1px;   --space-0-5: 3px;   --space-0-75: 5px;
+  --space-1-25: 7px;   --space-1-5: 8px;   --space-1-75: 9px;
+  --space-2-25: 11px;  --space-2-5: 12px;  --space-2-75: 15px;
+  --space-3-5: 18px;   --space-4-5: 24px;
+  --space-5-5: 30px;
+  --titlebar-h: 52px;
+  --tabs-h: 40px;
+  --titlebar-icon: 34px;
+  --radius: 22px; --radius-sm: 12px; --radius-md: 16px;
+}
+
+:root {
+  /* ===== SidekickAI 扩展令牌（v2 标准之外的应用专属扩展） ===== */
+
+  /* accent 强调色扩展（基于 brand 色阶，用于按钮/光晕/渐变） */
+  --accent-bright: var(--brand-500);
+  --accent-light:  var(--brand-400);
+  --accent-dim:    var(--brand-700);
+  --accent-90:     rgba(241, 72, 30, 0.9);
+  --accent-75:     rgba(241, 72, 30, 0.75);
+  --accent-50:     rgba(241, 72, 30, 0.5);
+  --accent-25:     rgba(241, 72, 30, 0.25);
+  --accent-10:     rgba(241, 72, 30, 0.10);
+  --accent-05:     rgba(241, 72, 30, 0.05);
+
+  /* 弱化文字色（暗色模式下有特殊值，见 .dark 覆写。
+     v2 标准的 --muted-foreground 在暗色下偏亮，此处定义更弱的层级用于次要辅助文字） */
+  --text-muted:     var(--muted-foreground);
+  --text-dim:       var(--muted-foreground);
+
+  /* 装饰光晕（渐变背景） */
+  --halo-1: radial-gradient(ellipse at top right, rgba(247, 102, 60, 0.22), transparent 60%);
+  --halo-2: radial-gradient(ellipse at bottom left, rgba(214, 58, 20, 0.20), transparent 60%);
+  --halo-3: radial-gradient(ellipse at center, rgba(241, 72, 30, 0.08), transparent 70%);
+
+  /* 额外圆角档位（v2 标准未提供 xs/2xs 档） */
+  --radius-xs: 4px;
+  --radius-2xs: 2px; /* 装饰性小圆角（scrollbar thumb、指示条等），固定不随缩放变化 */
+
+  /* 语义化布局尺寸（固定值不随 UI 档位变化，用于容器宽度/高度等不应缩放的场景） */
+  --dropdown-max-h: min(360px, calc(100vh - var(--titlebar-h) - var(--space-4)));
+  --drawer-w: 280px;
+  --touch-target: 44px; /* 移动端触摸目标最小尺寸 */
+  --toast-offset: calc(var(--space-12) + var(--space-2));
+
+  /* ===== 跨窗口动态布局辅助变量（4.9） ===== */
+  /* 侧边栏宽度：用于 ChatView/AiProviderAppView 等带左侧列表的窗口，
+     随 UI 比例微调，避免 small 档过宽 / large 档过窄。 */
+  --sidebar-w: calc(var(--titlebar-icon) * 9);
+  /* 对话输入区最小高度：随 UI 比例缩放，避免 small 档输入框过大或 large 档过小。 */
+  --chat-input-min-h: calc(var(--titlebar-icon) * 1.4);
+  /* 应用网格项宽度：用于底栏 AI 应用网格、AI 应用独立窗口的平台卡片网格，
+     随 UI 比例缩放保证三档视觉一致。 */
+  --app-grid-item-w: calc(var(--titlebar-icon) * 2.6);
+  /* 展开按钮宽度：底栏功能按钮（设置/快捷键/指纹等），随 UI 比例缩放。 */
+  --expanded-btn-w: calc(var(--titlebar-icon) * 3.1);
+  /* 设置面板侧栏拖拽范围（PANEL_MIN/PANEL_MAX），随 UI 比例微调。 */
+  --panel-min-w: calc(var(--titlebar-icon) * 11);
+  --panel-max-w: calc(var(--titlebar-icon) * 26);
+}
+
+/* ===== 暗色模式（暖砖红暗色） ===== */
+.dark,
+[data-theme="dark"] {
+  /* === surface — 暖砖红基底色系 === */
+  --background: #1f1719;
+  --muted:      #241d1f;
+  --card:       #2a2023;
+  --popover:    #3a2a2d;
+
+  /* === text — 暖调前景 === */
+  --foreground:         #f0e6e3;
+  --muted-foreground:   #d4c0bc;
+  --card-foreground:    #f0e6e3;
+  --popover-foreground: #f0e6e3;
+  --accent-foreground:  #f0e6e3;
+  --secondary-foreground: #f0e6e3;
+
+  /* === action — 暖砖红强调 === */
+  --primary:            #a8463a;
+  --primary-foreground: #fff7f3;
+  --accent:             #4a383a;
+  --input:              #3a2a2d;
+  --border:             rgba(194, 90, 74, 0.18);
+  --secondary:          #5a4448;
+  --ring:               #a8463a;
+
+  /* === feedback === */
+  --destructive:            #ff6b57;
+  --destructive-foreground: #fff5f2;
+  --success:                #4a7a68;
+  --warning:                #8a7a4e;
+  --info:                   var(--chart-4);
+
+  /* === chart === */
+  --chart-1: #a8463a;
+  --chart-2: #d4a574;
+  --chart-3: #4a7a68;
+  --chart-4: #4e5e8a;
+  --chart-5: #8a7a4e;
+
+  /* === 玻璃态（暗色） === */
+  --glass-bg:            rgba(58, 42, 45, 0.55);
+  --glass-bg-2:          rgba(74, 56, 58, 0.45);
+  --glass-bd:            rgba(194, 90, 74, 0.18);
+  --glass-bd-2:          rgba(255, 255, 255, 0.06);
+  --glass-border:        rgba(194, 90, 74, 0.18);
+  --glass-border-subtle: rgba(255, 255, 255, 0.06);
+
+  /* === Ornament 装饰元素（古典英伦细节 — 暗色特有） === */
+  --ornament-line:  1px solid rgba(212, 165, 116, 0.25);
+  --ornament-glyph: rgba(212, 165, 116, 0.4);
+
+  /* 暗色模式下的扩展令牌覆写 */
+  --text-muted:     #8a7470;
+  --text-dim:       #5a4845;
+
+  --accent-bright: #c25a4a;
+  --accent-light:  #e07a64;
+  --accent-dim:    #823328;
+  --accent-90:     rgba(168, 70, 58, 0.9);
+  --accent-75:     rgba(168, 70, 58, 0.75);
+  --accent-50:     rgba(168, 70, 58, 0.5);
+  --accent-25:     rgba(168, 70, 58, 0.25);
+  --accent-10:     rgba(168, 70, 58, 0.1);
+  --accent-05:     rgba(168, 70, 58, 0.05);
+
+  --halo-1: radial-gradient(ellipse at top right, rgba(194, 90, 74, 0.28), transparent 60%);
+  --halo-2: radial-gradient(ellipse at bottom left, rgba(130, 51, 40, 0.32), transparent 60%);
+  --halo-3: radial-gradient(ellipse at center, rgba(168, 70, 58, 0.12), transparent 70%);
+}
+
+/* =====================================================================
+   窗口外壳边框（4.8 全局规则）
+   frame:false 窗口没有系统边框，容易与背景融合。给所有带 .app-shell
+   类的窗口根容器加 1px 实线边框，在所有 UI 比例下都可见。
+   ===================================================================== */
+.app-shell {
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
+/* 大号 UI 比例下额外加一层 inset shadow 强化边界 */
+[data-ui-scale="large"] .app-shell {
+  box-shadow: inset 0 0 0 1px var(--glass-bd);
+}

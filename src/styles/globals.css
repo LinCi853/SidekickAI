@@ -1,0 +1,517 @@
+/* =====================================================================
+   全局样式与重置（从 showcase.html 移植）
+   ===================================================================== */
+@import './design-tokens.css';
+
+/* 统一 SVG 图标尺寸工具类（跟随 UI 三档缩放） */
+.icon-svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+.icon-svg-sm {
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
+}
+
+/* HTML hidden 属性优先级提升 —— 覆盖 display:flex/inline-flex 等声明 */
+[hidden] { display: none !important; }
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+html, body {
+  /* 窗口本体取消圆角设计（用户决策：圆角怎么调整都不合适，统一取消） */
+  border-radius: 0;
+  overflow: hidden;
+}
+:root {
+  /* 窗口边框圆角半径（已取消，保留令牌供历史引用兼容，值为 0） */
+  --window-radius: 0px;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* 窗口圆角已取消，无需预留边距 */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+#root {
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+
+a { color: var(--accent-bright); text-decoration: none; transition: color var(--duration-fast) var(--ease-out); }
+a:hover { color: var(--accent-light); }
+
+/* select 元素的下拉列表（option）在暗色模式下默认为白色背景，导致文字不可见 */
+option {
+  background: var(--card);
+  color: var(--foreground);
+}
+
+h1, h2, h3, h4, h5, h6 { font-weight: 700; line-height: 1.15; color: var(--foreground); }
+code { font-family: var(--font-mono); font-size: 0.92em; }
+
+/* ===== 玻璃卡片 ===== */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+.glass-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-50), transparent);
+}
+
+/* ===== 按钮 ===== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-2-5) var(--space-5);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  user-select: none;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  color: var(--foreground-inverse);
+  box-shadow: 0 2px 12px var(--accent-50);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+  box-shadow: 0 4px 20px var(--accent-75);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: var(--glass-bg-2);
+  border-color: var(--glass-bd-2);
+  color: var(--foreground);
+}
+.btn-ghost:hover {
+  background: var(--accent-10);
+  border-color: var(--accent-25);
+  color: var(--accent-bright);
+}
+
+/* ===== Button 变体扩展（替代页面重复按钮定义） ===== */
+/* danger 变体（替代 .prompt-btn.danger / .voice-download-btn.fail） */
+.btn-danger {
+  background: var(--danger);
+  color: var(--foreground-inverse);
+  box-shadow: 0 2px 12px var(--danger-bg);
+}
+.btn-danger:hover {
+  background: var(--destructive);
+  box-shadow: 0 4px 20px var(--danger-bg);
+  transform: translateY(-1px);
+}
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* link 变体（替代 .voice-uninstall-link-btn / .hotkey-shortcuts-link） */
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--accent-bright);
+  padding: 0;
+  border-radius: 0;
+}
+.btn-link:hover { color: var(--accent-light); text-decoration: underline; }
+
+/* icon 变体（替代 .nav-btn / .expanded-btn / .win-btn / 各种 *-close） */
+.btn-icon {
+  width: var(--titlebar-icon);
+  height: var(--titlebar-icon);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--titlebar-icon) * 0.2);
+  color: var(--foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.btn-icon svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+.btn-icon:hover:not(:disabled) { background: var(--accent-10); color: var(--accent-bright); }
+.btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-icon.is-close:hover:not(:disabled) {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+.btn-icon.is-active { background: var(--accent-bright); color: var(--primary-foreground); }
+.btn-icon.is-active:hover:not(:disabled) { background: var(--primary); filter: brightness(1.08); }
+
+/* primary-compact 变体（替代 SettingsPanel border-radius:0 系列） */
+.btn-primary-compact {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 0;
+  padding: var(--space-2) var(--space-4);
+  font-weight: 500;
+  border: 0;
+  cursor: pointer;
+  transition: filter var(--duration-fast) var(--ease-out);
+}
+.btn-primary-compact:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-primary-compact:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== 扁平主按钮（统一替代各处 .btn-primary 渐变风格，复制自 onboarding-next-btn） ===== */
+.btn-primary-flat {
+  padding: var(--space-1) var(--space-4);
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--primary-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  user-select: none;
+  white-space: nowrap;
+}
+.btn-primary-flat:hover:not(:disabled) {
+  background: var(--brand-700);
+}
+.btn-primary-flat:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-primary-flat.is-danger {
+  background: var(--destructive);
+  color: #fff;
+}
+.btn-primary-flat.is-danger:hover:not(:disabled) {
+  background: var(--danger);
+}
+.dark .btn-primary-flat {
+  color: var(--secondary-foreground);
+}
+
+/* text 变体（替代 SettingsPanel 文本按钮家族） */
+.btn-text {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--foreground);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.btn-text:hover:not(:disabled) { color: var(--accent-bright); font-weight: 600; }
+.btn-text:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-text.is-danger { color: var(--destructive); }
+.btn-text.is-danger:hover:not(:disabled) { color: var(--danger); font-weight: 600; }
+
+/* ===== SegmentedControl 分段控件（替代 .proxy-mode-btn / .voice-mode-btn / .platform-region-btn / .platform-status-btn） ===== */
+.seg-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 10px;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.seg-btn:hover:not(:disabled) { color: var(--accent-bright); }
+.seg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.seg-btn.is-active {
+  color: var(--accent-bright);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 0 var(--accent-bright);
+}
+
+/* ===== Toggle 开关（统一设计，替代旧 .toggle button + .hotkey-toggle） =====
+   结构：<label.toggle><input type=checkbox /><span.toggle-track /></label>
+   由 ui/Toggle.tsx 和 SettingsPanel/HotkeySection 共用 */
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+}
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.toggle-track {
+  display: inline-block;
+  width: var(--toggle-w);
+  min-width: var(--toggle-w);
+  height: var(--toggle-h);
+  min-height: var(--toggle-h);
+  border-radius: calc(var(--toggle-h) / 2);
+  border: 1px solid var(--glass-bd-2);
+  background: var(--card);
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+.toggle-track::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: var(--toggle-pad);
+  width: var(--toggle-knob);
+  height: var(--toggle-knob);
+  border-radius: 50%;
+  background: var(--foreground-inverse);
+  transform: translateY(-50%);
+  transition: transform var(--duration-fast) var(--ease-out);
+  box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
+}
+.toggle input:checked + .toggle-track {
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+}
+.toggle input:checked + .toggle-track::before {
+  transform: translateY(-50%) translateX(
+    calc(var(--toggle-w) - var(--toggle-knob) - var(--toggle-pad) * 2)
+  );
+}
+.toggle input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+.toggle input:disabled + .toggle-track {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== Card 卡片容器（替代 .app-grid-item / .app-switcher-item / .profile-card 等） ===== */
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  position: relative;
+}
+
+/* ===== Chip 可点击 chip（替代 .topbar-chip / .onboarding-toggle-chip） ===== */
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.chip-toggle:hover:not(:disabled) { border-color: var(--accent-25); color: var(--accent-bright); }
+.chip-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.chip-toggle.is-on {
+  background: var(--accent-bright);
+  color: var(--primary-foreground);
+  border-color: var(--accent-bright);
+}
+.chip-toggle.is-on:hover:not(:disabled) {
+  background: var(--accent-light);
+  border-color: var(--accent-light);
+  color: var(--primary-foreground);
+}
+
+/* ===== Radio 按钮组（SettingsPanel / OnboardingView 通用） ===== */
+.onboarding-radio-group {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.onboarding-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.onboarding-radio input {
+  margin: 0;
+  accent-color: var(--primary);
+}
+.onboarding-radio:hover {
+  border-color: var(--primary);
+  color: var(--card-foreground);
+}
+.onboarding-radio.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.onboarding-radio.is-active input {
+  accent-color: var(--primary-foreground);
+}
+
+/* ===== WindowControls 窗口控制三件套容器（替代 7 套 .win-btn / .chat-win-btn / ... 复制） ===== */
+.win-controls {
+  display: inline-flex;
+  gap: 0;
+  align-items: center;
+}
+.win-controls .btn-icon { border-radius: 0; }
+
+/* ===== Input 输入框基类 ===== */
+.input {
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  transition: border-color var(--duration-fast) var(--ease-out);
+  outline: none;
+}
+.input:focus {
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 0 2px var(--accent-25);
+}
+.input::placeholder { color: var(--text-muted); }
+.input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== Modal 模态容器基类 ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-warm-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+.modal-container {
+  background: var(--card);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--overlay-shadow-md);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 徽章 ===== */
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-0-5);
+  padding: var(--space-0-25) var(--space-1-25);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.badge-accent {
+  color: var(--accent-bright);
+  border-color: var(--accent-50);
+}
+.badge-dot {
+  width: var(--space-1-25); height: var(--space-1-25); border-radius: 50%;
+  background: var(--accent-bright);
+  box-shadow: none;
+}
+.badge-warn {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  background: transparent;
+}
+
+/* ===== 渐变文字 ===== */
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent-light), var(--accent-bright), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ===== 滚动条 ===== */
+::-webkit-scrollbar { width: var(--space-1-25); height: var(--space-1-25); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--popover); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+
+/* =====================================================================
+   跨平台拖拽区域适配
+   ---------------------------------------------------------------------
+   Electron frameless 窗口通过 -webkit-app-region: drag 标记拖拽区。
+   macOS 使用 titleBarStyle:'hiddenInset' 保留交通灯（左上角约 78px），
+   拖拽区域需避让交通灯，否则点击交通灯时被 drag 拦截导致按钮无响应。
+   Windows/Linux 无交通灯，拖拽区域可覆盖整个顶栏。
+   平台标识由 preload 写入 <html data-platform="...">。
+   ===================================================================== */
+
+/* macOS：顶栏拖拽区域左侧预留 78px 给交通灯（红黄绿按钮） */
+html[data-platform="darwin"] .top-bar-drag {
+  /* 使用 margin-left 让 drag 区域起点避开交通灯；
+     保留 flex:1 撑满剩余空间，标题居中不受影响 */
+  margin-left: 78px;
+}
+
+/* =====================================================================
+   平台字号区分（M3）
+   ---------------------------------------------------------------------
+   移动端 html 标签放大至 16px（更易读，适配 rem 单位）；
+   桌面端保留 14px。data-platform 由 Electron preload 或移动端
+   MobileMainView 挂载时写入。
+   ===================================================================== */
+html[data-platform="mobile"] {
+  font-size: var(--text-md);
+}
+html[data-platform="electron"] {
+  font-size: var(--text-sm);
+}

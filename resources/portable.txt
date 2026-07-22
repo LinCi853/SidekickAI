@@ -1,0 +1,2 @@
+﻿AI Window Portable Mode Marker
+This file enables portable mode: user data is stored in 'data' folder next to the exe.

@@ -1,0 +1,329 @@
+.prompt-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--background);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== 顶栏 ===== */
+.prompt-view-top {
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-bd);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  user-select: none;
+  flex: none;
+  z-index: 10;
+}
+.prompt-view-top-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: drag;
+  app-region: drag;
+  height: 100%;
+  min-width: 0;
+}
+.prompt-view-top-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.prompt-view-top-actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-1);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* ===== 主体 ===== */
+.prompt-view-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.prompt-view-add-row {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+}
+.prompt-view-add-btn {
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  min-height: 0;
+  line-height: 1.4;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--foreground-inverse);
+  border: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.prompt-view-add-btn:hover {
+  opacity: 0.9;
+}
+
+.prompt-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.prompt-group-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px dashed var(--glass-bd-2);
+}
+.prompt-card {
+  padding: var(--space-3);
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+.prompt-card:hover {
+  border-color: var(--accent-50);
+}
+.prompt-card.injected {
+  border-color: var(--accent);
+  background: var(--accent-10);
+}
+.prompt-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.prompt-card-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prompt-card-actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-1);
+}
+.prompt-card-edit-btn {
+  width: var(--titlebar-icon);
+  height: var(--titlebar-icon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.prompt-card-edit-btn:hover {
+  background: var(--accent-10);
+  color: var(--foreground);
+}
+.prompt-card-content {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  line-height: 1.5;
+  max-height: 60px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.prompt-view-empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ===== 编辑器弹窗 ===== */
+.prompt-editor-overlay {
+  position: fixed; inset: 0; background: var(--overlay-warm-dim);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  z-index: 420; display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity var(--duration-normal) var(--ease-out);
+  padding: var(--space-4);
+}
+.prompt-editor-overlay.is-open { opacity: 1; pointer-events: auto; }
+.prompt-editor {
+  width: min(480px, 100%); max-height: 100%; background: var(--card);
+  border: 1px solid var(--glass-bd); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; overflow: hidden;
+  transform: scale(0.96); transition: transform var(--duration-normal) var(--ease-out);
+}
+.prompt-editor-overlay.is-open .prompt-editor { transform: scale(1); }
+.prompt-editor-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--glass-bd-2);
+  gap: var(--space-2);
+}
+.prompt-editor-header h3 { font-family: var(--font-sans); font-size: var(--text-lg); font-weight: 600; }
+.prompt-editor-close {
+  width: var(--titlebar-icon); height: var(--titlebar-icon); display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer;
+  border-radius: var(--radius-sm); transition: background var(--duration-fast), color var(--duration-fast);
+  flex: none;
+}
+.prompt-editor-close:hover { background: var(--accent-10); color: var(--foreground); }
+.prompt-editor-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.prompt-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.prompt-field label { font-size: var(--text-xs); color: var(--muted-foreground); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+.prompt-field input, .prompt-field textarea {
+  background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--foreground); font-family: var(--font-sans); font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-2-5); outline: none; transition: border-color var(--duration-fast) var(--ease-out);
+  width: 100%; box-sizing: border-box;
+}
+.prompt-field input:focus, .prompt-field textarea:focus { border-color: var(--accent-bright); }
+.prompt-field textarea { resize: vertical; min-height: var(--space-24); line-height: 1.5; }
+.prompt-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.prompt-category-chips input {
+  flex: 1;
+  min-width: 120px;
+}
+/* 需求 1：注入位置 SegmentedControl + 占位符说明 */
+.prompt-segmented {
+  display: flex; gap: var(--space-1); padding: var(--space-1);
+  background: var(--background); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.prompt-segmented-item {
+  flex: 1; padding: var(--space-1) var(--space-2);
+  background: transparent; border: 0; border-radius: var(--radius-xs);
+  color: var(--muted-foreground); font-family: var(--font-sans); font-size: var(--text-xs);
+  cursor: pointer; transition: all var(--duration-fast) var(--ease-out);
+  min-height: 0; line-height: 1.4;
+}
+.prompt-segmented-item:hover { background: var(--accent-10); color: var(--foreground); }
+.prompt-segmented-item.active { background: var(--accent); color: var(--foreground-inverse); }
+.prompt-field-hint {
+  font-size: var(--text-xs); color: var(--text-muted);
+  font-family: var(--font-sans); line-height: 1.5;
+  padding: var(--space-1) var(--space-2); background: var(--glass-bg-2);
+  border-radius: var(--radius-xs);
+}
+.prompt-field-hint code {
+  font-family: var(--font-mono); color: var(--accent-bright);
+  background: var(--background); padding: 0 var(--space-0-5);
+  border-radius: var(--radius-xs);
+}
+/* 需求 2.5：HotkeyRecorder 录制中/错误状态 */
+.prompt-hotkey-input.is-recording {
+  border-color: var(--accent-bright);
+  background: var(--accent-10);
+  cursor: pointer;
+}
+.prompt-hotkey-input.has-error {
+  border-color: var(--danger, #ef4444);
+}
+.prompt-hotkey-input::placeholder { color: var(--text-muted); }
+.prompt-editor-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--space-3) var(--space-4); border-top: 1px solid var(--glass-bd-2);
+  gap: var(--space-2); flex-wrap: wrap; flex: none;
+}
+.prompt-editor-actions { display: flex; gap: var(--space-2); flex-wrap: nowrap; }
+.prompt-btn {
+  padding: 6px 12px; border-radius: var(--radius-sm); font-size: var(--text-sm); min-height: 0; line-height: 1.4; cursor: pointer;
+  border: 1px solid var(--border); background: var(--accent); color: var(--foreground);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.prompt-btn:hover { background: var(--input); border-color: var(--ring); color: var(--accent-bright); }
+.prompt-btn.primary { background: var(--accent-bright); color: var(--foreground-inverse); border-color: var(--accent-bright); }
+.prompt-btn.primary:hover { background: var(--accent); color: var(--foreground-inverse); border-color: var(--accent); }
+.prompt-btn.danger { color: var(--danger); }
+.prompt-btn.danger:hover { background: var(--danger-bg-soft); border-color: var(--danger); color: var(--danger); }
+
+/* toast */
+.prompt-toast {
+  position: fixed; left: 50%; bottom: var(--space-6); transform: translateX(-50%);
+  background: var(--muted); border: 1px solid var(--glass-bd);
+  color: var(--foreground); font-size: var(--text-sm); padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-card);
+  z-index: 430; pointer-events: none; opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
+}
+.prompt-toast.is-open { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+/* ===== AI 应用编辑器输入控件（AiAppEditor 复用本样式表） ===== */
+.ai-editor-input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.4;
+}
+.ai-editor-input:focus {
+  border-color: var(--accent);
+}
+.ai-editor-input::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+textarea.ai-editor-input {
+  resize: vertical;
+  min-height: var(--space-12);
+  line-height: 1.5;
+}
+select.ai-editor-input {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position: calc(100% - var(--space-3)) calc(50% - 1px),
+    calc(100% - var(--space-2-5)) calc(50% - 1px);
+  background-size: var(--space-1) var(--space-1), var(--space-1) var(--space-1);
+  background-repeat: no-repeat;
+  padding-right: var(--space-5);
+}
+select.ai-editor-input option {
+  background: var(--muted);
+  color: var(--foreground);
+}

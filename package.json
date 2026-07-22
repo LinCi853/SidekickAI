@@ -1,0 +1,57 @@
+{
+  "name": "sidekick-ai",
+  "version": "0.0.1",
+  "description": "工百窗（SidekickAI）—— 全平台 AI 聚合 + 反检测多 Profile 浏览器（Electron）",
+  "main": "out/main/index.js",
+  "author": "SidekickAI",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "postinstall": "electron-rebuild -f -w better-sqlite3 -w uiohook-napi",
+    "dev": "node scripts/dev.mjs",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "build:win-x64": "electron-vite build && electron-builder --win --x64",
+    "build:win-arm64": "electron-vite build && electron-builder --win --arm64",
+    "build:win": "npm run build:win-x64 && npm run build:win-arm64",
+    "dist": "electron-vite build && electron-builder",
+    "build:portable": "electron-vite build && electron-builder --config electron-builder.portable.yml --win",
+    "build:portable-zip": "electron-vite build && electron-builder --config electron-builder.portable.yml --win && powershell -Command \"$v=(node -p \\\"require('./package.json').version\\\"); $s='dist-portable\\win-unpacked'; $r='dist-portable\\SidekickAI'; $z=\\\"dist-portable\\SidekickAI-Portable-$v-win-x64.zip\\\"; if (Test-Path $r) { Remove-Item $r -Recurse -Force }; Move-Item -Path $s -Destination $r -Force; if (Test-Path $z) { Remove-Item $z }; Compress-Archive -Path $r -DestinationPath $z\"",
+    "build:win-all": "npm run build:win && npm run build:portable-zip",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^12.11.1",
+    "electron-store": "^10.0.0",
+    "opencc-js": "^1.4.0",
+    "puppeteer-core": "^25.2.1",
+    "undici": "^6.0.0"
+  },
+  "optionalDependencies": {
+    "uiohook-napi": "^1.5.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/adm-zip": "^0.5.7",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.0",
+    "electron-vite": "^2.3.0",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "typescript": "^5.4.0",
+    "vite": "^5.3.0",
+    "zustand": "^4.5.0"
+  }
+}

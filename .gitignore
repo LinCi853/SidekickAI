@@ -1,0 +1,84 @@
+# ============================================================
+# Dependencies
+# ============================================================
+node_modules/
+
+# ============================================================
+# Build Outputs
+# ============================================================
+# electron-vite 中间产物（主/preload/渲染层编译输出）
+out/
+# electron-builder 标准安装包输出（NSIS exe）
+dist/
+# electron-builder 便携版输出
+dist-portable/
+# 发布产物归档目录（安装包 + 便携版，由 launch.bat [2] 生成）
+release/
+target-check/
+
+# ============================================================
+# Electron Cache
+# ============================================================
+.electron-cache/
+
+# ============================================================
+# Runtime Data (app data / user profiles / cache)
+# ============================================================
+.app-data/
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+*.log.*
+chk-*.txt
+# 临时调试输出（asar 列表、运行时 stdout/stderr 捕获）
+asar-list.txt
+sidekick-stdout.txt
+sidekick-stderr.txt
+
+# ============================================================
+# Editor / OS
+# ============================================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Dev / Design Documents (开发需求、设计文档、原型)
+# ============================================================
+# 仅保留源码 + README + LICENSE；其余文档/测试/设计稿一律不入库
+.trae/
+.uploads/
+ai-window-uiux/
+ai-window-uiux-v2/
+docs/
+tests/
+showcase.html
+# 根目录散落 .md 不入库（README.md 与 LICENSE 例外）
+/*.md
+!README.md
+!LICENSE
+
+# ============================================================
+# Misc
+# ============================================================
+*.asar
+
+# ============================================================
+# Non-Windows platforms (已移除，仅保留 Windows 桌面端)
+# ============================================================
+mobile/
+launch.sh
+build/entitlements.mac.plist
+resources/icons/icon.icns
+scripts/notarize.cjs
+# 已废弃的移动端源码（本地保留作参考，不入库；代码引用已移除）
+src/components/MobileTabBar/
+src/components/MobileVoiceButton/
+src/lib/mobile-api/
+src/pages/MobileMainView.css
+src/pages/MobileMainView.tsx
+src/store/useMobileTabStore.ts
+src/styles/mobile.css

@@ -1,0 +1,197 @@
+.app-switcher-wrap {
+  position: relative;
+  flex: none;
+  margin-left: var(--space-1);
+  z-index: 2;
+}
+/* 遮罩层：下拉打开时覆盖全屏（除下拉菜单外），点击收起 */
+.app-switcher-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  background: transparent;
+  pointer-events: auto;
+}
+.app-switcher-btn {
+  /* 与顶栏其他图标统一使用 --titlebar-icon；hover 显示外环提示 */
+  width: var(--titlebar-icon);
+  min-width: 14px;
+  height: var(--titlebar-icon);
+  min-height: 14px;
+  max-height: calc(var(--titlebar-h) - var(--space-0-75));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  border: 0;
+  border-radius: calc(var(--titlebar-icon) * 0.2);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  color: var(--foreground-inverse);
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: calc(var(--titlebar-icon) * 0.55);
+  transition: filter var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+  flex: none;
+  /* 主题色边框：用 box-shadow 避免影响布局尺寸 */
+  box-shadow: 0 0 0 1.5px var(--primary);
+}
+.app-switcher-btn:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+.app-switcher-btn:active {
+  filter: brightness(0.95);
+}
+/* 下拉打开时的选中状态：轻微提亮 + 主题色边框加粗 */
+.app-switcher-btn.open {
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 2px var(--accent-bright);
+}
+.app-switcher-dropdown {
+  position: fixed;
+  /* top/left 由 JS 根据按钮视口位置动态设置，避免被父级 overflow/stacking-context 裁剪 */
+  margin-top: var(--space-1);
+  width: calc(var(--titlebar-icon) * 7.8);
+  max-height: var(--dropdown-max-h);
+  overflow-y: auto;
+  background: var(--muted);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-1);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.app-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-2);
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  line-height: 1.4;
+  transition: background var(--duration-fast);
+  position: relative;
+}
+.app-switcher-item:hover {
+  background: var(--accent-10);
+}
+/* 拖拽中：半透明（与 inline style 协同，css 兜底） */
+.app-switcher-item.dragging {
+  opacity: 0.4;
+}
+/* 拖拽悬停目标：虚线高亮边框 */
+.app-switcher-item.drag-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+/* 已打开高亮：与底栏 .open 规则等价（左侧主题色竖条 + 加粗名称） */
+.app-switcher-item.open {
+  position: relative;
+  background: var(--accent-10);
+}
+.app-switcher-item.open::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--space-1-5);
+  bottom: var(--space-1-5);
+  width: var(--space-0-5);
+  border-radius: var(--radius-2xs);
+  background: var(--primary);
+}
+.app-switcher-item.open .app-switcher-item-name {
+  color: var(--foreground);
+  font-weight: 600;
+}
+/* 当前激活（再点即关闭）：图标描边强化提示 */
+.app-switcher-item.active .app-switcher-item-icon {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary);
+}
+.app-switcher-item-icon {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground-inverse);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  flex: none;
+}
+.app-switcher-item-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-switcher-divider {
+  height: 1px;
+  background: var(--glass-bd-2);
+  margin: var(--space-1) var(--space-0-5);
+  flex: none;
+}
+.app-switcher-item.custom {
+  color: var(--accent-bright);
+}
+.app-switcher-item.custom .app-switcher-item-icon {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+}
+.app-switcher-section-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  line-height: 1.4;
+}
+.app-switcher-item.chat .app-switcher-item-icon {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  font-size: var(--text-xs);
+}
+.app-switcher-item.chat .app-switcher-item-name {
+  color: var(--foreground);
+}
+/* 自定义供应商：虚线左边框区分 */
+.app-switcher-item.chat {
+  border-left: 1px dashed var(--accent-50);
+}
+.app-switcher-item.manage {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  justify-content: center;
+  padding: var(--space-1-5) var(--space-2);
+  min-height: 0;
+  line-height: 1.4;
+}
+.app-switcher-item.manage:hover {
+  color: var(--accent-bright);
+}
+.app-switcher-empty {
+  padding: var(--space-3) var(--space-2) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}

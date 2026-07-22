@@ -1,0 +1,159 @@
+.standalone-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--background);
+  position: relative;
+}
+
+/* ===== 顶栏（宽屏常驻；窄屏下隐藏导航/工具按钮，仅留标题 + 窗口控制） ===== */
+.sa-top-bar {
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-bd);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  user-select: none;
+  flex: none;
+  z-index: 10;
+}
+/* 导航/工具按钮组（窄屏下隐藏） */
+.sa-nav-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+.standalone-view[data-viewport="narrow"] .sa-nav-group {
+  display: none;
+}
+/* 窄屏下标题更紧凑 */
+.standalone-view[data-viewport="narrow"] .sa-top-title {
+  font-size: var(--text-xs);
+}
+.sa-top-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  -webkit-app-region: drag;
+  app-region: drag;
+  height: 100%;
+  min-width: 0;
+}
+.sa-top-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: text;
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.sa-top-title:hover { background: var(--glass-bg-2); }
+.sa-top-title.editing {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  border-color: var(--accent-50);
+  background: var(--card);
+  outline: none;
+}
+.sa-top-title-input {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  background: transparent;
+  border: 0;
+  outline: none;
+  width: 100%;
+  padding: 0;
+}
+.sa-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+/* 子窗口标题栏按钮：与主窗口 .win-btn 保持同一套参数，确保两套窗口控制视觉一致 */
+.sa-btn {
+  width: var(--titlebar-icon);
+  min-width: 14px;
+  height: var(--titlebar-icon);
+  min-height: 14px;
+  max-height: calc(var(--titlebar-h) - var(--space-0-75));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  border-radius: calc(var(--titlebar-icon) * 0.2);
+  transition: background var(--duration-fast), color var(--duration-fast);
+  flex: none;
+}
+.sa-btn svg {
+  width: var(--icon-svg);
+  min-width: var(--space-2);
+  height: var(--icon-svg);
+  min-height: var(--space-2);
+}
+.sa-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.sa-btn:active:not(:disabled) {
+  background: var(--accent-dim);
+  color: var(--primary);
+}
+.sa-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.sa-btn.active {
+  color: var(--primary);
+  background: transparent;
+}
+.sa-btn.close {
+  color: var(--destructive);
+}
+.sa-btn.close:hover:not(:disabled) {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+
+/* ===== webview 容器 ===== */
+.sa-webview-container {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.sa-webview-container webview {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  border: none;
+  display: flex;
+}

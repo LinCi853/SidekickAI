@@ -1,0 +1,224 @@
+/* =====================================================================
+   ShortcutsModal.css —— 快捷键弹窗
+   关键：CSS grid 三段式布局（hotkey | action | scope），自动适配窄窗口。
+   - hotkey：左列，固定 80px 起，white-space: nowrap
+   - action：中列，flex 1，自适应剩余空间，文本可换行
+   - scope：右列，固定 56px，垂直顶部对齐 + 小 badge
+   这样即便在 400px 左右的窄窗口下，中文动作描述也能完整显示一行，
+   不会再被挤成单字竖排。
+   ===================================================================== */
+
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-warm-dim);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.shortcuts-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.shortcuts-modal {
+  /* 关键修复：放宽 modal 宽度 560px → 620px，给动作列更充足空间。
+     仍然 92vw 兜底窄窗口。 */
+  width: min(620px, 92vw);
+  max-height: 80vh;
+  background: var(--muted);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.96);
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+.shortcuts-overlay.is-open .shortcuts-modal {
+  transform: scale(1);
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--glass-bd-2);
+  flex: none;
+}
+.shortcuts-header h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.shortcuts-close {
+  width: var(--titlebar-icon); height: var(--titlebar-icon);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; color: var(--muted-foreground);
+  cursor: pointer; border-radius: var(--radius-sm);
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+.shortcuts-close:hover {
+  color: var(--foreground);
+  background: var(--accent-10);
+}
+
+.shortcuts-body {
+  /* 与 .shortcuts-header 水平 padding 对齐（var(--space-5)），
+     上下 var(--space-4) 与 header 垂直 rhythm 一致 */
+  padding: var(--space-4) var(--space-5);
+  overflow-y: auto;
+}
+
+/* ===== 列表容器 ===== */
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+/* ===== 单条快捷键行 =====
+   关键：hotkey 列用**固定 200px** 而不是 auto。
+   之前用 auto 会被长热键（如 "Ctrl + Tab / Ctrl + Shift + Tab" ≈ 300px）
+   撑到 ~300-450px，反过来把 action 列挤到 ~20px，导致中文被压成单字竖排。
+   固定 200px + white-space: normal 让长热键换行成 2 行，action 列始终有 ~280px 可用。 */
+.shortcuts-item {
+  display: grid;
+  grid-template-columns: 200px minmax(140px, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--glass-bd-2);
+}
+.shortcuts-item:last-child {
+  border-bottom: 0;
+}
+/* 已禁用的热键项：整体灰显 + 「已禁用」标签 */
+.shortcuts-item.is-disabled {
+  opacity: 0.45;
+}
+.shortcuts-disabled-tag {
+  margin-left: var(--space-1);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+/* 左列：快捷键（mono 字体 + accent 色）
+   关键：white-space: normal + word-break，允许在 200px 内换行。
+   短热键（如 "Alt + V"）保持 1 行；长热键（如 "Ctrl + Tab / Ctrl + Shift + Tab"）换行成 2 行。 */
+.shortcuts-keys {
+  font-family: var(--font-mono);
+  color: var(--accent-bright);
+  font-size: var(--text-sm);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  padding-top: var(--space-0-25);
+}
+
+/* 中列：动作描述（占满剩余空间，文本可换行） */
+.shortcuts-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0; /* grid 子项必须有 min-width:0 才能让文本收缩换行 */
+}
+.shortcuts-action-text {
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  /* 长中文短语允许换行，不会被压成单字竖排 */
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.shortcuts-note {
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  margin-top: var(--space-0-5);
+}
+
+/* 右列：范围 badge */
+.shortcuts-scope {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: var(--space-0-25);
+}
+.shortcuts-scope-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.shortcuts-scope-badge.is-global {
+  color: var(--accent-bright);
+  background: var(--accent-10);
+  border: 1px solid var(--accent-bd);
+}
+.shortcuts-scope-badge.is-window {
+  color: var(--info);
+  background: var(--info-bg-soft);
+  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+}
+.shortcuts-scope-badge.is-app {
+  color: var(--text-muted);
+  background: var(--card);
+  border: 1px solid var(--glass-bd-2);
+}
+
+/* 窄窗口（< 520px）：切换为两行布局
+   第一行：快捷键（左）+ 范围 badge（右）
+   第二行：动作描述（占满整行）
+   避免 3 列在窄窗口下被压缩，第三列看不到 */
+@media (max-width: 520px) {
+  .shortcuts-modal {
+    width: min(380px, 96vw);
+    max-height: 85vh;
+  }
+  .shortcuts-body {
+    padding: var(--space-2) var(--space-3);
+  }
+  .shortcuts-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-1);
+    padding: var(--space-1-5) var(--space-1);
+  }
+  .shortcuts-keys {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--text-sm);
+    padding-top: 0;
+  }
+  .shortcuts-scope {
+    flex: 0 0 auto;
+    padding-top: 0;
+  }
+  .shortcuts-action {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .shortcuts-action-text {
+    font-size: var(--text-sm);
+  }
+  .shortcuts-scope-badge {
+    font-size: var(--text-xs);
+    padding: var(--space-0-25) var(--space-1);
+  }
+}

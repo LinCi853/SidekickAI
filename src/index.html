@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-name="app.html">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function(){
+        try {
+          // 默认亮色（与 useThemeStore.readThemeMode 默认 'light' 一致）
+          // 支持 light / dark / system 三模式，system 读取系统 prefers-color-scheme
+          var t = localStorage.getItem('ai-window-theme') || 'light';
+          var html = document.documentElement;
+          var resolved;
+          if (t === 'dark') { resolved = 'dark'; }
+          else if (t === 'system') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          } else { resolved = 'light'; }
+          if (resolved === 'dark') { html.classList.add('dark'); html.setAttribute('data-theme','dark'); }
+          else { html.classList.remove('dark'); html.setAttribute('data-theme','light'); }
+        } catch(e){}
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'" />
+    <title>工百窗</title>
+    <!-- 字体：Orbitron(标题) + Exo 2(正文) + JetBrains Mono(代码) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&family=Exo+2:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </head>
+  <body data-name="app.body">
+    <div id="root" data-name="app.root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

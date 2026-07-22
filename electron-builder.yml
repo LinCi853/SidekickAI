@@ -1,0 +1,48 @@
+appId: com.sidekickai.app
+productName: SidekickAI
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**/*
+  - resources/icons/*
+  # 原生模块显式打包（避免被 electron-builder 自动剔除规则误删）
+  - node_modules/better-sqlite3/build/Release/better_sqlite3.node
+  - node_modules/uiohook-napi/prebuilds/**
+  # 删除 Chromium 协议汇总文件（10MB+，用户可在线查阅）
+  - '!LICENSES.chromium.html'
+# 原生 .node 必须解压到磁盘（无法从 asar 内加载 process.dlopen）
+# electron-builder 默认会 unpack *.node，显式声明确保跨平台稳定
+asarUnpack:
+  - node_modules/better-sqlite3/build/Release/*.node
+  - node_modules/uiohook-napi/prebuilds/**/*.node
+  - node_modules/uiohook-napi/build/Release/*.node
+# 打包后钩子：删除 Chromium 自带的 LICENSES.chromium.html 等大文件
+afterPack: scripts/after-pack.cjs
+extraResources:
+  - from: build/License.txt
+    to: License.txt
+# Windows 代码签名：从环境变量读取，未配置则跳过签名
+# CSC_LINK：证书 .pfx 路径或 base64；CSC_KEY_PASSWORD：证书密码
+# 架构由命令行 --x64 / --arm64 参数控制（yml 不配置 arch 避免追加导致合并包）
+win:
+  target:
+    - target: nsis
+  icon: resources/icons/icon.ico
+  # 仅保留中文 locales + en-US 兜底，删除其余语言 pak 文件（节省约 5MB）
+  # 注意：Chromium locale pak 文件名用连字符（zh-CN.pak / zh-TW.pak / en-US.pak）
+  # 不能用下划线（zh_CN），否则匹配不到任何 pak，locales 目录为空，启动后白屏
+  electronLanguages:
+    - zh-CN
+    - zh-TW
+    - en-US
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: SidekickAI
+  perMachine: false
+  # 按架构区分产物文件名，便于用户按 CPU 下载
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  # 自定义 NSIS 脚本：架构检测（arm64 装到 x64 系统时弹窗提示并退出）
+  include: installer.nsh

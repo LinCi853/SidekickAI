@@ -1,0 +1,296 @@
+/* =====================================================================
+   pages/DataExportWindow/index.css —— 数据迁移独立窗口样式
+   命名约定：BEM-like，前缀 data-export-
+   所有颜色/间距/圆角走 design-tokens.css 已定义的 CSS 变量
+   ===================================================================== */
+
+/* ===== 根容器 ===== */
+.data-export-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--background);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== 顶栏 ===== */
+.data-export-top {
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-bd);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  user-select: none;
+  flex: none;
+  z-index: 10;
+}
+.data-export-top-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: drag;
+  app-region: drag;
+  height: 100%;
+  min-width: 0;
+}
+.data-export-top-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.data-export-top-actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-1);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* ===== 主体：上下堆叠 ===== */
+.data-export-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ===== 分区卡片 ===== */
+.data-export-section {
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.data-export-section-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px dashed var(--glass-bd-2);
+}
+
+/* ===== 说明文字 ===== */
+.data-export-desc {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.data-export-desc-btn {
+  margin-left: var(--space-2);
+  padding: 2px var(--space-2);
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-sans);
+}
+.data-export-desc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== 预设按钮组 ===== */
+.data-export-presets {
+  display: flex;
+  gap: var(--space-2);
+}
+.data-export-preset-btn {
+  flex: 1;
+  padding: var(--space-2) var(--space-2);
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.data-export-preset-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.data-export-preset-btn.is-active {
+  background: var(--accent);
+  color: var(--foreground-inverse);
+  border-color: var(--accent);
+}
+.data-export-preset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== 细粒度选项列表 ===== */
+.data-export-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.data-export-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.data-export-option:hover {
+  border-color: var(--accent);
+}
+.data-export-option.is-checked {
+  background: var(--accent-10);
+  border-color: var(--accent);
+}
+.data-export-option.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.data-export-option.is-required {
+  /* 必选项标记 */
+}
+.data-export-option.is-required:hover {
+  border-color: var(--border);
+}
+.data-export-option-checkbox {
+  margin-top: 2px;
+  cursor: pointer;
+  flex: none;
+}
+.data-export-option-checkbox:disabled {
+  cursor: not-allowed;
+}
+.data-export-option-content {
+  flex: 1;
+  min-width: 0;
+}
+.data-export-option-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.data-export-option-label {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--foreground);
+}
+.data-export-option-size {
+  padding: 2px 6px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.data-export-option-badge {
+  padding: 2px 6px;
+  background: var(--accent-10);
+  color: var(--accent);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.data-export-option-desc {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+/* ===== 总体积汇总 ===== */
+.data-export-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--muted);
+  border-radius: var(--radius-sm);
+}
+.data-export-total-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+}
+.data-export-total-value {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+/* ===== 状态消息 ===== */
+.data-export-status {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  word-break: break-all;
+}
+.data-export-status.is-success {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.data-export-status.is-error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+/* ===== 操作按钮行 ===== */
+.data-export-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ===== 导入区 ===== */
+.data-export-import-warning {
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--danger);
+  line-height: 1.6;
+}
+.data-export-import-warning-title {
+  font-weight: 700;
+  margin-bottom: var(--space-1);
+}
+.data-export-import-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  word-break: break-all;
+}
+.data-export-import-file.is-selected {
+  color: var(--foreground);
+  border-color: var(--accent);
+}

@@ -1,0 +1,476 @@
+/* =====================================================================
+   OnboardingView.css —— 引导视图样式（分页式，纵向滚动兜底）
+   ===================================================================== */
+
+.onboarding-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+/* ===== 顶栏 ===== */
+.onboarding-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  -webkit-app-region: drag;
+}
+.onboarding-topbar-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+.onboarding-topbar-actions {
+  display: flex;
+  gap: var(--space-1);
+  -webkit-app-region: no-drag;
+}
+
+/* ===== 主体（启用纵向滚动兜底，内容溢出时可下滑查看） ===== */
+.onboarding-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-3) var(--space-5);
+  display: flex;
+}
+.onboarding-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 0;
+  overflow: visible;
+}
+
+/* ===== 页标题 ===== */
+.onboarding-page-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--card-foreground);
+  margin: 0 0 var(--space-1) 0;
+}
+.onboarding-page-desc {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  margin: 0 0 var(--space-3) 0;
+}
+
+/* ===== 欢迎页 ===== */
+.onboarding-header {
+  text-align: center;
+  margin-bottom: var(--space-4);
+}
+.onboarding-header h1 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0 0 var(--space-1) 0;
+}
+.onboarding-header p {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  margin: 0;
+  line-height: 1.5;
+}
+.onboarding-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-2);
+  overflow: hidden;
+}
+.onboarding-feature-card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.onboarding-feature-card strong {
+  display: block;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.onboarding-feature-card span {
+  color: var(--muted-foreground);
+}
+
+/* ===== 窗口类型页 ===== */
+.onboarding-window-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-2);
+  overflow: hidden;
+}
+.onboarding-window-card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.onboarding-window-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+.onboarding-window-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--primary);
+  background: var(--muted);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  width: fit-content;
+}
+.onboarding-window-desc {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+/* ===== 快捷键页 ===== */
+.onboarding-shortcut-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  overflow: hidden;
+}
+.onboarding-shortcut-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.onboarding-subtitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--card-foreground);
+  margin: 0 0 var(--space-2) 0;
+}
+.onboarding-shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow: hidden;
+}
+.onboarding-shortcut-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+.onboarding-shortcut-list kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--card-foreground);
+  background: var(--muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  flex: none;
+  min-width: 60px;
+  text-align: center;
+}
+.onboarding-shortcut-list span {
+  color: var(--muted-foreground);
+}
+
+/* ===== 快速设置页 ===== */
+.onboarding-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3) var(--space-4);
+  overflow: visible;
+}
+.onboarding-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.onboarding-field-full {
+  grid-column: 1 / -1;
+}
+.onboarding-field-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+.onboarding-field-hint {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  margin: var(--space-0-5) 0 var(--space-1) 0;
+  line-height: 1.4;
+}
+
+/* ===== Toggle 行（自启动/静默启动开关） ===== */
+.onboarding-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.onboarding-toggle-label {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+/* ===== 数据迁移导入按钮 ===== */
+.onboarding-import-btn {
+  align-self: flex-start;
+}
+
+/* ===== 导入错误提示 ===== */
+.onboarding-import-error {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+/* ===== 单选组 ===== */
+.onboarding-radio-group {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.onboarding-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.onboarding-radio input {
+  margin: 0;
+  accent-color: var(--primary);
+}
+.onboarding-radio:hover {
+  border-color: var(--primary);
+  color: var(--card-foreground);
+}
+.onboarding-radio.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.onboarding-radio.is-active input {
+  accent-color: var(--primary-foreground);
+}
+
+/* ===== 热键配置 ===== */
+.onboarding-hotkey-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.onboarding-hotkey-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.onboarding-hotkey-label {
+  flex: none;
+  width: 140px;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.onboarding-hotkey-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 200px;
+  padding: var(--space-1) var(--space-2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--card-foreground);
+}
+.onboarding-hotkey-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.onboarding-hotkey-save {
+  flex: none;
+  padding: var(--space-1) var(--space-2);
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--primary-foreground);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.onboarding-hotkey-save:hover {
+  background: var(--brand-700);
+}
+
+/* ===== 顶栏自定义页 ===== */
+.onboarding-topbar-toggles {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+.onboarding-toggle-chip {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.onboarding-toggle-chip:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+.onboarding-toggle-chip.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+/* ===== 底部导航 ===== */
+.onboarding-footer {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.onboarding-dots {
+  display: flex;
+  gap: var(--space-1);
+}
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--duration-fast);
+}
+.onboarding-dot.is-active {
+  background: var(--primary);
+}
+.onboarding-nav {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.onboarding-skip-btn {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.onboarding-skip-btn:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+.onboarding-prev-btn {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.onboarding-prev-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.onboarding-next-btn,
+.onboarding-finish-btn {
+  padding: var(--space-1) var(--space-4);
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--primary-foreground);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.onboarding-next-btn:hover:not(:disabled),
+.onboarding-finish-btn:hover:not(:disabled) {
+  background: var(--brand-700);
+}
+.onboarding-finish-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ===== 加载态 ===== */
+.onboarding-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+}
+
+/* ===== 暗色模式微调 ===== */
+.dark .onboarding-radio.is-active,
+.dark .onboarding-next-btn,
+.dark .onboarding-finish-btn {
+  color: var(--secondary-foreground);
+}
+.dark .onboarding-toggle-chip.is-on {
+  background: var(--accent-25);
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+/* ===== 自启动 + 静默启动 合并字段 ===== */
+.onboarding-toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.onboarding-toggle-row-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.onboarding-toggle-inline-hint {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  margin-left: var(--space-1);
+}

@@ -1,0 +1,245 @@
+.drawer-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay-warm-dim);
+  z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) ease;
+}
+.drawer-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--drawer-w);
+  height: 100%;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  z-index: 40;
+  transform: translateX(100%);
+  transition: transform var(--duration-slow) ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.drawer-panel.active {
+  transform: translateX(0);
+}
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-header-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--foreground);
+}
+.drawer-close-btn {
+  width: var(--titlebar-icon);
+  height: var(--titlebar-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+  flex-shrink: 0;
+}
+.drawer-close-btn svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+.drawer-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  /* 覆盖浏览器 button 默认 min-height，与 .drawer-item / .voice-config-row 同一套参数 */
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--glass-bd-2);
+  border-radius: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  transition: background var(--duration-fast);
+}
+.drawer-search svg {
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.drawer-search:hover {
+  background: var(--accent);
+}
+.drawer-search-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--foreground);
+  line-height: 1.4;
+}
+.drawer-search-input::placeholder {
+  color: var(--muted-foreground);
+}
+.drawer-kbd {
+  /* 纯文本加粗：去掉背景/边框/padding，三档字号自动跟随 */
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+  margin-left: auto;
+  line-height: 1.4;
+}
+.drawer-list {
+  flex: 1;
+  padding: 0 var(--space-2);
+  overflow-y: auto;
+}
+.drawer-item,
+.drawer-chat-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  /* 覆盖浏览器 button 默认 min-height，使高度完全由 padding + line-height 决定，
+     与 .voice-config-row 等 div 元素保持同一套 token 参数。 */
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  background: transparent;
+  text-align: left;
+  line-height: 1.4;
+  transition: color var(--duration-fast), font-weight var(--duration-fast);
+}
+.drawer-item:hover,
+.drawer-chat-item:hover {
+  background: transparent;
+  color: var(--accent-bright);
+  font-weight: 500;
+}
+.drawer-item svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
+  transition: color var(--duration-fast);
+}
+.drawer-item:hover svg {
+  color: var(--accent-bright);
+}
+.drawer-footer svg {
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
+}
+.drawer-item-shortcut {
+  /* 纯文本加粗：与 .drawer-kbd 视觉一致，三档字号自动跟随 */
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted-foreground);
+  margin-left: auto;
+  line-height: 1.4;
+  transition: color var(--duration-fast);
+  white-space: nowrap;
+}
+.drawer-item:hover .drawer-item-shortcut {
+  color: var(--accent-bright);
+}
+.drawer-footer {
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+}
+
+/* 自定义对话窗口分组 */
+.drawer-section-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+}
+.drawer-chat-dot {
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.drawer-chat-manage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  /* 覆盖浏览器 button 默认 min-height，与 .drawer-item / .voice-config-row 同一套参数 */
+  min-height: 0;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 0;
+  line-height: 1.4;
+  transition: color var(--duration-fast), font-weight var(--duration-fast);
+}
+.drawer-chat-manage:hover {
+  background: transparent;
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.drawer-chat-manage svg {
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
+  flex-shrink: 0;
+}
+.drawer-chat-empty {
+  padding: var(--space-1) var(--space-2);
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.drawer-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-0-5) var(--space-2);
+}
