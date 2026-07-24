@@ -15,7 +15,8 @@ import {
   getFormBounds,
   loadRenderer,
   resolveUserAgent,
-  setupBoundsTracking,
+  createDefaultWebPreferences,
+  attachDetachedWindowLifecycle,
   safeLogWindowTrace,
   attachWindowHotkeyInterceptor,
 } from './helpers.js'
@@ -62,14 +63,10 @@ export function createChatWindow(): BrowserWindow | null {
     frame: false,
     alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
-    webPreferences: {
+    webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
       webviewTag: false,
-      backgroundThrottling: false,
-    },
+    }),
   }))
 
   if (saved.isMaximized) {
@@ -98,28 +95,7 @@ export function createChatWindow(): BrowserWindow | null {
   // 窗口控制 IPC 由调用方所在窗口自行处理（WIN_CONTROL_* 复用），
   // 但脱离窗口的 IPC 复用同一通道，需要 findWindowIdByWin 正确返回 'chat'
   windowState.detachedWindows.set(CHAT_WINDOW_ID, win)
-  setupBoundsTracking(win, CHAT_WINDOW_ID)
-
-  win.on('focus', () => {
-    windowState.lastFocusedWin = win
-  })
-
-  win.on('close', () => {
-    const state = windowStore.getOrDefault(CHAT_WINDOW_ID)
-    if (!win.isDestroyed()) {
-      if (!win.isMaximized()) {
-        state.bounds = win.getBounds()
-      }
-      state.isMaximized = win.isMaximized()
-      state.alwaysOnTop = win.isAlwaysOnTop()
-      windowStore.save(CHAT_WINDOW_ID, state)
-    }
-    safeLogWindowTrace(CHAT_WINDOW_ID, 'close')
-  })
-
-  win.on('closed', () => {
-    windowState.detachedWindows.delete(CHAT_WINDOW_ID)
-  })
+  attachDetachedWindowLifecycle(win, CHAT_WINDOW_ID)
 
   return win
 }
@@ -150,14 +126,10 @@ export function createChatDetachedWindow(windowId: string, config: ChatWindowCon
     frame: false,
     alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
-    webPreferences: {
+    webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
       webviewTag: false,
-      backgroundThrottling: false,
-    },
+    }),
   }))
 
   if (saved.isMaximized) {
@@ -182,28 +154,7 @@ export function createChatDetachedWindow(windowId: string, config: ChatWindowCon
   attachWindowHotkeyInterceptor(win.webContents)
 
   windowState.detachedWindows.set(windowId, win)
-  setupBoundsTracking(win, windowId)
-
-  win.on('focus', () => {
-    windowState.lastFocusedWin = win
-  })
-
-  win.on('close', () => {
-    const state = windowStore.getOrDefault(windowId)
-    if (!win.isDestroyed()) {
-      if (!win.isMaximized()) {
-        state.bounds = win.getBounds()
-      }
-      state.isMaximized = win.isMaximized()
-      state.alwaysOnTop = win.isAlwaysOnTop()
-      windowStore.save(windowId, state)
-    }
-    safeLogWindowTrace(windowId, 'close')
-  })
-
-  win.on('closed', () => {
-    windowState.detachedWindows.delete(windowId)
-  })
+  attachDetachedWindowLifecycle(win, windowId)
 
   return win
 }

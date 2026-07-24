@@ -4,6 +4,7 @@ import type { DevicePreset } from '../../../lib/electron-api';
 import { savePreset, deletePreset } from '../../../lib/electron-api';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
+import { SectionTitle, FormRow } from '../../ui';
 
 interface PresetSectionProps {
   presets: DevicePreset[];
@@ -99,25 +100,13 @@ export default function PresetSection({
 
   return (
     <section data-name="settings.preset.section">
-      <div
-        className="settings-section-title-row collapsible"
-        onClick={() => setPresetExpanded((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={presetExpanded}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setPresetExpanded((v) => !v);
-          }
-        }}
-        data-name="settings.preset.title-row"
+      <SectionTitle
+        collapsible
+        collapsed={!presetExpanded}
+        onToggle={() => setPresetExpanded((v) => !v)}
       >
-        <span className="settings-section-title" data-name="settings.preset.title">
-          设备预设（{presets.length}）
-        </span>
-        <span className={`collapse-toggle-icon${presetExpanded ? ' expanded' : ''}`} data-name="settings.preset.collapse-icon">▼</span>
-      </div>
+        设备预设（{presets.length}）
+      </SectionTitle>
       {presetExpanded && (
         <>
           {loading && (
@@ -160,7 +149,7 @@ export default function PresetSection({
                   <div className="provider-card-actions spaced" data-name={`settings.preset.preset-item-${idx + 1}-actions`}>
                     <Button
                       variant="text"
-                      className="provider-action-btn"
+                      className="provider-action-btn btn-secondary-underline"
                       onClick={() => handleEdit(p)}
                       data-name={`settings.preset.preset-item-${idx + 1}-edit-button`}
                     >
@@ -170,7 +159,7 @@ export default function PresetSection({
                       <Button
                         variant="text"
                         danger
-                        className="provider-action-btn"
+                        className="provider-action-btn btn-secondary-underline"
                         onClick={() => void handleDelete(p.id)}
                         data-name={`settings.preset.preset-item-${idx + 1}-delete-button`}
                       >
@@ -199,7 +188,7 @@ export default function PresetSection({
           {editingId !== 'new' && (
             <Button
               variant="ghost"
-              className="provider-add-btn spaced"
+              className="provider-add-btn spaced btn-save-primary"
               onClick={handleAdd}
               data-name="settings.preset.add-button"
             >
@@ -232,11 +221,10 @@ function PresetForm({
 }: PresetFormProps) {
   return (
     <div className="provider-form" data-name="settings.preset.form">
-      <div className="provider-form-row" data-name="settings.preset.form-name-row">
-        <label className="provider-form-label" data-name="settings.preset.form-name-label">名称</label>
+      <FormRow label="名称" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.name}
           placeholder="Windows / Chrome 125"
           spellCheck={false}
@@ -244,11 +232,10 @@ function PresetForm({
           onChange={(e) => onUpdateField('name', e.target.value)}
           data-name="settings.preset.form-name-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-platform-row">
-        <label className="provider-form-label" data-name="settings.preset.form-platform-label">平台</label>
+      </FormRow>
+      <FormRow label="平台" stack>
         <select
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.platform}
           onChange={(e) => onUpdateField('platform', e.target.value as DevicePreset['platform'])}
           data-name="settings.preset.form-platform-select"
@@ -256,12 +243,11 @@ function PresetForm({
           <option value="desktop">desktop</option>
           <option value="mobile">mobile</option>
         </select>
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-user-agent-row">
-        <label className="provider-form-label" data-name="settings.preset.form-user-agent-label">User-Agent</label>
+      </FormRow>
+      <FormRow label="User-Agent" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.userAgent}
           placeholder="Mozilla/5.0 ..."
           spellCheck={false}
@@ -269,46 +255,42 @@ function PresetForm({
           onChange={(e) => onUpdateField('userAgent', e.target.value)}
           data-name="settings.preset.form-user-agent-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-viewport-width-row">
-        <label className="provider-form-label" data-name="settings.preset.form-viewport-width-label">视口宽度</label>
+      </FormRow>
+      <FormRow label="视口宽度" stack>
         <input
           type="number"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.viewport.width}
           min={1}
           onChange={(e) => onUpdateViewport('width', Number(e.target.value))}
           data-name="settings.preset.form-viewport-width-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-viewport-height-row">
-        <label className="provider-form-label" data-name="settings.preset.form-viewport-height-label">视口高度</label>
+      </FormRow>
+      <FormRow label="视口高度" stack>
         <input
           type="number"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.viewport.height}
           min={1}
           onChange={(e) => onUpdateViewport('height', Number(e.target.value))}
           data-name="settings.preset.form-viewport-height-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-dpr-row">
-        <label className="provider-form-label" data-name="settings.preset.form-dpr-label">设备像素比 (DPR)</label>
+      </FormRow>
+      <FormRow label="设备像素比 (DPR)" stack>
         <input
           type="number"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.devicePixelRatio}
           min={0}
           step={0.5}
           onChange={(e) => onUpdateField('devicePixelRatio', Number(e.target.value))}
           data-name="settings.preset.form-dpr-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-navigator-platform-row">
-        <label className="provider-form-label" data-name="settings.preset.form-navigator-platform-label">navigator.platform</label>
+      </FormRow>
+      <FormRow label="navigator.platform" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.navigatorPlatform}
           placeholder="Win32"
           spellCheck={false}
@@ -316,12 +298,11 @@ function PresetForm({
           onChange={(e) => onUpdateField('navigatorPlatform', e.target.value)}
           data-name="settings.preset.form-navigator-platform-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-vendor-row">
-        <label className="provider-form-label" data-name="settings.preset.form-vendor-label">navigator.vendor</label>
+      </FormRow>
+      <FormRow label="navigator.vendor" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.vendor}
           placeholder="Google Inc."
           spellCheck={false}
@@ -329,45 +310,41 @@ function PresetForm({
           onChange={(e) => onUpdateField('vendor', e.target.value)}
           data-name="settings.preset.form-vendor-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-touch-points-row">
-        <label className="provider-form-label" data-name="settings.preset.form-touch-points-label">最大触点数</label>
+      </FormRow>
+      <FormRow label="最大触点数" stack>
         <input
           type="number"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.maxTouchPoints}
           min={0}
           onChange={(e) => onUpdateField('maxTouchPoints', Number(e.target.value))}
           data-name="settings.preset.form-touch-points-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-cpu-cores-row">
-        <label className="provider-form-label" data-name="settings.preset.form-cpu-cores-label">CPU 核心数</label>
+      </FormRow>
+      <FormRow label="CPU 核心数" stack>
         <input
           type="number"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.hardwareConcurrency}
           min={1}
           onChange={(e) => onUpdateField('hardwareConcurrency', Number(e.target.value))}
           data-name="settings.preset.form-cpu-cores-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-device-memory-row">
-        <label className="provider-form-label" data-name="settings.preset.form-device-memory-label">设备内存 (GB)</label>
+      </FormRow>
+      <FormRow label="设备内存 (GB)" stack>
         <input
           type="number"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.deviceMemory}
           min={1}
           onChange={(e) => onUpdateField('deviceMemory', Number(e.target.value))}
           data-name="settings.preset.form-device-memory-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-ch-platform-row">
-        <label className="provider-form-label" data-name="settings.preset.form-ch-platform-label">Client Hints 平台</label>
+      </FormRow>
+      <FormRow label="Client Hints 平台" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.chPlatform}
           placeholder="Windows"
           spellCheck={false}
@@ -375,12 +352,11 @@ function PresetForm({
           onChange={(e) => onUpdateField('chPlatform', e.target.value)}
           data-name="settings.preset.form-ch-platform-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-ch-platform-version-row">
-        <label className="provider-form-label" data-name="settings.preset.form-ch-platform-version-label">Client Hints 平台版本</label>
+      </FormRow>
+      <FormRow label="Client Hints 平台版本" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.chPlatformVersion}
           placeholder="10.0.0"
           spellCheck={false}
@@ -388,11 +364,10 @@ function PresetForm({
           onChange={(e) => onUpdateField('chPlatformVersion', e.target.value)}
           data-name="settings.preset.form-ch-platform-version-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-ch-mobile-row">
-        <label className="provider-form-label" data-name="settings.preset.form-ch-mobile-label">Client Hints 移动端</label>
+      </FormRow>
+      <FormRow label="Client Hints 移动端" stack>
         <select
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={String(draft.chMobile)}
           onChange={(e) => onUpdateField('chMobile', e.target.value === 'true')}
           data-name="settings.preset.form-ch-mobile-select"
@@ -400,12 +375,11 @@ function PresetForm({
           <option value="false">否</option>
           <option value="true">是</option>
         </select>
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-language-row">
-        <label className="provider-form-label" data-name="settings.preset.form-language-label">默认语言</label>
+      </FormRow>
+      <FormRow label="默认语言" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.language}
           placeholder="zh-CN"
           spellCheck={false}
@@ -413,12 +387,11 @@ function PresetForm({
           onChange={(e) => onUpdateField('language', e.target.value)}
           data-name="settings.preset.form-language-input"
         />
-      </div>
-      <div className="provider-form-row" data-name="settings.preset.form-timezone-row">
-        <label className="provider-form-label" data-name="settings.preset.form-timezone-label">默认时区</label>
+      </FormRow>
+      <FormRow label="默认时区" stack>
         <input
           type="text"
-          className="provider-form-input"
+          className="provider-form-input input-underline"
           value={draft.timezone}
           placeholder="Asia/Shanghai"
           spellCheck={false}
@@ -426,7 +399,7 @@ function PresetForm({
           onChange={(e) => onUpdateField('timezone', e.target.value)}
           data-name="settings.preset.form-timezone-input"
         />
-      </div>
+      </FormRow>
       <div className="provider-form-actions" data-name="settings.preset.form-actions">
         <Button
           variant="primary-compact"

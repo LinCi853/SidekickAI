@@ -10,7 +10,7 @@
 //   - 单例：同时仅显示一个清理窗口（防止重复弹出）
 
 import { BrowserWindow, screen } from 'electron'
-import { WINDOW_BACKGROUND_COLOR } from './helpers.js'
+import { WINDOW_BACKGROUND_COLOR, createDefaultWebPreferences } from './helpers.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import type { ProcessInfo } from '../utils/process-guard.js'
 
@@ -205,12 +205,13 @@ export function showProcessCleanupWindow(processes: ProcessInfo[]): Promise<'cle
         title: '残留进程清理',
         alwaysOnTop: true,
         webPreferences: {
+          ...createDefaultWebPreferences({
+            preload: '',
+            webviewTag: false,
+          }),
           // 不使用 preload：自包含 HTML 通过 console-message 通信
-          contextIsolation: true,
-          nodeIntegration: false,
+          preload: undefined,
           sandbox: true,
-          webviewTag: false,
-          backgroundThrottling: false,
         },
       }),
     )

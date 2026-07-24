@@ -4,10 +4,11 @@ import {
   getPlatformCapabilities,
   clearAllData,
   openExportWindow,
-  getAppSettings,
   updateAppSettings,
 } from '../../../lib/electron-api';
 import Button from '../../ui/Button';
+import { SectionTitle } from '../../ui';
+import { useSettingsDraft } from '../../../hooks/useSettingsData';
 
 const PLATFORM_LABELS: Record<string, string> = {
   win32: 'Windows',
@@ -23,15 +24,17 @@ const STORAGE_LABELS: Record<string, string> = {
 };
 
 export default function AboutSection() {
+  const { draft, setDraft } = useSettingsDraft();
   const [caps, setCaps] = useState<PlatformCapabilities | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [whitelist, setWhitelist] = useState<string[]>([]);
   const [newOrigin, setNewOrigin] = useState('');
+
+  // 从草稿派生弹窗白名单
+  const whitelist = draft?.popupWhitelist || [];
 
   useEffect(() => {
     void getPlatformCapabilities().then(setCaps).catch(() => {});
-    void getAppSettings().then((s) => setWhitelist(s.popupWhitelist || [])).catch(() => {});
   }, []);
 
   const handleClearAllData = async () => {
@@ -60,30 +63,30 @@ export default function AboutSection() {
       return;
     }
     const next = [...whitelist, origin];
-    setWhitelist(next);
+    setDraft({ popupWhitelist: next });
     setNewOrigin('');
     try {
       await updateAppSettings({ popupWhitelist: next });
     } catch (err) {
       console.error('[AboutSection] 加入白名单失败:', err);
-      setWhitelist(whitelist);
+      setDraft({ popupWhitelist: whitelist });
     }
   };
 
   const handleRemoveOrigin = async (origin: string) => {
     const next = whitelist.filter((x) => x !== origin);
-    setWhitelist(next);
+    setDraft({ popupWhitelist: next });
     try {
       await updateAppSettings({ popupWhitelist: next });
     } catch (err) {
       console.error('[AboutSection] 移除白名单失败:', err);
-      setWhitelist(whitelist);
+      setDraft({ popupWhitelist: whitelist });
     }
   };
 
   return (
     <section data-name="settings.about.section">
-      <div className="settings-section-title" data-name="settings.about.title">关于</div>
+      <SectionTitle>关于</SectionTitle>
       <div className="about-row" data-name="settings.about.name-row"><span data-name="settings.about.name-label">名称</span><span data-name="settings.about.name-value">SidekickAI（工百窗）</span></div>
       <div className="about-row" data-name="settings.about.version-row"><span data-name="settings.about.version-label">版本</span><span data-name="settings.about.version-value">v0.5.1</span></div>
       <div className="about-row" data-name="settings.about.platform-row">
@@ -103,7 +106,9 @@ export default function AboutSection() {
         </span>
       </div>
 
-      <div className="settings-section-title" style={{ marginTop: 24 }} data-name="settings.about.whitelist-title">弹窗白名单</div>
+      <div style={{ marginTop: 24 }}>
+        <SectionTitle>弹窗白名单</SectionTitle>
+      </div>
       <div className="block-rule-form-stack" data-name="settings.about.whitelist-list">
         {whitelist.length === 0 ? (
           <div className="settings-section-hint" data-name="settings.about.whitelist-empty">暂无白名单条目</div>
@@ -127,7 +132,7 @@ export default function AboutSection() {
       <div className="voice-field-row" data-name="settings.about.whitelist-add-row">
         <input
           type="text"
-          className="voice-input"
+          className="voice-input input-underline"
           value={newOrigin}
           onChange={(e) => setNewOrigin(e.target.value)}
           placeholder="https://example.com/"
@@ -145,7 +150,9 @@ export default function AboutSection() {
         </button>
       </div>
 
-      <div className="settings-section-title" style={{ marginTop: 24 }} data-name="settings.about.data-management-title">数据管理</div>
+      <div style={{ marginTop: 24 }}>
+        <SectionTitle>数据管理</SectionTitle>
+      </div>
       <div className="block-rule-form-stack" data-name="settings.about.data-management-stack">
         <button
           type="button"

@@ -1,31 +1,16 @@
-import { updateAppSettings, listPresets, getAppSettings, clearUsageTraces } from '../../../lib/electron-api';
+import { updateAppSettings, listPresets, clearUsageTraces } from '../../../lib/electron-api';
 import type { DevicePreset } from '../../../lib/electron-api';
 import { useEffect, useState } from 'react';
+import { useSettingsDraft } from '../../../hooks/useSettingsData';
+import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
+import { SectionTitle, FormRow } from '../../ui';
+import type { GeneralSettings } from '../types';
 
 interface GeneralSectionProps {
-  /** 启动时打开：home=平台首页 / lastConversation=最近对话地址 */
-  startupOpen: 'home' | 'lastConversation';
-  setStartupOpen: (v: 'home' | 'lastConversation') => void;
-  /** 关闭按钮行为：close=直接关闭 / minimize=最小化到托盘 */
-  closeBehavior: 'close' | 'minimize';
-  setCloseBehavior: (v: 'close' | 'minimize') => void;
-  /** Enter 键发送消息（Shift+Enter 换行） */
-  enterToSend: boolean;
-  setEnterToSend: (v: boolean) => void;
-  /** 默认桌面端 UA 预设 id */
-  defaultDesktopUaPreset: string;
-  setDefaultDesktopUaPreset: (v: string) => void;
-  /** 默认移动端 UA 预设 id */
-  defaultMobileUaPreset: string;
-  setDefaultMobileUaPreset: (v: string) => void;
-  /** 点击已打开应用时的行为：switch=跳转 / close=关闭 */
-  appClickBehavior: 'switch' | 'close';
-  setAppClickBehavior: (v: 'switch' | 'close') => void;
-  /** 使用统计与操作日志：记录启动时间 + data-name 点击日志（默认开） */
-  usageTrackingEnabled: boolean;
-  setUsageTrackingEnabled: (v: boolean) => void;
+  general: GeneralSettings;
+  onChange: (patch: Partial<GeneralSettings>) => void;
 }
 
 const CLOSE_OPTIONS: Array<{ value: 'close' | 'minimize'; label: string }> = [
@@ -43,41 +28,43 @@ const APP_CLICK_OPTIONS: Array<{ value: 'switch' | 'close'; label: string }> = [
   { value: 'close', label: '关闭' },
 ];
 
-export default function GeneralSection({
-  startupOpen,
-  setStartupOpen,
-  closeBehavior,
-  setCloseBehavior,
-  enterToSend,
-  setEnterToSend,
-  defaultDesktopUaPreset,
-  setDefaultDesktopUaPreset,
-  defaultMobileUaPreset,
-  setDefaultMobileUaPreset,
-  appClickBehavior,
-  setAppClickBehavior,
-  usageTrackingEnabled,
-  setUsageTrackingEnabled,
-}: GeneralSectionProps) {
+export default function GeneralSection({ general, onChange }: GeneralSectionProps) {
+  // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
+  const {
+    startupOpen,
+    closeBehavior,
+    enterToSend,
+    defaultDesktopUaPreset,
+    defaultMobileUaPreset,
+    appClickBehavior,
+    usageTrackingEnabled,
+  } = general;
+
+  // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部 updateAppSettings 完成
+  const setStartupOpen = (v: 'home' | 'lastConversation') => onChange({ startupOpen: v });
+  const setCloseBehavior = (v: 'close' | 'minimize') => onChange({ closeBehavior: v });
+  const setEnterToSend = (v: boolean) => onChange({ enterToSend: v });
+  const setDefaultDesktopUaPreset = (v: string) => onChange({ defaultDesktopUaPreset: v });
+  const setDefaultMobileUaPreset = (v: string) => onChange({ defaultMobileUaPreset: v });
+  const setAppClickBehavior = (v: 'switch' | 'close') => onChange({ appClickBehavior: v });
+  const setUsageTrackingEnabled = (v: boolean) => onChange({ usageTrackingEnabled: v });
+  const { draft, setDraft } = useSettingsDraft();
+  // 使用统计清除反馈（带自动清除的字符串消息 + 独立的 success/error 类型，用于颜色区分）
+  const { feedback: usageClearMsg, showFeedback: showUsageToast } = useFeedbackToast(3000);
+  const [usageClearType, setUsageClearType] = useState<'success' | 'error'>('success');
   const [presets, setPresets] = useState<DevicePreset[]>([]);
-  // 开机自启动 / 静默启动（由本组件自行从主进程拉取，不经过父组件 props）
-  const [autoLaunch, setAutoLaunch] = useState(false);
-  const [silentStart, setSilentStart] = useState(false);
+  // 开机自启动 / 静默启动（通过 useSettingsDraft 从主进程加载，不经过父组件 props）
+  const autoLaunch = draft?.autoLaunch ?? false;
+  const silentStart = draft?.silentStart ?? false;
   const [autoLaunchError, setAutoLaunchError] = useState(false);
-  // 使用统计清除反馈
-  const [usageClearFeedback, setUsageClearFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const showUsageFeedback = (type: 'success' | 'error', msg: string) => {
+    setUsageClearType(type);
+    showUsageToast(msg);
+  };
 
   useEffect(() => {
     listPresets().then(setPresets).catch((e) => console.error('[general] 加载预设失败:', e));
-  }, []);
-
-  useEffect(() => {
-    getAppSettings()
-      .then((cfg) => {
-        setAutoLaunch(cfg.autoLaunch ?? false);
-        setSilentStart(cfg.silentStart ?? false);
-      })
-      .catch((e) => console.error('[general] 加载自启动设置失败:', e));
   }, []);
 
   const desktopPresets = presets.filter((p) => p.platform === 'desktop');
@@ -85,15 +72,12 @@ export default function GeneralSection({
 
   return (
     <section data-name="settings.general.section">
-      <div className="settings-section-title" data-name="settings.general.title">通用</div>
+      <SectionTitle>通用</SectionTitle>
 
       {/* 默认 UA 预设（用户自选桌面端 / 移动端 UA，数据来源于设备预设） */}
-      <div className="voice-config-row" data-name="settings.general.desktop-ua-row">
-        <label className="voice-config-label" data-name="settings.general.desktop-ua-label">
-          <span className="voice-config-name" data-name="settings.general.desktop-ua-name">默认桌面端 UA</span>
-        </label>
+      <FormRow label="默认桌面端 UA">
         <select
-          className="ua-preset-select"
+          className="ua-preset-select input-underline"
           value={defaultDesktopUaPreset}
           onChange={async (e) => {
             const next = e.target.value;
@@ -110,14 +94,11 @@ export default function GeneralSection({
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-      </div>
+      </FormRow>
 
-      <div className="voice-config-row" data-name="settings.general.mobile-ua-row">
-        <label className="voice-config-label" data-name="settings.general.mobile-ua-label">
-          <span className="voice-config-name" data-name="settings.general.mobile-ua-name">默认移动端 UA</span>
-        </label>
+      <FormRow label="默认移动端 UA">
         <select
-          className="ua-preset-select"
+          className="ua-preset-select input-underline"
           value={defaultMobileUaPreset}
           onChange={async (e) => {
             const next = e.target.value;
@@ -134,13 +115,10 @@ export default function GeneralSection({
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-      </div>
+      </FormRow>
 
       {/* 启动时打开：首页 / 最近对话 */}
-      <div className="voice-config-row" data-name="settings.general.startup-open-row">
-        <label className="voice-config-label" data-name="settings.general.startup-open-label">
-          <span className="voice-config-name" data-name="settings.general.startup-open-name">启动时打开</span>
-        </label>
+      <FormRow label="启动时打开">
         <SegmentedControl
           value={startupOpen}
           options={STARTUP_OPEN_OPTIONS}
@@ -155,13 +133,10 @@ export default function GeneralSection({
           name="启动时打开"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
 
       {/* 关闭按钮行为 */}
-      <div className="voice-config-row" data-name="settings.general.close-behavior-row">
-        <label className="voice-config-label" data-name="settings.general.close-behavior-label">
-          <span className="voice-config-name" data-name="settings.general.close-behavior-name">关闭按钮行为</span>
-        </label>
+      <FormRow label="关闭按钮行为">
         <SegmentedControl
           value={closeBehavior}
           options={CLOSE_OPTIONS}
@@ -176,13 +151,10 @@ export default function GeneralSection({
           name="关闭按钮行为"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
 
       {/* 点击已打开应用时的行为：跳转(默认) / 关闭 */}
-      <div className="voice-config-row" data-name="settings.general.app-click-behavior-row">
-        <label className="voice-config-label" data-name="settings.general.app-click-behavior-label">
-          <span className="voice-config-name" data-name="settings.general.app-click-behavior-name">点击已打开应用时</span>
-        </label>
+      <FormRow label="点击已打开应用时">
         <SegmentedControl
           value={appClickBehavior}
           options={APP_CLICK_OPTIONS}
@@ -197,13 +169,10 @@ export default function GeneralSection({
           name="点击已打开应用时"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
 
       {/* Enter 键发送消息 */}
-      <div className="voice-config-row" data-name="settings.general.enter-to-send-row">
-        <label className="voice-config-label" data-name="settings.general.enter-to-send-label">
-          <span className="voice-config-name" data-name="settings.general.enter-to-send-name">Enter 键发送消息</span>
-        </label>
+      <FormRow label="Enter 键发送消息">
         <Toggle
           checked={enterToSend}
           onChange={async (next) => {
@@ -218,31 +187,31 @@ export default function GeneralSection({
           aria-label="Enter 键发送消息"
           data-name="settings.general.enter-to-send-toggle"
         />
-      </div>
+      </FormRow>
 
       {/* 开机自启动 */}
-      <div className="voice-config-row" data-name="settings.general.auto-launch-row">
-        <label className="voice-config-label" data-name="settings.general.auto-launch-label">
-          <span className="voice-config-name" data-name="settings.general.auto-launch-name">开机自启动</span>
-        </label>
+      <FormRow label="开机自启动">
         <Toggle
           checked={autoLaunch}
           onChange={async (next) => {
-            setAutoLaunch(next);
             setAutoLaunchError(false);
-            if (!next) setSilentStart(false);
+            if (!next) {
+              setDraft({ autoLaunch: next, silentStart: false });
+            } else {
+              setDraft({ autoLaunch: next });
+            }
             try {
               await updateAppSettings({ autoLaunch: next, silentStart: next ? undefined : false });
             } catch (e) {
               console.error('保存开机自启动设置失败:', e);
-              setAutoLaunch(!next);
+              setDraft({ autoLaunch: !next });
               setAutoLaunchError(true);
             }
           }}
           aria-label="开机自启动"
           data-name="settings.general.auto-launch-toggle"
         />
-      </div>
+      </FormRow>
       {autoLaunchError && (
         <div
           style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.4, padding: '0 0 6px 0' }}
@@ -254,34 +223,26 @@ export default function GeneralSection({
 
       {/* 静默启动：仅当开机自启动开启时显示 */}
       {autoLaunch && (
-        <div className="voice-config-row" data-name="settings.general.silent-start-row">
-          <label className="voice-config-label" data-name="settings.general.silent-start-label">
-            <span className="voice-config-name" data-name="settings.general.silent-start-name">静默启动</span>
-            <span className="voice-config-hint" data-name="settings.general.silent-start-hint">开机时不显示主窗口，仅在托盘运行</span>
-          </label>
+        <FormRow label="静默启动" hint="开机时不显示主窗口，仅在托盘运行">
           <Toggle
             checked={silentStart}
             onChange={async (next) => {
-              setSilentStart(next);
+              setDraft({ silentStart: next });
               try {
                 await updateAppSettings({ silentStart: next });
               } catch (e) {
                 console.error('保存静默启动设置失败:', e);
-                setSilentStart(!next);
+                setDraft({ silentStart: !next });
               }
             }}
             aria-label="静默启动"
             data-name="settings.general.silent-start-toggle"
           />
-        </div>
+        </FormRow>
       )}
 
       {/* 使用统计与操作日志：记录启动时间 + data-name 点击日志，完全本地存储 */}
-      <div className="voice-config-row" data-name="settings.general.usage-tracking-row">
-        <label className="voice-config-label" data-name="settings.general.usage-tracking-label">
-          <span className="voice-config-name" data-name="settings.general.usage-tracking-name">使用统计与操作日志</span>
-          <span className="voice-config-hint" data-name="settings.general.usage-tracking-hint">记录启动时间与按钮点击频次，完全本地存储</span>
-        </label>
+      <FormRow label="使用统计与操作日志" hint="记录启动时间与按钮点击频次，完全本地存储">
         <Toggle
           checked={usageTrackingEnabled}
           onChange={async (next) => {
@@ -296,48 +257,42 @@ export default function GeneralSection({
           aria-label="使用统计与操作日志"
           data-name="settings.general.usage-tracking-toggle"
         />
-      </div>
+      </FormRow>
       {usageTrackingEnabled && (
-        <div className="voice-config-row" data-name="settings.general.usage-clear-row">
-          <label className="voice-config-label" data-name="settings.general.usage-clear-label">
-            <span className="voice-config-name" data-name="settings.general.usage-clear-name">清除统计记录</span>
-            <span className="voice-config-hint" data-name="settings.general.usage-clear-hint">清空所有启动时间与点击日志</span>
-          </label>
+        <FormRow label="清除统计记录" hint="清空所有启动时间与点击日志">
           <button
             type="button"
-            className="ua-preset-select"
+            className="ua-preset-select input-underline"
             style={{ cursor: 'pointer', padding: '4px 12px' }}
             data-name="settings.general.usage-clear-button"
             onClick={async () => {
               try {
                 const result = await clearUsageTraces();
                 if (result.ok) {
-                  setUsageClearFeedback({ type: 'success', msg: `已清除 ${result.count} 条记录` });
+                  showUsageFeedback('success', `已清除 ${result.count} 条记录`);
                 } else {
-                  setUsageClearFeedback({ type: 'error', msg: '清除失败' });
+                  showUsageFeedback('error', '清除失败');
                 }
-                setTimeout(() => setUsageClearFeedback(null), 3000);
               } catch (e) {
-                setUsageClearFeedback({ type: 'error', msg: '清除失败: ' + String(e) });
-                setTimeout(() => setUsageClearFeedback(null), 3000);
+                showUsageFeedback('error', '清除失败: ' + String(e));
               }
             }}
           >
             清除
           </button>
-        </div>
+        </FormRow>
       )}
-      {usageClearFeedback && (
+      {usageClearMsg && (
         <div
           style={{
             fontSize: 12,
-            color: usageClearFeedback.type === 'success' ? 'var(--success, #22c55e)' : 'var(--danger)',
+            color: usageClearType === 'success' ? 'var(--success, #22c55e)' : 'var(--danger)',
             lineHeight: 1.4,
             padding: '0 0 6px 0',
           }}
           data-name="settings.general.usage-clear-feedback"
         >
-          {usageClearFeedback.msg}
+          {usageClearMsg}
         </div>
       )}
     </section>

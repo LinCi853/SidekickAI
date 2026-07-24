@@ -24,14 +24,17 @@ export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl'
 export { default as WindowControls } from './WindowControls';
 export type { WindowControlsProps } from './WindowControls';
 
-export { default as Card } from './Card';
-export type { CardProps } from './Card';
-
-export { default as ListItem } from './ListItem';
-export type { ListItemProps } from './ListItem';
+export { default as TitleBar } from './TitleBar';
+export type { TitleBarProps } from './TitleBar';
 
 export { default as Modal } from './Modal';
 export type { ModalProps } from './Modal';
 
 export { default as HotkeyRecorder } from './HotkeyRecorder';
 export type { HotkeyRecorderProps, OtherHotkey } from './HotkeyRecorder';
+
+export { default as FormRow } from './FormRow';
+export type { FormRowProps } from './FormRow';
+
+export { default as SectionTitle } from './SectionTitle';
+export type { SectionTitleProps } from './SectionTitle';

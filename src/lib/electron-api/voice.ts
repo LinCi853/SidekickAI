@@ -9,30 +9,6 @@ import { requireElectron } from './core';
    语音识别 —— 对应 window.electron.stt
    ===================================================================== */
 
-/** 开始录音 */
-export async function startRecording(): Promise<void> {
-  const api = requireElectron();
-  return api.stt.start();
-}
-
-/** 停止录音并返回识别文本 */
-export async function stopAndTranscribe(): Promise<string> {
-  const api = requireElectron();
-  return api.stt.stop();
-}
-
-/** 注册识别结果回调（返回取消订阅函数） */
-export function onSttResult(callback: (text: string) => void): () => void {
-  const api = requireElectron();
-  return api.stt.onResult(callback);
-}
-
-/** 注册识别错误回调（返回取消订阅函数） */
-export function onSttError(callback: (err: string) => void): () => void {
-  const api = requireElectron();
-  return api.stt.onError(callback);
-}
-
 /**
  * 测试当前 AI 接入配置连通性（用于设置页"测试连接"按钮）。
  * 发送 0.3s 静音样本，验证能正常请求并解析。
@@ -177,19 +153,8 @@ export function uninstallVoiceModel(
 }
 
 /* =====================================================================
-   语音热键 + 后台语音 + 预览窗 —— 对应 window.electron.onVoiceHotkey 等
+   语音热键 + 后台语音 + 预览窗 —— 对应 window.electron.onVoiceInjectAndSend
    ===================================================================== */
-
-/**
- * 监听 Alt+V keydown/keyup 事件（主进程 uiohook 转发，仅主窗口渲染层订阅）。
- * @param downCb keydown 回调（应用内 C1 路径：开始录音）
- * @param upCb keyup 回调（应用内 C1 路径：停止录音 + 注入+发送）
- * @returns 取消监听函数
- */
-export function onVoiceHotkey(downCb: () => void, upCb: () => void): () => void {
-  const api = requireElectron();
-  return api.onVoiceHotkey(downCb, upCb);
-}
 
 /** 后台语音注入载荷（主进程→最近聚焦窗口渲染） */
 export interface VoiceInjectPayload {

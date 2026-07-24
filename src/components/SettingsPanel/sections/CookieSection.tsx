@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
-import { getAppSettings, updateAppSettings } from '../../../lib/electron-api';
+import { useState } from 'react';
+import { updateAppSettings } from '../../../lib/electron-api';
 import Toggle from '../../ui/Toggle';
+import { SectionTitle, FormRow } from '../../ui';
+import { useSettingsDraft } from '../../../hooks/useSettingsData';
+import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
 
 /* =====================================================================
    CookieSection —— Cookie 弹窗自动处理设置（需求 7）
@@ -8,42 +11,35 @@ import Toggle from '../../ui/Toggle';
    - 白名单：自动点击"接受全部"按钮
    - 黑名单：直接隐藏所有 cookie 弹窗
    - 冷却时间：同域名 N 毫秒内重复弹窗静默忽略
-   自管理 state，参照 StorageSection 模式（useEffect 加载 + updateAppSettings 持久化）
+   自管理 state，参照 StorageSection 模式（useSettingsDraft 加载 + updateAppSettings 持久化）
    ===================================================================== */
 
 export default function CookieSection() {
-  const [enabled, setEnabled] = useState(true);
-  const [whitelist, setWhitelist] = useState<string[]>([]);
-  const [blacklist, setBlacklist] = useState<string[]>([]);
-  const [cooldownMs, setCooldownMs] = useState(60000);
+  const { draft, setDraft } = useSettingsDraft();
+  const { feedback: feedbackMsg, showFeedback: showToast } = useFeedbackToast(2500);
+  const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
   const [whitelistDraft, setWhitelistDraft] = useState('');
   const [blacklistDraft, setBlacklistDraft] = useState('');
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  useEffect(() => {
-    getAppSettings()
-      .then((cfg) => {
-        setEnabled(cfg.cookieHandlerEnabled ?? true);
-        setWhitelist(cfg.cookieWhitelist ?? []);
-        setBlacklist(cfg.cookieBlacklist ?? []);
-        setCooldownMs(cfg.cookiePopupCooldownMs ?? 60000);
-      })
-      .catch((e) => console.error('[CookieSection] 加载 cookie 设置失败:', e));
-  }, []);
+  // 从草稿派生设置值
+  const enabled = draft?.cookieHandlerEnabled ?? true;
+  const whitelist = draft?.cookieWhitelist ?? [];
+  const blacklist = draft?.cookieBlacklist ?? [];
+  const cooldownMs = draft?.cookiePopupCooldownMs ?? 60000;
 
   const showFeedback = (type: 'success' | 'error', msg: string) => {
-    setFeedback({ type, msg });
-    setTimeout(() => setFeedback(null), 2500);
+    setFeedbackType(type);
+    showToast(msg);
   };
 
   const handleToggleEnabled = async (next: boolean) => {
     const prev = enabled;
-    setEnabled(next);
+    setDraft({ cookieHandlerEnabled: next });
     try {
       await updateAppSettings({ cookieHandlerEnabled: next });
     } catch (e) {
       console.error('[CookieSection] 更新总开关失败:', e);
-      setEnabled(prev);
+      setDraft({ cookieHandlerEnabled: prev });
     }
   };
 
@@ -66,26 +62,26 @@ export default function CookieSection() {
       return;
     }
     const next = [...whitelist, domain];
-    setWhitelist(next);
+    setDraft({ cookieWhitelist: next });
     setWhitelistDraft('');
     try {
       await updateAppSettings({ cookieWhitelist: next });
       showFeedback('success', `已添加 ${domain}`);
     } catch (e) {
       console.error('[CookieSection] 添加白名单失败:', e);
-      setWhitelist(whitelist);
+      setDraft({ cookieWhitelist: whitelist });
       showFeedback('error', '保存失败');
     }
   };
 
   const handleRemoveWhitelist = async (domain: string) => {
     const next = whitelist.filter((d) => d !== domain);
-    setWhitelist(next);
+    setDraft({ cookieWhitelist: next });
     try {
       await updateAppSettings({ cookieWhitelist: next });
     } catch (e) {
       console.error('[CookieSection] 删除白名单失败:', e);
-      setWhitelist(whitelist);
+      setDraft({ cookieWhitelist: whitelist });
     }
   };
 
@@ -97,63 +93,57 @@ export default function CookieSection() {
       return;
     }
     const next = [...blacklist, domain];
-    setBlacklist(next);
+    setDraft({ cookieBlacklist: next });
     setBlacklistDraft('');
     try {
       await updateAppSettings({ cookieBlacklist: next });
       showFeedback('success', `已添加 ${domain}`);
     } catch (e) {
       console.error('[CookieSection] 添加黑名单失败:', e);
-      setBlacklist(blacklist);
+      setDraft({ cookieBlacklist: blacklist });
       showFeedback('error', '保存失败');
     }
   };
 
   const handleRemoveBlacklist = async (domain: string) => {
     const next = blacklist.filter((d) => d !== domain);
-    setBlacklist(next);
+    setDraft({ cookieBlacklist: next });
     try {
       await updateAppSettings({ cookieBlacklist: next });
     } catch (e) {
       console.error('[CookieSection] 删除黑名单失败:', e);
-      setBlacklist(blacklist);
+      setDraft({ cookieBlacklist: blacklist });
     }
   };
 
   const handleCooldownChange = async (value: number) => {
     const clamped = Math.max(0, Math.min(600000, value));
     const prev = cooldownMs;
-    setCooldownMs(clamped);
+    setDraft({ cookiePopupCooldownMs: clamped });
     try {
       await updateAppSettings({ cookiePopupCooldownMs: clamped });
     } catch (e) {
       console.error('[CookieSection] 更新冷却时间失败:', e);
-      setCooldownMs(prev);
+      setDraft({ cookiePopupCooldownMs: prev });
     }
   };
 
   return (
     <section data-name="settings.cookie.section">
-      <div className="settings-section-title" data-name="settings.cookie.title">Cookie 弹窗处理</div>
+      <SectionTitle>Cookie 弹窗处理</SectionTitle>
 
       {/* 总开关 */}
-      <div className="voice-config-row" data-name="settings.cookie.enabled-row">
-        <label className="voice-config-label" data-name="settings.cookie.enabled-label">
-          <span className="voice-config-name" data-name="settings.cookie.enabled-name">启用自动处理</span>
-        </label>
+      <FormRow label="启用自动处理">
         <Toggle
           checked={enabled}
           onChange={handleToggleEnabled}
           aria-label="启用 Cookie 弹窗自动处理"
           data-name="settings.cookie.enabled-toggle"
         />
-      </div>
+      </FormRow>
 
       {/* 冷却时间 */}
-      <div className="voice-config-row" data-name="settings.cookie.cooldown-row">
-        <label className="voice-config-label" data-name="settings.cookie.cooldown-label">
-          <span className="voice-config-name" data-name="settings.cookie.cooldown-name">冷却时间（毫秒）</span>
-        </label>
+      <FormRow label="冷却时间（毫秒）">
         <input
           type="number"
           min={0}
@@ -164,18 +154,18 @@ export default function CookieSection() {
             const v = parseInt(e.target.value, 10);
             if (Number.isFinite(v)) void handleCooldownChange(v);
           }}
-          className="ua-preset-select"
+          className="ua-preset-select input-underline"
           style={{ width: 120 }}
           data-name="settings.cookie.cooldown-input"
         />
-      </div>
+      </FormRow>
       <div className="hotkey-section-hint" data-name="settings.cookie.cooldown-hint">
         同一域名在冷却时间内反复弹窗会被静默忽略（0 表示总是处理）
       </div>
 
       {/* 白名单 */}
       <div className="settings-section-title" style={{ marginTop: 16, fontSize: 13 }} data-name="settings.cookie.whitelist-title">白名单（自动点击"接受全部"）</div>
-      <div className="voice-config-row" data-name="settings.cookie.whitelist-add-row">
+      <div className="form-row" data-name="settings.cookie.whitelist-add-row">
         <input
           type="text"
           value={whitelistDraft}
@@ -188,7 +178,7 @@ export default function CookieSection() {
             }
           }}
           placeholder="example.com"
-          className="ua-preset-select"
+          className="ua-preset-select input-underline"
           style={{ flex: 1, minWidth: 0 }}
           data-name="settings.cookie.whitelist-input"
         />
@@ -226,7 +216,7 @@ export default function CookieSection() {
 
       {/* 黑名单 */}
       <div className="settings-section-title" style={{ marginTop: 16, fontSize: 13 }} data-name="settings.cookie.blacklist-title">黑名单（直接隐藏所有 cookie 弹窗）</div>
-      <div className="voice-config-row" data-name="settings.cookie.blacklist-add-row">
+      <div className="form-row" data-name="settings.cookie.blacklist-add-row">
         <input
           type="text"
           value={blacklistDraft}
@@ -239,7 +229,7 @@ export default function CookieSection() {
             }
           }}
           placeholder="example.com"
-          className="ua-preset-select"
+          className="ua-preset-select input-underline"
           style={{ flex: 1, minWidth: 0 }}
           data-name="settings.cookie.blacklist-input"
         />
@@ -275,13 +265,13 @@ export default function CookieSection() {
         )}
       </div>
 
-      {feedback && (
+      {feedbackMsg && (
         <div
-          className={`settings-feedback ${feedback.type === 'success' ? 'ok' : 'fail'}`}
+          className={`settings-feedback feedback-text ${feedbackType === 'success' ? 'ok' : 'fail'}`}
           style={{ marginTop: 8 }}
           data-name="settings.cookie.feedback"
         >
-          {feedback.msg}
+          {feedbackMsg}
         </div>
       )}
     </section>

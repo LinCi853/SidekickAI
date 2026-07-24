@@ -4,18 +4,16 @@
 // 首次启动自动填充预置规则（按平台域名匹配常见屏蔽目标）。
 // 与 prompt-store.ts 模式一致。
 
-import Store from 'electron-store'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { BlockRule } from '../shared/block-rules.types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 import { DEFAULT_BLOCK_RULES } from './block-rules-default.js'
 
 // 持久化存储实例（写入 block-rules.json）
-const store = new Store<{ rules: BlockRule[]; version: number }>({
+const store = createJsonStore<{ rules: BlockRule[]; version: number }>({
   name: 'block-rules',
-  cwd: getStoreCwd(),
   defaults: { rules: [], version: 1 },
 })
 

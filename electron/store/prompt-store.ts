@@ -4,19 +4,17 @@
 // 提供模板的 CRUD 接口，供「明输入明注入」功能使用。
 // 首次启动自动填充若干通用预置模板，便于用户即刻体验。
 
-import Store from 'electron-store'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { PromptTemplate } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 
 // 持久化存储实例（写入 prompts.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径
-const store = new Store<{ prompts: PromptTemplate[]; version: number }>({
+const store = createJsonStore<{ prompts: PromptTemplate[]; version: number }>({
   name: 'prompts',
-  cwd: getStoreCwd(),
   defaults: { prompts: [], version: 1 },
 })
 

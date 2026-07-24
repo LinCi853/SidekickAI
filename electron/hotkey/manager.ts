@@ -448,14 +448,6 @@ export class HotkeyManager {
   /** 附加 uiohook keydown/keyup 监听器 */
   private attachUiohookListener(): void {
     uIOhook.on('keydown', (e) => {
-      // 调试日志已关闭（噪声过大）。需要排查时取消下方注释即可。
-      // const now = Date.now()
-      // if (now - (this._lastKeydownLogAt ?? 0) > 200) {
-      //   this._lastKeydownLogAt = now
-      //   console.log(
-      //     `[HotkeyManager] uiohook keydown: keycode=${e.keycode} alt=${e.altKey} ctrl=${e.ctrlKey} shift=${e.shiftKey}`,
-      //   )
-      // }
       if (e.type !== EventType.EVENT_KEY_PRESSED) return
       // 录制模式：跳过常规热键匹配，仅由 handleRecordingKeydown 处理
       if (this._recordingCallback) {

@@ -4,15 +4,15 @@
 // 每个 Profile 是一个完整的「虚拟浏览器身份」，包含 UA / 指纹 / 窗口配置。
 // 通过 ipcMain.handle 暴露 CRUD 接口给渲染进程。
 
-import Store from 'electron-store'
-import { ipcMain, BrowserWindow, session } from 'electron'
+import { ipcMain, session } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Profile } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { generateUniqueName } from '../shared/naming.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { getPreset } from './preset-store.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 
 // Windows Chrome 125 默认 UA（与 presets/devices.ts 中 win-chrome-125 预设一致）
 const WINDOWS_CHROME_125_UA =
@@ -21,9 +21,8 @@ const WINDOWS_CHROME_125_UA =
 // 持久化存储实例（写入 profiles.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径（AppData\Roaming\<appName>）
-const store = new Store<{ profiles: Profile[]; version: number }>({
+const store = createJsonStore<{ profiles: Profile[]; version: number }>({
   name: 'profiles',
-  cwd: getStoreCwd(),
   defaults: { profiles: [], version: 1 },
 })
 
@@ -264,21 +263,13 @@ export function registerProfileIPC(): void {
       console.warn('[profile-store] 新 profile 挂载下载监听失败:', err)
     }
     // 广播到所有窗口：跨窗口同步 Profile 新建
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(ipc.PROFILE_CREATED, profile)
-      }
-    }
+    broadcastToAllWindows(ipc.PROFILE_CREATED, profile, 'profile')
     return profile
   })
   ipcMain.handle(ipc.PROFILE_UPDATE, async (_e, id: string, patch: Partial<Profile>) => {
     const updated = await profileStore.update(id, patch)
     // 广播到所有窗口：跨窗口同步 Profile 字段（如 name 变更后 AiAppEditor 刷新）
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(ipc.PROFILE_UPDATED, { id, profile: updated })
-      }
-    }
+    broadcastToAllWindows(ipc.PROFILE_UPDATED, { id, profile: updated }, 'profile')
     return updated
   })
   ipcMain.handle(ipc.PROFILE_DELETE, async (_e, id: string) => {
@@ -301,30 +292,18 @@ export function registerProfileIPC(): void {
     // 3. 删除 store 数据
     profileStore.delete(id)
     // 4. 广播到所有窗口：跨窗口同步 Profile 删除
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(ipc.PROFILE_DELETED, id)
-      }
-    }
+    broadcastToAllWindows(ipc.PROFILE_DELETED, id, 'profile')
   })
   ipcMain.handle(ipc.PROFILE_DUPLICATE, async (_e, id: string) => {
     const profile = profileStore.duplicate(id)
     // 广播到所有窗口：复制视为新建，触发 PROFILE_CREATED 同步
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(ipc.PROFILE_CREATED, profile)
-      }
-    }
+    broadcastToAllWindows(ipc.PROFILE_CREATED, profile, 'profile')
     return profile
   })
   ipcMain.handle(ipc.PROFILE_REORDER, async (_e, orderedIds: string[]) => {
     profileStore.reorderProfiles(orderedIds)
     // 广播到所有窗口：跨窗口同步 Profile 排序
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(ipc.PROFILE_REORDERED, orderedIds)
-      }
-    }
+    broadcastToAllWindows(ipc.PROFILE_REORDERED, orderedIds, 'profile')
     return true
   })
 }

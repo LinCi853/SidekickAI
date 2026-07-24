@@ -22,11 +22,19 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@tiptap/extension-code-block-lowlight": "^3.28.0",
+    "@tiptap/extension-image": "^3.28.0",
+    "@tiptap/extension-placeholder": "^3.28.0",
+    "@tiptap/extension-task-item": "^3.28.0",
+    "@tiptap/extension-task-list": "^3.28.0",
+    "@tiptap/pm": "^3.28.0",
+    "@tiptap/react": "^3.28.0",
+    "@tiptap/starter-kit": "^3.28.0",
+    "@tldraw/tldraw": "^5.2.5",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.11.1",
     "electron-store": "^10.0.0",
     "opencc-js": "^1.4.0",
-    "puppeteer-core": "^25.2.1",
     "undici": "^6.0.0"
   },
   "optionalDependencies": {

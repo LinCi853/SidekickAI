@@ -11,12 +11,11 @@
 //
 // 在 app.whenReady 后由 main.ts 调用 registerVoiceIpc(deps) 完成注册。
 
-import { app, BrowserWindow, ipcMain, net } from 'electron'
+import { app, ipcMain } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
-import { exec } from 'child_process'
-import AdmZip from 'adm-zip'
 import { IPC_CHANNELS } from '../shared/types.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { updateVoiceConfig, getVoiceConfig } from '../store/voice-store.js'
 import { aiProviderStore, deriveAudioEndpoint } from '../store/ai-provider-store.js'
 import {
@@ -32,6 +31,8 @@ import {
   getWhisperModelUrls,
 } from '../stt/binary-resolver.js'
 import type { AudioDeviceInfo } from '../shared/api.types.js'
+import { downloadFile, downloadWithMirrors } from '../utils/downloader.js'
+import { extractZip } from '../utils/zip-extractor.js'
 
 /**
  * 校验 enumerateDevices 返回的设备对象，过滤掉非法项
@@ -64,205 +65,11 @@ function sendDownloadProgress(
 ): void {
   // 关键修复：广播到所有窗口（之前 getAllWindows()[0] 会漏发给非首个窗口，
   // 比如设置窗在第二个窗口时，UI 永远停在 'downloading'，但日志已显示 '完成'）
-  const payload = { type, percent, status, detail }
-  for (const w of BrowserWindow.getAllWindows()) {
-    if (w.isDestroyed()) continue
-    try {
-      w.webContents.send(IPC_CHANNELS.VOICE_DOWNLOAD_PROGRESS, payload)
-    } catch (e) {
-      // 单个窗口发送失败不影响其他窗口
-      console.warn('[voice-ipc] 向窗口广播下载进度失败:', e)
-    }
-  }
-}
-
-/**
- * 流式下载文件（自动跟随 3xx 重定向）。
- * 使用 Electron net 模块，自动遵循应用 session 的代理配置（system/custom/direct）。
- * 国内访问 HuggingFace / GitHub 常被墙，主 URL 失败时自动尝试镜像。
- * 超时设计：连接超时 30s + 数据流停滞超时 30s（收到 headers 后仍保护 body 传输）
- */
-function downloadFile(
-  url: string,
-  dest: string,
-  onProgress: (percent: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const req = net.request(url)
-    let connectTimer: NodeJS.Timeout | null = null
-    let stallTimer: NodeJS.Timeout | null = null
-
-    const clearAllTimers = () => {
-      if (connectTimer) { clearTimeout(connectTimer); connectTimer = null }
-      if (stallTimer) { clearTimeout(stallTimer); stallTimer = null }
-    }
-    const abortAll = (msg: string) => {
-      clearAllTimers()
-      try { req.abort() } catch (e: unknown) { console.warn('[voice-ipc] 中止下载请求失败:', e) }
-      reject(new Error(msg))
-    }
-
-    // 连接超时：30s 内未收到 response headers 则放弃
-    connectTimer = setTimeout(() => abortAll('下载超时（30s 无响应）'), 30000)
-
-    // 停滞超时重置：每次收到 data 都重置 30s 计时器
-    const resetStallTimer = () => {
-      if (stallTimer) clearTimeout(stallTimer)
-      stallTimer = setTimeout(() => abortAll('下载超时（30s 数据停滞）'), 30000)
-    }
-
-    req.on('response', (res) => {
-      // 连接已建立，清除连接超时
-      if (connectTimer) { clearTimeout(connectTimer); connectTimer = null }
-      const statusCode = res.statusCode
-      // 跟随重定向
-      if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
-        ;(res as unknown as NodeJS.ReadableStream).resume()
-        const nextUrl = Array.isArray(res.headers.location)
-          ? res.headers.location[0]
-          : res.headers.location
-        downloadFile(nextUrl, dest, onProgress).then(resolve, reject)
-        return
-      }
-      if (statusCode !== 200) {
-        ;(res as unknown as NodeJS.ReadableStream).resume()
-        reject(new Error(`HTTP ${statusCode}`))
-        return
-      }
-      const totalHeader = res.headers['content-length']
-      const total = parseInt(
-        Array.isArray(totalHeader) ? totalHeader[0] || '0' : totalHeader || '0',
-        10,
-      )
-      let received = 0
-      const stream = fs.createWriteStream(dest)
-      // 开始接收数据，启用停滞超时
-      resetStallTimer()
-      res.on('data', (chunk: Buffer) => {
-        received += chunk.length
-        resetStallTimer()
-        if (total > 0) {
-          onProgress(Math.min(99, Math.round((received / total) * 100)))
-        }
-      })
-      ;(res as unknown as NodeJS.ReadableStream).pipe(stream)
-      stream.on('finish', () => {
-        clearAllTimers()
-        stream.close(() => resolve())
-      })
-      stream.on('error', (err) => { clearAllTimers(); reject(err) })
-      res.on('error', (err: Error) => { clearAllTimers(); reject(err) })
-    })
-    req.on('error', (err) => {
-      clearAllTimers()
-      reject(err)
-    })
-    req.end()
-  })
-}
-
-/**
- * 带镜像 fallback 的下载：依次尝试 URL 列表，任一成功即返回。
- * 最后将实际错误信息汇总，便于定位问题。
- */
-async function downloadWithMirrors(
-  urls: string[],
-  dest: string,
-  onProgress: (percent: number) => void,
-): Promise<void> {
-  const errors: string[] = []
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i]
-    console.log(`[voice-download] 尝试下载 (${i + 1}/${urls.length}):`, url)
-    onProgress(0)
-    try {
-      await downloadFile(url, dest, onProgress)
-      console.log(`[voice-download] 下载成功:`, url)
-      return
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      console.warn(`[voice-download] 下载失败 (${i + 1}/${urls.length}):`, url, '→', msg)
-      errors.push(`${url}: ${msg}`)
-      // 删除可能残留的不完整文件
-      try { fs.unlinkSync(dest) } catch (unlinkErr: unknown) { console.warn('[voice-ipc] 删除残留文件失败:', unlinkErr) }
-    }
-  }
-  throw new Error('全部下载源失败：' + errors.join(' | '))
-}
-
-/**
- * 解压 zip 到目标目录（跨平台）。
- *
- * 策略：
- *   - Windows：优先尝试 PowerShell Expand-Archive（原生性能更好），失败回退 adm-zip
- *   - macOS / Linux：直接使用 adm-zip（纯 JS，无原生依赖）
- *
- * 解压后会把子目录中的可执行文件平铺到 destDir 根目录（whisper.cpp release 的 zip
- * 内部通常带 whisper-bin-x64/ 之类的子目录）。
- */
-async function extractZip(zipPath: string, destDir: string): Promise<void> {
-  // Windows 优先尝试 PowerShell（性能更好），失败回退 adm-zip
-  if (process.platform === 'win32') {
-    try {
-      await extractZipViaPowerShell(zipPath, destDir)
-      return
-    } catch (err) {
-      console.warn('[voice-ipc] PowerShell 解压失败，回退到 adm-zip:', err)
-    }
-  }
-  await extractZipViaAdmZip(zipPath, destDir)
-}
-
-/** 使用 PowerShell Expand-Archive 解压（仅 Windows） */
-function extractZipViaPowerShell(zipPath: string, destDir: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Expand-Archive 解压后可能有子目录（如 whisper-bin-x64/），
-    // 解压后把里面的可执行文件移到 destDir 根目录
-    const tmpExtract = path.join(destDir, '_tmp_extract_' + Date.now())
-    const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${tmpExtract}' -Force; Get-ChildItem -Path '${tmpExtract}' -Recurse -File | Move-Item -Destination '${destDir}' -Force; Remove-Item -Path '${tmpExtract}' -Recurse -Force"`
-    exec(cmd, (err, _stdout, stderr) => {
-      if (err) {
-        reject(new Error(`PowerShell 解压失败：${stderr || err.message}`))
-        return
-      }
-      // 验证解压后是否真的产出了可执行文件
-      const possibleNames = WHISPER_CLI_BINARIES
-      const found = possibleNames.some((n) => fs.existsSync(path.join(destDir, n)))
-      if (!found) {
-        reject(new Error('PowerShell 解压完成但未找到可执行文件（zip 内容可能不包含预期二进制）'))
-        return
-      }
-      resolve()
-    })
-  })
-}
-
-/**
- * 使用 adm-zip 解压（跨平台，纯 JS）。
- * 解压后将所有条目平铺到 destDir 根目录（去掉 zip 内部的子目录层级），
- * 与 PowerShell 路径的产出结构保持一致。
- */
-async function extractZipViaAdmZip(zipPath: string, destDir: string): Promise<void> {
-  const zip = new AdmZip(zipPath)
-  const entries = zip.getEntries()
-  if (entries.length === 0) {
-    throw new Error('zip 包为空')
-  }
-  fs.mkdirSync(destDir, { recursive: true })
-  // maintainEntryPath=false：把条目平铺到 destDir 根目录（去掉 zip 内部子目录）
-  // overwrite=true：同名文件直接覆盖，避免残留旧版本
-  for (const entry of entries) {
-    if (entry.isDirectory) continue
-    zip.extractEntryTo(entry, destDir, false, true)
-  }
-  // 验证解压后是否真的产出了可执行文件
-  const possibleNames = WHISPER_CLI_BINARIES
-  const found = possibleNames.some((n) => fs.existsSync(path.join(destDir, n)))
-  if (!found) {
-    let listed: string[] = []
-    try { listed = fs.readdirSync(destDir) } catch { /* ignore */ }
-    throw new Error(`adm-zip 解压完成但未找到可执行文件（实际产出: ${listed.join(', ')}）`)
-  }
+  broadcastToAllWindows(
+    IPC_CHANNELS.VOICE_DOWNLOAD_PROGRESS,
+    { type, percent, status, detail },
+    'voice-download',
+  )
 }
 
 /** 由 main.ts 注入的依赖（避免循环引用） */

@@ -3,36 +3,14 @@
    ===================================================================== */
 
 .onboarding-root {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
-  overflow: hidden;
 }
 
 /* ===== 顶栏 ===== */
-.onboarding-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-2) var(--space-4);
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-  flex: none;
-  -webkit-app-region: drag;
-}
-.onboarding-topbar-title {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--card-foreground);
-}
-.onboarding-topbar-actions {
-  display: flex;
-  gap: var(--space-1);
-  -webkit-app-region: no-drag;
-}
+/* .onboarding-topbar / .onboarding-topbar-title / .onboarding-topbar-actions
+   已迁移到 StandaloneWindowHeader，此处不再保留。
+   .onboarding-topbar-toggles 仍由 OnboardingView.tsx 使用，见下方「顶栏自定义页」。 */
 
 /* ===== 主体（启用纵向滚动兜底，内容溢出时可下滑查看） ===== */
 .onboarding-body {
@@ -235,8 +213,6 @@
 
 /* ===== 导入错误提示 ===== */
 .onboarding-import-error {
-  font-size: var(--text-xs);
-  color: var(--danger);
   line-height: 1.5;
   word-break: break-all;
 }

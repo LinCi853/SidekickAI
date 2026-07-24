@@ -302,13 +302,19 @@ const api: ElectronAPI = {
     isCompleted: () => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_IS_COMPLETED),
     complete: (patch) => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_COMPLETE, patch),
   },
-  // 需求 11：灵感笔记 API（CRUD + 发送到 AI 输入框 + 存为提示词）
+  // 灵感笔记 API（v2：SQLite + FTS5 + 富文本 + 分类）
   notes: {
-    list: () => ipcRenderer.invoke(IPC_CHANNELS.NOTES_LIST),
+    list: (filter?: { keyword?: string; tag?: string; pinnedOnly?: boolean }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.NOTES_LIST, filter),
+    search: (keyword: string) => ipcRenderer.invoke(IPC_CHANNELS.NOTES_SEARCH, keyword),
     save: (input) => ipcRenderer.invoke(IPC_CHANNELS.NOTES_SAVE, input),
+    saveSync: (input) => ipcRenderer.sendSync(IPC_CHANNELS.NOTES_SAVE_SYNC, input),
     delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.NOTES_DELETE, id),
     getActive: () => ipcRenderer.invoke(IPC_CHANNELS.NOTES_GET_ACTIVE),
     setActive: (id) => ipcRenderer.invoke(IPC_CHANNELS.NOTES_SET_ACTIVE, id),
+    setPinned: (id, pinned) => ipcRenderer.invoke(IPC_CHANNELS.NOTES_SET_PINNED, id, pinned),
+    setTags: (id, tags) => ipcRenderer.invoke(IPC_CHANNELS.NOTES_SET_TAGS, id, tags),
+    listTags: () => ipcRenderer.invoke(IPC_CHANNELS.NOTES_LIST_TAGS),
     sendToAi: (text, enterToSend) =>
       ipcRenderer.invoke(IPC_CHANNELS.NOTES_SEND_TO_AI, { text, enterToSend }),
     saveAsPrompt: (content, title) =>
@@ -319,14 +325,25 @@ const api: ElectronAPI = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.NOTES_INJECT_RESULT, handler)
     },
   },
-  // 需求 12：白板 API（无限画布 + 卡片 + 箭头 + 手绘线条）
+  // 白板 API（v2：tldraw + 多白板）
   whiteboard: {
-    getState: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_STATE),
-    saveState: (state) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_STATE, state),
-    clear: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_CLEAR),
+    list: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_LIST),
+    create: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_CREATE, title),
+    rename: (id, title) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_RENAME, id, title),
+    delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_DELETE, id),
+    reorder: (ids) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_REORDER, ids),
+    getActive: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_ACTIVE),
+    setActive: (id) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SET_ACTIVE, id),
+    getSnapshot: (id) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_SNAPSHOT, id),
+    saveSnapshot: (id, snapshot) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT, id, snapshot),
+    // 同步保存（beforeunload 兜底）
+    saveSnapshotSync: (id, snapshot) => ipcRenderer.sendSync(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT_SYNC, id, snapshot),
     pushCard: (card) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_PUSH_CARD_REQUEST, card),
-    onPushCard: (callback: (card: WhiteboardCard) => void) => {
-      const handler = (_e: unknown, card: WhiteboardCard) => callback(card)
+    pushAck: () => {
+      ipcRenderer.send(IPC_CHANNELS.WHITEBOARD_PUSH_ACK)
+    },
+    onPushCard: (callback: (payload: { whiteboardId: string; card: WhiteboardCard }) => void) => {
+      const handler = (_e: unknown, payload: { whiteboardId: string; card: WhiteboardCard }) => callback(payload)
       ipcRenderer.on(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, handler)
     },
@@ -401,28 +418,6 @@ const api: ElectronAPI = {
     // v0.5.2 B-4：读取导入文件
     readImportFile: (filePath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_READ_IMPORT_FILE, filePath),
-  },
-  // 无头浏览器（puppeteer-core 内核）
-  headless: {
-    isRunning: () => ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_IS_RUNNING),
-    version: () => ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_VERSION),
-    close: () => ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_CLOSE),
-    createPage: (url?: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_CREATE_PAGE, url),
-    closePage: (pageId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_CLOSE_PAGE, pageId),
-    listPages: () => ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_LIST_PAGES),
-    getPageInfo: (pageId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_GET_PAGE_INFO, pageId),
-    navigate: (pageId: string, url: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_NAVIGATE, pageId, url),
-    screenshot: (
-      pageId: string,
-      options?: { fullPage?: boolean; saveToFile?: string },
-    ) => ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_SCREENSHOT, pageId, options),
-    pdf: (pageId: string) => ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_PDF, pageId),
-    evaluate: (pageId: string, script: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.HEADLESS_EVALUATE, pageId, script),
   },
   // 对话持久化（SQLite）
   chat: {

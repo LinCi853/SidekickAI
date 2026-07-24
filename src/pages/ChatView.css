@@ -1,34 +1,9 @@
-.chat-view {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--background);
-  overflow: hidden;
-  position: relative;
-}
-
-/* ===== 顶栏 ===== */
-.chat-top {
-  height: var(--titlebar-h);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2) 0 var(--space-3);
-  background: var(--glass-bg);
-  border-bottom: 1px solid var(--glass-bd);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  user-select: none;
-  flex: none;
-  z-index: 10;
-}
+/* ===== 顶栏子内容（TitleBar.center 内的拖拽区） ===== */
 .chat-top-drag {
   flex: 1;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  -webkit-app-region: drag;
-  app-region: drag;
   height: 100%;
   min-width: 0;
 }
@@ -60,12 +35,6 @@
   outline: none;
   max-width: calc(var(--titlebar-icon) * 5.7);
   cursor: pointer;
-}
-.chat-top-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
 }
 .chat-usage-badge {
   -webkit-app-region: no-drag;
@@ -231,24 +200,12 @@
   border-color: var(--accent-50);
 }
 
-/* 侧边栏切换按钮（宽屏收起 / 窄屏抽屉，常驻显示）*/
+/* 侧边栏切换按钮（宽屏收起 / 窄屏抽屉，常驻显示）
+   通用尺寸/外观复用 .titlebar-icon-btn，此处仅保留特有字段
+   （app-region 拖拽隔离 + flex:none + hover/active 状态色）*/
 .chat-sidebar-toggle {
-  display: inline-flex;
-  width: var(--titlebar-icon);
-  min-width: 14px;
-  height: var(--titlebar-icon);
-  min-height: 14px;
-  max-height: calc(var(--titlebar-h) - var(--space-0-75));
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  border-radius: calc(var(--titlebar-icon) * 0.2);
   -webkit-app-region: no-drag;
   app-region: no-drag;
-  transition: background var(--duration-fast), color var(--duration-fast);
   flex: none;
 }
 .chat-sidebar-toggle svg {

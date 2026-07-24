@@ -1,0 +1,27 @@
+/* =====================================================================
+   cards.css —— 通用玻璃卡片基类
+   ---------------------------------------------------------------------
+   替代 .prompt-card / .conv-item / .trace-item / .search-result-item
+   等容器重复的玻璃风底色 + 边框 + 圆角声明。
+   padding 由各卡片自身规则保留（各卡片 padding 值不同，不收敛到基类）。
+   ===================================================================== */
+
+.glass-card {
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-md);
+}
+
+.glass-card.interactive {
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+.glass-card.interactive:hover {
+  border-color: var(--accent-50);
+}
+
+.glass-card.interactive:active {
+  border-color: var(--accent);
+  background: var(--accent-10);
+}

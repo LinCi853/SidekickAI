@@ -10,6 +10,7 @@ import {
   WINDOW_BACKGROUND_COLOR,
   ONBOARDING_WINDOW_ID,
   getPreloadPath,
+  createDefaultWebPreferences,
   loadRenderer,
 } from './helpers.js'
 import { buildWindowConfig } from './window-config-builder.js'
@@ -56,14 +57,10 @@ export function showOnboardingWindow(): void {
     fullscreenable: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: '使用指南',
-    webPreferences: {
+    webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
       webviewTag: false,
-      backgroundThrottling: false,
-    },
+    }),
   }))
   windowState.onboardingWindow = win
   loadRenderer(win, ONBOARDING_WINDOW_ID, 'onboarding')

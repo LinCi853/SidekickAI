@@ -82,14 +82,3 @@ export async function killProcesses(pids: number[]): Promise<number[]> {
   }
   return killed
 }
-
-/**
- * 杀死所有 SidekickAI.exe 进程（排除当前进程）。
- * 等同于 detectResidualProcesses + killProcesses。
- *
- * @returns 成功杀死的 PID 列表
- */
-export async function killAllResidualProcesses(): Promise<number[]> {
-  const residuals = await detectResidualProcesses()
-  return killProcesses(residuals.map((p) => p.pid))
-}

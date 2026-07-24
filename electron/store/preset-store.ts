@@ -4,18 +4,16 @@
 // 首次启动自动填充预置预设（5 个内置设备配置）。
 // 与 block-rules-store.ts 模式一致。
 
-import Store from 'electron-store'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { DevicePreset } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 import { DEFAULT_PRESETS, PRESETS_DEFAULT_VERSION } from './presets-default.js'
 
 // 持久化存储实例（写入 presets.json）
-const store = new Store<{ presets: DevicePreset[]; version: number }>({
+const store = createJsonStore<{ presets: DevicePreset[]; version: number }>({
   name: 'presets',
-  cwd: getStoreCwd(),
   defaults: { presets: [], version: PRESETS_DEFAULT_VERSION },
 })
 

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
-import { Button, SegmentedControl } from '../../ui';
+import { Button, SegmentedControl, SectionTitle } from '../../ui';
 import type { AIPlatform, Profile, DevicePreset } from '../../../lib/electron-api';
 
 interface PlatformUrlSectionProps {
@@ -59,28 +59,13 @@ export default function PlatformUrlSection({
 
   return (
     <section data-name="settings.platform-url.section">
-      <div
-        className="settings-section-title collapsible-title"
-        onClick={() => setIsCollapsed((v) => !v)}
-        data-name="settings.platform-url.title-row"
+      <SectionTitle
+        collapsible
+        collapsed={isCollapsed}
+        onToggle={() => setIsCollapsed((v) => !v)}
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform var(--duration-fast)' }}
-          data-name="settings.platform-url.collapse-icon"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-        <span data-name="settings.platform-url.title">平台默认 URL</span>
-        <span className="platform-url-count" data-name="settings.platform-url.count">
-          ({visiblePlatforms.length})
-        </span>
-      </div>
+        平台默认 URL <span className="platform-url-count" data-name="settings.platform-url.count">({visiblePlatforms.length})</span>
+      </SectionTitle>
       {hideForeignModels && !isCollapsed && (
         <div className="platform-url-hint" data-name="settings.platform-url.hint">
           已开启「一键隐藏国外模型」，仅显示国内平台。可在「区域与代理」中关闭。
@@ -175,7 +160,7 @@ export default function PlatformUrlSection({
               <div className="platform-url-input-row" data-name={`settings.platform-url.platform-item-${idx + 1}-input-row`}>
                 <input
                   type="text"
-                  className="platform-url-input"
+                  className="platform-url-input input-underline"
                   value={urlDraft}
                   spellCheck={false}
                   autoComplete="off"
@@ -194,7 +179,7 @@ export default function PlatformUrlSection({
                 {dirty && profile && (
                   <Button
                     variant="primary-compact"
-                    className="platform-url-save"
+                    className="platform-url-save btn-save-primary"
                     disabled={savingPlatformId === p.id}
                     onClick={() => void handleSavePlatform(p)}
                     data-name={`settings.platform-url.platform-item-${idx + 1}-save-button`}
@@ -208,7 +193,7 @@ export default function PlatformUrlSection({
                 <div className="platform-ua-select" data-name={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-field`}>
                   <span className="platform-ua-label" data-name={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-label`}>桌面端 UA</span>
                   <select
-                    className="platform-ua-preset-select"
+                    className="platform-ua-preset-select input-underline"
                     value={desktopPresetDraft}
                     onChange={(e) =>
                       setPlatformDesktopUaDrafts((prev) => ({
@@ -232,7 +217,7 @@ export default function PlatformUrlSection({
                 <div className="platform-ua-select" data-name={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-field`}>
                   <span className="platform-ua-label" data-name={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-label`}>移动端 UA</span>
                   <select
-                    className="platform-ua-preset-select"
+                    className="platform-ua-preset-select input-underline"
                     value={mobilePresetDraft}
                     onChange={(e) =>
                       setPlatformMobileUaDrafts((prev) => ({

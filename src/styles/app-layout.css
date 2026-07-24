@@ -1,0 +1,85 @@
+/* =====================================================================
+   app-layout.css —— 通用布局类（根容器 / 侧边栏 / 列表项 / 空状态 / Toast）
+   复用 design-tokens.css 变量；替代各页面重复的布局样式声明。
+   ===================================================================== */
+
+/* ===== 根容器 ===== */
+.app-view-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--background);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== 窄侧边栏（160px） ===== */
+.app-sidebar-narrow {
+  flex: none;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* ===== 侧边栏列表项 ===== */
+.sidebar-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-list-item-delete {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== 空状态 ===== */
+.app-empty-state {
+  padding: var(--space-4) var(--space-2);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.app-empty-state.compact { padding: var(--space-2) var(--space-2); }
+.app-empty-state.large { padding: var(--space-6) var(--space-4); }
+
+/* ===== Toast ===== */
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1-5) var(--space-3);
+  box-shadow: var(--shadow-lg);
+  z-index: 20;
+  pointer-events: none;
+  animation: toast-in var(--duration-fast) ease-out;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translateX(-50%); }
+}

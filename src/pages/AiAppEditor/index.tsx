@@ -484,7 +484,7 @@ export default function AiAppEditor() {
     return (
       <>
         <WindowResizeHandles />
-        <div className="prompt-view app-shell" data-name="ai-app-editor.loading-container">
+        <div className="prompt-view app-shell app-view-root" data-name="ai-app-editor.loading-container">
           <div className="prompt-view-body" style={{ alignItems: 'center', justifyContent: 'center' }} data-name="ai-app-editor.loading-body">
             <div style={{ color: 'var(--muted-foreground)', fontSize: 'var(--text-sm)' }} data-name="ai-app-editor.loading-text">
               加载中…
@@ -499,8 +499,8 @@ export default function AiAppEditor() {
     return (
       <>
         <WindowResizeHandles />
-        <div className="prompt-view app-shell" data-name="ai-app-editor.error-container">
-          <TitleBar
+        <div className="prompt-view app-shell app-view-root" data-name="ai-app-editor.error-container">
+          <AiAppEditorTitleBar
             title="AI 应用配置"
             maximized={maximized}
             isPinned={isPinned}
@@ -522,8 +522,8 @@ export default function AiAppEditor() {
   return (
     <>
       <WindowResizeHandles />
-      <div className="prompt-view app-shell" data-name="ai-app-editor.container">
-        <TitleBar
+      <div className="prompt-view app-shell app-view-root" data-name="ai-app-editor.container">
+        <AiAppEditorTitleBar
           title={`AI 应用配置${platform ? ' · ' + platform.name : ''}`}
           maximized={maximized}
           isPinned={isPinned}
@@ -695,7 +695,7 @@ export default function AiAppEditor() {
                   </span>
                   <Button
                     variant="text"
-                    className="block-rule-action-btn"
+                    className="block-rule-action-btn btn-secondary-underline"
                     onClick={() => handleRuleEdit(rule)}
                     style={{ flexShrink: 0 }}
                     data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-edit-button`}
@@ -706,7 +706,7 @@ export default function AiAppEditor() {
                     <Button
                       variant="text"
                       danger
-                      className="block-rule-action-btn"
+                      className="block-rule-action-btn btn-secondary-underline danger"
                       onClick={() => void handleRuleDelete(rule.id)}
                       style={{ flexShrink: 0 }}
                       data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-delete-button`}
@@ -799,7 +799,7 @@ export default function AiAppEditor() {
               {!showRuleForm && (
                 <Button
                   variant="ghost"
-                  className="block-rule-submit-btn block-rule-add-btn"
+                  className="block-rule-submit-btn block-rule-add-btn btn-save-primary"
                   onClick={handleRuleAdd}
                   style={{ alignSelf: 'flex-start' }}
                   data-name="ai-app-editor.block-rule-add-button"
@@ -845,7 +845,7 @@ export default function AiAppEditor() {
 
         {/* toast */}
         {toast && (
-          <div className={`prompt-toast is-open`} role="status" aria-live="polite" data-name="ai-app-editor.toast">
+          <div className={`prompt-toast app-toast is-open`} role="status" aria-live="polite" data-name="ai-app-editor.toast">
             {toast}
           </div>
         )}
@@ -855,9 +855,9 @@ export default function AiAppEditor() {
 }
 
 /* =====================================================================
-   子组件：自定义标题栏
+   子组件：自定义标题栏（重命名为 AiAppEditorTitleBar 以避免遮蔽共享 ui/TitleBar）
    ===================================================================== */
-interface TitleBarProps {
+interface AiAppEditorTitleBarProps {
   title: string;
   maximized: boolean;
   isPinned: boolean;
@@ -867,7 +867,7 @@ interface TitleBarProps {
   onPin: () => void;
 }
 
-function TitleBar({ title, maximized, isPinned, onMinimize, onMaximize, onClose, onPin }: TitleBarProps) {
+function AiAppEditorTitleBar({ title, maximized, isPinned, onMinimize, onMaximize, onClose, onPin }: AiAppEditorTitleBarProps) {
   return (
     <div className="prompt-view-top" data-name="ai-app-editor.topbar">
       <div className="prompt-view-top-drag" data-name="ai-app-editor.topbar-drag">

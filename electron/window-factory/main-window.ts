@@ -12,6 +12,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import {
   __dirname,
   getPreloadPath,
+  createDefaultWebPreferences,
   attachWebviewPopupInterceptor,
   loadRenderer,
   setupBoundsTracking,
@@ -59,12 +60,10 @@ export function createMainWindow(): void {
     resizable: true,
     alwaysOnTop: saved.alwaysOnTop,
     webPreferences: {
-      preload: getPreloadPath(),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      webviewTag: true,
-      backgroundThrottling: false,
+      ...createDefaultWebPreferences({
+        preload: getPreloadPath(),
+        webviewTag: true,
+      }),
       // 启用 OverlayScrollbar 提供跨平台一致的滚动条外观
       additionalArguments: ['--enable-features=OverlayScrollbar'],
     },

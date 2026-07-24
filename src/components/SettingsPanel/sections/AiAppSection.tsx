@@ -5,8 +5,8 @@
 
    卡片采用「单行紧凑结构」：图标 + 名称/URL + 操作按钮，一行展示完毕。
 
-   折叠标题复用 settings-section-title-row（与全局热键等区块样式一致）；
-   开关项复用 voice-config-row 行布局。
+   折叠标题复用 SectionTitle 组件（与全局热键等区块样式一致）；
+   开关项复用 FormRow 行布局。
 
    「屏蔽国外模型」开关位于折叠头下方第一个控件；
    开启时 region === 'global' 的内置平台卡片完全不渲染（按 profile 反向匹配平台 region 过滤）。
@@ -20,6 +20,7 @@ import { findAiAppProfiles } from '../../../lib/shared-utils';
 import { useProfileStore } from '../../../store/useProfileStore';
 import Button from '../../ui/Button';
 import Toggle from '../../ui/Toggle';
+import { SectionTitle, FormRow } from '../../ui';
 
 /** pending 删除确认超时时间（ms）：超时未第二次点击则取消删除 */
 const PENDING_DELETE_TIMEOUT_MS = 3000;
@@ -133,38 +134,23 @@ export default function AiAppSection({
 
   return (
     <section data-name="settings.ai-app.section">
-      <div
-        className="settings-section-title-row collapsible"
-        onClick={() => setCollapsed((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setCollapsed((v) => !v);
-          }
-        }}
-        data-name="settings.ai-app.title-row"
+      <SectionTitle
+        collapsible
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((v) => !v)}
       >
-        <span className="settings-section-title" data-name="settings.ai-app.title">
-          AI 应用（{totalCount}）
-        </span>
-        <span className={`collapse-toggle-icon${!collapsed ? ' expanded' : ''}`} data-name="settings.ai-app.collapse-icon">▼</span>
-      </div>
+        AI 应用（{totalCount}）
+      </SectionTitle>
       {!collapsed && (
         <>
-          <div className="voice-config-row" data-name="settings.ai-app.hide-foreign-models-row">
-            <label className="voice-config-label" data-name="settings.ai-app.hide-foreign-models-label">
-              <span className="voice-config-name" data-name="settings.ai-app.hide-foreign-models-name">屏蔽国外模型</span>
-            </label>
+          <FormRow label="屏蔽国外模型">
             <Toggle
               checked={hideForeignModels}
               onChange={onToggleHideForeignModels}
               aria-label="屏蔽国外模型"
               data-name="settings.ai-app.hide-foreign-models-toggle"
             />
-          </div>
+          </FormRow>
 
           {/* 新建 AI 应用入口：直接打开空白编辑器自由配置 */}
           <div className="ai-app-create-row" data-name="settings.ai-app.create-row">
@@ -196,7 +182,7 @@ export default function AiAppSection({
                 return (
                   <div
                     key={profile.id}
-                    className={`preset-card ai-app-card${isPendingDelete ? ' pending-delete' : ''}`}
+                    className={`preset-card glass-card ai-app-card${isPendingDelete ? ' pending-delete' : ''}`}
                     style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, padding: '6px 8px' }}
                     data-name={`settings.ai-app.app-card-${idx + 1}`}
                     data-index={idx + 1}
@@ -217,7 +203,7 @@ export default function AiAppSection({
                     <div style={{ display: 'flex', gap: 0, flexShrink: 0 }} data-name={`settings.ai-app.app-card-${idx + 1}-actions`}>
                       <Button
                         variant="text"
-                        className="provider-action-btn"
+                        className="provider-action-btn btn-secondary-underline"
                         onClick={() => onEditApp(profile.id)}
                         title="打开编辑器自由配置"
                         style={{ padding: '2px 6px', fontSize: 12 }}
@@ -227,7 +213,7 @@ export default function AiAppSection({
                       </Button>
                       <Button
                         variant="text"
-                        className="provider-action-btn"
+                        className="provider-action-btn btn-secondary-underline"
                         onClick={() => void handleDuplicate(profile)}
                         title={`复制 ${displayName}`}
                         style={{ padding: '2px 6px', fontSize: 12 }}
@@ -238,7 +224,7 @@ export default function AiAppSection({
                       <Button
                         variant="text"
                         danger
-                        className="provider-action-btn"
+                        className="provider-action-btn btn-secondary-underline danger"
                         onClick={() => handleDelete(profile)}
                         title={isPendingDelete ? '再次点击确认删除' : `删除 ${displayName}`}
                         style={{ padding: '2px 6px', fontSize: 12 }}

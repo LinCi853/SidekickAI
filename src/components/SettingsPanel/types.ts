@@ -1,8 +1,42 @@
 export interface SettingsPanelProps {
-  /** 是否展开 */
   open: boolean;
-  /** 关闭回调 */
   onClose: () => void;
-  /** 打开快捷键查看弹窗（直达按钮，挂在「全局热键」分区右侧） */
   onOpenShortcuts?: () => void;
+}
+
+export interface VoiceSettings {
+  confirmMode: 'auto' | 'manual' | 'clipboard';
+  enterToSend: boolean;
+  sttMode: 'builtin' | 'ai' | 'local' | 'download';
+  aiProvider: string;
+  language: string;
+  localExePath: string;
+  localArgs: string;
+  downloadModel: string;
+  downloadedModels: string[];
+  downloadStatus: string;
+  inputDeviceId: string;
+  cliDownloaded: boolean;
+  ttsMode: 'disable' | 'ai';
+  ttsProvider: string;
+}
+
+export interface GeneralSettings {
+  startupOpen: 'home' | 'lastConversation';
+  closeBehavior: 'close' | 'minimize';
+  enterToSend: boolean;
+  defaultDesktopUaPreset: string;
+  defaultMobileUaPreset: string;
+  appClickBehavior: 'switch' | 'close';
+  usageTrackingEnabled: boolean;
+}
+
+export interface ProxySettings {
+  proxyMode: 'system' | 'direct' | 'custom';
+  customProxy: string;
+  proxyUsername: string;
+  proxyPassword: string;
+  proxyBypass: string;
+  proxyFallbackEnabled: boolean;
+  proxyFallbackMode: 'direct' | 'system';
 }

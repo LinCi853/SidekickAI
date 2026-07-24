@@ -1,0 +1,87 @@
+/* =====================================================================
+   forms.css —— 通用表单元素样式
+   ---------------------------------------------------------------------
+   从 SettingsPanel/styles.css + ProviderSection.css + OnboardingView.css
+   + PromptLibraryView.css 中抽取的重复表单样式。
+   由 globals.css 统一引入，供所有页面/组件复用。
+   ===================================================================== */
+
+/* ===== 下划线输入框（无边框，仅底部下划线；聚焦高亮） ===== */
+.input-underline {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--glass-bd-2);
+  border-radius: 0;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  outline: none;
+  line-height: 1.4;
+  transition: border-bottom-color var(--duration-fast);
+}
+.input-underline:focus {
+  border-bottom-color: var(--accent-50);
+}
+
+/* ===== 主操作保存按钮（实色背景，filter 调节明暗） ===== */
+.btn-save-primary {
+  flex: none;
+  min-height: 0;
+  box-sizing: border-box;
+  align-self: center;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border-radius: 0;
+  cursor: pointer;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 0;
+  line-height: 1.4;
+  transition: filter var(--duration-fast), opacity var(--duration-fast);
+}
+.btn-save-primary:hover { filter: brightness(1.08); }
+.btn-save-primary:active { filter: brightness(0.96); }
+.btn-save-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== 次要下划线按钮（透明背景，悬停高亮文字） ===== */
+.btn-secondary-underline {
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border-radius: 0;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: color var(--duration-fast);
+}
+.btn-secondary-underline:hover { color: var(--accent-bright); }
+.btn-secondary-underline.danger:hover { color: var(--danger); }
+
+/* ===== 测试结果块（带边框，ok/fail 双态） ===== */
+.test-result {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-bd-2);
+}
+.test-result.ok { color: var(--success); border-color: var(--success); }
+.test-result.fail { color: var(--danger); border-color: var(--danger); }
+
+/* ===== 反馈文本（成功/失败文字提示，无边框） ===== */
+.feedback-text {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.feedback-text.ok { color: var(--success); }
+.feedback-text.fail { color: var(--danger); }

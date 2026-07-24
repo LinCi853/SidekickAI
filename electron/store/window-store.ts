@@ -13,17 +13,15 @@
 //     "<uuid>": { ... }  // 脱离窗口
 //   }
 
-import Store from 'electron-store'
 import type { WindowStateData } from '../shared/types.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 
 type WindowStateStore = {
   states: Record<string, WindowStateData>
 }
 
-const store = new Store<WindowStateStore>({
+const store = createJsonStore<WindowStateStore>({
   name: 'window-states',
-  cwd: getStoreCwd(),
   defaults: { states: {} },
 })
 

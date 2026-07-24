@@ -130,40 +130,7 @@ export function requireElectron(): ElectronAPI {
   return api;
 }
 
-/* =====================================================================
-   平台统一 API 访问器
-   ---------------------------------------------------------------------
-   Electron 专属逻辑可继续用 getElectron() / requireElectron()。
-   ===================================================================== */
-
-import { PLATFORM, isElectron } from '../platform-detector';
+import { PLATFORM } from '../platform-detector';
 
 /** 当前平台常量（re-export 供外部同步分支使用） */
 export { PLATFORM };
-
-/** 统一 API 类型 = Electron API */
-export type UnifiedAPI = ElectronAPI;
-
-/**
- * 统一获取当前平台的 API。
- * - electron 环境 → 返回 window.electron
- * - web 环境     → 返回 null
- */
-export async function getAPI(): Promise<UnifiedAPI | null> {
-  if (isElectron()) return getElectron();
-  return null;
-}
-
-/**
- * 统一获取当前平台的 API，不存在则抛错。
- */
-export async function requireAPI(): Promise<UnifiedAPI> {
-  const api = await getAPI();
-  if (!api) {
-    throw new Error(
-      `当前平台 (${PLATFORM}) 无可用 API：` +
-        (isElectron() ? 'window.electron 不可用' : '纯 Web 环境无原生 API'),
-    );
-  }
-  return api;
-}

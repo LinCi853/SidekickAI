@@ -2,6 +2,8 @@
    全局样式与重置（从 showcase.html 移植）
    ===================================================================== */
 @import './design-tokens.css';
+@import './forms.css';
+@import './cards.css';
 
 /* 统一 SVG 图标尺寸工具类（跟随 UI 三档缩放） */
 .icon-svg {

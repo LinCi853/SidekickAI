@@ -1,0 +1,63 @@
+/* =====================================================================
+   ui/FormRow.css —— 设置项通用行布局样式
+   迁移自 SettingsPanel/styles.css 的 .voice-config-row* 系列
+   ===================================================================== */
+
+/* 设置面板行项：与外部菜单 .drawer-item 使用同一套参数。
+   padding / font-size / line-height / gap 全部对齐，避免各页面 rhythm 不一致。 */
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--glass-bd-2);
+  border-radius: 0;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.form-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+  padding-right: var(--space-2);
+}
+
+.form-row-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--foreground);
+  line-height: 1.4;
+}
+
+.form-row-hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.form-row-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* 纵向堆叠变体：标签在上，控件在下 */
+.form-row.stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* 紧凑变体：减小间距 */
+.form-row.compact {
+  gap: var(--space-1);
+}

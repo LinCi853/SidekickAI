@@ -23,6 +23,7 @@ import type {
   WhiteboardState,
   WhiteboardCard,
   WhiteboardCardInput,
+  WhiteboardMeta,
 } from './whiteboard.types.js'
 import type { PlatformCapabilities } from '../utils/platform-info.js'
 
@@ -332,42 +333,6 @@ export interface AIProviderAPI {
   readImportFile(filePath: string): Promise<{ ok: boolean; content?: string; error?: string }>
 }
 
-/** 无头浏览器管理接口（puppeteer-core 内核） */
-export interface HeadlessBrowserAPI {
-  /** 浏览器是否运行中 */
-  isRunning(): Promise<boolean>
-  /** 获取浏览器版本 */
-  version(): Promise<string>
-  /** 关闭浏览器 */
-  close(): Promise<void>
-  /** 创建新页面，返回 pageId */
-  createPage(url?: string): Promise<string>
-  /** 关闭页面 */
-  closePage(pageId: string): Promise<boolean>
-  /** 列出所有页面 ID */
-  listPages(): Promise<string[]>
-  /** 获取页面信息 */
-  getPageInfo(pageId: string): Promise<{ id: string; url: string; title: string } | null>
-  /** 导航到指定 URL */
-  navigate(pageId: string, url: string): Promise<{ ok: boolean; title?: string; error?: string }>
-  /**
-   * 截图
-   * @param pageId 页面 ID
-   * @param options.fullPage 是否整页截图
-   * @param options.saveToFile 保存到文件路径（不传则返回 base64）
-   */
-  screenshot(pageId: string, options?: { fullPage?: boolean; saveToFile?: string }): Promise<{
-    ok: boolean
-    data?: string
-    filePath?: string
-    error?: string
-  }>
-  /** 导出 PDF（base64） */
-  pdf(pageId: string): Promise<{ ok: boolean; data?: string; error?: string }>
-  /** 在页面执行 JS 代码 */
-  evaluate(pageId: string, script: string): Promise<{ ok: boolean; result?: unknown; error?: string }>
-}
-
 /** 对话持久化接口（SQLite） */
 export interface ChatAPI {
   /** 列出会话（按 sourceId 过滤；不传则列出全部） */
@@ -638,6 +603,8 @@ export interface AppSettings {
   cookiePopupCooldownMs: number
   /** 需求 7：Cookie 弹窗自动处理总开关（默认 true） */
   cookieHandlerEnabled: boolean
+  /** v0.5.2 R-3：AI 应用独立窗口默认打开的 tab（Alt+Q 入口） */
+  defaultAiAppTab: 'chat' | 'whiteboard' | 'notes'
 }
 
 /** 顶栏可显隐的按钮组标识（appSwitcher/menu/刷新始终显示，不在此列） */
@@ -739,54 +706,72 @@ export interface OnboardingAPI {
  * 灵感笔记 API（需求 11）
  * 笔记浮窗的 CRUD + 激活笔记管理 + 发送到 AI 输入框 + 存为提示词。
  */
+/** 笔记列表筛选条件 */
+export interface NoteListFilter {
+  keyword?: string
+  tag?: string
+  pinnedOnly?: boolean
+}
+
 export interface NotesAPI {
-  /** 列出全部笔记（按 updatedAt 降序） */
-  list(): Promise<Note[]>
+  /** 列出笔记（支持搜索/标签/置顶筛选，按 pinned DESC, updatedAt DESC） */
+  list(filter?: NoteListFilter): Promise<Note[]>
+  /** 全文搜索（FTS5） */
+  search(keyword: string): Promise<Note[]>
   /** 新增或更新笔记（upsert 语义：无 id 新增，有 id 更新） */
   save(input: NoteSaveInput): Promise<Note>
+  /** 同步保存（beforeunload 兜底，sendSync） */
+  saveSync(input: NoteSaveInput): { ok: boolean }
   /** 删除笔记 */
   delete(id: string): Promise<{ ok: boolean }>
   /** 获取当前激活的笔记（null=无激活） */
   getActive(): Promise<Note | null>
   /** 设置激活笔记（null=取消激活） */
   setActive(id: string | null): Promise<{ ok: boolean }>
-  /**
-   * 发送笔记内容到当前 AI 输入框。
-   * 主进程查找 lastFocusedWin（非笔记窗口），通过 VOICE_INJECT_AND_SEND 通道
-   * 把文本注入其激活的 AI 输入框（webview textarea / 自定义对话输入框）。
-   * enterToSend 控制是否自动回车发送。
-   */
+  /** 设置置顶 */
+  setPinned(id: string, pinned: boolean): Promise<{ ok: boolean }>
+  /** 设置标签 */
+  setTags(id: string, tags: string[]): Promise<{ ok: boolean }>
+  /** 列出全部已用标签（去重） */
+  listTags(): Promise<string[]>
+  /** 发送笔记内容到当前 AI 输入框 */
   sendToAi(text: string, enterToSend?: boolean): Promise<{ ok: boolean; error?: string }>
-  /**
-   * 把笔记内容保存为新的提示词模板。
-   * 标题取自首行（截断 30 字符），分类默认 '笔记'。
-   */
+  /** 把笔记内容保存为新的提示词模板 */
   saveAsPrompt(content: string, title?: string): Promise<{ ok: boolean; title?: string; error?: string }>
-  /** 监听主进程 → 笔记窗口渲染：注入结果回传（success + error?） */
+  /** 监听注入结果回传 */
   onInjectResult(callback: (result: { success: boolean; error?: string }) => void): () => void
 }
 
 /**
- * 白板 API（需求 12）
- * 无限画布：文本卡片、图片卡片、AI 回复卡片、箭头、手绘线条。
- * 整个应用共享一块白板（单例）。
+ * 白板 API（v2：tldraw + 多白板）
  */
 export interface WhiteboardAPI {
-  /** 读取完整白板状态（cards + arrows + strokes + viewport） */
-  getState(): Promise<WhiteboardState>
-  /** 保存完整白板状态（全量覆盖） */
-  saveState(state: WhiteboardState): Promise<{ ok: boolean }>
-  /** 清空白板 */
-  clear(): Promise<{ ok: boolean }>
-  /**
-   * 从任意窗口推送卡片到白板（需求 12：HistoryView 消息发送到白板）。
-   * 主进程接收后：若白板窗口未打开则先打开，生成完整 WhiteboardCard（随机位置），
-   * 再通过 WHITEBOARD_PUSH_CARD 转发给白板渲染层。
-   * 返回生成的完整卡片（含 id）。
-   */
+  /** 列出全部白板 */
+  list(): Promise<WhiteboardMeta[]>
+  /** 新建白板 */
+  create(title?: string): Promise<WhiteboardMeta>
+  /** 重命名白板 */
+  rename(id: string, title: string): Promise<{ ok: boolean }>
+  /** 删除白板 */
+  delete(id: string): Promise<{ ok: boolean }>
+  /** 重新排序 */
+  reorder(ids: string[]): Promise<{ ok: boolean }>
+  /** 获取激活白板 id */
+  getActive(): Promise<string | null>
+  /** 设置激活白板 id */
+  setActive(id: string | null): Promise<{ ok: boolean }>
+  /** 加载白板 snapshot（tldraw TLStore JSON，无则 null） */
+  getSnapshot(id: string): Promise<string | null>
+  /** 异步保存 snapshot */
+  saveSnapshot(id: string, snapshot: string): Promise<{ ok: boolean }>
+  /** 同步保存 snapshot（beforeunload 兜底） */
+  saveSnapshotSync(id: string, snapshot: string): { ok: boolean }
+  /** 从任意窗口推送卡片到白板 */
   pushCard(card: WhiteboardCardInput): Promise<WhiteboardCard>
-  /** 监听主进程 → 白板窗口渲染：外部推送卡片（截图 / HistoryView 拖入消息） */
-  onPushCard(callback: (card: WhiteboardCard) => void): () => void
+  /** 监听主进程 → 白板渲染：推送卡片（截图 / AI 回复） */
+  onPushCard(callback: (payload: { whiteboardId: string; card: WhiteboardCard }) => void): () => void
+  /** 白板 ready 后回 ACK（send，非 invoke；主进程 flush 待推送队列） */
+  pushAck(): void
 }
 
 /** 通过 contextBridge 暴露到渲染进程的完整 API */
@@ -806,7 +791,6 @@ export interface ElectronAPI {
   aiProvider: AIProviderAPI
   chat: ChatAPI
   fingerprint: FingerprintAPI
-  headless: HeadlessBrowserAPI
   /** 语音输入配置（enterToSend 等全局设置） */
   voice: VoiceConfigAPI
   /** 应用全局设置（区域代理、隐藏国外模型等） */

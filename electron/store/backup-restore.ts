@@ -12,6 +12,8 @@ import AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as path from 'path';
 import { closeChatStore } from './chat-store.js';
+import { closeWhiteboardDb } from './whiteboard-db.js';
+import { closeNotesDb } from './notes-db.js';
 import { profileStore } from './profile-store.js';
 import { getStoreCwd, isPortableMode } from './store-paths.js';
 
@@ -29,6 +31,12 @@ const BACKUP_FILES = [
   'chat.db',
   'chat.db-wal',
   'chat.db-shm',
+  'whiteboard.db',
+  'whiteboard.db-wal',
+  'whiteboard.db-shm',
+  'notes.db',
+  'notes.db-wal',
+  'notes.db-shm',
   'app-key.json',
 ];
 
@@ -428,9 +436,11 @@ export async function exportAllData(
     const dataDir = getDataDir();
     console.log('[backup-restore] 开始导出数据:', dataDir, '选项:', options);
 
-    // 1. 关闭 chat.db 连接，确保 WAL 写回主 db
+    // 1. 关闭 chat.db / whiteboard.db / notes.db 连接，确保 WAL 写回主 db
     try {
       closeChatStore();
+      closeWhiteboardDb();
+      closeNotesDb();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }
@@ -581,9 +591,11 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
       };
     }
 
-    // 2. 关闭 chat.db 连接
+    // 2. 关闭 chat.db / whiteboard.db / notes.db 连接
     try {
       closeChatStore();
+      closeWhiteboardDb();
+      closeNotesDb();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }

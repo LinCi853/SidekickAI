@@ -12,7 +12,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  closeCurrentWindow,
   getAppSettings,
   updateAppSettings,
   getHotkeys,
@@ -29,7 +28,9 @@ import {
   type HotkeyAction,
 } from '../lib/electron-api';
 import { useThemeStore, type ThemeMode } from '../store/useThemeStore';
-import { IconButton, Chip, HotkeyRecorder } from '../components/ui';
+import { Chip, HotkeyRecorder } from '../components/ui';
+import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult } from '../lib/electron-api';
 import './OnboardingView.css';
 
@@ -118,18 +119,7 @@ export default function OnboardingView() {
 
   // 引导窗口不需要最大化、最小化和置顶，不监听 F11/F12
   // ESC：关闭引导窗口
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-        e.preventDefault();
-        void closeCurrentWindow();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  useEscToCloseWindow();
 
   const updateField = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     if (!settings) return;
@@ -221,32 +211,21 @@ export default function OnboardingView() {
 
   if (!settings) {
     return (
-      <div className="onboarding-root app-shell" data-name="onboarding.loading-container">
+      <div className="onboarding-root app-shell app-view-root" data-name="onboarding.loading-container">
         <div className="onboarding-loading" data-name="onboarding.loading">加载中…</div>
       </div>
     );
   }
 
   return (
-    <div className="onboarding-root" data-name="onboarding.container">
+    <div className="onboarding-root app-view-root" data-name="onboarding.container">
       {/* 顶栏（仅保留关闭按钮，不提供最小化/最大化/置顶） */}
-      <div className="onboarding-topbar" data-name="onboarding.topbar">
-        <div className="onboarding-topbar-title" data-name="onboarding.topbar-title">工百窗 · 使用指南</div>
-        <div className="onboarding-topbar-actions" data-name="onboarding.topbar-actions">
-          <IconButton
-            type="button"
-            variant="close"
-            aria-label="关闭"
-            title="关闭"
-            data-name="onboarding.close-icon-button"
-            onClick={() => void closeCurrentWindow()}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" data-name="onboarding.close-icon">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </IconButton>
-        </div>
-      </div>
+      <StandaloneWindowHeader
+        title="工百窗 · 使用指南"
+        showPinButton={false}
+        showMinMax={false}
+        dataNamePrefix="onboarding"
+      />
 
       {/* 主体（内容溢出时纵向滚动兜底） */}
       <div className="onboarding-body" data-name="onboarding.body">

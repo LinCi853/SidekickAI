@@ -109,12 +109,6 @@ export function openAiAppProviderWindow(providerId?: string): Promise<void> {
   return api.openAiAppProviderWindow(providerId);
 }
 
-/** 切换 AI 应用独立窗口显隐（单例） */
-export function toggleAiAppProviderWindow(): Promise<void> {
-  const api = requireElectron();
-  return api.toggleAiAppProviderWindow();
-}
-
 /** 监听单例窗口复用时的 tab/provider 切换通知 */
 export function onAiAppProviderNavigate(
   callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,

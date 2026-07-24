@@ -13,7 +13,7 @@ import { useHotkeys } from '../hooks/useHotkeys';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import SettingsPanel from '../components/SettingsPanel';
 import ShortcutsModal from '../components/ShortcutsModal';
-import { IconButton } from '../components/ui';
+import { IconButton, TitleBar } from '../components/ui';
 import { useProfileStore } from '../store/useProfileStore';
 import { useTabStore } from '../store/useTabStore';
 import {
@@ -28,6 +28,8 @@ import {
 import type { Profile, HotkeyConfig } from '../lib/electron-api';
 import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } from '../lib/webview';
 import { useShortcutsToggle } from '../hooks/useShortcutsToggle';
+import { useIsNarrow } from '../hooks/useIsNarrow';
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import './StandaloneView.css';
 
 export default function StandaloneView() {
@@ -53,14 +55,7 @@ export default function StandaloneView() {
   // ShortcutsModal 动态渲染全局热键（自定义 accelerator + 启用状态）
   const [hotkeys, setHotkeys] = useState<HotkeyConfig[]>([]);
   // 长宽自适应：< 600px 视为窄屏（导航/工具按钮隐藏）
-  const [isNarrow, setIsNarrow] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 600 : false,
-  );
-  useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 600);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  const isNarrow = useIsNarrow();
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const webviewRef = useRef<WebviewElement | null>(null);
@@ -155,7 +150,6 @@ export default function StandaloneView() {
   }, [activeProfile]);
 
   // 窗口级 F11/F12 快捷键（webview 未获得焦点时生效，与顶栏按钮同一路径）
-  // ESC：标题编辑时退出编辑，否则关闭窗口
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F11') {
@@ -168,23 +162,24 @@ export default function StandaloneView() {
         useTabStore.getState().toggleAlwaysOnTop();
         return;
       }
-      if (e.key === 'Escape') {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-        if (isEditingTitle) {
-          e.preventDefault();
-          setIsEditingTitle(false);
-        } else {
-          e.preventDefault();
-          void closeCurrentWindow();
-        }
-      }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isEditingTitle]);
+  }, []);
+
+  // ESC：标题编辑时退出编辑，否则关闭窗口
+  useEscToCloseWindow({
+    onEsc: (e) => {
+      if (isEditingTitle) {
+        e.preventDefault();
+        setIsEditingTitle(false);
+        return true;
+      }
+      return false;
+    },
+  });
 
   const startEditTitle = useCallback(() => {
     if (!activeTab) return;
@@ -216,11 +211,15 @@ export default function StandaloneView() {
 
   return (
     <>
-      <div className="standalone-view app-shell" data-viewport={isNarrow ? 'narrow' : 'wide'} data-name="standalone.container">
+      <div className="standalone-view app-shell app-view-root" data-viewport={isNarrow ? 'narrow' : 'wide'} data-name="standalone.container">
         {/* ===== 顶栏（宽屏常驻；窄屏下隐藏导航/工具按钮，仅留标题 + 窗口控制） ===== */}
-        <div className="sa-top-bar" data-name="standalone.top-bar.container">
-          <div className="sa-top-drag" data-name="standalone.top-bar.drag-area">
-            {isEditingTitle ? (
+        <TitleBar
+          maximized={isMaximized}
+          onMinimize={() => void minimizeWindow()}
+          onMaximize={() => void handleMaximize()}
+          onClose={() => void closeCurrentWindow()}
+          center={
+            isEditingTitle ? (
               <span className="sa-top-title editing" data-name="standalone.top-bar.title-edit-wrapper">
                 <input
                   ref={titleInputRef}
@@ -250,165 +249,121 @@ export default function StandaloneView() {
               >
                 {activeTitle}
               </span>
-            )}
-          </div>
-          <div className="sa-actions" data-name="standalone.top-bar.actions">
-            {/* 导航/工具按钮组（窄屏下隐藏） */}
-            <div className="sa-nav-group" data-name="standalone.top-bar.nav-group">
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.back-icon-button"
-              aria-label="后退"
-              title="后退"
-              onClick={() => {
-                const wv = webviewRef.current;
-                if (wv && wv.canGoBack()) wv.goBack();
-              }}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.forward-icon-button"
-              aria-label="前进"
-              title="前进"
-              onClick={() => {
-                const wv = webviewRef.current;
-                if (wv && wv.canGoForward()) wv.goForward();
-              }}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.forward-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.reload-icon-button"
-              aria-label="刷新"
-              title="刷新"
-              onClick={() => webviewRef.current?.reload()}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.reload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 4 23 10 17 10" />
-                <polyline points="1 20 1 14 7 14" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.home-icon-button"
-              aria-label="主页"
-              title="回到默认页"
-              onClick={() => {
-                const wv = webviewRef.current;
-                if (wv) safeLoadURLWebview(wv, activeProfile?.aiPlatformUrl || '');
-              }}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.settings-icon-button"
-              aria-label="设置"
-              title="设置"
-              onClick={() => setIsSettingsOpen(true)}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.shortcuts-icon-button"
-              aria-label="快捷键"
-              title="快捷键"
-              onClick={() => setIsShortcutsOpen(true)}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.shortcuts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              variant={alwaysOnTop ? 'active' : 'default'}
-              className="sa-btn"
-              data-name="standalone.top-bar.pin-icon-button"
-              aria-label="置顶"
-              title={alwaysOnTop ? '取消置顶' : '置顶'}
-              onClick={async () => {
-                const next = !alwaysOnTop;
-                setAlwaysOnTop(next);
-                try { await pinCurrentWindow(next); } catch (e) { setAlwaysOnTop(!next); }
-              }}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.pin-icon" viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="17" x2="12" y2="3" />
-                <path d="M6.5 8.5L12 3l5.5 5.5" />
-                <path d="M5 21h14" />
-              </svg>
-            </IconButton>
-            </div>
-            {/* 窗口控制按钮（始终显示） */}
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.minimize-icon-button"
-              aria-label="最小化"
-              title="最小化"
-              onClick={() => void minimizeWindow()}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.minimize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              className="sa-btn"
-              data-name="standalone.top-bar.maximize-icon-button"
-              aria-label={isMaximized ? '还原' : '最大化'}
-              title={isMaximized ? '还原' : '最大化'}
-              onClick={() => void handleMaximize()}
-            >
-              {isMaximized ? (
-                <svg className="icon-svg" data-name="standalone.top-bar.restore-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="11" height="11" rx="1" />
-                  <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-                </svg>
-              ) : (
-                <svg className="icon-svg" data-name="standalone.top-bar.maximize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="4" y="4" width="16" height="16" rx="1" />
-                </svg>
-              )}
-            </IconButton>
-            <IconButton
-              type="button"
-              variant="close"
-              className="sa-btn"
-              data-name="standalone.top-bar.close-icon-button"
-              aria-label="关闭"
-              title="关闭"
-              onClick={() => void closeCurrentWindow()}
-            >
-              <svg className="icon-svg" data-name="standalone.top-bar.close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="6" y1="6" x2="18" y2="18" />
-                <line x1="18" y1="6" x2="6" y2="18" />
-              </svg>
-            </IconButton>
-          </div>
-        </div>
+            )
+          }
+          actions={
+            <>
+              {/* 导航/工具按钮组（窄屏下隐藏） */}
+              <div className="sa-nav-group" data-name="standalone.top-bar.nav-group">
+                <IconButton
+                  type="button"
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.back-icon-button"
+                  aria-label="后退"
+                  title="后退"
+                  onClick={() => {
+                    const wv = webviewRef.current;
+                    if (wv && wv.canGoBack()) wv.goBack();
+                  }}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.forward-icon-button"
+                  aria-label="前进"
+                  title="前进"
+                  onClick={() => {
+                    const wv = webviewRef.current;
+                    if (wv && wv.canGoForward()) wv.goForward();
+                  }}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.forward-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.reload-icon-button"
+                  aria-label="刷新"
+                  title="刷新"
+                  onClick={() => webviewRef.current?.reload()}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.reload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.home-icon-button"
+                  aria-label="主页"
+                  title="回到默认页"
+                  onClick={() => {
+                    const wv = webviewRef.current;
+                    if (wv) safeLoadURLWebview(wv, activeProfile?.aiPlatformUrl || '');
+                  }}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.settings-icon-button"
+                  aria-label="设置"
+                  title="设置"
+                  onClick={() => setIsSettingsOpen(true)}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.shortcuts-icon-button"
+                  aria-label="快捷键"
+                  title="快捷键"
+                  onClick={() => setIsShortcutsOpen(true)}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.shortcuts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+                  </svg>
+                </IconButton>
+                <IconButton
+                  type="button"
+                  variant={alwaysOnTop ? 'active' : 'default'}
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.pin-icon-button"
+                  aria-label="置顶"
+                  title={alwaysOnTop ? '取消置顶' : '置顶'}
+                  onClick={async () => {
+                    const next = !alwaysOnTop;
+                    setAlwaysOnTop(next);
+                    try { await pinCurrentWindow(next); } catch (e) { setAlwaysOnTop(!next); }
+                  }}
+                >
+                  <svg className="icon-svg" data-name="standalone.top-bar.pin-icon" viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="17" x2="12" y2="3" />
+                    <path d="M6.5 8.5L12 3l5.5 5.5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                </IconButton>
+              </div>
+            </>
+          }
+        />
 
         {/* ===== 中央：webview ===== */}
         <div

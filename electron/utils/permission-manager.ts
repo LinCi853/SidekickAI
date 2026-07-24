@@ -100,19 +100,6 @@ export function isSafeStorageAvailable(): boolean {
 const XOR_KEY = Buffer.from('ai-window-xor-fallback-v1', 'utf8')
 
 /**
- * XOR 加密字符串（safeStorage 不可用时的降级方案）。
- * 返回 base64 编码的密文，前缀 'xor:' 以区分 safeStorage 密文。
- */
-export function xorEncrypt(plain: string): string {
-  const plainBuf = Buffer.from(plain, 'utf8')
-  const result = Buffer.alloc(plainBuf.length)
-  for (let i = 0; i < plainBuf.length; i++) {
-    result[i] = plainBuf[i]! ^ XOR_KEY[i % XOR_KEY.length]!
-  }
-  return 'xor:' + result.toString('base64')
-}
-
-/**
  * XOR 解密字符串（识别 'xor:' 前缀的密文）。
  */
 export function xorDecrypt(cipher: string): string {

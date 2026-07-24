@@ -1,27 +1,3 @@
-.standalone-view {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--background);
-  position: relative;
-}
-
-/* ===== 顶栏（宽屏常驻；窄屏下隐藏导航/工具按钮，仅留标题 + 窗口控制） ===== */
-.sa-top-bar {
-  height: var(--titlebar-h);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2) 0 var(--space-3);
-  background: var(--glass-bg);
-  border-bottom: 1px solid var(--glass-bd);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  user-select: none;
-  flex: none;
-  z-index: 10;
-}
 /* 导航/工具按钮组（窄屏下隐藏） */
 .sa-nav-group {
   display: flex;
@@ -89,24 +65,11 @@
   gap: var(--space-1);
   flex: none;
 }
-/* 子窗口标题栏按钮：与主窗口 .win-btn 保持同一套参数，确保两套窗口控制视觉一致 */
+/* 子窗口标题栏按钮：通用尺寸/外观复用 .titlebar-icon-btn，此处仅保留特有字段
+   （app-region 拖拽隔离 + flex:none + 各状态色） */
 .sa-btn {
-  width: var(--titlebar-icon);
-  min-width: 14px;
-  height: var(--titlebar-icon);
-  min-height: 14px;
-  max-height: calc(var(--titlebar-h) - var(--space-0-75));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted-foreground);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
   -webkit-app-region: no-drag;
   app-region: no-drag;
-  border-radius: calc(var(--titlebar-icon) * 0.2);
-  transition: background var(--duration-fast), color var(--duration-fast);
   flex: none;
 }
 .sa-btn svg {

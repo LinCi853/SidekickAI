@@ -3,6 +3,7 @@ import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api';
 import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult } from '../../../lib/electron-api';
 import Button from '../../ui/Button';
 import HotkeyRecorder from '../../ui/HotkeyRecorder';
+import { SectionTitle, FormRow } from '../../ui';
 
 interface HotkeySectionProps {
   hotkeys: HotkeyConfig[];
@@ -55,9 +56,8 @@ export default function HotkeySection({
 
   return (
     <section data-name="settings.hotkey.section">
-      <div className="settings-section-title-row" data-name="settings.hotkey.title-row">
-        <div className="settings-section-title" data-name="settings.hotkey.title">全局热键</div>
-        {onOpenShortcuts && (
+      <SectionTitle
+        actions={onOpenShortcuts && (
           <Button
             variant="link"
             className="hotkey-shortcuts-link"
@@ -72,7 +72,9 @@ export default function HotkeySection({
             </svg>
           </Button>
         )}
-      </div>
+      >
+        全局热键
+      </SectionTitle>
       {/* 需求 2.5：提示词库内自定义快捷键的说明 */}
       <div className="hotkey-section-hint" data-name="settings.hotkey.prompt-hint">
         提示词库内自定义快捷键在此不显示，请在提示词库编辑中管理
@@ -132,7 +134,7 @@ export default function HotkeySection({
                 <HotkeyRecorder
                   value={draft}
                   placeholder={h.accelerator || 'Alt+Space'}
-                  className="hotkey-input"
+                  className="hotkey-input input-underline"
                   onRecord={(acc) => setDrafts((p) => ({ ...p, [h.action]: acc }))}
                   otherHotkeys={hotkeys
                     .filter((other) => other.action !== h.action)
@@ -144,7 +146,7 @@ export default function HotkeySection({
                 {dirty && (
                   <Button
                     variant="primary-compact"
-                    className="hotkey-save"
+                    className="hotkey-save btn-secondary-underline"
                     disabled={savingAction === h.action}
                     onClick={() => void handleSaveHotkey(h.action)}
                     data-name={`settings.hotkey.hotkey-item-${idx + 1}-save-button`}
@@ -154,7 +156,7 @@ export default function HotkeySection({
                 )}
               </div>
               {fb && (
-                <div className={`hotkey-feedback ${fb.type}`} data-name={`settings.hotkey.hotkey-item-${idx + 1}-feedback`}>{fb.msg}</div>
+                <div className={`hotkey-feedback feedback-text ${fb.type === 'success' ? 'ok' : 'fail'}`} data-name={`settings.hotkey.hotkey-item-${idx + 1}-feedback`}>{fb.msg}</div>
               )}
             </div>
           );
@@ -165,14 +167,10 @@ export default function HotkeySection({
           <div className="voice-config-name voice-section-subtitle" data-name="settings.hotkey.alt-space-subtitle">
             Alt+Space 窗口位置恢复
           </div>
-          <div className="voice-config-row" data-name="settings.hotkey.alt-space-threshold-row">
-            <label className="voice-config-label" data-name="settings.hotkey.alt-space-threshold-label">
-              <span className="voice-config-name" data-name="settings.hotkey.alt-space-threshold-name">触发次数</span>
-              <span className="voice-config-hint" data-name="settings.hotkey.alt-space-threshold-hint">默认 6，范围 3-20</span>
-            </label>
+          <FormRow label="触发次数" hint="默认 6，范围 3-20">
             <input
               type="number"
-              className="voice-input"
+              className="voice-input input-underline"
               min={3}
               max={20}
               value={thresholdDraft}
@@ -181,7 +179,7 @@ export default function HotkeySection({
               style={{ width: 80 }}
               data-name="settings.hotkey.alt-space-threshold-input"
             />
-          </div>
+          </FormRow>
         </div>
       )}
     </section>

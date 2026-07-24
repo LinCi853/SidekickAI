@@ -14,16 +14,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
-import { Button, IconButton, SegmentedControl } from '../components/ui';
+import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
+import { Button, SegmentedControl } from '../components/ui';
 import {
-  minimizeWindow,
-  maximizeToggleWindow,
-  closeCurrentWindow,
-  pinCurrentWindow,
-  isWindowMaximized,
-  isWindowAlwaysOnTop,
-  onMaximizeToggled,
-  onPinToggled,
   listConversations,
   listMessages,
   deleteConversation,
@@ -62,7 +55,6 @@ function sourceTypeLabel(t: string): string {
 type Tab = 'conversations' | 'logins' | 'windows';
 
 export default function HistoryView() {
-  const [isMaximized, setIsMaximized] = useState(false);
   const [tab, setTab] = useState<Tab>('conversations');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
@@ -81,24 +73,12 @@ export default function HistoryView() {
   const [usageStats, setUsageStats] = useState<{ totalTokens: number; todayTokens: number; todayCount: number } | null>(null);
   const importMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // 初始化：加载最大化状态 + 对话列表
+  // 初始化：加载对话列表 + 登录/窗口痕迹
   useEffect(() => {
-    void isWindowMaximized().then(setIsMaximized).catch((e) => console.error('[history] 加载失败:', e));
     void refreshConversations();
     void listLoginTraces().then(setLoginTraces).catch((e) => console.error('[HistoryView] 加载登录痕迹失败:', e));
     void listWindowTraces().then(setWindowTraces).catch((e) => console.error('[HistoryView] 加载窗口痕迹失败:', e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // F11/F12 由主进程 attachWindowHotkeyInterceptor 拦截处理，渲染层仅通过 IPC 监听状态更新
-  const [isPinned, setIsPinned] = useState(false);
-  useEffect(() => {
-    void isWindowAlwaysOnTop().then(setIsPinned).catch(() => {});
-  }, []);
-  useEffect(() => {
-    const offPin = onPinToggled((onTop) => setIsPinned(onTop));
-    const offMax = onMaximizeToggled((max) => setIsMaximized(max));
-    return () => { offPin(); offMax(); };
   }, []);
 
   // 刷新对话列表
@@ -170,11 +150,6 @@ export default function HistoryView() {
     // 始终调用以清除旧定时器（空查询时 fn 内部直接返回，不触发搜索）
     debouncedSearch(q);
   }, [searchQuery, debouncedSearch]);
-
-  const handleMaximize = async () => {
-    const next = await maximizeToggleWindow();
-    setIsMaximized(next);
-  };
 
   const handleDeleteConv = async (id: string) => {
     if (!confirm('确定删除该对话？删除后无法恢复。')) return;
@@ -373,56 +348,28 @@ export default function HistoryView() {
   return (
     <>
       <WindowResizeHandles />
-      <div className="history-view app-shell" data-name="history.container">
-        {/* 顶栏 */}
-        <div className="history-top" data-name="history.top-bar.container">
-          <div className="history-top-drag" data-name="history.top-bar.drag-area">
-            <span className="history-top-title" data-name="history.top-bar.title">历史搜索</span>
-            <div className="history-search-wrap" data-name="history.top-bar.search-wrap">
-              <input
-                type="text"
-                className="history-search-input"
-                data-name="history.top-bar.search-input"
-                placeholder="搜索所有对话内容…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-              />
-            </div>
-          </div>
-          <div className="history-top-actions" data-name="history.top-bar.actions">
-            <IconButton
-              type="button"
-              data-name="history.top-bar.pin-icon-button"
-              variant={isPinned ? 'active' : 'default'}
-              aria-label={isPinned ? '取消置顶' : '置顶'}
-              title={isPinned ? '取消置顶' : '置顶'}
-              onClick={async () => {
-                const next = !isPinned;
-                setIsPinned(next);
-                await pinCurrentWindow(next);
-              }}
-            >
-              <svg className="icon-svg" data-name="history.top-bar.pin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 17v5" />
-                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
-              </svg>
-            </IconButton>
-            <IconButton type="button" data-name="history.top-bar.minimize-icon-button" aria-label="最小化" title="最小化" onClick={() => void minimizeWindow()}>
-              <svg className="icon-svg" data-name="history.top-bar.minimize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            </IconButton>
-            <IconButton type="button" data-name="history.top-bar.maximize-icon-button" aria-label="最大化" title={isMaximized ? '还原' : '最大化'} onClick={() => void handleMaximize()}>
-              {isMaximized ? (
-                <svg className="icon-svg" data-name="history.top-bar.maximize-restore-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></svg>
-              ) : (
-                <svg className="icon-svg" data-name="history.top-bar.maximize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
-              )}
-            </IconButton>
-            <IconButton type="button" variant="close" data-name="history.top-bar.close-icon-button" aria-label="关闭" title="关闭" onClick={() => void closeCurrentWindow()}>
-              <svg className="icon-svg" data-name="history.top-bar.close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-            </IconButton>
-          </div>
-        </div>
+      <div className="history-view app-shell app-view-root" data-name="history.container">
+        {/* 顶栏：统一 StandaloneWindowHeader（标题 + 搜索框 + 置顶 + 窗口控制） */}
+        <StandaloneWindowHeader
+          title="历史搜索"
+          dataNamePrefix="history.top-bar"
+          center={
+            <>
+              <span className="history-top-title" data-name="history.top-bar.title">历史搜索</span>
+              <div className="history-search-wrap" data-name="history.top-bar.search-wrap">
+                <input
+                  type="text"
+                  className="history-search-input"
+                  data-name="history.top-bar.search-input"
+                  placeholder="搜索所有对话内容…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </>
+          }
+        />
 
         {/* 主体 */}
         <div className="history-body" data-name="history.body">
@@ -481,10 +428,10 @@ export default function HistoryView() {
                     </Button>
                   </div>
                   {isLoadingList && conversations.length === 0 && (
-                    <div className="history-list-empty" data-name="history.sidebar.list-loading">加载中…</div>
+                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.list-loading">加载中…</div>
                   )}
                   {!isLoadingList && conversations.length === 0 && (
-                    <div className="history-list-empty" data-name="history.sidebar.list-empty">暂无对话数据<br />浏览 AI 平台或使用自定义窗口后，对话将自动保存到本地</div>
+                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.list-empty">暂无对话数据<br />浏览 AI 平台或使用自定义窗口后，对话将自动保存到本地</div>
                   )}
                   {conversations.map((c, idx) => (
                     <div
@@ -492,7 +439,7 @@ export default function HistoryView() {
                       data-name={`history.sidebar.conv-item-${idx + 1}`}
                       data-index={idx + 1}
                       data-id={c.id}
-                      className={`conv-item${selectedConvId === c.id ? ' active' : ''}`}
+                      className={`glass-card interactive conv-item${selectedConvId === c.id ? ' active' : ''}`}
                       onClick={() => setSelectedConvId(c.id)}
                     >
                       <div className="conv-item-head" data-name="history.sidebar.conv-item-head">
@@ -522,10 +469,10 @@ export default function HistoryView() {
                     </Button>
                   </div>
                   {loginTraces.length === 0 && (
-                    <div className="history-list-empty" data-name="history.sidebar.logins-empty">暂无登录痕迹</div>
+                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.logins-empty">暂无登录痕迹</div>
                   )}
                   {loginTraces.map((t, idx) => (
-                    <div key={t.id} className="trace-item" data-name={`history.sidebar.login-trace-item-${idx + 1}`} data-index={idx + 1} data-id={t.id}>
+                    <div key={t.id} className="glass-card trace-item" data-name={`history.sidebar.login-trace-item-${idx + 1}`} data-index={idx + 1} data-id={t.id}>
                       <div className="trace-item-head" data-name="history.sidebar.login-trace-head">
                         <span className="trace-item-title" data-name="history.sidebar.login-trace-title">{t.platform || t.profileId}</span>
                         <span className="trace-item-time" data-name="history.sidebar.login-trace-time">{formatTime(t.loginTime, 'datetime')}</span>
@@ -551,10 +498,10 @@ export default function HistoryView() {
                     </Button>
                   </div>
                   {windowTraces.length === 0 && (
-                    <div className="history-list-empty" data-name="history.sidebar.windows-empty">暂无窗口操作痕迹</div>
+                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.windows-empty">暂无窗口操作痕迹</div>
                   )}
                   {windowTraces.map((t, idx) => (
-                    <div key={t.id} className="trace-item" data-name={`history.sidebar.window-trace-item-${idx + 1}`} data-index={idx + 1} data-id={t.id}>
+                    <div key={t.id} className="glass-card trace-item" data-name={`history.sidebar.window-trace-item-${idx + 1}`} data-index={idx + 1} data-id={t.id}>
                       <div className="trace-item-head" data-name="history.sidebar.window-trace-head">
                         <span className="trace-item-title" data-name="history.sidebar.window-trace-title">{t.action} · {t.windowId}</span>
                         <span className="trace-item-time" data-name="history.sidebar.window-trace-time">{formatTime(t.timestamp, 'datetime')}</span>
@@ -575,9 +522,9 @@ export default function HistoryView() {
                   <span className="history-detail-title" data-name="history.detail.search-title">搜索结果 ({searchResults.length})</span>
                 </div>
                 <div className="history-search-results" data-name="history.detail.search-results">
-                  {searching && <div className="history-list-empty" data-name="history.detail.searching-indicator">搜索中…</div>}
+                  {searching && <div className="history-list-empty app-empty-state large" data-name="history.detail.searching-indicator">搜索中…</div>}
                   {!searching && searchResults.length === 0 && (
-                    <div className="history-list-empty" data-name="history.detail.search-no-results">未找到匹配内容</div>
+                    <div className="history-list-empty app-empty-state large" data-name="history.detail.search-no-results">未找到匹配内容</div>
                   )}
                   {searchResults.map((m, idx) => (
                     <div
@@ -673,7 +620,7 @@ export default function HistoryView() {
                 </div>
                 <div className="history-messages" data-name="history.detail.messages">
                   {messages.length === 0 && (
-                    <div className="history-list-empty" data-name="history.detail.messages-empty">该对话暂无消息</div>
+                    <div className="history-list-empty app-empty-state large" data-name="history.detail.messages-empty">该对话暂无消息</div>
                   )}
                   {mergedMessages.map(({ msg: m, dupCount }, idx) => (
                     <div key={m.id} className={`history-msg ${m.role}`} data-name={`history.detail.msg-item-${idx + 1}`} data-index={idx + 1} data-id={m.id}>
@@ -741,7 +688,7 @@ export default function HistoryView() {
               </>
             ) : (
               <div className="history-messages" data-name="history.detail.empty-messages">
-                <div className="history-list-empty" data-name="history.detail.empty-placeholder">
+                <div className="history-list-empty app-empty-state large" data-name="history.detail.empty-placeholder">
                   {tab === 'conversations' ? '选择左侧对话查看详情' : tab === 'logins' ? '登录痕迹记录各 AI 平台的登录时间与 URL' : '窗口操作痕迹记录窗口的创建/关闭/最大化等行为'}
                 </div>
               </div>

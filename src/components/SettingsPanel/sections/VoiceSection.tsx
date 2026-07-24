@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import { Button, SegmentedControl } from '../../ui';
+import type { VoiceSettings } from '../types';
+import { Button, SegmentedControl, FormRow, SectionTitle } from '../../ui';
 import {
   setVoiceConfig,
   listDownloadedModels,
@@ -15,46 +15,15 @@ import {
   listAIProviders,
   testTtsProvider,
 } from '../../../lib/electron-api';
-import type { CustomAIProvider, TestTtsResult } from '../../../lib/electron-api';
+import type { CustomAIProvider } from '../../../lib/electron-api';
+import VoiceProviderConfig from './VoiceProviderConfig';
 
 type SttMode = 'builtin' | 'ai' | 'local' | 'download';
 type ConfirmMode = 'auto' | 'manual' | 'clipboard';
 
 interface VoiceSectionProps {
-  voiceConfirmMode: ConfirmMode;
-  setVoiceConfirmMode: Dispatch<SetStateAction<ConfirmMode>>;
-  voiceEnterToSend: boolean;
-  setVoiceEnterToSend: Dispatch<SetStateAction<boolean>>;
-  voiceSttMode: SttMode;
-  setVoiceSttMode: Dispatch<SetStateAction<SttMode>>;
-  voiceAiProvider: string;
-  setVoiceAiProvider: Dispatch<SetStateAction<string>>;
-  voiceLanguage: string;
-  setVoiceLanguage: Dispatch<SetStateAction<string>>;
-  voiceLocalExePath: string;
-  setVoiceLocalExePath: Dispatch<SetStateAction<string>>;
-  voiceLocalArgs: string;
-  setVoiceLocalArgs: Dispatch<SetStateAction<string>>;
-  voiceDownloadModel: string;
-  setVoiceDownloadModel: Dispatch<SetStateAction<string>>;
-  downloadedModels: string[];
-  setDownloadedModels: Dispatch<SetStateAction<string[]>>;
-  voiceDownloadStatus: string;
-  setVoiceDownloadStatus: Dispatch<SetStateAction<string>>;
-  voiceInputDeviceId: string;
-  setVoiceInputDeviceId: Dispatch<SetStateAction<string>>;
-  /**
-   * whisper-cli 引擎二进制是否已下载（**持久化字段**，来自 cfg.cliDownloaded）。
-   * 主进程 getVoiceConfig() 在启动时主动扫描磁盘并修正此字段后返回，
-   * 渲染层 mount 时 useState 初值直接基于此 prop，**无需** mount 后再异步 checkCliExists。
-   * 这是修复"每次打开设置页都看到下载按钮 / 重启后仍提示下载"的关键。
-   */
-  voiceCliDownloaded: boolean;
-  // ===== v0.5.2 B-3：TTS（语音合成）独立配置 =====
-  voiceTtsMode: 'disable' | 'ai';
-  setVoiceTtsMode: Dispatch<SetStateAction<'disable' | 'ai'>>;
-  voiceTtsProvider: string;
-  setVoiceTtsProvider: Dispatch<SetStateAction<string>>;
+  voice: VoiceSettings;
+  onChange: (patch: Partial<VoiceSettings>) => void;
 }
 
 const DOWNLOAD_MODELS: Array<{ id: 'whisper-tiny' | 'whisper-base' | 'whisper-small'; label: string; desc: string }> = [
@@ -63,97 +32,44 @@ const DOWNLOAD_MODELS: Array<{ id: 'whisper-tiny' | 'whisper-base' | 'whisper-sm
   { id: 'whisper-small', label: 'Whisper Small', desc: '约 466MB · 准确率高' },
 ];
 
-export default function VoiceSection({
-  voiceConfirmMode,
-  setVoiceConfirmMode,
-  voiceEnterToSend,
-  setVoiceEnterToSend,
-  voiceSttMode,
-  setVoiceSttMode,
-  voiceAiProvider,
-  setVoiceAiProvider,
-  voiceLanguage,
-  setVoiceLanguage,
-  voiceLocalExePath,
-  setVoiceLocalExePath,
-  voiceLocalArgs,
-  setVoiceLocalArgs,
-  voiceDownloadModel,
-  setVoiceDownloadModel,
-  downloadedModels,
-  setDownloadedModels,
-  voiceDownloadStatus,
-  setVoiceDownloadStatus,
-  voiceInputDeviceId,
-  setVoiceInputDeviceId,
-  voiceCliDownloaded,
-  voiceTtsMode,
-  setVoiceTtsMode,
-  voiceTtsProvider,
-  setVoiceTtsProvider,
-}: VoiceSectionProps) {
+export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
+  // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
+  const {
+    confirmMode: voiceConfirmMode,
+    enterToSend: voiceEnterToSend,
+    sttMode: voiceSttMode,
+    aiProvider: voiceAiProvider,
+    language: voiceLanguage,
+    localExePath: voiceLocalExePath,
+    localArgs: voiceLocalArgs,
+    downloadModel: voiceDownloadModel,
+    downloadedModels,
+    downloadStatus: voiceDownloadStatus,
+    inputDeviceId: voiceInputDeviceId,
+    cliDownloaded: voiceCliDownloaded,
+    ttsMode: voiceTtsMode,
+    ttsProvider: voiceTtsProvider,
+  } = voice;
+
+  // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部 setVoiceConfig 完成
+  const setVoiceConfirmMode = (v: ConfirmMode) => onChange({ confirmMode: v });
+  const setVoiceEnterToSend = (v: boolean) => onChange({ enterToSend: v });
+  const setVoiceSttMode = (v: SttMode) => onChange({ sttMode: v });
+  const setVoiceAiProvider = (v: string) => onChange({ aiProvider: v });
+  const setVoiceLanguage = (v: string) => onChange({ language: v });
+  const setVoiceLocalExePath = (v: string) => onChange({ localExePath: v });
+  const setVoiceLocalArgs = (v: string) => onChange({ localArgs: v });
+  const setVoiceDownloadModel = (v: string) => onChange({ downloadModel: v });
+  const setDownloadedModels = (v: string[]) => onChange({ downloadedModels: v });
+  const setVoiceDownloadStatus = (v: string) => onChange({ downloadStatus: v });
+  const setVoiceInputDeviceId = (v: string) => onChange({ inputDeviceId: v });
+  const setVoiceTtsMode = (v: 'disable' | 'ai') => onChange({ ttsMode: v });
+  const setVoiceTtsProvider = (v: string) => onChange({ ttsProvider: v });
   const [collapsed, setCollapsed] = useState(true);
-  const [aiDraft, setAiDraft] = useState<{ provider: string }>({ provider: voiceAiProvider });
-  const [aiSaving, setAiSaving] = useState(false);
-  const [aiTesting, setAiTesting] = useState(false);
-  const [aiTestResult, setAiTestResult] = useState<
-    { ok: boolean; message: string; text?: string } | null
-  >(null);
-  const aiDirty = aiDraft.provider !== voiceAiProvider;
-
-  const [localDraft, setLocalDraft] = useState({
-    exePath: voiceLocalExePath,
-    args: voiceLocalArgs,
-  });
-  const [isLocalSaving, setIsLocalSaving] = useState(false);
-  const localDirty =
-    localDraft.exePath !== voiceLocalExePath || localDraft.args !== voiceLocalArgs;
-
-  // ===== v0.5.2 B-3：TTS draft（完全复制 aiDraft 的模式） =====
-  const [ttsDraft, setTtsDraft] = useState<{ provider: string }>({ provider: voiceTtsProvider });
-  const [ttsSaving, setTtsSaving] = useState(false);
-  const [ttsTesting, setTtsTesting] = useState(false);
-  const [ttsTestResult, setTtsTestResult] = useState<TestTtsResult | null>(null);
-  const [ttsAudioEl, setTtsAudioEl] = useState<HTMLAudioElement | null>(null);
-  const ttsDirty = ttsDraft.provider !== voiceTtsProvider;
-
-  /**
-   * 父组件（SettingsPanel）的状态由 useEffect 异步从 getVoiceConfig 加载，
-   * 子组件 mount 时 props 多数情况还是空字符串。如果不在 props 变化时同步 draft，
-   * 就会卡死在「空表单」上。这是历史上反复出现的"假状态"之一。
-   *
-   * 同步策略：
-   * - 当 draft 与 props 完全一致（说明 user 未编辑），收到 props 变化时立即同步
-   * - 当 draft 与 props 不一致（说明 user 正在编辑），不动 draft（避免打断输入）
-   * - 保存成功后显式 setVoiceAiXxx() 同步父状态，aiDirty 也会自然归零
-   */
-  useEffect(() => {
-    setAiDraft((prev) => {
-      // 用户已编辑（dirty）则不同步，避免打断
-      if (prev.provider !== voiceAiProvider) {
-        return prev
-      }
-      return { provider: voiceAiProvider }
-    })
-  }, [voiceAiProvider])
-
-  useEffect(() => {
-    setLocalDraft((prev) => {
-      if (prev.exePath !== voiceLocalExePath || prev.args !== voiceLocalArgs) {
-        return prev
-      }
-      return { exePath: voiceLocalExePath, args: voiceLocalArgs }
-    })
-  }, [voiceLocalExePath, voiceLocalArgs])
-
-  useEffect(() => {
-    setTtsDraft((prev) => {
-      if (prev.provider !== voiceTtsProvider) {
-        return prev
-      }
-      return { provider: voiceTtsProvider }
-    })
-  }, [voiceTtsProvider])
+  // aiDraft/localDraft/ttsDraft 三套草稿模式已下放给 <VoiceProviderConfig> + useDraftState 管理，
+  // 这里仅保留 TTS 回放所需的 audio 元素引用（历史行为：测试按钮内联调用，从未设置此引用，
+  // 因此回放按钮始终为 no-op，本重构保持该行为不变）。
+  const [ttsAudioEl] = useState<HTMLAudioElement | null>(null);
 
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [cliDownloadPercent, setCliDownloadPercent] = useState(0);
@@ -215,73 +131,6 @@ export default function VoiceSection({
       await setVoiceConfig({ sttMode: mode });
     } catch (e) {
       console.error('保存语音引擎模式失败:', e);
-    }
-  };
-
-  const handleSaveAi = async () => {
-    setAiSaving(true);
-    try {
-      await setVoiceConfig({
-        aiProvider: aiDraft.provider,
-      });
-      setVoiceAiProvider(aiDraft.provider);
-    } catch (e) {
-      console.error('保存 AI 接入配置失败:', e);
-    } finally {
-      setAiSaving(false);
-    }
-  };
-
-  const handleSaveTts = async () => {
-    setTtsSaving(true);
-    try {
-      await setVoiceConfig({
-        ttsProvider: ttsDraft.provider,
-      });
-      setVoiceTtsProvider(ttsDraft.provider);
-    } catch (e) {
-      console.error('保存 TTS 配置失败:', e);
-    } finally {
-      setTtsSaving(false);
-    }
-  };
-
-  const handleTestTts = async () => {
-    setTtsTestResult(null);
-    // 如果有上一次播放的音频，停止
-    if (ttsAudioEl) {
-      ttsAudioEl.pause();
-      setTtsAudioEl(null);
-    }
-    try {
-      const result = await testTtsProvider({ providerId: ttsDraft.provider });
-      setTtsTestResult(result);
-      if (result.ok && result.audioDataUrl) {
-        const audio = new Audio(result.audioDataUrl);
-        setTtsAudioEl(audio);
-        void audio.play().catch((err) => console.warn('[VoiceSection] TTS 自动播放失败:', err));
-      }
-    } catch (e) {
-      setTtsTestResult({
-        ok: false,
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
-  };
-
-  const handleSaveLocal = async () => {
-    setIsLocalSaving(true);
-    try {
-      await setVoiceConfig({
-        localExePath: localDraft.exePath,
-        localArgs: localDraft.args,
-      });
-      setVoiceLocalExePath(localDraft.exePath);
-      setVoiceLocalArgs(localDraft.args);
-    } catch (e) {
-      console.error('保存本地识别配置失败:', e);
-    } finally {
-      setIsLocalSaving(false);
     }
   };
 
@@ -521,23 +370,13 @@ export default function VoiceSection({
 
   return (
     <section data-name="settings.voice.section">
-      <div
-        className="settings-section-title-row collapsible"
-        onClick={() => setCollapsed((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setCollapsed((v) => !v);
-          }
-        }}
-        data-name="settings.voice.title-row"
+      <SectionTitle
+        collapsible
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((v) => !v)}
       >
-        <span className="settings-section-title" data-name="settings.voice.title">语音输入</span>
-        <span className={`collapse-toggle-icon${!collapsed ? ' expanded' : ''}`} data-name="settings.voice.collapse-icon">▼</span>
-      </div>
+        语音输入
+      </SectionTitle>
       {!collapsed && (
         <>
       <div className="voice-config-name voice-section-subtitle" data-name="settings.voice.engine-subtitle">
@@ -559,47 +398,42 @@ export default function VoiceSection({
       {/* 麦克风设备选择（所有非 builtin 模式都需要） */}
       {voiceSttMode !== 'builtin' && (
         <div className="voice-mode-panel" data-name="settings.voice.mic-panel">
-          <div className="voice-config-row stack" data-name="settings.voice.mic-row">
-            <div className="voice-field" data-name="settings.voice.mic-field">
-              <label className="voice-field-label" data-name="settings.voice.mic-label">麦克风设备</label>
-              <div className="voice-field-row" data-name="settings.voice.mic-input-row">
-                <select
-                  className="voice-select"
-                  value={voiceInputDeviceId}
-                  onChange={async (e) => {
-                    const next = e.target.value;
-                    setVoiceInputDeviceId(next);
-                    try {
-                      await setVoiceConfig({ inputDeviceId: next });
-                    } catch (err) {
-                      console.error('保存麦克风设备失败:', err);
-                    }
-                  }}
-                  data-name="settings.voice.mic-select"
-                >
-                  <option value="" data-name="settings.voice.mic-option-1">系统默认麦克风</option>
-                  {inputDeviceList.map((d, idx) => (
-                    <option key={d.deviceId} value={d.deviceId} data-name={`settings.voice.mic-option-${idx + 2}`}>
-                      {d.label || `未命名设备 (${d.deviceId.slice(0, 12)}...)`}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant="text"
-                  className="voice-btn-secondary"
-                  onClick={refreshDevices}
-                  disabled={refreshingDevices}
-                  data-name="settings.voice.mic-refresh-button"
-                >
-                  {refreshingDevices ? '刷新中…' : '刷新'}
-                </Button>
-              </div>
-              <div className="voice-field-hint" data-name="settings.voice.mic-hint">
-                {inputDeviceList.length === 0
-                  ? '未找到麦克风设备，请确认已授权麦克风权限后点击刷新'
-                  : `共检测到 ${inputDeviceList.length} 个麦克风；选错设备会导致录音静默或识别失败`}
-              </div>
-            </div>
+          <FormRow stack label="麦克风设备">
+            <select
+              className="voice-select input-underline"
+              value={voiceInputDeviceId}
+              onChange={async (e) => {
+                const next = e.target.value;
+                setVoiceInputDeviceId(next);
+                try {
+                  await setVoiceConfig({ inputDeviceId: next });
+                } catch (err) {
+                  console.error('保存麦克风设备失败:', err);
+                }
+              }}
+              data-name="settings.voice.mic-select"
+            >
+              <option value="" data-name="settings.voice.mic-option-1">系统默认麦克风</option>
+              {inputDeviceList.map((d, idx) => (
+                <option key={d.deviceId} value={d.deviceId} data-name={`settings.voice.mic-option-${idx + 2}`}>
+                  {d.label || `未命名设备 (${d.deviceId.slice(0, 12)}...)`}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="text"
+              className="voice-btn-secondary btn-secondary-underline"
+              onClick={refreshDevices}
+              disabled={refreshingDevices}
+              data-name="settings.voice.mic-refresh-button"
+            >
+              {refreshingDevices ? '刷新中…' : '刷新'}
+            </Button>
+          </FormRow>
+          <div className="voice-field-hint" data-name="settings.voice.mic-hint">
+            {inputDeviceList.length === 0
+              ? '未找到麦克风设备，请确认已授权麦克风权限后点击刷新'
+              : `共检测到 ${inputDeviceList.length} 个麦克风；选错设备会导致录音静默或识别失败`}
           </div>
         </div>
       )}
@@ -612,137 +446,126 @@ export default function VoiceSection({
       {/* 自定义 AI 接入 */}
       {voiceSttMode === 'ai' && (
         <div className="voice-mode-panel" data-name="settings.voice.ai-panel">
-          <div className="voice-config-row stack" data-name="settings.voice.ai-config-row">
-            <div className="voice-field" data-name="settings.voice.ai-provider-field">
-              <label className="voice-field-label" data-name="settings.voice.ai-provider-label">服务商</label>
-              <select
-                className="voice-select"
-                value={aiDraft.provider}
-                onChange={(e) => setAiDraft({ provider: e.target.value })}
-                data-name="settings.voice.ai-provider-select"
-              >
-                <option value="openai" data-name="settings.voice.ai-provider-option-1">OpenAI (Whisper API)</option>
-                <option value="azure" data-name="settings.voice.ai-provider-option-2">Azure Speech</option>
-                <option value="google" data-name="settings.voice.ai-provider-option-3">Google Cloud Speech</option>
-                <option value="custom" data-name="settings.voice.ai-provider-option-4">自定义兼容接口</option>
-                {sttProviders.map((p, idx) => (
-                  <option key={p.id} value={p.id} data-name={`settings.voice.ai-provider-option-custom-${idx + 1}`}>
-                    {p.name}（自定义）
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="voice-field" data-name="settings.voice.ai-language-field">
-              <label className="voice-field-label" data-name="settings.voice.ai-language-label">识别语言</label>
-              <select
-                className="voice-select"
-                value={voiceLanguage}
-                onChange={async (e) => {
-                  const next = e.target.value
-                  setVoiceLanguage(next)
-                  try {
-                    await setVoiceConfig({ language: next })
-                  } catch (err) {
-                    console.error('保存识别语言失败:', err)
-                  }
-                }}
-                data-name="settings.voice.ai-language-select"
-              >
-                <option value="zh" data-name="settings.voice.ai-language-option-1">中文（普通话）</option>
-                <option value="en" data-name="settings.voice.ai-language-option-2">英文</option>
-                <option value="ja" data-name="settings.voice.ai-language-option-3">日文</option>
-                <option value="ko" data-name="settings.voice.ai-language-option-4">韩文</option>
-                <option value="auto" data-name="settings.voice.ai-language-option-5">自动判断</option>
-              </select>
-            </div>
-            {aiDirty && (
-              <Button
-                variant="primary-compact"
-                className="voice-save-btn"
-                disabled={aiSaving}
-                onClick={handleSaveAi}
-                data-name="settings.voice.ai-save-button"
-              >
-                {aiSaving ? '保存中…' : '保存'}
-              </Button>
+          <VoiceProviderConfig
+            scope="ai"
+            initial={{ provider: voiceAiProvider }}
+            onSave={async (d) => {
+              try {
+                await setVoiceConfig({ aiProvider: d.provider });
+                setVoiceAiProvider(d.provider);
+              } catch (e) {
+                console.error('保存 AI 接入配置失败:', e);
+              }
+            }}
+            onTest={(d) => testAiProvider({ providerId: d.provider })}
+            testLabel="测试连接"
+            testingLabel="测试中…"
+            testDisabled={(d) => !d.provider}
+            renderTestResultExtra={(r) =>
+              r.text ? (
+                <div className="voice-test-result-text" data-name="settings.voice.ai-test-result-text">
+                  识别回声：{r.text}
+                </div>
+              ) : null
+            }
+          >
+            {({ draft, setDraft }) => (
+              <>
+                <FormRow stack label="服务商">
+                  <select
+                    className="voice-select input-underline"
+                    value={draft.provider}
+                    onChange={(e) => setDraft({ provider: e.target.value })}
+                    data-name="settings.voice.ai-provider-select"
+                  >
+                    <option value="openai" data-name="settings.voice.ai-provider-option-1">OpenAI (Whisper API)</option>
+                    <option value="azure" data-name="settings.voice.ai-provider-option-2">Azure Speech</option>
+                    <option value="google" data-name="settings.voice.ai-provider-option-3">Google Cloud Speech</option>
+                    <option value="custom" data-name="settings.voice.ai-provider-option-4">自定义兼容接口</option>
+                    {sttProviders.map((p, idx) => (
+                      <option key={p.id} value={p.id} data-name={`settings.voice.ai-provider-option-custom-${idx + 1}`}>
+                        {p.name}（自定义）
+                      </option>
+                    ))}
+                  </select>
+                </FormRow>
+                <FormRow stack label="识别语言">
+                  <select
+                    className="voice-select input-underline"
+                    value={voiceLanguage}
+                    onChange={async (e) => {
+                      const next = e.target.value
+                      setVoiceLanguage(next)
+                      try {
+                        await setVoiceConfig({ language: next })
+                      } catch (err) {
+                        console.error('保存识别语言失败:', err)
+                      }
+                    }}
+                    data-name="settings.voice.ai-language-select"
+                  >
+                    <option value="zh" data-name="settings.voice.ai-language-option-1">中文（普通话）</option>
+                    <option value="en" data-name="settings.voice.ai-language-option-2">英文</option>
+                    <option value="ja" data-name="settings.voice.ai-language-option-3">日文</option>
+                    <option value="ko" data-name="settings.voice.ai-language-option-4">韩文</option>
+                    <option value="auto" data-name="settings.voice.ai-language-option-5">自动判断</option>
+                  </select>
+                </FormRow>
+              </>
             )}
-            {/* 测试连接：发送静音样本验证 AI 接入是否可正常请求与解析 */}
-            <Button
-              variant="text"
-              className="voice-test-btn"
-              disabled={!aiDraft.provider || aiTesting}
-              onClick={() => {
-                setAiTesting(true);
-                setAiTestResult(null);
-                testAiProvider({ providerId: aiDraft.provider })
-                  .then((res) => setAiTestResult(res))
-                  .catch((e) => setAiTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) }))
-                  .finally(() => setAiTesting(false));
-              }}
-              data-name="settings.voice.ai-test-button"
-            >
-              {aiTesting ? '测试中…' : '测试连接'}
-            </Button>
-            {aiTestResult && (
-              <div
-                className={`voice-test-result ${aiTestResult.ok ? 'ok' : 'fail'}`}
-                data-name="settings.voice.ai-test-result"
-              >
-                {aiTestResult.message}
-                {aiTestResult.text && (
-                  <div className="voice-test-result-text" data-name="settings.voice.ai-test-result-text">
-                    识别回声：{aiTestResult.text}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          </VoiceProviderConfig>
         </div>
       )}
 
       {voiceSttMode === 'local' && (
         <div className="voice-mode-panel" data-name="settings.voice.local-panel">
-          <div className="voice-config-row stack" data-name="settings.voice.local-config-row">
-            <div className="voice-field" data-name="settings.voice.local-exe-field">
-              <label className="voice-field-label" data-name="settings.voice.local-exe-label">可执行文件路径</label>
-              <input
-                type="text"
-                className="voice-input"
-                placeholder="C:\whisper\whisper.exe 或 /usr/local/bin/whisper"
-                value={localDraft.exePath}
-                onChange={(e) => setLocalDraft({ ...localDraft, exePath: e.target.value })}
-                data-name="settings.voice.local-exe-input"
-              />
-            </div>
-            <div className="voice-field" data-name="settings.voice.local-args-field">
-              <label className="voice-field-label" data-name="settings.voice.local-args-label">启动参数</label>
-              <input
-                type="text"
-                className="voice-input"
-                placeholder="-m model.bin -l zh --output-txt"
-                value={localDraft.args}
-                onChange={(e) => setLocalDraft({ ...localDraft, args: e.target.value })}
-                data-name="settings.voice.local-args-input"
-              />
-            </div>
-            {localDirty && (
-              <Button
-                variant="primary-compact"
-                className="voice-save-btn"
-                disabled={isLocalSaving}
-                onClick={handleSaveLocal}
-                data-name="settings.voice.local-save-button"
-              >
-                {isLocalSaving ? '保存中…' : '保存'}
-              </Button>
+          <VoiceProviderConfig
+            scope="local"
+            initial={{ exePath: voiceLocalExePath, args: voiceLocalArgs }}
+            onSave={async (d) => {
+              try {
+                await setVoiceConfig({
+                  localExePath: d.exePath,
+                  localArgs: d.args,
+                });
+                setVoiceLocalExePath(d.exePath);
+                setVoiceLocalArgs(d.args);
+              } catch (e) {
+                console.error('保存本地识别配置失败:', e);
+              }
+            }}
+          >
+            {({ draft, setDraft }) => (
+              <>
+                <FormRow stack label="可执行文件路径">
+                  <input
+                    type="text"
+                    className="voice-input input-underline"
+                    placeholder="C:\whisper\whisper.exe 或 /usr/local/bin/whisper"
+                    value={draft.exePath}
+                    onChange={(e) => setDraft({ ...draft, exePath: e.target.value })}
+                    data-name="settings.voice.local-exe-input"
+                  />
+                </FormRow>
+                <FormRow stack label="启动参数">
+                  <input
+                    type="text"
+                    className="voice-input input-underline"
+                    placeholder="-m model.bin -l zh --output-txt"
+                    value={draft.args}
+                    onChange={(e) => setDraft({ ...draft, args: e.target.value })}
+                    data-name="settings.voice.local-args-input"
+                  />
+                </FormRow>
+              </>
             )}
-          </div>
+          </VoiceProviderConfig>
         </div>
       )}
 
       {voiceSttMode === 'download' && (
         <div className="voice-mode-panel" data-name="settings.voice.download-panel">
-          <div className="voice-config-row stack" data-name="settings.voice.download-config-row">
+          <div className="form-row stack" data-name="settings.voice.download-config-row">
             {DOWNLOAD_MODELS.map((m, idx) => {
               // 关键修复：用 downloadedModels 数组判断是否已下载
               // 不要再依赖 voiceDownloadStatus（它会在切换模型时被覆盖）
@@ -858,7 +681,7 @@ export default function VoiceSection({
                 />
               </div>
             )}
-            <div className="voice-config-row stack compact mt-2" data-name="settings.voice.cli-block">
+            <div className="form-row stack compact" style={{ marginTop: 'var(--space-1)' }} data-name="settings.voice.cli-block">
               {/* 关键修复：CLI 已就绪时不再显示"运行下载模型所必需"提示，
                   避免与"已就绪"标签形成"已就绪/仍提示需要下载"的认知冲突。
                   useState 初值直接来自 cfg.cliExists（主进程 getVoiceConfig 主动扫描），
@@ -930,35 +753,67 @@ export default function VoiceSection({
         语音合成（TTS）
       </div>
       <div className="voice-mode-panel" data-name="settings.voice.tts-panel">
-        <div className="voice-config-row stack" data-name="settings.voice.tts-config-row">
-          <div className="voice-field" data-name="settings.voice.tts-mode-field">
-            <label className="voice-field-label" data-name="settings.voice.tts-mode-label">合成模式</label>
-            <SegmentedControl
-              className="voice-mode-group"
-              name="tts-mode"
-              value={voiceTtsMode}
-              onChange={async (mode: 'disable' | 'ai') => {
-                setVoiceTtsMode(mode);
-                try {
-                  await setVoiceConfig({ ttsMode: mode });
-                } catch (e) {
-                  console.error('保存 TTS 模式失败:', e);
-                }
-              }}
-              options={[
-                { value: 'disable', label: '关闭' },
-                { value: 'ai', label: '自定义 AI 接入' },
-              ]}
-            />
-          </div>
-          {voiceTtsMode === 'ai' && (
-            <>
-              <div className="voice-field" data-name="settings.voice.tts-provider-field">
-                <label className="voice-field-label" data-name="settings.voice.tts-provider-label">服务商</label>
+        <FormRow stack label="合成模式">
+          <SegmentedControl
+            className="voice-mode-group"
+            name="tts-mode"
+            value={voiceTtsMode}
+            onChange={async (mode: 'disable' | 'ai') => {
+              setVoiceTtsMode(mode);
+              try {
+                await setVoiceConfig({ ttsMode: mode });
+              } catch (e) {
+                console.error('保存 TTS 模式失败:', e);
+              }
+            }}
+            options={[
+              { value: 'disable', label: '关闭' },
+              { value: 'ai', label: '自定义 AI 接入' },
+            ]}
+          />
+        </FormRow>
+        {voiceTtsMode === 'ai' && (
+          <VoiceProviderConfig
+            scope="tts"
+            initial={{ provider: voiceTtsProvider }}
+            onSave={async (d) => {
+              try {
+                await setVoiceConfig({ ttsProvider: d.provider });
+                setVoiceTtsProvider(d.provider);
+              } catch (e) {
+                console.error('保存 TTS 配置失败:', e);
+              }
+            }}
+            onTest={(d) => testTtsProvider({ providerId: d.provider })}
+            testLabel="测试合成"
+            testingLabel="合成中…"
+            testDisabled={(d) => !d.provider}
+            renderTestResultExtra={(r) =>
+              r.ok && r.audioDataUrl ? (
+                <div className="voice-test-result-text" data-name="settings.voice.tts-test-result-audio">
+                  <button
+                    type="button"
+                    className="btn-primary-flat voice-test-replay-btn"
+                    onClick={() => {
+                      if (ttsAudioEl) {
+                        ttsAudioEl.currentTime = 0;
+                        void ttsAudioEl.play().catch(() => {});
+                      }
+                    }}
+                    data-name="settings.voice.tts-test-replay-button"
+                  >
+                    重新播放
+                  </button>
+                </div>
+              ) : null
+            }
+          >
+            {({ draft, setDraft }) => (
+              <FormRow stack label="服务商">
                 <select
-                  className="voice-select"
-                  value={ttsDraft.provider}
-                  onChange={(e) => setTtsDraft({ provider: e.target.value })}
+                  className="voice-select input-underline"
+                  value={draft.provider}
+                  onChange={(e) => setDraft({ provider: e.target.value })}
                   data-name="settings.voice.tts-provider-select"
                 >
                   <option value="openai" data-name="settings.voice.tts-provider-option-1">OpenAI (TTS API)</option>
@@ -969,71 +824,16 @@ export default function VoiceSection({
                     </option>
                   ))}
                 </select>
-              </div>
-              {ttsDirty && (
-                <Button
-                  variant="primary-compact"
-                  className="voice-save-btn"
-                  disabled={ttsSaving}
-                  onClick={handleSaveTts}
-                  data-name="settings.voice.tts-save-button"
-                >
-                  {ttsSaving ? '保存中…' : '保存'}
-                </Button>
-              )}
-              <Button
-                variant="text"
-                className="voice-test-btn"
-                disabled={!ttsDraft.provider || ttsTesting}
-                onClick={() => {
-                  setTtsTesting(true);
-                  setTtsTestResult(null);
-                  testTtsProvider({ providerId: ttsDraft.provider })
-                    .then((res) => setTtsTestResult(res))
-                    .catch((e) => setTtsTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) }))
-                    .finally(() => setTtsTesting(false));
-                }}
-                data-name="settings.voice.tts-test-button"
-              >
-                {ttsTesting ? '合成中…' : '测试合成'}
-              </Button>
-              {ttsTestResult && (
-                <div
-                  className={`voice-test-result ${ttsTestResult.ok ? 'ok' : 'fail'}`}
-                  data-name="settings.voice.tts-test-result"
-                >
-                  {ttsTestResult.message}
-                  {ttsTestResult.ok && ttsTestResult.audioDataUrl && (
-                    <div className="voice-test-result-text" data-name="settings.voice.tts-test-result-audio">
-                      <button
-                        type="button"
-                        className="btn-primary-flat voice-test-replay-btn"
-                        onClick={() => {
-                          if (ttsAudioEl) {
-                            ttsAudioEl.currentTime = 0;
-                            void ttsAudioEl.play().catch(() => {});
-                          }
-                        }}
-                        data-name="settings.voice.tts-test-replay-button"
-                      >
-                        重新播放
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+              </FormRow>
+            )}
+          </VoiceProviderConfig>
+        )}
       </div>
 
       {/* 上屏方式：候选窗已移除，全部自动上屏以减少操作步骤 */}
-      <div className="voice-config-row stack spaced" data-name="settings.voice.confirm-mode-row">
-        <div className="voice-config-label static" data-name="settings.voice.confirm-mode-label">
-          <span className="voice-config-name" data-name="settings.voice.confirm-mode-name">识别后上屏方式</span>
-        </div>
+      <FormRow stack label="识别后上屏方式">
         <select
-          className="voice-select"
+          className="voice-select input-underline"
           value={voiceConfirmMode === 'manual' ? 'auto' : voiceConfirmMode}
           onChange={async (e) => {
             const next = e.target.value as ConfirmMode;
@@ -1050,27 +850,27 @@ export default function VoiceSection({
           <option value="auto" data-name="settings.voice.confirm-mode-option-1">自动上屏（前台注入 / 后台粘贴）</option>
           <option value="clipboard" data-name="settings.voice.confirm-mode-option-2">仅复制到剪贴板（手动粘贴）</option>
         </select>
-        {voiceConfirmMode !== 'clipboard' && (
-          <label className="voice-field-hint voice-enter-send-label" data-name="settings.voice.enter-send-label">
-            <input
-              type="checkbox"
-              checked={voiceEnterToSend}
-              onChange={async (e) => {
-                const next = e.target.checked;
-                setVoiceEnterToSend(next);
-                try {
-                  await setVoiceConfig({ enterToSend: next });
-                } catch (err) {
-                  console.error('保存 enterToSend 失败:', err);
-                  setVoiceEnterToSend(!next);
-                }
-              }}
-              data-name="settings.voice.enter-send-input"
-            />
-            前台注入后自动回车发送
-          </label>
-        )}
-      </div>
+      </FormRow>
+      {voiceConfirmMode !== 'clipboard' && (
+        <label className="voice-field-hint voice-enter-send-label" data-name="settings.voice.enter-send-label">
+          <input
+            type="checkbox"
+            checked={voiceEnterToSend}
+            onChange={async (e) => {
+              const next = e.target.checked;
+              setVoiceEnterToSend(next);
+              try {
+                await setVoiceConfig({ enterToSend: next });
+              } catch (err) {
+                console.error('保存 enterToSend 失败:', err);
+                setVoiceEnterToSend(!next);
+              }
+            }}
+            data-name="settings.voice.enter-send-input"
+          />
+          前台注入后自动回车发送
+        </label>
+      )}
       </>
       )}
     </section>

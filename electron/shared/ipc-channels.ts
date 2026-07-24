@@ -180,18 +180,6 @@ export const IPC_CHANNELS = {
   CHAT_GET_CONFIG: 'chat:getConfig',
   // 主进程 → 主窗口：Alt+Q 无对话窗口时，请求打开配置
   CHAT_REQUEST_CONFIG: 'chat:requestConfig',
-  // 无头浏览器
-  HEADLESS_IS_RUNNING: 'headless:isRunning',
-  HEADLESS_VERSION: 'headless:version',
-  HEADLESS_CLOSE: 'headless:close',
-  HEADLESS_CREATE_PAGE: 'headless:createPage',
-  HEADLESS_CLOSE_PAGE: 'headless:closePage',
-  HEADLESS_LIST_PAGES: 'headless:listPages',
-  HEADLESS_GET_PAGE_INFO: 'headless:getPageInfo',
-  HEADLESS_NAVIGATE: 'headless:navigate',
-  HEADLESS_SCREENSHOT: 'headless:screenshot',
-  HEADLESS_PDF: 'headless:pdf',
-  HEADLESS_EVALUATE: 'headless:evaluate',
   // 语音热键（主→渲染：uiohook 监听 Alt+V keydown/keyup 转发）
   VOICE_HOTKEY_DOWN: 'voice:hotkeyDown',
   VOICE_HOTKEY_UP: 'voice:hotkeyUp',
@@ -308,35 +296,44 @@ export const IPC_CHANNELS = {
   ONBOARDING_SHOW: 'onboarding:show',
   ONBOARDING_IS_COMPLETED: 'onboarding:isCompleted',
   ONBOARDING_COMPLETE: 'onboarding:complete',
-  // 需求 11：灵感笔记（嵌入 StandaloneView，无独立窗口）
-  NOTES_LIST: 'notes:list',
-  NOTES_SAVE: 'notes:save',
+  // 灵感笔记（v2：SQLite + FTS5 + 富文本 + 分类）
+  NOTES_LIST: 'notes:list',                   // 支持 filter: {keyword?, tag?, pinnedOnly?}
+  NOTES_SEARCH: 'notes:search',               // 全文搜索（keyword）
+  NOTES_SAVE: 'notes:save',                   // upsert
+  NOTES_SAVE_SYNC: 'notes:saveSync',          // beforeunload 同步保存兜底（sendSync）
   NOTES_DELETE: 'notes:delete',
   NOTES_GET_ACTIVE: 'notes:getActive',
   NOTES_SET_ACTIVE: 'notes:setActive',
+  NOTES_SET_PINNED: 'notes:setPinned',
+  NOTES_SET_TAGS: 'notes:setTags',
+  NOTES_LIST_TAGS: 'notes:listTags',
   // 笔记 → 当前 AI 输入框（主进程查找 lastFocusedWin 内的活跃 webview 注入）
   NOTES_SEND_TO_AI: 'notes:sendToAi',
   // 笔记 → 提示词库
   NOTES_SAVE_AS_PROMPT: 'notes:saveAsPrompt',
-  // 主进程 → 目标窗口渲染：笔记内容直接注入 AI 输入框（不弹预览，与 PROMPT_INJECT_REQUEST 区分）
-  // 载荷：{ text: string, enterToSend: boolean }
-  NOTES_INJECT_TEXT: 'notes:injectText',
   // 主进程 → 笔记窗口渲染：注入结果回传（success + platformName?）
   NOTES_INJECT_RESULT: 'notes:injectResult',
-  // 需求 12：白板（嵌入 StandaloneView，无独立窗口）
-  WHITEBOARD_GET_STATE: 'whiteboard:getState',
-  WHITEBOARD_SAVE_STATE: 'whiteboard:saveState',
-  WHITEBOARD_CLEAR: 'whiteboard:clear',
-  // 主进程 → 白板窗口渲染：外部推送卡片（截图 / HistoryView 拖入消息）
-  // 载荷：WhiteboardCardInput
+  // 白板（v2：SQLite + tldraw + 多白板）
+  WHITEBOARD_LIST: 'whiteboard:list',
+  WHITEBOARD_CREATE: 'whiteboard:create',
+  WHITEBOARD_RENAME: 'whiteboard:rename',
+  WHITEBOARD_DELETE: 'whiteboard:delete',
+  WHITEBOARD_REORDER: 'whiteboard:reorder',
+  WHITEBOARD_GET_ACTIVE: 'whiteboard:getActive',
+  WHITEBOARD_SET_ACTIVE: 'whiteboard:setActive',
+  WHITEBOARD_GET_SNAPSHOT: 'whiteboard:getSnapshot',
+  WHITEBOARD_SAVE_SNAPSHOT: 'whiteboard:saveSnapshot',
+  // 同步保存（beforeunload 兜底，确保窗口关闭前完成写入）
+  WHITEBOARD_SAVE_SNAPSHOT_SYNC: 'whiteboard:saveSnapshotSync',
+  // 主进程 → 白板窗口渲染：外部推送卡片（截图 / AI 回复）
+  // 载荷：{ whiteboardId: string, card: WhiteboardCardInput }
   WHITEBOARD_PUSH_CARD: 'whiteboard:pushCard',
-  // 渲染进程 → 主进程：从任意窗口（如 HistoryView）推送卡片到白板
-  // 主进程接收后打开白板窗口（如未打开），生成完整 WhiteboardCard 并转发给白板渲染
-  // 载荷：WhiteboardCardInput
+  // 渲染进程 → 主进程：从任意窗口推送卡片到白板
   WHITEBOARD_PUSH_CARD_REQUEST: 'whiteboard:pushCardRequest',
-  // 主进程 → StandaloneView 渲染：通知切换到 whiteboard 视图模式
-  // v0.5.2：用于跨窗口推送卡片时自动激活白板视图
+  // 渲染进程 → 主进程：白板 ready 后回 ACK（替代旧 200ms 硬编码）
+  WHITEBOARD_PUSH_ACK: 'whiteboard:pushAck',
+  // 主进程 → AiProviderAppView 渲染：通知切换到 whiteboard tab
   STANDALONE_SWITCH_TO_WHITEBOARD: 'standalone:switchToWhiteboard',
-  // v0.5.2 R-4：白板图片磁盘存储
+  // 白板图片磁盘存储
   WHITEBOARD_SAVE_IMAGE: 'whiteboard:saveImage',
 } as const

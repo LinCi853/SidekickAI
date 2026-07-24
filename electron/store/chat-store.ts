@@ -21,9 +21,6 @@
 // 调用点（main.ts / handler.ts）通过 getChatStore().xxx() 访问，签名零修改。
 
 import Database from 'better-sqlite3'
-import { app } from 'electron'
-import path from 'path'
-import { mkdirSync } from 'fs'
 import type {
   Conversation,
   ConversationSourceType,
@@ -32,30 +29,15 @@ import type {
   WindowTraceAction,
   LoginTrace,
 } from '../shared/types.js'
-import { getModuleDirname, isPortableMode } from './store-paths.js'
+import {
+  resolveSqlitePath,
+  createSqliteDb,
+  createSingletonHolder,
+} from './store-paths.js'
 import { WindowTraceStore } from './window-trace-store.js'
 import { LoginTraceStore } from './login-trace-store.js'
 import { ConversationStore } from './conversation-store.js'
 import { UsageTraceStore } from './usage-trace-store.js'
-
-/** 数据库文件路径（dev / 便携 / 安装版分离） */
-function resolveDbPath(): string {
-  if (process.env.ELECTRON_RENDERER_URL) {
-    // dev 模式：项目内 .app-data/chat.db
-    const dir = path.join(getModuleDirname(), '..', '..', '.app-data')
-    mkdirSync(dir, { recursive: true })
-    return path.join(dir, 'chat.db')
-  }
-  // 便携模式：exe 同级 data/chat.db
-  if (isPortableMode()) {
-    const exeDir = path.dirname(app.getPath('exe'))
-    const dir = path.join(exeDir, 'data')
-    mkdirSync(dir, { recursive: true })
-    return path.join(dir, 'chat.db')
-  }
-  // 安装版：userData/chat.db
-  return path.join(app.getPath('userData'), 'chat.db')
-}
 
 /**
  * 对话 SQLite 持久化存储（facade）
@@ -71,13 +53,10 @@ export class ChatStore {
   private usageTraces: UsageTraceStore
 
   constructor(dbPath?: string) {
-    const finalPath = dbPath ?? resolveDbPath()
+    const finalPath = dbPath ?? resolveSqlitePath('chat.db')
     console.log('[chat-store] 数据库路径:', finalPath)
-    this.db = new Database(finalPath)
-    // 启用 WAL 模式提升并发写入性能
-    this.db.pragma('journal_mode = WAL')
-    this.db.pragma('foreign_keys = ON')
-    this.initSchema()
+    // createSqliteDb 统一 new Database + WAL + foreign_keys + schema 初始化
+    this.db = createSqliteDb(finalPath, (db) => this.initSchema(db))
     // 创建职责子 store（共享同一 db 实例，通过 facade 委托暴露）
     this.conversations = new ConversationStore(this.db)
     this.windowTraces = new WindowTraceStore(this.db)
@@ -86,8 +65,8 @@ export class ChatStore {
   }
 
   /** 初始化表结构（幂等） */
-  private initSchema(): void {
-    this.db.exec(`
+  private initSchema(db: Database.Database): void {
+    db.exec(`
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
         source_id TEXT NOT NULL,
@@ -160,28 +139,28 @@ export class ChatStore {
     // 当前版本号 = 1（初始 schema 已通过上方 CREATE TABLE IF NOT EXISTS 建立）。
     // 未来新增字段/表时，在此追加 `if (currentVersion < N) { ... ALTER TABLE ... }` 分支，
     // 并将 TARGET_VERSION 提升至 N。现有 CREATE TABLE IF NOT EXISTS 语句保持不动。
-    const currentVersion = this.db.pragma('user_version', { simple: true }) as number
+    const currentVersion = db.pragma('user_version', { simple: true }) as number
     const TARGET_VERSION = 5
     if (currentVersion < 1) {
       // v1: 初始版本，无需迁移（表已通过 CREATE TABLE IF NOT EXISTS 创建）
-      this.db.pragma(`user_version = 1`)
+      db.pragma(`user_version = 1`)
     }
     if (currentVersion < 2) {
       // v2: 新增 messages.content_hash 列 + 唯一索引（用于历史对话去重）
       // SQLite 不支持 ADD COLUMN IF NOT EXISTS，先查 table_info 判断列是否存在
-      const cols = this.db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
+      const cols = db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
       if (!cols.some((c) => c.name === 'content_hash')) {
-        this.db.exec('ALTER TABLE messages ADD COLUMN content_hash TEXT')
+        db.exec('ALTER TABLE messages ADD COLUMN content_hash TEXT')
       }
       // 创建唯一索引前先去重：清理已存在的重复 (conversation_id, content_hash) 数据
       // 保留每组中最早的一条（MIN(id)），避免 CREATE UNIQUE INDEX 因重复行失败
       try {
-        this.db.exec(
+        db.exec(
           'CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_content_hash ON messages(conversation_id, content_hash)',
         )
       } catch (e) {
         // UNIQUE constraint failed：表中存在重复数据，去重后重试
-        this.db.exec(`
+        db.exec(`
           DELETE FROM messages WHERE id NOT IN (
             SELECT MIN(id) FROM messages
             WHERE content_hash IS NOT NULL
@@ -194,28 +173,28 @@ export class ChatStore {
               HAVING COUNT(*) > 1
             )
         `)
-        this.db.exec(
+        db.exec(
           'CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_content_hash ON messages(conversation_id, content_hash)',
         )
       }
-      this.db.pragma(`user_version = 2`)
+      db.pragma(`user_version = 2`)
     }
     if (currentVersion < 3) {
       // v3: 新增 conversations.url 列（记录对话发生时的页面 URL，用于"启动时打开最近对话"）
-      const cols = this.db
+      const cols = db
         .prepare('PRAGMA table_info(conversations)')
         .all() as Array<{ name: string }>
       if (!cols.some((c) => c.name === 'url')) {
-        this.db.exec('ALTER TABLE conversations ADD COLUMN url TEXT')
+        db.exec('ALTER TABLE conversations ADD COLUMN url TEXT')
       }
-      this.db.pragma(`user_version = 3`)
+      db.pragma(`user_version = 3`)
     }
     if (currentVersion < 4) {
       // v4: 新增使用统计与操作日志表
       // - app_starts：每次应用启动的时间戳、版本、便携模式、退出时间
       // - click_logs：带 data-name 属性的 UI 元素点击事件
       // 完全本地存储，用户可在设置中关闭（usageTrackingEnabled）
-      this.db.exec(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS app_starts (
           id TEXT PRIMARY KEY,
           start_time INTEGER NOT NULL,
@@ -235,15 +214,15 @@ export class ChatStore {
         CREATE INDEX IF NOT EXISTS idx_click_time ON click_logs(timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_click_element ON click_logs(element_name);
       `)
-      this.db.pragma(`user_version = 4`)
+      db.pragma(`user_version = 4`)
     }
     if (currentVersion < 5) {
       // v5: 新增 messages.auto_grabbed 列（需求 6：标记消息是否由 webview 自动抓取入库）
-      const cols = this.db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
+      const cols = db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>
       if (!cols.some((c) => c.name === 'auto_grabbed')) {
-        this.db.exec('ALTER TABLE messages ADD COLUMN auto_grabbed INTEGER DEFAULT 0')
+        db.exec('ALTER TABLE messages ADD COLUMN auto_grabbed INTEGER DEFAULT 0')
       }
-      this.db.pragma(`user_version = 5`)
+      db.pragma(`user_version = 5`)
     }
     void TARGET_VERSION
   }
@@ -483,28 +462,26 @@ export class ChatStore {
 }
 
 // 单例实例（在 main.ts 中初始化）
-let chatStoreInstance: ChatStore | null = null
+const chatStoreHolder = createSingletonHolder<ChatStore>(
+  () => new ChatStore(),
+  (s) => s.close(),
+)
 
 /** 初始化单例（必须在 app.whenReady 后调用） */
 export function initChatStore(): ChatStore {
-  if (!chatStoreInstance) {
-    chatStoreInstance = new ChatStore()
-  }
-  return chatStoreInstance
+  return chatStoreHolder.get()
 }
 
 /** 获取单例（未初始化时抛错） */
 export function getChatStore(): ChatStore {
-  if (!chatStoreInstance) {
+  const s = chatStoreHolder.peek()
+  if (!s) {
     throw new Error('[chat-store] 尚未初始化，请先调用 initChatStore()')
   }
-  return chatStoreInstance
+  return s
 }
 
 /** 关闭单例（app before-quit 时调用） */
 export function closeChatStore(): void {
-  if (chatStoreInstance) {
-    chatStoreInstance.close()
-    chatStoreInstance = null
-  }
+  chatStoreHolder.close()
 }

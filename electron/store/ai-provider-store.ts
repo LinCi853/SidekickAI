@@ -7,25 +7,17 @@
 //
 // 加密密钥存储在 app-key.json，随数据一起跨设备迁移，不依赖 OS 用户凭据。
 
-import Store from 'electron-store'
 import { ipcMain, safeStorage, dialog } from 'electron'
 import { randomUUID } from 'crypto'
 import { writeFileSync, readFileSync } from 'fs'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 import {
   isSafeStorageAvailable,
   xorDecrypt,
 } from '../utils/permission-manager.js'
 import { encryptString, decryptString, isAesEncrypted, encryptWithPassword, decryptWithPassword } from '../utils/app-crypto.js'
-
-/**
- * 默认 Mimo API 端点/密钥（已废弃，保留空值以兼容 voice-store / stt/engine 的回退判断）。
- * 不再自动创建默认 Provider，用户需自行在 AI 应用管理中配置自定义 AI 供应商。
- */
-export const DEFAULT_MIMO_API_ENDPOINT = ''
-export const DEFAULT_MIMO_API_KEY = ''
 
 /** 落盘的 Provider 结构（apiKey 为加密后的 base64 字符串） */
 interface PersistedProvider extends Omit<CustomAIProvider, 'apiKey'> {
@@ -46,9 +38,8 @@ export function deriveAudioEndpoint(apiEndpoint: string, path: 'speech' | 'trans
 }
 
 // 持久化存储实例（写入 ai-providers.json）
-const store = new Store<{ providers: PersistedProvider[]; version: number }>({
+const store = createJsonStore<{ providers: PersistedProvider[]; version: number }>({
   name: 'ai-providers',
-  cwd: getStoreCwd(),
   defaults: { providers: [], version: 1 },
 })
 

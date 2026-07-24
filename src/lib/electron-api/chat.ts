@@ -9,10 +9,8 @@ import type {
   ChatSendPayload,
   ChatStreamChunk,
   WindowTrace,
-  WindowTraceAction,
   LoginTrace,
   ChatWindowConfig,
-  WindowStateData,
 } from '../../../electron/shared/types';
 import { requireElectron } from './core';
 
@@ -53,14 +51,6 @@ export async function deleteConversation(id: string): Promise<void> {
 export async function listMessages(conversationId: string): Promise<ChatMessage[]> {
   const api = requireElectron();
   return api.chat.listMessages(conversationId);
-}
-
-/** 保存单条消息（用于网页抓取入库） */
-export async function saveMessage(
-  msg: Omit<ChatMessage, 'id' | 'createdAt'> & Partial<Pick<ChatMessage, 'id' | 'createdAt'>>,
-): Promise<ChatMessage> {
-  const api = requireElectron();
-  return api.chat.saveMessage(msg);
 }
 
 /**
@@ -131,16 +121,6 @@ export function onChatStreamEnd(
   return api.chat.onStreamEnd(callback);
 }
 
-/** 记录窗口操作痕迹 */
-export async function logWindowTrace(
-  windowId: string,
-  action: WindowTraceAction,
-  detail?: unknown,
-): Promise<void> {
-  const api = requireElectron();
-  return api.chat.logWindowTrace(windowId, action, detail);
-}
-
 /** 记录登录痕迹 */
 export async function logLoginTrace(
   trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>,
@@ -164,28 +144,10 @@ export async function listLoginTraces(profileId?: string): Promise<LoginTrace[]>
   return api.chat.listLoginTraces(profileId);
 }
 
-/** 打开自定义对话窗口（API 直连模式，旧单例），已存在则聚焦 */
-export async function openChatWindow(): Promise<void> {
-  const api = requireElectron();
-  return api.chat.openWindow();
-}
-
 /** 打开历史搜索独立窗口（单例，列举所有本地保存数据） */
 export async function openHistoryWindow(): Promise<void> {
   const api = requireElectron();
   return api.chat.openHistoryWindow();
-}
-
-/** 列出所有自定义对话脱离窗口（mode='chat'） */
-export async function listChatDetachedWindows(): Promise<WindowStateData[]> {
-  const api = requireElectron();
-  return api.chat.listDetachedWindows();
-}
-
-/** 创建自定义对话脱离窗口（Alt+Q 可切换），返回 windowId */
-export async function createChatDetachedWindow(config: ChatWindowConfig): Promise<string> {
-  const api = requireElectron();
-  return api.chat.createDetachedWindow(config);
 }
 
 /** 更新自定义对话脱离窗口配置 */
@@ -195,18 +157,6 @@ export async function updateChatDetachedWindow(
 ): Promise<void> {
   const api = requireElectron();
   return api.chat.updateDetachedWindow(windowId, config);
-}
-
-/** 删除自定义对话脱离窗口（关闭窗口 + 清理状态） */
-export async function removeChatDetachedWindow(windowId: string): Promise<void> {
-  const api = requireElectron();
-  return api.chat.removeDetachedWindow(windowId);
-}
-
-/** 显示并聚焦指定自定义对话脱离窗口 */
-export async function showChatDetachedWindow(windowId: string): Promise<void> {
-  const api = requireElectron();
-  return api.chat.showDetachedWindow(windowId);
 }
 
 /** 获取当前窗口的 chatConfig（ChatView 渲染时调用） */
@@ -301,42 +251,8 @@ export async function updateConversation(
    使用统计与操作日志 —— 对应 window.electron.chat 的 usage trace 方法
    ===================================================================== */
 
-/** 记录 data-name 点击日志（受 usageTrackingEnabled 守卫） */
-export async function logUsageClick(
-  elementName: string,
-  windowType: string | null,
-  detail?: unknown,
-): Promise<{ ok: boolean; skipped?: boolean }> {
-  const api = requireElectron();
-  return api.chat.logUsageClick(elementName, windowType, detail);
-}
-
-/** 获取使用频次统计（默认最近 30 天） */
-export async function getUsageFrequencyStats(
-  rangeDays?: number,
-): Promise<{ ok: boolean; stats?: unknown; error?: string }> {
-  const api = requireElectron();
-  return api.chat.getUsageFrequencyStats(rangeDays);
-}
-
 /** 清空所有使用统计与点击日志 */
 export async function clearUsageTraces(): Promise<{ ok: boolean; count: number }> {
   const api = requireElectron();
   return api.chat.clearUsageTraces();
-}
-
-/** 列出最近 N 条启动记录 */
-export async function listAppStarts(
-  limit?: number,
-): Promise<{ ok: boolean; list: unknown[]; error?: string }> {
-  const api = requireElectron();
-  return api.chat.listAppStarts(limit);
-}
-
-/** 列出最近 N 条点击日志 */
-export async function listClickLogs(
-  limit?: number,
-): Promise<{ ok: boolean; list: unknown[]; error?: string }> {
-  const api = requireElectron();
-  return api.chat.listClickLogs(limit);
 }

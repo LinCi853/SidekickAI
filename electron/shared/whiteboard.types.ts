@@ -60,7 +60,7 @@ export interface WhiteboardViewport {
   zoom: number
 }
 
-/** 完整白板状态 */
+/** 完整白板状态（v1 旧结构，仅迁移用） */
 export interface WhiteboardState {
   cards: WhiteboardCard[]
   arrows: WhiteboardArrow[]
@@ -68,6 +68,15 @@ export interface WhiteboardState {
   viewport: WhiteboardViewport
 }
 
-/** 卡片新增/更新输入（id/x/y 可选；x/y 未提供时由主进程随机生成） */
+/** 白板元信息（列表项） */
+export interface WhiteboardMeta {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  sortOrder: number
+}
+
+/** 外部推送卡片输入（截图 / AI 回复 → 白板；id/x/y 可选） */
 export type WhiteboardCardInput = Omit<WhiteboardCard, 'id' | 'x' | 'y'>
   & Partial<Pick<WhiteboardCard, 'id' | 'x' | 'y'>>

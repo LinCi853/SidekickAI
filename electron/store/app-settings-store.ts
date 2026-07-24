@@ -9,12 +9,12 @@
 //   - proxyUsername/proxyPassword/proxyBypass: 自定义代理的认证与绕过列表
 //
 
-import Store from 'electron-store'
 import { ipcMain, BrowserWindow, app, session, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { IPC_CHANNELS, ALL_TOP_BAR_BUTTON_GROUPS, type TopBarButtonGroup } from '../shared/types.js'
-import { getStoreCwd, isPortableMode } from './store-paths.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
+import { createJsonStore, isPortableMode } from './store-paths.js'
 
 // 持久化存储实例（写入 app-settings.json）
 export interface AppSettings {
@@ -86,9 +86,8 @@ export interface AppSettings {
   defaultAiAppTab: 'chat' | 'whiteboard' | 'notes'
 }
 
-const store = new Store<{ settings: AppSettings; version: number }>({
+const store = createJsonStore<{ settings: AppSettings; version: number }>({
   name: 'app-settings',
-  cwd: getStoreCwd(),
   defaults: {
     settings: {
       hideForeignModels: true,
@@ -369,14 +368,7 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
  * 各窗口渲染层收到后，根据自身窗口类型重新计算最小宽度并调用 setMinimumSize。
  */
 function broadcastUiScaleChanged(uiScale: 'small' | 'medium' | 'large'): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed()) continue
-    try {
-      win.webContents.send(IPC_CHANNELS.UI_SCALE_CHANGED, uiScale)
-    } catch (err) {
-      console.error('[app-settings] 广播 UI_SCALE_CHANGED 失败:', err)
-    }
-  }
+  broadcastToAllWindows(IPC_CHANNELS.UI_SCALE_CHANGED, uiScale, 'app-settings')
 }
 
 /** 注册应用设置 IPC 处理器（含代理测试与即时生效） */

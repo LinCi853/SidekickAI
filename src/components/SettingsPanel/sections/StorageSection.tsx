@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import {
   estimateCacheSize,
   cleanCache,
-  getAppSettings,
   updateAppSettings,
   selectDownloadDir,
   openDownloadDir,
 } from '../../../lib/electron-api';
 import SegmentedControl from '../../ui/SegmentedControl';
+import { SectionTitle, FormRow } from '../../ui';
+import { useSettingsDraft } from '../../../hooks/useSettingsData';
+import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -30,51 +32,51 @@ function formatRelativeTime(ts: number): string {
 }
 
 export default function StorageSection() {
+  const { draft, setDraft } = useSettingsDraft();
+  const { feedback: cleanFeedback, showFeedback, clearFeedback } = useFeedbackToast(3000);
   const [cacheSize, setCacheSize] = useState<number | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [lastCleaned, setLastCleaned] = useState<number>(0);
-  const [autoClean, setAutoClean] = useState<'never' | 'daily' | 'weekly' | 'monthly'>('never');
-  const [cleanFeedback, setCleanFeedback] = useState<string | null>(null);
-
-  const [downloadDir, setDownloadDir] = useState('');
-  const [downloadBehavior, setDownloadBehavior] = useState<'ask' | 'auto'>('ask');
   const [selectingDir, setSelectingDir] = useState(false);
+
+  // 从草稿派生设置值
+  const autoClean = draft?.cacheAutoClean || 'never';
+  const downloadDir = draft?.downloadDir || '';
+  const downloadBehavior = draft?.downloadBehavior || 'ask';
 
   useEffect(() => {
     void estimateCacheSize().then(setCacheSize).catch(() => {});
-    void getAppSettings().then((s) => {
-      setLastCleaned(s.lastCacheCleanAt || 0);
-      setAutoClean(s.cacheAutoClean || 'never');
-      setDownloadDir(s.downloadDir || '');
-      setDownloadBehavior(s.downloadBehavior || 'ask');
-    }).catch(() => {});
   }, []);
+
+  // 当草稿加载/变化时同步 lastCleaned
+  useEffect(() => {
+    setLastCleaned(draft?.lastCacheCleanAt || 0);
+  }, [draft?.lastCacheCleanAt]);
 
   const handleClean = async () => {
     setCleaning(true);
-    setCleanFeedback(null);
+    clearFeedback();
     try {
       const result = await cleanCache();
       setCacheSize(0);
       setLastCleaned(Date.now());
-      setCleanFeedback(`已清理 ${formatBytes(result.cleanedBytes)}`);
+      showFeedback(`已清理 ${formatBytes(result.cleanedBytes)}`);
     } catch (err) {
       console.error('[StorageSection] 缓存清理失败:', err);
-      setCleanFeedback('清理失败，请查看日志');
+      showFeedback('清理失败，请查看日志');
     } finally {
       setCleaning(false);
-      setTimeout(() => setCleanFeedback(null), 3000);
     }
   };
 
   const handleAutoCleanChange = async (value: 'never' | 'daily' | 'weekly' | 'monthly') => {
     const prev = autoClean;
-    setAutoClean(value);
+    setDraft({ cacheAutoClean: value });
     try {
       await updateAppSettings({ cacheAutoClean: value });
     } catch (err) {
       console.error('[StorageSection] 更新自动清理频率失败:', err);
-      setAutoClean(prev);
+      setDraft({ cacheAutoClean: prev });
     }
   };
 
@@ -84,12 +86,12 @@ export default function StorageSection() {
     try {
       const dir = await selectDownloadDir();
       if (!dir) return;
-      setDownloadDir(dir);
+      setDraft({ downloadDir: dir });
       try {
         await updateAppSettings({ downloadDir: dir });
       } catch (err) {
         console.error('[StorageSection] 保存下载目录失败:', err);
-        setDownloadDir('');
+        setDraft({ downloadDir: '' });
       }
     } catch (err) {
       console.error('[StorageSection] 选择下载目录失败:', err);
@@ -100,18 +102,18 @@ export default function StorageSection() {
 
   const handleBehaviorChange = async (value: 'ask' | 'auto') => {
     const prev = downloadBehavior;
-    setDownloadBehavior(value);
+    setDraft({ downloadBehavior: value });
     try {
       await updateAppSettings({ downloadBehavior: value });
     } catch (err) {
       console.error('[StorageSection] 更新下载行为失败:', err);
-      setDownloadBehavior(prev);
+      setDraft({ downloadBehavior: prev });
     }
   };
 
   return (
     <section data-name="settings.storage.section">
-      <div className="settings-section-title" data-name="settings.storage.cache-title">缓存清理</div>
+      <SectionTitle>缓存清理</SectionTitle>
       <div className="about-row" data-name="settings.storage.cache-size-row">
         <span data-name="settings.storage.cache-size-label">当前缓存体积</span>
         <span data-name="settings.storage.cache-size-value">{cacheSize === null ? '计算中…' : formatBytes(cacheSize)}</span>
@@ -120,10 +122,7 @@ export default function StorageSection() {
         <span data-name="settings.storage.last-cleaned-label">上次清理</span>
         <span data-name="settings.storage.last-cleaned-value">{formatRelativeTime(lastCleaned)}</span>
       </div>
-      <div className="voice-config-row" data-name="settings.storage.auto-clean-row">
-        <label className="voice-config-label" data-name="settings.storage.auto-clean-label">
-          <span className="voice-config-name" data-name="settings.storage.auto-clean-name">自动清理</span>
-        </label>
+      <FormRow label="自动清理">
         <SegmentedControl
           value={autoClean}
           options={[
@@ -136,7 +135,7 @@ export default function StorageSection() {
           name="自动清理"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
       <div className="proxy-actions" data-name="settings.storage.cache-actions">
         <button
           type="button"
@@ -149,11 +148,13 @@ export default function StorageSection() {
           {cleaning ? '清理中…' : '立即清理'}
         </button>
         {cleanFeedback && (
-          <span className="settings-feedback ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</span>
+          <span className="settings-feedback feedback-text ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</span>
         )}
       </div>
 
-      <div className="settings-section-title" style={{ marginTop: 24 }} data-name="settings.storage.download-title">下载</div>
+      <div style={{ marginTop: 24 }}>
+        <SectionTitle>下载</SectionTitle>
+      </div>
       <div className="about-row" data-name="settings.storage.download-dir-row">
         <span data-name="settings.storage.download-dir-label">下载目录</span>
         <span
@@ -171,10 +172,7 @@ export default function StorageSection() {
           {downloadDir || '系统下载目录'}
         </span>
       </div>
-      <div className="voice-config-row" data-name="settings.storage.download-behavior-row">
-        <label className="voice-config-label" data-name="settings.storage.download-behavior-label">
-          <span className="voice-config-name" data-name="settings.storage.download-behavior-name">下载行为</span>
-        </label>
+      <FormRow label="下载行为">
         <SegmentedControl
           value={downloadBehavior}
           options={[
@@ -185,7 +183,7 @@ export default function StorageSection() {
           name="下载行为"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
       <div className="proxy-actions" data-name="settings.storage.download-actions">
         <button
           type="button"

@@ -1,37 +1,8 @@
-.history-view {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--background);
-  overflow: hidden;
-  position: relative;
-}
+/* .history-view 根容器通用样式见 .app-view-root */
 
 /* ===== 顶栏 ===== */
-.history-top {
-  height: var(--titlebar-h);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2) 0 var(--space-4);
-  background: var(--glass-bg);
-  border-bottom: 1px solid var(--glass-bd);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  user-select: none;
-  flex: none;
-  z-index: 10;
-}
-.history-top-drag {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  -webkit-app-region: drag;
-  app-region: drag;
-  height: 100%;
-  min-width: 0;
-}
+/* .history-top / .history-top-drag / .history-top-actions 已迁移到 StandaloneWindowHeader，
+   此处仅保留 StandaloneWindowHeader center 内仍使用的标题与搜索框样式 */
 .history-top-title {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -67,13 +38,6 @@
 }
 .history-search-input::placeholder {
   color: var(--text-muted);
-}
-.history-top-actions {
-  flex: none;
-  display: flex;
-  gap: var(--space-1);
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
 }
 /* ===== 主体 ===== */
 .history-body {
@@ -130,26 +94,11 @@
   overflow-y: auto;
   padding: var(--space-2);
 }
-.history-list-empty {
-  padding: var(--space-6) var(--space-4);
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.6;
-}
+/* .history-list-empty 通用样式见 .app-empty-state.large */
 
 .conv-item {
   padding: var(--space-2) var(--space-3);
   margin-bottom: var(--space-1);
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: border-color var(--duration-fast), background var(--duration-fast);
-}
-.conv-item:hover {
-  border-color: var(--accent-50);
 }
 .conv-item.active {
   border-color: var(--accent);
@@ -200,9 +149,6 @@
 .trace-item {
   padding: var(--space-2) var(--space-3);
   margin-bottom: var(--space-1);
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-md);
 }
 .trace-item-head {
   display: flex;
@@ -372,14 +318,6 @@
 }
 .search-result-item {
   padding: var(--space-2) var(--space-3);
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: border-color var(--duration-fast);
-}
-.search-result-item:hover {
-  border-color: var(--accent-50);
 }
 .search-result-conv {
   font-family: var(--font-sans);

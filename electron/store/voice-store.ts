@@ -10,12 +10,11 @@
 //
 // 主窗口与自定义对话窗口共用同一份配置（全局设置）。
 
-import Store from 'electron-store'
 import { ipcMain, app } from 'electron'
 import { statSync } from 'fs'
 import * as path from 'path'
 import { IPC_CHANNELS, type AudioDeviceInfo } from '../shared/types.js'
-import { getStoreCwd } from './store-paths.js'
+import { createJsonStore } from './store-paths.js'
 import { getWhisperCliBinaryNames } from '../stt/binary-resolver.js'
 
 // 持久化存储实例（写入 voice-config.json）
@@ -158,9 +157,8 @@ function scanWhisperCliExists(): boolean {
   }
 }
 
-const store = new Store<{ config: VoiceConfig; version: number }>({
+const store = createJsonStore<{ config: VoiceConfig; version: number }>({
   name: 'voice-config',
-  cwd: getStoreCwd(),
   defaults: {
     config: DEFAULT_VOICE_CONFIG,
     version: 2,

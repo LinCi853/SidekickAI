@@ -2,6 +2,7 @@ import { updateAppSettings } from '../../../lib/electron-api';
 import { useThemeStore, type ThemeMode } from '../../../store/useThemeStore';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
+import { SectionTitle, FormRow } from '../../ui';
 
 interface AppearanceSectionProps {
   /** 标签栏是否默认收起 */
@@ -35,13 +36,10 @@ export default function AppearanceSection({
 
   return (
     <section data-name="settings.appearance.section">
-      <div className="settings-section-title" data-name="settings.appearance.title">外观</div>
+      <SectionTitle>外观</SectionTitle>
 
       {/* 主题模式 */}
-      <div className="voice-config-row" data-name="settings.appearance.theme-row">
-        <label className="voice-config-label" data-name="settings.appearance.theme-label">
-          <span className="voice-config-name" data-name="settings.appearance.theme-name">主题</span>
-        </label>
+      <FormRow label="主题">
         <SegmentedControl
           value={theme}
           options={THEME_OPTIONS}
@@ -49,13 +47,10 @@ export default function AppearanceSection({
           name="主题"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
 
       {/* UI 比例（三档：紧凑/中档/大号） */}
-      <div className="voice-config-row" data-name="settings.appearance.ui-scale-row">
-        <label className="voice-config-label" data-name="settings.appearance.ui-scale-label">
-          <span className="voice-config-name" data-name="settings.appearance.ui-scale-name">UI 比例</span>
-        </label>
+      <FormRow label="UI 比例">
         <SegmentedControl
           value={uiScale}
           options={UI_SCALE_OPTIONS}
@@ -71,13 +66,10 @@ export default function AppearanceSection({
           name="UI 比例"
           className="proxy-mode-group"
         />
-      </div>
+      </FormRow>
 
       {/* 标签栏自动收起 */}
-      <div className="voice-config-row" data-name="settings.appearance.tab-bar-collapsed-row">
-        <label className="voice-config-label" data-name="settings.appearance.tab-bar-collapsed-label">
-          <span className="voice-config-name" data-name="settings.appearance.tab-bar-collapsed-name">标签栏收起</span>
-        </label>
+      <FormRow label="标签栏收起">
         <Toggle
           checked={tabBarCollapsed}
           onChange={async (next) => {
@@ -92,7 +84,7 @@ export default function AppearanceSection({
           aria-label="标签栏收起"
           data-name="settings.appearance.tab-bar-collapsed-toggle"
         />
-      </div>
+      </FormRow>
     </section>
   );
 }

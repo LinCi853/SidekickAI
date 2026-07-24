@@ -13,7 +13,8 @@ import {
   getPreloadPath,
   attachWebviewPopupInterceptor,
   loadRenderer,
-  setupBoundsTracking,
+  createDefaultWebPreferences,
+  attachDetachedWindowLifecycle,
   safeLogWindowTrace,
 } from './helpers.js'
 import { buildWindowConfig } from './window-config-builder.js'
@@ -38,14 +39,10 @@ export function createStandaloneWindow(windowId: string): BrowserWindow {
     resizable: true,
     alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
-    webPreferences: {
+    webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
       webviewTag: true,
-      backgroundThrottling: false,
-    },
+    }),
   }))
 
   // 拦截 <webview> 内弹窗（脱离窗口内也可能打开新窗口）
@@ -71,29 +68,7 @@ export function createStandaloneWindow(windowId: string): BrowserWindow {
   })
 
   windowState.detachedWindows.set(windowId, win)
-  setupBoundsTracking(win, windowId)
-
-  // 追踪最近聚焦窗口（置顶热键作用对象）
-  win.on('focus', () => {
-    windowState.lastFocusedWin = win
-  })
-
-  win.on('close', () => {
-    const state = windowStore.getOrDefault(windowId)
-    if (!win.isDestroyed()) {
-      if (!win.isMaximized()) {
-        state.bounds = win.getBounds()
-      }
-      state.isMaximized = win.isMaximized()
-      state.alwaysOnTop = win.isAlwaysOnTop()
-      windowStore.save(windowId, state)
-    }
-    safeLogWindowTrace(windowId, 'close')
-  })
-
-  win.on('closed', () => {
-    windowState.detachedWindows.delete(windowId)
-  })
+  attachDetachedWindowLifecycle(win, windowId)
 
   return win
 }

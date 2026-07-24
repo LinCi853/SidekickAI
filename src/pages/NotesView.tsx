@@ -1,106 +1,473 @@
 /* =====================================================================
-   pages/NotesView.tsx —— 灵感笔记（需求 11，嵌入模式）
-   架构（v0.5.2 重构）：
-   - 不再是独立窗口，作为 StandaloneView 的视图模式之一嵌入渲染
-   - 父组件传入 onClose 回调（切回 webview 模式）
-   - 主体：textarea 编辑当前激活笔记
-   - 底栏：发送到 AI 输入框 / 存为提示词 / 新建 / 历史
-   - 数据：通过 notes IPC 直接读写主进程持久化存储
-   特性：
-   - 实时保存（debounce 500ms）
-   - 切换到 webview 再切回，内容保留（state 不卸载）
-   - "发送到 AI"：复用 VOICE_INJECT_AND_SEND 通道，主进程查找 lastFocusedWin 注入
+   pages/NotesView.tsx —— 灵感笔记（v2：TipTap 富文本 + 搜索 + 分类 + flushDraft）
+   架构：
+   - 容器组件 NotesView：状态 + 数据加载 + 搜索/筛选 + flushDraft
+   - 展示子组件 NotesSidebar：搜索框 + 标签筛选 + 笔记列表（置顶/普通）
+   - 展示子组件 NotesEditor：TipTap 编辑器 + 标题 + 标签 + 置顶 + 工具栏
+   数据丢失修复（核心）：
+   - 切换笔记 / 组件卸载 / beforeunload 前 flushDraft
+   - flushDraft 将 draftRef 中的草稿同步保存到 SQLite
    ===================================================================== */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { createLowlight, common } from 'lowlight';
 import {
   listNotes,
   saveNote,
+  saveNoteSync,
   deleteNote,
   getActiveNote,
   setActiveNote,
+  setNotePinned,
+  setNoteTags,
+  listNoteTags,
   sendNoteToAi,
   saveNoteAsPrompt,
   onNoteInjectResult,
-  getAppSettings,
 } from '../lib/electron-api';
-import type { Note } from '../lib/electron-api';
+import type { Note, NoteSaveInput } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
 import { useToast } from '../hooks/useToast';
+import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
 import './NotesView.css';
 
+// lowlight 实例：使用 common 语言集合（CodeBlockLowlight 必需）
+const lowlight = createLowlight(common);
+
+/** 草稿状态（实时跟踪编辑器内容，供 flushDraft 读取） */
+interface DraftState {
+  id: string | null;
+  title: string | null;
+  content: string;
+  contentJson: string;
+}
+
+// ============================================================================
+// 展示子组件：NotesSidebar
+// ============================================================================
+
+interface NotesSidebarProps {
+  notes: Note[];
+  activeId: string | null;
+  allTags: string[];
+  searchKeyword: string;
+  filterTag: string | undefined;
+  onSearchChange: (keyword: string) => void;
+  onTagFilter: (tag: string | undefined) => void;
+  onSelect: (note: Note) => void;
+  onCreate: () => void;
+  onDelete: (id: string) => void;
+}
+
+function NotesSidebar({
+  notes,
+  activeId,
+  allTags,
+  searchKeyword,
+  filterTag,
+  onSearchChange,
+  onTagFilter,
+  onSelect,
+  onCreate,
+  onDelete,
+}: NotesSidebarProps) {
+  const pinnedNotes = notes.filter((n) => n.pinned);
+  const normalNotes = notes.filter((n) => !n.pinned);
+
+  const formatTime = (ts: number) => {
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+
+  const renderNoteItem = (note: Note) => (
+    <div
+      key={note.id}
+      className={`notes-sidebar-item ${note.id === activeId ? 'active' : ''}`}
+      onClick={() => onSelect(note)}
+    >
+      <div className="notes-sidebar-item-main">
+        <div className="notes-sidebar-item-title">
+          {note.pinned && <span className="notes-pin-icon">★</span>}
+          {note.title || note.content.split('\n').find((l) => l.trim())?.slice(0, 30) || '空白笔记'}
+        </div>
+        <div className="notes-sidebar-item-meta">
+          <span className="notes-sidebar-item-time">{formatTime(note.updatedAt)}</span>
+          {note.tags.length > 0 && (
+            <span className="notes-sidebar-item-tags">
+              {note.tags.map((t) => (
+                <span key={t} className="notes-tag-chip">{t}</span>
+              ))}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        className="notes-sidebar-item-delete sidebar-list-item-delete"
+        onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
+        title="删除"
+      >
+        ×
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="notes-sidebar app-sidebar-narrow">
+      <div className="notes-sidebar-search">
+        <input
+          type="text"
+          className="notes-search-input"
+          placeholder="搜索笔记…"
+          value={searchKeyword}
+          onChange={(e) => onSearchChange(e.target.value)}
+        />
+        <IconButton variant="default" aria-label="新建笔记" onClick={onCreate} title="新建笔记">
+          +
+        </IconButton>
+      </div>
+      {allTags.length > 0 && (
+        <div className="notes-sidebar-tags">
+          <button
+            className={`notes-tag-filter ${!filterTag ? 'active' : ''}`}
+            onClick={() => onTagFilter(undefined)}
+          >
+            全部
+          </button>
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              className={`notes-tag-filter ${filterTag === tag ? 'active' : ''}`}
+              onClick={() => onTagFilter(filterTag === tag ? undefined : tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="notes-sidebar-list">
+        {notes.length === 0 && (
+          <div className="notes-sidebar-empty app-empty-state">
+            {searchKeyword || filterTag ? '无匹配笔记' : '点击 + 新建笔记'}
+          </div>
+        )}
+        {pinnedNotes.length > 0 && (
+          <>
+            <div className="notes-sidebar-section">置顶</div>
+            {pinnedNotes.map(renderNoteItem)}
+          </>
+        )}
+        {normalNotes.length > 0 && (
+          <>
+            {pinnedNotes.length > 0 && <div className="notes-sidebar-section">全部</div>}
+            {normalNotes.map(renderNoteItem)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 展示子组件：NotesEditor
+// ============================================================================
+
+interface NotesEditorProps {
+  note: Note | null;
+  onContentChange: (content: string, contentJson: string) => void;
+  onTogglePin: () => void;
+  onTagsChange: (tags: string[]) => void;
+  onSendToAi: () => void;
+  onSaveAsPrompt: () => void;
+}
+
+function NotesEditor({
+  note,
+  onContentChange,
+  onTogglePin,
+  onTagsChange,
+  onSendToAi,
+  onSaveAsPrompt,
+}: NotesEditorProps) {
+  const [tagInput, setTagInput] = useState('');
+  const editor = useEditor({
+    extensions: [
+      // 禁用 StarterKit 内置 codeBlock，避免与 CodeBlockLowlight 重复
+      StarterKit.configure({ codeBlock: false }),
+      Placeholder.configure({ placeholder: '记录你的灵感…' }),
+      Image,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      CodeBlockLowlight.configure({ lowlight }),
+    ],
+    content: '',
+    onUpdate: ({ editor }) => {
+      const text = editor.getText();
+      const json = JSON.stringify(editor.getJSON());
+      onContentChange(text, json);
+    },
+  });
+
+  // 笔记切换时更新编辑器内容
+  useEffect(() => {
+    if (!editor) return;
+    if (note?.contentJson) {
+      try {
+        const json = JSON.parse(note.contentJson);
+        editor.commands.setContent(json);
+      } catch {
+        editor.commands.setContent(note.content || '');
+      }
+    } else {
+      editor.commands.clearContent();
+    }
+  }, [note?.id, editor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAddTag = () => {
+    const tag = tagInput.trim();
+    if (!tag) return;
+    const currentTags = note?.tags ?? [];
+    if (!currentTags.includes(tag)) {
+      onTagsChange([...currentTags, tag]);
+    }
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    const currentTags = note?.tags ?? [];
+    onTagsChange(currentTags.filter((t) => t !== tag));
+  };
+
+  if (!note) {
+    return (
+      <div className="notes-editor-empty">
+        <div className="notes-editor-empty-text app-empty-state">选择或新建一条笔记</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="notes-editor">
+      <div className="notes-editor-toolbar-top">
+        <div className="notes-tags-row">
+          {note.tags.map((tag) => (
+            <span key={tag} className="notes-tag-chip removable">
+              {tag}
+              <button className="notes-tag-remove" onClick={() => handleRemoveTag(tag)}>×</button>
+            </span>
+          ))}
+          <input
+            type="text"
+            className="notes-tag-input"
+            placeholder="添加标签…"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddTag();
+            }}
+            onBlur={handleAddTag}
+          />
+        </div>
+        <div className="notes-editor-actions">
+          <button
+            className={`notes-icon-btn ${note.pinned ? 'active' : ''}`}
+            onClick={onTogglePin}
+            title={note.pinned ? '取消置顶' : '置顶'}
+            aria-pressed={note.pinned}
+          >
+            ★
+          </button>
+        </div>
+      </div>
+
+      <div className="notes-toolbar">
+        <button
+          className="notes-icon-btn"
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+          title="加粗"
+        >
+          B
+        </button>
+        <button
+          className="notes-icon-btn"
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+          title="斜体"
+        >
+          I
+        </button>
+        <button
+          className="notes-icon-btn"
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+          title="标题"
+        >
+          H
+        </button>
+        <button
+          className="notes-icon-btn"
+          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+          title="无序列表"
+        >
+          •
+        </button>
+        <button
+          className="notes-icon-btn"
+          onClick={() => editor?.chain().focus().toggleTaskList().run()}
+          title="任务列表"
+        >
+          ☑
+        </button>
+        <button
+          className="notes-icon-btn"
+          onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+          title="代码块"
+        >
+          {'</>'}
+        </button>
+      </div>
+
+      <div className="notes-editor-body">
+        <EditorContent editor={editor} />
+      </div>
+
+      <div className="notes-bottom">
+        <span className="notes-char-count">
+          {note.content.length} 字
+        </span>
+        <div className="notes-bottom-actions">
+          <button className="notes-action-btn notes-action-btn-secondary" onClick={onSaveAsPrompt}>
+            存为提示词
+          </button>
+          <button className="notes-action-btn notes-action-btn-primary" onClick={onSendToAi}>
+            发送到 AI
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 容器组件：NotesView
+// ============================================================================
+
 interface NotesViewProps {
-  /** 关闭笔记视图（切回 webview 模式） */
   onClose?: () => void;
 }
 
-export default function NotesView({ onClose }: NotesViewProps) {
+export default function NotesView(_: NotesViewProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNoteState] = useState<Note | null>(null);
-  const [draft, setDraft] = useState('');
-  const [enterToSend, setEnterToSend] = useState(true);
-  const [showHistory, setShowHistory] = useState(false);
-  const draftRef = useRef(draft);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [filterTag, setFilterTag] = useState<string | undefined>();
+  const [allTags, setAllTags] = useState<string[]>([]);
   const { toast, showToast } = useToast();
 
-  // 初始化：加载笔记列表 + 激活笔记 + enterToSend 设置
+  // 草稿引用（实时跟踪编辑器内容，flushDraft 读取）
+  const draftRef = useRef<DraftState | null>(null);
+  const activeNoteRef = useRef<Note | null>(null);
+
+  activeNoteRef.current = activeNote;
+
+  // ===== 数据加载 =====
+  const refreshList = useCallback(async () => {
+    const filter: { keyword?: string; tag?: string } = {};
+    if (searchKeyword.trim()) filter.keyword = searchKeyword.trim();
+    if (filterTag) filter.tag = filterTag;
+    const list = await listNotes(Object.keys(filter).length > 0 ? filter : undefined);
+    setNotes(list);
+    return list;
+  }, [searchKeyword, filterTag]);
+
+  const refreshTags = useCallback(async () => {
+    try {
+      const tags = await listNoteTags();
+      setAllTags(tags);
+    } catch {
+      // 忽略
+    }
+  }, []);
+
+  // ===== flushDraft（核心修复：切换/卸载前保存草稿） =====
+  const flushDraft = useCallback(async () => {
+    const draft = draftRef.current;
+    if (!draft || !draft.content.trim()) return;
+    draftRef.current = null;
+    try {
+      const input: NoteSaveInput = {
+        content: draft.content,
+        contentJson: draft.contentJson,
+      };
+      if (draft.id) input.id = draft.id;
+      if (draft.title !== null) input.title = draft.title;
+      const saved = await saveNote(input);
+      setActiveNoteState((prev) => (prev?.id === saved.id ? saved : prev));
+      await refreshList();
+      await refreshTags();
+    } catch (err) {
+      console.error('[NotesView] flushDraft failed:', err);
+    }
+  }, [refreshList, refreshTags]);
+
+  // ===== 初始化 =====
   useEffect(() => {
     void (async () => {
       try {
-        const [list, active, settings] = await Promise.all([
-          listNotes(),
-          getActiveNote(),
-          getAppSettings(),
-        ]);
+        const [list, active] = await Promise.all([listNotes(), getActiveNote()]);
         setNotes(list);
         setActiveNoteState(active);
-        setDraft(active?.content ?? '');
-        setEnterToSend(settings.enterToSend ?? true);
+        if (active) {
+          draftRef.current = {
+            id: active.id,
+            title: active.title,
+            content: active.content,
+            contentJson: active.contentJson,
+          };
+        }
+        await refreshTags();
       } catch (e) {
-        console.error('[NotesView] 初始化失败:', e);
+        console.error('[NotesView] init failed:', e);
       }
     })();
-  }, []);
+  }, [refreshTags]);
 
-  // 同步 draft 到 ref（供防抖保存读取最新值）
+  // ===== 搜索/筛选变化时重新加载列表 =====
   useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
+    void refreshList();
+  }, [refreshList]);
 
-  // 防抖保存：draft 变化 500ms 后保存
-  useEffect(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const currentActive = activeNote;
-    // 内容未变化跳过
-    if (currentActive && draft === currentActive.content) return;
-    saveTimerRef.current = setTimeout(async () => {
-      const text = draftRef.current;
-      if (!text.trim() && !currentActive) return; // 空内容且无激活笔记，不创建
+  // ===== 防抖自动保存 + beforeunload 同步兜底 + 卸载前 flush（统一委托 useAutoSaveDraft） =====
+  const { schedule: scheduleSave, flushNow } = useAutoSaveDraft<DraftState | null>({
+    data: draftRef.current,
+    save: flushDraft,
+    saveSync: () => {
+      const draft = draftRef.current;
+      if (!draft || !draft.content.trim()) return;
       try {
-        const saved = await saveNote({
-          id: currentActive?.id,
-          content: text,
-        });
-        setActiveNoteState(saved);
-        // 同步列表中对应项
-        setNotes((prev) => {
-          const idx = prev.findIndex((n) => n.id === saved.id);
-          if (idx === -1) return [saved, ...prev];
-          const next = [...prev];
-          next[idx] = saved;
-          return next.sort((a, b) => b.updatedAt - a.updatedAt);
-        });
-      } catch (e) {
-        console.error('[NotesView] 自动保存失败:', e);
+        const input: NoteSaveInput = {
+          content: draft.content,
+          contentJson: draft.contentJson,
+        };
+        if (draft.id) input.id = draft.id;
+        if (draft.title !== null) input.title = draft.title;
+        saveNoteSync(input);
+      } catch (err) {
+        console.error('[NotesView] sync save failed:', err);
       }
-    }, 500);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [draft, activeNote]);
+    },
+    debounceMs: 800,
+  });
 
-  // 监听注入结果回传（主进程 → 笔记窗口）
+  // ===== 监听注入结果回传 =====
   useEffect(() => {
     const off = onNoteInjectResult((result) => {
       if (result.success) {
@@ -112,279 +479,161 @@ export default function NotesView({ onClose }: NotesViewProps) {
     return off;
   }, [showToast]);
 
-  // 新建笔记：清空 draft + 取消激活
-  const handleNew = async () => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  // ===== 事件处理 =====
+
+  // 新建笔记
+  const handleNew = useCallback(async () => {
+    await flushNow();
     try {
       await setActiveNote(null);
     } catch { /* ignore */ }
-    setActiveNoteState(null);
-    setDraft('');
-    setShowHistory(false);
-    // 聚焦输入框
-    requestAnimationFrame(() => {
-      const textarea = document.querySelector<HTMLTextAreaElement>('.notes-textarea');
-      textarea?.focus();
-    });
-  };
+    // 创建临时空 note（id 为空串表示"新建"，编辑器渲染但尚未入库）
+    const emptyNote: Note = {
+      id: '',
+      title: null,
+      content: '',
+      contentJson: '',
+      pinned: false,
+      tags: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    setActiveNoteState(emptyNote);
+    draftRef.current = { id: null, title: null, content: '', contentJson: '' };
+  }, [flushNow]);
 
-  // 选择历史笔记
-  const handleSelectNote = async (note: Note) => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  // 选择笔记
+  const handleSelectNote = useCallback(async (note: Note) => {
+    await flushNow();
     try {
       await setActiveNote(note.id);
     } catch { /* ignore */ }
     setActiveNoteState(note);
-    setDraft(note.content);
-    setShowHistory(false);
-  };
+    draftRef.current = {
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      contentJson: note.contentJson,
+    };
+  }, [flushNow]);
 
-  // 删除当前笔记（修复 11-7：删除后自动新建空白笔记，避免"删除后无法操作"）
-  const handleDelete = async () => {
-    if (!activeNote) return;
-    if (!confirm('确定删除当前笔记？')) return;
+  // 删除笔记
+  const handleDelete = useCallback(async (id: string) => {
     try {
-      await deleteNote(activeNote.id);
-      setNotes((prev) => prev.filter((n) => n.id !== activeNote.id));
-      // 切换到下一笔记或自动新建空白
-      const next = notes.find((n) => n.id !== activeNote.id) ?? null;
-      if (next) {
-        await setActiveNote(next.id);
-        setActiveNoteState(next);
-        setDraft(next.content);
-      } else {
-        // 没有其他笔记了，自动新建空白（避免删除后无法操作）
-        await setActiveNote(null);
+      await deleteNote(id);
+      if (activeNoteRef.current?.id === id) {
         setActiveNoteState(null);
-        setDraft('');
-        requestAnimationFrame(() => {
-          const textarea = document.querySelector<HTMLTextAreaElement>('.notes-textarea');
-          textarea?.focus();
-        });
+        draftRef.current = null;
+        await setActiveNote(null);
       }
-      showToast('已删除');
-    } catch (e) {
-      console.error('[NotesView] 删除失败:', e);
+      await refreshList();
+      await refreshTags();
+    } catch (err) {
+      console.error('[NotesView] delete failed:', err);
       showToast('删除失败');
     }
-  };
+  }, [refreshList, refreshTags, showToast]);
 
-  // 发送到 AI 输入框
-  const handleSendToAi = async () => {
-    const text = draft.trim();
-    if (!text) {
-      showToast('笔记内容为空');
-      return;
-    }
+  // 标题变化（已移除独立标题输入；标题从首行内容推导）
+
+  // 内容变化：首行作为标题（剥离 markdown # 前缀），其余为正文
+  const handleContentChange = useCallback((content: string, contentJson: string) => {
+    // 使用 || 而非 ??，将空串 id（新建笔记）转为 null
+    const id = activeNoteRef.current?.id || null;
+    // 首行非空行作为标题，剥离 markdown 标题前缀（# ## ###）
+    const firstLine = content.split('\n').find((l) => l.trim()) ?? '';
+    const title = firstLine.replace(/^#{1,6}\s*/, '').trim() || null;
+    draftRef.current = { id, title, content, contentJson };
+    scheduleSave();
+  }, [scheduleSave]);
+
+  // 切换置顶
+  const handleTogglePin = useCallback(async () => {
+    const note = activeNoteRef.current;
+    if (!note || !note.id) return; // 未保存的新笔记跳过
     try {
-      const result = await sendNoteToAi(text, enterToSend);
-      if (!result.ok && result.error) {
-        showToast(result.error);
-      }
-      // 成功结果由 onNoteInjectResult 监听器显示
-    } catch (e) {
-      console.error('[NotesView] 发送到 AI 失败:', e);
+      await setNotePinned(note.id, !note.pinned);
+      const updated = { ...note, pinned: !note.pinned };
+      setActiveNoteState(updated);
+      await refreshList();
+    } catch (err) {
+      console.error('[NotesView] toggle pin failed:', err);
+    }
+  }, [refreshList]);
+
+  // 标签变化
+  const handleTagsChange = useCallback(async (tags: string[]) => {
+    const note = activeNoteRef.current;
+    if (!note || !note.id) return; // 未保存的新笔记跳过
+    try {
+      await setNoteTags(note.id, tags);
+      const updated = { ...note, tags };
+      setActiveNoteState(updated);
+      await refreshList();
+      await refreshTags();
+    } catch (err) {
+      console.error('[NotesView] set tags failed:', err);
+    }
+  }, [refreshList, refreshTags]);
+
+  // 发送到 AI
+  const handleSendToAi = useCallback(async () => {
+    const draft = draftRef.current;
+    const note = activeNoteRef.current;
+    const text = draft?.content ?? note?.content ?? '';
+    if (!text.trim()) return;
+    try {
+      await sendNoteToAi(text, true);
+    } catch (err) {
+      console.error('[NotesView] send to AI failed:', err);
       showToast('发送失败');
     }
-  };
+  }, [showToast]);
 
   // 存为提示词
-  const handleSaveAsPrompt = async () => {
-    const text = draft.trim();
-    if (!text) {
-      showToast('笔记内容为空');
-      return;
-    }
+  const handleSaveAsPrompt = useCallback(async () => {
+    const draft = draftRef.current;
+    const note = activeNoteRef.current;
+    const text = draft?.content ?? note?.content ?? '';
+    if (!text.trim()) return;
     try {
-      const result = await saveNoteAsPrompt(text);
+      const result = await saveNoteAsPrompt(text, note?.title ?? undefined);
       if (result.ok) {
-        showToast(`已存为提示词：${result.title ?? ''}`);
+        showToast('已保存为提示词');
       } else {
-        showToast(result.error ?? '保存失败');
+        showToast(result.error || '保存失败');
       }
-    } catch (e) {
-      console.error('[NotesView] 存为提示词失败:', e);
+    } catch (err) {
+      console.error('[NotesView] save as prompt failed:', err);
       showToast('保存失败');
     }
-  };
-
-  // ESC：历史面板打开时关闭历史；否则触发 onClose 切回 webview
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      if (showHistory) {
-        setShowHistory(false);
-      } else {
-        onClose?.();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showHistory, onClose]);
-
-  // 字数统计
-  const charCount = useMemo(() => draft.length, [draft]);
+  }, [showToast]);
 
   return (
-    <div className="notes-view" data-name="notes.container">
-      {/* 顶栏 */}
-      <header className="notes-top" data-name="notes.topbar">
-        <div className="notes-top-title" data-name="notes.topbar-title">灵感笔记</div>
-        <div className="notes-top-actions" data-name="notes.topbar-actions">
-          <IconButton
-            type="button"
-            aria-label="历史笔记"
-            title="历史笔记"
-            variant={showHistory ? 'active' : 'default'}
-            className="notes-icon-btn"
-            data-name="notes.topbar-history-button"
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="notes.topbar-history-icon">
-              <path d="M3 12a9 9 0 1 0 3-6.7" />
-              <path d="M3 4v5h5" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-          </IconButton>
-          <IconButton
-            type="button"
-            aria-label="新建笔记"
-            title="新建笔记"
-            className="notes-icon-btn"
-            data-name="notes.topbar-new-button"
-            onClick={handleNew}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="notes.topbar-new-icon">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </IconButton>
-          <IconButton
-            type="button"
-            aria-label="删除笔记"
-            title="删除笔记"
-            className="notes-icon-btn"
-            disabled={!activeNote}
-            data-name="notes.topbar-delete-button"
-            onClick={handleDelete}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="notes.topbar-delete-icon">
-              <path d="M3 6h18" />
-              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            </svg>
-          </IconButton>
-          {onClose && (
-            <IconButton
-              type="button"
-              aria-label="关闭笔记"
-              title="关闭笔记（切回 AI 应用）"
-              className="notes-icon-btn"
-              data-name="notes.topbar-close-button"
-              onClick={onClose}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" data-name="notes.topbar-close-icon">
-                <line x1="6" y1="6" x2="18" y2="18" />
-                <line x1="18" y1="6" x2="6" y2="18" />
-              </svg>
-            </IconButton>
-          )}
-        </div>
-      </header>
-
-      {/* 主体：编辑器 */}
-      <main className="notes-body" data-name="notes.body">
-        <textarea
-          className="notes-textarea"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="随时记下灵感…&#10;支持 {{time}} {{tag}} 占位符（发送到 AI 时自动替换）"
-          spellCheck={false}
-          autoFocus
-          data-name="notes.textarea"
+    <div className="notes-view app-view-root">
+      <div className="notes-body">
+        <NotesSidebar
+          notes={notes}
+          activeId={activeNote?.id || null}
+          allTags={allTags}
+          searchKeyword={searchKeyword}
+          filterTag={filterTag}
+          onSearchChange={setSearchKeyword}
+          onTagFilter={setFilterTag}
+          onSelect={handleSelectNote}
+          onCreate={handleNew}
+          onDelete={handleDelete}
         />
-      </main>
-
-      {/* 底栏：字数 + 操作 */}
-      <footer className="notes-bottom" data-name="notes.bottombar">
-        <span className="notes-char-count" data-name="notes.char-count">{charCount} 字</span>
-        <div className="notes-bottom-actions" data-name="notes.bottombar-actions">
-          <button
-            type="button"
-            className="notes-action-btn notes-action-btn-secondary"
-            data-name="notes.save-as-prompt-button"
-            onClick={handleSaveAsPrompt}
-            disabled={!draft.trim()}
-          >
-            存为提示词
-          </button>
-          <button
-            type="button"
-            className="notes-action-btn notes-action-btn-primary"
-            data-name="notes.send-to-ai-button"
-            onClick={handleSendToAi}
-            disabled={!draft.trim()}
-          >
-            发送到 AI 输入框
-          </button>
-        </div>
-      </footer>
-
-      {/* 历史笔记浮层（修复 11-7：从底部弹出，避免遮挡） */}
-      {showHistory && (
-        <div className="notes-history-overlay" data-name="notes.history-overlay">
-          <div className="notes-history-panel" data-name="notes.history-panel">
-            <div className="notes-history-header" data-name="notes.history-header">
-              <span data-name="notes.history-title">历史笔记</span>
-              <button
-                type="button"
-                className="notes-history-close"
-                aria-label="关闭"
-                data-name="notes.history-close-button"
-                onClick={() => setShowHistory(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="notes-history-list" data-name="notes.history-list">
-              {notes.length === 0 ? (
-                <div className="notes-history-empty" data-name="notes.history-empty">暂无笔记</div>
-              ) : (
-                notes.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    className={`notes-history-item ${activeNote?.id === n.id ? 'active' : ''}`}
-                    data-name="notes.history-item"
-                    onClick={() => void handleSelectNote(n)}
-                  >
-                    <div className="notes-history-item-title" data-name="notes.history-item-title">
-                      {n.content.split('\n').map((l) => l.trim()).find((l) => l.length > 0)?.slice(0, 30) || '未命名笔记'}
-                    </div>
-                    <div className="notes-history-item-meta" data-name="notes.history-item-meta">
-                      {new Date(n.updatedAt).toLocaleString('zh-CN', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                      {' · '}
-                      {n.content.length} 字
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="notes-toast" data-name="notes.toast">
-          {toast}
-        </div>
-      )}
+        <NotesEditor
+          note={activeNote}
+          onContentChange={handleContentChange}
+          onTogglePin={handleTogglePin}
+          onTagsChange={handleTagsChange}
+          onSendToAi={handleSendToAi}
+          onSaveAsPrompt={handleSaveAsPrompt}
+        />
+      </div>
+      {toast && <div className="notes-toast app-toast">{toast}</div>}
     </div>
   );
 }

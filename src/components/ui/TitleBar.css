@@ -1,0 +1,73 @@
+/* =====================================================================
+   ui/TitleBar.css —— 通用窗口顶栏样式
+   统一毛玻璃风格，替代 .sa-top-bar / .chat-top / .ai-app-top 三套样式
+   ===================================================================== */
+
+.titlebar {
+  height: var(--titlebar-h);
+  min-height: var(--titlebar-h, 44px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-1) 0 var(--space-2);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-bd);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-sizing: border-box;
+  user-select: none;
+  flex: none;
+  z-index: 10;
+}
+
+.titlebar-leading {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.titlebar-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: 100%;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.titlebar-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* 通用顶栏图标按钮：统一 .sa-btn / .chat-sidebar-toggle 等按钮的共用样式
+   特有字段（如 app-region / flex:none / 各自 hover 状态）仍由具体类维护 */
+.titlebar-icon-btn {
+  width: var(--titlebar-icon);
+  min-width: 14px;
+  height: var(--titlebar-icon);
+  min-height: 14px;
+  max-height: calc(var(--titlebar-h) - var(--space-0-75));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  border-radius: calc(var(--titlebar-icon) * 0.2);
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.titlebar-icon-btn:hover {
+  background: var(--glass-bd);
+  color: var(--foreground);
+}

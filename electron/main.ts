@@ -11,7 +11,7 @@
 // electron/window-state.ts（windowState）。本文件保留：生命周期管理、IPC 注册、
 // 后台语音（预览窗 + STT）、便携模式检测。
 
-import { app, BrowserWindow, Menu, Tray, nativeImage, screen, session, ipcMain, systemPreferences } from 'electron'
+import { app, BrowserWindow, Menu, Tray, nativeImage, screen, session, ipcMain, protocol, systemPreferences } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { mkdirSync, existsSync } from 'fs'
@@ -33,9 +33,10 @@ import {
   ensureDefaultPresets,
 } from './store/preset-store.js'
 import { registerAIProviderIPC, ensureDefaultProviders } from './store/ai-provider-store.js'
-import { registerNotesIPC } from './store/notes-store.js'
-import { registerWhiteboardIPC } from './store/whiteboard-store.js'
+import { registerNotesIPC } from './store/notes-db.js'
+import { registerWhiteboardIPC, getWhiteboardDb } from './store/whiteboard-db.js'
 import { registerWhiteboardAssetIPC } from './store/whiteboard-asset-store.js'
+import { migrateWhiteboardNotes } from './store/migrate-whiteboard-notes.js'
 import { promptStore } from './store/prompt-store.js'
 import { registerVoiceConfigIPC, getVoiceConfig } from './store/voice-store.js'
 import { registerAppSettingsIPC, getAppSettings, updateAppSettings, applyAutoLaunchSetting } from './store/app-settings-store.js'
@@ -47,7 +48,6 @@ import { FingerprintEngine } from './fingerprint/engine.js'
 import { HotkeyManager } from './hotkey/manager.js'
 import { SttEngine } from './stt/engine.js'
 import { WHISPER_CLI_BINARIES } from './stt/binary-resolver.js'
-import { registerHeadlessIPC } from './headless/ipc.js'
 import { IPC_CHANNELS } from './shared/types.js'
 import type { WhiteboardCard, WhiteboardCardInput } from './shared/whiteboard.types.js'
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js'
@@ -162,6 +162,12 @@ function redirectUserData(): void {
 }
 redirectUserData()
 
+// 注册白板图片自定义协议为特权协议（必须在 app ready 前调用）
+// 解决 dev 模式下 file:// 被 webSecurity CORS 阻止的问题
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'whiteboard-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+])
+
 // 全局管理器实例（fingerprintEngine/hotkeyManager/sttEngine 仅本文件使用；
 // windowManager 已迁入 windowState，因 window-factory.ts 的窗口创建函数需读取）
 let fingerprintEngine: FingerprintEngine
@@ -178,6 +184,12 @@ const MAX_RECORDING_DURATION_MS = 10_000
 let recordingWatchdog: NodeJS.Timeout | null = null
 /** 剪贴板恢复定时器（后台粘贴后延迟恢复用户原剪贴板内容） */
 let clipboardRestoreTimer: NodeJS.Timeout | null = null
+/**
+ * 待投递的白板推送卡片队列（跨窗口推送：请求窗口 → 主进程 → 白板渲染窗口）。
+ * 渲染层 ready 后回 ACK（ipcRenderer.send），主进程 flush 队列一次性投递全部待推送卡片。
+ * 替代旧的 ipcMain.once/ipcMain.handle 互不触发的缺陷方案。
+ */
+const pendingWhiteboardPushes: Array<{ whiteboardId: string; card: WhiteboardCard; win: BrowserWindow }> = []
 
 /**
  * 清除录音 watchdog 定时器
@@ -1108,14 +1120,20 @@ app.whenReady().then(async () => {
     },
   )
 
-  // 需求 12：从任意窗口推送卡片到白板（HistoryView 消息 → 白板卡片）
-  // v0.5.2 R-3：白板已迁移到 AiProviderAppView 作为同级 tab。
-  // 接收 WhiteboardCardInput，生成完整 WhiteboardCard（id + 随机位置），
-  // 确保 AI 应用窗口可见，通知其切换到 whiteboard tab，再转发卡片。
+  // 从任意窗口推送卡片到白板（v2：定位 active 白板，发送 { whiteboardId, card }）
+  // 渲染层收到后插入 tldraw shape；ready 后回 ACK，主进程收到 ACK 后才转发卡片。
   ipcMain.handle(
     IPC_CHANNELS.WHITEBOARD_PUSH_CARD_REQUEST,
     (_e, input: WhiteboardCardInput) => {
-      // 生成完整卡片（id + 随机位置，避免与已有卡片重叠）
+      // 定位 active 白板（无则创建"截图收藏"）
+      const db = getWhiteboardDb()
+      let whiteboardId = db.getActiveWhiteboardId()
+      if (!whiteboardId) {
+        const wb = db.createWhiteboard('截图收藏')
+        whiteboardId = wb.id
+        db.setActiveWhiteboardId(wb.id)
+      }
+      // 生成完整卡片
       const card: WhiteboardCard = {
         id: crypto.randomUUID(),
         type: input.type,
@@ -1126,31 +1144,39 @@ app.whenReady().then(async () => {
         content: input.content,
         metadata: input.metadata ?? { createdAt: Date.now() },
       }
-      // 确保 AI 应用窗口可见（如未打开则打开，已打开则显示并聚焦）
+      // 确保 AI 应用窗口可见
       openAiAppProviderWindow({ initialTab: 'whiteboard' })
       const win = windowState.aiAppProviderWindow
       if (!win || win.isDestroyed()) {
         return card
       }
-      // 通知 AiProviderAppView 切换到 whiteboard tab
-      const sendSwitchAndCard = () => {
+      // 通知切换到 whiteboard tab，渲染层 ready 后回 ACK，主进程收到 ACK 再发送卡片
+      const sendSwitch = () => {
         if (win.isDestroyed()) return
         win.webContents.send(IPC_CHANNELS.AI_APP_PROVIDER_NAVIGATE, { tab: 'whiteboard' })
-        // 延迟 200ms 发送卡片，等 tab 切换完成
-        setTimeout(() => {
-          if (!win.isDestroyed()) {
-            win.webContents.send(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, card)
-          }
-        }, 200)
       }
       if (win.webContents.isLoading()) {
-        win.webContents.once('did-finish-load', sendSwitchAndCard)
+        win.webContents.once('did-finish-load', sendSwitch)
       } else {
-        sendSwitchAndCard()
+        sendSwitch()
       }
+      // 入队待推送卡片，等待渲染层 ready 后回 ACK 时统一 flush
+      pendingWhiteboardPushes.push({ whiteboardId, card, win })
       return card
     },
   )
+  // 渲染层 → 主进程：白板 ready 后回 ACK（send，非 invoke），flush 全部待推送卡片
+  ipcMain.on(IPC_CHANNELS.WHITEBOARD_PUSH_ACK, () => {
+    while (pendingWhiteboardPushes.length > 0) {
+      const push = pendingWhiteboardPushes.shift()!
+      if (!push.win.isDestroyed()) {
+        push.win.webContents.send(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, {
+          whiteboardId: push.whiteboardId,
+          card: push.card,
+        })
+      }
+    }
+  })
 
   // 注册设备预设 CRUD IPC + 首次启动填充预置设备预设
   registerPresetsIPC()
@@ -1320,10 +1346,13 @@ app.whenReady().then(async () => {
   ensureDefaultProviders()
   registerAIChatIPC()
 
-  // ===== 需求 11：注册灵感笔记 CRUD + 激活笔记管理 IPC =====
+  // ===== 一次性数据迁移：electron-store JSON → SQLite（幂等） =====
+  migrateWhiteboardNotes()
+
+  // ===== 灵感笔记 IPC（v2：SQLite + FTS5） =====
   registerNotesIPC()
 
-  // ===== 需求 12：注册白板 CRUD + 状态管理 IPC =====
+  // ===== 白板 IPC（v2：SQLite + tldraw + 多白板） =====
   registerWhiteboardIPC()
   registerWhiteboardAssetIPC()
 
@@ -1341,9 +1370,6 @@ app.whenReady().then(async () => {
 
   // ===== 注册全局代理认证处理器（app.on('login') 处理 407 代理认证） =====
   registerProxyAuthHandler()
-
-  // ===== 注册无头浏览器 IPC（puppeteer-core 内核） =====
-  registerHeadlessIPC()
 
   // ===== 注册窗口控制 IPC（窗口控制/管理/状态/chat脱离/指纹） =====
   registerWindowControlIpc({

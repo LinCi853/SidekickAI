@@ -1,58 +1,55 @@
 import { useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import { Button, SegmentedControl, Toggle } from '../../ui';
+import type { ProxySettings } from '../types';
 import { updateAppSettings, testProxy, applyProxy } from '../../../lib/electron-api';
+import { useDraftState } from '../../../hooks/useDraftState';
 
 interface ProxySectionProps {
-  proxyMode: 'system' | 'direct' | 'custom';
-  setProxyMode: Dispatch<SetStateAction<'system' | 'direct' | 'custom'>>;
-  customProxy: string;
-  setCustomProxy: Dispatch<SetStateAction<string>>;
-  proxyUsername: string;
-  setProxyUsername: Dispatch<SetStateAction<string>>;
-  proxyPassword: string;
-  setProxyPassword: Dispatch<SetStateAction<string>>;
-  proxyBypass: string;
-  setProxyBypass: Dispatch<SetStateAction<string>>;
-  /** 代理失败兜底开关（custom 模式加载失败时自动切换） */
-  proxyFallbackEnabled: boolean;
-  setProxyFallbackEnabled: Dispatch<SetStateAction<boolean>>;
-  /** 代理失败兜底模式：direct=直连 / system=系统代理 */
-  proxyFallbackMode: 'direct' | 'system';
-  setProxyFallbackMode: Dispatch<SetStateAction<'direct' | 'system'>>;
+  proxy: ProxySettings;
+  onChange: (patch: Partial<ProxySettings>) => void;
 }
 
-export default function ProxySection({
-  proxyMode,
-  setProxyMode,
-  customProxy,
-  setCustomProxy,
-  proxyUsername,
-  setProxyUsername,
-  proxyPassword,
-  setProxyPassword,
-  proxyBypass,
-  setProxyBypass,
-  proxyFallbackEnabled,
-  setProxyFallbackEnabled,
-  proxyFallbackMode,
-  setProxyFallbackMode,
-}: ProxySectionProps) {
+export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
+  // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
+  const {
+    proxyMode,
+    customProxy,
+    proxyUsername,
+    proxyPassword,
+    proxyBypass,
+    proxyFallbackEnabled,
+    proxyFallbackMode,
+  } = proxy;
+
+  // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部 updateAppSettings/applyProxy 完成
+  const setProxyMode = (v: 'system' | 'direct' | 'custom') => onChange({ proxyMode: v });
+  const setCustomProxy = (v: string) => onChange({ customProxy: v });
+  const setProxyUsername = (v: string) => onChange({ proxyUsername: v });
+  const setProxyPassword = (v: string) => onChange({ proxyPassword: v });
+  const setProxyBypass = (v: string) => onChange({ proxyBypass: v });
+  const setProxyFallbackEnabled = (v: boolean) => onChange({ proxyFallbackEnabled: v });
+  const setProxyFallbackMode = (v: 'direct' | 'system') => onChange({ proxyFallbackMode: v });
   // 草稿：编辑中的值（保存前不写回父级 state）
-  const [draftProxy, setDraftProxy] = useState(customProxy);
-  const [draftUser, setDraftUser] = useState(proxyUsername);
-  const [draftPass, setDraftPass] = useState(proxyPassword);
-  const [draftBypass, setDraftBypass] = useState(proxyBypass);
+  const { draft: proxyDraft, setDraft: setProxyDraft, isDirty: dirty, save: saveProxyDraft } = useDraftState({
+    initial: { proxy: customProxy, user: proxyUsername, pass: proxyPassword, bypass: proxyBypass },
+    onSave: async (d) => {
+      await updateAppSettings({
+        customProxy: d.proxy,
+        proxyUsername: d.user,
+        proxyPassword: d.pass,
+        proxyBypass: d.bypass,
+      });
+      setCustomProxy(d.proxy);
+      setProxyUsername(d.user);
+      setProxyPassword(d.pass);
+      setProxyBypass(d.bypass);
+      // 即时生效
+      await applyProxy();
+    },
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs?: number; message: string } | null>(null);
-
-  // 是否有未保存的修改
-  const dirty =
-    draftProxy !== customProxy ||
-    draftUser !== proxyUsername ||
-    draftPass !== proxyPassword ||
-    draftBypass !== proxyBypass;
 
   // 当前生效代理描述
   const effectiveDesc =
@@ -77,18 +74,7 @@ export default function ProxySection({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateAppSettings({
-        customProxy: draftProxy,
-        proxyUsername: draftUser,
-        proxyPassword: draftPass,
-        proxyBypass: draftBypass,
-      });
-      setCustomProxy(draftProxy);
-      setProxyUsername(draftUser);
-      setProxyPassword(draftPass);
-      setProxyBypass(draftBypass);
-      // 即时生效
-      await applyProxy();
+      await saveProxyDraft();
     } catch (e) {
       console.error('保存代理配置失败:', e);
     } finally {
@@ -148,10 +134,10 @@ export default function ProxySection({
               <label className="proxy-field-label" data-name="settings.proxy.address-label">代理地址</label>
               <input
                 type="text"
-                className="proxy-input"
+                className="proxy-input input-underline"
                 placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7891"
-                value={draftProxy}
-                onChange={(e) => setDraftProxy(e.target.value)}
+                value={proxyDraft.proxy}
+                onChange={(e) => setProxyDraft({ ...proxyDraft, proxy: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && dirty) handleSave();
                 }}
@@ -165,10 +151,10 @@ export default function ProxySection({
                 <label className="proxy-field-label" data-name="settings.proxy.username-label">用户名（可选）</label>
                 <input
                   type="text"
-                  className="proxy-input"
+                  className="proxy-input input-underline"
                   placeholder="代理认证用户名"
-                  value={draftUser}
-                  onChange={(e) => setDraftUser(e.target.value)}
+                  value={proxyDraft.user}
+                  onChange={(e) => setProxyDraft({ ...proxyDraft, user: e.target.value })}
                   autoComplete="off"
                   data-name="settings.proxy.username-input"
                 />
@@ -177,10 +163,10 @@ export default function ProxySection({
                 <label className="proxy-field-label" data-name="settings.proxy.password-label">密码（可选）</label>
                 <input
                   type="password"
-                  className="proxy-input"
+                  className="proxy-input input-underline"
                   placeholder="代理认证密码"
-                  value={draftPass}
-                  onChange={(e) => setDraftPass(e.target.value)}
+                  value={proxyDraft.pass}
+                  onChange={(e) => setProxyDraft({ ...proxyDraft, pass: e.target.value })}
                   autoComplete="off"
                   data-name="settings.proxy.password-input"
                 />
@@ -192,10 +178,10 @@ export default function ProxySection({
               <label className="proxy-field-label" data-name="settings.proxy.bypass-label">绕过列表</label>
               <input
                 type="text"
-                className="proxy-input"
+                className="proxy-input input-underline"
                 placeholder="localhost,127.0.0.1,*.local,192.168.*"
-                value={draftBypass}
-                onChange={(e) => setDraftBypass(e.target.value)}
+                value={proxyDraft.bypass}
+                onChange={(e) => setProxyDraft({ ...proxyDraft, bypass: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && dirty) handleSave();
                 }}
@@ -209,7 +195,7 @@ export default function ProxySection({
               {dirty && (
                 <Button
                   variant="primary-compact"
-                  className="proxy-save-btn"
+                  className="proxy-save-btn btn-save-primary"
                   disabled={isSaving}
                   onClick={handleSave}
                   data-name="settings.proxy.save-button"
@@ -219,7 +205,7 @@ export default function ProxySection({
               )}
               <Button
                 variant="text"
-                className="proxy-test-btn"
+                className="proxy-test-btn btn-secondary-underline"
                 disabled={isTesting}
                 onClick={handleTest}
                 data-name="settings.proxy.test-button"
@@ -230,7 +216,7 @@ export default function ProxySection({
 
             {/* 测试结果 */}
             {testResult && (
-              <div className={`proxy-test-result ${testResult.ok ? 'ok' : 'fail'}`} data-name="settings.proxy.test-result">
+              <div className={`proxy-test-result test-result ${testResult.ok ? 'ok' : 'fail'}`} data-name="settings.proxy.test-result">
                 {testResult.ok ? '✓ ' : '✗ '}
                 {testResult.message}
               </div>

@@ -67,7 +67,7 @@
   gap: var(--space-2);
   margin: var(--space-1) var(--space-2);
   padding: var(--space-1) var(--space-2);
-  /* 覆盖浏览器 button 默认 min-height，与 .drawer-item / .voice-config-row 同一套参数 */
+  /* 覆盖浏览器 button 默认 min-height，与 .drawer-item / .form-row 同一套参数 */
   min-height: 0;
   background: transparent;
   border: 0;
@@ -127,7 +127,7 @@
   width: 100%;
   padding: var(--space-1) var(--space-2);
   /* 覆盖浏览器 button 默认 min-height，使高度完全由 padding + line-height 决定，
-     与 .voice-config-row 等 div 元素保持同一套 token 参数。 */
+     与 .form-row 等 div 元素保持同一套 token 参数。 */
   min-height: 0;
   border: 0;
   border-radius: 0;
@@ -207,7 +207,7 @@
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-1) var(--space-2);
-  /* 覆盖浏览器 button 默认 min-height，与 .drawer-item / .voice-config-row 同一套参数 */
+  /* 覆盖浏览器 button 默认 min-height，与 .drawer-item / .form-row 同一套参数 */
   min-height: 0;
   color: var(--muted-foreground);
   font-family: var(--font-sans);

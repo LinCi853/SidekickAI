@@ -124,21 +124,8 @@
   padding-top: var(--space-1);
   border-top: 1px solid var(--glass-bd-2);
 }
-/* 标题行：标题 + 右侧直达按钮（如「全局热键」→查看全部） */
-.settings-section-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-1);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px dashed var(--glass-bd-2);
-}
-.settings-section-title-row .settings-section-title {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: 0;
-}
+/* 标题行：标题 + 右侧直达按钮（如「全局热键」→查看全部）
+   已迁移到 ui/SectionTitle.tsx，此处仅保留 .hotkey-shortcuts-link 样式 */
 .hotkey-shortcuts-link {
   flex: none;
   display: inline-flex;
@@ -317,47 +304,12 @@
 .hotkey-input {
   flex: 1;
   min-width: 0;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  outline: none;
-  line-height: 1.4;
-  transition: border-bottom-color var(--duration-fast) var(--ease-out);
-}
-.hotkey-input:focus {
-  border-bottom-color: var(--accent-50);
 }
 .hotkey-input::placeholder {
   color: var(--text-muted);
 }
 .hotkey-save {
   flex: none;
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  line-height: 1.4;
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-.hotkey-save:hover:not(:disabled) {
-  color: var(--accent-bright);
-  font-weight: 600;
 }
 .hotkey-save:disabled {
   opacity: 0.5;
@@ -365,11 +317,7 @@
 }
 .hotkey-feedback {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: 1.4;
 }
-.hotkey-feedback.success { color: var(--success); }
-.hotkey-feedback.error { color: var(--danger); }
 .hotkey-hint {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -413,49 +361,9 @@
 .platform-url-input {
   flex: 1;
   min-width: 0;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  outline: none;
-  line-height: 1.4;
-}
-.platform-url-input:focus {
-  border-bottom-color: var(--accent-50);
 }
 .platform-url-save {
   flex: none;
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: 0;
-  line-height: 1.4;
-  transition: filter var(--duration-fast) var(--ease-out),
-              opacity var(--duration-fast) var(--ease-out);
-}
-.platform-url-save:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.platform-url-save:active:not(:disabled) {
-  filter: brightness(0.96);
-}
-.platform-url-save:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .platform-url-hint {
   font-size: var(--text-xs);
@@ -549,22 +457,8 @@
   flex: none;
   min-width: 110px;
   max-width: 160px;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
   font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  outline: none;
   cursor: pointer;
-  line-height: 1.4;
-}
-.platform-ua-preset-select:focus {
-  border-bottom-color: var(--accent-50);
 }
 /* 暗色模式下 select 元素的下拉列表（option）默认白色背景，需显式设置与文字色配套 */
 .platform-ua-preset-select option,
@@ -646,24 +540,10 @@
   flex: none;
   min-width: 110px;
   max-width: 60%;
-  padding: var(--space-1) var(--space-2);
-  /* 覆盖浏览器 select 默认 min-height，统一由 padding + line-height 决定高度 */
-  min-height: 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
   font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  outline: none;
   cursor: pointer;
-  line-height: 1.4;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.ua-preset-select:focus {
-  border-bottom-color: var(--accent-50);
 }
 
 /* ===== 窄屏精简布局（窗口竖窄时卡片紧凑化） ===== */
@@ -733,32 +613,12 @@
 }
 .provider-action-btn {
   flex: none;
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  line-height: 1.4;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-.provider-action-btn:hover {
-  color: var(--accent-bright);
-  font-weight: 600;
 }
 .provider-action-btn.danger {
   color: var(--destructive);
 }
 .provider-action-btn.danger:hover {
   color: var(--destructive);
-  font-weight: 600;
 }
 .provider-action-btn:disabled {
   opacity: 0.5;
@@ -766,31 +626,6 @@
 }
 .provider-add-btn {
   margin-top: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: 0;
-  line-height: 1.4;
-  transition: filter var(--duration-fast) var(--ease-out),
-              opacity var(--duration-fast) var(--ease-out);
-}
-.provider-add-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.provider-add-btn:active:not(:disabled) {
-  filter: brightness(0.96);
-}
-.provider-add-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .provider-form {
   display: flex;
@@ -814,25 +649,6 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted-foreground);
-}
-.provider-form-input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 0;
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  outline: none;
-  line-height: 1.4;
-  transition: border-bottom-color var(--duration-fast) var(--ease-out);
-}
-.provider-form-input:focus {
-  border-bottom-color: var(--accent-50);
 }
 .provider-form-input::placeholder {
   color: var(--text-muted);
@@ -883,21 +699,7 @@
   filter: brightness(0.96);
 }
 .provider-test-result {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--glass-bd-2);
   word-break: break-all;
-}
-.provider-test-result.ok {
-  color: var(--success);
-  border-color: var(--success);
-}
-.provider-test-result.fail {
-  color: var(--danger);
-  border-color: var(--danger);
 }
 
 /* ===== 自定义对话窗口 ===== */
@@ -962,41 +764,12 @@
 }
 
 /* ===== 语音输入配置 ===== */
-/* 设置面板行项：与外部菜单 .drawer-item 使用同一套参数。
-   padding / font-size / line-height / gap 全部对齐，避免各页面 rhythm 不一致。 */
-.voice-config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  font-size: var(--text-sm);
-  line-height: 1.4;
-}
-.voice-config-label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  flex: 1;
-  min-width: 0;
-  cursor: default;
-  padding-right: var(--space-2);
-}
+/* 行布局已迁移到 ui/FormRow.tsx；此处仅保留 .voice-config-name（子区副标题复用） */
 .voice-config-name {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--foreground);
-  line-height: 1.4;
-}
-.voice-config-hint {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
   line-height: 1.4;
 }
 .voice-toggle {
@@ -1081,81 +854,16 @@
   color: var(--text-muted);
   line-height: 1.4;
 }
-.voice-input,
-.voice-select {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 0;
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  outline: none;
-  line-height: 1.4;
-  transition: border-bottom-color var(--duration-fast);
-}
-.voice-input:focus,
-.voice-select:focus {
-  border-bottom-color: var(--accent-50);
-}
 .voice-input::placeholder {
   color: var(--text-muted);
 }
 .voice-save-btn {
   flex: none;
-  align-self: center;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: 0;
-  line-height: 1.4;
-  transition: filter var(--duration-fast) var(--ease-out),
-              opacity var(--duration-fast) var(--ease-out);
-}
-.voice-save-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.voice-save-btn:active:not(:disabled) {
-  filter: brightness(0.96);
-}
-.voice-save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* 测试连接按钮（次要操作） */
 .voice-test-btn {
   flex: none;
-  align-self: center;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: transparent;
-  color: var(--muted-foreground);
-  border: 0;
-  line-height: 1.4;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-.voice-test-btn:hover:not(:disabled) {
-  color: var(--accent-bright);
-  font-weight: 600;
 }
 .voice-test-btn:disabled {
   opacity: 0.4;
@@ -1164,19 +872,12 @@
 .voice-test-result {
   flex: none;
   align-self: stretch;
-  padding: var(--space-1) var(--space-2);
   font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--glass-bd-2);
 }
 .voice-test-result.ok {
-  color: var(--success);
   border-color: var(--success-bd);
 }
 .voice-test-result.fail {
-  color: var(--danger);
   border-color: var(--danger-bd);
 }
 .voice-test-result-text {
@@ -1279,25 +980,6 @@
 .proxy-input-row {
   margin-top: var(--space-1);
 }
-.proxy-input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 0;
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  outline: none;
-  line-height: 1.4;
-  transition: border-bottom-color var(--duration-fast);
-}
-.proxy-input:focus {
-  border-bottom-color: var(--accent-50);
-}
 .proxy-input::placeholder {
   color: var(--text-muted);
 }
@@ -1376,74 +1058,16 @@
 }
 .proxy-save-btn {
   flex: 1;
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: 0;
-  line-height: 1.4;
-  transition: filter var(--duration-fast) var(--ease-out),
-              opacity var(--duration-fast) var(--ease-out);
-}
-.proxy-save-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.proxy-save-btn:active:not(:disabled) {
-  filter: brightness(0.96);
-}
-.proxy-save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .proxy-test-btn {
   flex: none;
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  line-height: 1.4;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-.proxy-test-btn:hover:not(:disabled) {
-  color: var(--accent-bright);
-  font-weight: 600;
 }
 .proxy-test-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .proxy-test-result {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--glass-bd-2);
   word-break: break-all;
-}
-.proxy-test-result.ok {
-  color: var(--success);
-  border-color: var(--success);
-}
-.proxy-test-result.fail {
-  color: var(--danger);
-  border-color: var(--danger);
 }
 
 /* 代理失败兜底配置块 */
@@ -1480,29 +1104,7 @@
   gap: var(--space-1);
 }
 
-.settings-section-title-row.collapsible {
-  cursor: pointer;
-  user-select: none;
-  transition: background var(--duration-fast);
-  margin-left: calc(var(--space-1) * -1);
-  margin-right: calc(var(--space-1) * -1);
-  padding-left: var(--space-1);
-  padding-right: var(--space-1);
-  border-radius: var(--radius-sm);
-}
-.settings-section-title-row.collapsible:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-.collapse-toggle-icon {
-  font-size: 10px;
-  color: var(--text-muted);
-  transition: transform var(--duration-fast) var(--ease-out);
-  flex: none;
-  line-height: 1;
-}
-.collapse-toggle-icon.expanded {
-  transform: rotate(180deg);
-}
+/* 可折叠标题样式已迁移到 ui/SectionTitle.tsx */
 
 .permission-hint {
   padding: var(--space-1) 0;
@@ -1529,32 +1131,11 @@
   background: transparent;
   border: 1px solid var(--glass-bd-2);
 }
-.block-rule-action-btn {
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  line-height: 1.4;
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-.block-rule-action-btn:hover {
-  color: var(--accent-bright);
-  font-weight: 600;
-}
 .block-rule-action-btn.danger {
   color: var(--destructive);
 }
 .block-rule-action-btn.danger:hover {
   color: var(--destructive);
-  font-weight: 600;
 }
 .block-rule-meta {
   font-size: var(--text-xs);
@@ -1570,21 +1151,6 @@
 }
 .block-rule-type-group {
   margin-top: var(--space-0-5);
-}
-.block-rule-input {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 0;
-  padding: var(--space-1) var(--space-2);
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-  background: transparent;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  outline: none;
-  line-height: 1.4;
 }
 .block-rule-textarea {
   min-height: calc(var(--space-4) * 3);
@@ -1700,32 +1266,14 @@
 }
 
 /* 设置项单行反馈文本（成功/失败提示，常用于按钮旁的临时反馈） */
-.settings-feedback {
-  font-size: var(--text-xs);
-  line-height: 1.4;
-}
-.settings-feedback.ok {
-  color: var(--success);
-}
-.settings-feedback.fail {
-  color: var(--danger);
-}
+/* 通用样式由 .feedback-text 提供，此处保留特有字段 */
 
 /* 语音 section */
 .voice-section-subtitle {
   margin-bottom: var(--space-1);
   padding: 0;
 }
-.voice-config-row.stack {
-  flex-direction: column;
-  align-items: stretch;
-}
-.voice-config-row.compact {
-  gap: var(--space-1);
-}
-.voice-config-row.mt-2 {
-  margin-top: var(--space-1);
-}
+/* .voice-config-row.stack/compact/mt-2 已迁移到 ui/FormRow.css */
 .voice-field-row {
   display: flex;
   gap: var(--space-1);
@@ -1752,9 +1300,7 @@
   gap: var(--space-1);
   margin-top: var(--space-2);
 }
-.voice-config-label.static {
-  flex: none;
-}
+/* .voice-config-label.static 已迁移到 ui/FormRow.tsx */
 .voice-progress-track.mt-1 {
   margin-top: var(--space-0-5);
 }
@@ -1763,26 +1309,7 @@
   color: var(--foreground-inverse);
 }
 .voice-btn-secondary {
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  line-height: 1.4;
   white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-.voice-btn-secondary:hover:not(:disabled) {
-  color: var(--accent-bright);
-  font-weight: 600;
 }
 .voice-btn-secondary:disabled {
   opacity: 0.5;
@@ -1834,25 +1361,11 @@
 .block-rule-add-btn {
   margin-top: var(--space-1);
   width: 100%;
-  min-height: 0;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  line-height: 1.4;
-  background: var(--primary);
-  border: 0;
-  color: var(--primary-foreground);
-  transition: filter var(--duration-fast) var(--ease-out),
-              opacity var(--duration-fast) var(--ease-out);
 }
 .block-rule-add-btn:hover {
-  filter: brightness(1.08);
   background: var(--primary);
   border: 0;
   color: var(--primary-foreground);
-}
-.block-rule-add-btn:active {
-  filter: brightness(0.96);
 }
 
 /* 平台默认 URL */
@@ -1882,7 +1395,7 @@
 
 /* =====================================================================
    AiAppSection —— AI 应用区块专属样式
-   复用 preset-card / settings-section-title-row / provider-form* 等已有 class，
+   复用 preset-card / SectionTitle / FormRow / provider-form* 等已有组件与 class，
    此处仅补充 AI 应用卡片图标等少量专属样式。
    ===================================================================== */
 

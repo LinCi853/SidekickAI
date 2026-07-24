@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
-import { Button, IconButton } from '../components/ui';
+import { Button, IconButton, TitleBar } from '../components/ui';
 import { useChatStore } from '../store/useChatStore';
 import {
   minimizeWindow,
@@ -78,13 +78,6 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     continueGeneration,
     registerStreamListeners,
   } = useChatStore();
-
-  // 窗口宽度监听
-  useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 600);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   // 获取当前窗口的 chatConfig（chat 脱离窗口专属配置）
   // 需求 10：同时初始化记录文本模板状态（前缀/后缀）
@@ -174,23 +167,6 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     },
     [windowId, chatConfig],
   );
-
-  // 查询窗口最大化状态
-  useEffect(() => {
-    void isWindowMaximized().then(setIsMaximized);
-  }, []);
-
-  // 查询窗口置顶状态（初始化 isPinned，避免状态不同步导致 F12 首次按无反应）
-  useEffect(() => {
-    void isWindowAlwaysOnTop().then(setIsPinned);
-  }, []);
-
-  // 监听主进程主动推送的置顶/最大化状态变更（F11 最大化时会自动取消置顶等场景）
-  useEffect(() => {
-    const offPin = onPinToggled((onTop) => setIsPinned(onTop));
-    const offMax = onMaximizeToggled((max) => setIsMaximized(max));
-    return () => { offPin(); offMax(); };
-  }, []);
 
   // F11/F12 由主进程 attachWindowHotkeyInterceptor 在 before-input-event 中拦截处理，
   // 通过 onMaximizeToggled/onPinToggled IPC 通知更新状态（见上方监听器）。
@@ -341,142 +317,105 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     <>
       <WindowResizeHandles />
       <div
-        className="chat-view app-shell"
+        className="chat-view app-shell app-view-root"
         data-viewport={isNarrow ? 'narrow' : 'wide'}
         data-density={density}
         data-code-theme={codeTheme}
         data-name="chat.container"
         style={cssVars}
       >
-        {/* 顶栏 */}
-        <div className="chat-top" data-name="chat.top-bar.container">
-          {/* 侧边栏切换按钮（宽屏收起 / 窄屏抽屉）*/}
-          <IconButton
-            type="button"
-            className="chat-sidebar-toggle"
-            data-name="chat.top-bar.sidebar-toggle-icon-button"
-            aria-label="会话列表"
-            title="会话列表"
-            onClick={() => {
-              if (isNarrow) setIsSidebarOpen((v) => !v);
-              else setIsSidebarCollapsed((v) => !v);
-            }}
-          >
-            <svg className="icon-svg" data-name="chat.top-bar.sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </IconButton>
-          <div className="chat-top-drag" data-name="chat.top-bar.drag-area">
-            <span className="chat-top-title" data-name="chat.top-bar.title">{chatConfig?.title || 'AI 对话'}</span>
-            {providers.length > 0 ? (
-              <select
-                className="chat-provider-select"
-                data-name="chat.top-bar.provider-select"
-                value={currentProviderId ?? ''}
-                onChange={(e) => setCurrentProvider(e.target.value)}
-                title="切换 AI 提供商"
-              >
-                {providers.map((p, idx) => (
-                  <option key={p.id} value={p.id} data-name={`chat.top-bar.provider-option-${idx + 1}`}>
-                    {p.name} ({p.model})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span data-name="chat.top-bar.no-provider-text" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
-                未配置提供商
-              </span>
-            )}
-            {usageStats && usageStats.todayTokens > 0 && (
-              <span
-                className="chat-usage-badge"
-                data-name="chat.top-bar.usage-badge"
-                title={`今日 ${usageStats.todayTokens} tokens / 共 ${usageStats.totalTokens} tokens`}
-              >
-                今日 {usageStats.todayTokens} tok
-              </span>
-            )}
-          </div>
-          <div className="chat-top-actions" data-name="chat.top-bar.actions">
+        {/* 顶栏：统一 TitleBar 组件，替代原 .chat-top 自定义结构 */}
+        <TitleBar
+          maximized={isMaximized}
+          onMinimize={() => void minimizeWindow()}
+          onMaximize={handleMaximize}
+          onClose={() => void closeCurrentWindow()}
+          leading={
             <IconButton
               type="button"
-              className="chat-top-btn"
-              data-name="chat.top-bar.settings-icon-button"
-              aria-label="设置"
-              title="设置"
-              onClick={() => void openAiAppProviderWindow(currentProviderId ?? undefined)}
-            >
-              <svg className="icon-svg" data-name="chat.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              variant={isPinned ? 'active' : 'default'}
-              className="chat-top-btn"
-              data-name="chat.top-bar.pin-icon-button"
-              aria-label={isPinned ? '取消置顶' : '置顶'}
-              title={isPinned ? '取消置顶' : '置顶'}
-              onClick={async () => {
-                const next = !isPinned;
-                setIsPinned(next);
-                await pinCurrentWindow(next);
+              className="chat-sidebar-toggle titlebar-icon-btn"
+              data-name="chat.top-bar.sidebar-toggle-icon-button"
+              aria-label="会话列表"
+              title="会话列表"
+              onClick={() => {
+                if (isNarrow) setIsSidebarOpen((v) => !v);
+                else setIsSidebarCollapsed((v) => !v);
               }}
             >
-              <svg className="icon-svg" data-name="chat.top-bar.pin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 17v5" />
-                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+              <svg className="icon-svg" data-name="chat.top-bar.sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </IconButton>
-            <IconButton
-              type="button"
-              data-name="chat.top-bar.maximize-icon-button"
-              aria-label={isMaximized ? '还原' : '最大化'}
-              title={isMaximized ? '还原' : '最大化'}
-              onClick={handleMaximize}
-            >
-              {isMaximized ? (
-                <svg className="icon-svg" data-name="chat.top-bar.restore-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M8 3v3a2 2 0 0 1-2 2H3" />
-                  <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-                  <path d="M3 16h3a2 2 0 0 1 2 2v3" />
-                  <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-                </svg>
+          }
+          center={
+            <div className="chat-top-drag" data-name="chat.top-bar.drag-area">
+              <span className="chat-top-title" data-name="chat.top-bar.title">{chatConfig?.title || 'AI 对话'}</span>
+              {providers.length > 0 ? (
+                <select
+                  className="chat-provider-select"
+                  data-name="chat.top-bar.provider-select"
+                  value={currentProviderId ?? ''}
+                  onChange={(e) => setCurrentProvider(e.target.value)}
+                  title="切换 AI 提供商"
+                >
+                  {providers.map((p, idx) => (
+                    <option key={p.id} value={p.id} data-name={`chat.top-bar.provider-option-${idx + 1}`}>
+                      {p.name} ({p.model})
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <svg className="icon-svg" data-name="chat.top-bar.maximize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="4" y="4" width="16" height="16" rx="1" />
-                </svg>
+                <span data-name="chat.top-bar.no-provider-text" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                  未配置提供商
+                </span>
               )}
-            </IconButton>
-            <IconButton
-              type="button"
-              data-name="chat.top-bar.minimize-icon-button"
-              aria-label="最小化"
-              title="最小化"
-              onClick={() => void minimizeWindow()}
-            >
-              <svg className="icon-svg" data-name="chat.top-bar.minimize-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </IconButton>
-            <IconButton
-              type="button"
-              variant="close"
-              data-name="chat.top-bar.close-icon-button"
-              aria-label="关闭"
-              title="关闭"
-              onClick={() => void closeCurrentWindow()}
-            >
-              <svg className="icon-svg" data-name="chat.top-bar.close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="6" y1="6" x2="18" y2="18" />
-                <line x1="18" y1="6" x2="6" y2="18" />
-              </svg>
-            </IconButton>
-          </div>
-        </div>
+              {usageStats && usageStats.todayTokens > 0 && (
+                <span
+                  className="chat-usage-badge"
+                  data-name="chat.top-bar.usage-badge"
+                  title={`今日 ${usageStats.todayTokens} tokens / 共 ${usageStats.totalTokens} tokens`}
+                >
+                  今日 {usageStats.todayTokens} tok
+                </span>
+              )}
+            </div>
+          }
+          actions={
+            <>
+              <IconButton
+                type="button"
+                data-name="chat.top-bar.settings-icon-button"
+                aria-label="设置"
+                title="设置"
+                onClick={() => void openAiAppProviderWindow(currentProviderId ?? undefined)}
+              >
+                <svg className="icon-svg" data-name="chat.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </IconButton>
+              <IconButton
+                type="button"
+                variant={isPinned ? 'active' : 'default'}
+                data-name="chat.top-bar.pin-icon-button"
+                aria-label={isPinned ? '取消置顶' : '置顶'}
+                title={isPinned ? '取消置顶' : '置顶'}
+                onClick={async () => {
+                  const next = !isPinned;
+                  setIsPinned(next);
+                  await pinCurrentWindow(next);
+                }}
+              >
+                <svg className="icon-svg" data-name="chat.top-bar.pin-icon" viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 17v5" />
+                  <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+                </svg>
+              </IconButton>
+            </>
+          }
+        />
 
         {/* 主体 */}
         <div className="chat-body" data-name="chat.body">

@@ -4,80 +4,11 @@
    迁移并精简，避免独立窗口依赖设置面板的样式表。
    ===================================================================== */
 
-.ai-app-provider-view {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--background);
-  overflow: hidden;
-  position: relative;
-}
-
-/* ===== 顶栏：tab 切换 + 窗口控制 ===== */
-.ai-app-top {
-  height: var(--titlebar-h);
-  min-height: var(--titlebar-h, 44px);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-1) 0 var(--space-2);
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-  box-sizing: border-box;
-  user-select: none;
-  flex: none;
-  z-index: 20;
-  font-size: var(--text-sm);
-}
-.ai-app-top-tabs {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-  -webkit-app-region: drag;
-  app-region: drag;
-  height: 100%;
-}
-/* SegmentedControl 实际渲染的是 .seg-btn；覆盖为 ai-app-tab 样式并恢复可点击 */
-.ai-app-top-tabs .ai-app-segmented {
+/* SegmentedControl 标签栏样式（作为 TitleBar.center 子内容，恢复可点击） */
+.ai-app-segmented {
   display: inline-flex;
   align-items: center;
   gap: var(--space-0-5);
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-.ai-app-top-tabs .seg-btn {
-  flex: none;
-  padding: 0 var(--space-2);
-  height: calc(var(--titlebar-h) - var(--space-2));
-  display: inline-flex;
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-  transition: color var(--duration-fast), background var(--duration-fast);
-}
-.ai-app-top-tabs .seg-btn:hover:not(:disabled) {
-  color: var(--foreground);
-  background: var(--accent-10);
-}
-.ai-app-top-tabs .seg-btn.is-active {
-  color: var(--accent-bright);
-  background: var(--accent-10);
-  box-shadow: none;
-}
-.ai-app-top-actions {
-  flex: none;
-  display: flex;
-  gap: var(--space-1);
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -116,7 +47,6 @@
   align-items: stretch;
   background: var(--card);
   border: 1px solid var(--glass-bd);
-  border-radius: var(--radius-md);
   overflow: hidden;
   transition: border-color var(--duration-fast), background var(--duration-fast);
 }
@@ -582,11 +512,9 @@
 }
 .provider-crypto-select-all {
   display: inline-flex;
-  align-items: center;
   gap: var(--space-0-5);
   font-size: var(--text-xs);
   color: var(--muted-foreground);
-  cursor: pointer;
   user-select: none;
 }
 .provider-crypto-select-all input[type="checkbox"] {
@@ -619,49 +547,7 @@
   margin: 0;
 }
 
-/* v0.5.2 B-4：模态对话框（导出/导入共用） */
-.provider-form-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
-}
-.provider-form-overlay.is-open {
-  opacity: 1;
-}
-.provider-form-dialog {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  width: 90%;
-  max-width: 460px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-}
-.provider-form-dialog-title {
-  margin: 0;
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--foreground);
-}
-.provider-form-dialog-desc {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--muted-foreground);
-  line-height: 1.5;
-}
-.provider-form-dialog .provider-form-input {
-  width: 100%;
-  box-sizing: border-box;
-}
+/* v0.5.2 B-4：模态对话框样式已迁移到 ProviderSection.css（改用 ui/Modal 组件） */
 .provider-import-file-row {
   display: flex;
   gap: var(--space-1);
@@ -1031,103 +917,7 @@
   background: var(--window-close);
 }
 
-/* ===== v0.5.2 R-1：供应商管理遮罩模态 ===== */
-.providers-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
-}
-.providers-modal {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 680px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-}
-.providers-modal-header {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--glass-bd);
-}
-.providers-modal-title {
-  margin: 0;
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--foreground);
-}
-.providers-modal-close {
-  flex: none;
-  width: var(--titlebar-icon);
-  height: var(--titlebar-icon);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: color var(--duration-fast), background var(--duration-fast);
-}
-.providers-modal-close:hover {
-  color: var(--destructive);
-  background: var(--danger-bg-soft);
-}
-.providers-modal-body {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* ===== v0.5.2 R-1：供应商编辑二级遮罩 ===== */
-.provider-edit-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;
-  backdrop-filter: blur(2px);
-}
-.provider-edit-dialog {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 560px;
-  max-height: 85vh;
-  overflow-y: auto;
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1-5);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-}
-
-/* 提升 export/import 对话框 z-index 到编辑遮罩之上 */
-.providers-modal-overlay .provider-form-overlay {
-  z-index: 1200;
-}
-
-/* v0.5.2 R-5: 供应商 TTS/STT 语音配置区 */
+/* v0.5.2 R-5: 供应商 TTS/STT 语音配置区（已迁移到 ProviderSection.css，保留此注释标记） */
 .provider-voice-config {
   display: flex;
   flex-direction: column;
@@ -1162,7 +952,4 @@
   min-width: 120px;
 }
 
-/* v0.5.2 B-4: 确保导入/导出对话框在最顶层 */
-.provider-form-overlay.is-open {
-  z-index: 1300;
-}
+/* v0.5.2 B-4: 导入/导出对话框 z-index 已由 ui/Modal 统一管理 */

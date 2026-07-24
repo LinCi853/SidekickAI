@@ -9,26 +9,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
+import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { usePromptStore } from '../store/usePromptStore';
 import {
-  minimizeWindow,
-  maximizeToggleWindow,
-  closeCurrentWindow,
-  pinCurrentWindow,
-  isWindowMaximized,
-  isWindowAlwaysOnTop,
-  onMaximizeToggled,
-  onPinToggled,
   requestPromptInject,
   onPromptInjectResult,
   getHotkeys,
   startHotkeyRecording,
   stopHotkeyRecording,
   onHotkeyRecordingResult,
+  closeCurrentWindow,
 } from '../lib/electron-api';
 import type { PromptTemplate, HotkeyConfig } from '../lib/electron-api';
 import { buildOtherHotkeysForPrompt } from '../lib/prompt-hotkey';
 import { useToast } from '../hooks/useToast';
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { Button, IconButton } from '../components/ui';
 import Chip from '../components/ui/Chip';
 import HotkeyRecorder from '../components/ui/HotkeyRecorder';
@@ -59,18 +54,15 @@ export default function PromptLibraryView() {
   const savePrompt = usePromptStore((s) => s.save);
   const removePrompt = usePromptStore((s) => s.remove);
 
-  const [maximized, setMaximized] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
   const [editor, setEditor] = useState<EditorState>(EMPTY_EDITOR);
   const [injectedId, setInjectedId] = useState<string | null>(null);
   // 需求 2.5：主进程全局热键列表，用于 HotkeyRecorder 冲突检测
   const [appHotkeys, setAppHotkeys] = useState<HotkeyConfig[]>([]);
   const { toast, showToast } = useToast();
 
-  // 初始化：加载提示词列表 + 最大化状态
+  // 初始化：加载提示词列表
   useEffect(() => {
     void init().catch((e) => console.error('[PromptLibraryView] 加载提示词失败:', e));
-    void isWindowMaximized().then(setMaximized).catch(() => {});
   }, [init]);
 
   // 需求 2.5：编辑器打开时拉取最新全局热键，用于冲突检测
@@ -81,34 +73,17 @@ export default function PromptLibraryView() {
       .catch((e) => console.warn('[PromptLibraryView] 加载全局热键失败:', e));
   }, [editor.open]);
 
-  // F11/F12 由主进程 attachWindowHotkeyInterceptor 拦截处理，渲染层仅通过 IPC 监听状态更新
-  useEffect(() => {
-    void isWindowAlwaysOnTop().then(setIsPinned).catch(() => {});
-  }, []);
-  useEffect(() => {
-    const offPin = onPinToggled((onTop) => setIsPinned(onTop));
-    const offMax = onMaximizeToggled((max) => setMaximized(max));
-    return () => { offPin(); offMax(); };
-  }, []);
-
   // ESC：编辑器打开时关闭编辑器，否则关闭窗口
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      // 输入框聚焦时不触发（让 input/textarea 自身处理）
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  useEscToCloseWindow({
+    onEsc: (e) => {
       if (editor.open) {
         e.preventDefault();
         setEditor(EMPTY_EDITOR);
-      } else {
-        e.preventDefault();
-        void closeCurrentWindow();
+        return true;
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editor.open]);
+      return false;
+    },
+  });
 
   // 监听注入结果回传（主进程 → 提示词库窗口）
   useEffect(() => {
@@ -178,11 +153,6 @@ export default function PromptLibraryView() {
     showToast('已删除');
   };
 
-  const handleMaximize = async () => {
-    const next = await maximizeToggleWindow();
-    setMaximized(next);
-  };
-
   const allCategories = useMemo(() => {
     const set = new Set<string>();
     prompts.forEach((p) => { if (p.category) set.add(p.category) });
@@ -201,46 +171,9 @@ export default function PromptLibraryView() {
   return (
     <>
       <WindowResizeHandles />
-      <div className="prompt-view app-shell" data-name="prompts.container">
-        {/* 顶栏 */}
-        <div className="prompt-view-top" data-name="prompts.topbar">
-          <div className="prompt-view-top-drag" data-name="prompts.topbar-drag">
-            <span className="prompt-view-top-title" data-name="prompts.topbar-title">提示词库</span>
-          </div>
-          <div className="prompt-view-top-actions" data-name="prompts.topbar-actions">
-            <IconButton
-              type="button"
-              variant={isPinned ? 'active' : 'default'}
-              className="prompt-view-win-btn"
-              aria-label={isPinned ? '取消置顶' : '置顶'}
-              title={isPinned ? '取消置顶' : '置顶'}
-              data-name="prompts.topbar-pin-button"
-              onClick={async () => {
-                const next = !isPinned;
-                setIsPinned(next);
-                await pinCurrentWindow(next);
-              }}
-            >
-              <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="prompts.topbar-pin-icon">
-                <path d="M12 17v5" />
-                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
-              </svg>
-            </IconButton>
-            <IconButton type="button" className="prompt-view-win-btn" onClick={() => void minimizeWindow()} title="最小化" aria-label="最小化" data-name="prompts.topbar-minimize-button">
-              <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="prompts.topbar-minimize-icon"><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            </IconButton>
-            <IconButton type="button" className="prompt-view-win-btn" onClick={() => void handleMaximize()} title={maximized ? '还原' : '最大化'} aria-label="最大化" data-name="prompts.topbar-maximize-button">
-              {maximized ? (
-                <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="prompts.topbar-restore-icon"><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></svg>
-              ) : (
-                <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="prompts.topbar-maximize-icon"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
-              )}
-            </IconButton>
-            <IconButton type="button" variant="close" className="prompt-view-win-btn close" onClick={() => void closeCurrentWindow()} title="关闭" aria-label="关闭" data-name="prompts.topbar-close-button">
-              <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="prompts.topbar-close-icon"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-            </IconButton>
-          </div>
-        </div>
+      <div className="prompt-view app-shell app-view-root" data-name="prompts.container">
+        {/* 顶栏：统一 StandaloneWindowHeader（标题 + 置顶 + 窗口控制） */}
+        <StandaloneWindowHeader title="提示词库" dataNamePrefix="prompts.topbar" />
 
         {/* 主体 */}
         <div className="prompt-view-body" data-name="prompts.body">
@@ -251,7 +184,7 @@ export default function PromptLibraryView() {
           </div>
 
           {prompts.length === 0 && (
-            <div className="prompt-view-empty" data-name="prompts.empty-state">暂无提示词模板<br />点击「新增提示词」添加</div>
+            <div className="prompt-view-empty app-empty-state large" data-name="prompts.empty-state">暂无提示词模板<br />点击「新增提示词」添加</div>
           )}
 
           {groupKeys.map((key, gIdx) => (
@@ -260,7 +193,7 @@ export default function PromptLibraryView() {
               {grouped[key].map((t, cIdx) => (
                 <div
                   key={t.id}
-                  className={`prompt-card${injectedId === t.id ? ' injected' : ''}`}
+                  className={`glass-card interactive prompt-card${injectedId === t.id ? ' injected' : ''}`}
                   data-name={`prompts.group-item-${gIdx + 1}-card-item-${cIdx + 1}`}
                   data-index={cIdx + 1}
                   data-id={t.id}
@@ -416,7 +349,7 @@ export default function PromptLibraryView() {
       </div>
 
       {/* toast */}
-      <div className={`prompt-toast${toast !== null ? ' is-open' : ''}`} data-name="prompts.toast">{toast ?? ''}</div>
+      <div className={`prompt-toast app-toast${toast !== null ? ' is-open' : ''}`} data-name="prompts.toast">{toast ?? ''}</div>
     </>
   );
 }

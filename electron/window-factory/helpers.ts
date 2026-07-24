@@ -14,7 +14,7 @@
 // 以保持 __dirname 语义与原文件一致，从而窗口文件中 path.join(__dirname, '../preload/...')
 // 等路径无需修改。
 
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, screen, type WebPreferences } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
@@ -27,6 +27,7 @@ import {
   toggleMaximizeForWindow,
   setAlwaysOnTopForWindow,
 } from '../ipc/window-control-ipc.js'
+import { buildWindowConfig } from './window-config-builder.js'
 
 /** 应用窗口统一背景色（与渲染层主题色一致，避免启动白闪） */
 export const WINDOW_BACKGROUND_COLOR = '#1f1719'
@@ -48,6 +49,26 @@ export function getPreloadPath(): string {
     return path.resolve(__dirname, '../preload/index.mjs')
   }
   return path.join(__dirname, '../preload/index.mjs')
+}
+
+/**
+ * 构建统一的 webPreferences 配置块。
+ * 所有窗口共享 contextIsolation / nodeIntegration / sandbox / backgroundThrottling 默认值，
+ * 各窗口通过 opts 指定 preload 路径与 webviewTag 开关。
+ * 若需额外字段（如 additionalArguments），调用方可展开后覆盖。
+ */
+export function createDefaultWebPreferences(opts: {
+  preload: string
+  webviewTag?: boolean
+}): WebPreferences {
+  return {
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: false,
+    backgroundThrottling: false,
+    webviewTag: opts.webviewTag ?? false,
+    preload: opts.preload,
+  }
 }
 
 // 历史搜索独立窗口（单例，列举所有本地保存数据）
@@ -162,6 +183,49 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
     }
+  })
+}
+
+/**
+ * 为脱离窗口（chat / standalone / ai-app）附加统一的生命周期管理。
+ *
+ * 统一处理：
+ *   1. bounds 持久化追踪（setupBoundsTracking）
+ *   2. focus 追踪（更新 windowState.lastFocusedWin）
+ *   3. close 事件：持久化 bounds + 最大化/置顶状态到 windowStore
+ *   4. closed 事件：从 windowState.detachedWindows 清理 + 可选自定义清理
+ *
+ * 调用方仍需自行完成 detachedWindows.set / aiAppProviderWindow 赋值等注册操作
+ * （注册时机因窗口类型而异）。onClosed 回调用于窗口类型的额外清理
+ * （如 ai-app 窗口需清空 windowState.aiAppProviderWindow）。
+ */
+export function attachDetachedWindowLifecycle(
+  win: BrowserWindow,
+  windowId: string,
+  onClosed?: () => void,
+): void {
+  setupBoundsTracking(win, windowId)
+
+  win.on('focus', () => {
+    windowState.lastFocusedWin = win
+  })
+
+  win.on('close', () => {
+    const state = windowStore.getOrDefault(windowId)
+    if (!win.isDestroyed()) {
+      if (!win.isMaximized()) {
+        state.bounds = win.getBounds()
+      }
+      state.isMaximized = win.isMaximized()
+      state.alwaysOnTop = win.isAlwaysOnTop()
+      windowStore.save(windowId, state)
+    }
+    safeLogWindowTrace(windowId, 'close')
+  })
+
+  win.on('closed', () => {
+    windowState.detachedWindows.delete(windowId)
+    onClosed?.()
   })
 }
 
@@ -322,11 +386,6 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
       const key = input.key
       const code = input.code
 
-      // 调试日志已关闭（噪声过大）。需要排查时取消下方注释即可。
-      // if (hasAlt || hasCtrl || hasMeta) {
-      //   console.log('[hotkey] before-input-event:', { key, code, mods, type: input.type })
-      // }
-
       // F4：后退（排除 Alt 以避免与 Alt+F4 关闭窗口冲突）
       if (key === 'F4' && !hasCtrl && !hasAlt) {
         console.log('[hotkey] F4 → 后退')
@@ -458,14 +517,21 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
 }
 
 /**
- * 构建渲染进程加载 URL（附加 windowId 查询参数，可选 mode）
+ * 构建渲染进程加载 URL（附加 windowId 查询参数，可选 mode + extraQuery）
  */
-function buildRendererUrl(windowId: string, mode?: string): string {
+function buildRendererUrl(
+  windowId: string,
+  mode?: string,
+  extraQuery?: Record<string, string>,
+): string {
   if (process.env.ELECTRON_RENDERER_URL) {
     const sep = process.env.ELECTRON_RENDERER_URL.includes('?') ? '&' : '?'
-    let url = `${process.env.ELECTRON_RENDERER_URL}${sep}windowId=${windowId}`
-    if (mode) url += `&mode=${mode}`
-    return url
+    const params = new URLSearchParams({ windowId })
+    if (mode) params.set('mode', mode)
+    if (extraQuery) {
+      for (const [k, v] of Object.entries(extraQuery)) params.set(k, v)
+    }
+    return `${process.env.ELECTRON_RENDERER_URL}${sep}${params.toString()}`
   }
   // 生产环境通过 loadFile 的 query 选项传递
   return '' // 空字符串表示用 loadFile
@@ -474,12 +540,18 @@ function buildRendererUrl(windowId: string, mode?: string): string {
 /**
  * 加载渲染进程页面（dev server 或打包文件）
  */
-export function loadRenderer(win: BrowserWindow, windowId: string, mode?: string): void {
+export function loadRenderer(
+  win: BrowserWindow,
+  windowId: string,
+  mode?: string,
+  extraQuery?: Record<string, string>,
+): void {
   if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(buildRendererUrl(windowId, mode))
+    void win.loadURL(buildRendererUrl(windowId, mode, extraQuery))
   } else {
     const query: Record<string, string> = { windowId }
     if (mode) query.mode = mode
+    if (extraQuery) Object.assign(query, extraQuery)
     void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
       query,
     })
@@ -490,6 +562,90 @@ export function loadRenderer(win: BrowserWindow, windowId: string, mode?: string
       if (!win.isDestroyed()) win.webContents.openDevTools({ mode: 'detach' })
     })
   }
+}
+
+/**
+ * 创建单例弹出窗口的通用工厂。
+ *
+ * 统一 popup-windows.ts 中 4 个弹出窗口的共同模式：
+ *   1. 单例检查（已存在则聚焦返回）
+ *   2. 居中位置计算（clamp 到工作区）
+ *   3. buildWindowConfig + createDefaultWebPreferences
+ *   4. loadRenderer 加载渲染进程
+ *   5. attachWindowHotkeyInterceptor 注册 F11/F12 拦截
+ *   6. ready-to-show 显示聚焦
+ *   7. closed 清理单例引用
+ *
+ * 调用方通过 getExisting / setWindow 回调适配不同的单例存储方式
+ * （windowState.xxxWindow 属性或 aiAppEditorWindows Map）。
+ */
+export function createSingletonPopupWindow(opts: {
+  width: number
+  height: number
+  minWidth: number
+  minHeight: number
+  title: string
+  windowId: string
+  mode: string
+  extraQuery?: Record<string, string>
+  getExisting: () => BrowserWindow | null | undefined
+  setWindow: (win: BrowserWindow | null) => void
+}): BrowserWindow {
+  // 1. 单例检查
+  const existing = opts.getExisting()
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore()
+    if (!existing.isVisible()) existing.show()
+    existing.focus()
+    return existing
+  }
+
+  // 2. 居中位置计算（clamp 到工作区）
+  const workArea = screen.getPrimaryDisplay().workArea
+  const width = Math.min(opts.width, workArea.width - 80)
+  const height = Math.min(opts.height, workArea.height - 80)
+  const x = workArea.x + Math.round((workArea.width - width) / 2)
+  const y = workArea.y + Math.round((workArea.height - height) / 2)
+
+  // 3. 创建 BrowserWindow
+  const win = new BrowserWindow(buildWindowConfig({
+    width,
+    height,
+    x,
+    y,
+    minWidth: opts.minWidth,
+    minHeight: opts.minHeight,
+    show: false,
+    frame: false,
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
+    title: opts.title,
+    webPreferences: createDefaultWebPreferences({
+      preload: getPreloadPath(),
+      webviewTag: false,
+    }),
+  }))
+
+  // 4. 缓存单例引用
+  opts.setWindow(win)
+
+  // 5. 加载渲染进程
+  loadRenderer(win, opts.windowId, opts.mode, opts.extraQuery)
+
+  // 6. F11/F12 快捷键拦截（弹出窗口不含 webview）
+  attachWindowHotkeyInterceptor(win.webContents)
+
+  // 7. ready-to-show
+  win.once('ready-to-show', () => {
+    win.show()
+    win.focus()
+  })
+
+  // 8. closed 清理
+  win.on('closed', () => {
+    opts.setWindow(null)
+  })
+
+  return win
 }
 
 /**

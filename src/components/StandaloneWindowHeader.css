@@ -1,0 +1,13 @@
+/* =====================================================================
+   components/StandaloneWindowHeader.css —— 独立窗口通用顶栏默认标题样式
+   与 .history-top-title / .prompt-view-top-title 保持一致（毛玻璃顶栏标题）
+   ===================================================================== */
+
+.sw-header-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}

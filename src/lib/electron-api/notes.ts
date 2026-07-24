@@ -1,25 +1,27 @@
 /* =====================================================================
-   lib/electron-api/notes.ts —— 灵感笔记（需求 11）
-   对应 window.electron.notes：浮窗 CRUD + 发送到 AI 输入框 + 存为提示词
+   lib/electron-api/notes.ts —— 灵感笔记（v2：SQLite + FTS5 + 富文本 + 分类）
+   对应 window.electron.notes
    ===================================================================== */
 
-import type { Note, NoteSaveInput } from '../../../electron/shared/types';
+import type { Note, NoteListFilter, NoteSaveInput } from '../../../electron/shared/types';
 import { requireElectron } from './core';
 
-/* =====================================================================
-   灵感笔记 —— 对应 window.electron.notes
-   ===================================================================== */
-
-/** 列出全部笔记（按 updatedAt 降序） */
-export async function listNotes(): Promise<Note[]> {
+/** 列出笔记（支持搜索/标签/置顶筛选，按 pinned DESC, updatedAt DESC） */
+export async function listNotes(filter?: NoteListFilter): Promise<Note[]> {
   const api = requireElectron();
-  return api.notes.list();
+  return api.notes.list(filter);
 }
 
 /** 新增或更新笔记（upsert 语义：无 id 新增，有 id 更新） */
 export async function saveNote(input: NoteSaveInput): Promise<Note> {
   const api = requireElectron();
   return api.notes.save(input);
+}
+
+/** 同步保存（beforeunload 兜底，sendSync 确保窗口关闭前完成写入） */
+export function saveNoteSync(input: NoteSaveInput): { ok: boolean } {
+  const api = requireElectron();
+  return api.notes.saveSync(input);
 }
 
 /** 删除笔记 */
@@ -40,12 +42,25 @@ export async function setActiveNote(id: string | null): Promise<{ ok: boolean }>
   return api.notes.setActive(id);
 }
 
-/**
- * 发送笔记内容到当前 AI 输入框。
- * 主进程查找 lastFocusedWin（非笔记窗口），通过 VOICE_INJECT_AND_SEND 通道
- * 把文本注入其激活的 AI 输入框（webview textarea / 自定义对话输入框）。
- * enterToSend 控制是否自动回车发送。
- */
+/** 设置置顶 */
+export async function setNotePinned(id: string, pinned: boolean): Promise<{ ok: boolean }> {
+  const api = requireElectron();
+  return api.notes.setPinned(id, pinned);
+}
+
+/** 设置标签 */
+export async function setNoteTags(id: string, tags: string[]): Promise<{ ok: boolean }> {
+  const api = requireElectron();
+  return api.notes.setTags(id, tags);
+}
+
+/** 列出全部已用标签（去重） */
+export async function listNoteTags(): Promise<string[]> {
+  const api = requireElectron();
+  return api.notes.listTags();
+}
+
+/** 发送笔记内容到当前 AI 输入框 */
 export async function sendNoteToAi(
   text: string,
   enterToSend?: boolean,
@@ -54,10 +69,7 @@ export async function sendNoteToAi(
   return api.notes.sendToAi(text, enterToSend);
 }
 
-/**
- * 把笔记内容保存为新的提示词模板。
- * 标题取自首行（截断 30 字符），分类默认 '笔记'。
- */
+/** 把笔记内容保存为新的提示词模板 */
 export async function saveNoteAsPrompt(
   content: string,
   title?: string,
@@ -66,7 +78,7 @@ export async function saveNoteAsPrompt(
   return api.notes.saveAsPrompt(content, title);
 }
 
-/** 监听主进程 → 笔记窗口渲染：注入结果回传（success + error?） */
+/** 监听主进程 → 笔记窗口渲染：注入结果回传 */
 export function onNoteInjectResult(
   callback: (result: { success: boolean; error?: string }) => void,
 ): () => void {
