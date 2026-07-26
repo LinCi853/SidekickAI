@@ -40,10 +40,10 @@
 .injection-preview-warning {
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: var(--warning-bg, rgba(234, 179, 8, 0.1));
-  border: 1px solid var(--warning-bd, rgba(234, 179, 8, 0.3));
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-bd);
   border-radius: var(--radius-sm);
-  color: var(--warning-fg, #b45309);
+  color: var(--warning-fg);
   font-family: var(--font-sans); font-size: var(--text-sm); line-height: 1.5;
 }
 .injection-preview-warning-icon { flex: none; font-size: var(--text-md); }

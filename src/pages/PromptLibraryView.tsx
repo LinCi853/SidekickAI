@@ -178,7 +178,7 @@ export default function PromptLibraryView() {
         {/* 主体 */}
         <div className="prompt-view-body" data-name="prompts.body">
           <div className="prompt-view-add-row" data-name="prompts.add-row">
-            <Button type="button" variant="ghost" className="prompt-view-add-btn" onClick={openAdd} data-name="prompts.add-button">
+            <Button type="button" variant="outline" className="prompt-view-add-btn" onClick={openAdd} data-name="prompts.add-button">
               + 新增提示词
             </Button>
           </div>
@@ -337,7 +337,7 @@ export default function PromptLibraryView() {
               <span data-name="prompts.editor-footer-spacer" />
             )}
             <div className="prompt-editor-actions" data-name="prompts.editor-actions">
-              <Button type="button" variant="text" className="prompt-btn" onClick={() => setEditor(EMPTY_EDITOR)} data-name="prompts.editor-cancel-button">
+              <Button type="button" variant="outline" className="prompt-btn" onClick={() => setEditor(EMPTY_EDITOR)} data-name="prompts.editor-cancel-button">
                 取消
               </Button>
               <Button type="button" variant="primary-compact" className="prompt-btn primary" onClick={() => void handleSave()} data-name="prompts.editor-save-button">

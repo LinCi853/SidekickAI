@@ -22,8 +22,8 @@ export interface HotkeyIpcDeps {
   hotkeyManager: HotkeyManager
   /** 获取主窗口（实时读取，等价于原全局变量 mainWindow 的闭包访问） */
   getMainWindow: () => BrowserWindow | null
-  /** AI 应用独立窗口显隐切换（Alt+Q，单例） */
-  toggleAiAppProviderWindow: () => void
+  /** 进阶面板显隐切换（Alt+Q，单例） */
+  toggleAdvancedPanelWindow: () => void
   /** 启动后台语音录音（Alt+V keydown，主窗口未聚焦时调用） */
   startBackgroundVoice: () => Promise<void>
   /** 停止后台语音录音并识别（Alt+V keyup） */
@@ -39,14 +39,14 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
   const {
     hotkeyManager,
     getMainWindow,
-    toggleAiAppProviderWindow,
+    toggleAdvancedPanelWindow,
     startBackgroundVoice,
     stopBackgroundVoice,
   } = deps
 
   // ===== 内置热键回调 =====
   // toggleMainWindow：切换主窗口显隐；连续 3 次 Alt+Space 恢复默认窗口位置
-  // toggleDetachedWindows：切换 AI 应用独立窗口显隐（Alt+Q，单例）
+  // toggleDetachedWindows：切换 进阶面板显隐（Alt+Q，单例）
   // 声明在 IPC 注册之前：HOTKEY_SET handler 闭包引用此对象，运行时已初始化。
   const hotkeyCallbacks: Record<HotkeyAction, () => void> = {
     toggleMainWindow: () => {
@@ -79,8 +79,8 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
       }
     },
     toggleDetachedWindows: () => {
-      // Alt+Q 切换 AI 应用独立窗口（单例，默认显示「自定义对话」页）
-      toggleAiAppProviderWindow()
+      // Alt+Q 切换 进阶面板（单例，默认显示「自定义对话」页）
+      toggleAdvancedPanelWindow()
     },
     // backgroundVoice 由 registerVoiceHotkey 独立处理（uiohook keydown/keyup），
     // 此处仅占位以满足 Record<HotkeyAction, () => void> 类型；HOTKEY_SET 拒绝自定义。

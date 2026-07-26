@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useEscToCloseOverlay } from '../../hooks/useEscToCloseWindow';
 import '../ui/TitleBar.css'; // 复用毛玻璃风格的 header 背景
 import './styles.css';
 
@@ -35,6 +36,9 @@ export default function SettingsPanelShell({
   className,
 }: SettingsPanelShellProps) {
   const asideRef = useRef<HTMLElement>(null);
+
+  // ESC 关闭设置面板（主窗口用；独立窗口由 useEscToCloseWindow 的 onEsc 拦截后亦触发 onClose，幂等）
+  useEscToCloseOverlay(open, onClose);
 
   // 关闭时设置 inert，防止 Tab 焦点泄漏到隐藏的设置面板
   useEffect(() => {

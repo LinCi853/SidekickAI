@@ -14,6 +14,7 @@ import {
   onWebviewPopupUrl,
   onPopupDenied,
   addToPopupWhitelist,
+  addToProfilePopupWhitelist,
   applyProxyFallback,
   getAppSettings,
 } from '../../lib/electron-api';
@@ -809,16 +810,26 @@ export function WebviewTab({
   // 弹窗被连续拦截 3 次后，主进程通过 onPopupDenied 通知渲染层：
   // 弹出 confirm 对话框询问用户是否将该 origin 加入白名单（登录/验证页通常需要弹独立窗口）。
   // 监听在组件挂载时注册一次即可，无需依赖 webview 实例。
+  // 白名单写入策略：优先写入当前 tab 所属 Profile 的专属白名单（Profile.popupWhitelist），
+  // 避免不同 AI 应用的关联域互相污染全局白名单；profileId 不可用时回退到全局白名单。
   useEffect(() => {
     const off = onPopupDenied(({ origin, count }) => {
       console.log(`[WebviewTab] 弹窗被拦截 ${count} 次，提示加白:`, origin);
       const ok = window.confirm(
         `检测到弹窗被多次拦截：\n${origin}\n\n是否允许该站点弹窗？（登录/验证页面通常需要）`,
       );
-      if (ok) void addToPopupWhitelist(origin);
+      if (ok) {
+        // 优先写入 Profile 专属白名单（隔离不同 AI 应用的关联域）
+        if (tab.profileId) {
+          void addToProfilePopupWhitelist(tab.profileId, origin);
+        } else {
+          // 回退：无 profileId（异常情况）写入全局白名单
+          void addToPopupWhitelist(origin);
+        }
+      }
     });
     return () => off();
-  }, []);
+  }, [tab.profileId]);
 
   // enterToSend 变化时，仅更新 webview 内的运行时标志位（无需重新注入监听器）
   // 必须检查 domReadyRef，否则 webview 未 ready 时 executeJavaScript 会同步抛错导致白屏

@@ -27,6 +27,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
+          webview: resolve(__dirname, 'electron/webview-preload.ts'),
         },
       },
     },

@@ -60,7 +60,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
   })
 
   // ===== 自定义对话脱离窗口管理 IPC（已停用，保留 IPC 通道兼容旧渲染层调用） =====
-  // 4.7 重构后：Alt+Q 改为切换 AI 应用独立窗口（toggleAiAppProviderWindow），
+  // 4.7 重构后：Alt+Q 改为切换 进阶面板（toggleAdvancedPanelWindow），
   // 不再创建/显示旧的 per-provider chat 脱离窗口（mode='chat'）。
   // 各 handler 降级为 no-op / 空返回，避免旧渲染层调用时崩溃。
   // 列出 chat 脱离窗口：始终返回空数组（不再有活跃的 chat 脱离窗口）
@@ -69,7 +69,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
   })
   // 创建 chat 脱离窗口：已停用，返回空字符串（不再创建）
   ipcMain.handle(IPC_CHANNELS.CHAT_CREATE_DETACHED, () => {
-    console.warn('[window-control-ipc] CHAT_CREATE_DETACHED 已停用（4.7 重构），请使用 AI 应用独立窗口')
+    console.warn('[window-control-ipc] CHAT_CREATE_DETACHED 已停用（4.7 重构），请使用 进阶面板')
     return ''
   })
   // 更新 chat 脱离窗口配置：no-op
@@ -89,7 +89,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
   })
   // 显示 chat 脱离窗口：已停用，no-op（不再显示旧的 per-provider chat 窗口）
   ipcMain.handle(IPC_CHANNELS.CHAT_SHOW_DETACHED, (_e, windowId: string) => {
-    console.warn(`[window-control-ipc] CHAT_SHOW_DETACHED 已停用（4.7 重构），windowId=${windowId}，请使用 AI 应用独立窗口`)
+    console.warn(`[window-control-ipc] CHAT_SHOW_DETACHED 已停用（4.7 重构），windowId=${windowId}，请使用 进阶面板`)
   })
   // 获取当前窗口的 chatConfig（ChatView 渲染时调用，保留兼容）
   ipcMain.handle(IPC_CHANNELS.CHAT_GET_CONFIG, (_e, windowId: string) => {

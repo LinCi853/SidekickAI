@@ -129,7 +129,7 @@ export default function InjectionPreviewModal({
           </span>
           <div className="injection-preview-actions" data-name="component.injection-preview.actions">
             <Button
-              variant="text"
+              variant="outline"
               className="injection-preview-btn"
               data-name="component.injection-preview.cancel-button"
               onClick={onCancel}

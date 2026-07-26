@@ -40,8 +40,11 @@ import type {
 import type { BlockRule, BlockRuleType } from '../../../electron/shared/block-rules.types';
 import { generateUniqueName } from '../../../electron/shared/naming';
 import { useToast } from '../../hooks/useToast';
+import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import Button from '../../components/ui/Button';
 import IconButton from '../../components/ui/IconButton';
+import { Combobox } from '../../components/ui';
+import type { ComboboxOption } from '../../components/ui';
 import Toggle from '../../components/ui/Toggle';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import '../PromptLibraryView.css';
@@ -145,6 +148,10 @@ export default function AiAppEditor() {
   const [aiThemeColor, setAiThemeColor] = useState('');
   const [aiPlatformRegion, setAiPlatformRegion] = useState<'cn' | 'global'>('cn');
 
+  // 弹窗白名单编辑（Profile 专属，应用关联域隔离）
+  const [popupWhitelist, setPopupWhitelist] = useState<string[]>([]);
+  const [whitelistInput, setWhitelistInput] = useState('');
+
   // 屏蔽规则编辑草稿
   const [ruleDraft, setRuleDraft] = useState<Omit<BlockRule, 'id' | 'builtin'>>(EMPTY_RULE_DRAFT);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -168,23 +175,16 @@ export default function AiAppEditor() {
     return () => { offPin(); offMax(); };
   }, []);
 
-  // ESC：屏蔽规则表单打开时关闭表单，否则关闭窗口
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  // ESC / Ctrl+W 关窗：屏蔽规则表单打开时 ESC 优先关闭表单，否则关闭窗口
+  useEscToCloseWindow({
+    onEsc: () => {
       if (showRuleForm) {
-        e.preventDefault();
         setShowRuleForm(false);
-      } else {
-        e.preventDefault();
-        void closeCurrentWindow();
+        return true;
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showRuleForm]);
+      return false;
+    },
+  });
 
   // 加载所有数据
   const loadAll = useCallback(async () => {
@@ -213,6 +213,8 @@ export default function AiAppEditor() {
         setAiSendSelector('');
         setAiThemeColor('');
         setAiPlatformRegion('cn');
+        setPopupWhitelist([]);
+        setWhitelistInput('');
         setError(null);
         return;
       }
@@ -246,6 +248,8 @@ export default function AiAppEditor() {
       setAiSendSelector(matchedProfile.aiSendSelector ?? '');
       setAiThemeColor(matchedProfile.aiThemeColor ?? found?.themeColor ?? '');
       setAiPlatformRegion(matchedProfile.aiPlatformRegion ?? found?.region ?? 'cn');
+      setPopupWhitelist(matchedProfile.popupWhitelist ?? []);
+      setWhitelistInput('');
       setError(null);
     } catch (e) {
       console.error('[AiAppEditor] 加载失败:', e);
@@ -272,6 +276,7 @@ export default function AiAppEditor() {
       if (data.profile.aiSendSelector !== undefined) setAiSendSelector(data.profile.aiSendSelector);
       if (data.profile.aiThemeColor !== undefined) setAiThemeColor(data.profile.aiThemeColor);
       if (data.profile.aiPlatformRegion !== undefined) setAiPlatformRegion(data.profile.aiPlatformRegion);
+      if (data.profile.popupWhitelist !== undefined) setPopupWhitelist(data.profile.popupWhitelist);
       // 更新 allProfiles 中的对应项（名称唯一性校验需要最新数据）
       setAllProfiles((prev) => prev.map((p) => (p.id === data.id ? data.profile : p)));
     });
@@ -345,6 +350,7 @@ export default function AiAppEditor() {
         aiSendSelector: aiSendSelector.trim() || undefined,
         aiThemeColor: aiThemeColor.trim() || undefined,
         aiPlatformRegion,
+        popupWhitelist: popupWhitelist.length > 0 ? popupWhitelist : undefined,
       };
 
       if (isCreateMode) {
@@ -360,6 +366,7 @@ export default function AiAppEditor() {
           aiSendSelector: patch.aiSendSelector,
           aiThemeColor: patch.aiThemeColor,
           aiPlatformRegion: patch.aiPlatformRegion,
+          popupWhitelist: patch.popupWhitelist,
         });
         setProfile(created);
         setAllProfiles((prev) => [...prev, created]);
@@ -558,33 +565,43 @@ export default function AiAppEditor() {
           </FieldGroup>
 
           <FieldGroup label="桌面端 UA 预设">
-            <select
-              className="ai-editor-input"
-              value={aiDesktopPreset}
-              onChange={(e) => setAiDesktopPreset(e.target.value)}
-              data-name="ai-app-editor.desktop-preset-select"
-            >
-              {desktopPresets.map((p, idx) => (
-                <option key={p.id} value={p.id} data-name={`ai-app-editor.desktop-preset-option-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <Combobox
+              inputValue={desktopPresets.find((p) => p.id === aiDesktopPreset)?.name ?? ''}
+              onInputChange={() => {}}
+              inputPlaceholder="选择桌面端 UA 预设"
+              inputClassName="ai-editor-input"
+              inputReadOnly
+              options={desktopPresets.map<ComboboxOption>((p, idx) => ({
+                value: p.id,
+                label: p.name,
+                selected: p.id === aiDesktopPreset,
+              }))}
+              onSelect={(v) => setAiDesktopPreset(v)}
+              searchable
+              searchPlaceholder="搜索 UA 预设…"
+              emptyText="无匹配预设"
+              dataName="ai-app-editor.desktop-preset"
+            />
           </FieldGroup>
 
           <FieldGroup label="移动端 UA 预设">
-            <select
-              className="ai-editor-input"
-              value={aiMobilePreset}
-              onChange={(e) => setAiMobilePreset(e.target.value)}
-              data-name="ai-app-editor.mobile-preset-select"
-            >
-              {mobilePresets.map((p, idx) => (
-                <option key={p.id} value={p.id} data-name={`ai-app-editor.mobile-preset-option-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <Combobox
+              inputValue={mobilePresets.find((p) => p.id === aiMobilePreset)?.name ?? ''}
+              onInputChange={() => {}}
+              inputPlaceholder="选择移动端 UA 预设"
+              inputClassName="ai-editor-input"
+              inputReadOnly
+              options={mobilePresets.map<ComboboxOption>((p, idx) => ({
+                value: p.id,
+                label: p.name,
+                selected: p.id === aiMobilePreset,
+              }))}
+              onSelect={(v) => setAiMobilePreset(v)}
+              searchable
+              searchPlaceholder="搜索 UA 预设…"
+              emptyText="无匹配预设"
+              dataName="ai-app-editor.mobile-preset"
+            />
           </FieldGroup>
 
           <FieldGroup label="输入框选择器（留空用平台默认）">
@@ -648,7 +665,7 @@ export default function AiAppEditor() {
                 { value: 'cn', label: '国内' },
                 { value: 'global', label: '国外' },
               ]}
-              className="proxy-mode-group"
+              className="seg-control-row"
             />
           </FieldGroup>
 
@@ -694,8 +711,7 @@ export default function AiAppEditor() {
                     )}
                   </span>
                   <Button
-                    variant="text"
-                    className="block-rule-action-btn btn-secondary-underline"
+                    variant="outline"
                     onClick={() => handleRuleEdit(rule)}
                     style={{ flexShrink: 0 }}
                     data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-edit-button`}
@@ -706,7 +722,7 @@ export default function AiAppEditor() {
                     <Button
                       variant="text"
                       danger
-                      className="block-rule-action-btn btn-secondary-underline danger"
+                      className="btn-secondary-underline danger"
                       onClick={() => void handleRuleDelete(rule.id)}
                       style={{ flexShrink: 0 }}
                       data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-delete-button`}
@@ -785,7 +801,7 @@ export default function AiAppEditor() {
                       保存
                     </Button>
                     <Button
-                      variant="text"
+                      variant="outline"
                       className="prompt-btn"
                       onClick={handleRuleCancel}
                       data-name="ai-app-editor.block-rule-form-cancel-button"
@@ -798,8 +814,7 @@ export default function AiAppEditor() {
 
               {!showRuleForm && (
                 <Button
-                  variant="ghost"
-                  className="block-rule-submit-btn block-rule-add-btn btn-save-primary"
+                  variant="outline"
                   onClick={handleRuleAdd}
                   style={{ alignSelf: 'flex-start' }}
                   data-name="ai-app-editor.block-rule-add-button"
@@ -807,6 +822,88 @@ export default function AiAppEditor() {
                   + 新增屏蔽规则
                 </Button>
               )}
+            </div>
+          </FieldGroup>
+
+          {/* 弹窗白名单（Profile 专属） */}
+          <FieldGroup
+            label="弹窗白名单（应用专属）"
+            hint="允许这些域名弹独立窗口（登录/验证页等）。内置默认登录域（auth/accounts/passport 等）已自动合并，此处只需配置本应用额外的关联域。"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }} data-name="ai-app-editor.popup-whitelist-container">
+              {popupWhitelist.length === 0 && (
+                <div style={{ color: 'var(--muted-foreground)', fontSize: 'var(--text-xs)', padding: 'var(--space-1) 0' }} data-name="ai-app-editor.popup-whitelist-empty">
+                  暂无应用专属白名单（依赖内置默认登录域兜底）
+                </div>
+              )}
+              {popupWhitelist.map((origin, wIdx) => (
+                <div
+                  key={wIdx}
+                  data-name={`ai-app-editor.popup-whitelist-item-${wIdx + 1}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-1)',
+                    padding: 'var(--space-1) var(--space-2)',
+                    background: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 'var(--text-xs)',
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} data-name={`ai-app-editor.popup-whitelist-item-${wIdx + 1}-text`}>
+                    {origin}
+                  </span>
+                  <Button
+                    variant="text"
+                    danger
+                    className="btn-secondary-underline danger"
+                    onClick={() => setPopupWhitelist((prev) => prev.filter((_, i) => i !== wIdx))}
+                    style={{ flexShrink: 0 }}
+                    data-name={`ai-app-editor.popup-whitelist-item-${wIdx + 1}-delete-button`}
+                  >
+                    删除
+                  </Button>
+                </div>
+              ))}
+
+              {/* 新增输入 */}
+              <div style={{ display: 'flex', gap: 'var(--space-1)' }} data-name="ai-app-editor.popup-whitelist-add">
+                <input
+                  type="text"
+                  className="ai-editor-input"
+                  value={whitelistInput}
+                  onChange={(e) => setWhitelistInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const v = whitelistInput.trim();
+                      if (v && !popupWhitelist.includes(v)) {
+                        setPopupWhitelist((prev) => [...prev, v]);
+                        setWhitelistInput('');
+                      }
+                    }
+                  }}
+                  placeholder="https://example.com/"
+                  data-name="ai-app-editor.popup-whitelist-input"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const v = whitelistInput.trim();
+                    if (!v) return;
+                    if (popupWhitelist.includes(v)) {
+                      showToast('该域名已在白名单中');
+                      return;
+                    }
+                    setPopupWhitelist((prev) => [...prev, v]);
+                    setWhitelistInput('');
+                  }}
+                  data-name="ai-app-editor.popup-whitelist-add-button"
+                >
+                  添加
+                </Button>
+              </div>
             </div>
           </FieldGroup>
 
@@ -823,7 +920,7 @@ export default function AiAppEditor() {
             }}
           >
             <Button
-              variant="text"
+              variant="outline"
               className="prompt-btn"
               onClick={handleCancel}
               disabled={saving}
@@ -940,7 +1037,7 @@ function AiAppEditorTitleBar({ title, maximized, isPinned, onMinimize, onMaximiz
 /* =====================================================================
    子组件：字段分组（label + content）
    ===================================================================== */
-function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldGroup({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }} data-name="ai-app-editor.field-group">
       <label
@@ -955,6 +1052,19 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
       >
         {label}
       </label>
+      {hint && (
+        <div
+          data-name="ai-app-editor.field-group-hint"
+          style={{
+            fontSize: 'var(--text-2xs)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.8,
+            lineHeight: 1.4,
+          }}
+        >
+          {hint}
+        </div>
+      )}
       {children}
     </div>
   );

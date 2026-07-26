@@ -211,20 +211,23 @@ function WhiteboardSidebar({ whiteboards, activeId, onSelect, onCreate, onRename
   };
 
   return (
-    <div className="wb-sidebar app-sidebar-narrow">
-      <div className="wb-sidebar-header">
-        <span className="wb-sidebar-title">白板列表</span>
-        <IconButton variant="default" aria-label="新建白板" onClick={onCreate} title="新建白板">
+    <div className="wb-sidebar app-sidebar-narrow" data-name="advanced-panel.wb-sidebar">
+      <div className="wb-sidebar-header" data-name="advanced-panel.wb-sidebar-header">
+        <span className="wb-sidebar-title" data-name="advanced-panel.wb-sidebar-title">白板列表</span>
+        <IconButton variant="default" aria-label="新建白板" onClick={onCreate} title="新建白板" data-name="advanced-panel.wb-sidebar-create-button">
           +
         </IconButton>
       </div>
-      <div className="wb-sidebar-list">
-        {whiteboards.length === 0 && <div className="wb-sidebar-empty app-empty-state">暂无白板</div>}
-        {whiteboards.map((wb) => (
+      <div className="wb-sidebar-list" data-name="advanced-panel.wb-sidebar-list">
+        {whiteboards.length === 0 && <div className="wb-sidebar-empty app-empty-state" data-name="advanced-panel.wb-sidebar-empty">暂无白板</div>}
+        {whiteboards.map((wb, idx) => (
           <div
             key={wb.id}
             className={`wb-sidebar-item sidebar-list-item ${wb.id === activeId ? 'active' : ''}`}
             onClick={() => editingId !== wb.id && onSelect(wb.id)}
+            data-name={`advanced-panel.wb-sidebar-item-${idx + 1}`}
+            data-index={idx + 1}
+            data-id={wb.id}
           >
             {editingId === wb.id ? (
               <input
@@ -240,17 +243,18 @@ function WhiteboardSidebar({ whiteboards, activeId, onSelect, onCreate, onRename
                     setEditingTitle('');
                   }
                 }}
+                data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-rename-input`}
               />
             ) : (
               <>
-                <span className="wb-sidebar-item-title" onDoubleClick={() => handleStartRename(wb)}>
+                <span className="wb-sidebar-item-title" onDoubleClick={() => handleStartRename(wb)} data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-title`}>
                   {wb.title || '未命名白板'}
                 </span>
-                <div className="wb-sidebar-item-actions">
-                  <button className="wb-sidebar-item-btn" onClick={(e) => { e.stopPropagation(); handleStartRename(wb); }} title="重命名">
+                <div className="wb-sidebar-item-actions" data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-actions`}>
+                  <button className="wb-sidebar-item-btn" onClick={(e) => { e.stopPropagation(); handleStartRename(wb); }} title="重命名" aria-label="重命名" data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-rename-button`}>
                     ✎
                   </button>
-                  <button className="wb-sidebar-item-btn danger" onClick={(e) => { e.stopPropagation(); onDelete(wb.id); }} title="删除">
+                  <button className="wb-sidebar-item-btn danger" onClick={(e) => { e.stopPropagation(); onDelete(wb.id); }} title="删除" aria-label="删除白板" data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-delete-button`}>
                     ×
                   </button>
                 </div>
@@ -414,7 +418,7 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
   }, [scheduleSave]);
 
   return (
-    <div className="wb-canvas-wrap">
+    <div className="wb-canvas-wrap" data-name="advanced-panel.wb-canvas">
       <Tldraw
         store={store}
         onMount={handleMount}
@@ -427,7 +431,7 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
 
 // ============================================================================
 // 容器组件：WhiteboardView
-// 架构变更（v0.5.1）：onWhiteboardPushCard 订阅已提升到 AiProviderAppView 顶层，
+// 架构变更（v0.5.1）：onWhiteboardPushCard 订阅已提升到 AdvancedPanelView 顶层，
 // WhiteboardView 通过 forwardRef 暴露 insertCard / switchToWhiteboard / isReady，
 // 供父组件在任意 tab 下统一管理跨窗口推送的卡片。
 // ============================================================================
@@ -448,10 +452,17 @@ interface WhiteboardViewProps {
   onClose?: () => void;
   /** canvas ready 回调（父组件用于发送 ACK） */
   onReady?: () => void;
+  /**
+   * 应用层侧边栏是否可见（默认 false）。
+   *
+   * tldraw 自带的 PageMenu（左下角）已支持多页面切换/新建/删除，
+   * 应用层侧边栏属于冗余设计，默认隐藏；如需传统的列表管理可在设置中开启。
+   */
+  sidebarVisible?: boolean;
 }
 
 const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(function WhiteboardView(
-  { onClose, onReady },
+  { onClose, onReady, sidebarVisible = false },
   ref,
 ) {
   const [whiteboards, setWhiteboards] = useState<WhiteboardMeta[]>([]);
@@ -490,6 +501,13 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
           setActiveId(list[0].id);
           await setActiveWhiteboardId(list[0].id);
           await loadSnapshotFor(list[0].id);
+        } else if (!sidebarVisible) {
+          // 侧边栏隐藏时无白板：自动新建一个，避免用户无入口可点
+          const wb = await createWhiteboard();
+          await refreshList();
+          setActiveId(wb.id);
+          await setActiveWhiteboardId(wb.id);
+          setSnapshot(null);
         }
       } catch (err) {
         console.error('[WhiteboardView] init failed:', err);
@@ -498,7 +516,7 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
         setLoading(false);
       }
     })();
-  }, [refreshList, loadSnapshotFor, showToast]);
+  }, [refreshList, loadSnapshotFor, showToast, sidebarVisible]);
 
   // 新建白板
   const handleCreate = useCallback(async () => {
@@ -581,23 +599,25 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
 
   if (loading) {
     return (
-      <div className="whiteboard-view app-view-root">
-        <div className="whiteboard-empty app-empty-state">加载中…</div>
+      <div className="whiteboard-view app-view-root" data-name="advanced-panel.whiteboard-view-loading">
+        <div className="whiteboard-empty app-empty-state" data-name="advanced-panel.whiteboard-loading-text">加载中…</div>
       </div>
     );
   }
 
   return (
-    <div className="whiteboard-view">
-      <div className="wb-body">
-        <WhiteboardSidebar
-          whiteboards={whiteboards}
-          activeId={activeId}
-          onSelect={handleSelect}
-          onCreate={handleCreate}
-          onRename={handleRename}
-          onDelete={handleDelete}
-        />
+    <div className="whiteboard-view" data-name="advanced-panel.whiteboard-view">
+      <div className="wb-body" data-name="advanced-panel.wb-body">
+        {sidebarVisible && (
+          <WhiteboardSidebar
+            whiteboards={whiteboards}
+            activeId={activeId}
+            onSelect={handleSelect}
+            onCreate={handleCreate}
+            onRename={handleRename}
+            onDelete={handleDelete}
+          />
+        )}
         {activeId ? (
           <WhiteboardCanvas
             key={activeId}
@@ -606,11 +626,11 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
             onReady={handleCanvasReady}
           />
         ) : (
-          <div className="wb-canvas-empty">
-            <div className="wb-canvas-empty-text app-empty-state">
-              点击左侧 "+" 新建白板
+          <div className="wb-canvas-empty" data-name="advanced-panel.wb-canvas-empty">
+            <div className="wb-canvas-empty-text app-empty-state" data-name="advanced-panel.wb-canvas-empty-text">
+              {sidebarVisible ? '点击左侧 "+" 新建白板' : '正在初始化白板…'}
               {onClose && (
-                <button className="wb-canvas-empty-btn" onClick={onClose}>
+                <button className="btn-outline wb-canvas-empty-btn" onClick={onClose} data-name="advanced-panel.wb-canvas-empty-back-button">
                   返回
                 </button>
               )}
@@ -618,7 +638,7 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
           </div>
         )}
       </div>
-      {toast && <div className="whiteboard-toast app-toast">{toast}</div>}
+      {toast && <div className="whiteboard-toast app-toast" data-name="advanced-panel.whiteboard-toast">{toast}</div>}
     </div>
   );
 });

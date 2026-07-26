@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, SegmentedControl, Toggle } from '../../ui';
+import { Button, SegmentedControl, Toggle, SectionTitle } from '../../ui';
 import type { ProxySettings } from '../types';
 import { updateAppSettings, testProxy, applyProxy } from '../../../lib/electron-api';
 import { useDraftState } from '../../../hooks/useDraftState';
@@ -101,14 +101,10 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
 
   return (
     <section data-name="settings.proxy.section">
-      <div className="settings-section-title" data-name="settings.proxy.title">区域与代理</div>
+      <SectionTitle>区域与代理</SectionTitle>
 
       {/* 代理模式 */}
       <div className="proxy-section-block" data-name="settings.proxy.block">
-        <div className="voice-config-name proxy-section-subtitle" data-name="settings.proxy.subtitle">
-          网络代理
-        </div>
-
         {/* 当前生效状态 */}
         <div className="proxy-status-row" data-name="settings.proxy.status-row">
           <span className={`proxy-status-dot mode-${proxyMode}`} data-name="settings.proxy.status-dot" />
@@ -116,7 +112,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
         </div>
 
         <SegmentedControl
-          className="proxy-mode-group"
+          className="seg-control-row"
           name="proxy-mode"
           value={proxyMode}
           onChange={handleModeChange}
@@ -134,7 +130,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
               <label className="proxy-field-label" data-name="settings.proxy.address-label">代理地址</label>
               <input
                 type="text"
-                className="proxy-input input-underline"
+                className="input-underline"
                 placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7891"
                 value={proxyDraft.proxy}
                 onChange={(e) => setProxyDraft({ ...proxyDraft, proxy: e.target.value })}
@@ -145,13 +141,13 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
               />
             </div>
 
-            {/* 认证（可选） */}
+            {/* 认证 */}
             <div className="proxy-field-row" data-name="settings.proxy.auth-row">
               <div className="proxy-field" data-name="settings.proxy.username-field">
-                <label className="proxy-field-label" data-name="settings.proxy.username-label">用户名（可选）</label>
+                <label className="proxy-field-label" data-name="settings.proxy.username-label">用户名</label>
                 <input
                   type="text"
-                  className="proxy-input input-underline"
+                  className="input-underline"
                   placeholder="代理认证用户名"
                   value={proxyDraft.user}
                   onChange={(e) => setProxyDraft({ ...proxyDraft, user: e.target.value })}
@@ -160,10 +156,10 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
                 />
               </div>
               <div className="proxy-field" data-name="settings.proxy.password-field">
-                <label className="proxy-field-label" data-name="settings.proxy.password-label">密码（可选）</label>
+                <label className="proxy-field-label" data-name="settings.proxy.password-label">密码</label>
                 <input
                   type="password"
-                  className="proxy-input input-underline"
+                  className="input-underline"
                   placeholder="代理认证密码"
                   value={proxyDraft.pass}
                   onChange={(e) => setProxyDraft({ ...proxyDraft, pass: e.target.value })}
@@ -178,7 +174,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
               <label className="proxy-field-label" data-name="settings.proxy.bypass-label">绕过列表</label>
               <input
                 type="text"
-                className="proxy-input input-underline"
+                className="input-underline"
                 placeholder="localhost,127.0.0.1,*.local,192.168.*"
                 value={proxyDraft.bypass}
                 onChange={(e) => setProxyDraft({ ...proxyDraft, bypass: e.target.value })}
@@ -187,7 +183,6 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
                 }}
                 data-name="settings.proxy.bypass-input"
               />
-              <div className="proxy-hint" data-name="settings.proxy.bypass-hint">逗号分隔的域名不走代理，留空则全部走代理</div>
             </div>
 
             {/* 操作按钮：保存仅修改时显示，测试始终可用 */}
@@ -204,7 +199,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
                 </Button>
               )}
               <Button
-                variant="text"
+                variant="outline"
                 className="proxy-test-btn btn-secondary-underline"
                 disabled={isTesting}
                 onClick={handleTest}
@@ -241,14 +236,11 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
               data-name="settings.proxy.fallback-toggle"
             />
           </div>
-          <div className="proxy-hint" data-name="settings.proxy.fallback-hint">
-            自定义代理加载失败时，自动切换到兜底模式重新加载（仅临时切换，不修改设置）
-          </div>
           {proxyFallbackEnabled && (
             <div className="proxy-fallback-mode" data-name="settings.proxy.fallback-mode-row">
               <label className="proxy-field-label" data-name="settings.proxy.fallback-mode-label">兜底模式</label>
               <SegmentedControl
-                className="proxy-mode-group"
+                className="seg-control-row"
                 name="proxy-fallback-mode"
                 value={proxyFallbackMode}
                 onChange={async (mode) => {

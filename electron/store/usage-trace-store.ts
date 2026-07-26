@@ -139,7 +139,7 @@ export class UsageTraceStore {
    * 调用方应先检查 usageTrackingEnabled，本方法不做开关判断（保持职责单一）。
    *
    * @param elementName data-name 属性值
-   * @param windowType 窗口类型（'main' | 'chat' | 'prompts' | 'history' | 'ai-app-provider' 等）
+   * @param windowType 窗口类型（'main' | 'chat' | 'prompts' | 'history' | 'advanced-panel' 等）
    * @param detail 可选附加详情（JSON 字符串）
    */
   logClick(elementName: string, windowType: string | null, detail?: unknown): void {

@@ -306,6 +306,28 @@ export function registerProfileIPC(): void {
     broadcastToAllWindows(ipc.PROFILE_REORDERED, orderedIds, 'profile')
     return true
   })
+
+  // 弹窗白名单：将 origin 加入指定 Profile 的专属白名单（Profile.popupWhitelist）
+  // 由渲染层 onPopupDenied 自动触发（用户确认后），或 AiAppEditor 手动添加
+  // 载荷：{ profileId: string, origin: string }
+  ipcMain.handle(ipc.POPUP_WHITELIST_ADD_PROFILE, async (_e, payload: { profileId: string; origin: string }) => {
+    const { profileId, origin } = payload
+    if (!profileId || !origin) return []
+    const profile = profileStore.get(profileId)
+    if (!profile) {
+      console.warn('[profile-store] POPUP_WHITELIST_ADD_PROFILE: 未找到 Profile:', profileId)
+      return []
+    }
+    const current = profile.popupWhitelist ?? []
+    if (!current.includes(origin)) {
+      const next = [...current, origin]
+      const updated = await profileStore.update(profileId, { popupWhitelist: next })
+      // 广播到所有窗口：跨窗口同步 Profile.popupWhitelist（如 AiAppEditor 列表刷新）
+      broadcastToAllWindows(ipc.PROFILE_UPDATED, { id: profileId, profile: updated }, 'profile')
+      console.log('[profile-store] Profile 专属白名单已加白:', profileId, origin)
+    }
+    return profileStore.get(profileId)?.popupWhitelist ?? []
+  })
 }
 
 /**

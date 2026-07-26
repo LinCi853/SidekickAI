@@ -45,7 +45,7 @@ const TOP_BAR_BUTTON_LABELS: Record<TopBarButtonGroup, string> = {
 
 const FEATURE_HIGHLIGHTS: Array<{ title: string; desc: string }> = [
   { title: '多标签聚合', desc: '9 个 AI 平台聚合到一个窄长窗口，标签可脱离为独立窗口' },
-  { title: '全局热键', desc: 'Alt+Space 呼出主窗、Alt+Q 打开 AI 应用管理、Alt+V 后台语音' },
+  { title: '全局热键', desc: 'Alt+Space 呼出主窗、Alt+Q 打开进阶面板、Alt+V 后台语音' },
   { title: '后台语音输入', desc: '按住 Alt+V 直接说话，松开即送，不切窗不打断工作' },
   { title: '8 维指纹伪装', desc: 'Canvas/WebGL/Audio/Fonts 等一致性配置，防关联' },
   { title: '自定义 AI 对话', desc: 'OpenAI/Anthropic/Custom 三协议直连，safeStorage 加密' },
@@ -58,12 +58,12 @@ const WINDOW_TYPES: Array<{ name: string; id: string; desc: string }> = [
   { name: '自定义对话', id: 'mode=chat', desc: 'API 直连 AI 对话' },
   { name: '历史搜索', id: 'mode=history', desc: '全文搜索本地对话' },
   { name: '提示词库', id: 'mode=prompts', desc: '模板管理与注入' },
-  { name: 'AI 应用管理', id: 'mode=ai-app-provider', desc: '自定义供应商/对话管理' },
+  { name: '进阶面板', id: 'mode=advanced-panel', desc: '自定义供应商/对话/白板/笔记' },
 ];
 
 const DEFAULT_GLOBAL_HOTKEYS: Array<{ action: HotkeyAction; label: string; fallback: string }> = [
   { action: 'toggleMainWindow', label: '呼出/隐藏主窗口', fallback: 'Alt+Space' },
-  { action: 'toggleDetachedWindows', label: '打开 AI 应用管理窗口', fallback: 'Alt+Q' },
+  { action: 'toggleDetachedWindows', label: '打开进阶面板', fallback: 'Alt+Q' },
   { action: 'backgroundVoice', label: '后台语音录入（测试）', fallback: 'Alt+V' },
 ];
 

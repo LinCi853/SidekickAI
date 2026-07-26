@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { Button, SegmentedControl } from '../components/ui';
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import {
   listConversations,
   listMessages,
@@ -72,6 +73,18 @@ export default function HistoryView() {
   const [editTitleValue, setEditTitleValue] = useState('');
   const [usageStats, setUsageStats] = useState<{ totalTokens: number; todayTokens: number; todayCount: number } | null>(null);
   const importMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // ESC / Ctrl+W 关窗：导入菜单展开时 ESC 优先收起菜单，否则关闭窗口
+  // 注：消息/标题编辑态的 ESC 由各自 input/textarea 自行处理；hook 默认跳过输入框聚焦
+  useEscToCloseWindow({
+    onEsc: () => {
+      if (showImportMenu) {
+        setShowImportMenu(false);
+        return true;
+      }
+      return false;
+    },
+  });
 
   // 初始化：加载对话列表 + 登录/窗口痕迹
   useEffect(() => {
@@ -564,10 +577,10 @@ export default function HistoryView() {
                         autoFocus
                       />
                       <div className="history-detail-actions" data-name="history.detail.edit-title-actions">
-                        <Button type="button" variant="text" className="history-detail-btn" onClick={handleCancelEditTitle}>
+                        <Button type="button" variant="outline" className="history-detail-btn" onClick={handleCancelEditTitle}>
                           取消
                         </Button>
-                        <Button type="button" variant="text" className="history-detail-btn" onClick={() => void handleSaveTitle()}>
+                        <Button type="button" variant="outline" className="history-detail-btn" onClick={() => void handleSaveTitle()}>
                           保存
                         </Button>
                       </div>
@@ -605,10 +618,10 @@ export default function HistoryView() {
                         </span>
                       )}
                       <div className="history-detail-actions" data-name="history.detail.actions">
-                        <Button type="button" variant="text" className="history-detail-btn" onClick={() => void handleExport(selectedConv.id, 'md')}>
+                        <Button type="button" variant="outline" className="history-detail-btn" onClick={() => void handleExport(selectedConv.id, 'md')}>
                           导出 MD
                         </Button>
-                        <Button type="button" variant="text" className="history-detail-btn" onClick={() => void handleExport(selectedConv.id, 'json')}>
+                        <Button type="button" variant="outline" className="history-detail-btn" onClick={() => void handleExport(selectedConv.id, 'json')}>
                           导出 JSON
                         </Button>
                         <Button type="button" variant="text" danger className="history-detail-btn danger" onClick={() => void handleDeleteConv(selectedConv.id)}>
@@ -641,7 +654,7 @@ export default function HistoryView() {
                             autoFocus
                           />
                           <div className="msg-edit-actions" data-name="history.detail.msg-edit-actions">
-                            <Button type="button" variant="text" className="msg-edit-btn" onClick={handleCancelEditMsg}>
+                            <Button type="button" variant="outline" className="msg-edit-btn" onClick={handleCancelEditMsg}>
                               取消
                             </Button>
                             <Button type="button" variant="primary-compact" className="msg-edit-btn primary" onClick={() => void handleSaveEditMsg()}>
@@ -656,12 +669,12 @@ export default function HistoryView() {
                             <div className="history-msg-meta" data-name="history.detail.msg-meta">tokens: {m.tokens} · {formatTime(m.createdAt, 'datetime')}</div>
                           )}
                           <div className="msg-actions" data-name="history.detail.msg-actions">
-                            <Button type="button" variant="text" className="msg-action-btn" onClick={() => handleStartEditMsg(m)}>
+                            <Button type="button" variant="outline" className="msg-action-btn" onClick={() => handleStartEditMsg(m)}>
                               编辑
                             </Button>
                             <Button
                               type="button"
-                              variant="text"
+                              variant="outline"
                               className="msg-action-btn"
                               onClick={() => void pushCardToWhiteboard({
                                 type: 'ai-reply',

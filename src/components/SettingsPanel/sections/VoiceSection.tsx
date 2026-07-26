@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { VoiceSettings } from '../types';
-import { Button, SegmentedControl, FormRow, SectionTitle } from '../../ui';
+import { Button, SegmentedControl, FormRow, SectionTitle, Combobox } from '../../ui';
+import type { ComboboxOption } from '../../ui';
 import {
   setVoiceConfig,
   listDownloadedModels,
@@ -379,49 +380,59 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
       </SectionTitle>
       {!collapsed && (
         <>
-      <div className="voice-config-name voice-section-subtitle" data-name="settings.voice.engine-subtitle">
-        识别引擎
-      </div>
-      <SegmentedControl
-        className="voice-mode-group"
-        name="stt-mode"
-        value={voiceSttMode}
-        onChange={handleModeChange}
-        options={[
-          { value: 'builtin', label: '内置识别' },
-          { value: 'ai', label: '自定义 AI 接入' },
-          { value: 'local', label: '本地识别软件' },
-          { value: 'download', label: '轻量级下载' },
-        ]}
-      />
+      <FormRow stack label="识别引擎">
+        <SegmentedControl
+          className="voice-mode-group"
+          name="stt-mode"
+          value={voiceSttMode}
+          onChange={handleModeChange}
+          options={[
+            { value: 'builtin', label: '内置识别' },
+            { value: 'ai', label: '自定义 AI 接入' },
+            { value: 'local', label: '本地识别软件' },
+            { value: 'download', label: '轻量级下载' },
+          ]}
+        />
+      </FormRow>
 
       {/* 麦克风设备选择（所有非 builtin 模式都需要） */}
       {voiceSttMode !== 'builtin' && (
         <div className="voice-mode-panel" data-name="settings.voice.mic-panel">
           <FormRow stack label="麦克风设备">
-            <select
-              className="voice-select input-underline"
-              value={voiceInputDeviceId}
-              onChange={async (e) => {
-                const next = e.target.value;
-                setVoiceInputDeviceId(next);
+            <Combobox
+              inputValue={
+                voiceInputDeviceId === ''
+                  ? '系统默认麦克风'
+                  : inputDeviceList.find((d) => d.deviceId === voiceInputDeviceId)?.label
+                    ?? `未命名设备 (${voiceInputDeviceId.slice(0, 12)}...)`
+              }
+              onInputChange={() => {}}
+              inputPlaceholder="选择麦克风设备"
+              inputClassName="input-underline"
+              inputReadOnly
+              options={[
+                { value: '', label: '系统默认麦克风', selected: voiceInputDeviceId === '' },
+                ...inputDeviceList.map<ComboboxOption>((d, idx) => ({
+                  value: d.deviceId,
+                  label: d.label || `未命名设备 (${d.deviceId.slice(0, 12)}...)`,
+                  selected: d.deviceId === voiceInputDeviceId,
+                })),
+              ]}
+              onSelect={async (v) => {
+                setVoiceInputDeviceId(v);
                 try {
-                  await setVoiceConfig({ inputDeviceId: next });
+                  await setVoiceConfig({ inputDeviceId: v });
                 } catch (err) {
                   console.error('保存麦克风设备失败:', err);
                 }
               }}
-              data-name="settings.voice.mic-select"
-            >
-              <option value="" data-name="settings.voice.mic-option-1">系统默认麦克风</option>
-              {inputDeviceList.map((d, idx) => (
-                <option key={d.deviceId} value={d.deviceId} data-name={`settings.voice.mic-option-${idx + 2}`}>
-                  {d.label || `未命名设备 (${d.deviceId.slice(0, 12)}...)`}
-                </option>
-              ))}
-            </select>
+              searchable
+              searchPlaceholder="搜索设备…"
+              emptyText="无匹配设备"
+              dataName="settings.voice.mic-select"
+            />
             <Button
-              variant="text"
+              variant="outline"
               className="voice-btn-secondary btn-secondary-underline"
               onClick={refreshDevices}
               disabled={refreshingDevices}
@@ -432,8 +443,8 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
           </FormRow>
           <div className="voice-field-hint" data-name="settings.voice.mic-hint">
             {inputDeviceList.length === 0
-              ? '未找到麦克风设备，请确认已授权麦克风权限后点击刷新'
-              : `共检测到 ${inputDeviceList.length} 个麦克风；选错设备会导致录音静默或识别失败`}
+              ? '未找到麦克风设备，请确认权限后点击刷新'
+              : `共检测到 ${inputDeviceList.length} 个麦克风`}
           </div>
         </div>
       )}
@@ -472,44 +483,76 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
             {({ draft, setDraft }) => (
               <>
                 <FormRow stack label="服务商">
-                  <select
-                    className="voice-select input-underline"
-                    value={draft.provider}
-                    onChange={(e) => setDraft({ provider: e.target.value })}
-                    data-name="settings.voice.ai-provider-select"
-                  >
-                    <option value="openai" data-name="settings.voice.ai-provider-option-1">OpenAI (Whisper API)</option>
-                    <option value="azure" data-name="settings.voice.ai-provider-option-2">Azure Speech</option>
-                    <option value="google" data-name="settings.voice.ai-provider-option-3">Google Cloud Speech</option>
-                    <option value="custom" data-name="settings.voice.ai-provider-option-4">自定义兼容接口</option>
-                    {sttProviders.map((p, idx) => (
-                      <option key={p.id} value={p.id} data-name={`settings.voice.ai-provider-option-custom-${idx + 1}`}>
-                        {p.name}（自定义）
-                      </option>
-                    ))}
-                  </select>
+                  <Combobox
+                    inputValue={(() => {
+                      const builtin: Record<string, string> = {
+                        openai: 'OpenAI (Whisper API)',
+                        azure: 'Azure Speech',
+                        google: 'Google Cloud Speech',
+                        custom: '自定义兼容接口',
+                      };
+                      if (builtin[draft.provider]) return builtin[draft.provider];
+                      const p = sttProviders.find((x) => x.id === draft.provider);
+                      return p ? `${p.name}（自定义）` : '';
+                    })()}
+                    onInputChange={() => {}}
+                    inputPlaceholder="选择服务商"
+                    inputClassName="input-underline"
+                    inputReadOnly
+                    options={[
+                      { value: 'openai', label: 'OpenAI (Whisper API)', selected: draft.provider === 'openai' },
+                      { value: 'azure', label: 'Azure Speech', selected: draft.provider === 'azure' },
+                      { value: 'google', label: 'Google Cloud Speech', selected: draft.provider === 'google' },
+                      { value: 'custom', label: '自定义兼容接口', selected: draft.provider === 'custom' },
+                      ...sttProviders.map<ComboboxOption>((p, idx) => ({
+                        value: p.id,
+                        label: `${p.name}（自定义）`,
+                        selected: p.id === draft.provider,
+                      })),
+                    ]}
+                    onSelect={(v) => setDraft({ provider: v })}
+                    searchable
+                    searchPlaceholder="搜索服务商…"
+                    emptyText="无匹配项"
+                    dataName="settings.voice.ai-provider-select"
+                  />
                 </FormRow>
                 <FormRow stack label="识别语言">
-                  <select
-                    className="voice-select input-underline"
-                    value={voiceLanguage}
-                    onChange={async (e) => {
-                      const next = e.target.value
-                      setVoiceLanguage(next)
+                  <Combobox
+                    inputValue={(() => {
+                      const map: Record<string, string> = {
+                        zh: '中文（普通话）',
+                        en: '英文',
+                        ja: '日文',
+                        ko: '韩文',
+                        auto: '自动判断',
+                      };
+                      return map[voiceLanguage] ?? '';
+                    })()}
+                    onInputChange={() => {}}
+                    inputPlaceholder="选择识别语言"
+                    inputClassName="input-underline"
+                    inputReadOnly
+                    options={[
+                      { value: 'zh', label: '中文（普通话）', selected: voiceLanguage === 'zh' },
+                      { value: 'en', label: '英文', selected: voiceLanguage === 'en' },
+                      { value: 'ja', label: '日文', selected: voiceLanguage === 'ja' },
+                      { value: 'ko', label: '韩文', selected: voiceLanguage === 'ko' },
+                      { value: 'auto', label: '自动判断', selected: voiceLanguage === 'auto' },
+                    ]}
+                    onSelect={async (v) => {
+                      setVoiceLanguage(v);
                       try {
-                        await setVoiceConfig({ language: next })
+                        await setVoiceConfig({ language: v });
                       } catch (err) {
-                        console.error('保存识别语言失败:', err)
+                        console.error('保存识别语言失败:', err);
                       }
                     }}
-                    data-name="settings.voice.ai-language-select"
-                  >
-                    <option value="zh" data-name="settings.voice.ai-language-option-1">中文（普通话）</option>
-                    <option value="en" data-name="settings.voice.ai-language-option-2">英文</option>
-                    <option value="ja" data-name="settings.voice.ai-language-option-3">日文</option>
-                    <option value="ko" data-name="settings.voice.ai-language-option-4">韩文</option>
-                    <option value="auto" data-name="settings.voice.ai-language-option-5">自动判断</option>
-                  </select>
+                    searchable
+                    searchPlaceholder="搜索语言…"
+                    emptyText="无匹配项"
+                    dataName="settings.voice.ai-language-select"
+                  />
                 </FormRow>
               </>
             )}
@@ -540,7 +583,7 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
                 <FormRow stack label="可执行文件路径">
                   <input
                     type="text"
-                    className="voice-input input-underline"
+                    className="input-underline"
                     placeholder="C:\whisper\whisper.exe 或 /usr/local/bin/whisper"
                     value={draft.exePath}
                     onChange={(e) => setDraft({ ...draft, exePath: e.target.value })}
@@ -550,7 +593,7 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
                 <FormRow stack label="启动参数">
                   <input
                     type="text"
-                    className="voice-input input-underline"
+                    className="input-underline"
                     placeholder="-m model.bin -l zh --output-txt"
                     value={draft.args}
                     onChange={(e) => setDraft({ ...draft, args: e.target.value })}
@@ -681,11 +724,7 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
                 />
               </div>
             )}
-            <div className="form-row stack compact" style={{ marginTop: 'var(--space-1)' }} data-name="settings.voice.cli-block">
-              {/* 关键修复：CLI 已就绪时不再显示"运行下载模型所必需"提示，
-                  避免与"已就绪"标签形成"已就绪/仍提示需要下载"的认知冲突。
-                  useState 初值直接来自 cfg.cliExists（主进程 getVoiceConfig 主动扫描），
-                  无中间态，打开设置页瞬间就是真实状态。 */}
+            <div className="form-row stack compact voice-cli-block" data-name="settings.voice.cli-block">
               {cliDownloadStatus === 'idle' && (
                 <Button
                   variant="primary-compact"
@@ -739,7 +778,7 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
                     </div>
                   )}
                   <div className="voice-field-hint cli-tip" data-name="settings.voice.cli-tip">
-                    提示：whisper-cli 国内下载常被墙，建议改用「自定义 AI 接入」模式（默认 Mimo API）
+                    国内下载常被墙，可改用「自定义 AI 接入」
                   </div>
                 </div>
               )}
@@ -749,9 +788,7 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
       )}
 
       {/* v0.5.2 B-3：TTS（语音合成）独立 section */}
-      <div className="voice-config-name voice-section-subtitle" data-name="settings.voice.tts-subtitle">
-        语音合成（TTS）
-      </div>
+      <SectionTitle className="section-title-spacer">语音合成</SectionTitle>
       <div className="voice-mode-panel" data-name="settings.voice.tts-panel">
         <FormRow stack label="合成模式">
           <SegmentedControl
@@ -810,20 +847,35 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
           >
             {({ draft, setDraft }) => (
               <FormRow stack label="服务商">
-                <select
-                  className="voice-select input-underline"
-                  value={draft.provider}
-                  onChange={(e) => setDraft({ provider: e.target.value })}
-                  data-name="settings.voice.tts-provider-select"
-                >
-                  <option value="openai" data-name="settings.voice.tts-provider-option-1">OpenAI (TTS API)</option>
-                  <option value="custom" data-name="settings.voice.tts-provider-option-2">自定义兼容接口</option>
-                  {ttsProviders.map((p, idx) => (
-                    <option key={p.id} value={p.id} data-name={`settings.voice.tts-provider-option-custom-${idx + 1}`}>
-                      {p.name}（自定义）
-                    </option>
-                  ))}
-                </select>
+                <Combobox
+                  inputValue={(() => {
+                    const builtin: Record<string, string> = {
+                      openai: 'OpenAI (TTS API)',
+                      custom: '自定义兼容接口',
+                    };
+                    if (builtin[draft.provider]) return builtin[draft.provider];
+                    const p = ttsProviders.find((x) => x.id === draft.provider);
+                    return p ? `${p.name}（自定义）` : '';
+                  })()}
+                  onInputChange={() => {}}
+                  inputPlaceholder="选择服务商"
+                  inputClassName="input-underline"
+                  inputReadOnly
+                  options={[
+                    { value: 'openai', label: 'OpenAI (TTS API)', selected: draft.provider === 'openai' },
+                    { value: 'custom', label: '自定义兼容接口', selected: draft.provider === 'custom' },
+                    ...ttsProviders.map<ComboboxOption>((p, idx) => ({
+                      value: p.id,
+                      label: `${p.name}（自定义）`,
+                      selected: p.id === draft.provider,
+                    })),
+                  ]}
+                  onSelect={(v) => setDraft({ provider: v })}
+                  searchable
+                  searchPlaceholder="搜索服务商…"
+                  emptyText="无匹配项"
+                  dataName="settings.voice.tts-provider-select"
+                />
               </FormRow>
             )}
           </VoiceProviderConfig>
@@ -832,11 +884,21 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
 
       {/* 上屏方式：候选窗已移除，全部自动上屏以减少操作步骤 */}
       <FormRow stack label="识别后上屏方式">
-        <select
-          className="voice-select input-underline"
-          value={voiceConfirmMode === 'manual' ? 'auto' : voiceConfirmMode}
-          onChange={async (e) => {
-            const next = e.target.value as ConfirmMode;
+        <Combobox
+          inputValue={(() => {
+            const mode = voiceConfirmMode === 'manual' ? 'auto' : voiceConfirmMode;
+            return mode === 'auto' ? '自动上屏（前台注入 / 后台粘贴）' : '仅复制到剪贴板（手动粘贴）';
+          })()}
+          onInputChange={() => {}}
+          inputPlaceholder="选择上屏方式"
+          inputClassName="input-underline"
+          inputReadOnly
+          options={[
+            { value: 'auto', label: '自动上屏（前台注入 / 后台粘贴）', selected: (voiceConfirmMode === 'manual' ? 'auto' : voiceConfirmMode) === 'auto' },
+            { value: 'clipboard', label: '仅复制到剪贴板（手动粘贴）', selected: voiceConfirmMode === 'clipboard' },
+          ]}
+          onSelect={async (v) => {
+            const next = v as ConfirmMode;
             setVoiceConfirmMode(next);
             try {
               await setVoiceConfig({ confirmMode: next });
@@ -845,11 +907,9 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
               setVoiceConfirmMode(voiceConfirmMode);
             }
           }}
-          data-name="settings.voice.confirm-mode-select"
-        >
-          <option value="auto" data-name="settings.voice.confirm-mode-option-1">自动上屏（前台注入 / 后台粘贴）</option>
-          <option value="clipboard" data-name="settings.voice.confirm-mode-option-2">仅复制到剪贴板（手动粘贴）</option>
-        </select>
+          searchable={false}
+          dataName="settings.voice.confirm-mode-select"
+        />
       </FormRow>
       {voiceConfirmMode !== 'clipboard' && (
         <label className="voice-field-hint voice-enter-send-label" data-name="settings.voice.enter-send-label">

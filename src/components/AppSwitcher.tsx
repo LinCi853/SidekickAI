@@ -1,9 +1,8 @@
 /* =====================================================================
    components/AppSwitcher.tsx —— 应用切换下拉菜单
-   点击顶栏图标展开，按使用频率分组显示：
-   1. AI 应用 —— 常用自定义 AI Provider（7天内）+ 内置 AI 平台，统一展示
-   2. 其他 AI —— 从未使用或超过7天未使用的自定义 AI Provider（排在最后）
-   自定义供应商点击打开 AI 应用独立窗口；内置平台点击切换/新建标签。
+   点击顶栏图标展开，AI 应用按最近使用时间排序：
+   自定义 AI Provider（最近使用优先）+ 内置 AI 平台，统一展示。
+   自定义供应商点击打开 进阶面板；内置平台点击切换/新建标签。
    平台列表由父组件（MainView）过滤后传入，保证与底栏同步。
    ===================================================================== */
 
@@ -12,18 +11,16 @@ import { createPortal } from 'react-dom';
 import type { AIPlatform, CustomAIProvider, Profile } from '../lib/electron-api';
 import {
   listAIProviders,
-  openAiAppProviderWindow,
+  openAdvancedPanelWindow,
 } from '../lib/electron-api';
 import { onWindowHidden } from '../lib/electron-api/window';
 import { useProfileStore } from '../store/useProfileStore';
 import { useTabStore } from '../store/useTabStore';
 import { findAiAppProfiles } from '../lib/shared-utils';
 import { useAiAppDrag } from '../hooks/useAiAppDrag';
+import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 import { getPlatformColors } from '../pages/MainView/utils';
 import './AppSwitcher.css';
-
-/** 7 天毫秒数：超过该时长未使用视为"最近未使用"，排序时落在最后 */
-const RECENT_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
 
 /** pending 关闭确认超时时间（ms）：超时未第二次点击则取消关闭 */
 const PENDING_CLOSE_TIMEOUT_MS = 3000
@@ -106,6 +103,9 @@ export default function AppSwitcher({
     return () => { off(); };
   }, []);
 
+  // ESC 关闭下拉菜单
+  useEscToCloseOverlay(isOpen, () => setIsOpen(false));
+
   // 当前激活 tab 对应的内置 AI 平台（用于左上角按钮显示首字母 + 主题色背景）
   const activePlatform = useMemo(() => {
     if (!activeTabId) return undefined;
@@ -159,16 +159,9 @@ export default function AppSwitcher({
   // 拖拽排序 hook（onDrop 时调用 useProfileStore.reorderProfiles 持久化）
   const { draggingId, hoverId, onDragStart, onDragOver, onDrop, onDragEnd } = useAiAppDrag(aiAppProfiles);
 
-  // 自定义 AI Provider 按使用频率分组：常用（7天内）+ 非常用，均展示在 AI 应用 section 内（不单独分组）
-  const { frequentlyUsedProviders, rarelyUsedProviders } = useMemo(() => {
-    const now = Date.now()
-    const frequentlyUsed = aiProviders
-      .filter((p) => p.lastUsedAt != null && now - p.lastUsedAt < RECENT_THRESHOLD_MS)
-      .sort((a, b) => (b.lastUsedAt ?? -1) - (a.lastUsedAt ?? -1))
-    const rarelyUsed = aiProviders
-      .filter((p) => p.lastUsedAt == null || now - p.lastUsedAt >= RECENT_THRESHOLD_MS)
-      .sort((a, b) => (b.lastUsedAt ?? -1) - (a.lastUsedAt ?? -1))
-    return { frequentlyUsedProviders: frequentlyUsed, rarelyUsedProviders: rarelyUsed }
+  // 自定义 AI Provider 按最近使用时间排序（最近使用的排在前面）
+  const sortedProviders = useMemo(() => {
+    return [...aiProviders].sort((a, b) => (b.lastUsedAt ?? -1) - (a.lastUsedAt ?? -1));
   }, [aiProviders]);
 
   // 点击应用：统一走 onAppClick 回调（与底栏完全等价的打开/关闭规则，含 appClickBehavior）
@@ -216,11 +209,11 @@ export default function AppSwitcher({
   };
 
   /**
-   * 点击自定义 AI Provider：打开 AI 应用独立窗口（单例），可选定位到该供应商。
+   * 点击自定义 AI Provider：打开 进阶面板（单例），可选定位到该供应商。
    */
   const handleOpenProvider = (provider: CustomAIProvider) => {
-    void openAiAppProviderWindow(provider.id).catch((e) =>
-      console.error('[AppSwitcher] 打开 AI 应用独立窗口失败:', e),
+    void openAdvancedPanelWindow(provider.id).catch((e) =>
+      console.error('[AppSwitcher] 打开 进阶面板失败:', e),
     );
     setIsOpen(false);
   };
@@ -267,7 +260,7 @@ export default function AppSwitcher({
           >
             AI 应用
           </div>
-          {frequentlyUsedProviders.length === 0 && rarelyUsedProviders.length === 0 && aiAppProfiles.length === 0 ? (
+          {sortedProviders.length === 0 && aiAppProfiles.length === 0 ? (
             <div
               className="app-switcher-empty"
               data-name="component.app-switcher.empty"
@@ -276,8 +269,8 @@ export default function AppSwitcher({
             </div>
           ) : (
             <>
-              {/* 常用自定义 AI 供应商（虚线边框区分） */}
-              {frequentlyUsedProviders.map((p, idx) => {
+              {/* 自定义 AI 供应商（按最近使用排序） */}
+              {sortedProviders.map((p, idx) => {
                 const accent = p.apiEndpoint.includes('mimo') || p.model.includes('mimo')
                   ? 'var(--accent-bright)'
                   : 'var(--info)';
@@ -286,7 +279,7 @@ export default function AppSwitcher({
                     key={p.id}
                     type="button"
                     className="app-switcher-item chat"
-                    data-name={`component.app-switcher.frequent-app-item-${idx + 1}`}
+                    data-name={`component.app-switcher.provider-item-${idx + 1}`}
                     data-index={idx + 1}
                     data-id={p.id}
                     onClick={() => handleOpenProvider(p)}
@@ -294,7 +287,7 @@ export default function AppSwitcher({
                   >
                     <span
                       className="app-switcher-item-icon"
-                      data-name={`component.app-switcher.frequent-app-item-icon-${idx + 1}`}
+                      data-name={`component.app-switcher.provider-item-icon-${idx + 1}`}
                       style={{ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 87%, transparent))` }}
                       aria-hidden="true"
                     >
@@ -302,7 +295,7 @@ export default function AppSwitcher({
                     </span>
                     <span
                       className="app-switcher-item-name"
-                      data-name={`component.app-switcher.frequent-app-item-name-${idx + 1}`}
+                      data-name={`component.app-switcher.provider-item-name-${idx + 1}`}
                     >
                       {p.name}
                     </span>
@@ -392,40 +385,6 @@ export default function AppSwitcher({
                         </svg>
                       </span>
                     )}
-                  </button>
-                );
-              })}
-
-              {/* 非常用自定义 AI 供应商（从未使用或超过7天未使用的）—— 合并到 AI 应用 section 内，不单独分组 */}
-              {rarelyUsedProviders.map((p, idx) => {
-                const accent = p.apiEndpoint.includes('mimo') || p.model.includes('mimo')
-                  ? 'var(--accent-bright)'
-                  : 'var(--info)';
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="app-switcher-item chat"
-                    data-name={`component.app-switcher.rare-app-item-${idx + 1}`}
-                    data-index={idx + 1}
-                    data-id={p.id}
-                    onClick={() => handleOpenProvider(p)}
-                    title={`打开「${p.name}」（${p.model}）`}
-                  >
-                    <span
-                      className="app-switcher-item-icon"
-                      data-name={`component.app-switcher.rare-app-item-icon-${idx + 1}`}
-                      style={{ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 87%, transparent))` }}
-                      aria-hidden="true"
-                    >
-                      {p.name.charAt(0).toUpperCase()}
-                    </span>
-                    <span
-                      className="app-switcher-item-name"
-                      data-name={`component.app-switcher.rare-app-item-name-${idx + 1}`}
-                    >
-                      {p.name}
-                    </span>
                   </button>
                 );
               })}

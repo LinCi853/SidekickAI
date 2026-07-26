@@ -30,6 +30,9 @@ export type { TitleBarProps } from './TitleBar';
 export { default as Modal } from './Modal';
 export type { ModalProps } from './Modal';
 
+export { default as Combobox } from './Combobox';
+export type { ComboboxOption, ComboboxProps } from './Combobox';
+
 export { default as HotkeyRecorder } from './HotkeyRecorder';
 export type { HotkeyRecorderProps, OtherHotkey } from './HotkeyRecorder';
 

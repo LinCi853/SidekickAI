@@ -33,85 +33,8 @@
 .prompt-add:hover { color: var(--accent-bright); border-color: var(--accent-50); background: var(--accent-10); }
 .prompt-empty { color: var(--text-muted); font-size: var(--text-sm); padding: var(--space-1) 0; }
 
-/* 编辑器弹窗（新增/编辑提示词）—— 默认隐藏，.is-open 时显示 */
-.prompt-overlay {
-  position: fixed; inset: 0; z-index: 420;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out);
-  padding: var(--space-4);
-}
-.prompt-overlay.is-open { opacity: 1; pointer-events: auto; }
-.prompt-editor {
-  width: 90%; max-width: 480px; max-height: 100%;
-  background: var(--card); border: 1px solid var(--glass-bd);
-  border-radius: var(--radius-md); box-shadow: var(--shadow-card);
-  display: flex; flex-direction: column; overflow: hidden;
-  transform: scale(0.95);
-  transition: transform var(--duration-normal) var(--ease-out);
-}
-.prompt-overlay.is-open .prompt-editor { transform: scale(1); }
-.prompt-editor-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--glass-bd);
-  flex: none;
-}
-.prompt-editor-header h3 { font-family: var(--font-sans); font-size: var(--text-lg); font-weight: 600; margin: 0; }
-.prompt-editor-close {
-  width: var(--titlebar-icon); height: var(--titlebar-icon);
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: var(--radius-sm); border: 0; background: transparent;
-  color: var(--muted-foreground); cursor: pointer; padding: 0;
-}
-.prompt-editor-close:hover { background: var(--accent-10); color: var(--foreground); }
-.prompt-editor-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; flex: 1 1 auto; min-height: 0; }
-.prompt-field { display: flex; flex-direction: column; gap: var(--space-1); }
-.prompt-field label { font-size: var(--text-xs); color: var(--muted-foreground); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
-.prompt-field input, .prompt-field textarea {
-  background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3); color: var(--foreground); font-family: var(--font-sans); font-size: var(--text-sm);
-  outline: none; transition: border-color var(--duration-fast) var(--ease-out);
-  width: 100%; box-sizing: border-box;
-}
-.prompt-field input:focus, .prompt-field textarea:focus { border-color: var(--accent-bright); }
-.prompt-field textarea { resize: vertical; min-height: var(--space-24); line-height: 1.5; }
-.prompt-category-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-.prompt-category-chips input {
-  flex: 1;
-  min-width: 120px;
-}
-/* 需求 1：注入位置 SegmentedControl + 占位符说明 */
-.prompt-segmented {
-  display: flex; gap: var(--space-1); padding: var(--space-1);
-  background: var(--background); border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.prompt-segmented-item {
-  flex: 1; padding: var(--space-1) var(--space-2);
-  background: transparent; border: 0; border-radius: var(--radius-xs);
-  color: var(--muted-foreground); font-family: var(--font-sans); font-size: var(--text-xs);
-  cursor: pointer; transition: all var(--duration-fast) var(--ease-out);
-  min-height: 0; line-height: 1.4;
-}
-.prompt-segmented-item:hover { background: var(--accent-10); color: var(--foreground); }
-.prompt-segmented-item.active { background: var(--accent); color: var(--foreground-inverse); }
-.prompt-field-hint {
-  font-size: var(--text-xs); color: var(--text-muted);
-  font-family: var(--font-sans); line-height: 1.5;
-  padding: var(--space-1) var(--space-2); background: var(--glass-bg-2);
-  border-radius: var(--radius-xs);
-}
-.prompt-field-hint code {
-  font-family: var(--font-mono); color: var(--accent-bright);
-  background: var(--background); padding: 0 var(--space-0-5);
-  border-radius: var(--radius-xs);
-}
+/* 编辑器弹窗样式已迁移到 pages/PromptLibraryView.css（统一新版设计令牌） */
+
 /* 需求 2.5：HotkeyRecorder 录制中/错误状态 */
 .prompt-hotkey-input.is-recording {
   border-color: var(--accent-bright);

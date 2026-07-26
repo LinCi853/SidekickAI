@@ -36,6 +36,11 @@
   max-width: calc(var(--titlebar-icon) * 5.7);
   cursor: pointer;
 }
+/* Provider 切换 Combobox 容器：限定宽度，避免撑开顶栏 */
+.chat-top-drag .combobox {
+  width: auto;
+  max-width: calc(var(--titlebar-icon) * 5.7);
+}
 .chat-usage-badge {
   -webkit-app-region: no-drag;
   app-region: no-drag;
@@ -92,25 +97,8 @@
 }
 .chat-new-btn {
   flex: 1;
-  padding: var(--space-1) var(--space-2);
   min-height: 0;
-  background: var(--accent);
-  color: var(--foreground-inverse);
-  border: 0;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: 1.4;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--duration-fast);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-}
-.chat-new-btn:hover {
-  background: var(--accent-bright);
+  /* 视觉样式由 .btn-outline 提供 */
 }
 .chat-conv-list {
   flex: 1 1 auto;

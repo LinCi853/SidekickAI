@@ -75,10 +75,6 @@ export default function HotkeySection({
       >
         全局热键
       </SectionTitle>
-      {/* 需求 2.5：提示词库内自定义快捷键的说明 */}
-      <div className="hotkey-section-hint" data-name="settings.hotkey.prompt-hint">
-        提示词库内自定义快捷键在此不显示，请在提示词库编辑中管理
-      </div>
       <div className="hotkey-list" data-name="settings.hotkey.hotkey-list">
         {hotkeys.map((h, idx) => {
           const draft = drafts[h.action] ?? '';
@@ -99,15 +95,6 @@ export default function HotkeySection({
                   {isTestFeature && (
                     <span
                       className="hotkey-item-badge"
-                      style={{
-                        marginLeft: '6px',
-                        fontSize: '10px',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: 'var(--warning, #f59e0b)',
-                        color: '#fff',
-                        verticalAlign: 'middle',
-                      }}
                       data-name={`settings.hotkey.hotkey-item-${idx + 1}-badge`}
                     >
                       测试
@@ -134,7 +121,7 @@ export default function HotkeySection({
                 <HotkeyRecorder
                   value={draft}
                   placeholder={h.accelerator || 'Alt+Space'}
-                  className="hotkey-input input-underline"
+                  className="input-underline"
                   onRecord={(acc) => setDrafts((p) => ({ ...p, [h.action]: acc }))}
                   otherHotkeys={hotkeys
                     .filter((other) => other.action !== h.action)
@@ -163,24 +150,18 @@ export default function HotkeySection({
         })}
       </div>
       {altSpaceResetThreshold !== undefined && onAltSpaceThresholdChange && (
-        <div className="proxy-custom-block" data-name="settings.hotkey.alt-space-block">
-          <div className="voice-config-name voice-section-subtitle" data-name="settings.hotkey.alt-space-subtitle">
-            Alt+Space 窗口位置恢复
-          </div>
-          <FormRow label="触发次数" hint="默认 6，范围 3-20">
-            <input
-              type="number"
-              className="voice-input input-underline"
-              min={3}
-              max={20}
-              value={thresholdDraft}
-              onChange={(e) => setThresholdDraft(e.target.value)}
-              onBlur={handleThresholdBlur}
-              style={{ width: 80 }}
-              data-name="settings.hotkey.alt-space-threshold-input"
-            />
-          </FormRow>
-        </div>
+        <FormRow label="Alt+Space 位置恢复触发次数">
+          <input
+            type="number"
+            className="input-underline hotkey-threshold-input"
+            min={3}
+            max={20}
+            value={thresholdDraft}
+            onChange={(e) => setThresholdDraft(e.target.value)}
+            onBlur={handleThresholdBlur}
+            data-name="settings.hotkey.alt-space-threshold-input"
+          />
+        </FormRow>
       )}
     </section>
   );

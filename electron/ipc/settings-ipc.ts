@@ -9,7 +9,9 @@
 
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS, type AIPlatform } from '../shared/types.js'
+import type { Profile } from '../shared/profile.types.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
+import { IPHONE_UA, IPHONE_VIEWPORT } from '../presets/devices.js'
 import { profileStore } from '../store/profile-store.js'
 import { presetStore } from '../store/preset-store.js'
 
@@ -23,6 +25,34 @@ function deriveGradientColor(hex: string): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
 }
 
+/**
+ * 为「未绑定预设平台」的自定义 AI 应用合成为一个 AIPlatform 项，
+ * 让所有切换 UI（AppSwitcher / BottomBar / AiAppSection）能识别并展示它。
+ *
+ * - id 用 `custom:<profileId>` 前缀避免与预设 id 冲突
+ * - region 默认 'cn'：用户自定义应用应默认可见（hideForeignModels 默认开启时不被屏蔽）
+ *   用户可在 AiAppEditor 中显式设置为 'global' 以纳入「国外模型」过滤
+ * - 选择器/UA 等字段沿用 Profile 上的用户覆盖；未设置则用通用兜底
+ */
+function synthesizeCustomPlatform(profile: Profile): AIPlatform {
+  const themeColor = profile.aiThemeColor ?? '#4a5568'
+  return {
+    id: `custom:${profile.id}`,
+    name: profile.name ?? '未命名 AI 应用',
+    url: profile.aiPlatformUrl ?? '',
+    region: profile.aiPlatformRegion ?? 'cn',
+    defaultDesktopPreset: profile.aiDesktopPreset ?? 'win-chrome-125',
+    defaultMobilePreset: profile.aiMobilePreset ?? 'iphone-15-pro-safari',
+    defaultUA: IPHONE_UA,
+    defaultResolution: IPHONE_VIEWPORT,
+    defaultLanguage: 'zh-CN',
+    inputSelector: profile.aiInputSelector,
+    sendSelector: profile.aiSendSelector,
+    themeColor,
+    gradientColor: deriveGradientColor(themeColor),
+  }
+}
+
 /** 注册预设与 AI 平台查询相关 IPC handler */
 export function registerSettingsIpc(): void {
   // ===== 预设 / AI 平台 IPC =====
@@ -31,9 +61,12 @@ export function registerSettingsIpc(): void {
     presetStore.get(id),
   )
   // AI 平台列表：合并 Profile 上的用户自定义覆盖（region / desktopPreset / mobilePreset / themeColor）
+  // 同时为「未绑定预设」的自定义 AI 应用合成 AIPlatform 项追加到列表末尾，
+  // 否则 AppSwitcher / BottomBar / AiAppSection 反向匹配平台时找不到对应项会过滤掉自定义应用。
   ipcMain.handle(IPC_CHANNELS.AI_PLATFORM_LIST, async () => {
     const profiles = profileStore.list()
-    return AI_PLATFORMS.map((p) => {
+    // 1) 预设平台：合并匹配 profile 的覆盖
+    const presetResults = AI_PLATFORMS.map((p) => {
       const profile = profiles.find(
         (pr) => pr.isAIPlatform && (pr.aiPlatformId === p.id || pr.aiPlatformUrl === p.url),
       )
@@ -55,5 +88,22 @@ export function registerSettingsIpc(): void {
       }
       return result
     })
+    // 2) 已被预设匹配的 profile id（用于排除已绑定的，避免重复）
+    const matchedProfileIds = new Set(
+      profiles
+        .filter(
+          (pr) =>
+            pr.isAIPlatform &&
+            AI_PLATFORMS.some(
+              (p) => p.id === pr.aiPlatformId || p.url === pr.aiPlatformUrl,
+            ),
+        )
+        .map((pr) => pr.id),
+    )
+    // 3) 自定义 AI 应用（未绑定预设）：合成为 AIPlatform 项追加到列表末尾
+    const customResults: AIPlatform[] = profiles
+      .filter((pr) => pr.isAIPlatform && !matchedProfileIds.has(pr.id))
+      .map((pr) => synthesizeCustomPlatform(pr))
+    return [...presetResults, ...customResults]
   })
 }

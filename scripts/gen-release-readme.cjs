@@ -43,7 +43,7 @@ ${zipName}
 
 --- 快捷键 ---
 Alt+Space    主窗口呼出/隐藏
-Alt+Q        划词提问
+Alt+Q        进阶面板
 Alt+V        后台语音输入
 Alt+Shift+P  置顶切换
 Alt+Shift+M  静音切换

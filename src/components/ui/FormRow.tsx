@@ -1,7 +1,6 @@
 /* =====================================================================
    ui/FormRow.tsx —— 设置项通用行布局组件
-   替代 SettingsPanel/styles.css 中 .voice-config-row + .voice-config-label
-   + .voice-config-name + .voice-config-hint 的手写样板。
+   提供 label + hint + 右侧控件的统一行布局，替代各 section 手写的样板。
    ===================================================================== */
 
 import type { ReactNode } from 'react';

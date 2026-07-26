@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { WebviewElement } from '../../lib/webview';
 
@@ -63,6 +64,19 @@ export default function TabContextMenu({
     setEditingUrl,
     close,
   } = actions;
+
+  // ESC 关闭菜单（URL 编辑输入框聚焦时由输入框自行处理 ESC 退出编辑，不关菜单）
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      e.preventDefault();
+      close();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [close]);
 
   return (
     <>

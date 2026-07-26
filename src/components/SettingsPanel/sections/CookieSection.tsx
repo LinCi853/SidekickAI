@@ -154,18 +154,13 @@ export default function CookieSection() {
             const v = parseInt(e.target.value, 10);
             if (Number.isFinite(v)) void handleCooldownChange(v);
           }}
-          className="ua-preset-select input-underline"
-          style={{ width: 120 }}
+          className="input-underline settings-cookie-cooldown-input"
           data-name="settings.cookie.cooldown-input"
         />
       </FormRow>
-      <div className="hotkey-section-hint" data-name="settings.cookie.cooldown-hint">
-        同一域名在冷却时间内反复弹窗会被静默忽略（0 表示总是处理）
-      </div>
 
       {/* 白名单 */}
-      <div className="settings-section-title" style={{ marginTop: 16, fontSize: 13 }} data-name="settings.cookie.whitelist-title">白名单（自动点击"接受全部"）</div>
-      <div className="form-row" data-name="settings.cookie.whitelist-add-row">
+      <FormRow stack label="白名单">
         <input
           type="text"
           value={whitelistDraft}
@@ -178,21 +173,19 @@ export default function CookieSection() {
             }
           }}
           placeholder="example.com"
-          className="ua-preset-select input-underline"
-          style={{ flex: 1, minWidth: 0 }}
+          className="input-underline"
           data-name="settings.cookie.whitelist-input"
         />
         <button
           type="button"
-          className="btn-text"
-          style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 600 }}
+          className="btn-outline btn-outline-sm"
           onClick={() => void handleAddWhitelist()}
           disabled={!whitelistDraft.trim()}
           data-name="settings.cookie.whitelist-add-button"
         >
           添加
         </button>
-      </div>
+      </FormRow>
       <div className="cookie-domain-list" data-name="settings.cookie.whitelist-list">
         {whitelist.length === 0 ? (
           <div className="cookie-domain-empty" data-name="settings.cookie.whitelist-empty">暂无白名单域名</div>
@@ -215,8 +208,7 @@ export default function CookieSection() {
       </div>
 
       {/* 黑名单 */}
-      <div className="settings-section-title" style={{ marginTop: 16, fontSize: 13 }} data-name="settings.cookie.blacklist-title">黑名单（直接隐藏所有 cookie 弹窗）</div>
-      <div className="form-row" data-name="settings.cookie.blacklist-add-row">
+      <FormRow stack label="黑名单">
         <input
           type="text"
           value={blacklistDraft}
@@ -229,21 +221,19 @@ export default function CookieSection() {
             }
           }}
           placeholder="example.com"
-          className="ua-preset-select input-underline"
-          style={{ flex: 1, minWidth: 0 }}
+          className="input-underline"
           data-name="settings.cookie.blacklist-input"
         />
         <button
           type="button"
-          className="btn-text"
-          style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 600 }}
+          className="btn-outline btn-outline-sm"
           onClick={() => void handleAddBlacklist()}
           disabled={!blacklistDraft.trim()}
           data-name="settings.cookie.blacklist-add-button"
         >
           添加
         </button>
-      </div>
+      </FormRow>
       <div className="cookie-domain-list" data-name="settings.cookie.blacklist-list">
         {blacklist.length === 0 ? (
           <div className="cookie-domain-empty" data-name="settings.cookie.blacklist-empty">暂无黑名单域名</div>
@@ -267,7 +257,7 @@ export default function CookieSection() {
 
       {feedbackMsg && (
         <div
-          className={`settings-feedback feedback-text ${feedbackType === 'success' ? 'ok' : 'fail'}`}
+          className={`feedback-text ${feedbackType === 'success' ? 'ok' : 'fail'}`}
           style={{ marginTop: 8 }}
           data-name="settings.cookie.feedback"
         >

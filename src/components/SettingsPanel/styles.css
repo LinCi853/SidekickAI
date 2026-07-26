@@ -113,17 +113,6 @@
   padding-bottom: var(--space-1);
   border-bottom: 1px dashed var(--glass-bd-2);
 }
-/* 子区块标签：AI 应用展开后区分「内置平台」「自定义供应商」等子段 */
-.settings-subsection-label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin: var(--space-2) 0 var(--space-1);
-  padding-top: var(--space-1);
-  border-top: 1px solid var(--glass-bd-2);
-}
 /* 标题行：标题 + 右侧直达按钮（如「全局热键」→查看全部）
    已迁移到 ui/SectionTitle.tsx，此处仅保留 .hotkey-shortcuts-link 样式 */
 .hotkey-shortcuts-link {
@@ -211,17 +200,6 @@
   flex-direction: column;
   gap: 0;
 }
-/* 需求 2.5：提示词库自定义快捷键的说明提示 */
-.hotkey-section-hint {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.5;
-  padding: var(--space-1) var(--space-2);
-  background: var(--glass-bg-2);
-  border-radius: var(--radius-xs);
-  margin-bottom: var(--space-2);
-}
-
 /* Cookie 弹窗处理（需求 7）—— 白/黑名单域名列表 */
 .cookie-domain-list {
   display: flex;
@@ -242,7 +220,7 @@
 }
 .cookie-domain-name {
   font-family: var(--font-mono);
-  color: var(--text);
+  color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -323,6 +301,23 @@
   font-size: var(--text-xs);
   color: var(--text-muted);
   line-height: 1.4;
+}
+/* 测试功能徽章（如 backgroundVoice 旁的"测试"标记） */
+.hotkey-item-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--warning, #f59e0b);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+/* Alt+Space 触发次数输入框（窄宽度） */
+.hotkey-threshold-input {
+  width: 80px;
+  flex: none;
 }
 
 /* ===== 平台默认 URL 编辑 ===== */
@@ -504,42 +499,10 @@
 .theme-color-text:focus {
   border-color: var(--accent-50);
 }
-/* 旧版单选样式（保留兼容） */
-.platform-ua-options {
-  display: inline-flex;
-  gap: var(--space-1);
-}
-.platform-ua-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-0-75) var(--space-2);
-  /* 覆盖浏览器 button 默认 min-height，统一由 padding + line-height 决定高度 */
-  min-height: 0;
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  user-select: none;
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-.platform-ua-option.active {
-  background: var(--accent-10);
-  color: var(--accent-bright);
-  border-color: var(--accent-50);
-}
-.platform-ua-option input[type='radio'] {
-  margin: 0;
-  width: var(--icon-svg-sm);
-  height: var(--icon-svg-sm);
-  accent-color: var(--accent-bright);
-}
 /* 默认 UA 预设下拉（外观设置中自选桌面端/移动端 UA） */
 .ua-preset-select {
-  flex: none;
   min-width: 110px;
-  max-width: 60%;
+  max-width: 100%;
   font-family: var(--font-sans);
   cursor: pointer;
   white-space: nowrap;
@@ -569,250 +532,10 @@
   }
 }
 
-/* ===== 自定义 AI 提供商 ===== */
-.provider-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  padding: var(--space-0-5) 0;
-  margin-bottom: 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-}
-.provider-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.provider-card-name {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--foreground);
-}
-.provider-card-model {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-}
-.provider-card-endpoint {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  word-break: break-all;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.provider-card-actions {
-  display: flex;
-  gap: var(--space-1);
-}
-.provider-action-btn {
-  flex: none;
-}
-.provider-action-btn.danger {
-  color: var(--destructive);
-}
-.provider-action-btn.danger:hover {
-  color: var(--destructive);
-}
-.provider-action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.provider-add-btn {
-  margin-top: var(--space-1);
-}
-.provider-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-1) 0;
-  margin-top: var(--space-1);
-  background: transparent;
-  border: 0;
-  border-top: 1px dashed var(--glass-bd-2);
-  border-radius: 0;
-}
-.provider-form-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-25);
-}
-.provider-form-label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted-foreground);
-}
-.provider-form-input::placeholder {
-  color: var(--text-muted);
-}
-.provider-form-actions {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: var(--space-0-5);
-}
-.provider-form-btn {
-  flex: none;
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  line-height: 1.4;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out),
-              filter var(--duration-fast) var(--ease-out);
-}
-.provider-form-btn:hover:not(:disabled) {
-  color: var(--accent-bright);
-  font-weight: 600;
-}
-.provider-form-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.provider-form-btn.primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: 0;
-}
-.provider-form-btn.primary:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.provider-form-btn.primary:active:not(:disabled) {
-  filter: brightness(0.96);
-}
-.provider-test-result {
-  word-break: break-all;
-}
-
-/* ===== 自定义对话窗口 ===== */
-.chat-win-empty {
-  padding: var(--space-2) 0;
-  text-align: center;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px dashed var(--glass-bd-2);
-  border-radius: 0;
-}
-.chat-win-card {
-  position: relative;
-}
-.chat-win-color-dot {
-  width: var(--icon-svg-sm);
-  height: var(--icon-svg-sm);
-  border-radius: 50%;
-  flex: none;
-  border: 1px solid var(--glass-bd-2);
-}
-.chat-win-color-row {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-}
-.chat-win-color-input {
-  flex: none;
-  width: var(--toggle-h);
-  height: var(--toggle-h);
-  box-sizing: border-box;
-  padding: 0;
-  background: transparent;
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.chat-win-color-input::-webkit-color-swatch-wrapper { padding: var(--space-0-5); }
-.chat-win-color-input::-webkit-color-swatch { border: 0; border-radius: var(--radius-xs); }
-.chat-win-checkbox-row {
-  flex-direction: row;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.chat-win-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.chat-win-checkbox input[type="checkbox"] {
-  width: var(--titlebar-icon);
-  height: var(--titlebar-icon);
-  cursor: pointer;
-  accent-color: var(--accent);
-}
+/* ===== 自定义 AI 提供商样式已迁移到 sections/ProviderSection.css ===== */
 
 /* ===== 语音输入配置 ===== */
-/* 行布局已迁移到 ui/FormRow.tsx；此处仅保留 .voice-config-name（子区副标题复用） */
-.voice-config-name {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--foreground);
-  line-height: 1.4;
-}
-.voice-toggle {
-  flex: none;
-  width: var(--toggle-w);
-  min-width: var(--toggle-w);
-  height: var(--toggle-h);
-  min-height: var(--toggle-h);
-  border-radius: calc(var(--toggle-h) / 2);
-  border: 1px solid var(--glass-bd-2);
-  background: var(--card);
-  position: relative;
-  cursor: pointer;
-  padding: 0;
-  line-height: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-  transition: background var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out);
-}
-.voice-toggle.on {
-  background: var(--primary);
-  border-color: var(--primary);
-}
-.voice-toggle.off {
-  background: var(--card);
-}
-.voice-toggle-knob {
-  position: absolute;
-  top: 50%;
-  left: var(--toggle-pad);
-  width: var(--toggle-knob);
-  height: var(--toggle-knob);
-  border-radius: 50%;
-  background: var(--foreground-inverse);
-  transform: translateY(-50%);
-  transition: transform var(--duration-fast) var(--ease-out);
-  box-shadow: var(--shadow-sm);
-  box-sizing: border-box;
-}
-.voice-toggle.on .voice-toggle-knob {
-  transform: translateY(-50%) translateX(calc(var(--toggle-w) - var(--toggle-knob) - var(--toggle-pad) * 2));
-}
+/* 行布局已迁移到 ui/FormRow.tsx */
 
 /* ===== 语音引擎模式选择 ===== */
 .voice-mode-group {
@@ -830,32 +553,15 @@
   border-top: 1px dashed var(--glass-bd-2);
   border-radius: 0;
 }
-.voice-mode-hint {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.6;
-}
-.voice-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-25);
-}
-.voice-field-label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted-foreground);
+.voice-mode-panel > .form-row {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 .voice-field-hint {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-muted);
   line-height: 1.4;
-}
-.voice-input::placeholder {
-  color: var(--text-muted);
 }
 .voice-save-btn {
   flex: none;
@@ -971,26 +677,6 @@
 .voice-status-text.failed { color: var(--danger); }
 
 /* ===== 区域与代理设置 ===== */
-.proxy-mode-group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
-}
-.proxy-input-row {
-  margin-top: var(--space-1);
-}
-.proxy-input::placeholder {
-  color: var(--text-muted);
-}
-.proxy-hint {
-  margin-top: var(--space-0-5);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
 /* 当前生效代理状态指示 */
 .proxy-status-row {
   display: flex;
@@ -1096,98 +782,7 @@
 }
 
 /* ===== Phase C：从 sections/*.tsx 抽取的行内样式类 ===== */
-.collapsible-title {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
 /* 可折叠标题样式已迁移到 ui/SectionTitle.tsx */
-
-.permission-hint {
-  padding: var(--space-1) 0;
-  color: var(--muted-foreground);
-}
-
-.chat-win-textarea {
-  min-height: calc(var(--space-4) * 4);
-  resize: vertical;
-}
-
-/* 屏蔽规则 section */
-.block-rule-name {
-  flex: 1;
-  font-size: var(--text-sm);
-}
-.block-rule-badge {
-  margin-left: var(--space-1);
-  padding: var(--space-0-25) var(--space-1);
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--muted-foreground);
-  background: transparent;
-  border: 1px solid var(--glass-bd-2);
-}
-.block-rule-action-btn.danger {
-  color: var(--destructive);
-}
-.block-rule-action-btn.danger:hover {
-  color: var(--destructive);
-}
-.block-rule-meta {
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  padding-left: calc(var(--toggle-w) + var(--space-2));
-}
-.block-rule-form {
-  margin-top: var(--space-1);
-  padding: var(--space-1) 0;
-  background: transparent;
-  border-top: 1px dashed var(--glass-bd-2);
-  border-radius: 0;
-}
-.block-rule-type-group {
-  margin-top: var(--space-0-5);
-}
-.block-rule-textarea {
-  min-height: calc(var(--space-4) * 3);
-  font-family: monospace;
-  font-size: var(--text-xs);
-  padding-top: var(--space-1);
-  padding-bottom: var(--space-1);
-  line-height: 1.4;
-}
-.block-rule-submit-btn {
-  min-height: 0;
-  box-sizing: border-box;
-  align-self: center;
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  line-height: 1.4;
-  transition: background var(--duration-fast), color var(--duration-fast), filter var(--duration-fast);
-}
-.block-rule-submit-btn:hover {
-  color: var(--accent-bright);
-  font-weight: 600;
-}
-.block-rule-submit-btn.active {
-  background: var(--primary);
-  border: 0;
-  color: var(--primary-foreground);
-}
-.block-rule-submit-btn.active:hover {
-  filter: brightness(1.08);
-}
 
 /* 语音 section */
 .voice-model-radio {
@@ -1253,6 +848,10 @@
 .voice-field-hint.cli-tip {
   margin-top: var(--space-1);
 }
+/* whisper-cli 下载/卸载控件块（紧凑堆叠布局，带顶部间距） */
+.voice-cli-block {
+  margin-top: var(--space-1);
+}
 
 /* ===== Phase C 续：本次补充的行内样式类 ===== */
 
@@ -1268,21 +867,37 @@
 /* 设置项单行反馈文本（成功/失败提示，常用于按钮旁的临时反馈） */
 /* 通用样式由 .feedback-text 提供，此处保留特有字段 */
 
-/* 语音 section */
-.voice-section-subtitle {
-  margin-bottom: var(--space-1);
-  padding: 0;
+/* ===== 通用工具类：替代各 section 中重复的内联 style ===== */
+
+/* 小型描边按钮 .btn-outline-sm 已迁移至 globals.css 的 .btn-outline，
+   存量引用同时附加 .btn-outline 类即可继承通用视觉样式；
+   此处仅保留 flex 布局覆盖以维持原有最小尺寸行为。 */
+.btn-outline-sm {
+  flex: none;
 }
+
+/* 分区标题段间距：替代 <div style={{ marginTop: 24 }}><SectionTitle>…</SectionTitle></div> */
+.section-title-spacer {
+  margin-top: var(--space-6);
+}
+
+/* 下载目录值（截断显示，等宽字体） */
+.settings-storage-dir-value {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Cookie 冷却时间输入框（固定窄宽度） */
+.settings-cookie-cooldown-input {
+  width: 120px;
+  flex: none;
+}
+
 /* .voice-config-row.stack/compact/mt-2 已迁移到 ui/FormRow.css */
-.voice-field-row {
-  display: flex;
-  gap: var(--space-1);
-}
-.voice-field-row > .voice-input,
-.voice-field-row > .voice-select {
-  flex: 1;
-  min-width: 0;
-}
 .voice-status-row {
   display: flex;
   align-items: center;
@@ -1293,12 +908,6 @@
 }
 .voice-field-hint.mb-1 {
   margin-bottom: var(--space-0-5);
-}
-.voice-config-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
 }
 /* .voice-config-label.static 已迁移到 ui/FormRow.tsx */
 .voice-progress-track.mt-1 {
@@ -1320,52 +929,12 @@
 .proxy-section-block {
   margin-top: var(--space-2);
 }
-.proxy-section-subtitle {
-  margin-bottom: var(--space-1);
-  padding: 0;
-}
 
-/* 屏蔽规则 section */
-.block-rules-intro {
-  padding: 0;
-  margin-bottom: var(--space-1);
-}
-.block-rules-status {
-  padding: var(--space-1) 0;
-  color: var(--muted-foreground);
-}
-.block-rule-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-0-5);
-  padding: var(--space-0-5) 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
-}
-.block-rule-form-title {
-  margin-bottom: var(--space-1);
-}
+/* 通用纵向堆叠容器（按钮组、确认对话框内按钮等） */
 .block-rule-form-stack {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-}
-.block-rule-form-actions {
-  display: flex;
-  gap: var(--space-1);
-  margin-top: var(--space-0-5);
-}
-.block-rule-add-btn {
-  margin-top: var(--space-1);
-  width: 100%;
-}
-.block-rule-add-btn:hover {
-  background: var(--primary);
-  border: 0;
-  color: var(--primary-foreground);
 }
 
 /* 平台默认 URL */
@@ -1381,16 +950,16 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+.preset-card-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .provider-card-actions.spaced {
   margin-top: var(--space-1);
 }
 .provider-add-btn.spaced {
   margin-top: var(--space-1);
-}
-
-/* 自定义对话窗口 */
-.chat-win-section-hint {
-  margin-bottom: var(--space-2);
 }
 
 /* =====================================================================
@@ -1405,32 +974,44 @@
   flex-direction: column;
 }
 
+/* AI 应用卡片：单行紧凑结构 —— 图标 + 名称/URL + 操作按钮 */
+.ai-app-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0-5) var(--space-1);
+}
+
 /* AI 应用卡片：复用 preset-card 基础样式，仅补充图标与信息布局 */
 .ai-app-card-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--titlebar-icon);
-  height: var(--titlebar-icon);
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: var(--radius-sm);
   color: var(--foreground-inverse);
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   flex: none;
 }
 .ai-app-card-info {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-1-5);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 .ai-app-card-name {
   font-family: var(--font-sans);
-  font-size: var(--text-sm);
+  font-size: 13px;
   font-weight: 600;
+  line-height: 18px;
   color: var(--foreground);
   max-width: 100%;
   overflow: hidden;
@@ -1439,12 +1020,18 @@
 }
 .ai-app-card-url {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted-foreground);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ai-app-card-actions {
+  display: flex;
+  gap: 0;
+  flex: none;
 }
 /* 已打开状态：左侧主题色条 */
 .ai-app-card.open {
@@ -1464,13 +1051,6 @@
 .ai-app-card.pending-delete {
   border-color: var(--destructive);
   background: color-mix(in srgb, var(--destructive) 8%, var(--card));
-}
-
-/* 清除旧两行结构样式（保留选择器避免其他引用报错） */
-.ai-app-card-info-row,
-.ai-app-card-drag-handle,
-.ai-app-card-actions {
-  display: none;
 }
 
 /* ===== 新建 AI 应用入口 ===== */

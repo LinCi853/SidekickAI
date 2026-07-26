@@ -15,7 +15,7 @@ import RecordIndicator from './pages/RecordIndicator';
 import HistoryView from './pages/HistoryView';
 import PromptLibraryView from './pages/PromptLibraryView';
 import AiAppEditor from './pages/AiAppEditor';
-import AiProviderAppView from './pages/AiProviderAppView';
+import AdvancedPanelView from './pages/AdvancedPanelView';
 import DataExportWindow from './pages/DataExportWindow';
 import OnboardingView from './pages/OnboardingView';
 import Button from './components/ui/Button';
@@ -27,10 +27,10 @@ import { getAppSettings, onUiScaleChanged, setMinimumSize } from './lib/electron
 import {
   calculateMainWindowMinWidth,
   calculateChatWindowMinWidth,
-  calculateAiAppWindowMinWidth,
+  calculateAdvancedPanelMinWidth,
   MAIN_WINDOW_MIN_HEIGHT,
   CHAT_WINDOW_MIN_HEIGHT,
-  AI_APP_WINDOW_MIN_HEIGHT,
+  ADVANCED_PANEL_MIN_HEIGHT,
   type UiScale,
 } from '../electron/shared/window-size';
 
@@ -170,13 +170,13 @@ export default function App() {
   const isHistory = mode === 'history';
   const isPrompts = mode === 'prompts';
   const isAiAppEditor = mode === 'ai-app-editor';
-  const isAiAppProvider = mode === 'ai-app-provider';
+  const isAdvancedPanel = mode === 'advanced-panel';
   const isOnboarding = mode === 'onboarding';
   const isDataExport = mode === 'data-export';
 
-  // chat/preview/history/prompts/ai-app-editor/ai-app-provider/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
+  // chat/preview/history/prompts/ai-app-editor/advanced-panel/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
   useEffect(() => {
-    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAiAppProvider || isOnboarding || isDataExport) {
+    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport) {
       setReady(true);
       // 即使是辅助窗口也应用 UI 比例
       void getAppSettings().then((cfg) => {
@@ -239,7 +239,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAiAppProvider, isOnboarding, isDataExport]);
+  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport]);
 
   // 监听 UI 比例变化广播：更新 data-ui-scale 属性 + 重新计算当前窗口最小尺寸。
   // 主进程在 uiScale 变更后向所有窗口推送；各窗口根据自身类型选用对应公式。
@@ -265,9 +265,9 @@ export default function App() {
       } else if (isChat) {
         minWidth = calculateChatWindowMinWidth(uiScale);
         minHeight = CHAT_WINDOW_MIN_HEIGHT;
-      } else if (mode === 'ai-app-provider') {
-        minWidth = calculateAiAppWindowMinWidth(uiScale);
-        minHeight = AI_APP_WINDOW_MIN_HEIGHT;
+      } else if (mode === 'advanced-panel') {
+        minWidth = calculateAdvancedPanelMinWidth(uiScale);
+        minHeight = ADVANCED_PANEL_MIN_HEIGHT;
       }
       if (minWidth != null && minHeight != null) {
         void setMinimumSize(minWidth, minHeight).catch((e) =>
@@ -284,7 +284,7 @@ export default function App() {
 
   // 路由分流：preview(默认/record-indicator) → RecordIndicator,
   //   history → HistoryView, prompts → PromptLibraryView,
-  //   ai-app-editor → AiAppEditor, ai-app-provider → AiProviderAppView,
+  //   ai-app-editor → AiAppEditor, advanced-panel → AdvancedPanelView,
   //   notes → NotesView, whiteboard → WhiteboardView,
   //   chat → ChatView, 主窗口 → MainView, 脱离窗口 → StandaloneView
   // 所有视图用 ErrorBoundary 包裹，防止单个 webview 报错导致整个应用白屏
@@ -292,7 +292,7 @@ export default function App() {
   if (isHistory) return <AppErrorBoundary><HistoryView /></AppErrorBoundary>;
   if (isPrompts) return <AppErrorBoundary><PromptLibraryView /></AppErrorBoundary>;
   if (isAiAppEditor) return <AppErrorBoundary><AiAppEditor /></AppErrorBoundary>;
-  if (isAiAppProvider) return <AppErrorBoundary><AiProviderAppView /></AppErrorBoundary>;
+  if (isAdvancedPanel) return <AppErrorBoundary><AdvancedPanelView /></AppErrorBoundary>;
   if (isDataExport) return <AppErrorBoundary><DataExportWindow /></AppErrorBoundary>;
   if (isOnboarding) return <AppErrorBoundary><OnboardingView /></AppErrorBoundary>;
   if (isChat) return <AppErrorBoundary><ChatView windowId={mode === 'chat' ? windowId : undefined} /></AppErrorBoundary>;

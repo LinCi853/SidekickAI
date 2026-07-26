@@ -45,6 +45,10 @@
   --destructive-foreground: #ffffff;
   --success:                var(--highlight-success);
   --warning:                var(--highlight-warning);
+  --warning-bg:             color-mix(in srgb, var(--warning) 10%, transparent);
+  --warning-bd:             color-mix(in srgb, var(--warning) 30%, transparent);
+  --warning-fg:             var(--warning);
+  --warning-bg-soft:        color-mix(in srgb, var(--warning) 15%, transparent);
   /* --info 已在下方语义扩展色块定义为 #6495ed，此处不重复声明 */
 
   /* === chart === */
@@ -262,12 +266,12 @@
   --toast-offset: calc(var(--space-12) + var(--space-2));
 
   /* ===== 跨窗口动态布局辅助变量（4.9） ===== */
-  /* 侧边栏宽度：用于 ChatView/AiProviderAppView 等带左侧列表的窗口，
+  /* 侧边栏宽度：用于 ChatView/AdvancedPanelView 等带左侧列表的窗口，
      随 UI 比例微调，避免 small 档过宽 / large 档过窄。 */
   --sidebar-w: calc(var(--titlebar-icon) * 9);
   /* 对话输入区最小高度：随 UI 比例缩放，避免 small 档输入框过大或 large 档过小。 */
   --chat-input-min-h: calc(var(--titlebar-icon) * 1.4);
-  /* 应用网格项宽度：用于底栏 AI 应用网格、AI 应用独立窗口的平台卡片网格，
+  /* 应用网格项宽度：用于底栏 AI 应用网格、进阶面板的平台卡片网格，
      随 UI 比例缩放保证三档视觉一致。 */
   --app-grid-item-w: calc(var(--titlebar-icon) * 2.6);
   /* 展开按钮宽度：底栏功能按钮（设置/快捷键/指纹等），随 UI 比例缩放。 */
@@ -308,6 +312,10 @@
   --destructive-foreground: #fff5f2;
   --success:                #4a7a68;
   --warning:                #8a7a4e;
+  --warning-bg:             color-mix(in srgb, var(--warning) 10%, transparent);
+  --warning-bd:             color-mix(in srgb, var(--warning) 30%, transparent);
+  --warning-fg:             var(--warning);
+  --warning-bg-soft:        color-mix(in srgb, var(--warning) 15%, transparent);
   --info:                   var(--chart-4);
 
   /* === chart === */

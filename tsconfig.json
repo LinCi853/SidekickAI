@@ -28,5 +28,14 @@
     }
   },
   "include": ["src", "electron"],
+  "exclude": [
+    "src/lib/mobile-api/**",
+    "src/pages/MobileMainView.tsx",
+    "src/pages/MobileMainView.css",
+    "src/components/MobileTabBar/**",
+    "src/components/MobileVoiceButton/**",
+    "src/store/useMobileTabStore.ts",
+    "src/styles/mobile.css"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

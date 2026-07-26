@@ -15,6 +15,7 @@ import {
   onHotkeyRecordingResult,
 } from '../lib/electron-api';
 import { buildOtherHotkeysForPrompt } from '../lib/prompt-hotkey';
+import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
 import Chip from './ui/Chip';
@@ -79,6 +80,9 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
       .then(setAppHotkeys)
       .catch((e) => console.warn('[PromptLibrary] 加载全局热键失败:', e));
   }, [editor.open]);
+
+  // ESC：编辑器打开时关闭编辑器（主窗口底栏内联模式下使用；独立窗口 PromptLibraryView 由 useEscToCloseWindow 的 onEsc 处理）
+  useEscToCloseOverlay(editor.open, () => setEditor(EMPTY_EDITOR));
 
   const handleInject = async (template: PromptTemplate) => {
     if (!onInject) {
@@ -387,7 +391,7 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
             )}
             <div className="prompt-editor-actions" data-name="component.prompt-library.editor-actions">
               <Button
-                variant="text"
+                variant="outline"
                 className="prompt-btn"
                 data-name="component.prompt-library.cancel-button"
                 onClick={() => setEditor(EMPTY_EDITOR)}

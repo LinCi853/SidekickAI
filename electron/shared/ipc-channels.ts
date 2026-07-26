@@ -271,12 +271,12 @@ export const IPC_CHANNELS = {
   BLOCK_RULES_UPDATE: 'blockRules:update',
   // AI 应用编辑窗口
   AI_APP_EDITOR_OPEN: 'ai-app-editor:open',
-  // AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话）
-  AI_APP_PROVIDER_OPEN: 'aiAppProvider:open',
-  AI_APP_PROVIDER_TOGGLE: 'aiAppProvider:toggle',
-  // 主进程 → AI 应用独立窗口渲染：单例窗口复用时通知切换 tab/provider
-  // 载荷：{ tab: 'providers' | 'chat', providerId?: string }
-  AI_APP_PROVIDER_NAVIGATE: 'aiAppProvider:navigate',
+  // 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
+  ADVANCED_PANEL_OPEN: 'advancedPanel:open',
+  ADVANCED_PANEL_TOGGLE: 'advancedPanel:toggle',
+  // 主进程 → 进阶面板渲染：单例窗口复用时通知切换 tab/provider
+  // 载荷：{ tab: 'chat' | 'whiteboard' | 'notes', providerId?: string }
+  ADVANCED_PANEL_NAVIGATE: 'advancedPanel:navigate',
   // 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）
   // 载荷：{ action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab', data?: unknown }
   WEBVIEW_HOTKEY: 'webview:hotkey',
@@ -290,6 +290,9 @@ export const IPC_CHANNELS = {
   // 渲染→主：用户确认将 origin 加入白名单（持久化到 AppSettings.popupWhitelist）
   // 载荷：origin: string
   POPUP_WHITELIST_ADD: 'popup:whitelistAdd',
+  // 渲染→主：用户确认将 origin 加入某 Profile 的专属白名单（持久化到 Profile.popupWhitelist）
+  // 载荷：{ profileId: string, origin: string }
+  POPUP_WHITELIST_ADD_PROFILE: 'popup:whitelistAddProfile',
   // 平台能力查询（设置页显示权限状态）
   PLATFORM_CAPABILITIES: 'platform:capabilities',
   // 引导（首次启动引导窗）
@@ -332,7 +335,7 @@ export const IPC_CHANNELS = {
   WHITEBOARD_PUSH_CARD_REQUEST: 'whiteboard:pushCardRequest',
   // 渲染进程 → 主进程：白板 ready 后回 ACK（替代旧 200ms 硬编码）
   WHITEBOARD_PUSH_ACK: 'whiteboard:pushAck',
-  // 主进程 → AiProviderAppView 渲染：通知切换到 whiteboard tab
+  // 主进程 → AdvancedPanelView 渲染：通知切换到 whiteboard tab
   STANDALONE_SWITCH_TO_WHITEBOARD: 'standalone:switchToWhiteboard',
   // 白板图片磁盘存储
   WHITEBOARD_SAVE_IMAGE: 'whiteboard:saveImage',

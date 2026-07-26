@@ -255,6 +255,20 @@ export function addToPopupWhitelist(origin: string): Promise<string[]> {
 }
 
 /**
+ * 请求将 origin 加入指定 Profile 的专属白名单（持久化到 Profile.popupWhitelist）。
+ *
+ * 与 addToPopupWhitelist 的区别：本函数将白名单条目隔离到具体 AI 应用，
+ * 避免不同 AI 应用的关联域互相污染全局白名单。onPopupDenied 自动加白时优先调用本函数。
+ */
+export function addToProfilePopupWhitelist(
+  profileId: string,
+  origin: string,
+): Promise<string[]> {
+  const api = requireElectron();
+  return api.addToProfilePopupWhitelist(profileId, origin);
+}
+
+/**
  * 监听窗口重新显示/聚焦到前台事件（主进程 show/focus 后触发）。
  * 用于每次唤出窗口时聚焦 AI 输入框。返回取消监听的函数。
  */

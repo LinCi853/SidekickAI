@@ -370,22 +370,22 @@ const api: ElectronAPI = {
   }) => {
     return ipcRenderer.invoke(IPC_CHANNELS.AI_APP_EDITOR_OPEN, opts)
   },
-  /** 打开 AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话） */
-  openAiAppProviderWindow: (providerId?: string) => {
-    return ipcRenderer.invoke(IPC_CHANNELS.AI_APP_PROVIDER_OPEN, providerId)
+  /** 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话） */
+  openAdvancedPanelWindow: (providerId?: string) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.ADVANCED_PANEL_OPEN, providerId)
   },
-  /** 切换 AI 应用独立窗口显隐（单例） */
-  toggleAiAppProviderWindow: () => {
-    return ipcRenderer.invoke(IPC_CHANNELS.AI_APP_PROVIDER_TOGGLE)
+  /** 切换 进阶面板显隐（单例） */
+  toggleAdvancedPanelWindow: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.ADVANCED_PANEL_TOGGLE)
   },
   /** 主→渲染：单例窗口复用时通知切换 tab/provider */
-  onAiAppProviderNavigate: (
+  onAdvancedPanelNavigate: (
     callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
   ) => {
     const handler = (_e: unknown, payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) =>
       callback(payload)
-    ipcRenderer.on(IPC_CHANNELS.AI_APP_PROVIDER_NAVIGATE, handler)
-    return () => ipcRenderer.removeListener(IPC_CHANNELS.AI_APP_PROVIDER_NAVIGATE, handler)
+    ipcRenderer.on(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, handler)
   },
   /** 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后通知各窗口重新计算最小尺寸） */
   onUiScaleChanged: (callback: (uiScale: 'small' | 'medium' | 'large') => void) => {
@@ -560,6 +560,9 @@ const api: ElectronAPI = {
   /** 渲染→主：将 origin 加入弹窗白名单（持久化到 AppSettings.popupWhitelist） */
   addToPopupWhitelist: (origin: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.POPUP_WHITELIST_ADD, origin),
+  /** 渲染→主：将 origin 加入指定 Profile 的专属白名单（持久化到 Profile.popupWhitelist） */
+  addToProfilePopupWhitelist: (profileId: string, origin: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.POPUP_WHITELIST_ADD_PROFILE, { profileId, origin }),
   // 窗口重新显示/聚焦到前台（主→渲染：每次 show/focus 通知渲染层聚焦输入框）
   onWindowShown: (callback: () => void) => {
     const handler = () => callback()
@@ -706,7 +709,7 @@ ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, (_e, isFs: boolean) 
 updateWindowShapeAttributes()
 
 // ===== 使用统计：全局 data-name 点击日志监听器 =====
-// 监听主进程下发的窗口类型（main/chat/ai-app-provider/history/prompt-library/...），
+// 监听主进程下发的窗口类型（main/chat/advanced-panel/history/prompt-library/...），
 // 写入 window.__ai_window_type__ 供点击日志的 windowType 字段使用。
 let windowType: string | null = null
 ;(window as unknown as { __ai_window_type__?: string | null }).__ai_window_type__ = null

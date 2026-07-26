@@ -1,12 +1,12 @@
 /* =====================================================================
-   pages/AiProviderAppView.tsx —— AI 应用独立窗口主视图
+   pages/AdvancedPanelView.tsx —— 进阶面板主视图
    架构：
    - 顶栏：tab 切换（自定义供应商 / 自定义对话）+ 窗口控制（最小化/最大化/关闭）
    - 主体：根据 activeTab 渲染两个子页面
      · providers  —— 自定义供应商管理（添加/编辑/删除/测试，复用 useChatStore 的 provider 管理）
      · chat       —— 自定义对话（复用 useChatStore 的会话/流式；左侧会话列表 + 右侧消息区）
-   - 通过 URL 查询参数 ?mode=ai-app-provider[&provider=...&tab=...] 接收初始状态
-   - 主进程通过 'ai-app-provider:navigate' 事件通知切换 tab/provider（单例窗口复用时）
+   - 通过 URL 查询参数 ?mode=advanced-panel[&provider=...&tab=...] 接收初始状态
+   - 主进程通过 'advancedPanel:navigate' 事件通知切换 tab/provider（单例窗口复用时）
    ===================================================================== */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -16,7 +16,7 @@ import {
   minimizeWindow,
   maximizeToggleWindow,
   closeCurrentWindow,
-  onAiAppProviderNavigate,
+  onAdvancedPanelNavigate,
   pinCurrentWindow,
   listAIProviderModels,
   exportAIProvidersEncrypted,
@@ -30,6 +30,7 @@ import {
   // 白板跨窗口推送（v0.5.1：订阅提升到顶层，解决 WhiteboardView 未挂载时卡片丢失）
   onWhiteboardPushCard,
   pushWhiteboardAck,
+  getAppSettings,
 } from '../lib/electron-api';
 import type {
   CustomAIProvider,
@@ -37,15 +38,16 @@ import type {
   WhiteboardCard,
 } from '../lib/electron-api';
 import Badge from '../components/ui/Badge';
-import { Button, IconButton, SegmentedControl, TitleBar } from '../components/ui';
-import AiAppSettingsPanel from '../components/AiAppSettingsPanel';
+import { Button, IconButton, SegmentedControl, TitleBar, Combobox } from '../components/ui';
+import type { ComboboxOption } from '../components/ui';
+import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel';
 import { MessageBubble } from './MessageBubble';
 import WhiteboardView from './WhiteboardView';
 import type { WhiteboardViewHandle } from './WhiteboardView';
 import NotesView from './NotesView';
 import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
-import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import './AiProviderAppView.css';
+import { useEscToCloseWindow, useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
+import './AdvancedPanelView.css';
 
 type TabKey = 'chat' | 'whiteboard' | 'notes';
 
@@ -63,11 +65,20 @@ function readInitialProviderId(): string | null {
   return new URLSearchParams(window.location.search).get('provider');
 }
 
-export default function AiProviderAppView() {
+export default function AdvancedPanelView() {
   const [activeTab, setActiveTab] = useState<TabKey>(readInitialTab);
   const { isMaximized, isPinned, setIsMaximized, setIsPinned } = useWindowMaximizedAndPinned();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initialProviderId = useMemo(() => readInitialProviderId(), []);
+
+  // 白板应用层侧边栏显隐（默认 false，依赖 tldraw 自带 PageMenu 多页面切换）
+  // 设置面板关闭时重新读取，使设置变更立即生效
+  const [whiteboardSidebarVisible, setWhiteboardSidebarVisible] = useState(false);
+  useEffect(() => {
+    void getAppSettings()
+      .then((cfg) => setWhiteboardSidebarVisible(cfg.whiteboardSidebarVisible ?? false))
+      .catch(() => {});
+  }, []);
 
   // ===== 白板跨窗口推送管理（v0.5.1：订阅提升到顶层） =====
   // WhiteboardView 仅在 activeTab === 'whiteboard' 时挂载，
@@ -78,7 +89,7 @@ export default function AiProviderAppView() {
 
   // 监听主进程的 navigate 事件（单例窗口复用时切换 tab/provider）
   useEffect(() => {
-    return onAiAppProviderNavigate((payload) => {
+    return onAdvancedPanelNavigate((payload) => {
       setActiveTab(payload.tab);
       if (payload.providerId) {
         useChatStore.getState().setCurrentProvider(payload.providerId);
@@ -146,23 +157,9 @@ export default function AiProviderAppView() {
     flushPendingPushCards();
   }, [flushPendingPushCards]);
 
-  // ESC：设置面板/Modal 打开时逐级关闭，否则关闭窗口
-  useEscToCloseWindow({
-    onEsc: (e) => {
-      // 检查是否有 Modal 打开（ui/Modal 的 .modal-overlay）
-      if (document.querySelector('.modal-overlay')) {
-        // Modal 自带 ESC 关闭逻辑，这里不重复处理
-        return true;
-      }
-      // 检查设置面板是否打开
-      if (settingsOpen) {
-        e.preventDefault();
-        setSettingsOpen(false);
-        return true;
-      }
-      return false;
-    },
-  });
+  // ESC / Ctrl+W 关窗：浮窗（设置面板/Modal/模板面板）由 useEscToCloseOverlay 统一处理；
+  // 进阶面板无标题编辑态，onEsc 直接关闭窗口
+  useEscToCloseWindow();
 
   const handleMinimize = useCallback(() => void minimizeWindow().catch(() => {}), []);
   const handleMaximize = useCallback(() => {
@@ -173,7 +170,7 @@ export default function AiProviderAppView() {
   const handleClose = useCallback(() => void closeCurrentWindow().catch(() => {}), []);
 
   return (
-    <div className="ai-app-provider-view app-shell app-view-root" data-name="ai-app-provider.container">
+    <div className="advanced-panel-provider-view app-shell app-view-root" data-name="advanced-panel.container">
       <TitleBar
         maximized={isMaximized}
         onMinimize={handleMinimize}
@@ -183,8 +180,8 @@ export default function AiProviderAppView() {
           <SegmentedControl<TabKey>
             value={activeTab}
             onChange={setActiveTab}
-            name="ai-app-tab"
-            className="ai-app-segmented"
+            name="advanced-panel-tab"
+            className="advanced-panel-segmented"
             options={[
               { value: 'chat', label: '自定义对话' },
               { value: 'whiteboard', label: '白板' },
@@ -199,9 +196,9 @@ export default function AiProviderAppView() {
               onClick={() => setSettingsOpen(true)}
               title="设置"
               aria-label="设置"
-              data-name="ai-app-provider.topbar-settings-button"
+              data-name="advanced-panel.topbar-settings-button"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '60%', height: '60%' }} data-name="ai-app-provider.topbar-settings-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '60%', height: '60%' }} data-name="advanced-panel.topbar-settings-icon">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
@@ -216,9 +213,9 @@ export default function AiProviderAppView() {
               }}
               title={isPinned ? '取消置顶' : '置顶'}
               aria-label={isPinned ? '取消置顶' : '置顶'}
-              data-name="ai-app-provider.topbar-pin-button"
+              data-name="advanced-panel.topbar-pin-button"
             >
-              <svg viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '60%', height: '60%' }} data-name="ai-app-provider.topbar-pin-icon">
+              <svg viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '60%', height: '60%' }} data-name="advanced-panel.topbar-pin-icon">
                 <path d="M12 17v5" />
                 <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
               </svg>
@@ -226,18 +223,28 @@ export default function AiProviderAppView() {
           </>
         }
       />
-      <div className="ai-app-provider-body" data-name="ai-app-provider.body">
+      <div className="advanced-panel-provider-body" data-name="advanced-panel.body">
         {activeTab === 'chat' && <ChatTab />}
         {activeTab === 'whiteboard' && (
           <WhiteboardView
             ref={whiteboardRef}
             onClose={() => setActiveTab('chat')}
             onReady={handleWhiteboardReady}
+            sidebarVisible={whiteboardSidebarVisible}
           />
         )}
         {activeTab === 'notes' && <NotesView />}
       </div>
-      <AiAppSettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AdvancedPanelSettingsPanel
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          // 设置面板关闭时重新读取白板侧边栏设置，使开关变化立即生效
+          void getAppSettings()
+            .then((cfg) => setWhiteboardSidebarVisible(cfg.whiteboardSidebarVisible ?? false))
+            .catch(() => {});
+        }}
+      />
       <WindowResizeHandles />
     </div>
   );
@@ -259,6 +266,7 @@ function ChatTab() {
     initProviders,
     initConversations,
     setCurrentProvider,
+    editProvider,
     selectConversation,
     startNewConversation,
     removeConversation,
@@ -298,6 +306,9 @@ function ChatTab() {
     return off;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ESC：记录文本模板面板打开时优先关闭模板面板（通过全局浮窗栈管理优先级）
+  useEscToCloseOverlay(showRecordTemplate, () => setShowRecordTemplate(false));
 
   // provider 加载后初始化会话列表
   useEffect(() => {
@@ -352,61 +363,83 @@ function ChatTab() {
   const currentProvider = providers.find((p) => p.id === currentProviderId);
 
   return (
-    <div className="ai-app-chat" data-name="ai-app-provider.chat">
+    <div className="advanced-panel-chat" data-name="advanced-panel.chat">
       {/* 左侧：provider 选择 + 会话列表 */}
-      <aside className="ai-app-chat-sidebar" data-name="ai-app-provider.chat-sidebar">
-        <div className="ai-app-chat-provider" data-name="ai-app-provider.chat-provider">
-          <label className="ai-app-chat-provider-label" data-name="ai-app-provider.chat-provider-label">当前模型</label>
-          <div className="ai-app-chat-provider-selector" data-name="ai-app-provider.chat-provider-selector">
-            <select
-              className="ai-app-chat-provider-select"
-              value={currentProviderId ?? ''}
-              onChange={(e) => setCurrentProvider(e.target.value)}
+      <aside className="advanced-panel-chat-sidebar" data-name="advanced-panel.chat-sidebar">
+        <div className="advanced-panel-chat-provider" data-name="advanced-panel.chat-provider">
+          <label className="advanced-panel-chat-provider-label" data-name="advanced-panel.chat-provider-label">当前模型</label>
+          <div className="advanced-panel-chat-provider-selector" data-name="advanced-panel.chat-provider-selector">
+            <Combobox
+              inputValue={(() => {
+                if (providers.length === 0) return '未配置供应商';
+                const cur = providers.find((p) => p.id === currentProviderId);
+                return cur ? cur.model : '';
+              })()}
+              onInputChange={() => {}}
+              inputPlaceholder="选择模型"
+              inputClassName="advanced-panel-chat-provider-select"
+              inputReadOnly
               disabled={providers.length === 0}
-              data-name="ai-app-provider.chat-provider-select"
-            >
-              {providers.length === 0 && <option value="" data-name="ai-app-provider.chat-provider-select-empty-option">未配置供应商</option>}
-              {providers.map((p, idx) => (
-                <option key={p.id} value={p.id} data-name={`ai-app-provider.chat-provider-select-option-${idx + 1}`} data-index={idx + 1} data-id={p.id}>{p.name} · {p.model}</option>
-              ))}
-            </select>
-            <svg className="ai-app-chat-provider-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="ai-app-provider.chat-provider-arrow-icon">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+              options={providers.flatMap<ComboboxOption>((p) => {
+                const models = [p.model, ...(p.alternativeModels ?? [])];
+                return models.map((m) => ({
+                  value: `${p.id}::${m}`,
+                  label: m,
+                  selected: p.id === currentProviderId && p.model === m,
+                }));
+              })}
+              onSelect={async (v) => {
+                const sepIdx = v.indexOf('::');
+                if (sepIdx < 0) return;
+                const pid = v.slice(0, sepIdx);
+                const modelName = v.slice(sepIdx + 2);
+                const target = providers.find((p) => p.id === pid);
+                if (!target) return;
+                if (pid !== currentProviderId) setCurrentProvider(pid);
+                if (target.model !== modelName) {
+                  const alts = target.alternativeModels ?? [];
+                  const newAlts = alts.includes(modelName)
+                    ? [...alts.filter((m) => m !== modelName), target.model]
+                    : [...alts, target.model];
+                  await editProvider(pid, { model: modelName, alternativeModels: newAlts });
+                }
+              }}
+              searchable
+              searchPlaceholder="搜索模型…"
+              emptyText="无匹配模型"
+              dataName="advanced-panel.chat-provider-select"
+            />
           </div>
-          {currentProvider && (
-            <div className="ai-app-chat-provider-meta" data-name="ai-app-provider.chat-provider-meta">{currentProvider.model}</div>
-          )}
         </div>
-        <Button type="button" variant="ghost" className="ai-app-chat-new" onClick={startNewConversation} data-name="ai-app-provider.chat-new-conversation-button">+ 新建对话</Button>
-        <div className="ai-app-chat-conv-list" data-name="ai-app-provider.chat-conv-list">
+        <Button type="button" variant="outline" className="advanced-panel-chat-new" onClick={startNewConversation} data-name="advanced-panel.chat-new-conversation-button">+ 新建对话</Button>
+        <div className="advanced-panel-chat-conv-list" data-name="advanced-panel.chat-conv-list">
           {conversations.length === 0 && (
-            <div className="ai-app-chat-empty" data-name="ai-app-provider.chat-conv-empty">暂无对话</div>
+            <div className="advanced-panel-chat-empty" data-name="advanced-panel.chat-conv-empty">暂无对话</div>
           )}
           {conversations.map((c, idx) => (
             <div
               key={c.id}
-              className={`ai-app-chat-conv-item${c.id === currentConversationId ? ' active' : ''}`}
-              data-name={`ai-app-provider.chat-conv-item-${idx + 1}`}
+              className={`advanced-panel-chat-conv-item${c.id === currentConversationId ? ' active' : ''}`}
+              data-name={`advanced-panel.chat-conv-item-${idx + 1}`}
               data-index={idx + 1}
               data-id={c.id}
             >
               <button
                 type="button"
-                className="ai-app-chat-conv-main"
+                className="advanced-panel-chat-conv-main"
                 onClick={() => void selectConversation(c.id)}
                 title={c.title}
-                data-name={`ai-app-provider.chat-conv-item-${idx + 1}-main`}
+                data-name={`advanced-panel.chat-conv-item-${idx + 1}-main`}
               >
-                <span className="ai-app-chat-conv-title" data-name={`ai-app-provider.chat-conv-item-${idx + 1}-title`}>{c.title || '未命名对话'}</span>
+                <span className="advanced-panel-chat-conv-title" data-name={`advanced-panel.chat-conv-item-${idx + 1}-title`}>{c.title || '未命名对话'}</span>
               </button>
               <IconButton
                 type="button"
-                className="ai-app-chat-conv-del"
+                className="advanced-panel-chat-conv-del"
                 onClick={() => void removeConversation(c.id)}
                 title="删除对话"
                 aria-label="删除对话"
-                data-name={`ai-app-provider.chat-conv-item-${idx + 1}-delete-button`}
+                data-name={`advanced-panel.chat-conv-item-${idx + 1}-delete-button`}
               >
                 ×
               </IconButton>
@@ -416,10 +449,10 @@ function ChatTab() {
       </aside>
 
       {/* 右侧：消息区 + 输入框 */}
-      <section className="ai-app-chat-main" data-name="ai-app-provider.chat-main">
-        <div className="ai-app-chat-messages" data-name="ai-app-provider.chat-messages">
+      <section className="advanced-panel-chat-main" data-name="advanced-panel.chat-main">
+        <div className="advanced-panel-chat-messages" data-name="advanced-panel.chat-messages">
           {messages.length === 0 && !streaming && (
-            <div className="ai-app-chat-placeholder" data-name="ai-app-provider.chat-placeholder">
+            <div className="advanced-panel-chat-placeholder" data-name="advanced-panel.chat-placeholder">
               {currentProvider ? `开始与 ${currentProvider.name} 对话` : '请先在「自定义供应商」页配置供应商'}
             </div>
           )}
@@ -438,74 +471,74 @@ function ChatTab() {
             />
           )}
           {streamError && (
-            <div className="ai-app-chat-error" data-name="ai-app-provider.chat-error">{streamError}</div>
+            <div className="advanced-panel-chat-error" data-name="advanced-panel.chat-error">{streamError}</div>
           )}
-          <div ref={messagesEndRef} data-name="ai-app-provider.chat-messages-end" />
+          <div ref={messagesEndRef} data-name="advanced-panel.chat-messages-end" />
         </div>
         {/* 需求 10：记录文本模板折叠面板 */}
-        <div className="ai-app-chat-record-template" data-name="ai-app-provider.chat-record-template-panel">
+        <div className="advanced-panel-chat-record-template" data-name="advanced-panel.chat-record-template-panel">
           <button
             type="button"
-            className="ai-app-chat-record-template-toggle"
-            data-name="ai-app-provider.chat-record-template-toggle-button"
+            className="advanced-panel-chat-record-template-toggle"
+            data-name="advanced-panel.chat-record-template-toggle-button"
             onClick={() => setShowRecordTemplate((v) => !v)}
           >
             {showRecordTemplate ? '▾' : '▸'} 记录文本模板
           </button>
           {showRecordTemplate && (
-            <div className="ai-app-chat-record-template-body" data-name="ai-app-provider.chat-record-template-body">
-              <div className="ai-app-chat-record-template-row" data-name="ai-app-provider.chat-record-template-prefix-row">
-                <label className="ai-app-chat-record-template-label" data-name="ai-app-provider.chat-record-template-prefix-label">前缀</label>
+            <div className="advanced-panel-chat-record-template-body" data-name="advanced-panel.chat-record-template-body">
+              <div className="advanced-panel-chat-record-template-row" data-name="advanced-panel.chat-record-template-prefix-row">
+                <label className="advanced-panel-chat-record-template-label" data-name="advanced-panel.chat-record-template-prefix-label">前缀</label>
                 <input
                   type="text"
-                  className="ai-app-chat-record-template-input"
-                  data-name="ai-app-provider.chat-record-template-prefix-input"
+                  className="advanced-panel-chat-record-template-input"
+                  data-name="advanced-panel.chat-record-template-prefix-input"
                   placeholder="例如：[{{time}}] "
                   value={recordTextPrefix}
                   onChange={(e) => setRecordTextPrefix(e.target.value)}
                   onBlur={() => persistRecordTemplate({ prefix: recordTextPrefix, suffix: recordTextSuffix })}
                 />
               </div>
-              <div className="ai-app-chat-record-template-row" data-name="ai-app-provider.chat-record-template-suffix-row">
-                <label className="ai-app-chat-record-template-label" data-name="ai-app-provider.chat-record-template-suffix-label">后缀</label>
+              <div className="advanced-panel-chat-record-template-row" data-name="advanced-panel.chat-record-template-suffix-row">
+                <label className="advanced-panel-chat-record-template-label" data-name="advanced-panel.chat-record-template-suffix-label">后缀</label>
                 <input
                   type="text"
-                  className="ai-app-chat-record-template-input"
-                  data-name="ai-app-provider.chat-record-template-suffix-input"
+                  className="advanced-panel-chat-record-template-input"
+                  data-name="advanced-panel.chat-record-template-suffix-input"
                   placeholder="例如：——{{tag}}"
                   value={recordTextSuffix}
                   onChange={(e) => setRecordTextSuffix(e.target.value)}
                   onBlur={() => persistRecordTemplate({ prefix: recordTextPrefix, suffix: recordTextSuffix })}
                 />
               </div>
-              <div className="ai-app-chat-record-template-hint" data-name="ai-app-provider.chat-record-template-hint">
+              <div className="advanced-panel-chat-record-template-hint" data-name="advanced-panel.chat-record-template-hint">
                 占位符：<code>{'{{time}}'}</code> 当前时间；<code>{'{{tag}}'}</code> 供应商名。仅影响保存的 AI 回复，不改变实时显示。
               </div>
             </div>
           )}
         </div>
-        <div className="ai-app-chat-input-wrap" data-name="ai-app-provider.chat-input-wrap">
+        <div className="advanced-panel-chat-input-wrap" data-name="advanced-panel.chat-input-wrap">
           <textarea
             ref={inputRef}
-            className="ai-app-chat-input"
+            className="advanced-panel-chat-input"
             value={input}
             placeholder={currentProvider ? `发送给 ${currentProvider.name}...` : '请先选择供应商'}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
             disabled={!currentProviderId}
-            data-name="ai-app-provider.chat-input-textarea"
+            data-name="advanced-panel.chat-input-textarea"
           />
-          <div className="ai-app-chat-input-actions" data-name="ai-app-provider.chat-input-actions">
+          <div className="advanced-panel-chat-input-actions" data-name="advanced-panel.chat-input-actions">
             {streaming ? (
-              <button type="button" className="btn-primary-flat ai-app-chat-send cancel" onClick={() => void cancelStream()} data-name="ai-app-provider.chat-stop-button">停止</button>
+              <button type="button" className="btn-primary-flat advanced-panel-chat-send cancel" onClick={() => void cancelStream()} data-name="advanced-panel.chat-stop-button">停止</button>
             ) : (
               <button
                 type="button"
-                className="btn-primary-flat ai-app-chat-send"
+                className="btn-primary-flat advanced-panel-chat-send"
                 onClick={() => void handleSend()}
                 disabled={!input.trim() || !currentProviderId}
-                data-name="ai-app-provider.chat-send-button"
+                data-name="advanced-panel.chat-send-button"
               >
                 发送
               </button>

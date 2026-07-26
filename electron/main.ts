@@ -69,8 +69,8 @@ import {
   showHistoryWindow,
   showPromptWindow,
   showAiAppEditorWindow,
-  openAiAppProviderWindow,
-  toggleAiAppProviderWindow,
+  openAdvancedPanelWindow,
+  toggleAdvancedPanelWindow,
   showOnboardingWindow,
   setOnboardingLifecycleCallbacks,
   showProcessCleanupWindow,
@@ -1032,21 +1032,21 @@ app.whenReady().then(async () => {
     if (!opts || typeof opts !== 'object') return
     showAiAppEditorWindow(opts)
   })
-  // 打开 AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话）
+  // 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   // 可选 providerId：若提供则切换到对应供应商的对话页
-  ipcMain.handle(IPC_CHANNELS.AI_APP_PROVIDER_OPEN, (_e, providerId?: string) => {
-    openAiAppProviderWindow(providerId ? { providerId, initialTab: 'chat' } : undefined)
+  ipcMain.handle(IPC_CHANNELS.ADVANCED_PANEL_OPEN, (_e, providerId?: string) => {
+    openAdvancedPanelWindow(providerId ? { providerId, initialTab: 'chat' } : undefined)
   })
-  // 切换 AI 应用独立窗口显隐（单例，Alt+Q 入口）
-  // v0.5.2：Alt+Q 始终打开 AI 应用窗口，笔记/白板作为该窗口的视图模式
-  ipcMain.handle(IPC_CHANNELS.AI_APP_PROVIDER_TOGGLE, () => {
-    toggleAiAppProviderWindow()
+  // 切换 进阶面板显隐（单例，Alt+Q 入口）
+  // v0.5.2：Alt+Q 始终打开 进阶面板，笔记/白板作为该窗口的视图模式
+  ipcMain.handle(IPC_CHANNELS.ADVANCED_PANEL_TOGGLE, () => {
+    toggleAdvancedPanelWindow()
   })
 
   // 需求 11：笔记 → 当前 AI 输入框
-  // v0.5.2：笔记嵌入 StandaloneView，sender 即 AI 应用窗口。
+  // v0.5.2：笔记嵌入 StandaloneView，sender 即 进阶面板。
   // 查找最近聚焦窗口（lastFocusedWin），把笔记文本直接注入其激活的 AI 输入框。
-  // 复用与语音注入相同的 VOICE_INJECT_AND_SEND 通道：渲染层 MainView/ChatView/AiProviderAppView
+  // 复用与语音注入相同的 VOICE_INJECT_AND_SEND 通道：渲染层 MainView/ChatView/AdvancedPanelView
   // 均已实现该监听器，自动适配 webview 输入框 / textarea / 自定义对话输入框。
   // 注入结果通过 NOTES_INJECT_RESULT 回传到调用方窗口（sender），供其显示 toast。
   ipcMain.handle(
@@ -1144,16 +1144,16 @@ app.whenReady().then(async () => {
         content: input.content,
         metadata: input.metadata ?? { createdAt: Date.now() },
       }
-      // 确保 AI 应用窗口可见
-      openAiAppProviderWindow({ initialTab: 'whiteboard' })
-      const win = windowState.aiAppProviderWindow
+      // 确保 进阶面板可见
+      openAdvancedPanelWindow({ initialTab: 'whiteboard' })
+      const win = windowState.advancedPanelWindow
       if (!win || win.isDestroyed()) {
         return card
       }
       // 通知切换到 whiteboard tab，渲染层 ready 后回 ACK，主进程收到 ACK 再发送卡片
       const sendSwitch = () => {
         if (win.isDestroyed()) return
-        win.webContents.send(IPC_CHANNELS.AI_APP_PROVIDER_NAVIGATE, { tab: 'whiteboard' })
+        win.webContents.send(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, { tab: 'whiteboard' })
       }
       if (win.webContents.isLoading()) {
         win.webContents.once('did-finish-load', sendSwitch)
@@ -1410,7 +1410,7 @@ app.whenReady().then(async () => {
   registerHotkeyIpc({
     hotkeyManager,
     getMainWindow: () => windowState.mainWindow,
-    toggleAiAppProviderWindow,
+    toggleAdvancedPanelWindow,
     startBackgroundVoice,
     stopBackgroundVoice,
   })
@@ -1503,10 +1503,10 @@ app.on('before-quit', () => {
     windowState.promptWindow.destroy()
     windowState.promptWindow = null
   }
-  // 销毁 AI 应用独立窗（避免进程残留）
-  if (windowState.aiAppProviderWindow && !windowState.aiAppProviderWindow.isDestroyed()) {
-    windowState.aiAppProviderWindow.destroy()
-    windowState.aiAppProviderWindow = null
+  // 销毁进阶面板窗（避免进程残留）
+  if (windowState.advancedPanelWindow && !windowState.advancedPanelWindow.isDestroyed()) {
+    windowState.advancedPanelWindow.destroy()
+    windowState.advancedPanelWindow = null
   }
   // 销毁引导窗（避免进程残留）
   if (windowState.onboardingWindow && !windowState.onboardingWindow.isDestroyed()) {

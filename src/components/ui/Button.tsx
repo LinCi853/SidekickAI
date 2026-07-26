@@ -12,7 +12,9 @@ export type ButtonVariant =
   | 'danger'
   | 'link'
   | 'primary-compact'
-  | 'text';
+  | 'primary-flat'
+  | 'text'
+  | 'outline';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** 按钮变体 */
@@ -30,10 +32,12 @@ function resolveClass(variant: ButtonVariant, danger?: boolean, extra?: string):
     : variant === 'danger' ? 'btn-danger'
     : variant === 'link' ? 'btn-link'
     : variant === 'primary-compact' ? 'btn-primary-compact'
+    : variant === 'primary-flat' ? 'btn-primary-flat'
     : variant === 'text' ? 'btn-text'
+    : variant === 'outline' ? 'btn-outline'
     : 'btn-ghost';
-  // link 变体不继承 .btn 基类（无边框无 padding）
-  const base = variant === 'link' ? '' : 'btn';
+  // link / outline / primary-flat 变体不继承 .btn 基类（自带 padding 与边框样式）
+  const base = (variant === 'link' || variant === 'outline' || variant === 'primary-flat') ? '' : 'btn';
   const dangerMod = danger && variant === 'text' ? 'is-danger' : '';
   return [base, variantClass, dangerMod, extra].filter(Boolean).join(' ');
 }

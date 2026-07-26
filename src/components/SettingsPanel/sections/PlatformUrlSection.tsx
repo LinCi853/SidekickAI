@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
-import { Button, SegmentedControl, SectionTitle } from '../../ui';
+import { Button, SegmentedControl, SectionTitle, Combobox } from '../../ui';
+import type { ComboboxOption } from '../../ui';
 import type { AIPlatform, Profile, DevicePreset } from '../../../lib/electron-api';
 
 interface PlatformUrlSectionProps {
@@ -68,7 +69,7 @@ export default function PlatformUrlSection({
       </SectionTitle>
       {hideForeignModels && !isCollapsed && (
         <div className="platform-url-hint" data-name="settings.platform-url.hint">
-          已开启「一键隐藏国外模型」，仅显示国内平台。可在「区域与代理」中关闭。
+          已隐藏国外平台，可在「区域与代理」中关闭。
         </div>
       )}
       {!isCollapsed && (
@@ -192,51 +193,53 @@ export default function PlatformUrlSection({
               <div className="platform-ua-row" data-name={`settings.platform-url.platform-item-${idx + 1}-ua-row`}>
                 <div className="platform-ua-select" data-name={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-field`}>
                   <span className="platform-ua-label" data-name={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-label`}>桌面端 UA</span>
-                  <select
-                    className="platform-ua-preset-select input-underline"
-                    value={desktopPresetDraft}
-                    onChange={(e) =>
+                  <Combobox
+                    inputValue={desktopPresets.find((preset) => preset.id === desktopPresetDraft)?.name ?? ''}
+                    onInputChange={() => {}}
+                    inputPlaceholder="选择桌面端 UA"
+                    inputClassName="platform-ua-preset-select input-underline"
+                    inputReadOnly
+                    options={desktopPresets.map<ComboboxOption>((preset, presetIdx) => ({
+                      value: preset.id,
+                      label: preset.name,
+                      selected: preset.id === desktopPresetDraft,
+                    }))}
+                    onSelect={(v) =>
                       setPlatformDesktopUaDrafts((prev) => ({
                         ...prev,
-                        [p.id]: e.target.value,
+                        [p.id]: v,
                       }))
                     }
-                    data-name={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-select`}
-                  >
-                    {desktopPresets.map((preset, presetIdx) => (
-                      <option
-                        key={preset.id}
-                        value={preset.id}
-                        data-name={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-option-${presetIdx + 1}`}
-                      >
-                        {preset.name}
-                      </option>
-                    ))}
-                  </select>
+                    searchable
+                    searchPlaceholder="搜索 UA 预设…"
+                    emptyText="无匹配预设"
+                    dataName={`settings.platform-url.platform-item-${idx + 1}-desktop-ua-select`}
+                  />
                 </div>
                 <div className="platform-ua-select" data-name={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-field`}>
                   <span className="platform-ua-label" data-name={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-label`}>移动端 UA</span>
-                  <select
-                    className="platform-ua-preset-select input-underline"
-                    value={mobilePresetDraft}
-                    onChange={(e) =>
+                  <Combobox
+                    inputValue={mobilePresets.find((preset) => preset.id === mobilePresetDraft)?.name ?? ''}
+                    onInputChange={() => {}}
+                    inputPlaceholder="选择移动端 UA"
+                    inputClassName="platform-ua-preset-select input-underline"
+                    inputReadOnly
+                    options={mobilePresets.map<ComboboxOption>((preset, presetIdx) => ({
+                      value: preset.id,
+                      label: preset.name,
+                      selected: preset.id === mobilePresetDraft,
+                    }))}
+                    onSelect={(v) =>
                       setPlatformMobileUaDrafts((prev) => ({
                         ...prev,
-                        [p.id]: e.target.value,
+                        [p.id]: v,
                       }))
                     }
-                    data-name={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-select`}
-                  >
-                    {mobilePresets.map((preset, presetIdx) => (
-                      <option
-                        key={preset.id}
-                        value={preset.id}
-                        data-name={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-option-${presetIdx + 1}`}
-                      >
-                        {preset.name}
-                      </option>
-                    ))}
-                  </select>
+                    searchable
+                    searchPlaceholder="搜索 UA 预设…"
+                    emptyText="无匹配预设"
+                    dataName={`settings.platform-url.platform-item-${idx + 1}-mobile-ua-select`}
+                  />
                 </div>
                 <div className="platform-theme-color" data-name={`settings.platform-url.platform-item-${idx + 1}-theme-color-field`}>
                   <span className="platform-ua-label" data-name={`settings.platform-url.platform-item-${idx + 1}-theme-color-label`}>主打色</span>

@@ -1,0 +1,251 @@
+/* =====================================================================
+   ui/Combobox.css —— 统一下拉选择组件样式
+   特性：
+   - 自适应宽度：根据触发器宽度自动撑开，最大不超过视口宽度的 80%
+   - 网格布局：根据内容长度自动计算每行容纳量（flex-wrap + 自适应宽度）
+   - 内嵌搜索框：实时过滤候选
+   - 统一关闭方式：ESC（由 hook 处理） + 点击外部 + 关闭按钮
+   ===================================================================== */
+
+.combobox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+/* 只读模式：输入框不可编辑，点击展开下拉 */
+.combobox.is-readonly .combobox-input {
+  cursor: pointer;
+  background: var(--muted);
+}
+.combobox.is-readonly .combobox-input:hover {
+  border-color: var(--accent-50);
+}
+
+/* 触发器容器（输入框 + 下拉箭头） */
+.combobox-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.combobox-trigger .combobox-input {
+  flex: 1;
+  min-width: 0;
+  padding-right: 28px; /* 给右侧箭头留位置 */
+}
+.combobox-arrow {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  padding: 2px 4px;
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+.combobox-arrow:hover {
+  color: var(--foreground);
+  background: var(--accent-10);
+}
+.combobox-arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.combobox-arrow.expanded {
+  color: var(--accent-bright);
+}
+
+/* 下拉面板（Portal 渲染到 document.body） */
+.combobox-panel {
+  position: fixed;
+  z-index: 1000;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  max-width: min(80vw, 560px);
+  max-height: min(60vh, 420px);
+  overflow: hidden;
+}
+
+/* 面板头部：搜索框 + 关闭按钮 */
+.combobox-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-1-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.combobox-search {
+  flex: 1;
+  min-width: 0;
+  background: var(--muted);
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-size: var(--text-sm);
+  padding: 4px 8px;
+  outline: none;
+  transition: border-color var(--duration-fast);
+}
+.combobox-search:focus {
+  border-color: var(--accent);
+}
+.combobox-search::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+.combobox-close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+.combobox-close:hover {
+  color: var(--foreground);
+  background: var(--accent-10);
+}
+
+/* 面板主体：候选项区域（网格布局自适应） */
+.combobox-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-1);
+  /* flex-wrap 网格：每项根据内容自适应宽度，超出换行 */
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-content: flex-start;
+}
+
+/* 候选项 chip */
+.combobox-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  background: var(--muted);
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.combobox-option:hover {
+  background: var(--accent-10);
+  color: var(--accent-bright);
+  border-color: var(--accent-25);
+}
+/* 选中态：强对比 + 左侧色条 + 勾选图标 */
+.combobox-option.selected {
+  background: var(--accent-10);
+  color: var(--accent-bright);
+  border-color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding-left: 7px;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--accent-25);
+}
+.combobox-option.selected:hover {
+  background: var(--accent-25);
+  border-color: var(--accent);
+  border-left-color: var(--accent-bright);
+}
+/* 勾选标记（CSS 伪元素实现 ✓） */
+.combobox-option.selected::before {
+  content: '✓';
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--accent-bright);
+  font-family: var(--font-sans);
+  line-height: 1;
+}
+.combobox-option-tag {
+  flex-shrink: 0;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-bright);
+  background: var(--accent-10);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-sans);
+}
+.combobox-option.selected .combobox-option-tag {
+  color: var(--primary-foreground);
+  background: rgba(255, 255, 255, 0.2);
+}
+.combobox-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 面板底部：状态栏（X / Y 项） */
+.combobox-footer {
+  flex-shrink: 0;
+  padding: 4px var(--space-1-5);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
+}
+.combobox-footer-hint {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  opacity: 0.8;
+}
+
+/* 空状态 */
+.combobox-empty {
+  padding: var(--space-3) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  text-align: center;
+  font-family: var(--font-sans);
+}
+
+/* 加载状态 */
+.combobox-loading {
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  text-align: center;
+  font-family: var(--font-sans);
+}

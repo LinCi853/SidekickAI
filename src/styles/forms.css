@@ -26,6 +26,9 @@
 .input-underline:focus {
   border-bottom-color: var(--accent-50);
 }
+.input-underline::placeholder {
+  color: var(--text-muted);
+}
 
 /* ===== 主操作保存按钮（实色背景，filter 调节明暗） ===== */
 .btn-save-primary {
@@ -65,6 +68,11 @@
 }
 .btn-secondary-underline:hover { color: var(--accent-bright); }
 .btn-secondary-underline.danger:hover { color: var(--danger); }
+/* 紧凑变体：用于卡片内多按钮行（更小 padding + 字号） */
+.btn-secondary-underline.compact {
+  padding: 2px 6px;
+  font-size: 12px;
+}
 
 /* ===== 测试结果块（带边框，ok/fail 双态） ===== */
 .test-result {
@@ -85,3 +93,11 @@
 }
 .feedback-text.ok { color: var(--success); }
 .feedback-text.fail { color: var(--danger); }
+
+/* ===== SegmentedControl 容器通用布局类（替代跨场景复用 .proxy-mode-group） ===== */
+.seg-control-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}

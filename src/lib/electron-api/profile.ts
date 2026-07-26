@@ -101,20 +101,20 @@ export function openAiAppEditor(opts: {
 }
 
 /**
- * 打开 AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话）。
+ * 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）。
  * 可选 providerId：若提供则切换到对应自定义供应商的对话页。
  */
-export function openAiAppProviderWindow(providerId?: string): Promise<void> {
+export function openAdvancedPanelWindow(providerId?: string): Promise<void> {
   const api = requireElectron();
-  return api.openAiAppProviderWindow(providerId);
+  return api.openAdvancedPanelWindow(providerId);
 }
 
 /** 监听单例窗口复用时的 tab/provider 切换通知 */
-export function onAiAppProviderNavigate(
+export function onAdvancedPanelNavigate(
   callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
 ): () => void {
   const api = requireElectron();
-  return api.onAiAppProviderNavigate(callback);
+  return api.onAdvancedPanelNavigate(callback);
 }
 
 /**

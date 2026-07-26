@@ -14,6 +14,7 @@ import {
   getPreloadPath,
   createDefaultWebPreferences,
   attachWebviewPopupInterceptor,
+  attachWebviewAntiDetection,
   loadRenderer,
   setupBoundsTracking,
   safeLogWindowTrace,
@@ -73,6 +74,7 @@ export function createMainWindow(): void {
   // 拦截 <webview> 内弹窗（target="_blank" / window.open()）
   // 必须通过 did-attach-webview 在 webview 的 guest webContents 上注册 handler，
   // BrowserWindow.webContents 的 handler 不拦截 webview 内的弹窗
+  attachWebviewAntiDetection(win.webContents)
   attachWebviewPopupInterceptor(win.webContents)
 
   // 确保 x/y 在屏幕可视范围内

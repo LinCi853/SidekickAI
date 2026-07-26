@@ -133,14 +133,13 @@ export default function StorageSection() {
           ]}
           onChange={(v) => void handleAutoCleanChange(v)}
           name="自动清理"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
-      <div className="proxy-actions" data-name="settings.storage.cache-actions">
+      <div className="block-rule-form-stack" data-name="settings.storage.cache-actions">
         <button
           type="button"
-          className="btn-text"
-          style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 600 }}
+          className="btn-outline btn-outline-sm"
           onClick={() => void handleClean()}
           disabled={cleaning}
           data-name="settings.storage.clean-button"
@@ -148,24 +147,15 @@ export default function StorageSection() {
           {cleaning ? '清理中…' : '立即清理'}
         </button>
         {cleanFeedback && (
-          <span className="settings-feedback feedback-text ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</span>
+          <span className="feedback-text ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</span>
         )}
       </div>
 
-      <div style={{ marginTop: 24 }}>
-        <SectionTitle>下载</SectionTitle>
-      </div>
+      <SectionTitle className="section-title-spacer">下载</SectionTitle>
       <div className="about-row" data-name="settings.storage.download-dir-row">
         <span data-name="settings.storage.download-dir-label">下载目录</span>
         <span
-          style={{
-            maxWidth: 220,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-          }}
+          className="settings-storage-dir-value"
           title={downloadDir || '系统下载目录'}
           data-name="settings.storage.download-dir-value"
         >
@@ -181,14 +171,13 @@ export default function StorageSection() {
           ]}
           onChange={(v) => void handleBehaviorChange(v)}
           name="下载行为"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
-      <div className="proxy-actions" data-name="settings.storage.download-actions">
+      <div className="block-rule-form-stack" data-name="settings.storage.download-actions">
         <button
           type="button"
-          className="btn-text"
-          style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 600 }}
+          className="btn-outline btn-outline-sm"
           onClick={() => void handleSelectDownloadDir()}
           disabled={selectingDir}
           data-name="settings.storage.select-dir-button"
@@ -197,8 +186,7 @@ export default function StorageSection() {
         </button>
         <button
           type="button"
-          className="btn-text"
-          style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 600 }}
+          className="btn-outline btn-outline-sm"
           onClick={() => void openDownloadDir()}
           data-name="settings.storage.open-dir-button"
         >

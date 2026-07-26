@@ -218,22 +218,7 @@
   gap: var(--space-2);
 }
 .history-detail-btn {
-  padding: var(--space-1) var(--space-2);
-  min-height: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: 1.4;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-bd-2);
-  color: var(--muted-foreground);
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-.history-detail-btn:hover {
-  background: var(--accent-10);
-  color: var(--foreground);
+  /* 视觉样式由 .btn-outline / .btn-text 提供，此处保留 danger 修饰 */
 }
 .history-detail-btn.danger:hover {
   background: var(--danger-bg-soft);
@@ -394,21 +379,7 @@
   }
 }
 .msg-action-btn {
-  padding: var(--space-1) var(--space-2);
-  min-height: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: 1.4;
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid var(--glass-bd);
-  color: var(--text-muted);
-  transition: all var(--duration-fast);
-}
-.msg-action-btn:hover {
-  background: var(--glass-bg-2);
-  color: var(--muted-foreground);
+  /* 视觉样式由 .btn-outline / .btn-text 提供，此处保留 danger 修饰 */
 }
 .msg-action-btn.danger:hover {
   background: var(--danger-bg-soft);
@@ -439,30 +410,10 @@
   justify-content: flex-end;
 }
 .msg-edit-btn {
-  padding: var(--space-1) var(--space-2);
-  min-height: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: 1.4;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-bd-2);
-  color: var(--muted-foreground);
-  transition: all var(--duration-fast);
-}
-.msg-edit-btn:hover {
-  background: var(--accent-10);
-  color: var(--foreground);
+  /* 视觉样式由 .btn-outline / .btn-primary-compact 提供 */
 }
 .msg-edit-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--foreground-inverse);
-}
-.msg-edit-btn.primary:hover {
-  background: var(--accent-bright);
+  /* primary 主操作样式由 .btn-primary-compact 提供 */
 }
 
 /* 会话标题编辑 */

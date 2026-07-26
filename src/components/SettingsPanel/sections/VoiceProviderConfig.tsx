@@ -93,7 +93,7 @@ function VoiceProviderConfig<T, R extends BaseTestResult = BaseTestResult>({
       )}
       {onTest && (
         <Button
-          variant="text"
+          variant="outline"
           className="voice-test-btn btn-secondary-underline"
           disabled={testing || (testDisabled ? testDisabled(draft) : false)}
           onClick={handleTest}

@@ -239,13 +239,8 @@
 }
 .prompt-editor-actions { display: flex; gap: var(--space-2); flex-wrap: nowrap; }
 .prompt-btn {
-  padding: 6px 12px; border-radius: var(--radius-sm); font-size: var(--text-sm); min-height: 0; line-height: 1.4; cursor: pointer;
-  border: 1px solid var(--border); background: var(--accent); color: var(--foreground);
-  transition: all var(--duration-fast) var(--ease-out);
+  /* 视觉样式由 .btn-outline / .btn-primary-compact 提供，此处保留 danger 修饰 */
 }
-.prompt-btn:hover { background: var(--input); border-color: var(--ring); color: var(--accent-bright); }
-.prompt-btn.primary { background: var(--accent-bright); color: var(--foreground-inverse); border-color: var(--accent-bright); }
-.prompt-btn.primary:hover { background: var(--accent); color: var(--foreground-inverse); border-color: var(--accent); }
 .prompt-btn.danger { color: var(--danger); }
 .prompt-btn.danger:hover { background: var(--danger-bg-soft); border-color: var(--danger); color: var(--danger); }
 

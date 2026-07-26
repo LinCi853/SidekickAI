@@ -37,6 +37,11 @@ export function isElectron(): boolean {
   return detectPlatform() === 'electron'
 }
 
+/** 当前平台是否为移动端（Capacitor 原生） */
+export function isMobile(): boolean {
+  return detectPlatform() === 'mobile'
+}
+
 /**
  * 平台常量 —— 模块加载时一次性求值。
  * 供同步代码分支使用（如 App.tsx 顶部平台分流），避免重复调用 detectPlatform()。

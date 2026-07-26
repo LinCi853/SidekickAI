@@ -11,6 +11,7 @@
 import './ShortcutsModal.css';
 import type { HotkeyConfig, HotkeyAction } from '../lib/electron-api';
 import { IconButton } from './ui';
+import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 
 export interface ShortcutsModalProps {
   open: boolean;
@@ -27,7 +28,7 @@ const DEFAULT_GLOBAL_HOTKEYS: Array<{
   note?: string;
 }> = [
   { action: 'toggleMainWindow', fallbackKeys: 'Alt + Space', actionText: '呼出/隐藏主窗口' },
-  { action: 'toggleDetachedWindows', fallbackKeys: 'Alt + Q', actionText: '打开 AI 应用管理窗口' },
+  { action: 'toggleDetachedWindows', fallbackKeys: 'Alt + Q', actionText: '打开进阶面板' },
   { action: 'backgroundVoice', fallbackKeys: 'Alt + V', actionText: '后台语音录入（按住说话，松开发送）' },
 ];
 
@@ -64,6 +65,9 @@ function scopeClass(scope: string): string {
 }
 
 export default function ShortcutsModal({ open, onClose, hotkeys }: ShortcutsModalProps) {
+  // ESC 关闭快捷键说明面板
+  useEscToCloseOverlay(open, onClose);
+
   // 前 3 项：根据 hotkeys prop 动态生成（自定义 accelerator + 启用状态）
   const globalItems = DEFAULT_GLOBAL_HOTKEYS.map((g) => {
     const cfg = hotkeys?.find((h) => h.action === g.action);

@@ -78,8 +78,8 @@ export interface AppSettingsState {
   // 其他
   altSpaceResetThreshold: number;
   setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>;
-  defaultAiAppTab: 'chat' | 'whiteboard' | 'notes';
-  setDefaultAiAppTab: Dispatch<SetStateAction<'chat' | 'whiteboard' | 'notes'>>;
+  defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes';
+  setDefaultAdvancedPanelTab: Dispatch<SetStateAction<'chat' | 'whiteboard' | 'notes'>>;
   // 加载与持久化
   load: () => Promise<void>;
   /** 更新单个或多个字段并持久化到主进程 */
@@ -109,7 +109,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
     ...ALL_TOP_BAR_BUTTON_GROUPS,
   ]);
   const [altSpaceResetThreshold, setAltSpaceResetThreshold] = useState(6);
-  const [defaultAiAppTab, setDefaultAiAppTab] = useState<'chat' | 'whiteboard' | 'notes'>('chat');
+  const [defaultAdvancedPanelTab, setDefaultAdvancedPanelTab] = useState<'chat' | 'whiteboard' | 'notes'>('chat');
 
   const load = useCallback(async () => {
     try {
@@ -135,7 +135,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
       setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
       setAltSpaceResetThreshold(cfg.altSpaceResetThreshold ?? 6);
       setUsageTrackingEnabled(cfg.usageTrackingEnabled ?? true);
-      setDefaultAiAppTab(cfg.defaultAiAppTab ?? 'chat');
+      setDefaultAdvancedPanelTab(cfg.defaultAdvancedPanelTab ?? 'chat');
     } catch (e) {
       console.error('[useAppSettings] 加载失败:', e);
     }
@@ -170,7 +170,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
     hideForeignModels, setHideForeignModels,
     topBarVisibleButtons, setTopBarVisibleButtons,
     altSpaceResetThreshold, setAltSpaceResetThreshold,
-    defaultAiAppTab, setDefaultAiAppTab,
+    defaultAdvancedPanelTab, setDefaultAdvancedPanelTab,
     load,
     update,
   };

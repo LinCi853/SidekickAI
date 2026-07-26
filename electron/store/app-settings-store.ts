@@ -16,6 +16,35 @@ import { IPC_CHANNELS, ALL_TOP_BAR_BUTTON_GROUPS, type TopBarButtonGroup } from 
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { createJsonStore, isPortableMode } from './store-paths.js'
 
+/**
+ * 默认弹窗白名单：各 AI 平台登录/认证/账户域。
+ *
+ * 这些域是 AI 平台登录态必需的独立窗口场景（accounts/auth/passport 等），
+ * 与「应用外页面」语义不同——前者是平台账户体系的必要部分，
+ * 后者是用户感知的"被弹出去打开了别的东西"。
+ *
+ * 预填默认值避免新用户首次登录被拦截 3 次才能加白的糟糕体验，
+ * 也避免同域登录 popup 被强制页面内跳转破坏模态登录流程。
+ */
+const DEFAULT_POPUP_WHITELIST: string[] = [
+  // ChatGPT
+  'https://auth.openai.com/',
+  'https://auth0.openai.com/',
+  'https://login.openai.com/',
+  // Claude
+  'https://auth.anthropic.com/',
+  // Gemini
+  'https://accounts.google.com/',
+  'https://myaccount.google.com/',
+  // 豆包
+  'https://passport.volcengine.com/',
+  // 文心一言
+  'https://passport.baidu.com/',
+  // 小米 Mimo
+  'https://account.xiaomi.com/',
+  'https://auth.mi.com/',
+]
+
 // 持久化存储实例（写入 app-settings.json）
 export interface AppSettings {
   /** 是否隐藏国外模型/平台 */
@@ -82,8 +111,10 @@ export interface AppSettings {
   cookiePopupCooldownMs: number
   /** 需求 7：Cookie 弹窗自动处理总开关（默认 true） */
   cookieHandlerEnabled: boolean
-  /** v0.5.2 R-3：AI 应用独立窗口默认打开的 tab（Alt+Q 入口） */
-  defaultAiAppTab: 'chat' | 'whiteboard' | 'notes'
+  /** v0.5.2 R-3：进阶面板默认打开的 tab（Alt+Q 入口） */
+  defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
+  /** 白板应用层侧边栏是否可见（默认 false，依赖 tldraw 自带的 PageMenu 多页面切换） */
+  whiteboardSidebarVisible: boolean
 }
 
 const store = createJsonStore<{ settings: AppSettings; version: number }>({
@@ -111,7 +142,9 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       topBarVisibleButtons: ['navBack', 'navForward', 'navHome', 'pinToggle'],
       // 点击已打开应用时默认切换到该标签（不关闭），需用户主动改为 close 才关闭
       appClickBehavior: 'switch',
-      popupWhitelist: [],
+      // 弹窗白名单默认值：预填各 AI 平台登录/认证域，避免新用户首次登录被拦截 3 次才能加白
+      // （这些域是登录/账户体系必需的独立窗口场景，不是「应用外页面」）
+      popupWhitelist: DEFAULT_POPUP_WHITELIST,
       // 缓存清理：默认不自动清理（用户主动触发），首次启动 lastCacheCleanAt=0
       cacheAutoClean: 'never',
       lastCacheCleanAt: 0,
@@ -130,8 +163,10 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       cookieBlacklist: [],
       cookiePopupCooldownMs: 60000,
       cookieHandlerEnabled: true,
-      // v0.5.2 R-3：AI 应用独立窗口默认打开的 tab
-      defaultAiAppTab: 'chat',
+      // v0.5.2 R-3：进阶面板默认打开的 tab
+      defaultAdvancedPanelTab: 'chat',
+      // 白板应用层侧边栏默认隐藏（tldraw 自带 PageMenu 已支持多页面切换）
+      whiteboardSidebarVisible: false,
     },
     version: 1,
   },
@@ -154,7 +189,20 @@ export function getAppSettings(): AppSettings {
   const valid = new Set<TopBarButtonGroup>(ALL_TOP_BAR_BUTTON_GROUPS)
   s.topBarVisibleButtons = migrated.filter((g) => valid.has(g as TopBarButtonGroup)) as TopBarButtonGroup[]
   // 兼容旧版本设置文件：popupWhitelist 字段可能不存在
-  s.popupWhitelist = s.popupWhitelist ?? []
+  // 同时合并默认登录域：老用户已编辑过的条目保留，缺失的默认登录域补齐
+  // （登录域是 AI 平台账户体系必需，不应让用户删除导致登录失败）
+  const existingPopupWhitelist = (s.popupWhitelist ?? []) as string[]
+  const mergedWhitelist = [...existingPopupWhitelist]
+  for (const def of DEFAULT_POPUP_WHITELIST) {
+    // 已存在等价或包含/被包含的条目则跳过
+    const alreadyExists = mergedWhitelist.some(
+      (y) => y === def || y.startsWith(def) || def.startsWith(y),
+    )
+    if (!alreadyExists) {
+      mergedWhitelist.push(def)
+    }
+  }
+  s.popupWhitelist = mergedWhitelist
   // 兼容旧版本设置文件：缓存清理与下载相关字段可能不存在
   s.cacheAutoClean = s.cacheAutoClean ?? 'never'
   s.lastCacheCleanAt = s.lastCacheCleanAt ?? 0
@@ -172,7 +220,12 @@ export function getAppSettings(): AppSettings {
   s.cookiePopupCooldownMs = s.cookiePopupCooldownMs ?? 60000
   s.cookieHandlerEnabled = s.cookieHandlerEnabled ?? true
   // v0.5.2 R-3：兼容旧版本设置文件
-  s.defaultAiAppTab = s.defaultAiAppTab ?? 'chat'
+  s.defaultAdvancedPanelTab = s.defaultAdvancedPanelTab ?? 'chat'
+  // 白板应用层侧边栏：老用户无此字段时默认隐藏
+  s.whiteboardSidebarVisible = s.whiteboardSidebarVisible ?? false
+  // 兼容旧版本设置文件：默认 UA 预设字段可能不存在
+  s.defaultDesktopUaPreset = s.defaultDesktopUaPreset || 'win-chrome-125'
+  s.defaultMobileUaPreset = s.defaultMobileUaPreset || 'iphone-15-pro-safari'
   return s
 }
 

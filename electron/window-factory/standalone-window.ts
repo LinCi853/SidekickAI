@@ -12,6 +12,7 @@ import {
   WINDOW_BACKGROUND_COLOR,
   getPreloadPath,
   attachWebviewPopupInterceptor,
+  attachWebviewAntiDetection,
   loadRenderer,
   createDefaultWebPreferences,
   attachDetachedWindowLifecycle,
@@ -46,6 +47,7 @@ export function createStandaloneWindow(windowId: string): BrowserWindow {
   }))
 
   // 拦截 <webview> 内弹窗（脱离窗口内也可能打开新窗口）
+  attachWebviewAntiDetection(win.webContents)
   attachWebviewPopupInterceptor(win.webContents)
 
   if (

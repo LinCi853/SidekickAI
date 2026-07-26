@@ -255,17 +255,17 @@ export function calculateChatWindowMinWidth(uiScale: UiScale): number {
 }
 
 /**
- * 计算 AI 应用独立窗口的最小宽度。
+ * 计算 进阶面板的最小宽度。
  *
- * AiProviderAppView 顶栏元素计数：
+ * AdvancedPanelView 顶栏元素计数：
  *   - 左侧分页切换(3) + 顶部操作按钮(4) = 7
  *   - gap 计数 ≈ 6
  */
-export function calculateAiAppWindowMinWidth(uiScale: UiScale): number {
+export function calculateAdvancedPanelMinWidth(uiScale: UiScale): number {
   const elementCount = 7
   const gapCount = 6
   return calculateMinWidthByElements(uiScale, elementCount, gapCount, {
-    titleText: 'AI 应用',
+    titleText: '进阶面板',
   })
 }
 
@@ -273,5 +273,5 @@ export function calculateAiAppWindowMinWidth(uiScale: UiScale): number {
 export const MAIN_WINDOW_MIN_HEIGHT = 520
 /** ChatView 窗口最小高度 */
 export const CHAT_WINDOW_MIN_HEIGHT = 500
-/** AI 应用独立窗口最小高度 */
-export const AI_APP_WINDOW_MIN_HEIGHT = 560
+/** 进阶面板最小高度 */
+export const ADVANCED_PANEL_MIN_HEIGHT = 560

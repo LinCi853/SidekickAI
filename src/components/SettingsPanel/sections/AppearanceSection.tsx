@@ -45,7 +45,7 @@ export default function AppearanceSection({
           options={THEME_OPTIONS}
           onChange={(v) => setTheme(v)}
           name="主题"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
 
@@ -64,7 +64,7 @@ export default function AppearanceSection({
             }
           }}
           name="UI 比例"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
 

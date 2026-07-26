@@ -29,11 +29,11 @@ export { createStandaloneWindow } from './window-factory/standalone-window.js'
 export { createChatWindow, createChatDetachedWindow } from './window-factory/chat-window.js'
 export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow } from './window-factory/popup-windows.js'
 export {
-  createAiAppProviderWindow,
-  openAiAppProviderWindow,
-  showAiAppProviderWindow,
-  focusAiAppProviderWindow,
-  toggleAiAppProviderWindow,
-} from './window-factory/ai-app-window.js'
+  createAdvancedPanelWindow,
+  openAdvancedPanelWindow,
+  showAdvancedPanelWindow,
+  focusAdvancedPanelWindow,
+  toggleAdvancedPanelWindow,
+} from './window-factory/advanced-panel-window.js'
 export { showOnboardingWindow, setOnboardingLifecycleCallbacks } from './window-factory/onboarding-window.js'
 export { showProcessCleanupWindow } from './window-factory/process-cleanup-window.js'

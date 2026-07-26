@@ -1,6 +1,6 @@
 /* =====================================================================
    SettingsPanel/sections/ProviderSection —— 自定义 AI 供应商管理分区
-   从 pages/AiProviderAppView.tsx 的 ProvidersModal 迁移而来。
+   从 pages/AdvancedPanelView.tsx 的 ProvidersModal 迁移而来。
    - 外层 SectionTitle collapsible（替代 .providers-modal-header）
    - 卡片列表保留 .provider-card 类（列表行风格，与 SettingsPanel 其他 section 一致）
    - 编辑表单 / 加密导出 / 加密导入 改用 ui/Modal（ESC + 遮罩关闭由 Modal 自动处理）
@@ -26,24 +26,83 @@ import type {
   CustomAIProviderInput,
 } from '../../../lib/electron-api';
 import Badge from '../../ui/Badge';
-import { Button, IconButton, Modal, SegmentedControl, SectionTitle, FormRow } from '../../ui';
+import { Button, IconButton, Modal, SegmentedControl, SectionTitle, FormRow, Combobox } from '../../ui';
+import type { ComboboxOption } from '../../ui';
 import './ProviderSection.css';
 
 interface ProviderSectionProps {
   /** 是否默认折叠 */
   defaultCollapsed?: boolean;
+  /**
+   * 编辑状态变化回调（editing 从 null 变为非 null，或从非 null 变为 null 时触发）。
+   *
+   * 用途：进阶面板中，编辑供应商时需关闭侧滑面板，让编辑 Modal 全屏覆盖进阶面板。
+   * 侧滑面板的 transform 会破坏内部 Modal 的 fixed 定位，故编辑时必须关闭侧滑面板，
+   * Modal 通过 portal 渲染到 document.body 确保脱离 transform 影响。
+   */
+  onEditingChange?: (editing: boolean) => void;
 }
 
-/** v0.5.2 regress-1：供应商来源预设 */
-const PRESETS: Array<{ id: string; label: string; protocol: 'openai' | 'anthropic' | 'custom'; endpoint: string; model: string }> = [
-  { id: 'openai', label: 'OpenAI', protocol: 'openai', endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
-  { id: 'deepseek', label: 'DeepSeek', protocol: 'openai', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat' },
-  { id: 'qwen', label: '通义千问', protocol: 'openai', endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model: 'qwen-plus' },
-  { id: 'kimi', label: 'Kimi', protocol: 'openai', endpoint: 'https://api.moonshot.cn/v1/chat/completions', model: 'moonshot-v1-8k' },
-  { id: 'zhipu', label: '智谱', protocol: 'openai', endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash' },
+/** 供应商来源预设（2026 热门模型，覆盖国内外主流厂商 + Coding Plan + 聚合平台）
+ *  region: 'domestic' 国内 | 'foreign' 国外
+ *  region 字段仅作为 tag 显示用，所有预设始终展示（不做过滤）
+ */
+const PRESETS: Array<{ id: string; label: string; protocol: 'openai' | 'anthropic' | 'custom'; endpoint: string; model: string; region: 'domestic' | 'foreign' }> = [
+  // ===== 国际主流 =====
+  { id: 'openai', label: 'OpenAI', protocol: 'openai', endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini', region: 'foreign' },
+  { id: 'anthropic', label: 'Anthropic Claude', protocol: 'anthropic', endpoint: 'https://api.anthropic.com/v1/messages', model: 'claude-sonnet-4-5', region: 'foreign' },
+  { id: 'gemini', label: 'Google Gemini', protocol: 'openai', endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', model: 'gemini-2.5-pro', region: 'foreign' },
+  { id: 'groq', label: 'Groq', protocol: 'openai', endpoint: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile', region: 'foreign' },
+  { id: 'openrouter', label: 'OpenRouter', protocol: 'openai', endpoint: 'https://openrouter.ai/api/v1/chat/completions', model: 'openai/gpt-4o-mini', region: 'foreign' },
+  { id: 'together', label: 'Together AI', protocol: 'openai', endpoint: 'https://api.together.xyz/v1/chat/completions', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', region: 'foreign' },
+  { id: 'mistral', label: 'Mistral AI', protocol: 'openai', endpoint: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-large-latest', region: 'foreign' },
+  { id: 'cohere', label: 'Cohere', protocol: 'openai', endpoint: 'https://api.cohere.ai/v1/chat/completions', model: 'command-r-plus', region: 'foreign' },
+  { id: 'fireworks', label: 'Fireworks AI', protocol: 'openai', endpoint: 'https://api.fireworks.ai/inference/v1/chat/completions', model: 'accounts/fireworks/models/llama-v3p1-70b-instruct', region: 'foreign' },
+  { id: 'perplexity', label: 'Perplexity', protocol: 'openai', endpoint: 'https://api.perplexity.ai/chat/completions', model: 'llama-3.1-sonar-large-32k-online', region: 'foreign' },
+  { id: 'xai', label: 'xAI Grok', protocol: 'openai', endpoint: 'https://api.x.ai/v1/chat/completions', model: 'grok-3', region: 'foreign' },
+  { id: 'deepinfra', label: 'DeepInfra', protocol: 'openai', endpoint: 'https://api.deepinfra.com/v1/openai/chat/completions', model: 'meta-llama/Llama-3.3-70B-Instruct', region: 'foreign' },
+  { id: 'lepton', label: 'Lepton AI', protocol: 'openai', endpoint: 'https://api.lepton.ai/v1/chat/completions', model: 'llama3-70b', region: 'foreign' },
+  { id: 'novita', label: 'Novita AI', protocol: 'openai', endpoint: 'https://api.novita.ai/v3/openai/chat/completions', model: 'llama3.1-70b-instruct', region: 'foreign' },
+  { id: 'chutes', label: 'Chutes AI', protocol: 'openai', endpoint: 'https://api.chutes.ai/v1/chat/completions', model: 'chutes/llama-3.3-70b', region: 'foreign' },
+  // ===== 国内主流 =====
+  { id: 'deepseek', label: 'DeepSeek 深度求索', protocol: 'openai', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat', region: 'domestic' },
+  { id: 'qwen', label: '通义千问 (阿里百炼)', protocol: 'openai', endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model: 'qwen-plus', region: 'domestic' },
+  { id: 'kimi', label: 'Kimi (月之暗面)', protocol: 'openai', endpoint: 'https://api.moonshot.cn/v1/chat/completions', model: 'moonshot-v1-8k', region: 'domestic' },
+  { id: 'zhipu', label: '智谱 GLM', protocol: 'openai', endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash', region: 'domestic' },
+  { id: 'doubao', label: '豆包 (火山方舟)', protocol: 'openai', endpoint: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions', model: 'doubao-pro-32k', region: 'domestic' },
+  { id: 'ernie', label: '百度文心 ERNIE', protocol: 'openai', endpoint: 'https://qianfan.baidubce.com/v2/chat/completions', model: 'ernie-4.0-8k', region: 'domestic' },
+  { id: 'hunyuan', label: '腾讯混元', protocol: 'openai', endpoint: 'https://api.hunyuan.cloud.tencent.com/v1/chat/completions', model: 'hunyuan-pro', region: 'domestic' },
+  { id: 'minimax', label: 'MiniMax', protocol: 'openai', endpoint: 'https://api.minimax.chat/v1/chat/completions', model: 'MiniMax-M2.5', region: 'domestic' },
+  { id: 'baichuan', label: '百川大模型', protocol: 'openai', endpoint: 'https://api.baichuan-ai.com/v1/chat/completions', model: 'Baichuan4-Turbo', region: 'domestic' },
+  { id: 'stepfun', label: '阶跃星辰 StepFun', protocol: 'openai', endpoint: 'https://api.stepfun.com/v1/chat/completions', model: 'step-2-16k', region: 'domestic' },
+  { id: 'lingyi', label: '零一万物 (01.AI)', protocol: 'openai', endpoint: 'https://api.lingyiwanwu.com/v1/chat/completions', model: 'yi-large', region: 'domestic' },
+  { id: 'tiangong', label: '昆仑万维 天工', protocol: 'openai', endpoint: 'https://api.tiangong.cn/v1/chat/completions', model: 'Skywork-4.0', region: 'domestic' },
+  { id: 'sensetime', label: '商汤 SenseChat', protocol: 'openai', endpoint: 'https://api.sensenova.cn/compatible-mode/v1/chat/completions', model: 'SenseChat-5', region: 'domestic' },
+  { id: 'mimo', label: '小米 MiMo (按量付费)', protocol: 'openai', endpoint: 'https://api.xiaomimimo.com/v1/chat/completions', model: 'mimo-v2.5-pro', region: 'domestic' },
+  { id: 'mimo-plan', label: '小米 MiMo (Token Plan 订阅)', protocol: 'openai', endpoint: 'https://token-plan-cn.xiaomimimo.com/v1/chat/completions', model: 'mimo-v2.5-pro', region: 'domestic' },
+  // ===== Coding / 开发专用 =====
+  { id: 'github-copilot', label: 'GitHub Copilot', protocol: 'openai', endpoint: 'https://api.githubcopilot.com/chat/completions', model: 'gpt-4o', region: 'foreign' },
+  { id: 'codegeex', label: 'CodeGeeX (智谱)', protocol: 'openai', endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'codegeex-4-all-9b', region: 'domestic' },
+  { id: 'codestral', label: 'Codestral (Mistral 编程)', protocol: 'openai', endpoint: 'https://api.mistral.ai/v1/chat/completions', model: 'codestral-latest', region: 'foreign' },
+  { id: 'deepseek-coder', label: 'DeepSeek Coder', protocol: 'openai', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-coder', region: 'domestic' },
+  { id: 'qwen-coder', label: '通义千问 Coder', protocol: 'openai', endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model: 'qwen-coder-plus', region: 'domestic' },
+  { id: 'codebuddy', label: '腾讯 CodeBuddy', protocol: 'openai', endpoint: 'https://api.hunyuan.cloud.tencent.com/v1/chat/completions', model: 'codebuddy-code', region: 'domestic' },
+  // ===== 聚合平台 =====
+  { id: 'siliconflow', label: '硅基流动 SiliconFlow', protocol: 'openai', endpoint: 'https://api.siliconflow.cn/v1/chat/completions', model: 'deepseek-ai/DeepSeek-V3', region: 'domestic' },
+  { id: 'modelscope', label: '魔搭 ModelScope (阿里)', protocol: 'openai', endpoint: 'https://api-inference.modelscope.cn/v1/chat/completions', model: 'Qwen/Qwen2.5-72B-Instruct', region: 'domestic' },
+  { id: 'dmxapi', label: 'DMXAPI 聚合', protocol: 'openai', endpoint: 'https://www.dmxapi.cn/v1/chat/completions', model: 'gpt-4o-mini', region: 'domestic' },
+  { id: 'aihubmix', label: 'AiHubMix 聚合', protocol: 'openai', endpoint: 'https://aihubmix.com/v1/chat/completions', model: 'gpt-4.1-free', region: 'foreign' },
+  { id: 'oneapi', label: 'OneAPI 聚合', protocol: 'openai', endpoint: 'https://api.oneapi.pro/v1/chat/completions', model: 'gpt-4o-mini', region: 'foreign' },
 ];
 
-export default function ProviderSection({ defaultCollapsed = true }: ProviderSectionProps) {
+/** 根据端点 URL 自动推断协议 */
+function detectProtocol(endpoint: string): 'openai' | 'anthropic' | 'custom' {
+  const lower = endpoint.toLowerCase();
+  if (lower.includes('anthropic.com') || lower.endsWith('/v1/messages')) return 'anthropic';
+  return 'openai'; // 绝大多数供应商兼容 OpenAI 格式
+}
+
+export default function ProviderSection({ defaultCollapsed = true, onEditingChange }: ProviderSectionProps) {
   const {
     providers,
     loadingProviders,
@@ -66,7 +125,13 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
   // 需求 9：模型搜索 combobox 状态
   const [modelCandidates, setModelCandidates] = useState<string[]>([]);
   const [searchingModels, setSearchingModels] = useState(false);
+  // 下拉开关：主模型 / TTS / STT 三处下拉独立控制
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showTtsDropdown, setShowTtsDropdown] = useState(false);
+  const [showSttDropdown, setShowSttDropdown] = useState(false);
+  // TTS/STT 自动搜索状态：开关打开时若 modelCandidates 为空，自动触发搜索
+  const [autoSearchingTts, setAutoSearchingTts] = useState(false);
+  const [autoSearchingStt, setAutoSearchingStt] = useState(false);
 
   // v0.5.2 B-4：加密导出 / 导入状态（文件对话框 + 选择性导出 + 预览导入）
   const [selectedExportIds, setSelectedExportIds] = useState<Set<string>>(new Set());
@@ -86,6 +151,13 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
   useEffect(() => {
     void initProviders();
   }, [initProviders]);
+
+  // 注：下拉框 ESC 关闭由 ui/Combobox 内部 useEscToCloseOverlay 处理，不再此处监听
+
+  // 编辑状态变化时通知父组件（进阶面板用于关闭侧滑面板，让编辑 Modal 全屏覆盖）
+  useEffect(() => {
+    onEditingChange?.(editing !== null);
+  }, [editing, onEditingChange]);
 
   const handleAdd = () => {
     setEditing({
@@ -162,6 +234,12 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
       setEditing(null);
       setEditingId(null);
       setTestResult(null);
+      setModelCandidates([]);
+      setShowModelDropdown(false);
+      setShowTtsDropdown(false);
+      setShowSttDropdown(false);
+      setAutoSearchingTts(false);
+      setAutoSearchingStt(false);
     } catch (e) {
       setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -175,14 +253,18 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
     setTestResult(null);
     setModelCandidates([]);
     setShowModelDropdown(false);
+    setShowTtsDropdown(false);
+    setShowSttDropdown(false);
+    setAutoSearchingTts(false);
+    setAutoSearchingStt(false);
   };
 
-  // 需求 9：搜索 Provider 可用模型列表
+  // 需求 9：搜索 Provider 可用模型列表（不要求 API Key）
   const handleSearchModels = async (overrideInput?: CustomAIProviderInput) => {
     const input = overrideInput ?? editing;
     if (!input) return;
-    if (!input.apiEndpoint.trim() || !input.apiKey.trim()) {
-      setTestResult({ ok: false, message: '请先填写 API 端点和密钥' });
+    if (!input.apiEndpoint.trim()) {
+      setTestResult({ ok: false, message: '请先填写 API 端点' });
       return;
     }
     setSearchingModels(true);
@@ -191,7 +273,9 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
       const models = await listAIProviderModels(input);
       setModelCandidates(models);
       if (models.length === 0) {
-        setTestResult({ ok: false, message: '未找到模型（协议可能不支持 /v1/models，请手动输入）' });
+        setTestResult({ ok: false, message: '未找到模型（该端点可能不支持 /v1/models，请手动输入模型名）' });
+      } else {
+        setTestResult(null);
       }
     } catch (e) {
       setModelCandidates([]);
@@ -201,21 +285,115 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
     }
   };
 
-  // 应用预设：填入 endpoint + 默认 model + 协议，并触发模型搜索
+  // 语音模型候选：展示所有 modelCandidates，不筛选
+  // 但自动匹配时优先选择包含 TTS/STT 关键词的模型
+  const isTtsModel = (m: string): boolean => /tts/i.test(m);
+  const isSttModel = (m: string): boolean => /stt|whisper/i.test(m);
+
+  // TTS 开关切换：开启时若 modelCandidates 为空，自动触发搜索；
+  // 搜索完成后若有匹配的 TTS 模型且当前 ttsModel 为空，自动填入第一个候选；
+  // 无论是否匹配到候选，都展开下拉（让用户看到搜索结果或手动输入）
+  const handleTtsToggle = async (v: string) => {
+    if (!editing) return;
+    const enabled = v === 'on';
+    if (!enabled) {
+      setEditing({ ...editing, ttsEnabled: false });
+      setShowTtsDropdown(false);
+      return;
+    }
+    // 开启 TTS：若 modelCandidates 为空，自动搜索
+    if (modelCandidates.length === 0) {
+      setEditing({ ...editing, ttsEnabled: true });
+      setAutoSearchingTts(true);
+      setShowTtsDropdown(true); // 立即展开下拉显示 loading
+      try {
+        const models = await listAIProviderModels(editing);
+        setModelCandidates(models);
+        // 自动填入第一个匹配 TTS 关键词的模型（若有）
+        const ttsMatch = models.find((m) => isTtsModel(m));
+        if (ttsMatch && !editing.ttsModel) {
+          setEditing((prev) => prev ? { ...prev, ttsModel: ttsMatch } : prev);
+        }
+        // 保持下拉展开，让用户看到候选列表
+      } catch (e) {
+        setTestResult({ ok: false, message: `TTS 模型搜索失败：${e instanceof Error ? e.message : String(e)}` });
+      } finally {
+        setAutoSearchingTts(false);
+      }
+    } else {
+      // 已有候选，自动填入第一个匹配 TTS 关键词的模型（若 ttsModel 为空）
+      const ttsMatch = modelCandidates.find((m) => isTtsModel(m));
+      setEditing({
+        ...editing,
+        ttsEnabled: true,
+        ttsModel: editing.ttsModel || ttsMatch || '',
+      });
+      setShowTtsDropdown(true); // 总是展开下拉
+    }
+  };
+
+  // STT 开关切换：开启时若 modelCandidates 为空，自动触发搜索；
+  // 搜索完成后若有匹配的 STT 模型且当前 sttModel 为空，自动填入第一个候选；
+  // 无论是否匹配到候选，都展开下拉（让用户看到搜索结果或手动输入）
+  const handleSttToggle = async (v: string) => {
+    if (!editing) return;
+    const enabled = v === 'on';
+    if (!enabled) {
+      setEditing({ ...editing, sttEnabled: false });
+      setShowSttDropdown(false);
+      return;
+    }
+    // 开启 STT：若 modelCandidates 为空，自动搜索
+    if (modelCandidates.length === 0) {
+      setEditing({ ...editing, sttEnabled: true });
+      setAutoSearchingStt(true);
+      setShowSttDropdown(true); // 立即展开下拉显示 loading
+      try {
+        const models = await listAIProviderModels(editing);
+        setModelCandidates(models);
+        // 自动填入第一个匹配 STT/whisper 关键词的模型（若有）
+        const sttMatch = models.find((m) => isSttModel(m));
+        if (sttMatch && !editing.sttModel) {
+          setEditing((prev) => prev ? { ...prev, sttModel: sttMatch } : prev);
+        }
+        // 保持下拉展开，让用户看到候选列表
+      } catch (e) {
+        setTestResult({ ok: false, message: `STT 模型搜索失败：${e instanceof Error ? e.message : String(e)}` });
+      } finally {
+        setAutoSearchingStt(false);
+      }
+    } else {
+      // 已有候选，自动填入第一个匹配 STT 关键词的模型（若 sttModel 为空）
+      const sttMatch = modelCandidates.find((m) => isSttModel(m));
+      setEditing({
+        ...editing,
+        sttEnabled: true,
+        sttModel: editing.sttModel || sttMatch || '',
+      });
+      setShowSttDropdown(true); // 总是展开下拉
+    }
+  };
+
+  // 应用预设：填入 endpoint + 默认 model，协议由端点自动推断
   const handleApplyPreset = (preset: typeof PRESETS[number]) => {
     if (!editing) return;
     const next: CustomAIProviderInput = {
       ...editing,
-      protocol: preset.protocol,
+      protocol: detectProtocol(preset.endpoint),
       apiEndpoint: preset.endpoint,
       model: preset.model,
       alternativeModels: [],
     };
     setEditing(next);
-    // 仅当 apiKey 已填时才触发搜索（否则提示用户先填 apiKey）
-    if (next.apiKey.trim()) {
-      void handleSearchModels(next);
-    }
+    // 预设应用后自动触发模型搜索（不需要 API Key）
+    void handleSearchModels(next);
+  };
+
+  // API 端点变化时自动推断协议
+  const handleEndpointChange = (value: string) => {
+    if (!editing) return;
+    const protocol = detectProtocol(value);
+    setEditing({ ...editing, apiEndpoint: value, protocol });
   };
 
   // v0.5.2 regress-1：勾选/取消勾选模型
@@ -270,6 +448,16 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
     if (editing.model && editing.alternativeModels?.includes(editing.model)) {
       updateField('alternativeModels', editing.alternativeModels.filter((m) => m !== editing.model));
     }
+  };
+
+  // 卡片列表中切换当前使用模型：将选中模型设为主模型，原主模型降级为备选
+  const handleSwitchProviderModel = async (provider: CustomAIProvider, modelName: string) => {
+    if (provider.model === modelName) return;
+    const alts = provider.alternativeModels ?? [];
+    const newAlts = alts.includes(modelName)
+      ? [...alts.filter((m) => m !== modelName), provider.model]
+      : [...alts, provider.model];
+    await editProvider(provider.id, { model: modelName, alternativeModels: newAlts });
   };
 
   // v0.5.2 B-4：加密导出（文件对话框 + 选择性导出）
@@ -406,50 +594,67 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
       {!collapsed && (
         <>
           {loadingProviders && providers.length === 0 && (
-            <div className="ai-app-tab-hint" data-name="settings.provider.loading">正在加载...</div>
+            <div className="advanced-panel-tab-hint" data-name="settings.provider.loading">正在加载...</div>
           )}
 
           {/* 供应商卡片列表 */}
           {providers.map((p, idx) => (
-            <div className="provider-card" key={p.id} data-name={`ai-app-provider.provider-card-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
-              <div className="provider-card-head" data-name={`ai-app-provider.provider-card-${idx + 1}-head`}>
-                <span className="provider-card-name" data-name={`ai-app-provider.provider-card-${idx + 1}-name`}>{p.name}</span>
-                <Badge variant="accent" data-name={`ai-app-provider.provider-card-${idx + 1}-protocol-badge`}>{p.protocol}</Badge>
+            <div className="provider-card" key={p.id} data-name={`advanced-panel.provider-card-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
+              <div className="provider-card-head" data-name={`advanced-panel.provider-card-${idx + 1}-head`}>
+                <span className="provider-card-name" data-name={`advanced-panel.provider-card-${idx + 1}-name`}>{p.name}</span>
+                <Badge variant="accent" data-name={`advanced-panel.provider-card-${idx + 1}-protocol-badge`}>{p.protocol}</Badge>
                 {!editing && (
                   <label
                     className="provider-card-export-check"
                     title="勾选后点加密导出，仅导出选中项"
-                    data-name={`ai-app-provider.provider-card-${idx + 1}-export-check-label`}
+                    data-name={`advanced-panel.provider-card-${idx + 1}-export-check-label`}
                   >
                     <input
                       type="checkbox"
                       checked={selectedExportIds.has(p.id)}
                       onChange={(e) => handleToggleExportSelect(p.id, e.target.checked)}
-                      data-name={`ai-app-provider.provider-card-${idx + 1}-export-check-input`}
+                      data-name={`advanced-panel.provider-card-${idx + 1}-export-check-input`}
                     />
                   </label>
                 )}
               </div>
-              <div className="provider-card-model" data-name={`ai-app-provider.provider-card-${idx + 1}-model`}>模型：{p.model}</div>
-              <div className="provider-card-endpoint" title={p.apiEndpoint} data-name={`ai-app-provider.provider-card-${idx + 1}-endpoint`}>{p.apiEndpoint}</div>
-              <div className="provider-card-actions" data-name={`ai-app-provider.provider-card-${idx + 1}-actions`}>
-                <Button type="button" variant="text" className="provider-action-btn" onClick={() => handleEdit(p)} data-name={`ai-app-provider.provider-card-${idx + 1}-edit-button`}>编辑</Button>
-                <Button type="button" variant="text" danger className="provider-action-btn danger" onClick={() => void handleDelete(p.id)} data-name={`ai-app-provider.provider-card-${idx + 1}-delete-button`}>删除</Button>
+              <div className="provider-card-model" data-name={`advanced-panel.provider-card-${idx + 1}-model`}>
+                <Combobox
+                  inputValue={p.model}
+                  onInputChange={() => {}}
+                  inputReadOnly
+                  inputClassName="provider-card-model-select"
+                  disabled={(p.alternativeModels?.length ?? 0) === 0}
+                  options={[p.model, ...(p.alternativeModels ?? [])].map<ComboboxOption>((m) => ({
+                    value: m,
+                    label: m,
+                    selected: m === p.model,
+                  }))}
+                  onSelect={(v) => void handleSwitchProviderModel(p, v)}
+                  searchable={false}
+                  emptyText="仅一个模型"
+                  dataName={`advanced-panel.provider-card-${idx + 1}-model-select`}
+                />
+              </div>
+              <div className="provider-card-endpoint" title={p.apiEndpoint} data-name={`advanced-panel.provider-card-${idx + 1}-endpoint`}>{p.apiEndpoint}</div>
+              <div className="provider-card-actions" data-name={`advanced-panel.provider-card-${idx + 1}-actions`}>
+                <Button type="button" variant="text" className="provider-action-btn" onClick={() => handleEdit(p)} data-name={`advanced-panel.provider-card-${idx + 1}-edit-button`}>编辑</Button>
+                <Button type="button" variant="text" danger className="provider-action-btn danger" onClick={() => void handleDelete(p.id)} data-name={`advanced-panel.provider-card-${idx + 1}-delete-button`}>删除</Button>
               </div>
             </div>
           ))}
 
           {/* v0.5.2 B-4：加密导出 / 导入工具栏（卡片列表下方） */}
           {!editing && (
-            <div className="provider-crypto-panel v2" data-name="ai-app-provider.crypto-panel">
-              <div className="provider-crypto-toolbar" data-name="ai-app-provider.crypto-toolbar">
-                <label className="provider-crypto-select-all" data-name="ai-app-provider.crypto-select-all">
+            <div className="provider-crypto-panel v2" data-name="advanced-panel.crypto-panel">
+              <div className="provider-crypto-toolbar" data-name="advanced-panel.crypto-toolbar">
+                <label className="provider-crypto-select-all" data-name="advanced-panel.crypto-select-all">
                   <input
                     type="checkbox"
                     checked={selectedExportIds.size === providers.length && providers.length > 0}
                     onChange={(e) => handleToggleSelectAll(e.target.checked)}
                     disabled={providers.length === 0}
-                    data-name="ai-app-provider.crypto-select-all-input"
+                    data-name="advanced-panel.crypto-select-all-input"
                   />
                   <span>全选</span>
                 </label>
@@ -458,7 +663,7 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
                   variant="text"
                   onClick={handleStartExport}
                   disabled={providers.length === 0 && selectedExportIds.size === 0}
-                  data-name="ai-app-provider.crypto-export-button"
+                  data-name="advanced-panel.crypto-export-button"
                   className="provider-crypto-action-btn"
                 >
                   {selectedExportIds.size > 0
@@ -469,7 +674,7 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
                   type="button"
                   variant="text"
                   onClick={handleStartImport}
-                  data-name="ai-app-provider.crypto-import-button"
+                  data-name="advanced-panel.crypto-import-button"
                   className="provider-crypto-action-btn"
                 >
                   加密导入
@@ -480,22 +685,31 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
 
           {/* 新建按钮（表单未打开时显示） */}
           {!editing && (
-            <Button type="button" variant="ghost" className="provider-add-btn" onClick={handleAdd} data-name="ai-app-provider.provider-add-button">+ 添加自定义供应商</Button>
+            <button
+              type="button"
+              className="btn-outline provider-add-btn"
+              onClick={handleAdd}
+              data-name="advanced-panel.provider-add-button"
+            >
+              + 添加自定义供应商
+            </button>
           )}
         </>
       )}
 
       {/* 编辑/新建表单（Modal 替代原 .provider-edit-overlay） */}
+      {/* portal=true：渲染到 document.body，脱离侧滑面板 transform 的影响，全屏覆盖进阶面板 */}
       <Modal
         open={editing !== null}
         onClose={handleCancel}
         title="编辑供应商"
         className="provider-edit-modal"
-        data-name="ai-app-provider.provider-form"
+        portal
+        data-name="advanced-panel.provider-form"
       >
         {editing && (
           <>
-            <FormRow label="名称" stack data-name="ai-app-provider.provider-form-name-row">
+            <FormRow label="名称" data-name="advanced-panel.provider-form-name-row">
               <input
                 type="text"
                 className="provider-form-input"
@@ -503,65 +717,34 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
                 placeholder="My OpenAI"
                 spellCheck={false}
                 autoComplete="off"
-                data-name="ai-app-provider.provider-form-name-input"
+                data-name="advanced-panel.provider-form-name-input"
                 onChange={(e) => updateField('name', e.target.value)}
               />
             </FormRow>
-            <FormRow label="协议" stack data-name="ai-app-provider.provider-form-protocol-row">
-              <select
-                className="provider-form-input"
-                value={editing.protocol}
-                data-name="ai-app-provider.provider-form-protocol-select"
-                onChange={(e) => updateField('protocol', e.target.value as CustomAIProvider['protocol'])}
-              >
-                <option value="openai" data-name="ai-app-provider.provider-form-protocol-option-1">openai</option>
-                <option value="anthropic" data-name="ai-app-provider.provider-form-protocol-option-2">anthropic</option>
-                <option value="custom" data-name="ai-app-provider.provider-form-protocol-option-3">custom</option>
-              </select>
-            </FormRow>
-            {/* v0.5.2 regress-1：供应商来源预设 Chip */}
-            <FormRow label="供应商来源预设" stack data-name="ai-app-provider.provider-form-preset-row">
-              <div className="provider-preset-chips" data-name="ai-app-provider.provider-form-preset-chips">
-                {PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    className={`provider-preset-chip${editing.apiEndpoint === preset.endpoint ? ' active' : ''}`}
-                    onClick={() => handleApplyPreset(preset)}
-                    title={`${preset.endpoint} · ${preset.model}`}
-                    data-name={`ai-app-provider.provider-form-preset-chip-${preset.id}`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="provider-preset-chip"
-                  onClick={() => {
-                    if (!editing) return;
-                    setEditing({ ...editing, apiEndpoint: '', model: '', alternativeModels: [] });
-                  }}
-                  title="清空 endpoint 和 model，手动配置"
-                  data-name="ai-app-provider.provider-form-preset-chip-custom"
-                >
-                  自定义
-                </button>
-              </div>
-            </FormRow>
-            <FormRow label="API 端点" stack data-name="ai-app-provider.provider-form-endpoint-row">
-              <input
-                type="text"
-                className="provider-form-input"
-                value={editing.apiEndpoint}
-                placeholder="https://api.openai.com/v1/chat/completions"
-                spellCheck={false}
-                autoComplete="off"
-                data-name="ai-app-provider.provider-form-endpoint-input"
-                onChange={(e) => updateField('apiEndpoint', e.target.value)}
+            {/* API 端点 + 预设下拉合并为 Combobox：输入框可自定义端点，下拉箭头展开供应商预设 */}
+            <FormRow label="API 端点" compact data-name="advanced-panel.provider-form-endpoint-row">
+              <Combobox
+                inputValue={editing.apiEndpoint}
+                onInputChange={(v) => handleEndpointChange(v)}
+                inputPlaceholder="https://api.openai.com/v1/chat/completions"
+                inputClassName="provider-form-input"
+                options={PRESETS.map<ComboboxOption>((p) => ({
+                  value: p.id,
+                  label: p.label,
+                  selected: p.endpoint === editing.apiEndpoint,
+                }))}
+                onSelect={(v) => {
+                  const preset = PRESETS.find(p => p.id === v);
+                  if (preset) handleApplyPreset(preset);
+                }}
+                searchable
+                searchPlaceholder="搜索供应商预设…"
+                emptyText="无匹配预设，可直接输入端点"
+                dataName="advanced-panel.provider-form-endpoint"
               />
             </FormRow>
-            <FormRow label="API 密钥" stack data-name="ai-app-provider.provider-form-api-key-row">
-              <div className="provider-api-key-wrapper" data-name="ai-app-provider.provider-form-api-key-wrapper">
+            <FormRow label="API 密钥" data-name="advanced-panel.provider-form-api-key-row">
+              <div className="provider-api-key-wrapper" data-name="advanced-panel.provider-form-api-key-wrapper">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   className="provider-form-input"
@@ -569,7 +752,7 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
                   placeholder="sk-..."
                   spellCheck={false}
                   autoComplete="off"
-                  data-name="ai-app-provider.provider-form-api-key-input"
+                  data-name="advanced-panel.provider-form-api-key-input"
                   onChange={(e) => updateField('apiKey', e.target.value)}
                 />
                 <IconButton
@@ -577,7 +760,7 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
                   className="provider-api-key-toggle"
                   aria-label={showApiKey ? '隐藏密钥' : '显示密钥'}
                   title={showApiKey ? '隐藏密钥' : '显示密钥'}
-                  data-name="ai-app-provider.provider-form-api-key-toggle"
+                  data-name="advanced-panel.provider-form-api-key-toggle"
                   onClick={() => setShowApiKey((v) => !v)}
                 >
                   {showApiKey ? (
@@ -594,179 +777,188 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
                 </IconButton>
               </div>
             </FormRow>
-            <FormRow label="模型" stack data-name="ai-app-provider.provider-form-model-row">
-              <div className="provider-model-combobox" data-name="ai-app-provider.provider-form-model-combobox">
-                <input
-                  type="text"
-                  className="provider-form-input"
-                  value={editing.model}
-                  placeholder="gpt-4o-mini（主模型）"
-                  spellCheck={false}
-                  autoComplete="off"
-                  data-name="ai-app-provider.provider-form-model-input"
-                  onChange={(e) => updateField('model', e.target.value)}
-                  onFocus={() => setShowModelDropdown(true)}
-                  onBlur={() => {
-                    setTimeout(() => setShowModelDropdown(false), 200);
-                    handleModelInputBlur();
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="provider-model-search-btn"
-                  disabled={searchingModels}
-                  onClick={() => void handleSearchModels()}
-                  data-name="ai-app-provider.provider-form-model-search-button"
-                >
-                  {searchingModels ? '搜索中…' : '搜索模型'}
-                </Button>
-                {showModelDropdown && modelCandidates.length > 0 && (
-                  <ul className="provider-model-dropdown" data-name="ai-app-provider.provider-form-model-dropdown">
-                    {modelCandidates.map((m) => {
-                      const isMain = editing.model === m;
-                      const isAlt = editing.alternativeModels?.includes(m) ?? false;
-                      const checked = isMain || isAlt;
-                      return (
-                        <li
-                          key={m}
-                          className="provider-model-option-row"
-                          data-name={`ai-app-provider.provider-form-model-option-${m}`}
-                        >
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => handleToggleModel(m, e.target.checked)}
-                            />
-                            <span className="provider-model-option-label">{m}</span>
-                            {isMain && <span className="provider-model-option-tag">主</span>}
-                          </label>
-                        </li>
-                      );
+            <FormRow label="模型" compact data-name="advanced-panel.provider-form-model-row">
+              <div className="provider-model-section" data-name="advanced-panel.provider-form-model-section">
+                {/* 第一行：模型输入 + 搜索按钮 + 统一下拉（右侧无其他组件） */}
+                <div className="provider-model-combobox" data-name="advanced-panel.provider-form-model-combobox">
+                  <Combobox
+                    inputValue={editing.model}
+                    onInputChange={(v) => updateField('model', v)}
+                    inputPlaceholder="gpt-4o-mini"
+                    inputClassName="provider-form-input"
+                    options={modelCandidates.map<ComboboxOption>((m) => {
+                      const isSelected = editing.model === m || (editing.alternativeModels?.includes(m) ?? false);
+                      return {
+                        value: m,
+                        label: m,
+                        selected: isSelected,
+                      };
                     })}
-                  </ul>
+                    onSelect={(v) => handleToggleModel(v, true)}
+                    onDeselect={(v) => handleToggleModel(v, false)}
+                    multiple
+                    searchable
+                    searchPlaceholder="搜索模型名…"
+                    open={showModelDropdown}
+                    onOpenChange={setShowModelDropdown}
+                    loading={searchingModels}
+                    loadingText="正在搜索可用模型…"
+                    emptyText={modelCandidates.length === 0 ? '点击右侧搜索按钮查询可用模型' : '无匹配项'}
+                    dataName="advanced-panel.provider-form-model"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="provider-model-search-btn"
+                    disabled={searchingModels}
+                    onClick={() => void handleSearchModels()}
+                    data-name="advanced-panel.provider-form-model-search-button"
+                  >
+                    {searchingModels ? '搜索中…' : '搜索'}
+                  </Button>
+                </div>
+                {/* 第二行：已选模型 chips（换行展示，无主次区分） */}
+                {(editing.model || (editing.alternativeModels?.length ?? 0) > 0) && (
+                  <div className="provider-model-chips" data-name="advanced-panel.provider-form-model-chips">
+                    {[
+                      editing.model,
+                      ...(editing.alternativeModels ?? []),
+                    ].filter(Boolean).map((m) => (
+                      <span key={m} className="provider-model-chip" data-name={`advanced-panel.provider-form-model-chip-${m}`}>
+                        {m}
+                        <button
+                          type="button"
+                          className="provider-model-chip-remove"
+                          aria-label={`移除 ${m}`}
+                          onClick={() => handleRemoveModelChip(m)}
+                          data-name={`advanced-panel.provider-form-model-chip-${m}-remove`}
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
-              {/* v0.5.2 regress-1：已选模型 Chip 展示 */}
-              {(editing.model || (editing.alternativeModels?.length ?? 0) > 0) && (
-                <div className="provider-model-chips" data-name="ai-app-provider.provider-form-model-chips">
-                  {editing.model && (
-                    <span className="provider-model-chip main" data-name="ai-app-provider.provider-form-model-chip-main">
-                      {editing.model}
-                      <button
-                        type="button"
-                        className="provider-model-chip-remove"
-                        aria-label="移除主模型"
-                        onClick={() => handleRemoveModelChip(editing.model)}
-                        data-name="ai-app-provider.provider-form-model-chip-main-remove"
-                      >×</button>
-                    </span>
-                  )}
-                  {(editing.alternativeModels ?? []).map((m) => (
-                    <span key={m} className="provider-model-chip" data-name={`ai-app-provider.provider-form-model-chip-${m}`}>
-                      {m}
-                      <button
-                        type="button"
-                        className="provider-model-chip-remove"
-                        aria-label={`移除 ${m}`}
-                        onClick={() => handleRemoveModelChip(m)}
-                      >×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
             </FormRow>
-            <FormRow label="温度" hint="0~2，可选" stack data-name="ai-app-provider.provider-form-temperature-row">
-              <input
-                type="number"
-                className="provider-form-input"
-                value={editing.temperature ?? ''}
-                min={0}
-                max={2}
-                step={0.1}
-                placeholder="0.7"
-                data-name="ai-app-provider.provider-form-temperature-input"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  updateField('temperature', v === '' ? undefined : Number(v));
-                }}
-              />
-            </FormRow>
-            <FormRow label="最大 token" hint="可选" stack data-name="ai-app-provider.provider-form-max-tokens-row">
-              <input
-                type="number"
-                className="provider-form-input"
-                value={editing.maxTokens ?? ''}
-                min={1}
-                placeholder="4096"
-                data-name="ai-app-provider.provider-form-max-tokens-input"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  updateField('maxTokens', v === '' ? undefined : Number(v));
-                }}
-              />
-            </FormRow>
-            <FormRow label="语音配置" stack data-name="ai-app-provider.provider-form-voice-row">
-              <div className="provider-voice-section">
-                <div className="provider-voice-row">
-                  <span className="provider-voice-label">TTS（文本转语音）</span>
+            <div className="provider-form-inline-row" data-name="advanced-panel.provider-form-number-row">
+              <FormRow label="温度" compact data-name="advanced-panel.provider-form-temperature-row">
+                <input
+                  type="number"
+                  className="provider-form-input"
+                  value={editing.temperature ?? ''}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  placeholder="0.7"
+                  data-name="advanced-panel.provider-form-temperature-input"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    updateField('temperature', v === '' ? undefined : Number(v));
+                  }}
+                />
+              </FormRow>
+              <FormRow label="最大 token" compact data-name="advanced-panel.provider-form-max-tokens-row">
+                <input
+                  type="number"
+                  className="provider-form-input"
+                  value={editing.maxTokens ?? ''}
+                  min={1}
+                  placeholder="4096"
+                  data-name="advanced-panel.provider-form-max-tokens-input"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    updateField('maxTokens', v === '' ? undefined : Number(v));
+                  }}
+                />
+              </FormRow>
+            </div>
+            <FormRow label="语音" compact data-name="advanced-panel.provider-form-voice-row">
+              <div className="provider-voice-compact">
+                <div className="provider-voice-item">
+                  <span className="provider-voice-item-label">TTS</span>
                   <SegmentedControl
                     value={editing.ttsEnabled ? 'on' : 'off'}
-                    onChange={(v) => setEditing({ ...editing, ttsEnabled: v === 'on' })}
+                    onChange={(v) => void handleTtsToggle(v)}
                     name="tts-toggle"
                     options={[
-                      { value: 'off', label: '关闭' },
-                      { value: 'on', label: '启用' },
+                      { value: 'off', label: '关' },
+                      { value: 'on', label: '开' },
                     ]}
                   />
                   {editing.ttsEnabled && (
-                    <input
-                      type="text"
-                      value={editing.ttsModel}
-                      onChange={(e) => setEditing({ ...editing, ttsModel: e.target.value })}
-                      placeholder="tts-1"
-                      className="provider-form-input"
+                    <Combobox
+                      inputValue={editing.ttsModel ?? ''}
+                      onInputChange={(v) => setEditing({ ...editing, ttsModel: v })}
+                      inputPlaceholder="tts-1"
+                      inputClassName="provider-form-input provider-voice-model-input"
+                      options={modelCandidates.map<ComboboxOption>((m) => ({
+                        value: m,
+                        label: m,
+                        selected: editing.ttsModel === m,
+                        tag: isTtsModel(m) ? 'TTS' : undefined,
+                      }))}
+                      onSelect={(v) => setEditing({ ...editing, ttsModel: v })}
+                      searchable
+                      searchPlaceholder="搜索模型…"
+                      open={showTtsDropdown}
+                      onOpenChange={setShowTtsDropdown}
+                      loading={autoSearchingTts}
+                      loadingText="正在自动搜索模型…"
+                      emptyText={modelCandidates.length === 0 ? '正在搜索模型…' : '无可用模型'}
+                      dataName="advanced-panel.provider-form-tts-model"
                     />
                   )}
                 </div>
-                <div className="provider-voice-row">
-                  <span className="provider-voice-label">STT（语音转文本）</span>
+                <div className="provider-voice-item">
+                  <span className="provider-voice-item-label">STT</span>
                   <SegmentedControl
                     value={editing.sttEnabled ? 'on' : 'off'}
-                    onChange={(v) => setEditing({ ...editing, sttEnabled: v === 'on' })}
+                    onChange={(v) => void handleSttToggle(v)}
                     name="stt-toggle"
                     options={[
-                      { value: 'off', label: '关闭' },
-                      { value: 'on', label: '启用' },
+                      { value: 'off', label: '关' },
+                      { value: 'on', label: '开' },
                     ]}
                   />
                   {editing.sttEnabled && (
-                    <input
-                      type="text"
-                      value={editing.sttModel}
-                      onChange={(e) => setEditing({ ...editing, sttModel: e.target.value })}
-                      placeholder="whisper-1"
-                      className="provider-form-input"
+                    <Combobox
+                      inputValue={editing.sttModel ?? ''}
+                      onInputChange={(v) => setEditing({ ...editing, sttModel: v })}
+                      inputPlaceholder="whisper-1"
+                      inputClassName="provider-form-input provider-voice-model-input"
+                      options={modelCandidates.map<ComboboxOption>((m) => ({
+                        value: m,
+                        label: m,
+                        selected: editing.sttModel === m,
+                        tag: isSttModel(m) ? 'STT' : undefined,
+                      }))}
+                      onSelect={(v) => setEditing({ ...editing, sttModel: v })}
+                      searchable
+                      searchPlaceholder="搜索模型…"
+                      open={showSttDropdown}
+                      onOpenChange={setShowSttDropdown}
+                      loading={autoSearchingStt}
+                      loadingText="正在自动搜索模型…"
+                      emptyText={modelCandidates.length === 0 ? '正在搜索模型…' : '无可用模型'}
+                      dataName="advanced-panel.provider-form-stt-model"
                     />
                   )}
                 </div>
               </div>
             </FormRow>
             {testResult && (
-              <div className={`provider-test-result ${testResult.ok ? 'ok' : 'fail'}`} data-name="ai-app-provider.provider-form-test-result">
+              <div className={`provider-test-result test-result ${testResult.ok ? 'ok' : 'fail'}`} data-name="advanced-panel.provider-form-test-result">
                 {testResult.ok ? '连通正常' : '连通失败'}：{testResult.message}
                 {typeof testResult.latencyMs === 'number' ? `（${testResult.latencyMs}ms）` : ''}
               </div>
             )}
-            <div className="provider-form-actions" data-name="ai-app-provider.provider-form-actions">
-              <Button type="button" variant="ghost" className="provider-form-btn" disabled={testing || saving} onClick={() => void handleTest()} data-name="ai-app-provider.provider-form-test-button">
+            <div className="provider-form-actions" data-name="advanced-panel.provider-form-actions">
+              <Button type="button" variant="outline" className="provider-form-btn" disabled={testing || saving} onClick={() => void handleTest()} data-name="advanced-panel.provider-form-test-button">
                 {testing ? '测试中…' : '测试连通性'}
               </Button>
-              <Button type="button" variant="primary-compact" className="provider-form-btn primary" disabled={testing || saving} onClick={() => void handleSave()} data-name="ai-app-provider.provider-form-save-button">
+              <Button type="button" variant="primary-flat" className="provider-form-btn" disabled={testing || saving} onClick={() => void handleSave()} data-name="advanced-panel.provider-form-save-button">
                 {saving ? '保存中…' : '保存'}
               </Button>
-              <Button type="button" variant="ghost" className="provider-form-btn" disabled={testing || saving} onClick={handleCancel} data-name="ai-app-provider.provider-form-cancel-button">取消</Button>
+              <Button type="button" variant="outline" className="provider-form-btn" disabled={testing || saving} onClick={handleCancel} data-name="advanced-panel.provider-form-cancel-button">取消</Button>
             </div>
           </>
         )}
@@ -778,46 +970,48 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
         onClose={() => !exporting && setExportDialogOpen(false)}
         title="加密导出"
         className="provider-crypto-modal"
-        data-name="ai-app-provider.export-dialog"
+        data-name="advanced-panel.export-dialog"
       >
-        <p className="provider-form-dialog-desc" data-name="ai-app-provider.export-dialog-desc">
+        <p className="provider-form-dialog-desc" data-name="advanced-panel.export-dialog-desc">
           {selectedExportIds.size > 0
-            ? `将导出 ${selectedExportIds.size} 个选中的 Provider 到 .sapp 文件。请输入加密密码（导入时需要使用）。`
-            : `将导出全部 ${providers.length} 个 Provider 到 .sapp 文件。请输入加密密码（导入时需要使用）。`}
+            ? `导出 ${selectedExportIds.size} 个 Provider 到 .sapp 文件，输入加密密码。`
+            : `导出全部 ${providers.length} 个 Provider 到 .sapp 文件，输入加密密码。`}
         </p>
-        <input
-          type="password"
-          className="provider-form-input"
-          placeholder="加密密码"
-          value={exportPassword}
-          onChange={(e) => setExportPassword(e.target.value)}
-          autoFocus
-          autoComplete="off"
-          data-name="ai-app-provider.export-dialog-password-input"
-        />
+        <FormRow label="加密密码" compact data-name="advanced-panel.export-dialog-password-row">
+          <input
+            type="password"
+            className="provider-form-input"
+            placeholder="输入密码"
+            value={exportPassword}
+            onChange={(e) => setExportPassword(e.target.value)}
+            autoFocus
+            autoComplete="off"
+            data-name="advanced-panel.export-dialog-password-input"
+          />
+        </FormRow>
         {cryptoFeedback && (
-          <div className={`provider-test-result ${cryptoFeedback.type === 'success' ? 'ok' : 'fail'}`} data-name="ai-app-provider.crypto-feedback">
+          <div className={`provider-test-result ${cryptoFeedback.type === 'success' ? 'ok' : 'fail'}`} data-name="advanced-panel.export-dialog-feedback">
             {cryptoFeedback.msg}
           </div>
         )}
-        <div className="provider-form-actions" data-name="ai-app-provider.export-dialog-actions">
+        <div className="provider-form-actions" data-name="advanced-panel.export-dialog-actions">
           <Button
             type="button"
-            variant="text"
+            variant="outline"
             className="provider-form-btn"
             disabled={exporting}
             onClick={() => setExportDialogOpen(false)}
-            data-name="ai-app-provider.export-dialog-cancel-button"
+            data-name="advanced-panel.export-dialog-cancel-button"
           >
             取消
           </Button>
           <Button
             type="button"
-            variant="primary-compact"
-            className="provider-form-btn primary"
+            variant="primary-flat"
+            className="provider-form-btn"
             disabled={!exportPassword.trim() || exporting}
             onClick={() => void handleConfirmExport()}
-            data-name="ai-app-provider.export-dialog-confirm-button"
+            data-name="advanced-panel.export-dialog-confirm-button"
           >
             {exporting ? '导出中…' : '确认导出'}
           </Button>
@@ -830,63 +1024,67 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
         onClose={() => !importing && setImportDialogOpen(false)}
         title="加密导入"
         className="provider-crypto-modal"
-        data-name="ai-app-provider.import-dialog"
+        data-name="advanced-panel.import-dialog"
       >
         {!importPreview ? (
           <>
-            <p className="provider-form-dialog-desc" data-name="ai-app-provider.import-dialog-step1-desc">
-              选择 .sapp 文件并输入密码以预览导入内容。
+            <p className="provider-form-dialog-desc" data-name="advanced-panel.import-dialog-step1-desc">
+              选择 .sapp 文件并输入密码。
             </p>
-            <div className="provider-import-file-row" data-name="ai-app-provider.import-dialog-file-row">
+            <FormRow label="文件" compact data-name="advanced-panel.import-dialog-file-row">
+              <div className="provider-import-file-row">
+                <input
+                  type="text"
+                  className="provider-form-input"
+                  value={importFilePath}
+                  readOnly
+                  placeholder="选择 .sapp 文件..."
+                  data-name="advanced-panel.import-dialog-file-input"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleSelectImportFile()}
+                  data-name="advanced-panel.import-dialog-select-file-button"
+                >
+                  选择文件
+                </Button>
+              </div>
+            </FormRow>
+            <FormRow label="解密密码" compact data-name="advanced-panel.import-dialog-password-row">
               <input
-                type="text"
+                type="password"
                 className="provider-form-input"
-                value={importFilePath}
-                readOnly
-                placeholder="选择 .sapp 文件..."
-                data-name="ai-app-provider.import-dialog-file-input"
+                placeholder="输入密码"
+                value={importPassword}
+                onChange={(e) => setImportPassword(e.target.value)}
+                autoComplete="off"
+                data-name="advanced-panel.import-dialog-password-input"
               />
-              <Button
-                type="button"
-                variant="text"
-                onClick={() => void handleSelectImportFile()}
-                data-name="ai-app-provider.import-dialog-select-file-button"
-              >
-                选择文件
-              </Button>
-            </div>
-            <input
-              type="password"
-              className="provider-form-input"
-              placeholder="解密密码"
-              value={importPassword}
-              onChange={(e) => setImportPassword(e.target.value)}
-              autoComplete="off"
-              data-name="ai-app-provider.import-dialog-password-input"
-            />
+            </FormRow>
             {cryptoFeedback && (
-              <div className={`provider-test-result ${cryptoFeedback.type === 'success' ? 'ok' : 'fail'}`} data-name="ai-app-provider.crypto-feedback">
+              <div className={`provider-test-result ${cryptoFeedback.type === 'success' ? 'ok' : 'fail'}`} data-name="advanced-panel.import-dialog-step1-feedback">
                 {cryptoFeedback.msg}
               </div>
             )}
-            <div className="provider-form-actions" data-name="ai-app-provider.import-dialog-step1-actions">
+            <div className="provider-form-actions" data-name="advanced-panel.import-dialog-step1-actions">
               <Button
                 type="button"
-                variant="text"
+                variant="outline"
                 className="provider-form-btn"
                 disabled={importing}
                 onClick={() => setImportDialogOpen(false)}
-                data-name="ai-app-provider.import-dialog-cancel-button"
+                data-name="advanced-panel.import-dialog-cancel-button"
               >
                 取消
               </Button>
               <Button
                 type="button"
-                variant="primary-compact"
-                className="provider-form-btn primary"
+                variant="primary-flat"
+                className="provider-form-btn"
                 disabled={!importFilePath || !importPassword.trim() || importing}
                 onClick={() => void handlePreviewImport()}
-                data-name="ai-app-provider.import-dialog-preview-button"
+                data-name="advanced-panel.import-dialog-preview-button"
               >
                 {importing ? '解析中…' : '预览'}
               </Button>
@@ -894,23 +1092,23 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
           </>
         ) : (
           <>
-            <p className="provider-form-dialog-desc" data-name="ai-app-provider.import-dialog-step2-desc">
-              将导入 {importPreview.providers.length} 个 Provider，其中 {importPreview.conflictIds.length} 个会覆盖现有配置。
+            <p className="provider-form-dialog-desc" data-name="advanced-panel.import-dialog-step2-desc">
+              导入 {importPreview.providers.length} 个 Provider，其中 {importPreview.conflictIds.length} 个覆盖现有配置。
             </p>
-            <div className="provider-import-preview-list" data-name="ai-app-provider.import-dialog-preview-list">
+            <div className="provider-import-preview-list" data-name="advanced-panel.import-dialog-preview-list">
               {importPreview.providers.map((p, idx) => {
                 const isConflict = importPreview.conflictIds.includes(p.id);
                 return (
                   <div
                     key={p.id}
                     className={`provider-import-preview-item ${isConflict ? 'conflict' : 'new'}`}
-                    data-name={`ai-app-provider.import-dialog-preview-item-${idx + 1}`}
+                    data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}`}
                     data-index={idx + 1}
                     data-id={p.id}
                   >
-                    <span className="provider-import-preview-name" data-name={`ai-app-provider.import-dialog-preview-item-${idx + 1}-name`}>{p.name}</span>
-                    <span className="provider-import-preview-meta" data-name={`ai-app-provider.import-dialog-preview-item-${idx + 1}-meta`}>{p.protocol} · {p.model}</span>
-                    <span className="provider-import-preview-tag" data-name={`ai-app-provider.import-dialog-preview-item-${idx + 1}-tag`}>
+                    <span className="provider-import-preview-name" data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-name`}>{p.name}</span>
+                    <span className="provider-import-preview-meta" data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-meta`}>{p.protocol} · {p.model}</span>
+                    <span className="provider-import-preview-tag" data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-tag`}>
                       {isConflict ? '覆盖' : '新增'}
                     </span>
                   </div>
@@ -918,28 +1116,28 @@ export default function ProviderSection({ defaultCollapsed = true }: ProviderSec
               })}
             </div>
             {cryptoFeedback && (
-              <div className={`provider-test-result ${cryptoFeedback.type === 'success' ? 'ok' : 'fail'}`} data-name="ai-app-provider.crypto-feedback">
+              <div className={`provider-test-result ${cryptoFeedback.type === 'success' ? 'ok' : 'fail'}`} data-name="advanced-panel.import-dialog-step2-feedback">
                 {cryptoFeedback.msg}
               </div>
             )}
-            <div className="provider-form-actions" data-name="ai-app-provider.import-dialog-step2-actions">
+            <div className="provider-form-actions" data-name="advanced-panel.import-dialog-step2-actions">
               <Button
                 type="button"
-                variant="text"
+                variant="outline"
                 className="provider-form-btn"
                 disabled={importing}
                 onClick={() => setImportPreview(null)}
-                data-name="ai-app-provider.import-dialog-back-button"
+                data-name="advanced-panel.import-dialog-back-button"
               >
                 返回
               </Button>
               <Button
                 type="button"
-                variant="primary-compact"
-                className="provider-form-btn primary"
+                variant="primary-flat"
+                className="provider-form-btn"
                 disabled={importing}
                 onClick={() => void handleConfirmImport()}
-                data-name="ai-app-provider.import-dialog-confirm-button"
+                data-name="advanced-panel.import-dialog-confirm-button"
               >
                 {importing ? '导入中…' : '确认导入'}
               </Button>

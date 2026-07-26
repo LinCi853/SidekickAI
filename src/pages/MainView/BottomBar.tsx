@@ -5,7 +5,7 @@ import {
   triggerVoiceStart,
   triggerVoiceStop,
   listAIProviders,
-  openAiAppProviderWindow,
+  openAdvancedPanelWindow,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
 import { useProfileStore } from '../../store/useProfileStore';
@@ -194,11 +194,11 @@ export default function BottomBar({
   }, [expanded, computeTargetHeight]);
 
   /**
-   * 点击自定义 AI Provider：打开 AI 应用独立窗口（单例），可选定位到该供应商
+   * 点击自定义 AI Provider：打开 进阶面板（单例），可选定位到该供应商
    */
   const handleOpenProvider = (provider: CustomAIProvider) => {
-    void openAiAppProviderWindow(provider.id).catch((e) =>
-      console.error('[BottomBar] 打开 AI 应用独立窗口失败:', e),
+    void openAdvancedPanelWindow(provider.id).catch((e) =>
+      console.error('[BottomBar] 打开 进阶面板失败:', e),
     );
   };
 

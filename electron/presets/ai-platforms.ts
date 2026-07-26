@@ -21,6 +21,15 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[data-testid="send-button"], button[aria-label="发送"]',
     themeColor: '#10a37f',
     gradientColor: '#1a7f64',
+    // chat.openai.com 与 chatgpt.com 同账户体系；auth.openai.com 为登录域
+    allowedOrigins: [
+      'https://chat.openai.com/',
+      'https://chatgpt.com/',
+      'https://auth.openai.com/',
+      'https://auth0.openai.com/',
+      'https://login.openai.com/',
+    ],
+    conversationUrlPatterns: ['/c/', '/g/', '/chat/', '/conversation/'],
   },
   {
     id: 'claude',
@@ -36,6 +45,14 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[aria-label="Send Message"], button[type="submit"]',
     themeColor: '#cc785c',
     gradientColor: '#a65539',
+    // claude.ai 为主域；anthropic.com 为登录/账户域
+    allowedOrigins: [
+      'https://claude.ai/',
+      'https://www.anthropic.com/',
+      'https://auth.anthropic.com/',
+      'https://console.anthropic.com/',
+    ],
+    conversationUrlPatterns: ['/c/', '/chat/', '/conversation/'],
   },
   {
     id: 'gemini',
@@ -51,6 +68,14 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[aria-label="发送"], button.send-button',
     themeColor: '#4285f4',
     gradientColor: '#1e63d6',
+    // gemini.google.com 为主域；accounts.google.com 为登录；aistudio.google.com 为关联产品
+    allowedOrigins: [
+      'https://gemini.google.com/',
+      'https://accounts.google.com/',
+      'https://myaccount.google.com/',
+      'https://aistudio.google.com/',
+    ],
+    conversationUrlPatterns: ['/app/', '/chat/', '/conversation/', '/c/'],
   },
   {
     id: 'doubao',
@@ -66,6 +91,14 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[data-testid="send_button"]',
     themeColor: '#3370ff',
     gradientColor: '#1a56db',
+    // www.doubao.com 为主域；passport.volcengine.com / volces.com 为登录
+    allowedOrigins: [
+      'https://www.doubao.com/',
+      'https://doubao.com/',
+      'https://passport.volcengine.com/',
+      'https://www.volcengine.com/',
+    ],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/'],
   },
   {
     id: 'chatglm',
@@ -82,6 +115,14 @@ export const AI_PLATFORMS: AIPlatform[] = [
   fileInputSelector: 'input[type=file][accept*="image" i], input[type=file]',
   themeColor: '#316cfc',
     gradientColor: '#1e4fd6',
+    // chatglm.cn 为主域；bigmodel.cn 为开放平台；accounts 通用登录
+    allowedOrigins: [
+      'https://chatglm.cn/',
+      'https://www.chatglm.cn/',
+      'https://bigmodel.cn/',
+      'https://open.bigmodel.cn/',
+    ],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/'],
   },
   {
     id: 'deepseek',
@@ -99,6 +140,12 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'div[role="button"].ds-button.ds-button--primary.ds-button--filled.ds-button--circle, div[role="button"][aria-label="发送"], button.ds-icon-button[type="button"]:last-child',
     themeColor: '#4d6bfe',
     gradientColor: '#2e4fd9',
+    allowedOrigins: [
+      'https://chat.deepseek.com/',
+      'https://www.deepseek.com/',
+      'https://platform.deepseek.com/',
+    ],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/', '/a/chat/'],
   },
   {
     id: 'kimi',
@@ -114,6 +161,12 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[class*="send"], button[class*="Send"], button[aria-label*="发送"], div[role="button"][aria-label*="发送"], .send-button',
     themeColor: '#12161d',
     gradientColor: '#2d3748',
+    allowedOrigins: [
+      'https://kimi.moonshot.cn/',
+      'https://www.moonshot.cn/',
+      'https://platform.moonshot.cn/',
+    ],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/'],
   },
   {
     id: 'yiyan',
@@ -129,6 +182,14 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[class*="send"], #sendBtn',
     themeColor: '#1c7fff',
     gradientColor: '#0e5fcc',
+    // yiyan.baidu.com 为主域；passport.baidu.com 为登录；chat.baidu.com 为关联产品
+    allowedOrigins: [
+      'https://yiyan.baidu.com/',
+      'https://passport.baidu.com/',
+      'https://chat.baidu.com/',
+      'https://aip.baidubce.com/',
+    ],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/', '/dialog/'],
   },
   {
     id: 'mimo',
@@ -144,5 +205,15 @@ export const AI_PLATFORMS: AIPlatform[] = [
     sendSelector: 'button[class*="send"], button[class*="Send"], button[aria-label*="发送"], div[role="button"][aria-label*="发送"]',
     themeColor: '#ff6b35',
     gradientColor: '#e04e1f',
+    // mimo.xiaomi.com 为主域；aistudio.xiaomimimo.com / platform.xiaomimimo.com 为关联产品域，
+    // 此前 window.open 跳转被拦截 loadURL 失败导致 remount 循环，纳入白名单避免开独立窗口
+    allowedOrigins: [
+      'https://mimo.xiaomi.com/',
+      'https://aistudio.xiaomimimo.com/',
+      'https://platform.xiaomimimo.com/',
+      'https://account.xiaomi.com/',
+      'https://auth.mi.com/',
+    ],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/', '/dialogue/'],
   },
 ]

@@ -603,8 +603,10 @@ export interface AppSettings {
   cookiePopupCooldownMs: number
   /** 需求 7：Cookie 弹窗自动处理总开关（默认 true） */
   cookieHandlerEnabled: boolean
-  /** v0.5.2 R-3：AI 应用独立窗口默认打开的 tab（Alt+Q 入口） */
-  defaultAiAppTab: 'chat' | 'whiteboard' | 'notes'
+  /** v0.5.2 R-3：进阶面板默认打开的 tab（Alt+Q 入口） */
+  defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
+  /** 白板应用层侧边栏是否可见（默认 false，依赖 tldraw 自带的 PageMenu 多页面切换） */
+  whiteboardSidebarVisible: boolean
 }
 
 /** 顶栏可显隐的按钮组标识（appSwitcher/menu/刷新始终显示，不在此列） */
@@ -823,6 +825,8 @@ export interface ElectronAPI {
   ) => () => void
   /** 渲染→主：将 origin 加入弹窗白名单（持久化到 AppSettings.popupWhitelist） */
   addToPopupWhitelist: (origin: string) => Promise<string[]>
+  /** 渲染→主：将 origin 加入指定 Profile 的专属白名单（持久化到 Profile.popupWhitelist） */
+  addToProfilePopupWhitelist: (profileId: string, origin: string) => Promise<string[]>
   /** 窗口重新显示/聚焦到前台（主→渲染：聚焦输入框） */
   onWindowShown: (callback: () => void) => () => void
   /** 窗口隐藏（主→渲染：自动收起展开的面板） */
@@ -879,14 +883,14 @@ export interface ElectronAPI {
     mode?: 'edit' | 'create';
   }) => Promise<void>
   /**
-   * 打开 AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话）。
+   * 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）。
    * 可选 providerId：若提供则切换到对应自定义供应商的对话页。
    */
-  openAiAppProviderWindow: (providerId?: string) => Promise<void>
-  /** 切换 AI 应用独立窗口显隐（单例） */
-  toggleAiAppProviderWindow: () => Promise<void>
+  openAdvancedPanelWindow: (providerId?: string) => Promise<void>
+  /** 切换 进阶面板显隐（单例） */
+  toggleAdvancedPanelWindow: () => Promise<void>
   /** 主→渲染：单例窗口复用时通知切换 tab/provider */
-  onAiAppProviderNavigate: (
+  onAdvancedPanelNavigate: (
     callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
   ) => () => void
   /** 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后通知各窗口重新计算最小尺寸） */

@@ -25,8 +25,8 @@ export const windowState = {
   historyWindow: null as BrowserWindow | null,
   // 提示词库独立窗口（单例）
   promptWindow: null as BrowserWindow | null,
-  // AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话）
-  aiAppProviderWindow: null as BrowserWindow | null,
+  // 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
+  advancedPanelWindow: null as BrowserWindow | null,
   // 引导独立窗口（单例，首次启动或「使用指南」入口）
   onboardingWindow: null as BrowserWindow | null,
   // 数据导出独立窗口（单例，细粒度选择导出内容 + 体积提示）

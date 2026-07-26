@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
 import { IconButton } from '../../components/ui';
+import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import {
   minimizeWindow,
   maximizeToggleWindow,
@@ -133,18 +134,8 @@ export default function DataExportWindow() {
     return () => { offPin(); offMax(); };
   }, []);
 
-  // ESC 关闭窗口
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      e.preventDefault();
-      void closeCurrentWindow();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  // ESC / Ctrl+W 关窗：复用统一 hook（覆盖 INPUT/TEXTAREA/SELECT/contentEditable 跳过逻辑）
+  useEscToCloseWindow();
 
   // 加载体积估算
   const loadSizes = () => {

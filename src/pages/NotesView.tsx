@@ -90,23 +90,27 @@ function NotesSidebar({
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
 
-  const renderNoteItem = (note: Note) => (
+  const renderNoteItem = (note: Note, idx: number) => (
     <div
       key={note.id}
       className={`notes-sidebar-item ${note.id === activeId ? 'active' : ''}`}
       onClick={() => onSelect(note)}
+      data-name={`advanced-panel.notes-sidebar-item-${idx + 1}`}
+      data-index={idx + 1}
+      data-id={note.id}
+      data-pinned={note.pinned ? 'true' : 'false'}
     >
-      <div className="notes-sidebar-item-main">
-        <div className="notes-sidebar-item-title">
+      <div className="notes-sidebar-item-main" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-main`}>
+        <div className="notes-sidebar-item-title" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-title`}>
           {note.pinned && <span className="notes-pin-icon">★</span>}
           {note.title || note.content.split('\n').find((l) => l.trim())?.slice(0, 30) || '空白笔记'}
         </div>
-        <div className="notes-sidebar-item-meta">
-          <span className="notes-sidebar-item-time">{formatTime(note.updatedAt)}</span>
+        <div className="notes-sidebar-item-meta" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-meta`}>
+          <span className="notes-sidebar-item-time" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-time`}>{formatTime(note.updatedAt)}</span>
           {note.tags.length > 0 && (
-            <span className="notes-sidebar-item-tags">
+            <span className="notes-sidebar-item-tags" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-tags`}>
               {note.tags.map((t) => (
-                <span key={t} className="notes-tag-chip">{t}</span>
+                <span key={t} className="notes-tag-chip" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-tag-${t}`}>{t}</span>
               ))}
             </span>
           )}
@@ -116,6 +120,8 @@ function NotesSidebar({
         className="notes-sidebar-item-delete sidebar-list-item-delete"
         onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
         title="删除"
+        aria-label="删除笔记"
+        data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-delete-button`}
       >
         ×
       </button>
@@ -123,54 +129,58 @@ function NotesSidebar({
   );
 
   return (
-    <div className="notes-sidebar app-sidebar-narrow">
-      <div className="notes-sidebar-search">
+    <div className="notes-sidebar app-sidebar-narrow" data-name="advanced-panel.notes-sidebar">
+      <div className="notes-sidebar-search" data-name="advanced-panel.notes-sidebar-search">
         <input
           type="text"
           className="notes-search-input"
           placeholder="搜索笔记…"
           value={searchKeyword}
           onChange={(e) => onSearchChange(e.target.value)}
+          data-name="advanced-panel.notes-sidebar-search-input"
         />
-        <IconButton variant="default" aria-label="新建笔记" onClick={onCreate} title="新建笔记">
+        <IconButton variant="default" aria-label="新建笔记" onClick={onCreate} title="新建笔记" data-name="advanced-panel.notes-sidebar-create-button">
           +
         </IconButton>
       </div>
       {allTags.length > 0 && (
-        <div className="notes-sidebar-tags">
+        <div className="notes-sidebar-tags" data-name="advanced-panel.notes-sidebar-tags">
           <button
             className={`notes-tag-filter ${!filterTag ? 'active' : ''}`}
             onClick={() => onTagFilter(undefined)}
+            data-name="advanced-panel.notes-sidebar-tag-filter-all"
           >
             全部
           </button>
-          {allTags.map((tag) => (
+          {allTags.map((tag, idx) => (
             <button
               key={tag}
               className={`notes-tag-filter ${filterTag === tag ? 'active' : ''}`}
               onClick={() => onTagFilter(filterTag === tag ? undefined : tag)}
+              data-name={`advanced-panel.notes-sidebar-tag-filter-${idx + 1}`}
+              data-tag={tag}
             >
               {tag}
             </button>
           ))}
         </div>
       )}
-      <div className="notes-sidebar-list">
+      <div className="notes-sidebar-list" data-name="advanced-panel.notes-sidebar-list">
         {notes.length === 0 && (
-          <div className="notes-sidebar-empty app-empty-state">
+          <div className="notes-sidebar-empty app-empty-state" data-name="advanced-panel.notes-sidebar-empty">
             {searchKeyword || filterTag ? '无匹配笔记' : '点击 + 新建笔记'}
           </div>
         )}
         {pinnedNotes.length > 0 && (
           <>
-            <div className="notes-sidebar-section">置顶</div>
-            {pinnedNotes.map(renderNoteItem)}
+            <div className="notes-sidebar-section" data-name="advanced-panel.notes-sidebar-section-pinned">置顶</div>
+            {pinnedNotes.map((n, i) => renderNoteItem(n, i))}
           </>
         )}
         {normalNotes.length > 0 && (
           <>
-            {pinnedNotes.length > 0 && <div className="notes-sidebar-section">全部</div>}
-            {normalNotes.map(renderNoteItem)}
+            {pinnedNotes.length > 0 && <div className="notes-sidebar-section" data-name="advanced-panel.notes-sidebar-section-all">全部</div>}
+            {normalNotes.map((n, i) => renderNoteItem(n, pinnedNotes.length + i))}
           </>
         )}
       </div>
@@ -250,20 +260,20 @@ function NotesEditor({
 
   if (!note) {
     return (
-      <div className="notes-editor-empty">
-        <div className="notes-editor-empty-text app-empty-state">选择或新建一条笔记</div>
+      <div className="notes-editor-empty" data-name="advanced-panel.notes-editor-empty">
+        <div className="notes-editor-empty-text app-empty-state" data-name="advanced-panel.notes-editor-empty-text">选择或新建一条笔记</div>
       </div>
     );
   }
 
   return (
-    <div className="notes-editor">
-      <div className="notes-editor-toolbar-top">
-        <div className="notes-tags-row">
-          {note.tags.map((tag) => (
-            <span key={tag} className="notes-tag-chip removable">
+    <div className="notes-editor" data-name="advanced-panel.notes-editor">
+      <div className="notes-editor-toolbar-top" data-name="advanced-panel.notes-editor-toolbar-top">
+        <div className="notes-tags-row" data-name="advanced-panel.notes-editor-tags-row">
+          {note.tags.map((tag, idx) => (
+            <span key={tag} className="notes-tag-chip removable" data-name={`advanced-panel.notes-editor-tag-${idx + 1}`} data-tag={tag}>
               {tag}
-              <button className="notes-tag-remove" onClick={() => handleRemoveTag(tag)}>×</button>
+              <button className="notes-tag-remove" onClick={() => handleRemoveTag(tag)} aria-label={`移除标签 ${tag}`} data-name={`advanced-panel.notes-editor-tag-${idx + 1}-remove`}>×</button>
             </span>
           ))}
           <input
@@ -276,25 +286,30 @@ function NotesEditor({
               if (e.key === 'Enter') handleAddTag();
             }}
             onBlur={handleAddTag}
+            data-name="advanced-panel.notes-editor-tag-input"
           />
         </div>
-        <div className="notes-editor-actions">
+        <div className="notes-editor-actions" data-name="advanced-panel.notes-editor-actions">
           <button
             className={`notes-icon-btn ${note.pinned ? 'active' : ''}`}
             onClick={onTogglePin}
             title={note.pinned ? '取消置顶' : '置顶'}
             aria-pressed={note.pinned}
+            aria-label={note.pinned ? '取消置顶' : '置顶'}
+            data-name="advanced-panel.notes-editor-pin-button"
           >
             ★
           </button>
         </div>
       </div>
 
-      <div className="notes-toolbar">
+      <div className="notes-toolbar" data-name="advanced-panel.notes-toolbar">
         <button
           className="notes-icon-btn"
           onClick={() => editor?.chain().focus().toggleBold().run()}
           title="加粗"
+          aria-label="加粗"
+          data-name="advanced-panel.notes-toolbar-bold-button"
         >
           B
         </button>
@@ -302,6 +317,8 @@ function NotesEditor({
           className="notes-icon-btn"
           onClick={() => editor?.chain().focus().toggleItalic().run()}
           title="斜体"
+          aria-label="斜体"
+          data-name="advanced-panel.notes-toolbar-italic-button"
         >
           I
         </button>
@@ -309,6 +326,8 @@ function NotesEditor({
           className="notes-icon-btn"
           onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
           title="标题"
+          aria-label="标题"
+          data-name="advanced-panel.notes-toolbar-heading-button"
         >
           H
         </button>
@@ -316,6 +335,8 @@ function NotesEditor({
           className="notes-icon-btn"
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
           title="无序列表"
+          aria-label="无序列表"
+          data-name="advanced-panel.notes-toolbar-bullet-list-button"
         >
           •
         </button>
@@ -323,6 +344,8 @@ function NotesEditor({
           className="notes-icon-btn"
           onClick={() => editor?.chain().focus().toggleTaskList().run()}
           title="任务列表"
+          aria-label="任务列表"
+          data-name="advanced-panel.notes-toolbar-task-list-button"
         >
           ☑
         </button>
@@ -330,24 +353,26 @@ function NotesEditor({
           className="notes-icon-btn"
           onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
           title="代码块"
+          aria-label="代码块"
+          data-name="advanced-panel.notes-toolbar-code-block-button"
         >
           {'</>'}
         </button>
       </div>
 
-      <div className="notes-editor-body">
+      <div className="notes-editor-body" data-name="advanced-panel.notes-editor-body">
         <EditorContent editor={editor} />
       </div>
 
-      <div className="notes-bottom">
-        <span className="notes-char-count">
+      <div className="notes-bottom" data-name="advanced-panel.notes-bottom">
+        <span className="notes-char-count" data-name="advanced-panel.notes-char-count">
           {note.content.length} 字
         </span>
-        <div className="notes-bottom-actions">
-          <button className="notes-action-btn notes-action-btn-secondary" onClick={onSaveAsPrompt}>
+        <div className="notes-bottom-actions" data-name="advanced-panel.notes-bottom-actions">
+          <button className="btn-outline notes-action-btn notes-action-btn-secondary" onClick={onSaveAsPrompt} data-name="advanced-panel.notes-save-as-prompt-button">
             存为提示词
           </button>
-          <button className="notes-action-btn notes-action-btn-primary" onClick={onSendToAi}>
+          <button className="notes-action-btn notes-action-btn-primary" onClick={onSendToAi} data-name="advanced-panel.notes-send-to-ai-button">
             发送到 AI
           </button>
         </div>
@@ -610,8 +635,8 @@ export default function NotesView(_: NotesViewProps) {
   }, [showToast]);
 
   return (
-    <div className="notes-view app-view-root">
-      <div className="notes-body">
+    <div className="notes-view app-view-root" data-name="advanced-panel.notes-view">
+      <div className="notes-body" data-name="advanced-panel.notes-body">
         <NotesSidebar
           notes={notes}
           activeId={activeNote?.id || null}
@@ -633,7 +658,7 @@ export default function NotesView(_: NotesViewProps) {
           onSaveAsPrompt={handleSaveAsPrompt}
         />
       </div>
-      {toast && <div className="notes-toast app-toast">{toast}</div>}
+      {toast && <div className="notes-toast app-toast" data-name="advanced-panel.notes-toast">{toast}</div>}
     </div>
   );
 }

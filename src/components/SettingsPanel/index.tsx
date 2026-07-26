@@ -43,6 +43,10 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
   // 预设展开状态（本地 UI state，不属于持久化数据）
   const [presetExpanded, setPresetExpanded] = useState(false);
 
+  // 供应商编辑状态：编辑时本地强制隐藏侧滑面板，让编辑 Modal 全屏覆盖主窗口
+  // 与进阶面板体验保持一致（侧滑面板的 transform 会破坏内部 Modal 的 fixed 定位）
+  const [providerEditing, setProviderEditing] = useState(false);
+
   // 主窗口专属：已打开标签（用于顶栏按钮显隐后同步最小宽度）
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
@@ -154,7 +158,7 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
   }, [app]);
 
   return (
-    <SettingsPanelShell open={open} onClose={onClose}>
+    <SettingsPanelShell open={open && !providerEditing} onClose={onClose}>
       <AppearanceSection
         tabBarCollapsed={app.tabBarCollapsed}
         setTabBarCollapsed={app.setTabBarCollapsed}
@@ -189,7 +193,10 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         onToggleHideForeignModels={handleToggleHideForeignModels}
       />
 
-      <ProviderSection defaultCollapsed={true} />
+      <ProviderSection
+        defaultCollapsed={true}
+        onEditingChange={setProviderEditing}
+      />
 
       <HotkeySection
         hotkeys={hotkeys.hotkeys}

@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { getChatStore } from '../store/chat-store.js'
 import { getAppSettings } from '../store/app-settings-store.js'
+import { profileStore } from '../store/profile-store.js'
 import { type WindowTraceAction, type ChatWindowConfig } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { windowState } from '../window-state.js'
@@ -28,6 +29,7 @@ import {
   setAlwaysOnTopForWindow,
 } from '../ipc/window-control-ipc.js'
 import { buildWindowConfig } from './window-config-builder.js'
+import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 
 /** 应用窗口统一背景色（与渲染层主题色一致，避免启动白闪） */
 export const WINDOW_BACKGROUND_COLOR = '#1f1719'
@@ -49,6 +51,15 @@ export function getPreloadPath(): string {
     return path.resolve(__dirname, '../preload/index.mjs')
   }
   return path.join(__dirname, '../preload/index.mjs')
+}
+
+// 获取 webview 访客页 preload 脚本路径
+// 用于 webview 内的反检测覆盖（navigator.webdriver / chrome.runtime 等）
+export function getWebviewPreloadPath(): string {
+  if (isDev) {
+    return path.resolve(__dirname, '../preload/webview.mjs')
+  }
+  return path.join(__dirname, '../preload/webview.mjs')
 }
 
 /**
@@ -75,8 +86,8 @@ export function createDefaultWebPreferences(opts: {
 export const HISTORY_WINDOW_ID = 'history'
 // 提示词库独立窗口（单例，不遮挡主页面）
 export const PROMPT_WINDOW_ID = 'prompts'
-// AI 应用独立窗口（单例，承载内置 AI/自定义供应商/自定义对话）
-export const AI_APP_PROVIDER_WINDOW_ID = 'ai-app-provider'
+// 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
+export const ADVANCED_PANEL_WINDOW_ID = 'advanced-panel'
 // 引导独立窗口（单例，首次启动或「使用指南」入口）
 export const ONBOARDING_WINDOW_ID = 'onboarding'
 
@@ -95,17 +106,131 @@ function extractUrlOrigin(url: string): string {
 }
 
 /**
- * 同步读取 popupWhitelist（避免 setWindowOpenHandler 内 await 导致时序问题）。
+ * 判断目标 URL 的 origin 是否被当前页所属 AI 平台的 allowedOrigins 清单覆盖。
+ *
+ * 用途：解决各 AI 平台多域名场景（如 mimo 的 mimo.xiaomi.com / aistudio.xiaomimimo.com、
+ * ChatGPT 的 chat.openai.com / chatgpt.com）下，跨域 popup 被误判为「应用外页面」
+ * 而开独立窗口的问题。
+ *
+ * 匹配规则：
+ * 1. 取当前页 URL 的 origin，反查 AI_PLATFORMS 中第一个 allowedOrigins 命中的平台
+ * 2. 若找到平台，再判断目标 URL 的 origin 是否在该平台的 allowedOrigins 内
+ * 3. origin 比较统一规范化为 `protocol//host/`（与 extractUrlOrigin 一致）
+ *
+ * @returns true 表示目标 URL 与当前页属于同一平台相关域（应作为页面内跳转），
+ *          false 表示无关联（保持原跨域处理逻辑）
+ */
+function isTargetOriginAllowedByPlatform(currentUrl: string, targetUrl: string): boolean {
+  if (!currentUrl || !targetUrl) return false
+  let currentOrigin = ''
+  let targetOrigin = ''
+  try {
+    currentOrigin = extractUrlOrigin(currentUrl)
+    targetOrigin = extractUrlOrigin(targetUrl)
+  } catch {
+    return false
+  }
+  if (!currentOrigin || !targetOrigin || currentOrigin === targetOrigin) {
+    // 同 origin 不需要走此分支；交由调用方按同域处理
+    return false
+  }
+  // 反查当前页所属平台（任一平台的 allowedOrigins 命中当前 origin 即视为该平台）
+  let platformAllowedOrigins: string[] | undefined
+  for (const p of AI_PLATFORMS) {
+    if (!p.allowedOrigins || p.allowedOrigins.length === 0) continue
+    const currentHit = p.allowedOrigins.some(
+      (o) => extractUrlOrigin(o) === currentOrigin || currentOrigin.startsWith(o),
+    )
+    if (currentHit) {
+      platformAllowedOrigins = p.allowedOrigins
+      break
+    }
+  }
+  if (!platformAllowedOrigins) return false
+  // 检查目标 origin 是否在平台 allowedOrigins 内
+  return platformAllowedOrigins.some(
+    (o) => extractUrlOrigin(o) === targetOrigin || targetOrigin.startsWith(o),
+  )
+}
+
+/**
+ * 同步读取全局 popupWhitelist（避免 setWindowOpenHandler 内 await 导致时序问题）。
  * 通过模块顶部静态 import getAppSettings，调用为同步函数。
  * 注：不能用 require() —— electron-vite 打包后模块路径不存在。
  */
-function getPopupWhitelistSync(): string[] {
+function getGlobalPopupWhitelistSync(): string[] {
   try {
     return getAppSettings().popupWhitelist || []
   } catch (e) {
-    console.warn('[webview-popup] 读取 popupWhitelist 失败:', e)
+    console.warn('[webview-popup] 读取全局 popupWhitelist 失败:', e)
     return []
   }
+}
+
+/**
+ * 从 webview 的 session partition 字符串中提取 profileId。
+ *
+ * partition 格式为 `persist:<profileId>`（见 WebviewTab.tsx 与 window/manager.ts）。
+ * 非 persist: 开头（如默认 session）返回 null。
+ */
+function extractProfileIdFromPartition(partition: string): string | null {
+  if (!partition || !partition.startsWith('persist:')) return null
+  return partition.slice('persist:'.length) || null
+}
+
+/**
+ * 同步合并三层弹窗白名单（全局 + 平台 + Profile），用于 setWindowOpenHandler 内的判断。
+ *
+ * 三层来源（任一命中即放行）：
+ * ① 全局默认登录域：AppSettings.popupWhitelist（DEFAULT_POPUP_WHITELIST 自动合并）
+ * ② 平台关联域：当前页所属 AI 平台的 AIPlatform.allowedOrigins
+ * ③ Profile 专属自定义：当前 webview 所属 Profile 的 popupWhitelist
+ *
+ * @param wc webview 的 guest webContents
+ * @param currentUrl 当前页 URL（用于反查平台 allowedOrigins）
+ * @returns 合并去重后的 origin 前缀数组
+ */
+function getMergedPopupWhitelistSync(wc: Electron.WebContents, currentUrl: string): string[] {
+  const result = new Set<string>()
+
+  // ① 全局默认
+  for (const prefix of getGlobalPopupWhitelistSync()) {
+    if (prefix) result.add(prefix)
+  }
+
+  // ② 平台 allowedOrigins
+  if (currentUrl) {
+    const currentOrigin = extractUrlOrigin(currentUrl)
+    for (const p of AI_PLATFORMS) {
+      if (!p.allowedOrigins || p.allowedOrigins.length === 0) continue
+      const currentHit = p.allowedOrigins.some(
+        (o) => extractUrlOrigin(o) === currentOrigin || currentOrigin.startsWith(o),
+      )
+      if (currentHit) {
+        for (const o of p.allowedOrigins) result.add(o)
+        break
+      }
+    }
+  }
+
+  // ③ Profile 专属
+  try {
+    const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
+    const partition = sessionWithPartition.getPartition?.() || ''
+    const profileId = extractProfileIdFromPartition(partition)
+    if (profileId) {
+      const profile = profileStore.get(profileId)
+      if (profile?.popupWhitelist) {
+        for (const prefix of profile.popupWhitelist) {
+          if (prefix) result.add(prefix)
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[webview-popup] 读取 Profile.popupWhitelist 失败:', e)
+  }
+
+  return Array.from(result)
 }
 
 /** 获取调用方所在的 BrowserWindow */
@@ -195,9 +320,9 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
  *   3. close 事件：持久化 bounds + 最大化/置顶状态到 windowStore
  *   4. closed 事件：从 windowState.detachedWindows 清理 + 可选自定义清理
  *
- * 调用方仍需自行完成 detachedWindows.set / aiAppProviderWindow 赋值等注册操作
+ * 调用方仍需自行完成 detachedWindows.set / advancedPanelWindow 赋值等注册操作
  * （注册时机因窗口类型而异）。onClosed 回调用于窗口类型的额外清理
- * （如 ai-app 窗口需清空 windowState.aiAppProviderWindow）。
+ * （如 ai-app 窗口需清空 windowState.advancedPanelWindow）。
  */
 export function attachDetachedWindowLifecycle(
   win: BrowserWindow,
@@ -226,6 +351,23 @@ export function attachDetachedWindowLifecycle(
   win.on('closed', () => {
     windowState.detachedWindows.delete(windowId)
     onClosed?.()
+  })
+}
+
+/**
+ * 为窗口的 webContents 注册 <webview> 反检测 preload 注入。
+ *
+ * 通过 will-attach-webview 事件（webview 附加前触发），强制设置 preload 脚本，
+ * 在页面脚本执行前覆盖 navigator.webdriver / window.chrome 等特征属性，
+ * 防止 DeepSeek 等网站识别出 Electron/WebView 环境。
+ */
+export function attachWebviewAntiDetection(parentWebContents: Electron.WebContents): void {
+  const webviewPreload = getWebviewPreloadPath()
+  parentWebContents.on('will-attach-webview', (_event, webPreferences) => {
+    webPreferences.preload = webviewPreload
+    webPreferences.contextIsolation = true
+    webPreferences.nodeIntegration = false
+    webPreferences.sandbox = false
   })
 }
 
@@ -278,8 +420,12 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
       }
 
       // 1) 白名单检查（origin 前缀匹配）
+      //    合并三层：全局默认登录域 + 平台 allowedOrigins + Profile 专属自定义
+      //    提前计算 currentUrl 用于反查平台 allowedOrigins 和 Profile popupWhitelist
       const origin = extractUrlOrigin(url)
-      const whitelist = getPopupWhitelistSync()
+      let currentUrlForWhitelist = ''
+      try { currentUrlForWhitelist = wc.getURL() } catch { /* guest 未就绪 */ }
+      const whitelist = getMergedPopupWhitelistSync(wc, currentUrlForWhitelist)
       const isWhitelisted = whitelist.some(
         (prefix) => url.startsWith(prefix) || origin.startsWith(prefix),
       )
@@ -302,11 +448,16 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
       //    跨域 loadURL 在 SPA 内易触发 ERR_FAILED (-2) 导致 guest 崩溃；
       //    而跨域 window.open 通常是登录/OAuth/支付等需要独立窗口的场景。
       //    通过 origin 比较（scheme+host）判断是否跨域，path/hash/query 不影响。
-      let currentUrl = ''
-      try { currentUrl = wc.getURL() } catch { /* guest 未就绪 */ }
+      //
+      //    例外：若目标 origin 命中当前页所属 AI 平台的 allowedOrigins 清单
+      //    （如 mimo.xiaomi.com ↔ aistudio.xiaomimimo.com、chat.openai.com ↔ chatgpt.com），
+      //    视为同平台关联域，作为页面内跳转处理，避免误开独立窗口被用户感知为
+      //    「跳转到应用外页面」。loadURL 失败由 safeLoadURLWebview 的 remount 机制兜底。
+      const currentUrl = currentUrlForWhitelist
       const currentOrigin = currentUrl ? extractUrlOrigin(currentUrl) : ''
       const isCrossOrigin = !!currentOrigin && origin !== currentOrigin
-      if (isCrossOrigin) {
+      const isPlatformRelated = isTargetOriginAllowedByPlatform(currentUrl, url)
+      if (isCrossOrigin && !isPlatformRelated) {
         console.log('[webview-popup] 跨域 popup 自动放行:', url, '当前:', currentUrl.slice(0, 80))
         const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
         const partition = sessionWithPartition.getPartition?.() || ''
@@ -316,6 +467,10 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
             webPreferences: partition ? { partition } : {},
           },
         }
+      }
+      if (isCrossOrigin && isPlatformRelated) {
+        console.log('[webview-popup] 平台关联域 popup，页面内跳转:', url, '当前:', currentUrl.slice(0, 80))
+        // 落入下方同域处理分支（deny + 转发渲染层 safeLoadURLWebview）
       }
 
       // 3) 同域 popup：统计拒绝次数（按 origin 聚合）
@@ -693,7 +848,7 @@ export function findWindowIdByWin(win: BrowserWindow): string | null {
   if (win === windowState.mainWindow) return MAIN_WINDOW_ID
   if (win === windowState.historyWindow) return HISTORY_WINDOW_ID
   if (win === windowState.promptWindow) return PROMPT_WINDOW_ID
-  if (win === windowState.aiAppProviderWindow) return AI_APP_PROVIDER_WINDOW_ID
+  if (win === windowState.advancedPanelWindow) return ADVANCED_PANEL_WINDOW_ID
   if (win === windowState.onboardingWindow) return ONBOARDING_WINDOW_ID
   if (win === windowState.previewWindow) return 'preview'
   for (const [id, w] of windowState.detachedWindows) {

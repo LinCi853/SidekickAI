@@ -313,13 +313,37 @@ ${popupGuardComment}            try {
                 }
                 // 额外收紧：会话 URL（/c/, /chat/, /conversation/ 等）放行原生处理，
                 // 避免与站点 SPA 路由冲突（这些 URL 通常由站点自身路由器处理）
+                // 包含常见 AI 平台对话页路径模式：/c/<id>、/g/<id>、/chat/<id>、
+                // /conversation/<id>、/dialog/<id>、/dialogue/<id>、/app/<id>、
+                // /message/<id>、/prompt/<id>，以及无 id 的新建对话路径
                 try {
                   var pathname = new URL(absUrl).pathname || '';
-                  if (pathname.indexOf('/c/') === 0 || pathname.indexOf('/chat/') === 0 ||
-                      pathname.indexOf('/conversation/') === 0 ||
-                      pathname === '/c/new' || pathname === '/new' ||
-                      pathname === '/chat' || pathname === '/chat/new') {
+                  // 会话 URL 路径前缀清单（含 id 形式）
+                  var conversationPrefixes = [
+                    '/c/', '/g/', '/chat/', '/conversation/',
+                    '/dialog/', '/dialogue/', '/app/',
+                    '/message/', '/prompt/', '/thread/'
+                  ];
+                  // 无 id 的新建会话路径
+                  var newConversationPaths = [
+                    '/c/new', '/new', '/chat', '/chat/new', '/g/new'
+                  ];
+                  var isConversation = conversationPrefixes.some(function(p) { return pathname.indexOf(p) === 0; })
+                    || newConversationPaths.indexOf(pathname) !== -1;
+                  if (isConversation) {
                     console.log('[AIWindow] 会话 URL，放行原生处理:', href);
+                    return;
+                  }
+                  // 登录/认证 URL 路径前缀清单：放行原生处理（交由 setWindowOpenHandler 决策）
+                  // 这些 URL 若被强制 SPA 路由跳转会破坏模态登录流程
+                  var loginPrefixes = [
+                    '/auth/', '/login/', '/oauth/', '/signin/', '/signup/',
+                    '/register/', '/account/', '/sso/', '/callback/',
+                    '/applyAndLogin', '/applyandlogin'
+                  ];
+                  var isLogin = loginPrefixes.some(function(p) { return pathname.indexOf(p) === 0; });
+                  if (isLogin) {
+                    console.log('[AIWindow] 登录/认证 URL，放行原生处理:', href);
                     return;
                   }
                 } catch (err) { /* URL 解析失败，继续拦截 */ }

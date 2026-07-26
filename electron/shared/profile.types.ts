@@ -129,6 +129,18 @@ export interface Profile {
   aiInputSelector?: string
   /** AI 平台发送按钮 CSS 选择器（用户覆盖，留空用平台预设 sendSelector） */
   aiSendSelector?: string
+  /**
+   * 该 AI 应用专属的弹窗白名单（origin 前缀数组，如 'https://auth.openai.com/'）。
+   *
+   * 与全局 AppSettings.popupWhitelist 的关系：
+   * - 主进程 setWindowOpenHandler 在判断弹窗时合并三层白名单：
+   *   ① 全局默认登录域（AppSettings.popupWhitelist，作为兜底，所有应用共享）
+   *   ② 平台 allowedOrigins（AIPlatform.allowedOrigins，平台关联域）
+   *   ③ 本字段（Profile.popupWhitelist，应用专属自定义）
+   * - 用户在 AiAppEditor 中编辑；onPopupDenied 自动加白时写入本字段而非全局
+   * - 留空时仅依赖 ①② 两层兜底
+   */
+  popupWhitelist?: string[]
 }
 
 // ============================================================================
@@ -167,4 +179,19 @@ export interface AIPlatform {
   themeColor: string
   /** 渐变色（从 themeColor 衍生的第二个色，用于渐变背景） */
   gradientColor: string
+  /**
+   * 允许跳转的相关域名清单（origin 前缀，含 scheme + host）。
+   * 主进程 setWindowOpenHandler 在跨域 popup 判断时优先匹配此清单：
+   * 若目标 origin 命中，则视为「同域」处理（页面内跳转，不开新窗口），
+   * 避免各平台多域名场景（如 mimo 的 mimo.xiaomi.com / aistudio.xiaomimimo.com、
+   * ChatGPT 的 chat.openai.com / chatgpt.com）被误判为「跳转到应用外页面」。
+   * 未配置时仅按当前 URL origin 做同域判断。
+   */
+  allowedOrigins?: string[]
+  /**
+   * 会话 URL 路径前缀清单（pathname 起始匹配，如 ['/c/', '/chat/', '/conversation/']）。
+   * 渲染层 click 拦截器对这些路径放行原生处理，避免与站点 SPA 路由冲突。
+   * 未配置时使用通用兜底白名单。
+   */
+  conversationUrlPatterns?: string[]
 }

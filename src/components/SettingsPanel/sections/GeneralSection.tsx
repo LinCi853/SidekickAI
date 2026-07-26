@@ -5,7 +5,8 @@ import { useSettingsDraft } from '../../../hooks/useSettingsData';
 import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
-import { SectionTitle, FormRow } from '../../ui';
+import { SectionTitle, FormRow, Combobox } from '../../ui';
+import type { ComboboxOption } from '../../ui';
 import type { GeneralSettings } from '../types';
 
 interface GeneralSectionProps {
@@ -69,6 +70,13 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
 
   const desktopPresets = presets.filter((p) => p.platform === 'desktop');
   const mobilePresets = presets.filter((p) => p.platform === 'mobile');
+  // 兜底：当前选中的预设 id 不在列表中（如自定义预设被删除）时，显示一个临时占位项避免下拉框空白
+  const desktopPlaceholder = desktopPresets.some((p) => p.id === defaultDesktopUaPreset)
+    ? null
+    : { id: defaultDesktopUaPreset, name: '（已失效，请重选）' };
+  const mobilePlaceholder = mobilePresets.some((p) => p.id === defaultMobileUaPreset)
+    ? null
+    : { id: defaultMobileUaPreset, name: '（已失效，请重选）' };
 
   return (
     <section data-name="settings.general.section">
@@ -76,45 +84,65 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
 
       {/* 默认 UA 预设（用户自选桌面端 / 移动端 UA，数据来源于设备预设） */}
       <FormRow label="默认桌面端 UA">
-        <select
-          className="ua-preset-select input-underline"
-          value={defaultDesktopUaPreset}
-          onChange={async (e) => {
-            const next = e.target.value;
-            setDefaultDesktopUaPreset(next);
+        <Combobox
+          inputValue={
+            desktopPlaceholder
+              ? desktopPlaceholder.name
+              : desktopPresets.find((p) => p.id === defaultDesktopUaPreset)?.name ?? ''
+          }
+          onInputChange={() => {}}
+          inputPlaceholder="选择桌面端 UA 预设"
+          inputClassName="input-underline ua-preset-select"
+          inputReadOnly
+          options={desktopPresets.map<ComboboxOption>((p) => ({
+            value: p.id,
+            label: p.name,
+            selected: p.id === defaultDesktopUaPreset,
+          }))}
+          onSelect={async (v) => {
+            setDefaultDesktopUaPreset(v);
             try {
-              await updateAppSettings({ defaultDesktopUaPreset: next });
+              await updateAppSettings({ defaultDesktopUaPreset: v });
             } catch (err) {
               console.error('保存默认桌面端 UA 失败:', err);
             }
           }}
-          data-name="settings.general.desktop-ua-select"
-        >
-          {desktopPresets.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+          searchable
+          searchPlaceholder="搜索 UA 预设…"
+          emptyText="无匹配预设"
+          dataName="settings.general.desktop-ua-select"
+        />
       </FormRow>
 
       <FormRow label="默认移动端 UA">
-        <select
-          className="ua-preset-select input-underline"
-          value={defaultMobileUaPreset}
-          onChange={async (e) => {
-            const next = e.target.value;
-            setDefaultMobileUaPreset(next);
+        <Combobox
+          inputValue={
+            mobilePlaceholder
+              ? mobilePlaceholder.name
+              : mobilePresets.find((p) => p.id === defaultMobileUaPreset)?.name ?? ''
+          }
+          onInputChange={() => {}}
+          inputPlaceholder="选择移动端 UA 预设"
+          inputClassName="input-underline ua-preset-select"
+          inputReadOnly
+          options={mobilePresets.map<ComboboxOption>((p) => ({
+            value: p.id,
+            label: p.name,
+            selected: p.id === defaultMobileUaPreset,
+          }))}
+          onSelect={async (v) => {
+            setDefaultMobileUaPreset(v);
             try {
-              await updateAppSettings({ defaultMobileUaPreset: next });
+              await updateAppSettings({ defaultMobileUaPreset: v });
             } catch (err) {
               console.error('保存默认移动端 UA 失败:', err);
             }
           }}
-          data-name="settings.general.mobile-ua-select"
-        >
-          {mobilePresets.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+          searchable
+          searchPlaceholder="搜索 UA 预设…"
+          emptyText="无匹配预设"
+          dataName="settings.general.mobile-ua-select"
+        />
       </FormRow>
 
       {/* 启动时打开：首页 / 最近对话 */}
@@ -131,7 +159,7 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
             }
           }}
           name="启动时打开"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
 
@@ -149,7 +177,7 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
             }
           }}
           name="关闭按钮行为"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
 
@@ -167,7 +195,7 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
             }
           }}
           name="点击已打开应用时"
-          className="proxy-mode-group"
+          className="seg-control-row"
         />
       </FormRow>
 
@@ -214,16 +242,17 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
       </FormRow>
       {autoLaunchError && (
         <div
-          style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.4, padding: '0 0 6px 0' }}
+          className="feedback-text fail"
+          style={{ padding: '0 var(--space-2) 6px' }}
           data-name="settings.general.auto-launch-error"
         >
-          设置失败，请在系统设置中允许本应用修改自启动配置，或将程序快捷方式拖入「启动」文件夹。
+          设置失败，请在系统设置中允许自启动，或将快捷方式拖入「启动」文件夹。
         </div>
       )}
 
       {/* 静默启动：仅当开机自启动开启时显示 */}
       {autoLaunch && (
-        <FormRow label="静默启动" hint="开机时不显示主窗口，仅在托盘运行">
+        <FormRow label="静默启动">
           <Toggle
             checked={silentStart}
             onChange={async (next) => {
@@ -241,8 +270,8 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
         </FormRow>
       )}
 
-      {/* 使用统计与操作日志：记录启动时间 + data-name 点击日志，完全本地存储 */}
-      <FormRow label="使用统计与操作日志" hint="记录启动时间与按钮点击频次，完全本地存储">
+      {/* 使用统计与操作日志 */}
+      <FormRow label="使用统计与操作日志">
         <Toggle
           checked={usageTrackingEnabled}
           onChange={async (next) => {
@@ -259,11 +288,10 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
         />
       </FormRow>
       {usageTrackingEnabled && (
-        <FormRow label="清除统计记录" hint="清空所有启动时间与点击日志">
+        <FormRow label="清除统计记录">
           <button
             type="button"
-            className="ua-preset-select input-underline"
-            style={{ cursor: 'pointer', padding: '4px 12px' }}
+            className="btn-outline btn-outline-sm"
             data-name="settings.general.usage-clear-button"
             onClick={async () => {
               try {
@@ -284,12 +312,8 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
       )}
       {usageClearMsg && (
         <div
-          style={{
-            fontSize: 12,
-            color: usageClearType === 'success' ? 'var(--success, #22c55e)' : 'var(--danger)',
-            lineHeight: 1.4,
-            padding: '0 0 6px 0',
-          }}
+          className={`feedback-text ${usageClearType === 'success' ? 'ok' : 'fail'}`}
+          style={{ padding: '0 var(--space-2) 6px' }}
           data-name="settings.general.usage-clear-feedback"
         >
           {usageClearMsg}

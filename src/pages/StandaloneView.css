@@ -12,16 +12,6 @@
 .standalone-view[data-viewport="narrow"] .sa-top-title {
   font-size: var(--text-xs);
 }
-.sa-top-drag {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  -webkit-app-region: drag;
-  app-region: drag;
-  height: 100%;
-  min-width: 0;
-}
 .sa-top-title {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -58,12 +48,6 @@
   outline: none;
   width: 100%;
   padding: 0;
-}
-.sa-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
 }
 /* 子窗口标题栏按钮：通用尺寸/外观复用 .titlebar-icon-btn，此处仅保留特有字段
    （app-region 拖拽隔离 + flex:none + 各状态色） */

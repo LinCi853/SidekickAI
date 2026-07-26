@@ -7,8 +7,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import Sun from 'lucide-react/dist/esm/icons/sun'
 import Moon from 'lucide-react/dist/esm/icons/moon'
 import { useThemeStore } from '../store/useThemeStore';
-import { openAiAppProviderWindow, showOnboardingWindow } from '../lib/electron-api';
+import { openAdvancedPanelWindow, showOnboardingWindow } from '../lib/electron-api';
 import { IconButton } from './ui';
+import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 import './DrawerPanel.css';
 
 export interface DrawerPanelProps {
@@ -41,9 +42,9 @@ export default function DrawerPanel({
     }
   }, [open]);
 
-  const handleOpenAiApp = useCallback(() => {
-    void openAiAppProviderWindow().catch((e) =>
-      console.error('[DrawerPanel] 打开 AI 应用独立窗口失败:', e),
+  const handleOpenAdvancedPanel = useCallback(() => {
+    void openAdvancedPanelWindow().catch((e) =>
+      console.error('[DrawerPanel] 打开 进阶面板失败:', e),
     );
     onClose();
   }, [onClose]);
@@ -76,7 +77,10 @@ export default function DrawerPanel({
     [onOpenSearch, onOpenShortcuts, onOpenSettings, onOpenPromptLibrary, onClose],
   );
 
-  // 打开时监听快捷键：K=搜索，?=快捷键，,=设置，P=提示词库
+  // ESC：关闭抽屉（加入全局浮窗栈，与其他浮窗统一优先级管理）
+  useEscToCloseOverlay(open, onClose);
+
+  // 打开时监听快捷键：K=搜索，?=快捷键，,=设置，P=提示词库（ESC 由 useEscToCloseOverlay 处理）
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -173,13 +177,13 @@ export default function DrawerPanel({
         </button>
 
         <div className="drawer-list" data-name="component.drawer-panel.list">
-          {/* AI 应用入口（Alt+Q） */}
+          {/* 进阶面板入口（Alt+Q） */}
           <button
             type="button"
             className="drawer-item"
-            data-name="component.drawer-panel.ai-app-button"
-            onClick={handleOpenAiApp}
-            title="打开 AI 应用独立窗口（Alt+Q）"
+            data-name="component.drawer-panel.advanced-panel-button"
+            onClick={handleOpenAdvancedPanel}
+            title="打开进阶面板（Alt+Q）"
           >
             <svg
               viewBox="0 0 24 24"
@@ -188,7 +192,7 @@ export default function DrawerPanel({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              data-name="component.drawer-panel.ai-app-icon"
+              data-name="component.drawer-panel.advanced-panel-icon"
             >
               <path d="M12 8V4H8" />
               <rect width="16" height="12" x="4" y="8" rx="2" />
@@ -197,8 +201,8 @@ export default function DrawerPanel({
               <path d="M15 13v2" />
               <path d="M9 13v2" />
             </svg>
-            <span data-name="component.drawer-panel.ai-app-label">AI 应用</span>
-            <span className="drawer-item-shortcut" data-name="component.drawer-panel.ai-app-shortcut">Alt+Q</span>
+            <span data-name="component.drawer-panel.advanced-panel-label">进阶面板</span>
+            <span className="drawer-item-shortcut" data-name="component.drawer-panel.advanced-panel-shortcut">Alt+Q</span>
           </button>
 
           {/* 使用指南入口 */}

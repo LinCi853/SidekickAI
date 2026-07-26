@@ -15,7 +15,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
-import { Button, IconButton, TitleBar } from '../components/ui';
+import { Button, IconButton, TitleBar, Combobox } from '../components/ui';
+import type { ComboboxOption } from '../components/ui';
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { useChatStore } from '../store/useChatStore';
 import {
   minimizeWindow,
@@ -31,7 +33,7 @@ import {
   getChatConfig,
   onVoiceInjectAndSend,
   onWindowShown,
-  openAiAppProviderWindow,
+  openAdvancedPanelWindow,
   updateChatDetachedWindow,
 } from '../lib/electron-api';
 import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
@@ -171,6 +173,21 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   // F11/F12 由主进程 attachWindowHotkeyInterceptor 在 before-input-event 中拦截处理，
   // 通过 onMaximizeToggled/onPinToggled IPC 通知更新状态（见上方监听器）。
   // 不在渲染层注册 keydown handler，避免与主进程拦截器双重执行导致状态抵消。
+
+  // ESC / Ctrl+W 关窗：抽屉或模板面板打开时 ESC 优先关闭浮窗，否则关闭窗口
+  useEscToCloseWindow({
+    onEsc: () => {
+      if (isNarrow && isSidebarOpen) {
+        setIsSidebarOpen(false);
+        return true;
+      }
+      if (showRecordTemplate) {
+        setShowRecordTemplate(false);
+        return true;
+      }
+      return false;
+    },
+  });
 
   // 消息更新时滚动到底部
   useEffect(() => {
@@ -353,19 +370,26 @@ export default function ChatView({ windowId }: { windowId?: string }) {
             <div className="chat-top-drag" data-name="chat.top-bar.drag-area">
               <span className="chat-top-title" data-name="chat.top-bar.title">{chatConfig?.title || 'AI 对话'}</span>
               {providers.length > 0 ? (
-                <select
-                  className="chat-provider-select"
-                  data-name="chat.top-bar.provider-select"
-                  value={currentProviderId ?? ''}
-                  onChange={(e) => setCurrentProvider(e.target.value)}
-                  title="切换 AI 提供商"
-                >
-                  {providers.map((p, idx) => (
-                    <option key={p.id} value={p.id} data-name={`chat.top-bar.provider-option-${idx + 1}`}>
-                      {p.name} ({p.model})
-                    </option>
-                  ))}
-                </select>
+                <Combobox
+                  inputValue={(() => {
+                    const cur = providers.find((p) => p.id === currentProviderId);
+                    return cur ? `${cur.name} (${cur.model})` : '';
+                  })()}
+                  onInputChange={() => {}}
+                  inputPlaceholder="选择 AI 提供商"
+                  inputClassName="chat-provider-select"
+                  inputReadOnly
+                  options={providers.map<ComboboxOption>((p) => ({
+                    value: p.id,
+                    label: `${p.name} (${p.model})`,
+                    selected: p.id === currentProviderId,
+                  }))}
+                  onSelect={(v) => setCurrentProvider(v)}
+                  searchable
+                  searchPlaceholder="搜索提供商…"
+                  emptyText="无匹配提供商"
+                  dataName="chat.top-bar.provider-select"
+                />
               ) : (
                 <span data-name="chat.top-bar.no-provider-text" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
                   未配置提供商
@@ -389,7 +413,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                 data-name="chat.top-bar.settings-icon-button"
                 aria-label="设置"
                 title="设置"
-                onClick={() => void openAiAppProviderWindow(currentProviderId ?? undefined)}
+                onClick={() => void openAdvancedPanelWindow(currentProviderId ?? undefined)}
               >
                 <svg className="icon-svg" data-name="chat.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="3" />
@@ -429,7 +453,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
           <aside className={`chat-sidebar${isNarrow && isSidebarOpen ? ' open' : ''}${isSidebarCollapsed ? ' collapsed' : ''}`} data-name="chat.sidebar.container">
             <div className="chat-sidebar-head" data-name="chat.sidebar.head">
               <Button
-                variant="ghost"
+                variant="outline"
                 type="button"
                 className="chat-new-btn"
                 data-name="chat.sidebar.new-conversation-button"

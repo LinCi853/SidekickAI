@@ -30,6 +30,8 @@ import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } 
 import { useShortcutsToggle } from '../hooks/useShortcutsToggle';
 import { useIsNarrow } from '../hooks/useIsNarrow';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
+import { listBlockRules } from '../lib/electron-api/block-rules';
+import { buildBlockerScript, matchDomain } from '../lib/webview-blocker';
 import './StandaloneView.css';
 
 export default function StandaloneView() {
@@ -87,7 +89,7 @@ export default function StandaloneView() {
     : null;
   const activeTitle = activeTab?.title ?? '工百窗';
 
-  // webview 指纹注入 + viewport + 弹窗拦截兜底
+  // webview 指纹注入 + viewport + 弹窗拦截兜底 + 屏蔽规则注入
   useEffect(() => {
     const webview = webviewRef.current;
     if (!webview || !activeProfile) return;
@@ -99,6 +101,24 @@ export default function StandaloneView() {
 
         // 强制移动端 viewport，防止横向滚动/阴影；兜底拦截 window.open 与 _blank
         await injectViewportAndPopupGuard(webview);
+
+        // 注入页面组件屏蔽规则（与 WebviewTab 保持一致，确保脱离窗口也享受广告屏蔽）
+        try {
+          const rules = await listBlockRules();
+          const url = webview.getURL();
+          const hostname = url ? new URL(url).hostname : '';
+          if (hostname) {
+            const matched = rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname));
+            console.log(
+              `[StandaloneView] 屏蔽规则注入: hostname=${hostname} total=${rules.length} matched=${matched.length}`,
+            );
+            if (matched.length > 0) {
+              await webview.executeJavaScript(buildBlockerScript(matched));
+            }
+          }
+        } catch (e) {
+          console.error('[StandaloneView] 屏蔽规则注入失败:', e);
+        }
       } catch (e) {
         console.error('[StandaloneView] 注入失败:', e);
       }
@@ -129,6 +149,12 @@ export default function StandaloneView() {
         useTabStore.getState().toggleAlwaysOnTop();
         return;
       }
+      // Ctrl+W：关闭整个脱离窗口（webview 焦点时兜底，主进程已拦截但渲染层需自行处理关闭）
+      if (hasCtrl && !hasAlt && !hasMeta && !hasShift && (inputEvent.key === 'w' || inputEvent.key === 'W')) {
+        e.preventDefault();
+        void closeCurrentWindow();
+        return;
+      }
       // 反引号(` ~) 或 Shift+? 呼出快捷键说明窗口
       if (!hasAlt && !hasCtrl && !hasMeta && !hasShift && (inputEvent.key === '`' || inputEvent.key === '~' || inputEvent.code === 'Backquote')) {
         e.preventDefault();
@@ -150,6 +176,7 @@ export default function StandaloneView() {
   }, [activeProfile]);
 
   // 窗口级 F11/F12 快捷键（webview 未获得焦点时生效，与顶栏按钮同一路径）
+  // 注：Ctrl+W / ESC 由下方 useEscToCloseWindow 统一处理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F11') {
@@ -169,9 +196,11 @@ export default function StandaloneView() {
     };
   }, []);
 
-  // ESC：标题编辑时退出编辑，否则关闭窗口
+  // ESC / Ctrl+W 关窗：浮窗（设置面板/快捷键说明）由 useEscToCloseOverlay 统一处理；
+  // onEsc 仅处理标题编辑态退出（非浮窗）；否则关闭窗口
   useEscToCloseWindow({
     onEsc: (e) => {
+      // 标题编辑时退出编辑
       if (isEditingTitle) {
         e.preventDefault();
         setIsEditingTitle(false);

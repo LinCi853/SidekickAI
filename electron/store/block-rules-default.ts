@@ -143,7 +143,9 @@ export const DEFAULT_BLOCK_RULES: BlockRule[] = [
     domainPattern: '*.doubao.com',
     type: 'css',
     // 豆包下载提示：匹配 download/app-banner/qrcode 等 + href 链接
-    selector: '[class*="download" i], [class*="app-download" i], [class*="app-banner" i], [class*="qrcode" i], a[href*="/download"], a[href*="/app"]',
+    // 注意：a[href*="/app"] 已收紧为 a[href*="/download/app"]——会误匹配登录流程 URL，
+    // 导致登录态丢失。原 a[href*="/app"] 一次性迁移逻辑见 block-rules-store.ts ensureDefaultBlockRules()
+    selector: '[class*="download" i], [class*="app-download" i], [class*="app-banner" i], [class*="qrcode" i], a[href*="/download"], a[href*="/download/app"]',
     label: '豆包下载提示',
     enabled: true,
     builtin: true,
@@ -163,8 +165,9 @@ export const DEFAULT_BLOCK_RULES: BlockRule[] = [
           if (text.indexOf(keywords[i]) >= 0) return true;
         }
         // 匹配包含下载链接且含二维码图片的容器
+        // 注意：a[href*="/app"] 已收紧为 a[href*="/download/app"]——会误匹配登录流程 URL
         var imgs = el.querySelectorAll ? el.querySelectorAll('img[src*="qrcode"], img[src*="download"], canvas') : [];
-        if (imgs.length > 0 && el.querySelectorAll('a[href*="/download"], a[href*="/app"]').length > 0) return true;
+        if (imgs.length > 0 && el.querySelectorAll('a[href*="/download"], a[href*="/download/app"]').length > 0) return true;
         return false;
       }
       function scan() {
@@ -240,7 +243,8 @@ export const DEFAULT_BLOCK_RULES: BlockRule[] = [
     domainPattern: '*.chatglm.cn',
     type: 'css',
     // 智谱清言下载/二维码类元素
-    selector: '[class*="download" i], [class*="app-banner" i], [class*="qrcode" i], a[href*="/download"], a[href*="/app"]',
+    // 注意：a[href*="/app"] 已收紧为 a[href*="/download/app"]——会误匹配登录流程 URL
+    selector: '[class*="download" i], [class*="app-banner" i], [class*="qrcode" i], a[href*="/download"], a[href*="/download/app"]',
     label: '智谱清言下载提示',
     enabled: false,
     builtin: true,
@@ -278,6 +282,111 @@ export const DEFAULT_BLOCK_RULES: BlockRule[] = [
     })();`,
     label: '智谱清言下载提示（JS 文本匹配）',
     enabled: false,
+    builtin: true,
+  },
+  // ===== Gemini =====
+  // Gemini 升级到 Advanced 横幅 + 登录引导弹窗
+  {
+    id: 'builtin-gemini-upgrade',
+    domainPattern: '*.gemini.google.com',
+    type: 'css',
+    // Gemini 升级到 Advanced 横幅、试用提示等
+    selector: '[class*="upgrade" i], [class*="advanced-banner" i], [class*="subscription-banner" i], [class*="try-advanced" i], [data-testid*="upgrade"]',
+    label: 'Gemini 升级横幅',
+    enabled: true,
+    builtin: true,
+  },
+  // ===== 文心一言 =====
+  // 文心一言下载 App 提示 + 升级提示
+  {
+    id: 'builtin-yiyan-download',
+    domainPattern: '*.yiyan.baidu.com',
+    type: 'css',
+    // 注意：a[href*="/app"] 不加入——避免误匹配百度登录回调 URL
+    selector: '[class*="download" i], [class*="app-download" i], [class*="app-banner" i], [class*="qrcode" i], a[href*="/download"], a[href*="/download/app"]',
+    label: '文心一言下载提示',
+    enabled: true,
+    builtin: true,
+  },
+  {
+    id: 'builtin-yiyan-download-js',
+    domainPattern: '*.yiyan.baidu.com',
+    type: 'js',
+    selector: '',
+    jsCode: `(function() {
+      var keywords = ['下载文心', '下载 App', '下载应用', '下载客户端', '扫码下载', '安装文心一言'];
+      function hideIfMatch(el) {
+        var text = (el.textContent || '').trim();
+        if (text.length > 60) return false;
+        for (var i = 0; i < keywords.length; i++) {
+          if (text.indexOf(keywords[i]) >= 0) return true;
+        }
+        return false;
+      }
+      function scan() {
+        document.querySelectorAll('[role="button"], button, a, div, span').forEach(function(el) {
+          if (el.getAttribute('data-ai-blocked')) return;
+          if (hideIfMatch(el)) {
+            el.setAttribute('data-ai-blocked', '1');
+            el.style.setProperty('display', 'none', 'important');
+          }
+        });
+      }
+      scan();
+      if (!window.__ai_yiyan_block_observer__) {
+        window.__ai_yiyan_block_observer__ = true;
+        new MutationObserver(function() { scan(); }).observe(document.body, { childList: true, subtree: true });
+      }
+    })();`,
+    label: '文心一言下载提示（JS 文本匹配）',
+    enabled: true,
+    builtin: true,
+  },
+  // ===== 小米 Mimo =====
+  // 小米 Mimo 引导跳转到 aistudio.xiaomimimo.com 的横幅 + 下载 App 提示
+  {
+    id: 'builtin-mimo-redirect',
+    domainPattern: '*.xiaomi.com',
+    type: 'css',
+    // 小米 Mimo 引导跳转 aistudio 的横幅、下载提示等
+    // 注意：a[href*="xiaomimimo.com"] 不加入——会误屏蔽合法跳转，改由 allowedOrigins 处理
+    selector: '[class*="download" i], [class*="app-download" i], [class*="app-banner" i], [class*="qrcode" i], a[href*="/download"], a[href*="/download/app"]',
+    label: '小米 Mimo 下载提示',
+    enabled: true,
+    builtin: true,
+  },
+  {
+    id: 'builtin-mimo-redirect-js',
+    domainPattern: '*.xiaomi.com',
+    type: 'js',
+    selector: '',
+    jsCode: `(function() {
+      var keywords = ['下载 Mimo', '下载App', '下载 App', '下载应用', '扫码下载', '下载客户端'];
+      function hideIfMatch(el) {
+        var text = (el.textContent || '').trim();
+        if (text.length > 60) return false;
+        for (var i = 0; i < keywords.length; i++) {
+          if (text.indexOf(keywords[i]) >= 0) return true;
+        }
+        return false;
+      }
+      function scan() {
+        document.querySelectorAll('[role="button"], button, a, div, span').forEach(function(el) {
+          if (el.getAttribute('data-ai-blocked')) return;
+          if (hideIfMatch(el)) {
+            el.setAttribute('data-ai-blocked', '1');
+            el.style.setProperty('display', 'none', 'important');
+          }
+        });
+      }
+      scan();
+      if (!window.__ai_mimo_block_observer__) {
+        window.__ai_mimo_block_observer__ = true;
+        new MutationObserver(function() { scan(); }).observe(document.body, { childList: true, subtree: true });
+      }
+    })();`,
+    label: '小米 Mimo 下载提示（JS 文本匹配）',
+    enabled: true,
     builtin: true,
   },
 ]

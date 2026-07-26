@@ -232,6 +232,41 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 .btn-text.is-danger { color: var(--destructive); }
 .btn-text.is-danger:hover:not(:disabled) { color: var(--danger); font-weight: 600; }
 
+/* outline 变体（带边框的简洁操作按钮，统一用于"添加 / 新建 / 搜索"等动作）
+   设计基准来自 SettingsPanel 原 .btn-outline-sm，迁移到 globals 以供跨页面复用 */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--accent-50);
+  color: var(--accent-bright);
+}
+.btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-outline svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+
 /* ===== SegmentedControl 分段控件（替代 .proxy-mode-btn / .voice-mode-btn / .platform-region-btn / .platform-status-btn） ===== */
 .seg-btn {
   background: transparent;
@@ -442,6 +477,26 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   display: flex;
   flex-direction: column;
 }
+.modal-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--glass-bd-2);
+}
+.modal-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 600;
+  margin: 0;
+  color: var(--foreground);
+}
+.modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
 
 /* ===== 徽章 ===== */
 .badge {
@@ -505,15 +560,8 @@ html[data-platform="darwin"] .top-bar-drag {
 }
 
 /* =====================================================================
-   平台字号区分（M3）
-   ---------------------------------------------------------------------
-   移动端 html 标签放大至 16px（更易读，适配 rem 单位）；
-   桌面端保留 14px。data-platform 由 Electron preload 或移动端
-   MobileMainView 挂载时写入。
+   桌面端基准字号（Electron 环境）
    ===================================================================== */
-html[data-platform="mobile"] {
-  font-size: var(--text-md);
-}
 html[data-platform="electron"] {
   font-size: var(--text-sm);
 }

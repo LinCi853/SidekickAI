@@ -53,37 +53,102 @@ function toOpenAIMessages(messages: ChatMessage[]): Array<{ role: string; conten
 }
 
 /**
- * 智能补全 API endpoint：
- * - OpenAI 兼容协议：如果 URL 不以 /chat/completions 结尾，自动补上
- * - Anthropic 协议：如果 URL 不以 /v1/messages 结尾，自动补上
+ * 规范化 API 端点 URL（智能补全协议与路径）：
+ *
+ * 补全规则：
+ *   1. 协议：缺省 https://（支持用户只输入 `api.openai.com` 或 `api.openai.com/v1` 等）
+ *   2. 末尾斜杠：统一去除
+ *   3. 路径：根据目标类型补全
+ *      - target='chat'   → openai/custom: /v1/chat/completions；anthropic: /v1/messages
+ *      - target='models' → /v1/models
+ *
+ * 自动校正示例（以 chat 为例，输入 → 输出）：
+ *   api.openai.com                              → https://api.openai.com/v1/chat/completions
+ *   api.openai.com/                             → https://api.openai.com/v1/chat/completions
+ *   http://api.openai.com                        → http://api.openai.com/v1/chat/completions
+ *   https://api.openai.com/v1                   → https://api.openai.com/v1/chat/completions
+ *   https://api.openai.com/v1/                  → https://api.openai.com/v1/chat/completions
+ *   https://api.openai.com/v1/chat/completions  → 不变
+ *   https://api.openai.com/v1/models           → https://api.openai.com/v1/chat/completions (截断后补全)
+ *
+ * @param rawEndpoint 用户输入的原始端点
+ * @param target 目标类型：'chat'（聊天请求）或 'models'（模型列表查询）
+ * @param protocol 协议类型：影响 chat 路径
  */
-function resolveEndpoint(provider: CustomAIProvider): string {
-  let url = provider.apiEndpoint.trim()
-  // 去掉末尾斜杠
+function normalizeApiUrl(
+  rawEndpoint: string,
+  target: 'chat' | 'models',
+  protocol: 'openai' | 'anthropic' | 'custom',
+): string {
+  let url = rawEndpoint.trim()
+  if (!url) return url
+
+  // 1. 补全协议：缺省 https://
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url
+  }
+
+  // 2. 去除末尾斜杠
   url = url.replace(/\/+$/, '')
 
-  if (provider.protocol === 'anthropic') {
-    if (!url.endsWith('/v1/messages')) {
-      // 如果已经有 /v1 前缀，补 /messages；否则补 /v1/messages
-      if (url.endsWith('/v1')) {
+  // 3. 根据目标类型补全路径
+  if (target === 'models') {
+    // 目标：GET /v1/models
+    if (url.endsWith('/v1/models')) {
+      // 已完整
+    } else if (url.endsWith('/v1')) {
+      url = url + '/models'
+    } else if (url.endsWith('/models')) {
+      // 已是 /models 末尾（非 /v1/models），保持原样
+    } else if (url.includes('/v1/')) {
+      // 已包含 /v1/ 路径（如 /v1/chat/completions），截断到 /v1 后追加 /models
+      const v1Idx = url.indexOf('/v1/')
+      url = url.slice(0, v1Idx + 3) + '/models'
+    } else {
+      // 无 /v1 路径，追加 /v1/models
+      url = url + '/v1/models'
+    }
+  } else {
+    // target === 'chat'
+    if (protocol === 'anthropic') {
+      // 目标：POST /v1/messages
+      if (url.endsWith('/v1/messages')) {
+        // 已完整
+      } else if (url.endsWith('/v1')) {
         url = url + '/messages'
+      } else if (url.includes('/v1/')) {
+        // 截断到 /v1 后追加 /messages
+        const v1Idx = url.indexOf('/v1/')
+        url = url.slice(0, v1Idx + 3) + '/messages'
       } else {
         url = url + '/v1/messages'
       }
-    }
-  } else {
-    // openai / custom 协议
-    if (!url.endsWith('/chat/completions')) {
-      if (url.endsWith('/v1')) {
+    } else {
+      // openai / custom，目标：POST /v1/chat/completions
+      if (url.endsWith('/chat/completions')) {
+        // 已完整
+      } else if (url.endsWith('/v1')) {
         url = url + '/chat/completions'
-      } else if (!url.includes('/v1/')) {
-        url = url + '/v1/chat/completions'
+      } else if (url.includes('/v1/')) {
+        // 已包含 /v1/ 路径（如 /v1/models），截断到 /v1 后追加 /chat/completions
+        const v1Idx = url.indexOf('/v1/')
+        url = url.slice(0, v1Idx + 3) + '/chat/completions'
       } else {
-        url = url + '/chat/completions'
+        url = url + '/v1/chat/completions'
       }
     }
   }
+
   return url
+}
+
+/**
+ * 智能补全 API endpoint（聊天请求用）：
+ * - OpenAI 兼容协议：补全到 /v1/chat/completions
+ * - Anthropic 协议：补全到 /v1/messages
+ */
+function resolveEndpoint(provider: CustomAIProvider): string {
+  return normalizeApiUrl(provider.apiEndpoint, 'chat', provider.protocol)
 }
 
 /** 将内部 ChatMessage 转换为 Anthropic 消息格式（system 单独传，user/assistant 入 messages） */
@@ -345,7 +410,11 @@ export async function testProvider(provider: CustomAIProvider): Promise<TestResu
  * GET `${endpoint 智能补全 /v1/models}` with Authorization: Bearer ${apiKey}
  * 解析 OpenAI 兼容格式 `{ data: [{ id: 'gpt-4' }, ...] }`
  * Anthropic 协议无对应接口，返回空数组
- * 失败时返回空数组（不抛错），由调用方决定如何处理
+ *
+ * 错误处理：失败时抛错（由调用方 catch 并展示具体原因），区分：
+ *   - 401/403：API Key 缺失或无效（多数主流端点 /v1/models 需要鉴权）
+ *   - 其他 HTTP 错误：返回状态码 + 响应体片段
+ *   - 网络异常：返回原始错误信息
  *
  * @param input Provider 输入（不需要 id/时间戳）
  */
@@ -353,55 +422,66 @@ export async function listModels(input: CustomAIProviderInput): Promise<string[]
   // Anthropic 协议无 /v1/models 接口
   if (input.protocol === 'anthropic') return []
 
+  // 智能补全协议与路径（支持只输入域名、缺 https://、末尾斜杠等场景）
+  const url = normalizeApiUrl(input.apiEndpoint, 'models', input.protocol)
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  }
+  // API Key 可选：有些公开端点不需要鉴权即可列出模型；但 OpenAI/DeepSeek/Qwen 等需要
+  if (input.apiKey.trim()) {
+    headers.Authorization = `Bearer ${input.apiKey}`
+  }
+
+  let response
   try {
-    let url = input.apiEndpoint.trim().replace(/\/+$/, '')
-    // 智能补全 /v1/models
-    if (url.endsWith('/v1')) {
-      url = url + '/models'
-    } else if (!url.includes('/v1/')) {
-      url = url + '/v1/models'
-    } else if (!url.endsWith('/models')) {
-      // 截断到 /v1/ 后追加 models
-      const v1Idx = url.indexOf('/v1/')
-      if (v1Idx !== -1) {
-        url = url.slice(0, v1Idx + 3) + '/models'
-      } else {
-        url = url + '/models'
-      }
-    }
-
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-      Authorization: `Bearer ${input.apiKey}`,
-    }
-
-    const response = await request(url, {
+    response = await request(url, {
       method: 'GET',
       headers,
       headersTimeout: PROVIDER_TEST_TIMEOUT_MS,
       bodyTimeout: PROVIDER_TEST_TIMEOUT_MS,
     })
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      console.warn(`[ai-client] listModels 失败: HTTP ${response.statusCode}`)
-      return []
-    }
-
-    const body = await response.body.json() as { data?: Array<{ id?: string }> }
-    if (!body.data || !Array.isArray(body.data)) {
-      console.warn('[ai-client] listModels 响应格式异常:', body)
-      return []
-    }
-
-    const models = body.data
-      .map((m) => m.id)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0)
-      .sort((a, b) => a.localeCompare(b))
-
-    console.log(`[ai-client] listModels: ${url} 返回 ${models.length} 个模型`)
-    return models
   } catch (err) {
-    console.warn('[ai-client] listModels 异常:', err instanceof Error ? err.message : String(err))
-    return []
+    throw new Error(`请求失败：${err instanceof Error ? err.message : String(err)}`)
   }
+
+  // 401/403：API Key 缺失或无效
+  if (response.statusCode === 401 || response.statusCode === 403) {
+    const errText = await response.body.text().catch(() => '')
+    throw new Error(
+      `API Key 缺失或无效（HTTP ${response.statusCode}），该端点需要有效的 API Key 才能查询模型列表${
+        errText ? `：${errText.slice(0, 120)}` : ''
+      }`,
+    )
+  }
+
+  // 其他非 2xx 错误
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    const errText = await response.body.text().catch(() => '')
+    throw new Error(
+      `HTTP ${response.statusCode}${errText ? `：${errText.slice(0, 120)}` : ''}`,
+    )
+  }
+
+  // 解析响应体
+  let body: { data?: Array<{ id?: string }> }
+  try {
+    body = await response.body.json() as { data?: Array<{ id?: string }> }
+  } catch {
+    // 部分端点返回非 JSON 格式（如 HTML 错误页）
+    throw new Error('响应格式异常（非 JSON），该端点可能不支持 /v1/models')
+  }
+
+  if (!body.data || !Array.isArray(body.data)) {
+    // 响应是 JSON 但不是 OpenAI 兼容格式
+    throw new Error('响应格式不是 OpenAI 兼容的 { data: [...] } 结构')
+  }
+
+  const models = body.data
+    .map((m) => m.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    .sort((a, b) => a.localeCompare(b))
+
+  console.log(`[ai-client] listModels: ${url} 返回 ${models.length} 个模型`)
+  return models
 }

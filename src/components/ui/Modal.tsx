@@ -6,7 +6,9 @@
 
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import IconButton from './IconButton';
+import { pushOverlay, isTopOverlay } from '../../hooks/useEscToCloseWindow';
 
 export interface ModalProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /** 是否显示 */
@@ -25,6 +27,15 @@ export interface ModalProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'
   closeOnOverlayClick?: boolean;
   /** 是否按 Esc 关闭（默认 true） */
   closeOnEscape?: boolean;
+  /**
+   * 是否通过 Portal 渲染到 document.body（默认 false）。
+   *
+   * 用途：当 Modal 的祖先元素有 CSS transform（如侧滑面板的 translateX）时，
+   * `position: fixed` 的包含块会变为该祖先元素而非视口，导致 Modal 定位异常。
+   * 启用 portal 后 Modal 渲染到 document.body，脱离 transform 祖先的影响，
+   * 确保全屏遮罩正确覆盖整个视口。
+   */
+  portal?: boolean;
   /** 内容 */
   children: ReactNode;
 }
@@ -46,22 +57,33 @@ export default function Modal({
   closeIcon,
   closeOnOverlayClick = true,
   closeOnEscape = true,
+  portal = false,
   className,
   children,
   ...rest
 }: ModalProps) {
   useEffect(() => {
     if (!open || !closeOnEscape) return;
+    const close = () => onClose?.();
+    const removeFromStack = pushOverlay(close);
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose?.();
+      if (e.key !== 'Escape') return;
+      // 只有栈顶的 Modal 处理 ESC（后打开的优先）
+      if (!isTopOverlay(close)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close();
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener('keydown', handleKey, true);
+    return () => {
+      window.removeEventListener('keydown', handleKey, true);
+      removeFromStack();
+    };
   }, [open, closeOnEscape, onClose]);
 
   if (!open) return null;
 
-  return (
+  const content = (
     <div
       className="modal-overlay"
       onClick={(e) => {
@@ -77,7 +99,7 @@ export default function Modal({
           <div className="modal-header" data-name="ui.modal.header">
             {title && <h2 className="modal-title" data-name="ui.modal.title">{title}</h2>}
             {showCloseButton && (
-              <IconButton aria-label={closeLabel} variant="default" onClick={onClose} data-name="ui.modal.close-icon-button">
+              <IconButton aria-label={closeLabel} variant="close" onClick={onClose} data-name="ui.modal.close-icon-button">
                 {closeIcon ?? (
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" data-name="ui.modal.close-icon">
                     <path d="M2 2 L12 12 M12 2 L2 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -93,4 +115,11 @@ export default function Modal({
       </div>
     </div>
   );
+
+  // Portal 模式：渲染到 document.body，脱离祖先 transform 的影响
+  // 用于侧滑面板内嵌的 Modal（如供应商编辑），确保 fixed 定位相对于视口
+  if (portal && typeof document !== 'undefined') {
+    return createPortal(content, document.body);
+  }
+  return content;
 }

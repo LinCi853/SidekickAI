@@ -15,10 +15,10 @@ export {
   calculateMinWidthByElements,
   calculateMainWindowMinWidth,
   calculateChatWindowMinWidth,
-  calculateAiAppWindowMinWidth,
+  calculateAdvancedPanelMinWidth,
   MAIN_WINDOW_MIN_HEIGHT,
   CHAT_WINDOW_MIN_HEIGHT,
-  AI_APP_WINDOW_MIN_HEIGHT,
+  ADVANCED_PANEL_MIN_HEIGHT,
 } from '../shared/window-size.js'
 export type { UiScale, MinWidthOptions } from '../shared/window-size.js'
 

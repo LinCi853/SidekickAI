@@ -69,13 +69,13 @@ export function MessageBubble({
         {showActions && (
           <div className="message-actions" data-name="chat.message-bubble.actions">
             {isUser && onEdit && (
-              <button type="button" data-name="chat.message-bubble.edit-button" onClick={handleStartEdit}>编辑</button>
+              <button type="button" className="btn-outline" data-name="chat.message-bubble.edit-button" onClick={handleStartEdit}>编辑</button>
             )}
             {!isUser && onRetry && (
-              <button type="button" data-name="chat.message-bubble.retry-button" onClick={onRetry}>重试</button>
+              <button type="button" className="btn-outline" data-name="chat.message-bubble.retry-button" onClick={onRetry}>重试</button>
             )}
             {!isUser && onContinue && (
-              <button type="button" data-name="chat.message-bubble.continue-button" onClick={onContinue}>继续</button>
+              <button type="button" className="btn-outline" data-name="chat.message-bubble.continue-button" onClick={onContinue}>继续</button>
             )}
           </div>
         )}
@@ -89,7 +89,7 @@ export function MessageBubble({
               autoFocus
             />
             <div className="message-editing-actions" data-name="chat.message-bubble.edit-actions">
-              <button type="button" className="cancel" data-name="chat.message-bubble.edit-cancel-button" onClick={handleCancelEdit}>取消</button>
+              <button type="button" className="btn-outline cancel" data-name="chat.message-bubble.edit-cancel-button" onClick={handleCancelEdit}>取消</button>
               <button type="button" className="save" data-name="chat.message-bubble.edit-save-button" onClick={handleSaveEdit}>保存</button>
             </div>
           </div>

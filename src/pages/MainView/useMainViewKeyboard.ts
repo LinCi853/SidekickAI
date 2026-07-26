@@ -14,6 +14,7 @@
 import { useEffect, useRef } from 'react';
 import { useTabStore } from '../../store/useTabStore';
 import { useProfileStore } from '../../store/useProfileStore';
+import { hasOverlay } from '../../hooks/useEscToCloseWindow';
 
 const LONG_PRESS_MS = 500;
 
@@ -102,12 +103,12 @@ export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar:
         e.preventDefault();
       }
     };
-    // ESC 关闭底栏（已展开时）
+    // ESC 关闭底栏（已展开时）；浮窗栈非空时让浮窗优先处理（如快捷键说明/设置面板/抽屉）
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isTypingTarget(e.target) && bottomBarExpanded) {
-        e.preventDefault();
-        toggleBottomBar();
-      }
+      if (e.key !== 'Escape' || isTypingTarget(e.target) || !bottomBarExpanded) return;
+      if (hasOverlay()) return;
+      e.preventDefault();
+      toggleBottomBar();
     };
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp, true);

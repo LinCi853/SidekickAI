@@ -156,10 +156,8 @@ export default function AiAppSection({
           <div className="ai-app-create-row" data-name="settings.ai-app.create-row">
             <button
               type="button"
-              className="btn-text"
-              style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 600 }}
+              className="btn-outline btn-outline-sm"
               onClick={handleCreateNew}
-              title="打开空白编辑器，自由配置新 AI 应用的所有字段后创建"
               data-name="settings.ai-app.create-button"
             >
               + 新建 AI 应用
@@ -182,41 +180,36 @@ export default function AiAppSection({
                 return (
                   <div
                     key={profile.id}
-                    className={`preset-card glass-card ai-app-card${isPendingDelete ? ' pending-delete' : ''}`}
-                    style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, padding: '6px 8px' }}
+                    className={`preset-card ai-app-card${isPendingDelete ? ' pending-delete' : ''}`}
                     data-name={`settings.ai-app.app-card-${idx + 1}`}
                     data-index={idx + 1}
                     data-id={profile.id}
                   >
                     <span
                       className="ai-app-card-icon"
-                      style={{ background: `linear-gradient(135deg, ${c1}, ${c2})`, width: 28, height: 28, minWidth: 28, fontSize: 12, borderRadius: 6 }}
+                      style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
                       aria-hidden="true"
                       data-name={`settings.ai-app.app-card-${idx + 1}-icon`}
                     >
                       {displayName.charAt(0).toUpperCase()}
                     </span>
-                    <span className="ai-app-card-info" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0, overflow: 'hidden' }} data-name={`settings.ai-app.app-card-${idx + 1}-info`}>
-                      <span className="ai-app-card-name" style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px' }} data-name={`settings.ai-app.app-card-${idx + 1}-name`}>{displayName}</span>
-                      <span className="ai-app-card-url" style={{ fontSize: 11, color: 'var(--muted-foreground)', lineHeight: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} data-name={`settings.ai-app.app-card-${idx + 1}-url`}>{shortUrl(displayUrl)}</span>
+                    <span className="ai-app-card-info" data-name={`settings.ai-app.app-card-${idx + 1}-info`}>
+                      <span className="ai-app-card-name" data-name={`settings.ai-app.app-card-${idx + 1}-name`}>{displayName}</span>
+                      <span className="ai-app-card-url" data-name={`settings.ai-app.app-card-${idx + 1}-url`}>{shortUrl(displayUrl)}</span>
                     </span>
-                    <div style={{ display: 'flex', gap: 0, flexShrink: 0 }} data-name={`settings.ai-app.app-card-${idx + 1}-actions`}>
+                    <div className="ai-app-card-actions" data-name={`settings.ai-app.app-card-${idx + 1}-actions`}>
                       <Button
                         variant="text"
-                        className="provider-action-btn btn-secondary-underline"
+                        className="btn-secondary-underline compact"
                         onClick={() => onEditApp(profile.id)}
-                        title="打开编辑器自由配置"
-                        style={{ padding: '2px 6px', fontSize: 12 }}
                         data-name={`settings.ai-app.app-card-${idx + 1}-edit-button`}
                       >
                         编辑
                       </Button>
                       <Button
                         variant="text"
-                        className="provider-action-btn btn-secondary-underline"
+                        className="btn-secondary-underline compact"
                         onClick={() => void handleDuplicate(profile)}
-                        title={`复制 ${displayName}`}
-                        style={{ padding: '2px 6px', fontSize: 12 }}
                         data-name={`settings.ai-app.app-card-${idx + 1}-duplicate-button`}
                       >
                         复制
@@ -224,10 +217,9 @@ export default function AiAppSection({
                       <Button
                         variant="text"
                         danger
-                        className="provider-action-btn btn-secondary-underline danger"
+                        className="btn-secondary-underline compact danger"
                         onClick={() => handleDelete(profile)}
                         title={isPendingDelete ? '再次点击确认删除' : `删除 ${displayName}`}
-                        style={{ padding: '2px 6px', fontSize: 12 }}
                         data-name={`settings.ai-app.app-card-${idx + 1}-delete-button`}
                       >
                         {isPendingDelete ? '确认' : '删除'}

@@ -32,6 +32,7 @@
 
 .notes-search-input {
   flex: 1;
+  min-width: 0;
   height: 24px;
   box-sizing: border-box;
   background: var(--background);
@@ -42,6 +43,7 @@
   font-family: var(--font-sans);
   padding: 0 var(--space-1-5);
   outline: none;
+  user-select: text;
   transition: border-color var(--duration-fast) var(--ease-out);
 }
 
@@ -90,7 +92,7 @@
 .notes-sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-1) 0;
+  padding: var(--space-1) var(--space-1-5);
 }
 
 .notes-sidebar-section {
@@ -105,6 +107,16 @@
 .notes-sidebar-empty {
   padding: var(--space-4) var(--space-2-5);
   font-family: var(--font-sans);
+}
+
+/* 笔记列表项基础类：flex 布局 + padding + 左侧边框（active 时着色） */
+.notes-sidebar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-1-5);
+  border-left: 2px solid transparent;
+  cursor: pointer;
 }
 
 .notes-sidebar-item:hover {
