@@ -2,7 +2,7 @@
 // 拆分计划：将注入流程抽到 useWebviewInjection hook，对话抓取抽到 useConversationScrape hook。
 // 暂缓原因：dom-ready 注入、UA 切换、登录检测等逻辑通过共享 webview ref 紧密耦合，
 // 拆分需保证注入时序与 ref 生命周期一致，避免破坏指纹注入与对话抓取功能。
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getFingerprintScript,
   logLoginTrace,
@@ -219,7 +219,18 @@ export function WebviewTab({
     };
   }, []);
 
-  const src = sanitizeUrl(tab.url || profile.aiPlatformUrl || '');
+  // webview 的 src 仅在挂载时设置一次（基于 tab.id / remountKey），
+  // 不随 tab.url 变化重写。否则 SPA 内部 in-page 导航触发 updateTabUrl →
+  // React 重渲染 → <webview src={新URL}> → Electron 内部 loadURL(新URL) →
+  // 与 SPA 当前导航冲突产生 ERR_ABORTED，并可能干扰 SPA 路由导致页面跳回首页。
+  // 用户主动导航（主页按钮/右键修改 URL/弹窗转发）通过 safeLoadURLWebview 直接调用
+  // webview.loadURL，不依赖 src attribute。
+  const initialSrc = useMemo(
+    () => sanitizeUrl(tab.url || profile.aiPlatformUrl || ''),
+    // 仅在 tab.id 或 remountKey 变化（即 webview 实际销毁重建）时重算
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab.id, remountKey],
+  );
 
   // dom-ready：注入指纹脚本
   useEffect(() => {
@@ -1056,13 +1067,13 @@ export function WebviewTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id, profile.name, profile.isAIPlatform, profile.aiPlatformId, tab.id, remountKey]);
 
-  if (!src) return null;
+  if (!initialSrc) return null;
 
   return (
     <webview
       key={`${tab.id}-${remountKey}`}
       ref={ref as React.RefObject<HTMLElement> as React.RefObject<WebviewElement>}
-      src={src}
+      src={initialSrc}
       partition={`persist:${profile.id}`}
       useragent={profile.userAgent || undefined}
       {...({ allowpopups: 'true', backgroundcolor: 'transparent' } as Record<string, unknown>)}

@@ -1,5 +1,5 @@
 /* =====================================================================
-   lib/electron-api/whiteboard.ts —— 白板（v2：tldraw + 多白板）
+   lib/electron-api/whiteboard.ts —— 白板（v3：Excalidraw + 多白板）
    对应 window.electron.whiteboard
    ===================================================================== */
 
@@ -48,7 +48,7 @@ export async function setActiveWhiteboardId(id: string | null): Promise<{ ok: bo
   return api.whiteboard.setActive(id);
 }
 
-/** 加载白板 snapshot（tldraw TLStore JSON，无则 null） */
+/** 加载白板 snapshot（Excalidraw scene JSON，无则 null） */
 export async function getWhiteboardSnapshot(id: string): Promise<string | null> {
   const api = requireElectron();
   return api.whiteboard.getSnapshot(id);

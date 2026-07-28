@@ -316,7 +316,7 @@ export const IPC_CHANNELS = {
   NOTES_SAVE_AS_PROMPT: 'notes:saveAsPrompt',
   // 主进程 → 笔记窗口渲染：注入结果回传（success + platformName?）
   NOTES_INJECT_RESULT: 'notes:injectResult',
-  // 白板（v2：SQLite + tldraw + 多白板）
+  // 白板（v3：SQLite + Excalidraw + 多白板）
   WHITEBOARD_LIST: 'whiteboard:list',
   WHITEBOARD_CREATE: 'whiteboard:create',
   WHITEBOARD_RENAME: 'whiteboard:rename',

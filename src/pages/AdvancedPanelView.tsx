@@ -71,7 +71,7 @@ export default function AdvancedPanelView() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initialProviderId = useMemo(() => readInitialProviderId(), []);
 
-  // 白板应用层侧边栏显隐（默认 false，依赖 tldraw 自带 PageMenu 多页面切换）
+  // 白板应用层侧边栏显隐（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口）
   // 设置面板关闭时重新读取，使设置变更立即生效
   const [whiteboardSidebarVisible, setWhiteboardSidebarVisible] = useState(false);
   useEffect(() => {

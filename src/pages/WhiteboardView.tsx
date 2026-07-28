@@ -1,19 +1,35 @@
 /* =====================================================================
-   pages/WhiteboardView.tsx —— 白板（v2：tldraw + 多白板）
+   pages/WhiteboardView.tsx —— 白板（v3：Excalidraw + 多白板）
    架构：
    - 容器组件 WhiteboardView：状态 + 数据加载 + IPC 订阅
    - 展示子组件 WhiteboardSidebar：白板列表 + 新建/重命名/删除/切换
-   - 展示子组件 WhiteboardCanvas：tldraw 画布 + snapshot 加载/保存
-   持久化：debounce 500ms → SQLite snapshot + beforeunload 同步兜底
-   图片资源：whiteboard-asset:// 协议（硬约束）
+   - 展示子组件 WhiteboardCanvas：Excalidraw 画布 + 场景加载/保存
+   持久化：debounce 500ms → SQLite scene JSON + beforeunload 同步兜底
+   图片资源：whiteboard-asset:// 协议（硬约束，加载时转 dataURL 喂给 Excalidraw）
+   许可证：Excalidraw 使用 MIT，可商用（替代 tldraw 专有许可证）
    ===================================================================== */
 
 import { useEffect, useMemo, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Tldraw, createTLStore, defaultShapeUtils } from '@tldraw/tldraw';
-import { getSnapshot, loadSnapshot } from '@tldraw/editor';
-import { toRichText } from '@tldraw/tlschema';
-import type { Editor, TLStore, TLAsset, TLShape, TLTextShape, TLImageShape, TLArrowShape } from '@tldraw/tldraw';
-import '@tldraw/tldraw/tldraw.css';
+import {
+  Excalidraw,
+  serializeAsJSON,
+  convertToExcalidrawElements,
+  FONT_FAMILY,
+  MIME_TYPES,
+} from '@excalidraw/excalidraw';
+import '@excalidraw/excalidraw/index.css';
+import type {
+  ExcalidrawImperativeAPI,
+  AppState,
+  BinaryFiles,
+  BinaryFileData,
+  DataURL,
+} from '@excalidraw/excalidraw/types';
+import type {
+  ExcalidrawElement,
+  FileId,
+  OrderedExcalidrawElement,
+} from '@excalidraw/excalidraw/element/types';
 import {
   listWhiteboards,
   createWhiteboard,
@@ -32,152 +48,104 @@ import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
 import './WhiteboardView.css';
 
 // ============================================================================
-// tldraw asset URL 覆盖：en 用 data URL（内联回退）；zh-cn 走 CDN 拉取真实中文翻译
+// 工具：whiteboard-asset:// → dataURL
+// Excalidraw 的 files map 需要 dataURL，而 WhiteboardCard.content 存的是
+// whiteboard-asset:// 协议路径。插入前先 fetch 转 dataURL。
 // ============================================================================
-const TLDRAW_ASSET_URLS = {
-  translations: {
-    en: 'data:application/json,{}',
-  },
-} as const;
+async function assetUrlToDataUrl(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.error('[WhiteboardView] asset → dataURL 转换失败:', url, err);
+    throw err;
+  }
+}
 
 // ============================================================================
-// 遗留数据转换：v1 WhiteboardState → tldraw TLStore
+// 遗留数据转换：v1 WhiteboardState → Excalidraw initialData
+// 卡片 → text/image 元素；箭头 → arrow 元素；手绘线条 → 跳过（无法精确转换）
 // ============================================================================
+async function convertLegacySnapshot(
+  legacy: WhiteboardState,
+): Promise<{ elements: ExcalidrawElement[]; appState: Partial<AppState>; files: BinaryFiles }> {
+  const skeleton: Parameters<typeof convertToExcalidrawElements>[0] = [];
+  const files: BinaryFiles = {};
+  const cardIndex = new Map<string, { x: number; y: number; w: number; h: number }>();
 
-/**
- * 将旧版 WhiteboardState（cards/arrows/strokes）转换为 tldraw shapes，
- * 并装入一个新的 TLStore 返回。
- */
-function convertLegacySnapshot(legacy: WhiteboardState): TLStore {
-  const store = createTLStore({ shapeUtils: defaultShapeUtils });
-  const shapes: TLShape[] = [];
-  let shapeIndex = 0;
-  // 生成 z-order 索引（a1, a2, ...）和默认父页面
-  const nextIndex = () => `a${++shapeIndex}` as TLShape['index'];
-  const parentId = 'page:page' as TLShape['parentId'];
-
-  // 卡片 → text/image/geo shapes
   for (const card of legacy.cards ?? []) {
+    const x = card.x ?? 0;
+    const y = card.y ?? 0;
+    const w = card.width ?? 240;
+    const h = card.height ?? 120;
+    cardIndex.set(card.id, { x, y, w, h });
+
     if (card.type === 'image') {
-      const w = card.width ?? 400;
-      const h = card.height ?? 300;
-      const assetId = `asset:${card.id}` as TLAsset['id'];
-      const asset: TLAsset = {
-        id: assetId,
-        typeName: 'asset',
-        type: 'image',
-        props: {
-          name: `image-${card.id.slice(0, 8)}`,
-          src: card.content,
-          w,
-          h,
-          mimeType: 'image/png',
-          isAnimated: false,
-        },
-        meta: {},
-      };
-      store.put([asset]);
-      const shape: TLImageShape = {
-        id: `shape:${card.id}` as TLImageShape['id'],
-        typeName: 'shape',
-        type: 'image',
-        parentId,
-        index: nextIndex(),
-        x: card.x,
-        y: card.y,
-        rotation: 0,
-        isLocked: false,
-        opacity: 1,
-        props: {
-          w,
-          h,
-          assetId,
-          playing: false,
-          url: '',
-          crop: null,
-          flipX: false,
-          flipY: false,
-          altText: '',
-        },
-        meta: {},
-      };
-      shapes.push(shape);
+      // 图片：转 dataURL 后装入 files map
+      try {
+        const dataUrl = await assetUrlToDataUrl(card.content);
+        const fileId = `file_${card.id}` as FileId;
+        files[fileId] = {
+          mimeType: MIME_TYPES.png,
+          id: fileId,
+          dataURL: dataUrl as DataURL,
+          created: Date.now(),
+        };
+        skeleton.push({
+          type: 'image',
+          x,
+          y,
+          width: w,
+          height: h,
+          fileId,
+        });
+      } catch {
+        // 图片转换失败则跳过
+      }
     } else {
-      // text / ai-reply → text shape
-      const w = card.width ?? 240;
-      const shape: TLTextShape = {
-        id: `shape:${card.id}` as TLTextShape['id'],
-        typeName: 'shape',
+      // text / ai-reply → text 元素
+      const text = card.content || ' ';
+      skeleton.push({
         type: 'text',
-        parentId,
-        index: nextIndex(),
-        x: card.x,
-        y: card.y,
-        rotation: 0,
-        isLocked: false,
-        opacity: 1,
-        props: {
-          color: 'black',
-          size: 'm',
-          font: 'draw',
-          textAlign: 'start',
-          w,
-          richText: toRichText(card.content || ' '),
-          scale: 1,
-          autoSize: false,
-        },
-        meta: {},
-      };
-      shapes.push(shape);
+        text,
+        x,
+        y,
+        width: w,
+        fontSize: 16,
+        fontFamily: FONT_FAMILY.Virgil,
+      });
     }
   }
 
-  // 箭头 → arrow shapes（v5：start/end 为 VecModel {x,y}，绑定由 TLArrowBinding 记录承载）
-  // 旧版 fromCardId/toCardId 绑定关系在 v5 中需要单独创建 binding 记录，这里简化为直线箭头
+  // 箭头：根据 from/to 卡片坐标生成直线
   for (const arrow of legacy.arrows ?? []) {
-    const shape: TLArrowShape = {
-      id: `shape:${arrow.id}` as TLArrowShape['id'],
-      typeName: 'shape',
+    const from = cardIndex.get(arrow.fromCardId);
+    const to = cardIndex.get(arrow.toCardId);
+    if (!from || !to) continue;
+    skeleton.push({
       type: 'arrow',
-      parentId,
-      index: nextIndex(),
-      x: 0,
-      y: 0,
-      rotation: 0,
-      isLocked: false,
-      opacity: 1,
-      props: {
-        kind: 'arc',
-        start: { x: 0, y: 0 },
-        end: { x: 200, y: 0 },
-        bend: 0,
-        color: 'black',
-        fill: 'none',
-        size: 'm',
-        dash: 'solid',
-        arrowheadEnd: 'arrow',
-        arrowheadStart: 'none',
-        font: 'draw',
-        richText: toRichText(''),
-        labelColor: 'black',
-        labelPosition: 0.5,
-        scale: 1,
-        elbowMidPoint: 0.5,
-      },
-      meta: {},
-    };
-    shapes.push(shape);
+      x: from.x + from.w,
+      y: from.y + from.h / 2,
+      points: [
+        [0, 0],
+        [to.x - from.x - from.w, to.y + to.h / 2 - (from.y + from.h / 2)],
+      ],
+    });
   }
 
-  // 手绘线条 → draw shapes
-  // v5 的 TLDrawShapeSegment 使用 base64 编码的 path（delta-encoded Float32/Float16），
-  // 无法从旧版 points 数组直接构造；遗留手绘线条跳过转换（仅保留卡片和箭头）。
-  // 如需保留，用户可在新版本中重新绘制。
-
-  if (shapes.length > 0) {
-    store.put(shapes);
-  }
-  return store;
+  const elements = convertToExcalidrawElements(skeleton, { regenerateIds: false });
+  return {
+    elements,
+    appState: { viewBackgroundColor: '#ffffff' },
+    files,
+  };
 }
 
 // ============================================================================
@@ -277,61 +245,67 @@ interface WhiteboardCanvasProps {
 }
 
 function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps) {
-  const editorRef = useRef<Editor | null>(null);
+  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const activeIdRef = useRef(activeId);
   const onReadyRef = useRef(onReady);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+  // 最新场景数据 ref（用于防抖保存读取）
+  const latestSceneRef = useRef<{ elements: readonly ExcalidrawElement[]; appState: AppState; files: BinaryFiles } | null>(null);
+  // 是否完成首次加载（避免 initialData 还原触发保存覆盖空数据）
+  const hydratedRef = useRef(false);
 
   activeIdRef.current = activeId;
   onReadyRef.current = onReady;
 
-  // 初始化 store：从 snapshot 反序列化，或创建空 store
-  const store = useMemo<TLStore>(() => {
-    if (snapshot) {
-      try {
-        const parsed = JSON.parse(snapshot);
-        // 检测遗留数据标记
-        if (parsed.__legacy === true && parsed.cards) {
-          const legacyStore = convertLegacySnapshot(parsed as WhiteboardState);
-          return legacyStore;
-        }
-        // tldraw snapshot 格式：用独立函数 loadSnapshot 装入新 store
-        const newStore = createTLStore({ shapeUtils: defaultShapeUtils });
-        try {
-          loadSnapshot(newStore, parsed);
-        } catch {
-          // load 失败则返回空 store
-        }
-        return newStore;
-      } catch {
-        // JSON 解析失败，创建空 store
+  // 初始化数据：snapshot 反序列化，或遗留数据转换，或空场景
+  // initialData 接受 Promise，可异步处理遗留图片转换
+  const initialData = useMemo(() => {
+    hydratedRef.current = false;
+    if (!snapshot) return null;
+    try {
+      const parsed = JSON.parse(snapshot);
+      // 遗留数据检测（v1 WhiteboardState）
+      if (parsed.__legacy === true && parsed.cards) {
+        return convertLegacySnapshot(parsed as WhiteboardState);
       }
+      // Excalidraw 场景格式：直接返回（restore 由 Excalidraw 内部完成）
+      return parsed as { elements: ExcalidrawElement[]; appState: Partial<AppState>; files?: BinaryFiles };
+    } catch {
+      return null;
     }
-    return createTLStore({ shapeUtils: defaultShapeUtils });
   }, [snapshot]);
 
-  // 防抖保存 + beforeunload 同步兜底 + 卸载前 flush（统一委托 useAutoSaveDraft）
+  // 防抖保存 + beforeunload 同步兜底（统一委托 useAutoSaveDraft）
   const { schedule: scheduleSave } = useAutoSaveDraft<string>({
     data: activeId,
     save: () => {
-      const editor = editorRef.current;
+      const api = apiRef.current;
       const id = activeIdRef.current;
-      if (!editor || !id) return;
+      const scene = latestSceneRef.current;
+      if (!api || !id || !scene) return;
       try {
-        const snap = getSnapshot(editor.store);
-        const json = JSON.stringify(snap);
+        const json = serializeAsJSON(
+          scene.elements as readonly ExcalidrawElement[],
+          scene.appState,
+          scene.files,
+          'local',
+        );
         void saveWhiteboardSnapshot(id, json);
       } catch (err) {
         console.error('[WhiteboardCanvas] save failed:', err);
       }
     },
     saveSync: () => {
-      const editor = editorRef.current;
+      const api = apiRef.current;
       const id = activeIdRef.current;
-      if (!editor || !id) return;
+      const scene = latestSceneRef.current;
+      if (!api || !id || !scene) return;
       try {
-        const snap = getSnapshot(editor.store);
-        const json = JSON.stringify(snap);
+        const json = serializeAsJSON(
+          scene.elements as readonly ExcalidrawElement[],
+          scene.appState,
+          scene.files,
+          'local',
+        );
         saveWhiteboardSnapshotSync(id, json);
       } catch (err) {
         console.error('[WhiteboardCanvas] sync save failed:', err);
@@ -340,75 +314,90 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
     debounceMs: 500,
   });
 
-  // 卸载时取消 store.listen 订阅（flush 保存已由 useAutoSaveDraft 处理）
-  useEffect(() => {
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
+  // onChange：缓存最新场景 + 触发防抖保存
+  const handleChange = useCallback(
+    (elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
+      latestSceneRef.current = { elements, appState, files };
+      // 首次 hydration 完成后才保存（避免 initialData 触发 onChange 覆盖）
+      if (hydratedRef.current) {
+        scheduleSave();
       }
-    };
-  }, []);
+    },
+    [scheduleSave],
+  );
 
-  // 处理 editor 就绪：注册 store 变更监听以触发自动保存
-  const handleMount = useCallback((editor: Editor) => {
-    editorRef.current = editor;
-    // 监听 store 变更 → 防抖保存（替代 v5 已移除的 onChange prop）
-    unsubscribeRef.current = store.listen(() => {
-      scheduleSave();
-    });
-    // 通知容器：白板已 ready，可以回 ACK
-    onReadyRef.current();
-  }, [store, scheduleSave]);
+  // excalidrawAPI 就绪回调
+  const handleAPIReady = useCallback(
+    (api: ExcalidrawImperativeAPI) => {
+      apiRef.current = api;
+      // 标记 hydration 完成（下一帧后允许保存）
+      requestAnimationFrame(() => {
+        hydratedRef.current = true;
+      });
+      // 通知容器：白板已 ready，可以回 ACK
+      onReadyRef.current();
+    },
+    [],
+  );
 
   // 监听容器派发的插入卡片事件（跨窗口推送的截图/AI回复）
   useEffect(() => {
     const handler = async (e: Event) => {
-      const editor = editorRef.current;
-      if (!editor) return;
+      const api = apiRef.current;
+      if (!api) return;
       const card = (e as CustomEvent<WhiteboardCard>).detail;
       const x = card.x ?? Math.round(Math.random() * 200 + 100);
       const y = card.y ?? Math.round(Math.random() * 200 + 100);
 
       if (card.type === 'image') {
-        // 图片：创建 asset + image shape
-        const assetId = `asset:${card.id}` as TLAsset['id'];
-        const w = card.width ?? 400;
-        const h = card.height ?? 300;
-        const asset: TLAsset = {
-          id: assetId,
-          typeName: 'asset',
-          type: 'image',
-          props: { name: `pushed-${card.id.slice(0, 8)}`, src: card.content, w, h, mimeType: 'image/png', isAnimated: false },
-          meta: {},
-        };
-        editor.store.put([asset]);
-        editor.createShape<TLImageShape>({
-          id: `shape:${card.id}` as TLImageShape['id'],
-          type: 'image',
-          x,
-          y,
-          props: { w, h, assetId, playing: false, url: '', crop: null, flipX: false, flipY: false, altText: '' },
-        });
+        // 图片：fetch whiteboard-asset:// → dataURL → addFiles + image 元素
+        try {
+          const dataUrl = await assetUrlToDataUrl(card.content);
+          const fileId = `file_${card.id}` as FileId;
+          const file: BinaryFileData = {
+            mimeType: MIME_TYPES.png,
+            id: fileId,
+            dataURL: dataUrl as DataURL,
+            created: Date.now(),
+          };
+          api.addFiles([file]);
+          const w = card.width ?? 400;
+          const h = card.height ?? 300;
+          const newElements = convertToExcalidrawElements(
+            [
+              {
+                type: 'image',
+                x,
+                y,
+                width: w,
+                height: h,
+                fileId,
+              },
+            ],
+            { regenerateIds: false },
+          );
+          api.updateScene({ elements: [...api.getSceneElements(), ...newElements] });
+        } catch (err) {
+          console.error('[WhiteboardCanvas] 插入图片卡片失败:', err);
+        }
       } else {
-        // 文本 / AI 回复 → text shape
-        const w = card.width ?? 240;
-        editor.createShape<TLTextShape>({
-          id: `shape:${card.id}` as TLTextShape['id'],
-          type: 'text',
-          x,
-          y,
-          props: {
-            color: 'black',
-            size: 'm',
-            font: 'draw',
-            textAlign: 'start',
-            w,
-            richText: toRichText(card.content || ' '),
-            scale: 1,
-            autoSize: false,
-          },
-        });
+        // 文本 / AI 回复 → text 元素
+        const text = card.content || ' ';
+        const newElements = convertToExcalidrawElements(
+          [
+            {
+              type: 'text',
+              text,
+              x,
+              y,
+              width: card.width ?? 240,
+              fontSize: 16,
+              fontFamily: FONT_FAMILY.Virgil,
+            },
+          ],
+          { regenerateIds: false },
+        );
+        api.updateScene({ elements: [...api.getSceneElements(), ...newElements] });
       }
       // 触发保存
       scheduleSave();
@@ -419,11 +408,12 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
 
   return (
     <div className="wb-canvas-wrap" data-name="advanced-panel.wb-canvas">
-      <Tldraw
-        store={store}
-        onMount={handleMount}
-        assetUrls={TLDRAW_ASSET_URLS}
-        locale="zh-cn"
+      <Excalidraw
+        initialData={initialData}
+        onChange={handleChange}
+        excalidrawAPI={handleAPIReady}
+        langCode="zh-CN"
+        name="SidekickAI 白板"
       />
     </div>
   );
@@ -432,7 +422,7 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
 // ============================================================================
 // 容器组件：WhiteboardView
 // 架构变更（v0.5.1）：onWhiteboardPushCard 订阅已提升到 AdvancedPanelView 顶层，
-// WhiteboardView 通过 forwardRef 暴露 insertCard / switchToWhiteboard / isReady，
+// WhiteboardView 通过 forwardRef 暴露 insertCard / switchToWhiteboard / isReady,
 // 供父组件在任意 tab 下统一管理跨窗口推送的卡片。
 // ============================================================================
 
@@ -455,8 +445,9 @@ interface WhiteboardViewProps {
   /**
    * 应用层侧边栏是否可见（默认 false）。
    *
-   * tldraw 自带的 PageMenu（左下角）已支持多页面切换/新建/删除，
-   * 应用层侧边栏属于冗余设计，默认隐藏；如需传统的列表管理可在设置中开启。
+   * Excalidraw 没有内置多页面切换 UI，
+   * 应用层侧边栏是管理多白板的唯一入口，默认隐藏（单白板模式）。
+   * 如需传统的列表管理可在设置中开启。
    */
   sidebarVisible?: boolean;
 }

@@ -1121,7 +1121,7 @@ app.whenReady().then(async () => {
   )
 
   // 从任意窗口推送卡片到白板（v2：定位 active 白板，发送 { whiteboardId, card }）
-  // 渲染层收到后插入 tldraw shape；ready 后回 ACK，主进程收到 ACK 后才转发卡片。
+  // 渲染层收到后插入 Excalidraw 元素；ready 后回 ACK，主进程收到 ACK 后才转发卡片。
   ipcMain.handle(
     IPC_CHANNELS.WHITEBOARD_PUSH_CARD_REQUEST,
     (_e, input: WhiteboardCardInput) => {
@@ -1352,7 +1352,7 @@ app.whenReady().then(async () => {
   // ===== 灵感笔记 IPC（v2：SQLite + FTS5） =====
   registerNotesIPC()
 
-  // ===== 白板 IPC（v2：SQLite + tldraw + 多白板） =====
+  // ===== 白板 IPC（v3：SQLite + Excalidraw + 多白板） =====
   registerWhiteboardIPC()
   registerWhiteboardAssetIPC()
 

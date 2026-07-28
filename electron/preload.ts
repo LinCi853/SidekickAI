@@ -325,7 +325,7 @@ const api: ElectronAPI = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.NOTES_INJECT_RESULT, handler)
     },
   },
-  // 白板 API（v2：tldraw + 多白板）
+  // 白板 API（v3：Excalidraw + 多白板）
   whiteboard: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_LIST),
     create: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_CREATE, title),

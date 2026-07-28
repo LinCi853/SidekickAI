@@ -605,7 +605,7 @@ export interface AppSettings {
   cookieHandlerEnabled: boolean
   /** v0.5.2 R-3：进阶面板默认打开的 tab（Alt+Q 入口） */
   defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
-  /** 白板应用层侧边栏是否可见（默认 false，依赖 tldraw 自带的 PageMenu 多页面切换） */
+  /** 白板应用层侧边栏是否可见（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口） */
   whiteboardSidebarVisible: boolean
 }
 
@@ -745,7 +745,7 @@ export interface NotesAPI {
 }
 
 /**
- * 白板 API（v2：tldraw + 多白板）
+ * 白板 API（v3：Excalidraw + 多白板）
  */
 export interface WhiteboardAPI {
   /** 列出全部白板 */
@@ -762,7 +762,7 @@ export interface WhiteboardAPI {
   getActive(): Promise<string | null>
   /** 设置激活白板 id */
   setActive(id: string | null): Promise<{ ok: boolean }>
-  /** 加载白板 snapshot（tldraw TLStore JSON，无则 null） */
+  /** 加载白板 snapshot（Excalidraw scene JSON，无则 null） */
   getSnapshot(id: string): Promise<string | null>
   /** 异步保存 snapshot */
   saveSnapshot(id: string, snapshot: string): Promise<{ ok: boolean }>

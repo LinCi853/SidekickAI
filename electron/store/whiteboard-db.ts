@@ -1,7 +1,7 @@
 // electron/store/whiteboard-db.ts — 白板多白板 SQLite 持久化 + IPC 注册
 //
 // 迁移自 electron-store（whiteboard.json 全量重写）。使用 better-sqlite3（WAL）。
-// 支持多白板：每个白板一条 whiteboards 记录 + 一条 whiteboard_snapshots（tldraw TLStore JSON）。
+// 支持多白板：每个白板一条 whiteboards 记录 + 一条 whiteboard_snapshots（Excalidraw scene JSON）。
 //
 // 数据库路径：
 //   - dev：项目内 .app-data/whiteboard.db
@@ -28,7 +28,7 @@ export type { WhiteboardMeta }
 
 /** 白板完整数据（含 snapshot） */
 export interface WhiteboardWithSnapshot extends WhiteboardMeta {
-  /** tldraw TLStore 序列化 JSON 字符串；新白板为 null（用空 store 初始化） */
+  /** Excalidraw scene 序列化 JSON 字符串；新白板为 null（用空场景初始化） */
   snapshot: string | null
 }
 
@@ -72,7 +72,7 @@ export class WhiteboardDb {
     return rows
   }
 
-  /** 新建白板，返回元信息（snapshot 为 null，渲染层用空 store 初始化） */
+  /** 新建白板，返回元信息（snapshot 为 null，渲染层用空场景初始化） */
   createWhiteboard(title?: string): WhiteboardMeta {
     const now = Date.now()
     const id = randomUUID()

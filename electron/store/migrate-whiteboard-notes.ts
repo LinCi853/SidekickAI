@@ -58,7 +58,7 @@ function migrateWhiteboard(): void {
     // 创建"迁移白板"
     const wb = db.createWhiteboard('迁移白板')
 
-    // 将旧状态存入 meta，渲染层首次加载时转换为 tldraw shapes
+    // 将旧状态存入 snapshot，渲染层首次加载时转换为 Excalidraw 元素
     if (state.cards?.length || state.arrows?.length || state.strokes?.length) {
       db.saveSnapshot(wb.id, JSON.stringify({
         __legacy: true,

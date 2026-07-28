@@ -111,6 +111,28 @@
 
 脚本已内置国内镜像配置，无需手动设置环境变量。
 
+## 商标声明
+
+本项目为 AI 平台聚合工具，不隶属于所聚合的任何 AI 服务提供商。所有第三方平台名称、Logo、品牌标识（包括但不限于 ChatGPT、Claude、Gemini、豆包、文心一言、Kimi、通义千问、智谱清言、DeepSeek、Mimo、Grok、Perplexity 等）均为各自所有者的注册商标，本项目不持有、不主张任何权利。
+
+- 应用内仅使用平台名称的**首字母 + 自定义渐变色**作为视觉标识，未内置、未分发任何平台 Logo 或商标图形
+- 项目仅提供 URL 聚合与浏览器隔离能力，所有 AI 服务的实际使用需用户自行遵守对应平台的服务条款（ToS）
+- 用户基于本项目产生的任何商业活动，应自行确认与所涉及平台的合规性
+
+## 开源依赖
+
+本项目基于众多开源组件构建，关键依赖许可证如下：
+
+- **MIT**：Electron、React、Excalidraw（白板组件）、better-sqlite3、electron-store、undici、adm-zip、uiohook-napi、Tiptap、Vite、Zustand
+- **Apache-2.0**：opencc-js
+- **ISC**：lucide-react（图标库）
+- **BSD-3-Clause**：highlight.js（代码高亮，二进制分发需保留版权声明）
+- **(MPL-2.0 OR Apache-2.0)**：DOMPurify（HTML 消毒，本项目选择适用 Apache-2.0 分支）
+
+Excalidraw 内嵌字体（Cascadia、Liberation、Nunito、Xiaolai、Virgil、Excalifont 等）均为 SIL Open Font License 或同类宽松字体许可，允许商用与再分发。
+
+完整依赖许可证清单可通过 `npx license-checker --production` 生成。
+
 ## 许可证
 
 [MIT License](./LICENSE) © 2026 LinCi853

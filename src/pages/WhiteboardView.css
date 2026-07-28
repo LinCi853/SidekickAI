@@ -1,6 +1,6 @@
 /* =====================================================================
-   WhiteboardView.css —— 白板（v2：tldraw + 多白板）
-   布局：左侧 sidebar + 右侧 tldraw 画布
+   WhiteboardView.css —— 白板（v3：Excalidraw + 多白板）
+   布局：左侧 sidebar + 右侧 Excalidraw 画布
    ===================================================================== */
 
 .whiteboard-view {
@@ -129,9 +129,16 @@
   overflow: hidden;
 }
 
-.wb-canvas-wrap .tl-container {
-  position: absolute;
-  inset: 0;
+/* Excalidraw 填满容器：宽度/高度 100%（Excalidraw 要求父容器有非零高度） */
+.wb-canvas-wrap .excalidraw {
+  width: 100%;
+  height: 100%;
+}
+
+/* 隐藏 Excalidraw 主菜单/欢迎屏，避免遮挡画布（功能由应用层 sidebar 提供） */
+.wb-canvas-wrap .excalidraw .main-menu-prompt,
+.wb-canvas-wrap .excalidraw .HelpButton {
+  display: none !important;
 }
 
 /* 空状态（无白板时） */

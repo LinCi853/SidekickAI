@@ -113,7 +113,7 @@ export interface AppSettings {
   cookieHandlerEnabled: boolean
   /** v0.5.2 R-3：进阶面板默认打开的 tab（Alt+Q 入口） */
   defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
-  /** 白板应用层侧边栏是否可见（默认 false，依赖 tldraw 自带的 PageMenu 多页面切换） */
+  /** 白板应用层侧边栏是否可见（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口） */
   whiteboardSidebarVisible: boolean
 }
 
@@ -165,7 +165,7 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       cookieHandlerEnabled: true,
       // v0.5.2 R-3：进阶面板默认打开的 tab
       defaultAdvancedPanelTab: 'chat',
-      // 白板应用层侧边栏默认隐藏（tldraw 自带 PageMenu 已支持多页面切换）
+      // 白板应用层侧边栏默认隐藏（单白板模式；如需管理多白板可在设置中开启）
       whiteboardSidebarVisible: false,
     },
     version: 1,
