@@ -357,7 +357,7 @@ input[type="number"].provider-form-input {
 .provider-model-option-tag {
   font-size: 10px;
   padding: 1px 5px;
-  background: var(--accent);
+  background: var(--accent-dim);
   color: var(--primary-foreground);
   border-radius: var(--radius-xs);
   flex-shrink: 0;

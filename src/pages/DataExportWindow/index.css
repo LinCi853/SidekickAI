@@ -129,9 +129,9 @@
   color: var(--accent);
 }
 .data-export-preset-btn.is-active {
-  background: var(--accent);
+  background: var(--accent-dim);
   color: var(--foreground-inverse);
-  border-color: var(--accent);
+  border-color: var(--accent-dim);
 }
 .data-export-preset-btn:disabled {
   opacity: 0.5;

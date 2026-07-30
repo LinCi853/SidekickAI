@@ -263,7 +263,7 @@
   background: var(--avatar-gradient);
 }
 .chat-avatar.assistant {
-  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
 }
 .chat-msg-content {
   display: flex;
@@ -298,7 +298,7 @@
   max-width: 100%;
 }
 .chat-msg.user {
-  background: var(--accent);
+  background: var(--accent-dim);
   color: var(--foreground-inverse);
   border-bottom-right-radius: var(--radius-xs);
   white-space: pre-wrap;
@@ -578,7 +578,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
   border-radius: var(--radius-md);
   color: var(--foreground-inverse);
   font-family: var(--font-sans);

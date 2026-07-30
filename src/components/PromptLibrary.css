@@ -15,7 +15,7 @@
 }
 .prompt-chip:hover { background: var(--accent-10); color: var(--accent-bright); border-color: var(--accent-50); }
 .prompt-chip:active { transform: scale(0.96); }
-.prompt-chip.injected { background: var(--accent); color: var(--foreground-inverse); border-color: var(--accent); }
+.prompt-chip.injected { background: var(--accent-dim); color: var(--foreground-inverse); border-color: var(--accent-dim); }
 .prompt-chip-title {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
 }
@@ -42,7 +42,7 @@
   cursor: pointer;
 }
 .prompt-hotkey-input.has-error {
-  border-color: var(--danger, #ef4444);
+  border-color: var(--danger);
 }
 .prompt-hotkey-input::placeholder { color: var(--text-muted); }
 .prompt-editor-footer {

@@ -174,7 +174,7 @@
 }
 
 .notes-sidebar-item-delete:hover {
-  color: var(--danger, #c25a4a);
+  color: var(--danger);
   background: var(--glass-bg);
 }
 
@@ -212,7 +212,7 @@
 }
 
 .notes-tag-remove:hover {
-  color: var(--danger, #c25a4a);
+  color: var(--danger);
   background: var(--glass-bg);
 }
 

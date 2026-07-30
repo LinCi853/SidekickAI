@@ -62,7 +62,7 @@
   line-height: 1.4;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  background: var(--accent);
+  background: var(--accent-dim);
   color: var(--foreground-inverse);
   border: 0;
   transition: opacity var(--duration-fast) var(--ease-out);
@@ -212,7 +212,7 @@
   min-height: 0; line-height: 1.4;
 }
 .prompt-segmented-item:hover { background: var(--accent-10); color: var(--foreground); }
-.prompt-segmented-item.active { background: var(--accent); color: var(--foreground-inverse); }
+.prompt-segmented-item.active { background: var(--accent-dim); color: var(--foreground-inverse); }
 .prompt-field-hint {
   font-size: var(--text-xs); color: var(--text-muted);
   font-family: var(--font-sans); line-height: 1.5;
@@ -231,7 +231,7 @@
   cursor: pointer;
 }
 .prompt-hotkey-input.has-error {
-  border-color: var(--danger, #ef4444);
+  border-color: var(--danger);
 }
 .prompt-hotkey-input::placeholder { color: var(--text-muted); }
 .prompt-editor-footer {
