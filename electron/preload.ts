@@ -136,18 +136,6 @@ const api: ElectronAPI = {
   },
   // 语音识别
   stt: {
-    start: () => ipcRenderer.invoke(IPC_CHANNELS.STT_START),
-    stop: () => ipcRenderer.invoke(IPC_CHANNELS.STT_STOP),
-    onResult: (callback) => {
-      const handler = (_e: unknown, text: string) => callback(text)
-      ipcRenderer.on(IPC_CHANNELS.STT_RESULT, handler)
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.STT_RESULT, handler)
-    },
-    onError: (callback) => {
-      const handler = (_e: unknown, err: string) => callback(err)
-      ipcRenderer.on(IPC_CHANNELS.STT_ERROR, handler)
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.STT_ERROR, handler)
-    },
     // 测试 AI 接入配置连通性（设置页"测试连接"按钮调用）
     testAi: (input: { providerId: string }) => {
       return ipcRenderer.invoke(IPC_CHANNELS.VOICE_TEST_AI, input)
@@ -191,6 +179,16 @@ const api: ElectronAPI = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_START_RECORDING, handler)
     },
     /**
+     * 订阅热键录制实时反馈（主进程 → 渲染层：每次按键时推送当前修饰键+按键组合）
+     * 用于录制 UI 实时显示用户按下的组合，无需等到最终键按下。
+     * @returns 取消监听函数
+     */
+    onRecordingPartial: (callback: (partial: { modifiers: string[]; key: string | null }) => void) => {
+      const handler = (_e: unknown, partial: { modifiers: string[]; key: string | null }) => callback(partial)
+      ipcRenderer.on(IPC_CHANNELS.HOTKEY_RECORDING_PARTIAL, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_RECORDING_PARTIAL, handler)
+    },
+    /**
      * 订阅热键管理器状态变化（主进程推送）
      * @param callback 状态：{ uiohookStarted, voiceHotkeyRegistered, voiceKeyPressed, pollingActive }
      */
@@ -212,6 +210,8 @@ const api: ElectronAPI = {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_LIST),
     save: (template) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_SAVE, template),
     delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_DELETE, id),
+    exportPrompts: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_EXPORT),
+    importPrompts: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_IMPORT),
     openWindow: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_OPEN_WINDOW),
     // 需求 1：传递完整 PromptTemplate，由主窗口渲染层在 webview 上下文中组合后注入
     requestInject: (template) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_INJECT_REQUEST, template),
@@ -219,10 +219,8 @@ const api: ElectronAPI = {
   // 注入历史管理（需求 2：注入预览 + Jaccard 去重）
   injection: {
     log: (record) => ipcRenderer.invoke(IPC_CHANNELS.INJECTION_LOG, record),
-    listRecent: (limit) => ipcRenderer.invoke(IPC_CHANNELS.INJECTION_LIST_RECENT, limit),
     findSimilar: (text, limit, threshold) =>
       ipcRenderer.invoke(IPC_CHANNELS.INJECTION_FIND_SIMILAR, text, limit, threshold),
-    clear: () => ipcRenderer.invoke(IPC_CHANNELS.INJECTION_CLEAR),
   },
   // 指纹脚本（单页架构：渲染进程取脚本注入 webview）
   fingerprint: {
@@ -319,6 +317,8 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.NOTES_SEND_TO_AI, { text, enterToSend }),
     saveAsPrompt: (content, title) =>
       ipcRenderer.invoke(IPC_CHANNELS.NOTES_SAVE_AS_PROMPT, { content, title }),
+    saveImage: (dataUrl: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.NOTES_SAVE_IMAGE, dataUrl),
     onInjectResult: (callback: (result: { success: boolean; error?: string }) => void) => {
       const handler = (_e: unknown, result: { success: boolean; error?: string }) => callback(result)
       ipcRenderer.on(IPC_CHANNELS.NOTES_INJECT_RESULT, handler)
@@ -331,7 +331,6 @@ const api: ElectronAPI = {
     create: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_CREATE, title),
     rename: (id, title) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_RENAME, id, title),
     delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_DELETE, id),
-    reorder: (ids) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_REORDER, ids),
     getActive: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_ACTIVE),
     setActive: (id) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SET_ACTIVE, id),
     getSnapshot: (id) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_SNAPSHOT, id),
@@ -425,8 +424,6 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_DELETE_CONVERSATION, id),
     listMessages: (conversationId) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_MESSAGES, conversationId),
-    saveMessage: (msg) => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SAVE_MESSAGE, msg),
-    // 需求 5：智能合并保存
     saveMessageWithMerge: (msg) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SAVE_MESSAGE_WITH_MERGE, msg),
     // webview 抓取入库后通知主进程广播给其他窗口（HistoryView 订阅刷新侧边栏）
@@ -458,8 +455,6 @@ const api: ElectronAPI = {
       ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_END, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM_END, handler)
     },
-    logWindowTrace: (windowId, action, detail) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOG_WINDOW_TRACE, windowId, action, detail),
     logLoginTrace: (trace) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOG_LOGIN_TRACE, trace),
     listWindowTraces: (windowId, limit) =>
@@ -479,34 +474,17 @@ const api: ElectronAPI = {
     clearWindowTraces: (windowId) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_WINDOW_TRACES, windowId),
     // 使用统计与操作日志
-    logUsageClick: (elementName, windowType, detail) =>
-      ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_LOG_CLICK, elementName, windowType, detail),
-    getUsageFrequencyStats: (rangeDays) =>
-      ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_GET_STATS, rangeDays),
     clearUsageTraces: () =>
       ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_CLEAR),
-    listAppStarts: (limit) =>
-      ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_LIST_APP_STARTS, limit),
-    listClickLogs: (limit) =>
-      ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_LIST_CLICK_LOGS, limit),
     updateMessage: (messageId, updates) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_MESSAGE, messageId, updates),
     deleteMessage: (messageId) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_DELETE_MESSAGE, messageId),
     updateConversation: (id, updates) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_CONVERSATION, id, updates),
-    openWindow: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_OPEN_WINDOW),
     openHistoryWindow: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_OPEN_HISTORY_WINDOW),
-    listDetachedWindows: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_DETACHED),
-    createDetachedWindow: (config) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_DETACHED, config),
     updateDetachedWindow: (windowId, config) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_DETACHED, windowId, config),
-    removeDetachedWindow: (windowId) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_REMOVE_DETACHED, windowId),
-    showDetachedWindow: (windowId) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SHOW_DETACHED, windowId),
     getChatConfig: (windowId) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_CONFIG, windowId),
     // Alt+Q 无对话窗口时，主进程请求打开配置
@@ -561,20 +539,6 @@ const api: ElectronAPI = {
     const handler = () => callback()
     ipcRenderer.on(IPC_CHANNELS.WINDOW_HIDDEN, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_HIDDEN, handler)
-  },
-  // 语音热键（主→渲染：uiohook 监听 Alt+V keydown/keyup 转发，仅主窗口渲染层订阅）
-  onVoiceHotkey: (
-    downCb: () => void,
-    upCb: () => void,
-  ) => {
-    const downHandler = () => downCb()
-    const upHandler = () => upCb()
-    ipcRenderer.on(IPC_CHANNELS.VOICE_HOTKEY_DOWN, downHandler)
-    ipcRenderer.on(IPC_CHANNELS.VOICE_HOTKEY_UP, upHandler)
-    return () => {
-      ipcRenderer.removeListener(IPC_CHANNELS.VOICE_HOTKEY_DOWN, downHandler)
-      ipcRenderer.removeListener(IPC_CHANNELS.VOICE_HOTKEY_UP, upHandler)
-    }
   },
   // 后台语音注入+发送（主→最近聚焦窗口渲染：背景路径识别完成后注入 AI 输入框）
   // 载荷：{ text, enterToSend }，由渲染层决定是否自动回车发送

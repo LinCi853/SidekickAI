@@ -34,6 +34,8 @@ export interface HotkeyRecorderProps {
   stopRecording: () => Promise<void>
   /** 监听录制结果 */
   onRecordingResult: (cb: (result: { accelerator: string; reason?: string }) => void) => () => void
+  /** 监听录制实时反馈（每次按键时推送当前组合，用于 UI 实时显示） */
+  onRecordingPartial: (cb: (partial: { modifiers: string[]; key: string | null }) => void) => () => void
   /** 传入的 CSS 类名 */
   className?: string
   /** 是否禁用 */
@@ -48,11 +50,13 @@ export default function HotkeyRecorder({
   startRecording,
   stopRecording,
   onRecordingResult,
+  onRecordingPartial,
   className,
   disabled,
 }: HotkeyRecorderProps) {
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [partialText, setPartialText] = useState<string | null>(null)
   const recordingRef = useRef(false)
 
   // 录制结果监听：组件挂载时订阅，录制状态下处理结果
@@ -61,6 +65,7 @@ export default function HotkeyRecorder({
       if (!recordingRef.current) return
       recordingRef.current = false
       setRecording(false)
+      setPartialText(null)
       resetActiveRecorder = null
 
       // 空 accelerator 表示用户按 Esc 取消
@@ -103,9 +108,23 @@ export default function HotkeyRecorder({
     }
   }, [onRecordingResult, otherHotkeys, onRecord, stopRecording])
 
+  // 录制实时反馈监听：收到 partial 事件时更新显示文本
+  useEffect(() => {
+    const unsubscribe = onRecordingPartial((partial) => {
+      if (!recordingRef.current) return
+      const parts = [...partial.modifiers]
+      if (partial.key) parts.push(partial.key)
+      setPartialText(parts.length > 0 ? parts.join('+') : null)
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [onRecordingPartial])
+
   const handleClick = useCallback(async () => {
     if (disabled) return
     setError(null)
+    setPartialText(null)
     // 重置之前活跃的录制器（同一窗口内只允许一个录制）
     if (resetActiveRecorder) {
       resetActiveRecorder()
@@ -117,17 +136,21 @@ export default function HotkeyRecorder({
     resetActiveRecorder = () => {
       recordingRef.current = false
       setRecording(false)
+      setPartialText(null)
     }
     const ok = await startRecording()
     if (!ok) {
       setRecording(false)
       recordingRef.current = false
+      setPartialText(null)
       resetActiveRecorder = null
       setError('无法启动录制，请重试')
     }
   }, [disabled, startRecording])
 
-  const displayValue = recording ? '按下快捷键…（Esc 取消）' : value
+  const displayValue = recording
+    ? (partialText ?? '按下快捷键…（Esc 取消）')
+    : value
   const inputClass = [
     className ?? '',
     recording ? ' is-recording' : '',

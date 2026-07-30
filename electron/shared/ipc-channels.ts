@@ -80,6 +80,7 @@ export const IPC_CHANNELS = {
   HOTKEY_STATUS: 'hotkey:status', // 主进程推送热键管理器状态（启动后 / 状态变化时）
   HOTKEY_START_RECORDING: 'hotkey:startRecording', // 开始录制热键（主进程临时注册 globalShortcut 捕获按键）
   HOTKEY_STOP_RECORDING: 'hotkey:stopRecording', // 停止录制热键
+  HOTKEY_RECORDING_PARTIAL: 'hotkey:recordingPartial', // 录制实时反馈（主进程 → 渲染层：每次按键时推送当前组合）
   // 窗口重新展示（主进程 → 渲染层：脱离窗口被 Alt+Q 显示时通知刷新 webview）
   WINDOW_SHOWN: 'window:shown',
   WINDOW_HIDDEN: 'window:hidden',
@@ -91,6 +92,10 @@ export const IPC_CHANNELS = {
   PROMPT_LIST: 'prompt:list',
   PROMPT_SAVE: 'prompt:save',
   PROMPT_DELETE: 'prompt:delete',
+  // 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件）
+  PROMPT_EXPORT: 'prompt:export',
+  // 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库）
+  PROMPT_IMPORT: 'prompt:import',
   // 打开提示词库独立窗口（单例）
   PROMPT_OPEN_WINDOW: 'prompt:openWindow',
   // 提示词注入请求（提示词库窗口 → 主进程 → 主窗口渲染：注入激活 webview）
@@ -180,9 +185,6 @@ export const IPC_CHANNELS = {
   CHAT_GET_CONFIG: 'chat:getConfig',
   // 主进程 → 主窗口：Alt+Q 无对话窗口时，请求打开配置
   CHAT_REQUEST_CONFIG: 'chat:requestConfig',
-  // 语音热键（主→渲染：uiohook 监听 Alt+V keydown/keyup 转发）
-  VOICE_HOTKEY_DOWN: 'voice:hotkeyDown',
-  VOICE_HOTKEY_UP: 'voice:hotkeyUp',
   // 底栏语音按钮触发（渲染→主：走后台语音路径，显示独立预览窗）
   VOICE_TRIGGER_START: 'voice:triggerStart',
   VOICE_TRIGGER_STOP: 'voice:triggerStop',
@@ -316,6 +318,8 @@ export const IPC_CHANNELS = {
   NOTES_SAVE_AS_PROMPT: 'notes:saveAsPrompt',
   // 主进程 → 笔记窗口渲染：注入结果回传（success + platformName?）
   NOTES_INJECT_RESULT: 'notes:injectResult',
+  // 笔记图片保存（渲染层 → 主进程：dataURL → notes-asset:// 路径）
+  NOTES_SAVE_IMAGE: 'notes:saveImage',
   // 白板（v3：SQLite + Excalidraw + 多白板）
   WHITEBOARD_LIST: 'whiteboard:list',
   WHITEBOARD_CREATE: 'whiteboard:create',

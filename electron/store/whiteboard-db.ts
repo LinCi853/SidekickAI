@@ -15,7 +15,7 @@ import Database from 'better-sqlite3'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { registerSafeIpcHandler } from '../shared/ipc-utils.js'
+import { registerSafeIpcHandler, registerSyncIpcHandler } from '../shared/ipc-utils.js'
 import type { WhiteboardMeta } from '../shared/whiteboard.types.js'
 import {
   resolveSqlitePath,
@@ -232,13 +232,11 @@ export function registerWhiteboardIPC(): void {
     'whiteboard-db saveSnapshot',
   )
   // 同步保存（beforeunload 兜底）
-  ipcMain.on(ipc.WHITEBOARD_SAVE_SNAPSHOT_SYNC, (e, id: string, snapshot: string) => {
-    try {
+  registerSyncIpcHandler(
+    ipc.WHITEBOARD_SAVE_SNAPSHOT_SYNC,
+    (_e, id: string, snapshot: string) => {
       db.saveSnapshot(id, snapshot)
-      e.returnValue = { ok: true }
-    } catch (err) {
-      console.error('[whiteboard-db] 同步保存失败:', err)
-      e.returnValue = { ok: false, error: String(err) }
-    }
-  })
+    },
+    'whiteboard-db saveSnapshotSync',
+  )
 }

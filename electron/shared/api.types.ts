@@ -12,7 +12,6 @@ import type {
   CustomAIProvider,
   CustomAIProviderInput,
   PromptTemplate,
-  WindowTraceAction,
   WindowTrace,
   LoginTrace,
 } from './chat.types.js'
@@ -168,10 +167,6 @@ export interface TestTtsResult {
 
 /** 语音识别接口 */
 export interface SttAPI {
-  start(): Promise<void>
-  stop(): Promise<string>
-  onResult(callback: (text: string) => void): () => void
-  onError(callback: (err: string) => void): () => void
   /** 测试 AI 接入配置连通性（设置页"测试连接"按钮调用） */
   testAi: (input: { providerId: string }) => Promise<TestAiProviderResult>
   /**
@@ -225,6 +220,8 @@ export interface HotkeyAPI {
   stopRecording(): Promise<void>
   /** 监听热键录制结果（主进程 → 渲染层：录制完成后通知） */
   onRecordingResult(callback: (result: { accelerator: string; reason?: string }) => void): () => void
+  /** 订阅热键录制实时反馈（主进程 → 渲染层：每次按键时推送当前组合，用于 UI 实时显示） */
+  onRecordingPartial(callback: (partial: { modifiers: string[]; key: string | null }) => void): () => void
   /** 订阅热键管理器状态变化（主进程推送：uiohook/voiceHotkey/voiceKeyPressed/polling） */
   onStatus(callback: (status: unknown) => void): () => void
 }
@@ -245,6 +242,10 @@ export interface PromptAPI {
   save(template: PromptTemplate): Promise<PromptTemplate>
   /** 删除模板 */
   delete(id: string): Promise<void>
+  /** 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件） */
+  exportPrompts(): Promise<{ ok: boolean; filePath?: string; canceled?: boolean; error?: string }>
+  /** 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库） */
+  importPrompts(): Promise<{ ok: boolean; added?: number; updated?: number; canceled?: boolean; error?: string }>
   /** 打开提示词库独立窗口（单例） */
   openWindow(): Promise<void>
   /**
@@ -278,12 +279,8 @@ export interface SimilarInjectionResult extends InjectionRecord {
 export interface InjectionHistoryAPI {
   /** 记录一次注入 */
   log(record: Omit<InjectionRecord, 'id' | 'createdAt'>): Promise<InjectionRecord>
-  /** 列出最近 N 条注入记录（按时间倒序） */
-  listRecent(limit?: number): Promise<InjectionRecord[]>
   /** 在最近 limit 条记录中查找与 text 相似度 ≥ threshold 的记录 */
   findSimilar(text: string, limit?: number, threshold?: number): Promise<SimilarInjectionResult[]>
-  /** 清空所有注入历史，返回删除的条数 */
-  clear(): Promise<number>
 }
 
 /** 自定义 AI 提供商管理接口 */
@@ -343,8 +340,6 @@ export interface ChatAPI {
   deleteConversation(id: string): Promise<void>
   /** 列出会话消息（按时间升序） */
   listMessages(conversationId: string): Promise<ChatMessage[]>
-  /** 保存单条消息（用于网页抓取入库） */
-  saveMessage(msg: Omit<ChatMessage, 'id' | 'createdAt'> & Partial<Pick<ChatMessage, 'id' | 'createdAt'>>): Promise<ChatMessage>
   /** 保存消息并智能合并（需求 5：Jaccard 相似度 ≥ 0.85 时更新而非新增） */
   saveMessageWithMerge(
     msg: Omit<ChatMessage, 'id' | 'createdAt'> & Partial<Pick<ChatMessage, 'id' | 'createdAt'>>,
@@ -363,8 +358,6 @@ export interface ChatAPI {
   onStreamChunk(callback: (chunk: ChatStreamChunk) => void): () => void
   /** 监听流式结束 */
   onStreamEnd(callback: (info: { conversationId: string; ok: boolean; error?: string }) => void): () => void
-  /** 记录窗口操作痕迹 */
-  logWindowTrace(windowId: string, action: WindowTraceAction, detail?: unknown): Promise<void>
   /** 记录登录痕迹 */
   logLoginTrace(trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>): Promise<void>
   /** 列出窗口操作痕迹（按时间倒序，limit 默认 200） */
@@ -383,36 +376,18 @@ export interface ChatAPI {
   clearLoginTraces(profileId?: string): Promise<{ ok: boolean; count: number }>
   /** 清空窗口操作痕迹（可选按 windowId 过滤） */
   clearWindowTraces(windowId?: string): Promise<{ ok: boolean; count: number }>
-  /** 记录 data-name 点击日志（受 usageTrackingEnabled 守卫） */
-  logUsageClick(elementName: string, windowType: string | null, detail?: unknown): Promise<{ ok: boolean; skipped?: boolean }>
-  /** 获取使用频次统计（默认最近 30 天） */
-  getUsageFrequencyStats(rangeDays?: number): Promise<{ ok: boolean; stats?: unknown; error?: string }>
   /** 清空所有使用统计与点击日志 */
   clearUsageTraces(): Promise<{ ok: boolean; count: number }>
-  /** 列出最近 N 条启动记录 */
-  listAppStarts(limit?: number): Promise<{ ok: boolean; list: unknown[]; error?: string }>
-  /** 列出最近 N 条点击日志 */
-  listClickLogs(limit?: number): Promise<{ ok: boolean; list: unknown[]; error?: string }>
   /** 更新消息内容 */
   updateMessage(messageId: string, updates: Partial<Pick<ChatMessage, 'content' | 'role'>>): Promise<{ ok: boolean }>
   /** 删除单条消息 */
   deleteMessage(messageId: string): Promise<{ ok: boolean }>
   /** 更新会话（标题等） */
   updateConversation(id: string, updates: { title?: string }): Promise<{ ok: boolean }>
-  /** 打开自定义对话窗口（API 直连模式，旧单例），已存在则聚焦 */
-  openWindow(): Promise<void>
   /** 打开历史搜索独立窗口（单例，列举所有本地保存数据） */
   openHistoryWindow(): Promise<void>
-  /** 列出所有自定义对话脱离窗口（mode='chat'）的状态 */
-  listDetachedWindows(): Promise<WindowStateData[]>
-  /** 创建自定义对话脱离窗口（Alt+Q 可切换），返回 windowId */
-  createDetachedWindow(config: ChatWindowConfig): Promise<string>
   /** 更新自定义对话脱离窗口配置（providerId/title/style） */
   updateDetachedWindow(windowId: string, config: ChatWindowConfig): Promise<void>
-  /** 删除自定义对话脱离窗口（关闭窗口 + 清理状态） */
-  removeDetachedWindow(windowId: string): Promise<void>
-  /** 显示并聚焦指定自定义对话脱离窗口 */
-  showDetachedWindow(windowId: string): Promise<void>
   /** 获取当前窗口的 chatConfig（ChatView 渲染时调用） */
   getChatConfig(windowId: string): Promise<ChatWindowConfig | null>
   /** 主进程 → 主窗口：Alt+Q 无对话窗口时，请求打开对话配置界面 */
@@ -748,6 +723,8 @@ export interface NotesAPI {
   sendToAi(text: string, enterToSend?: boolean): Promise<{ ok: boolean; error?: string }>
   /** 把笔记内容保存为新的提示词模板 */
   saveAsPrompt(content: string, title?: string): Promise<{ ok: boolean; title?: string; error?: string }>
+  /** 保存图片到磁盘，返回 notes-asset:// 路径（用于 markdown 中引用粘贴/拖拽的图片） */
+  saveImage(dataUrl: string): Promise<{ ok: boolean; url?: string; error?: string }>
   /** 监听注入结果回传 */
   onInjectResult(callback: (result: { success: boolean; error?: string }) => void): () => void
 }
@@ -764,8 +741,6 @@ export interface WhiteboardAPI {
   rename(id: string, title: string): Promise<{ ok: boolean }>
   /** 删除白板 */
   delete(id: string): Promise<{ ok: boolean }>
-  /** 重新排序 */
-  reorder(ids: string[]): Promise<{ ok: boolean }>
   /** 获取激活白板 id */
   getActive(): Promise<string | null>
   /** 设置激活白板 id */
@@ -832,8 +807,6 @@ export interface ElectronAPI {
   onWindowShown: (callback: () => void) => () => void
   /** 窗口隐藏（主→渲染：自动收起展开的面板） */
   onWindowHidden: (callback: () => void) => () => void
-  /** 主→渲染：Alt+V keydown/keyup 转发（仅主窗口渲染层订阅） */
-  onVoiceHotkey: (downCb: () => void, upCb: () => void) => () => void
   /** 主→最近聚焦窗口渲染：后台识别文本到达，注入 AI 输入框；enterToSend 控制是否自动发送 */
   onVoiceInjectAndSend: (cb: (payload: { text: string; enterToSend: boolean }) => void) => () => void
   /** 主→预览窗渲染：更新文本/状态 */

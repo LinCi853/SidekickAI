@@ -4,11 +4,12 @@
 // 提供模板的 CRUD 接口，供「明输入明注入」功能使用。
 // 首次启动自动填充若干通用预置模板，便于用户即刻体验。
 
-import { ipcMain } from 'electron'
+import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
+import fs from 'fs'
 import type { PromptTemplate } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createJsonStore, createCrudStore } from './store-paths.js'
 
 // 持久化存储实例（写入 prompts.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
@@ -29,12 +30,17 @@ const DEFAULT_PROMPTS: Array<Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedA
 
 /**
  * 提示词模板持久化存储：CRUD 操作
+ *
+ * 标准 list/save/delete 委托给 createCrudStore 工厂；
+ * list 保持按 createdAt 升序、save 始终刷新 updatedAt 等业务规则仍在本类中实现。
  */
 export class PromptStore {
+  /** 标准 CRUD 操作集（基于 electron-store 的 prompts 数组） */
+  private crud = createCrudStore<PromptTemplate>({ store, key: 'prompts' })
+
   /** 读取全部模板（按创建时间升序） */
   list(): PromptTemplate[] {
-    const prompts = store.get('prompts')
-    return [...prompts].sort((a, b) => a.createdAt - b.createdAt)
+    return [...this.crud.list()].sort((a, b) => a.createdAt - b.createdAt)
   }
 
   /**
@@ -42,27 +48,39 @@ export class PromptStore {
    * 按 id 查找：存在则更新（保留 createdAt，刷新 updatedAt）；不存在则新增（补全 id 与时间戳）。
    */
   save(template: PromptTemplate): PromptTemplate {
-    const prompts = store.get('prompts')
     const id = template.id || randomUUID()
-    const now = Date.now()
-    const idx = prompts.findIndex((p) => p.id === id)
-    const toSave: PromptTemplate = { ...template, id, updatedAt: now }
-    if (idx === -1) {
-      prompts.push(toSave)
-    } else {
-      prompts[idx] = toSave
-    }
-    store.set('prompts', prompts)
+    const toSave: PromptTemplate = { ...template, id, updatedAt: Date.now() }
+    this.crud.save(toSave)
     return toSave
   }
 
   /** 删除模板 */
   delete(id: string): void {
-    const prompts = store.get('prompts')
-    store.set(
-      'prompts',
-      prompts.filter((p) => p.id !== id),
-    )
+    this.crud.delete(id)
+  }
+
+  /** 导出全部提示词为 JSON 字符串 */
+  exportPrompts(): string {
+    return JSON.stringify({ version: 1, prompts: this.list() }, null, 2)
+  }
+
+  /**
+   * 导入提示词（合并模式：同 id 覆盖，新 id 新增）。
+   * @returns 新增数与更新数
+   */
+  importPrompts(json: string): { added: number; updated: number } {
+    const data = JSON.parse(json) as { prompts?: PromptTemplate[] }
+    const incoming = Array.isArray(data?.prompts) ? data.prompts : []
+    const existing = new Map(this.list().map((p) => [p.id, p]))
+    let added = 0
+    let updated = 0
+    for (const p of incoming) {
+      if (!p || typeof p !== 'object' || !p.title || typeof p.content !== 'string') continue
+      if (existing.has(p.id)) updated++
+      else added++
+      this.save(p)
+    }
+    return { added, updated }
   }
 }
 
@@ -80,6 +98,46 @@ export function registerPromptIPC(): void {
     promptStore.save(template),
   )
   ipcMain.handle(ipc.PROMPT_DELETE, (_e, id: string) => promptStore.delete(id))
+
+  // 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件）
+  ipcMain.handle(ipc.PROMPT_EXPORT, async (e) => {
+    try {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const { canceled, filePath } = await dialog.showSaveDialog(win!, {
+        title: '导出提示词',
+        defaultPath: 'prompts-backup.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+      if (canceled || !filePath) return { ok: false, canceled: true }
+      const json = promptStore.exportPrompts()
+      fs.writeFileSync(filePath, json, 'utf-8')
+      console.log('[prompt-store] 导出成功:', filePath)
+      return { ok: true, filePath }
+    } catch (err) {
+      console.error('[prompt-store] 导出失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
+
+  // 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库）
+  ipcMain.handle(ipc.PROMPT_IMPORT, async (e) => {
+    try {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
+        title: '导入提示词',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+        properties: ['openFile'],
+      })
+      if (canceled || !filePaths?.[0]) return { ok: false, canceled: true }
+      const json = fs.readFileSync(filePaths[0], 'utf-8')
+      const result = promptStore.importPrompts(json)
+      console.log('[prompt-store] 导入成功:', result)
+      return { ok: true, ...result }
+    } catch (err) {
+      console.error('[prompt-store] 导入失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
 }
 
 /**

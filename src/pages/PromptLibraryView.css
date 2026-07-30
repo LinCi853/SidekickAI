@@ -51,6 +51,7 @@
   flex: none;
   display: flex;
   justify-content: flex-end;
+  gap: var(--space-2);
 }
 .prompt-view-add-btn {
   padding: var(--space-1) var(--space-2);

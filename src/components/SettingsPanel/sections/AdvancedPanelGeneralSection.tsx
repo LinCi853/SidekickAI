@@ -1,11 +1,11 @@
 /* =====================================================================
    AdvancedPanelGeneralSection —— Alt+Q 进阶面板通用设置
-   自管理 state（参照 CookieSection/StorageSection 模式）。
+   使用 useSettingsDraft 统一加载 + 乐观更新 + 失败回滚（与 CookieSection/StorageSection 对齐）。
    后续可扩展更多 Alt+Q 专属设置（如窗口尺寸、标签栏样式等）。
    ===================================================================== */
 
-import { useEffect, useState } from 'react';
-import { getAppSettings, updateAppSettings } from '../../../lib/electron-api';
+import { updateAppSettings } from '../../../lib/electron-api';
+import { useSettingsDraft } from '../../../hooks/useSettingsData';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
 import { SectionTitle, FormRow } from '../../ui';
@@ -19,39 +19,30 @@ const TAB_OPTIONS: Array<{ value: AdvancedPanelTab; label: string }> = [
 ];
 
 export default function AdvancedPanelGeneralSection() {
-  const [defaultTab, setDefaultTab] = useState<AdvancedPanelTab>('chat');
-  const [whiteboardSidebarVisible, setWhiteboardSidebarVisible] = useState(false);
+  const { draft, setDraft } = useSettingsDraft();
 
-  useEffect(() => {
-    void getAppSettings()
-      .then((cfg) => {
-        setDefaultTab(cfg.defaultAdvancedPanelTab ?? 'chat');
-        setWhiteboardSidebarVisible(cfg.whiteboardSidebarVisible ?? false);
-      })
-      .catch((e) => {
-        console.error('[AdvancedPanelGeneralSection] 加载设置失败:', e);
-      });
-  }, []);
+  const defaultTab: AdvancedPanelTab = draft?.defaultAdvancedPanelTab ?? 'chat';
+  const whiteboardSidebarVisible = draft?.whiteboardSidebarVisible ?? false;
 
   const handleChangeTab = async (value: AdvancedPanelTab) => {
     const prev = defaultTab;
-    setDefaultTab(value);
+    setDraft({ defaultAdvancedPanelTab: value });
     try {
       await updateAppSettings({ defaultAdvancedPanelTab: value });
     } catch (e) {
       console.error('[AdvancedPanelGeneralSection] 保存默认 tab 设置失败:', e);
-      setDefaultTab(prev);
+      setDraft({ defaultAdvancedPanelTab: prev });
     }
   };
 
   const handleToggleSidebar = async (value: boolean) => {
     const prev = whiteboardSidebarVisible;
-    setWhiteboardSidebarVisible(value);
+    setDraft({ whiteboardSidebarVisible: value });
     try {
       await updateAppSettings({ whiteboardSidebarVisible: value });
     } catch (e) {
       console.error('[AdvancedPanelGeneralSection] 保存白板侧边栏设置失败:', e);
-      setWhiteboardSidebarVisible(prev);
+      setDraft({ whiteboardSidebarVisible: prev });
     }
   };
 

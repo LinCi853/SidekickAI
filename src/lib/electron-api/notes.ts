@@ -78,6 +78,14 @@ export async function saveNoteAsPrompt(
   return api.notes.saveAsPrompt(content, title);
 }
 
+/** 保存图片到磁盘，返回 notes-asset:// 路径（用于 markdown 中引用粘贴/拖拽的图片） */
+export async function saveNotesImage(
+  dataUrl: string,
+): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const api = requireElectron();
+  return api.notes.saveImage(dataUrl);
+}
+
 /** 监听主进程 → 笔记窗口渲染：注入结果回传 */
 export function onNoteInjectResult(
   callback: (result: { success: boolean; error?: string }) => void,

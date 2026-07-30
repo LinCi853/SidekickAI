@@ -31,7 +31,7 @@ import { useThemeStore, type ThemeMode } from '../store/useThemeStore';
 import { Chip, HotkeyRecorder } from '../components/ui';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult } from '../lib/electron-api';
+import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult, onHotkeyRecordingPartial } from '../lib/electron-api';
 import './OnboardingView.css';
 
 const TOP_BAR_BUTTON_LABELS: Record<TopBarButtonGroup, string> = {
@@ -523,6 +523,7 @@ export default function OnboardingView() {
                           startRecording={startHotkeyRecording}
                           stopRecording={stopHotkeyRecording}
                           onRecordingResult={onHotkeyRecordingResult}
+                          onRecordingPartial={onHotkeyRecordingPartial}
                         />
                         {dirty && (
                           <button

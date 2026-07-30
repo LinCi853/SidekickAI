@@ -13,7 +13,7 @@ import Database from 'better-sqlite3'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { registerSafeIpcHandler } from '../shared/ipc-utils.js'
+import { registerSafeIpcHandler, registerSyncIpcHandler } from '../shared/ipc-utils.js'
 import {
   resolveSqlitePath,
   createSqliteDb,
@@ -302,13 +302,11 @@ export function registerNotesIPC(): void {
     }
   })
   // 同步保存（beforeunload 兜底，sendSync 确保窗口关闭前完成写入）
-  ipcMain.on(ipc.NOTES_SAVE_SYNC, (e, input: NoteSaveInput) => {
-    try {
+  registerSyncIpcHandler(
+    ipc.NOTES_SAVE_SYNC,
+    (_e, input: NoteSaveInput) => {
       db.saveNote(input)
-      e.returnValue = { ok: true }
-    } catch (err) {
-      console.error('[notes-db] 同步保存失败:', err)
-      e.returnValue = { ok: false, error: String(err) }
-    }
-  })
+    },
+    'notes-db saveSync',
+  )
 }

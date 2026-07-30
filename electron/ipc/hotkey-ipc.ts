@@ -204,11 +204,18 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
   // 录制结果只发给发起录制的窗口（sender），支持使用指南等独立窗口
   ipcMain.handle(IPC_CHANNELS.HOTKEY_START_RECORDING, async (event) => {
     const sender = event.sender
-    return hotkeyManager.startRecording((result) => {
-      if (!sender.isDestroyed()) {
-        sender.send(IPC_CHANNELS.HOTKEY_START_RECORDING, result)
-      }
-    })
+    return hotkeyManager.startRecording(
+      (result) => {
+        if (!sender.isDestroyed()) {
+          sender.send(IPC_CHANNELS.HOTKEY_START_RECORDING, result)
+        }
+      },
+      (partial) => {
+        if (!sender.isDestroyed()) {
+          sender.send(IPC_CHANNELS.HOTKEY_RECORDING_PARTIAL, partial)
+        }
+      },
+    )
   })
   ipcMain.handle(IPC_CHANNELS.HOTKEY_STOP_RECORDING, async () => {
     hotkeyManager.stopRecording()

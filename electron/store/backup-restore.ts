@@ -43,6 +43,9 @@ const BACKUP_FILES = [
 /** 可选迁移的目录（用户选择，体积大） */
 const OPTIONAL_DIRS = ['bin', 'models'];
 
+/** 基础数据中包含的资产目录（图片等，随 basicData 一起备份） */
+const ASSET_DIRS = ['whiteboard-assets', 'notes-assets'];
+
 /** Partitions/<id>/ 下属于「登录凭据」的文件（根级文件，非目录） */
 const PARTITION_COOKIE_FILES = ['Cookies'];
 
@@ -212,6 +215,13 @@ export function estimateExportSizes(): ExportSizeEstimate {
         const stat = fs.statSync(filePath);
         if (stat.isFile()) basicDataSize += stat.size;
       } catch { /* ignore */ }
+    }
+  }
+  // 基础数据：资产目录（白板/笔记图片）体积
+  for (const dirName of ASSET_DIRS) {
+    const dirPath = path.join(dataDir, dirName);
+    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+      basicDataSize += getDirSize(dirPath);
     }
   }
 
@@ -451,12 +461,19 @@ export async function exportAllData(
     // 记录跳过的文件（EBUSY 等锁定错误）
     const skippedFiles: string[] = [];
 
-    // 3. 基础数据（配置 JSON + chat.db + app-key.json）
+    // 3. 基础数据（配置 JSON + chat.db + app-key.json + 资产目录）
     if (options.basicData) {
       for (const fileName of BACKUP_FILES) {
         const filePath = path.join(dataDir, fileName);
         if (!fs.existsSync(filePath)) continue;
         await addFileWithRetry(zip, filePath, fileName, skippedFiles);
+      }
+      // 资产目录（白板/笔记图片，跨设备迁移不丢图片）
+      for (const dirName of ASSET_DIRS) {
+        const dirPath = path.join(dataDir, dirName);
+        if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+          await addFolderWithRetry(zip, dirPath, dirName, skippedFiles);
+        }
       }
     }
 

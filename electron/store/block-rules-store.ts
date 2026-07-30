@@ -8,7 +8,7 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { BlockRule } from '../shared/block-rules.types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createJsonStore, createCrudStore } from './store-paths.js'
 import { DEFAULT_BLOCK_RULES } from './block-rules-default.js'
 
 // 持久化存储实例（写入 block-rules.json）
@@ -19,50 +19,45 @@ const store = createJsonStore<{ rules: BlockRule[]; version: number }>({
 
 /**
  * 页面组件屏蔽规则存储：CRUD 操作
+ *
+ * 标准 list/save/delete/update 委托给 createCrudStore 工厂；
+ * 内置规则保护（builtin 不可删除）等业务规则仍在本类中实现。
  */
 export class BlockRulesStore {
+  /** 标准 CRUD 操作集（基于 electron-store 的 rules 数组） */
+  private crud = createCrudStore<BlockRule>({ store, key: 'rules' })
+
   /** 读取全部规则 */
   list(): BlockRule[] {
-    return store.get('rules')
+    return this.crud.list()
   }
 
   /** 新增或更新规则（upsert 语义） */
   save(rule: BlockRule): BlockRule {
-    const rules = store.get('rules')
-    const idx = rules.findIndex((r) => r.id === rule.id)
-    if (idx === -1) {
-      const created: BlockRule = {
-        ...rule,
-        id: rule.id || randomUUID(),
-      }
-      rules.push(created)
-      store.set('rules', rules)
-      return created
-    }
-    rules[idx] = { ...rule, id: rules[idx].id }
-    store.set('rules', rules)
-    return rules[idx]
+    const existing = this.crud.get(rule.id)
+    const toSave: BlockRule = existing
+      ? { ...rule, id: existing.id }
+      : { ...rule, id: rule.id || randomUUID() }
+    this.crud.save(toSave)
+    return toSave
   }
 
   /** 删除规则（内置规则不可删除） */
   delete(id: string): void {
-    const rules = store.get('rules')
-    const rule = rules.find((r) => r.id === id)
+    const rule = this.crud.get(id)
     if (rule?.builtin) {
       console.warn('[block-rules-store] 内置规则不可删除:', id)
       return
     }
-    store.set('rules', rules.filter((r) => r.id !== id))
+    this.crud.delete(id)
   }
 
   /** 更新规则（部分字段） */
   update(id: string, patch: Partial<BlockRule>): BlockRule | null {
-    const rules = store.get('rules')
-    const idx = rules.findIndex((r) => r.id === id)
-    if (idx === -1) return null
-    rules[idx] = { ...rules[idx], ...patch, id }
-    store.set('rules', rules)
-    return rules[idx]
+    const existing = this.crud.get(id)
+    if (!existing) return null
+    this.crud.update(id, patch)
+    return { ...existing, ...patch, id }
   }
 }
 

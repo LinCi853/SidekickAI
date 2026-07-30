@@ -4,23 +4,15 @@
    「+」新增 / 右键编辑删除。注入由父组件通过 onInject 回调执行。
    ===================================================================== */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { PromptTemplate, HotkeyConfig } from '../lib/electron-api';
+import type { PromptTemplate } from '../lib/electron-api';
 import { usePromptStore } from '../store/usePromptStore';
 import { useTabStore } from '../store/useTabStore';
-import {
-  getHotkeys,
-  startHotkeyRecording,
-  stopHotkeyRecording,
-  onHotkeyRecordingResult,
-} from '../lib/electron-api';
-import { buildOtherHotkeysForPrompt } from '../lib/prompt-hotkey';
 import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
-import Chip from './ui/Chip';
-import HotkeyRecorder from './ui/HotkeyRecorder';
+import PromptEditorForm from './PromptEditorForm';
 import './PromptLibrary.css';
 import '../pages/PromptLibraryView.css';
 
@@ -60,8 +52,6 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
   const [injectedId, setInjectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; open: boolean }>({ msg: '', open: false });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 需求 2.5：主进程全局热键列表，用于 HotkeyRecorder 冲突检测
-  const [appHotkeys, setAppHotkeys] = useState<HotkeyConfig[]>([]);
 
   const showToast = (msg: string) => {
     setToast({ msg, open: true });
@@ -74,14 +64,6 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
-
-  // 需求 2.5：编辑器打开时拉取最新全局热键，用于冲突检测
-  useEffect(() => {
-    if (!editor.open) return;
-    getHotkeys()
-      .then(setAppHotkeys)
-      .catch((e) => console.warn('[PromptLibrary] 加载全局热键失败:', e));
-  }, [editor.open]);
 
   // ESC：编辑器打开时关闭编辑器（主窗口底栏内联模式下使用；独立窗口 PromptLibraryView 由 useEscToCloseWindow 的 onEsc 处理）
   useEscToCloseOverlay(editor.open, () => setEditor(EMPTY_EDITOR));
@@ -144,12 +126,6 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
     setEditor(EMPTY_EDITOR);
     showToast('已删除');
   };
-
-  const allCategories = useMemo(() => {
-    const set = new Set<string>();
-    prompts.forEach((p) => { if (p.category) set.add(p.category) });
-    return Array.from(set);
-  }, [prompts]);
 
   const isModal = open !== undefined;
 
@@ -309,79 +285,18 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
               </svg>
             </IconButton>
           </div>
-          <div className="prompt-editor-body" data-name="component.prompt-library.editor-body">
-            <div className="prompt-field" data-name="component.prompt-library.title-field">
-              <label data-name="component.prompt-library.title-label">标题</label>
-              <input
-                value={editor.title}
-                data-name="component.prompt-library.title-input"
-                autoFocus
-                spellCheck={false}
-                placeholder="如：总结全文"
-                onChange={(e) => setEditor((s) => ({ ...s, title: e.target.value }))}
-              />
-            </div>
-            <div className="prompt-field" data-name="component.prompt-library.category-field">
-              <label data-name="component.prompt-library.category-label">分类（可选）</label>
-              <div className="prompt-category-chips">
-                {allCategories.map((cat) => (
-                  <Chip key={cat} selected={editor.category === cat}
-                    onClick={() => setEditor((s) => ({ ...s, category: s.category === cat ? '' : cat }))}
-                    data-name="component.prompt-library.category-chip">
-                    {cat}
-                  </Chip>
-                ))}
-                <input
-                  value={editor.category}
-                  data-name="component.prompt-library.category-input"
-                  spellCheck={false}
-                  placeholder="新增分类..."
-                  onChange={(e) => setEditor((s) => ({ ...s, category: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="prompt-field" data-name="component.prompt-library.content-field">
-              <label data-name="component.prompt-library.content-label">内容</label>
-              <textarea
-                value={editor.content}
-                data-name="component.prompt-library.content-textarea"
-                spellCheck={false}
-                placeholder="输入提示词内容，使用 {{body}} 作为当前输入框内容的占位符（点击上方提示可复制）"
-                onChange={(e) => setEditor((s) => ({ ...s, content: e.target.value }))}
-              />
-            </div>
-            <div className="prompt-field-hint" data-name="component.prompt-library.placeholder-hint">
-              占位符：
-              <code
-                style={{ cursor: 'pointer', userSelect: 'all' }}
-                onClick={() => navigator.clipboard.writeText('{{body}}')}
-                title="点击复制"
-                data-name="component.prompt-library.placeholder-copy"
-              >{'{{body}}'}</code>
-              当前输入框内容（点击复制）
-            </div>
-            {/* 需求 2.5：局内快捷键录入 */}
-            <div className="prompt-field" data-name="component.prompt-library.hotkey-field">
-              <label data-name="component.prompt-library.hotkey-label">局内快捷键（可选）</label>
-              <HotkeyRecorder
-                value={editor.hotkey}
-                placeholder="点击录入（如 Ctrl+Shift+1）"
-                className="prompt-hotkey-input"
-                onRecord={(acc) => setEditor((s) => ({ ...s, hotkey: acc }))}
-                otherHotkeys={buildOtherHotkeysForPrompt(
-                  appHotkeys,
-                  editor.editing?.id ?? null,
-                  prompts,
-                )}
-                startRecording={startHotkeyRecording}
-                stopRecording={stopHotkeyRecording}
-                onRecordingResult={onHotkeyRecordingResult}
-              />
-              <div className="prompt-field-hint" data-name="component.prompt-library.hotkey-hint">
-                在主窗口聚焦时按下快捷键即注入该模板；与全局热键冲突的将自动跳过
-              </div>
-            </div>
-          </div>
+          <PromptEditorForm
+            title={editor.title}
+            content={editor.content}
+            category={editor.category}
+            hotkey={editor.hotkey}
+            editingId={editor.editing?.id ?? null}
+            onTitleChange={(v) => setEditor((s) => ({ ...s, title: v }))}
+            onContentChange={(v) => setEditor((s) => ({ ...s, content: v }))}
+            onCategoryChange={(v) => setEditor((s) => ({ ...s, category: v }))}
+            onHotkeyChange={(v) => setEditor((s) => ({ ...s, hotkey: v }))}
+            dataNamePrefix="component.prompt-library.editor"
+          />
           <div className="prompt-editor-footer" data-name="component.prompt-library.editor-footer">
             {editor.editing ? (
               <Button

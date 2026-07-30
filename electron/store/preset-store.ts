@@ -8,7 +8,7 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { DevicePreset } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createJsonStore, createCrudStore } from './store-paths.js'
 import { DEFAULT_PRESETS, PRESETS_DEFAULT_VERSION } from './presets-default.js'
 
 // 持久化存储实例（写入 presets.json）
@@ -19,55 +19,56 @@ const store = createJsonStore<{ presets: DevicePreset[]; version: number }>({
 
 /**
  * 设备预设存储：CRUD 操作
+ *
+ * 标准 list/get/save/delete/update 委托给 createCrudStore 工厂；
+ * 内置预设保护（builtin 不可删除）等业务规则仍在本类中实现。
  */
 export class PresetStore {
+  /** 标准 CRUD 操作集（基于 electron-store 的 presets 数组） */
+  private crud = createCrudStore<DevicePreset>({ store, key: 'presets' })
+
   /** 读取全部预设 */
   list(): DevicePreset[] {
-    return store.get('presets')
+    return this.crud.list()
   }
 
   /** 按 id 查找单个预设 */
   get(id: string): DevicePreset | null {
-    return store.get('presets').find((p) => p.id === id) ?? null
+    return this.crud.get(id) ?? null
   }
 
   /** 新增或更新预设（upsert 语义） */
   save(preset: DevicePreset): DevicePreset {
-    const presets = store.get('presets')
-    const idx = presets.findIndex((p) => p.id === preset.id)
-    if (idx === -1) {
+    const existing = this.crud.get(preset.id)
+    if (!existing) {
       const created: DevicePreset = {
         ...preset,
         id: preset.id || randomUUID(),
       }
-      presets.push(created)
-      store.set('presets', presets)
+      this.crud.save(created)
       return created
     }
-    presets[idx] = { ...preset, id: presets[idx].id }
-    store.set('presets', presets)
-    return presets[idx]
+    const updated = { ...preset, id: existing.id }
+    this.crud.save(updated)
+    return updated
   }
 
   /** 删除预设（内置预设不可删除） */
   delete(id: string): void {
-    const presets = store.get('presets')
-    const preset = presets.find((p) => p.id === id)
+    const preset = this.crud.get(id)
     if (preset?.builtin) {
       console.warn('[preset-store] 内置预设不可删除:', id)
       return
     }
-    store.set('presets', presets.filter((p) => p.id !== id))
+    this.crud.delete(id)
   }
 
   /** 更新预设（部分字段） */
   update(id: string, patch: Partial<DevicePreset>): DevicePreset | null {
-    const presets = store.get('presets')
-    const idx = presets.findIndex((p) => p.id === id)
-    if (idx === -1) return null
-    presets[idx] = { ...presets[idx], ...patch, id }
-    store.set('presets', presets)
-    return presets[idx]
+    const existing = this.crud.get(id)
+    if (!existing) return null
+    this.crud.update(id, patch)
+    return { ...existing, ...patch, id }
   }
 }
 

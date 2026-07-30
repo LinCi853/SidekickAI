@@ -1,6 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api';
-import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult } from '../../../lib/electron-api';
+import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult, onHotkeyRecordingPartial } from '../../../lib/electron-api';
 import Button from '../../ui/Button';
 import HotkeyRecorder from '../../ui/HotkeyRecorder';
 import { SectionTitle, FormRow } from '../../ui';
@@ -129,6 +129,7 @@ export default function HotkeySection({
                   startRecording={startHotkeyRecording}
                   stopRecording={stopHotkeyRecording}
                   onRecordingResult={onHotkeyRecordingResult}
+                  onRecordingPartial={onHotkeyRecordingPartial}
                 />
                 {dirty && (
                   <Button

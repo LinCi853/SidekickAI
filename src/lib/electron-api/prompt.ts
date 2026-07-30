@@ -33,6 +33,29 @@ export async function openPromptWindow(): Promise<void> {
   return api.prompt.openWindow();
 }
 
+/** 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件） */
+export async function exportPrompts(): Promise<{
+  ok: boolean;
+  filePath?: string;
+  canceled?: boolean;
+  error?: string;
+}> {
+  const api = requireElectron();
+  return api.prompt.exportPrompts();
+}
+
+/** 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库） */
+export async function importPrompts(): Promise<{
+  ok: boolean;
+  added?: number;
+  updated?: number;
+  canceled?: boolean;
+  error?: string;
+}> {
+  const api = requireElectron();
+  return api.prompt.importPrompts();
+}
+
 /** 请求注入模板到主窗口激活 webview（提示词库窗口 → 主进程 → 主窗口渲染）
  *  需求 1：传递完整 PromptTemplate，由主窗口渲染层在 webview 上下文中组合后注入
  */

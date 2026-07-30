@@ -1,8 +1,8 @@
 /* =====================================================================
-   components/SaveAsPromptModal.tsx —— 存为提示词遮罩
-   点击「存为提示词」后弹出覆盖应用的遮罩，预填笔记内容，
-   用户可再次修改标题/内容/分类后保存为提示词模板。
-   复用 InjectionPreviewModal 的遮罩样式与 ESC 关闭逻辑。
+   components/SaveAsPromptModal.tsx —— 存为提示词弹窗
+   点击「存为提示词」后弹出，预填笔记内容，
+   用户可修改标题/内容/分类/快捷键后保存为提示词模板。
+   三方一致：复用 PromptEditorForm 共享表单 + prompt-editor 外壳样式。
    ===================================================================== */
 
 import { useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import { savePrompt } from '../lib/electron-api';
 import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
-import './InjectionPreviewModal.css';
+import PromptEditorForm from './PromptEditorForm';
 
 export interface SaveAsPromptModalProps {
   /** 是否打开 */
@@ -35,7 +35,8 @@ export default function SaveAsPromptModal({
 }: SaveAsPromptModalProps) {
   const [title, setTitle] = useState(initialTitle ?? '');
   const [content, setContent] = useState(initialContent);
-  const [category, setCategory] = useState('笔记');
+  const [category, setCategory] = useState('');
+  const [hotkey, setHotkey] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +45,8 @@ export default function SaveAsPromptModal({
     if (open) {
       setTitle(initialTitle ?? '');
       setContent(initialContent);
-      setCategory('笔记');
+      setCategory('');
+      setHotkey('');
       setError(null);
       setSaving(false);
     }
@@ -69,6 +71,7 @@ export default function SaveAsPromptModal({
         title: title.trim() || content.slice(0, 30),
         content: content.trim(),
         category: category.trim() || undefined,
+        hotkey: hotkey.trim() || undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -84,23 +87,23 @@ export default function SaveAsPromptModal({
 
   return (
     <div
-      className="injection-preview-overlay is-open"
+      className={`prompt-editor-overlay${open ? ' is-open' : ''}`}
       data-name="component.save-as-prompt.overlay"
       onClick={onClose}
       aria-hidden={!open}
     >
       <div
-        className="injection-preview-modal"
+        className="prompt-editor"
         role="dialog"
         aria-label="存为提示词"
         data-name="component.save-as-prompt.modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="injection-preview-header" data-name="component.save-as-prompt.header">
+        <div className="prompt-editor-header" data-name="component.save-as-prompt.header">
           <h3 data-name="component.save-as-prompt.title">存为提示词</h3>
           <IconButton
             variant="close"
-            className="injection-preview-close"
+            className="prompt-editor-close"
             data-name="component.save-as-prompt.close-button"
             aria-label="关闭"
             title="关闭"
@@ -121,54 +124,43 @@ export default function SaveAsPromptModal({
           </IconButton>
         </div>
 
-        <div className="injection-preview-body" data-name="component.save-as-prompt.body">
-          <input
-            type="text"
-            className="injection-preview-textarea"
-            style={{ minHeight: 'auto', maxHeight: 'none', padding: 'var(--space-2) var(--space-3)' }}
-            value={title}
-            placeholder="标题（可选，留空则取内容前 30 字）"
-            data-name="component.save-as-prompt.title-input"
-            spellCheck={false}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <input
-            type="text"
-            className="injection-preview-textarea"
-            style={{ minHeight: 'auto', maxHeight: 'none', padding: 'var(--space-2) var(--space-3)' }}
-            value={category}
-            placeholder="分类（可选）"
-            data-name="component.save-as-prompt.category-input"
-            spellCheck={false}
-            onChange={(e) => setCategory(e.target.value)}
-          />
-          <textarea
-            className="injection-preview-textarea"
-            value={content}
-            data-name="component.save-as-prompt.content-textarea"
-            spellCheck={false}
-            autoFocus
-            placeholder="提示词内容"
-            onChange={(e) => setContent(e.target.value)}
-          />
-          {error && (
-            <div
-              style={{ color: 'var(--danger, #ef4444)', fontSize: 'var(--text-sm)' }}
-              data-name="component.save-as-prompt.error"
-            >
-              {error}
-            </div>
-          )}
-        </div>
+        <PromptEditorForm
+          title={title}
+          content={content}
+          category={category}
+          hotkey={hotkey}
+          editingId={null}
+          onTitleChange={setTitle}
+          onContentChange={setContent}
+          onCategoryChange={setCategory}
+          onHotkeyChange={setHotkey}
+          dataNamePrefix="component.save-as-prompt"
+        />
 
-        <div className="injection-preview-footer" data-name="component.save-as-prompt.footer">
-          <span className="injection-preview-meta" data-name="component.save-as-prompt.meta">
+        {error && (
+          <div
+            style={{
+              color: 'var(--danger, #ef4444)',
+              fontSize: 'var(--text-sm)',
+              padding: '0 var(--space-4)',
+            }}
+            data-name="component.save-as-prompt.error"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="prompt-editor-footer" data-name="component.save-as-prompt.footer">
+          <span
+            style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}
+            data-name="component.save-as-prompt.meta"
+          >
             {content.length} 字
           </span>
-          <div className="injection-preview-actions" data-name="component.save-as-prompt.actions">
+          <div className="prompt-editor-actions" data-name="component.save-as-prompt.actions">
             <Button
               variant="outline"
-              className="injection-preview-btn"
+              className="prompt-btn"
               data-name="component.save-as-prompt.cancel-button"
               onClick={onClose}
             >
@@ -176,7 +168,7 @@ export default function SaveAsPromptModal({
             </Button>
             <Button
               variant="primary-compact"
-              className="injection-preview-btn"
+              className="prompt-btn"
               data-name="component.save-as-prompt.confirm-button"
               disabled={saving}
               onClick={() => void handleConfirm()}

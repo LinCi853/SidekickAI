@@ -71,3 +71,15 @@ export function onHotkeyRecordingResult(
   const api = requireElectron();
   return api.hotkey.onRecordingResult(callback);
 }
+
+/**
+ * 订阅热键录制实时反馈（主进程 → 渲染层：每次按键时推送当前修饰键+按键组合）。
+ * 用于录制 UI 实时显示用户按下的组合，无需等到最终键按下。
+ * @returns 取消监听函数
+ */
+export function onHotkeyRecordingPartial(
+  callback: (partial: { modifiers: string[]; key: string | null }) => void,
+): () => void {
+  const api = requireElectron();
+  return api.hotkey.onRecordingPartial(callback);
+}

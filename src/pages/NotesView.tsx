@@ -27,6 +27,7 @@ import {
   onNoteInjectResult,
   getAppSettings,
   updateAppSettings,
+  saveNotesImage,
 } from '../lib/electron-api';
 import type { Note, NoteSaveInput } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
@@ -276,6 +277,87 @@ function NotesEditor({
     });
   }, [markdownText]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** 在光标位置插入指定文本（不包裹选区，用于图片插入） */
+  const insertText = useCallback((text: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const newText = markdownText.slice(0, start) + text + markdownText.slice(end);
+    handleContentChange(newText);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + text.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  }, [markdownText]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** 粘贴处理：检测图片类型，保存为 notes-asset:// 并插入 markdown 图片语法 */
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+          const result = await saveNotesImage(dataUrl);
+          if (result.ok && result.url) {
+            insertText(`\n![图片](${result.url})\n`);
+          }
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+  }, [insertText]);
+
+  /** 拖拽处理：检测图片文件，保存为 notes-asset:// 并插入 markdown 图片语法 */
+  const handleDrop = useCallback((e: React.DragEvent<HTMLTextAreaElement>) => {
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    e.preventDefault();
+    for (const file of imageFiles) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        const result = await saveNotesImage(dataUrl);
+        if (result.ok && result.url) {
+          insertText(`\n![图片](${result.url})\n`);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  }, [insertText]);
+
+  /** Markdown 快捷键：Ctrl+B 加粗 / Ctrl+I 斜体 / Ctrl+K 代码 / Ctrl+E 任务项 */
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    switch (e.key.toLowerCase()) {
+      case 'b':
+        e.preventDefault();
+        insertSyntax('**', '**', '粗体');
+        break;
+      case 'i':
+        e.preventDefault();
+        insertSyntax('*', '*', '斜体');
+        break;
+      case 'k':
+        e.preventDefault();
+        insertSyntax('`', '`', '代码');
+        break;
+      case 'e':
+        e.preventDefault();
+        insertLinePrefix('- [ ] ');
+        break;
+    }
+  }, [insertSyntax, insertLinePrefix]);
+
   const handleAddTag = () => {
     const tag = tagInput.trim();
     if (!tag) return;
@@ -411,6 +493,9 @@ function NotesEditor({
             spellCheck={false}
             placeholder="记录你的灵感…（支持 Markdown 语法）"
             onChange={(e) => handleContentChange(e.target.value)}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onKeyDown={handleKeyDown}
             data-name="advanced-panel.notes-markdown-textarea"
           />
         ) : (

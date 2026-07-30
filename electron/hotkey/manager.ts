@@ -76,6 +76,7 @@ const uIOhook = uiohookMod?.uIOhook ?? {
 // 热键配置持久化存储（写入 hotkey.json）
 // cwd 统一走 store-paths，便携模式写入 exe 同级 data/ 目录
 import { getStoreCwd as getHotkeyStoreCwd } from '../store/store-paths.js'
+import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
 const HOTKEY_STORE_CWD = getHotkeyStoreCwd()
 
 /** 内置热键动作标识 */
@@ -86,6 +87,9 @@ export type HotkeyAction =
 
 /** 热键录制回调（主进程 → 渲染层：录制完成后通知） */
 export type HotkeyRecordingCallback = (result: { accelerator: string; reason?: string }) => void
+
+/** 热键录制实时反馈回调（每次按键时通知，用于 UI 实时显示当前组合） */
+export type HotkeyPartialCallback = (partial: { modifiers: string[]; key: string | null }) => void
 
 /** 热键配置（用于 UI 展示与持久化） */
 export interface HotkeyConfig {
@@ -313,6 +317,8 @@ export class HotkeyManager {
 
   /** 热键录制状态：null 表示未录制，非 null 表示录制中（含回调） */
   private _recordingCallback: HotkeyRecordingCallback | null = null
+  /** 录制实时反馈回调（每次按键时调用，用于 UI 显示当前组合） */
+  private _recordingPartialCallback: HotkeyPartialCallback | null = null
   /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等） */
   private _recordingSuppressors: string[] = []
   /** 录制前已注册的热键备份（用于录制结束后恢复） */
@@ -397,7 +403,11 @@ export class HotkeyManager {
         return true
       }
       console.warn(
-        `[HotkeyManager] globalShortcut 注册失败: ${accelerator}，已启用 uiohook 兜底`,
+        (() => {
+          const sysConflict = checkSystemHotkeyConflict(accelerator)
+          const hint = sysConflict ? `，可能与系统快捷键「${sysConflict.label}」冲突` : ''
+          return `[HotkeyManager] globalShortcut 注册失败: ${accelerator}${hint}，已启用 uiohook 兜底`
+        })(),
       )
     } catch (err) {
       console.warn(
@@ -755,6 +765,22 @@ export class HotkeyManager {
    * 从 uiohook 事件构建 accelerator 字符串，检测可用性后通知回调。
    */
   private handleRecordingKeydown(e: UiohookEvent): void {
+    // 实时反馈：在任何过滤之前，发送当前按键状态给渲染层
+    if (this._recordingPartialCallback) {
+      const partialMods: string[] = []
+      if (e.ctrlKey) partialMods.push('Ctrl')
+      if (e.altKey) partialMods.push('Alt')
+      if (e.shiftKey) partialMods.push('Shift')
+      if (e.metaKey) partialMods.push('Meta')
+      const partialKeyName = this._uiohookKeyToName.get(e.keycode)
+      // 修饰键自身按下时，不重复显示为 key
+      const isModifierKey = ['Ctrl', 'Alt', 'Shift', 'Meta', 'Super'].includes(partialKeyName || '')
+      this._recordingPartialCallback({
+        modifiers: partialMods,
+        key: isModifierKey || !partialKeyName ? null : partialKeyName,
+      })
+    }
+
     // 仅修饰键，等待下一个按键
     const keyName = this._uiohookKeyToName.get(e.keycode)
     if (!keyName) return
@@ -793,7 +819,10 @@ export class HotkeyManager {
           globalShortcut.register(accelerator, () => {})
         }
       } else {
-        reason = `快捷键 ${accelerator} 已被系统或其他应用占用，请换一个组合`
+        const sysConflict = checkSystemHotkeyConflict(accelerator)
+        reason = sysConflict
+          ? `快捷键 ${accelerator} 与系统快捷键「${sysConflict.label}」冲突，请换一个组合`
+          : `快捷键 ${accelerator} 已被系统或其他应用占用，请换一个组合`
         // 重新注册抑制器
         if (isSuppressed) {
           globalShortcut.register(accelerator, () => {})
@@ -835,6 +864,7 @@ export class HotkeyManager {
     this._recordingSuppressors = []
     this._recordingBackup = []
     this._recordingCallback = null
+    this._recordingPartialCallback = null
   }
 
   /**
@@ -844,11 +874,12 @@ export class HotkeyManager {
    * 通过 globalShortcut.register 检测所有应用（含外部应用）的占用情况。
    * @returns 是否成功进入录制状态
    */
-  async startRecording(callback: HotkeyRecordingCallback): Promise<boolean> {
+  async startRecording(callback: HotkeyRecordingCallback, onPartial?: HotkeyPartialCallback): Promise<boolean> {
     if (this._recordingCallback) {
       this.stopRecording()
     }
     this._recordingCallback = callback
+    this._recordingPartialCallback = onPartial ?? null
 
     // 启动 uiohook（录制依赖系统级键盘监听）
     this.ensureUiohookStarted()
