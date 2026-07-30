@@ -49,6 +49,9 @@
   --warning-bd:             color-mix(in srgb, var(--warning) 30%, transparent);
   --warning-fg:             var(--warning);
   --warning-bg-soft:        color-mix(in srgb, var(--warning) 15%, transparent);
+  /* 琥珀实心徽章专用（亮色：琥珀底配深棕字，对比度达标；暗色见 .dark 覆写） */
+  --warning-badge-bg:       var(--warning);
+  --warning-badge-fg:       #2a1c00;
   /* --info 已在下方语义扩展色块定义为 #6495ed，此处不重复声明 */
 
   /* === chart === */
@@ -128,10 +131,16 @@
   --glass-border:          var(--border);
   --glass-border-subtle:   rgba(0, 0, 0, 0.06);
 
-  /* === 语义扩展色（收敛各页面重复硬编码，值与原字面量一致） === */
-  --danger:               #e57373;
-  --danger-bg:            rgba(229, 115, 115, 0.2);
-  --danger-bg-soft:       rgba(229, 115, 115, 0.15);
+  /* === 语义扩展色（收敛各页面重复硬编码） === */
+  /* 红系反馈色统一体系：
+     - --destructive 为唯一「错误/危险」红（删除按钮、失败文本、错误边框共用）
+     - --danger 为 --destructive 的别名，消除 #ef4444 与 #e57373 双值漂移，
+       并随 .dark 自动覆写，修复暗色下 --danger 仍用亮色值的旧问题
+     - --window-close（窗口控制红）、--highlight-recording（录制状态红）为
+       语义明确、用途固定的专用变体，不属于错误反馈，故独立保留 */
+  --danger:               var(--destructive);
+  --danger-bg:            color-mix(in srgb, var(--destructive) 18%, transparent);
+  --danger-bg-soft:       color-mix(in srgb, var(--destructive) 12%, transparent);
   --success-bg-soft:      rgba(34, 197, 94, 0.15);
   --destructive-dim:      var(--brand-700);
   --accent-green:         var(--success);       /* 兼容别名，未来移除 */
@@ -154,7 +163,7 @@
 
   /* === 语义边框 / 面板阴影扩展（基于 color-mix 自动适配双主题） === */
   --success-bd:           color-mix(in srgb, var(--success) 30%, transparent);
-  --danger-bd:            color-mix(in srgb, var(--danger) 30%, transparent);
+  --danger-bd:            color-mix(in srgb, var(--destructive) 30%, transparent);
   --window-close-bd:      color-mix(in srgb, var(--window-close) 30%, transparent);
   --shadow-panel:         -12px 0 48px rgba(20, 12, 10, 0.5);
 
@@ -316,6 +325,9 @@
   --warning-bd:             color-mix(in srgb, var(--warning) 30%, transparent);
   --warning-fg:             var(--warning);
   --warning-bg-soft:        color-mix(in srgb, var(--warning) 15%, transparent);
+  /* 暗色提亮琥珀用于实心徽章，保证深字可读 */
+  --warning-badge-bg:       #f0b73c;
+  --warning-badge-fg:       #1f1719;
   --info:                   var(--chart-4);
 
   /* === chart === */

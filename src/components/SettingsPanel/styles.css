@@ -308,8 +308,8 @@
   margin-left: 6px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--warning);
-  color: var(--foreground-inverse);
+  background: var(--warning-badge-bg);
+  color: var(--warning-badge-fg);
   font-size: 10px;
   font-weight: 600;
   vertical-align: middle;
