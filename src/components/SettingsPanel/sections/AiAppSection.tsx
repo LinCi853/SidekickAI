@@ -40,6 +40,8 @@ export interface AiAppSectionProps {
   onEditApp: (profileId: string) => void;
   hideForeignModels: boolean;
   onToggleHideForeignModels: () => void;
+  disableAllBlockRules: boolean;
+  onToggleDisableAllBlockRules: () => void;
 }
 
 export default function AiAppSection({
@@ -47,6 +49,8 @@ export default function AiAppSection({
   onEditApp,
   hideForeignModels,
   onToggleHideForeignModels,
+  disableAllBlockRules,
+  onToggleDisableAllBlockRules,
 }: AiAppSectionProps) {
   const [collapsed, setCollapsed] = useState(true);
 
@@ -149,6 +153,15 @@ export default function AiAppSection({
               onChange={onToggleHideForeignModels}
               aria-label="屏蔽国外模型"
               data-name="settings.ai-app.hide-foreign-models-toggle"
+            />
+          </FormRow>
+
+          <FormRow label="关闭所有广告屏蔽规则">
+            <Toggle
+              checked={disableAllBlockRules}
+              onChange={onToggleDisableAllBlockRules}
+              aria-label="关闭所有广告屏蔽规则"
+              data-name="settings.ai-app.disable-all-block-rules-toggle"
             />
           </FormRow>
 

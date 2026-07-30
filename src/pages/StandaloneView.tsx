@@ -24,6 +24,7 @@ import {
   isWindowMaximized,
   pinCurrentWindow,
   getHotkeys,
+  getAppSettings,
 } from '../lib/electron-api';
 import type { Profile, HotkeyConfig } from '../lib/electron-api';
 import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } from '../lib/webview';
@@ -103,18 +104,24 @@ export default function StandaloneView() {
         await injectViewportAndPopupGuard(webview);
 
         // 注入页面组件屏蔽规则（与 WebviewTab 保持一致，确保脱离窗口也享受广告屏蔽）
+        // 全局开关 disableAllBlockRules 开启时跳过所有屏蔽规则注入
         try {
-          const rules = await listBlockRules();
-          const url = webview.getURL();
-          const hostname = url ? new URL(url).hostname : '';
-          if (hostname) {
-            const matched = rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname));
-            console.log(
-              `[StandaloneView] 屏蔽规则注入: hostname=${hostname} total=${rules.length} matched=${matched.length}`,
-            );
-            if (matched.length > 0) {
-              await webview.executeJavaScript(buildBlockerScript(matched));
+          const settings = await getAppSettings();
+          if (!settings.disableAllBlockRules) {
+            const rules = await listBlockRules();
+            const url = webview.getURL();
+            const hostname = url ? new URL(url).hostname : '';
+            if (hostname) {
+              const matched = rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname));
+              console.log(
+                `[StandaloneView] 屏蔽规则注入: hostname=${hostname} total=${rules.length} matched=${matched.length}`,
+              );
+              if (matched.length > 0) {
+                await webview.executeJavaScript(buildBlockerScript(matched));
+              }
             }
+          } else {
+            console.log('[StandaloneView] 屏蔽规则已全局关闭，跳过注入');
           }
         } catch (e) {
           console.error('[StandaloneView] 屏蔽规则注入失败:', e);

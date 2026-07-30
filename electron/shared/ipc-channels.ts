@@ -328,15 +328,6 @@ export const IPC_CHANNELS = {
   WHITEBOARD_SAVE_SNAPSHOT: 'whiteboard:saveSnapshot',
   // 同步保存（beforeunload 兜底，确保窗口关闭前完成写入）
   WHITEBOARD_SAVE_SNAPSHOT_SYNC: 'whiteboard:saveSnapshotSync',
-  // 主进程 → 白板窗口渲染：外部推送卡片（截图 / AI 回复）
-  // 载荷：{ whiteboardId: string, card: WhiteboardCardInput }
-  WHITEBOARD_PUSH_CARD: 'whiteboard:pushCard',
-  // 渲染进程 → 主进程：从任意窗口推送卡片到白板
-  WHITEBOARD_PUSH_CARD_REQUEST: 'whiteboard:pushCardRequest',
-  // 渲染进程 → 主进程：白板 ready 后回 ACK（替代旧 200ms 硬编码）
-  WHITEBOARD_PUSH_ACK: 'whiteboard:pushAck',
   // 主进程 → AdvancedPanelView 渲染：通知切换到 whiteboard tab
   STANDALONE_SWITCH_TO_WHITEBOARD: 'standalone:switchToWhiteboard',
-  // 白板图片磁盘存储
-  WHITEBOARD_SAVE_IMAGE: 'whiteboard:saveImage',
 } as const

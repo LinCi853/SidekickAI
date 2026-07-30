@@ -38,17 +38,38 @@ export default function InjectionPreviewModal({
     setEditedText(composedText);
   }, [composedText]);
 
-  // ESC 关闭
+  // ESC 关闭 + 长按任意键退出预览（按键持续按下 ≥ 500ms 自动关闭）
   useEffect(() => {
     if (!open) return;
+    let longPressTimer: number | null = null;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onCancel();
+        return;
+      }
+      // 长按检测：首次 keydown（非 repeat）启动定时器，500ms 后关闭预览
+      // repeat 事件不重复启动定时器
+      if (!e.repeat && longPressTimer === null) {
+        longPressTimer = window.setTimeout(() => {
+          onCancel();
+        }, 500);
+      }
+    };
+    const handleKeyUp = () => {
+      // 松开按键时清除长按定时器
+      if (longPressTimer !== null) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      if (longPressTimer !== null) clearTimeout(longPressTimer);
+    };
   }, [open, onCancel]);
 
   if (!open) return null;

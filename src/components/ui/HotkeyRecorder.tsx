@@ -5,6 +5,7 @@
 // Alt+key 等被系统拦截的组合也能可靠捕获。
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { checkSystemHotkeyConflict } from '../../lib/system-hotkeys'
 
 /**
  * 模块级：当前活跃的录制器重置函数。
@@ -77,6 +78,14 @@ export default function HotkeyRecorder({
       const conflictWith = otherHotkeys.find((h) => h.accelerator === result.accelerator)
       if (conflictWith) {
         setError(`与「${conflictWith.label}」冲突`)
+        return
+      }
+
+      // 系统快捷键冲突检测：仅警告，不阻止（用户可强行使用）
+      const sysConflict = checkSystemHotkeyConflict(result.accelerator)
+      if (sysConflict) {
+        setError(`与系统快捷键「${sysConflict.label}」可能冲突`)
+        onRecord(result.accelerator)
         return
       }
 

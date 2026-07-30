@@ -80,11 +80,7 @@ export interface ChatWindowConfig {
   systemPrompt?: string
   /** 窗口初始尺寸（覆盖 windowForm 的默认值，可选） */
   bounds?: { width: number; height: number }
-  /** 需求 10：记录文本模板前缀（assistant 消息保存前附加，支持 {{time}} {{tag}} 占位符） */
-  recordTextPrefix?: string
-  /** 需求 10：记录文本模板后缀 */
-  recordTextSuffix?: string
-  /** 需求 10：该窗口最近一次使用的会话 id（替代按 providerId 键入的 localStorage） */
+  /** 该窗口最近一次使用的会话 id（替代按 providerId 键入的 localStorage） */
   lastConversationId?: string
 }
 

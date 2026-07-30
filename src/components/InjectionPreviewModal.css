@@ -1,6 +1,7 @@
 /* InjectionPreviewModal —— 注入预览浮层（需求 2） */
+/* z-index 高于底栏(10001)与窗口拖拽条(10010)，确保覆盖整个 app body */
 .injection-preview-overlay {
-  position: fixed; inset: 0; z-index: 440;
+  position: fixed; inset: 0; z-index: 10020;
   background: rgba(0, 0, 0, 0.5);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; pointer-events: none;

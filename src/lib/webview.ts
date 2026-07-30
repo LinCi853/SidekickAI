@@ -20,8 +20,8 @@ export interface WebviewElement extends HTMLWebViewElement {
   getURL(): string;
   /** 获取 guest webContents id（webview attach 后可用；未 attach 时调用会抛错） */
   getWebContentsId(): number;
-  /** 截图当前页面（需求 12：截图到白板）。返回 NativeImage，调用 toDataURL() 转 base64 */
-  capturePage(): Promise<{ toDataURL(): string; toPNG(): Buffer }>;
+  /** 截图当前页面（需求 12：截图到白板）。返回 NativeImage，调用 toDataURL() 转 base64，getSize() 获取原始尺寸 */
+  capturePage(): Promise<{ toDataURL(): string; toPNG(): Buffer; getSize(): { width: number; height: number } }>;
   addEventListener(event: string, callback: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void;
   removeEventListener(event: string, callback: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void;
 }

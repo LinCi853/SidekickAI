@@ -21,8 +21,6 @@ import type { BlockRule } from './block-rules.types.js'
 import type { Note, NoteSaveInput } from './notes.types.js'
 import type {
   WhiteboardState,
-  WhiteboardCard,
-  WhiteboardCardInput,
   WhiteboardMeta,
 } from './whiteboard.types.js'
 import type { PlatformCapabilities } from '../utils/platform-info.js'
@@ -607,6 +605,16 @@ export interface AppSettings {
   defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
   /** 白板应用层侧边栏是否可见（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口） */
   whiteboardSidebarVisible: boolean
+  /** 关闭所有广告屏蔽规则：开启后所有单独配置的屏蔽规则均不生效（默认 false） */
+  disableAllBlockRules: boolean
+  /** 灵感笔记侧边栏宽度（默认 160px，范围 120-400） */
+  notesSidebarWidth: number
+  /** 灵感笔记侧边栏是否收起 */
+  notesSidebarCollapsed: boolean
+  /** 自定义对话侧边栏宽度（默认 160px，范围 120-400） */
+  chatSidebarWidth: number
+  /** 自定义对话侧边栏是否收起 */
+  chatSidebarCollapsed: boolean
 }
 
 /** 顶栏可显隐的按钮组标识（appSwitcher/menu/刷新始终显示，不在此列） */
@@ -768,12 +776,6 @@ export interface WhiteboardAPI {
   saveSnapshot(id: string, snapshot: string): Promise<{ ok: boolean }>
   /** 同步保存 snapshot（beforeunload 兜底） */
   saveSnapshotSync(id: string, snapshot: string): { ok: boolean }
-  /** 从任意窗口推送卡片到白板 */
-  pushCard(card: WhiteboardCardInput): Promise<WhiteboardCard>
-  /** 监听主进程 → 白板渲染：推送卡片（截图 / AI 回复） */
-  onPushCard(callback: (payload: { whiteboardId: string; card: WhiteboardCard }) => void): () => void
-  /** 白板 ready 后回 ACK（send，非 invoke；主进程 flush 待推送队列） */
-  pushAck(): void
 }
 
 /** 通过 contextBridge 暴露到渲染进程的完整 API */
@@ -803,7 +805,6 @@ export interface ElectronAPI {
   notes: NotesAPI
   /** 白板 API（需求 12：无限画布 + 卡片 + 箭头 + 手绘线条） */
   whiteboard: WhiteboardAPI
-  saveWhiteboardImage(dataUrl: string): Promise<string>
   /** 平台能力查询（设置页显示权限状态） */
   platformCapabilities: PlatformCapabilitiesAPI
   /** 主进程 → 渲染层：拦截 webview 弹窗后新建标签页 */

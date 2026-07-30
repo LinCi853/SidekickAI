@@ -146,10 +146,11 @@
 /* .prompt-view-empty 通用样式见 .app-empty-state.large */
 
 /* ===== 编辑器弹窗 ===== */
+/* z-index 高于底栏(10001)与窗口拖拽条(10010)，确保覆盖整个 app body */
 .prompt-editor-overlay {
   position: fixed; inset: 0; background: var(--overlay-warm-dim);
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  z-index: 420; display: flex; align-items: center; justify-content: center;
+  z-index: 10020; display: flex; align-items: center; justify-content: center;
   opacity: 0; pointer-events: none; transition: opacity var(--duration-normal) var(--ease-out);
   padding: var(--space-4);
 }

@@ -10,14 +10,9 @@
    ===================================================================== */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import Image from '@tiptap/extension-image';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { createLowlight, common } from 'lowlight';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import {
   listNotes,
   saveNote,
@@ -29,17 +24,17 @@ import {
   setNoteTags,
   listNoteTags,
   sendNoteToAi,
-  saveNoteAsPrompt,
   onNoteInjectResult,
+  getAppSettings,
+  updateAppSettings,
 } from '../lib/electron-api';
 import type { Note, NoteSaveInput } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
+import SidebarResizer from '../components/SidebarResizer';
+import SaveAsPromptModal from '../components/SaveAsPromptModal';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
 import './NotesView.css';
-
-// lowlight 实例：使用 common 语言集合（CodeBlockLowlight 必需）
-const lowlight = createLowlight(common);
 
 /** 草稿状态（实时跟踪编辑器内容，供 flushDraft 读取） */
 interface DraftState {
@@ -64,6 +59,10 @@ interface NotesSidebarProps {
   onSelect: (note: Note) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
+  width: number;
+  collapsed: boolean;
+  onResize: (w: number) => void;
+  onToggleCollapse: () => void;
 }
 
 function NotesSidebar({
@@ -77,6 +76,10 @@ function NotesSidebar({
   onSelect,
   onCreate,
   onDelete,
+  width,
+  collapsed,
+  onResize,
+  onToggleCollapse,
 }: NotesSidebarProps) {
   const pinnedNotes = notes.filter((n) => n.pinned);
   const normalNotes = notes.filter((n) => !n.pinned);
@@ -129,7 +132,16 @@ function NotesSidebar({
   );
 
   return (
-    <div className="notes-sidebar app-sidebar-narrow" data-name="advanced-panel.notes-sidebar">
+    <div
+      className={`notes-sidebar app-sidebar-narrow${collapsed ? ' is-collapsed' : ''}`}
+      style={collapsed ? undefined : { width: `${width}px`, flex: 'none' }}
+      data-name="advanced-panel.notes-sidebar"
+    >
+      {collapsed && (
+        <button className="notes-sidebar-expand-btn" onClick={onToggleCollapse} title="展开侧边栏" data-name="advanced-panel.notes-sidebar-expand-button">
+          »
+        </button>
+      )}
       <div className="notes-sidebar-search" data-name="advanced-panel.notes-sidebar-search">
         <input
           type="text"
@@ -141,6 +153,9 @@ function NotesSidebar({
         />
         <IconButton variant="default" aria-label="新建笔记" onClick={onCreate} title="新建笔记" data-name="advanced-panel.notes-sidebar-create-button">
           +
+        </IconButton>
+        <IconButton variant="default" aria-label="收起侧边栏" onClick={onToggleCollapse} title="收起侧边栏" data-name="advanced-panel.notes-sidebar-collapse-button">
+          «
         </IconButton>
       </div>
       {allTags.length > 0 && (
@@ -184,6 +199,7 @@ function NotesSidebar({
           </>
         )}
       </div>
+      {!collapsed && <SidebarResizer width={width} minWidth={120} maxWidth={400} onResize={onResize} />}
     </div>
   );
 }
@@ -210,38 +226,55 @@ function NotesEditor({
   onSaveAsPrompt,
 }: NotesEditorProps) {
   const [tagInput, setTagInput] = useState('');
-  const editor = useEditor({
-    extensions: [
-      // 禁用 StarterKit 内置 codeBlock，避免与 CodeBlockLowlight 重复
-      StarterKit.configure({ codeBlock: false }),
-      Placeholder.configure({ placeholder: '记录你的灵感…' }),
-      Image,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      CodeBlockLowlight.configure({ lowlight }),
-    ],
-    content: '',
-    onUpdate: ({ editor }) => {
-      const text = editor.getText();
-      const json = JSON.stringify(editor.getJSON());
-      onContentChange(text, json);
-    },
-  });
+  // 编辑模式：'source' = 编辑 markdown 源码；'preview' = 渲染预览
+  const [mode, setMode] = useState<'source' | 'preview'>('preview');
+  // 编辑器内的 markdown 源码（受控）
+  const [markdownText, setMarkdownText] = useState(note?.content ?? '');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 笔记切换时更新编辑器内容
+  // 笔记切换时同步内容到编辑器，并切到预览模式
   useEffect(() => {
-    if (!editor) return;
-    if (note?.contentJson) {
-      try {
-        const json = JSON.parse(note.contentJson);
-        editor.commands.setContent(json);
-      } catch {
-        editor.commands.setContent(note.content || '');
-      }
-    } else {
-      editor.commands.clearContent();
-    }
-  }, [note?.id, editor]); // eslint-disable-line react-hooks/exhaustive-deps
+    const content = note?.content ?? '';
+    setMarkdownText(content);
+    setMode('preview');
+  }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleContentChange = (value: string) => {
+    setMarkdownText(value);
+    // contentJson 传空字符串（已废弃 TipTap JSON，新笔记存 markdown 字符串到 content）
+    onContentChange(value, '');
+  };
+
+  /** 在 textarea 当前光标位置插入 markdown 语法标记 */
+  const insertSyntax = useCallback((before: string, after: string = '', placeholder: string = '') => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = markdownText.slice(start, end) || placeholder;
+    const newText = markdownText.slice(0, start) + before + selected + after + markdownText.slice(end);
+    handleContentChange(newText);
+    // 恢复光标到选中内容后
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + before.length + selected.length + after.length;
+      ta.setSelectionRange(start + before.length, pos);
+    });
+  }, [markdownText]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** 在行首插入前缀（如 # / - / - [ ]） */
+  const insertLinePrefix = useCallback((prefix: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const lineStart = markdownText.lastIndexOf('\n', start - 1) + 1;
+    const newText = markdownText.slice(0, lineStart) + prefix + markdownText.slice(lineStart);
+    handleContentChange(newText);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + prefix.length, start + prefix.length);
+    });
+  }, [markdownText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddTag = () => {
     const tag = tagInput.trim();
@@ -306,7 +339,16 @@ function NotesEditor({
       <div className="notes-toolbar" data-name="advanced-panel.notes-toolbar">
         <button
           className="notes-icon-btn"
-          onClick={() => editor?.chain().focus().toggleBold().run()}
+          onClick={() => setMode(mode === 'source' ? 'preview' : 'source')}
+          title={mode === 'source' ? '查看预览' : '查看源码'}
+          aria-label={mode === 'source' ? '查看预览' : '查看源码'}
+          data-name="advanced-panel.notes-toolbar-mode-toggle"
+        >
+          {mode === 'source' ? '👁' : '</>'}
+        </button>
+        <button
+          className="notes-icon-btn"
+          onClick={() => insertSyntax('**', '**', '粗体')}
           title="加粗"
           aria-label="加粗"
           data-name="advanced-panel.notes-toolbar-bold-button"
@@ -315,7 +357,7 @@ function NotesEditor({
         </button>
         <button
           className="notes-icon-btn"
-          onClick={() => editor?.chain().focus().toggleItalic().run()}
+          onClick={() => insertSyntax('*', '*', '斜体')}
           title="斜体"
           aria-label="斜体"
           data-name="advanced-panel.notes-toolbar-italic-button"
@@ -324,7 +366,7 @@ function NotesEditor({
         </button>
         <button
           className="notes-icon-btn"
-          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+          onClick={() => insertLinePrefix('## ')}
           title="标题"
           aria-label="标题"
           data-name="advanced-panel.notes-toolbar-heading-button"
@@ -333,7 +375,7 @@ function NotesEditor({
         </button>
         <button
           className="notes-icon-btn"
-          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+          onClick={() => insertLinePrefix('- ')}
           title="无序列表"
           aria-label="无序列表"
           data-name="advanced-panel.notes-toolbar-bullet-list-button"
@@ -342,7 +384,7 @@ function NotesEditor({
         </button>
         <button
           className="notes-icon-btn"
-          onClick={() => editor?.chain().focus().toggleTaskList().run()}
+          onClick={() => insertLinePrefix('- [ ] ')}
           title="任务列表"
           aria-label="任务列表"
           data-name="advanced-panel.notes-toolbar-task-list-button"
@@ -351,7 +393,7 @@ function NotesEditor({
         </button>
         <button
           className="notes-icon-btn"
-          onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+          onClick={() => insertSyntax('\n```\n', '\n```\n', '代码')}
           title="代码块"
           aria-label="代码块"
           data-name="advanced-panel.notes-toolbar-code-block-button"
@@ -361,12 +403,32 @@ function NotesEditor({
       </div>
 
       <div className="notes-editor-body" data-name="advanced-panel.notes-editor-body">
-        <EditorContent editor={editor} />
+        {mode === 'source' ? (
+          <textarea
+            ref={textareaRef}
+            className="notes-markdown-textarea"
+            value={markdownText}
+            spellCheck={false}
+            placeholder="记录你的灵感…（支持 Markdown 语法）"
+            onChange={(e) => handleContentChange(e.target.value)}
+            data-name="advanced-panel.notes-markdown-textarea"
+          />
+        ) : (
+          <div className="notes-markdown-preview" data-name="advanced-panel.notes-markdown-preview">
+            {markdownText.trim() ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                {markdownText}
+              </ReactMarkdown>
+            ) : (
+              <div className="notes-editor-empty-text app-empty-state">记录你的灵感…（点击 {'</>'} 切换到源码编辑）</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="notes-bottom" data-name="advanced-panel.notes-bottom">
         <span className="notes-char-count" data-name="advanced-panel.notes-char-count">
-          {note.content.length} 字
+          {markdownText.length} 字
         </span>
         <div className="notes-bottom-actions" data-name="advanced-panel.notes-bottom-actions">
           <button className="btn-outline notes-action-btn notes-action-btn-secondary" onClick={onSaveAsPrompt} data-name="advanced-panel.notes-save-as-prompt-button">
@@ -395,11 +457,20 @@ export default function NotesView(_: NotesViewProps) {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterTag, setFilterTag] = useState<string | undefined>();
   const [allTags, setAllTags] = useState<string[]>([]);
+  // 侧边栏宽度/收起状态（持久化到 app settings）
+  const [sidebarWidth, setSidebarWidth] = useState(160);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { toast, showToast } = useToast();
+  // 存为提示词遮罩状态
+  const [saveAsPromptOpen, setSaveAsPromptOpen] = useState(false);
+  const [saveAsPromptContent, setSaveAsPromptContent] = useState('');
+  const [saveAsPromptTitle, setSaveAsPromptTitle] = useState<string | undefined>(undefined);
 
   // 草稿引用（实时跟踪编辑器内容，flushDraft 读取）
   const draftRef = useRef<DraftState | null>(null);
   const activeNoteRef = useRef<Note | null>(null);
+  // 最新内容引用（不被 auto-save 清空，供 handleSaveAsPrompt 读取）
+  const latestContentRef = useRef<string>('');
 
   activeNoteRef.current = activeNote;
 
@@ -457,6 +528,7 @@ export default function NotesView(_: NotesViewProps) {
             content: active.content,
             contentJson: active.contentJson,
           };
+          latestContentRef.current = active.content;
         }
         await refreshTags();
       } catch (e) {
@@ -469,6 +541,29 @@ export default function NotesView(_: NotesViewProps) {
   useEffect(() => {
     void refreshList();
   }, [refreshList]);
+
+  // ===== 读取侧边栏宽度/收起设置 =====
+  useEffect(() => {
+    void getAppSettings()
+      .then((cfg) => {
+        setSidebarWidth(cfg.notesSidebarWidth ?? 160);
+        setSidebarCollapsed(cfg.notesSidebarCollapsed ?? false);
+      })
+      .catch(() => {});
+  }, []);
+
+  // 侧边栏拖拽调宽：即时更新状态，松开时持久化
+  const handleSidebarResize = useCallback((w: number) => {
+    setSidebarWidth(w);
+    void updateAppSettings({ notesSidebarWidth: w });
+  }, []);
+
+  // 侧边栏收起/展开切换
+  const handleSidebarToggleCollapse = useCallback(() => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    void updateAppSettings({ notesSidebarCollapsed: next });
+  }, [sidebarCollapsed]);
 
   // ===== 防抖自动保存 + beforeunload 同步兜底 + 卸载前 flush（统一委托 useAutoSaveDraft） =====
   const { schedule: scheduleSave, flushNow } = useAutoSaveDraft<DraftState | null>({
@@ -525,6 +620,7 @@ export default function NotesView(_: NotesViewProps) {
     };
     setActiveNoteState(emptyNote);
     draftRef.current = { id: null, title: null, content: '', contentJson: '' };
+    latestContentRef.current = '';
   }, [flushNow]);
 
   // 选择笔记
@@ -540,6 +636,7 @@ export default function NotesView(_: NotesViewProps) {
       content: note.content,
       contentJson: note.contentJson,
     };
+    latestContentRef.current = note.content;
   }, [flushNow]);
 
   // 删除笔记
@@ -569,6 +666,7 @@ export default function NotesView(_: NotesViewProps) {
     const firstLine = content.split('\n').find((l) => l.trim()) ?? '';
     const title = firstLine.replace(/^#{1,6}\s*/, '').trim() || null;
     draftRef.current = { id, title, content, contentJson };
+    latestContentRef.current = content;
     scheduleSave();
   }, [scheduleSave]);
 
@@ -615,24 +713,18 @@ export default function NotesView(_: NotesViewProps) {
     }
   }, [showToast]);
 
-  // 存为提示词
-  const handleSaveAsPrompt = useCallback(async () => {
-    const draft = draftRef.current;
-    const note = activeNoteRef.current;
-    const text = draft?.content ?? note?.content ?? '';
+  // 存为提示词：弹出遮罩供用户再次修改
+  const handleSaveAsPrompt = useCallback(() => {
+    // 优先从 latestContentRef 读取（auto-save 清空 draftRef 后仍可用）
+    const text = latestContentRef.current || activeNoteRef.current?.content || '';
     if (!text.trim()) return;
-    try {
-      const result = await saveNoteAsPrompt(text, note?.title ?? undefined);
-      if (result.ok) {
-        showToast('已保存为提示词');
-      } else {
-        showToast(result.error || '保存失败');
-      }
-    } catch (err) {
-      console.error('[NotesView] save as prompt failed:', err);
-      showToast('保存失败');
-    }
-  }, [showToast]);
+    // 标题从首行内容推导（剥离 markdown # 前缀）
+    const firstLine = text.split('\n').find((l) => l.trim()) ?? '';
+    const title = firstLine.replace(/^#{1,6}\s*/, '').trim() || undefined;
+    setSaveAsPromptContent(text);
+    setSaveAsPromptTitle(title);
+    setSaveAsPromptOpen(true);
+  }, []);
 
   return (
     <div className="notes-view app-view-root" data-name="advanced-panel.notes-view">
@@ -648,6 +740,10 @@ export default function NotesView(_: NotesViewProps) {
           onSelect={handleSelectNote}
           onCreate={handleNew}
           onDelete={handleDelete}
+          width={sidebarWidth}
+          collapsed={sidebarCollapsed}
+          onResize={handleSidebarResize}
+          onToggleCollapse={handleSidebarToggleCollapse}
         />
         <NotesEditor
           note={activeNote}
@@ -659,6 +755,16 @@ export default function NotesView(_: NotesViewProps) {
         />
       </div>
       {toast && <div className="notes-toast app-toast" data-name="advanced-panel.notes-toast">{toast}</div>}
+      <SaveAsPromptModal
+        open={saveAsPromptOpen}
+        initialContent={saveAsPromptContent}
+        initialTitle={saveAsPromptTitle}
+        onSaved={() => {
+          setSaveAsPromptOpen(false);
+          showToast('已保存为提示词');
+        }}
+        onClose={() => setSaveAsPromptOpen(false)}
+      />
     </div>
   );
 }

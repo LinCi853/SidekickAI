@@ -9,7 +9,7 @@
    许可证：Excalidraw 使用 MIT，可商用（替代 tldraw 专有许可证）
    ===================================================================== */
 
-import { useEffect, useMemo, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Excalidraw,
   serializeAsJSON,
@@ -41,7 +41,7 @@ import {
   saveWhiteboardSnapshot,
   saveWhiteboardSnapshotSync,
 } from '../lib/electron-api';
-import type { WhiteboardMeta, WhiteboardCard, WhiteboardState } from '../lib/electron-api';
+import type { WhiteboardMeta, WhiteboardState } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
@@ -240,21 +240,17 @@ function WhiteboardSidebar({ whiteboards, activeId, onSelect, onCreate, onRename
 interface WhiteboardCanvasProps {
   activeId: string;
   snapshot: string | null;
-  /** editor 就绪回调（用于父组件触发 ACK） */
-  onReady: () => void;
 }
 
-function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps) {
+function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const activeIdRef = useRef(activeId);
-  const onReadyRef = useRef(onReady);
   // 最新场景数据 ref（用于防抖保存读取）
   const latestSceneRef = useRef<{ elements: readonly ExcalidrawElement[]; appState: AppState; files: BinaryFiles } | null>(null);
   // 是否完成首次加载（避免 initialData 还原触发保存覆盖空数据）
   const hydratedRef = useRef(false);
 
   activeIdRef.current = activeId;
-  onReadyRef.current = onReady;
 
   // 初始化数据：snapshot 反序列化，或遗留数据转换，或空场景
   // initialData 接受 Promise，可异步处理遗留图片转换
@@ -334,77 +330,9 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
       requestAnimationFrame(() => {
         hydratedRef.current = true;
       });
-      // 通知容器：白板已 ready，可以回 ACK
-      onReadyRef.current();
     },
     [],
   );
-
-  // 监听容器派发的插入卡片事件（跨窗口推送的截图/AI回复）
-  useEffect(() => {
-    const handler = async (e: Event) => {
-      const api = apiRef.current;
-      if (!api) return;
-      const card = (e as CustomEvent<WhiteboardCard>).detail;
-      const x = card.x ?? Math.round(Math.random() * 200 + 100);
-      const y = card.y ?? Math.round(Math.random() * 200 + 100);
-
-      if (card.type === 'image') {
-        // 图片：fetch whiteboard-asset:// → dataURL → addFiles + image 元素
-        try {
-          const dataUrl = await assetUrlToDataUrl(card.content);
-          const fileId = `file_${card.id}` as FileId;
-          const file: BinaryFileData = {
-            mimeType: MIME_TYPES.png,
-            id: fileId,
-            dataURL: dataUrl as DataURL,
-            created: Date.now(),
-          };
-          api.addFiles([file]);
-          const w = card.width ?? 400;
-          const h = card.height ?? 300;
-          const newElements = convertToExcalidrawElements(
-            [
-              {
-                type: 'image',
-                x,
-                y,
-                width: w,
-                height: h,
-                fileId,
-              },
-            ],
-            { regenerateIds: false },
-          );
-          api.updateScene({ elements: [...api.getSceneElements(), ...newElements] });
-        } catch (err) {
-          console.error('[WhiteboardCanvas] 插入图片卡片失败:', err);
-        }
-      } else {
-        // 文本 / AI 回复 → text 元素
-        const text = card.content || ' ';
-        const newElements = convertToExcalidrawElements(
-          [
-            {
-              type: 'text',
-              text,
-              x,
-              y,
-              width: card.width ?? 240,
-              fontSize: 16,
-              fontFamily: FONT_FAMILY.Virgil,
-            },
-          ],
-          { regenerateIds: false },
-        );
-        api.updateScene({ elements: [...api.getSceneElements(), ...newElements] });
-      }
-      // 触发保存
-      scheduleSave();
-    };
-    window.addEventListener('wb-insert-card', handler);
-    return () => window.removeEventListener('wb-insert-card', handler);
-  }, [scheduleSave]);
 
   return (
     <div className="wb-canvas-wrap" data-name="advanced-panel.wb-canvas">
@@ -421,27 +349,10 @@ function WhiteboardCanvas({ activeId, snapshot, onReady }: WhiteboardCanvasProps
 
 // ============================================================================
 // 容器组件：WhiteboardView
-// 架构变更（v0.5.1）：onWhiteboardPushCard 订阅已提升到 AdvancedPanelView 顶层，
-// WhiteboardView 通过 forwardRef 暴露 insertCard / switchToWhiteboard / isReady,
-// 供父组件在任意 tab 下统一管理跨窗口推送的卡片。
 // ============================================================================
-
-/** WhiteboardView 对外暴露的命令式 API */
-export interface WhiteboardViewHandle {
-  /** 插入卡片到当前激活白板（canvas 未 ready 时返回 false） */
-  insertCard: (card: WhiteboardCard) => boolean;
-  /** 切换到指定白板（加载 snapshot） */
-  switchToWhiteboard: (id: string) => Promise<void>;
-  /** canvas editor 是否已就绪 */
-  isReady: () => boolean;
-  /** 当前激活白板 id */
-  getActiveId: () => string | null;
-}
 
 interface WhiteboardViewProps {
   onClose?: () => void;
-  /** canvas ready 回调（父组件用于发送 ACK） */
-  onReady?: () => void;
   /**
    * 应用层侧边栏是否可见（默认 false）。
    *
@@ -452,20 +363,12 @@ interface WhiteboardViewProps {
   sidebarVisible?: boolean;
 }
 
-const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(function WhiteboardView(
-  { onClose, onReady, sidebarVisible = false },
-  ref,
-) {
+function WhiteboardView({ onClose, sidebarVisible = false }: WhiteboardViewProps) {
   const [whiteboards, setWhiteboards] = useState<WhiteboardMeta[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast, showToast } = useToast();
-
-  // canvas editor 就绪状态（ref 避免 re-render）
-  const canvasReadyRef = useRef(false);
-  const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
 
   // 加载白板列表 + 激活白板 snapshot
   const refreshList = useCallback(async () => {
@@ -563,31 +466,6 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
     }
   }, [refreshList, activeId, loadSnapshotFor, showToast]);
 
-  // canvas ready 回调：标记就绪 + 通知父组件
-  const handleCanvasReady = useCallback(() => {
-    canvasReadyRef.current = true;
-    onReadyRef.current?.();
-  }, []);
-
-  // ===== 命令式 API（供父组件通过 ref 调用） =====
-  useImperativeHandle(ref, () => ({
-    insertCard: (card: WhiteboardCard) => {
-      if (!canvasReadyRef.current || !activeId) return false;
-      // 通过自定义事件通知 WhiteboardCanvas 内部的监听器执行插入
-      window.dispatchEvent(new CustomEvent('wb-insert-card', { detail: card }));
-      return true;
-    },
-    switchToWhiteboard: async (id: string) => {
-      if (id === activeId) return;
-      canvasReadyRef.current = false; // 切换白板后需等待新 canvas 重新 ready
-      setActiveId(id);
-      await setActiveWhiteboardId(id);
-      await loadSnapshotFor(id);
-    },
-    isReady: () => canvasReadyRef.current,
-    getActiveId: () => activeId,
-  }), [activeId, loadSnapshotFor]);
-
   if (loading) {
     return (
       <div className="whiteboard-view app-view-root" data-name="advanced-panel.whiteboard-view-loading">
@@ -614,7 +492,6 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
             key={activeId}
             activeId={activeId}
             snapshot={snapshot}
-            onReady={handleCanvasReady}
           />
         ) : (
           <div className="wb-canvas-empty" data-name="advanced-panel.wb-canvas-empty">
@@ -632,6 +509,6 @@ const WhiteboardView = forwardRef<WhiteboardViewHandle, WhiteboardViewProps>(fun
       {toast && <div className="whiteboard-toast app-toast" data-name="advanced-panel.whiteboard-toast">{toast}</div>}
     </div>
   );
-});
+}
 
 export default WhiteboardView;

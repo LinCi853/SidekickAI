@@ -78,6 +78,18 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
     }
   };
 
+  /** 切换「关闭所有广告屏蔽规则」开关 */
+  const handleToggleDisableAllBlockRules = async () => {
+    const next = !app.disableAllBlockRules;
+    app.setDisableAllBlockRules(next);
+    try {
+      await updateAppSettings({ disableAllBlockRules: next });
+    } catch (e) {
+      console.error('[SettingsPanel] 切换关闭所有广告屏蔽规则失败:', e);
+      app.setDisableAllBlockRules(app.disableAllBlockRules);
+    }
+  };
+
   /** 修改 Alt+Space 连续触发恢复窗口位置的次数阈值 */
   const handleAltSpaceThresholdChange = async (value: number) => {
     const clamped = Math.max(3, Math.min(20, value));
@@ -191,6 +203,8 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         }}
         hideForeignModels={app.hideForeignModels}
         onToggleHideForeignModels={handleToggleHideForeignModels}
+        disableAllBlockRules={app.disableAllBlockRules}
+        onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
       />
 
       <ProviderSection

@@ -64,11 +64,9 @@ interface ChatState {
   removeConversation: (id: string) => Promise<void>;
 
   // 发送消息
-  // 需求 10：recordTextPrefix/Suffix/tag 由调用方传入（来自 chatConfig），主进程保存 assistant 消息前应用模板
   sendMessage: (
     text: string,
     systemPrompt?: string,
-    recordTemplate?: { recordTextPrefix?: string; recordTextSuffix?: string; tag?: string },
   ) => Promise<void>;
   cancelStream: () => Promise<void>;
 
@@ -196,7 +194,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  sendMessage: async (text, systemPrompt, recordTemplate) => {
+  sendMessage: async (text, systemPrompt) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     const providerId = get().currentProviderId;
@@ -230,10 +228,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         providerId,
         message: trimmed,
         systemPrompt: systemPrompt?.trim() || undefined,
-        // 需求 10：传递记录文本模板，主进程保存 assistant 消息前应用
-        recordTextPrefix: recordTemplate?.recordTextPrefix,
-        recordTextSuffix: recordTemplate?.recordTextSuffix,
-        tag: recordTemplate?.tag,
       });
       // 更新会话 id（首次发送时主进程会创建会话）
       if (!get().currentConversationId) {

@@ -5,6 +5,7 @@
    ===================================================================== */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PromptTemplate, HotkeyConfig } from '../lib/electron-api';
 import { usePromptStore } from '../store/usePromptStore';
 import { useTabStore } from '../store/useTabStore';
@@ -21,6 +22,7 @@ import IconButton from './ui/IconButton';
 import Chip from './ui/Chip';
 import HotkeyRecorder from './ui/HotkeyRecorder';
 import './PromptLibrary.css';
+import '../pages/PromptLibraryView.css';
 
 export interface PromptLibraryProps {
   /** 注入模板到当前激活标签（需求 1：传递完整 PromptTemplate，由父组件组合后注入） */
@@ -220,57 +222,62 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
   return (
     <>
       {isModal ? (
-        <div
-          className={`prompt-overlay${open ? ' is-open' : ''}`}
-          data-name="component.prompt-library.overlay"
-          onClick={onClose}
-          aria-hidden={!open}
-        >
+        createPortal(
           <div
-            className="prompt-editor"
-            role="dialog"
-            aria-label="提示词库"
-            data-name="component.prompt-library.modal"
-            onClick={(e) => e.stopPropagation()}
+            className={`prompt-editor-overlay${open ? ' is-open' : ''}`}
+            data-name="component.prompt-library.overlay"
+            onClick={onClose}
+            aria-hidden={!open}
           >
-            <div className="prompt-editor-header" data-name="component.prompt-library.modal-header">
-              <h3 data-name="component.prompt-library.modal-title">提示词库</h3>
-              <IconButton
-                variant="close"
-                className="prompt-editor-close"
-                data-name="component.prompt-library.modal-close-button"
-                aria-label="关闭"
-                title="关闭"
-                onClick={onClose}
-              >
-                <svg
-                  className="icon-svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  data-name="component.prompt-library.modal-close-icon"
+            <div
+              className="prompt-editor"
+              role="dialog"
+              aria-label="提示词库"
+              data-name="component.prompt-library.modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="prompt-editor-header" data-name="component.prompt-library.modal-header">
+                <h3 data-name="component.prompt-library.modal-title">提示词库</h3>
+                <IconButton
+                  variant="close"
+                  className="prompt-editor-close"
+                  data-name="component.prompt-library.modal-close-button"
+                  aria-label="关闭"
+                  title="关闭"
+                  onClick={onClose}
                 >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </IconButton>
+                  <svg
+                    className="icon-svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    data-name="component.prompt-library.modal-close-icon"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </IconButton>
+              </div>
+              <div className="prompt-editor-body" data-name="component.prompt-library.modal-body">{chipList}</div>
             </div>
-            <div className="prompt-editor-body" data-name="component.prompt-library.modal-body">{chipList}</div>
-          </div>
-        </div>
+          </div>,
+          document.body,
+        )
       ) : (
         chipList
       )}
 
-      {/* 编辑器弹窗 */}
-      <div
-        className={`prompt-overlay${editor.open ? ' is-open' : ''}`}
-        data-name="component.prompt-library.editor-overlay"
-        onClick={() => setEditor(EMPTY_EDITOR)}
-        aria-hidden={!editor.open}
-      >
+      {/* 编辑器弹窗 —— 通过 portal 渲染到 document.body，
+          避免被底栏 .bottom-bar 的 transform 困住导致 position:fixed 失效 */}
+      {createPortal(
+        <div
+          className={`prompt-editor-overlay${editor.open ? ' is-open' : ''}`}
+          data-name="component.prompt-library.editor-overlay"
+          onClick={() => setEditor(EMPTY_EDITOR)}
+          aria-hidden={!editor.open}
+        >
         <div
           className="prompt-editor"
           role="dialog"
@@ -409,7 +416,9 @@ export default function PromptLibrary({ onInject, open, onClose }: PromptLibrary
             </div>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
+      )}
 
       {/* toast */}
       <div

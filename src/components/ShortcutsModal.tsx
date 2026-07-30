@@ -36,6 +36,7 @@ const DEFAULT_GLOBAL_HOTKEYS: Array<{
 const APP_SHORTCUTS: Array<{ keys: string; action: string; scope: string; note?: string }> = [
   { keys: 'Alt + 1~9', action: '切换到第 N 个标签', scope: '窗口内' },
   { keys: 'Ctrl + Tab / Ctrl + Shift + Tab', action: '向前/向后循环切换标签', scope: '窗口内' },
+  { keys: 'Ctrl + 1/2/3', action: '切换进阶面板标签（对话/白板/笔记）', scope: '窗口内' },
   { keys: 'Ctrl + T', action: '脱离当前标签为独立窗口', scope: '窗口内' },
   { keys: 'Ctrl + W', action: '关闭当前标签', scope: '窗口内' },
   { keys: '双击标题', action: '编辑标签标题', scope: '窗口内' },

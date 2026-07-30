@@ -13,7 +13,7 @@
    - 窄屏适配：侧边栏折叠为抽屉
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import { Button, IconButton, TitleBar, Combobox } from '../components/ui';
 import type { ComboboxOption } from '../components/ui';
@@ -51,10 +51,6 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [chatConfig, setChatConfig] = useState<ChatWindowConfig | null>(null);
-  // 需求 10：记录文本模板折叠面板状态
-  const [showRecordTemplate, setShowRecordTemplate] = useState(false);
-  const [recordTextPrefix, setRecordTextPrefix] = useState('');
-  const [recordTextSuffix, setRecordTextSuffix] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -82,15 +78,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   } = useChatStore();
 
   // 获取当前窗口的 chatConfig（chat 脱离窗口专属配置）
-  // 需求 10：同时初始化记录文本模板状态（前缀/后缀）
   useEffect(() => {
     if (!windowId) return;
     void getChatConfig(windowId).then((cfg) => {
       setChatConfig(cfg);
-      if (cfg) {
-        setRecordTextPrefix(cfg.recordTextPrefix ?? '');
-        setRecordTextSuffix(cfg.recordTextSuffix ?? '');
-      }
     });
   }, [windowId]);
 
@@ -153,36 +144,15 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentConversationId]);
 
-  // 需求 10：记录文本模板变更时持久化到 chatConfig
-  const persistRecordTemplate = useCallback(
-    (next: { prefix: string; suffix: string }) => {
-      if (!windowId || !chatConfig) return;
-      const nextCfg: ChatWindowConfig = {
-        ...chatConfig,
-        recordTextPrefix: next.prefix || undefined,
-        recordTextSuffix: next.suffix || undefined,
-      };
-      setChatConfig(nextCfg);
-      void updateChatDetachedWindow(windowId, nextCfg).catch((e) =>
-        console.error('[ChatView] 持久化记录文本模板失败:', e),
-      );
-    },
-    [windowId, chatConfig],
-  );
-
   // F11/F12 由主进程 attachWindowHotkeyInterceptor 在 before-input-event 中拦截处理，
   // 通过 onMaximizeToggled/onPinToggled IPC 通知更新状态（见上方监听器）。
   // 不在渲染层注册 keydown handler，避免与主进程拦截器双重执行导致状态抵消。
 
-  // ESC / Ctrl+W 关窗：抽屉或模板面板打开时 ESC 优先关闭浮窗，否则关闭窗口
+  // ESC / Ctrl+W 关窗：抽屉打开时 ESC 优先关闭浮窗，否则关闭窗口
   useEscToCloseWindow({
     onEsc: () => {
       if (isNarrow && isSidebarOpen) {
         setIsSidebarOpen(false);
-        return true;
-      }
-      if (showRecordTemplate) {
-        setShowRecordTemplate(false);
         return true;
       }
       return false;
@@ -225,12 +195,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
           inputRef.current?.focus();
         }, 0);
         // 直接用最新 text 发送（避免 setState 异步导致读到旧 input）
-        // 需求 10：附带记录文本模板
-        void sendMessage(text, chatConfig?.systemPrompt, {
-          recordTextPrefix: chatConfig?.recordTextPrefix,
-          recordTextSuffix: chatConfig?.recordTextSuffix,
-          tag: chatConfig?.title,
-        });
+        void sendMessage(text, chatConfig?.systemPrompt);
         setInput('');
       } else {
         inputRef.current?.focus();
@@ -262,12 +227,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   const handleSend = async () => {
     const text = input;
     setInput('');
-    // 需求 10：传递记录文本模板（前缀/后缀 + tag），主进程保存 assistant 消息前应用
-    await sendMessage(text, chatConfig?.systemPrompt, {
-      recordTextPrefix: chatConfig?.recordTextPrefix,
-      recordTextSuffix: chatConfig?.recordTextSuffix,
-      tag: chatConfig?.title,
-    });
+    await sendMessage(text, chatConfig?.systemPrompt);
     inputRef.current?.focus();
   };
 
@@ -295,11 +255,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     // 若配置了默认提示词，自动作为首条 user 消息发送（连同 systemPrompt）
     const dp = chatConfig?.defaultPrompt?.trim();
     if (dp && currentProviderId && !streaming) {
-      await sendMessage(dp, chatConfig?.systemPrompt, {
-        recordTextPrefix: chatConfig?.recordTextPrefix,
-        recordTextSuffix: chatConfig?.recordTextSuffix,
-        tag: chatConfig?.title,
-      });
+      await sendMessage(dp, chatConfig?.systemPrompt);
     }
   };
 
@@ -596,49 +552,6 @@ export default function ChatView({ windowId }: { windowId?: string }) {
             </div>
 
             {streamError && <div className="chat-error-bar" data-name="chat.error-bar">⚠ {streamError}</div>}
-
-            {/* 需求 10：记录文本模板折叠面板 */}
-            <div className="chat-record-template" data-name="chat.record-template-panel">
-              <button
-                type="button"
-                className="chat-record-template-toggle"
-                data-name="chat.record-template-toggle-button"
-                onClick={() => setShowRecordTemplate((v) => !v)}
-              >
-                {showRecordTemplate ? '▾' : '▸'} 记录文本模板
-              </button>
-              {showRecordTemplate && (
-                <div className="chat-record-template-body" data-name="chat.record-template-body">
-                  <div className="chat-record-template-row" data-name="chat.record-template-prefix-row">
-                    <label className="chat-record-template-label" data-name="chat.record-template-prefix-label">前缀</label>
-                    <input
-                      type="text"
-                      className="chat-record-template-input"
-                      data-name="chat.record-template-prefix-input"
-                      placeholder="例如：[{{time}}] "
-                      value={recordTextPrefix}
-                      onChange={(e) => setRecordTextPrefix(e.target.value)}
-                      onBlur={() => persistRecordTemplate({ prefix: recordTextPrefix, suffix: recordTextSuffix })}
-                    />
-                  </div>
-                  <div className="chat-record-template-row" data-name="chat.record-template-suffix-row">
-                    <label className="chat-record-template-label" data-name="chat.record-template-suffix-label">后缀</label>
-                    <input
-                      type="text"
-                      className="chat-record-template-input"
-                      data-name="chat.record-template-suffix-input"
-                      placeholder="例如：——{{tag}}"
-                      value={recordTextSuffix}
-                      onChange={(e) => setRecordTextSuffix(e.target.value)}
-                      onBlur={() => persistRecordTemplate({ prefix: recordTextPrefix, suffix: recordTextSuffix })}
-                    />
-                  </div>
-                  <div className="chat-record-template-hint" data-name="chat.record-template-hint">
-                    占位符：<code>{'{{time}}'}</code> 当前时间；<code>{'{{tag}}'}</code> 窗口标题。仅影响保存的 AI 回复，不改变实时显示。
-                  </div>
-                </div>
-              )}
-            </div>
 
             <div className="chat-input-area" data-name="chat.input-area">
               <div className="chat-input-wrap" data-name="chat.input-wrap">

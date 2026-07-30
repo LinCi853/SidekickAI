@@ -115,6 +115,16 @@ export interface AppSettings {
   defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
   /** 白板应用层侧边栏是否可见（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口） */
   whiteboardSidebarVisible: boolean
+  /** 关闭所有广告屏蔽规则：开启后所有单独配置的屏蔽规则均不生效（默认 false） */
+  disableAllBlockRules: boolean
+  /** 灵感笔记侧边栏宽度（默认 160px，范围 120-400） */
+  notesSidebarWidth: number
+  /** 灵感笔记侧边栏是否收起 */
+  notesSidebarCollapsed: boolean
+  /** 自定义对话侧边栏宽度（默认 160px，范围 120-400） */
+  chatSidebarWidth: number
+  /** 自定义对话侧边栏是否收起 */
+  chatSidebarCollapsed: boolean
 }
 
 const store = createJsonStore<{ settings: AppSettings; version: number }>({
@@ -167,6 +177,14 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       defaultAdvancedPanelTab: 'chat',
       // 白板应用层侧边栏默认隐藏（单白板模式；如需管理多白板可在设置中开启）
       whiteboardSidebarVisible: false,
+      // 关闭所有广告屏蔽规则：默认关闭（即默认启用屏蔽规则）
+      disableAllBlockRules: false,
+      // 灵感笔记侧边栏：默认 160px 宽，未收起
+      notesSidebarWidth: 160,
+      notesSidebarCollapsed: false,
+      // 自定义对话侧边栏：默认 160px 宽，未收起
+      chatSidebarWidth: 160,
+      chatSidebarCollapsed: false,
     },
     version: 1,
   },
@@ -223,6 +241,14 @@ export function getAppSettings(): AppSettings {
   s.defaultAdvancedPanelTab = s.defaultAdvancedPanelTab ?? 'chat'
   // 白板应用层侧边栏：老用户无此字段时默认隐藏
   s.whiteboardSidebarVisible = s.whiteboardSidebarVisible ?? false
+  // 关闭所有广告屏蔽规则：老用户无此字段时默认 false（即启用屏蔽规则）
+  s.disableAllBlockRules = s.disableAllBlockRules ?? false
+  // 灵感笔记侧边栏宽度/收起：老用户无此字段时使用默认值
+  s.notesSidebarWidth = s.notesSidebarWidth ?? 160
+  s.notesSidebarCollapsed = s.notesSidebarCollapsed ?? false
+  // 自定义对话侧边栏宽度/收起：老用户无此字段时使用默认值
+  s.chatSidebarWidth = s.chatSidebarWidth ?? 160
+  s.chatSidebarCollapsed = s.chatSidebarCollapsed ?? false
   // 兼容旧版本设置文件：默认 UA 预设字段可能不存在
   s.defaultDesktopUaPreset = s.defaultDesktopUaPreset || 'win-chrome-125'
   s.defaultMobileUaPreset = s.defaultMobileUaPreset || 'iphone-15-pro-safari'

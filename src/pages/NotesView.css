@@ -21,6 +21,11 @@
 
 /* ===== 侧边栏（瘦身：160px，通用样式见 .app-sidebar-narrow） ===== */
 
+/* notes-sidebar 需要 position: relative 让 sidebar-resizer 的 absolute 定位生效 */
+.notes-sidebar {
+  position: relative;
+}
+
 .notes-sidebar-search {
   flex: none;
   display: flex;
@@ -294,49 +299,59 @@
   user-select: text;
 }
 
-/* TipTap 编辑器样式 */
-.notes-editor-body .ProseMirror {
+/* Markdown 源码编辑 textarea */
+.notes-markdown-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  box-sizing: border-box;
+  resize: none;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  padding: var(--space-2) var(--space-3);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.notes-markdown-textarea:focus {
+  border-color: var(--accent-bright);
+}
+
+/* Markdown 预览渲染样式 */
+.notes-markdown-preview {
   min-height: 100%;
   color: var(--foreground);
   font-size: var(--text-base);
   font-family: var(--font-sans);
   line-height: 1.6;
-  outline: none;
 }
 
-.notes-editor-body .ProseMirror p {
+.notes-markdown-preview p {
   margin: 0 0 var(--space-2);
 }
 
-.notes-editor-body .ProseMirror h1,
-.notes-editor-body .ProseMirror h2,
-.notes-editor-body .ProseMirror h3 {
+.notes-markdown-preview h1,
+.notes-markdown-preview h2,
+.notes-markdown-preview h3,
+.notes-markdown-preview h4,
+.notes-markdown-preview h5,
+.notes-markdown-preview h6 {
   margin: var(--space-3) 0 var(--space-2);
   font-weight: 600;
 }
 
-.notes-editor-body .ProseMirror ul,
-.notes-editor-body .ProseMirror ol {
+.notes-markdown-preview ul,
+.notes-markdown-preview ol {
   padding-left: var(--space-4);
   margin: 0 0 var(--space-2);
 }
 
-.notes-editor-body .ProseMirror ul[data-type="taskList"] {
-  list-style: none;
-  padding-left: 0;
-}
-
-.notes-editor-body .ProseMirror ul[data-type="taskList"] li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-
-.notes-editor-body .ProseMirror ul[data-type="taskList"] li > div {
-  flex: 1;
-}
-
-.notes-editor-body .ProseMirror pre {
+.notes-markdown-preview pre {
   background: var(--muted);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
@@ -346,7 +361,7 @@
   margin: 0 0 var(--space-2);
 }
 
-.notes-editor-body .ProseMirror code {
+.notes-markdown-preview code {
   font-family: var(--font-mono);
   font-size: 0.9em;
   background: var(--glass-bg);
@@ -354,23 +369,47 @@
   padding: 1px 4px;
 }
 
-.notes-editor-body .ProseMirror pre code {
+.notes-markdown-preview pre code {
   background: transparent;
   padding: 0;
 }
 
-.notes-editor-body .ProseMirror img {
+.notes-markdown-preview img {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius-sm);
 }
 
-.notes-editor-body .ProseMirror p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
+.notes-markdown-preview blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: var(--space-3);
+  margin: 0 0 var(--space-2);
   color: var(--muted-foreground);
-  pointer-events: none;
-  height: 0;
+}
+
+.notes-markdown-preview a {
+  color: var(--accent-bright);
+  text-decoration: none;
+}
+
+.notes-markdown-preview a:hover {
+  text-decoration: underline;
+}
+
+.notes-markdown-preview table {
+  border-collapse: collapse;
+  margin: 0 0 var(--space-2);
+}
+
+.notes-markdown-preview th,
+.notes-markdown-preview td {
+  border: 1px solid var(--border);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* highlight.js 代码高亮（与 rehype-highlight 配合） */
+.notes-markdown-preview .hljs {
+  background: transparent;
 }
 
 /* ===== 图标按钮 ===== */
@@ -481,4 +520,42 @@
   overflow: hidden;
   text-overflow: ellipsis;
   animation: toast-in var(--duration-normal) var(--ease-out);
+}
+
+/* ===== 侧边栏收起状态 ===== */
+.notes-sidebar.is-collapsed {
+  width: 24px;
+  min-width: 24px;
+  overflow: hidden;
+  padding: 0;
+}
+.notes-sidebar-expand-btn {
+  width: 24px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: 0;
+}
+.notes-sidebar-expand-btn:hover {
+  color: var(--foreground);
+  background: var(--glass-bg);
+}
+
+/* ===== 侧边栏拖拽手柄 ===== */
+.sidebar-resizer {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.sidebar-resizer:hover {
+  background: var(--accent-bright);
 }

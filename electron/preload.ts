@@ -4,7 +4,7 @@
 // contextIsolation 始终开启，不直接暴露 ipcRenderer，仅暴露最小必要接口。
 
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_CHANNELS, type AIPlatform, type Profile, type PromptTemplate, type ElectronAPI, type WhiteboardCard } from './shared/types.js'
+import { IPC_CHANNELS, type AIPlatform, type Profile, type PromptTemplate, type ElectronAPI } from './shared/types.js'
 import { AI_PLATFORMS } from './presets/ai-platforms.js'
 
 const api: ElectronAPI = {
@@ -338,18 +338,6 @@ const api: ElectronAPI = {
     saveSnapshot: (id, snapshot) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT, id, snapshot),
     // 同步保存（beforeunload 兜底）
     saveSnapshotSync: (id, snapshot) => ipcRenderer.sendSync(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT_SYNC, id, snapshot),
-    pushCard: (card) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_PUSH_CARD_REQUEST, card),
-    pushAck: () => {
-      ipcRenderer.send(IPC_CHANNELS.WHITEBOARD_PUSH_ACK)
-    },
-    onPushCard: (callback: (payload: { whiteboardId: string; card: WhiteboardCard }) => void) => {
-      const handler = (_e: unknown, payload: { whiteboardId: string; card: WhiteboardCard }) => callback(payload)
-      ipcRenderer.on(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, handler)
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, handler)
-    },
-  },
-  saveWhiteboardImage: (dataUrl: string) => {
-    return ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_IMAGE, dataUrl)
   },
   // 平台能力查询（设置页显示权限状态）
   platformCapabilities: {

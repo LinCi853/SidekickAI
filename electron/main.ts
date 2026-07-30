@@ -49,7 +49,6 @@ import { HotkeyManager } from './hotkey/manager.js'
 import { SttEngine } from './stt/engine.js'
 import { WHISPER_CLI_BINARIES } from './stt/binary-resolver.js'
 import { IPC_CHANNELS } from './shared/types.js'
-import type { WhiteboardCard, WhiteboardCardInput } from './shared/whiteboard.types.js'
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js'
 import { registerTabIpc } from './ipc/tab-ipc.js'
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js'
@@ -184,12 +183,6 @@ const MAX_RECORDING_DURATION_MS = 10_000
 let recordingWatchdog: NodeJS.Timeout | null = null
 /** 剪贴板恢复定时器（后台粘贴后延迟恢复用户原剪贴板内容） */
 let clipboardRestoreTimer: NodeJS.Timeout | null = null
-/**
- * 待投递的白板推送卡片队列（跨窗口推送：请求窗口 → 主进程 → 白板渲染窗口）。
- * 渲染层 ready 后回 ACK（ipcRenderer.send），主进程 flush 队列一次性投递全部待推送卡片。
- * 替代旧的 ipcMain.once/ipcMain.handle 互不触发的缺陷方案。
- */
-const pendingWhiteboardPushes: Array<{ whiteboardId: string; card: WhiteboardCard; win: BrowserWindow }> = []
 
 /**
  * 清除录音 watchdog 定时器
@@ -1119,64 +1112,6 @@ app.whenReady().then(async () => {
       }
     },
   )
-
-  // 从任意窗口推送卡片到白板（v2：定位 active 白板，发送 { whiteboardId, card }）
-  // 渲染层收到后插入 Excalidraw 元素；ready 后回 ACK，主进程收到 ACK 后才转发卡片。
-  ipcMain.handle(
-    IPC_CHANNELS.WHITEBOARD_PUSH_CARD_REQUEST,
-    (_e, input: WhiteboardCardInput) => {
-      // 定位 active 白板（无则创建"截图收藏"）
-      const db = getWhiteboardDb()
-      let whiteboardId = db.getActiveWhiteboardId()
-      if (!whiteboardId) {
-        const wb = db.createWhiteboard('截图收藏')
-        whiteboardId = wb.id
-        db.setActiveWhiteboardId(wb.id)
-      }
-      // 生成完整卡片
-      const card: WhiteboardCard = {
-        id: crypto.randomUUID(),
-        type: input.type,
-        x: input.x ?? Math.round(Math.random() * 200 + 100),
-        y: input.y ?? Math.round(Math.random() * 200 + 100),
-        width: input.width,
-        height: input.height,
-        content: input.content,
-        metadata: input.metadata ?? { createdAt: Date.now() },
-      }
-      // 确保 进阶面板可见
-      openAdvancedPanelWindow({ initialTab: 'whiteboard' })
-      const win = windowState.advancedPanelWindow
-      if (!win || win.isDestroyed()) {
-        return card
-      }
-      // 通知切换到 whiteboard tab，渲染层 ready 后回 ACK，主进程收到 ACK 再发送卡片
-      const sendSwitch = () => {
-        if (win.isDestroyed()) return
-        win.webContents.send(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, { tab: 'whiteboard' })
-      }
-      if (win.webContents.isLoading()) {
-        win.webContents.once('did-finish-load', sendSwitch)
-      } else {
-        sendSwitch()
-      }
-      // 入队待推送卡片，等待渲染层 ready 后回 ACK 时统一 flush
-      pendingWhiteboardPushes.push({ whiteboardId, card, win })
-      return card
-    },
-  )
-  // 渲染层 → 主进程：白板 ready 后回 ACK（send，非 invoke），flush 全部待推送卡片
-  ipcMain.on(IPC_CHANNELS.WHITEBOARD_PUSH_ACK, () => {
-    while (pendingWhiteboardPushes.length > 0) {
-      const push = pendingWhiteboardPushes.shift()!
-      if (!push.win.isDestroyed()) {
-        push.win.webContents.send(IPC_CHANNELS.WHITEBOARD_PUSH_CARD, {
-          whiteboardId: push.whiteboardId,
-          card: push.card,
-        })
-      }
-    }
-  })
 
   // 注册设备预设 CRUD IPC + 首次启动填充预置设备预设
   registerPresetsIPC()

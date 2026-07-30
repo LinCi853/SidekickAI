@@ -178,11 +178,6 @@ export function registerAIChatIPC(): void {
         messages,
         controller,
         userMsg.id,
-        {
-          recordTextPrefix: payload.recordTextPrefix,
-          recordTextSuffix: payload.recordTextSuffix,
-          tag: payload.tag,
-        },
       )
 
       return { conversationId, userMessageId: userMsg.id }
@@ -409,9 +404,6 @@ export function registerAIChatIPC(): void {
  * 执行流式 API 调用：实时推送 chunk，结束后保存 assistant 消息
  *
  * 不向调用方抛错，所有错误通过 stream-end 事件推送到渲染层。
- *
- * 需求 10：recordTemplate 包含 recordTextPrefix/Suffix/tag，在保存 assistant 消息前应用模板。
- * 占位符：{{time}} → YYYY-MM-DD HH:mm:ss；{{tag}} → recordTemplate.tag
  */
 async function runStream(
   sender: WebContents,
@@ -420,7 +412,6 @@ async function runStream(
   history: ChatMessage[],
   controller: AbortController,
   userMessageId: string,
-  recordTemplate?: { recordTextPrefix?: string; recordTextSuffix?: string; tag?: string },
 ): Promise<void> {
 
   let fullText = ''
@@ -443,21 +434,6 @@ async function runStream(
     }
   }
 
-  // 需求 10：应用记录文本模板（前缀/后缀 + 占位符 {{time}} {{tag}}）
-  const applyRecordTemplate = (text: string): string => {
-    if (!recordTemplate) return text
-    const prefix = recordTemplate.recordTextPrefix?.trim()
-    const suffix = recordTemplate.recordTextSuffix?.trim()
-    if (!prefix && !suffix) return text
-    const now = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
-    const tag = recordTemplate.tag ?? ''
-    const fill = (s: string) =>
-      s.replace(/\{\{time\}\}/g, timeStr).replace(/\{\{tag\}\}/g, tag)
-    return `${fill(prefix ?? '')}${text}${fill(suffix ?? '')}`
-  }
-
   try {
     await streamChat(
       provider,
@@ -478,15 +454,13 @@ async function runStream(
         },
         onDone: (text) => {
           // 保存 assistant 消息到 SQLite（含 completionTokens），并取回真实 id 随 stream-end 下发
-          // 需求 10：保存前应用记录文本模板（前缀/后缀）
-          const finalText = applyRecordTemplate(text)
           let assistantMsg: ChatMessage | undefined
           try {
-            if (finalText.trim()) {
+            if (text.trim()) {
               assistantMsg = getChatStore().saveMessage({
                 conversationId,
                 role: 'assistant',
-                content: finalText,
+                content: text,
                 tokens: completionTokens || undefined,
               })
             }
@@ -514,7 +488,7 @@ async function runStream(
               getChatStore().saveMessage({
                 conversationId,
                 role: 'assistant',
-                content: applyRecordTemplate(fullText + `\n\n[错误中断: ${err.message}]`),
+                content: fullText + `\n\n[错误中断: ${err.message}]`,
               })
             } catch (e) {
               console.error('[ai-handler] 保存部分文本失败:', e)

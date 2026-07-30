@@ -33,74 +33,6 @@
 /* ===== 供应商卡片 / 表单 / 加密导出导入样式已迁移到 ProviderSection.css ===== */
 /* Alt+Q 窗口和主窗口设置面板共享 ProviderSection 组件，样式源统一为 ProviderSection.css */
 
-/* 需求 10：ChatTab 记录文本模板折叠面板 */
-.advanced-panel-chat-record-template {
-  flex: none;
-  padding: var(--space-1) var(--space-2);
-  border-top: 1px solid var(--glass-bd-2);
-  background: var(--muted);
-  font-size: var(--text-xs);
-}
-.advanced-panel-chat-record-template-toggle {
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: var(--space-0-5) 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-.advanced-panel-chat-record-template-toggle:hover {
-  color: var(--foreground);
-}
-.advanced-panel-chat-record-template-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-1) 0;
-}
-.advanced-panel-chat-record-template-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.advanced-panel-chat-record-template-label {
-  flex: none;
-  width: 32px;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.advanced-panel-chat-record-template-input {
-  flex: 1;
-  min-width: 0;
-  padding: var(--space-0-5) var(--space-1);
-  background: var(--background);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-sm);
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  outline: none;
-}
-.advanced-panel-chat-record-template-input:focus {
-  border-color: var(--accent);
-}
-.advanced-panel-chat-record-template-hint {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-.advanced-panel-chat-record-template-hint code {
-  font-family: var(--font-mono);
-  background: var(--glass-bg-2);
-  padding: 0 4px;
-  border-radius: var(--radius-sm);
-  color: var(--accent-bright);
-}
-
 /* ===== 自定义对话 ===== */
 .advanced-panel-chat {
   flex: 1 1 auto;
@@ -116,6 +48,7 @@
   background: var(--muted);
   border-right: 1px solid var(--glass-bd);
   overflow: hidden;
+  position: relative;
 }
 .advanced-panel-chat-provider {
   padding: var(--space-3) var(--space-2);
@@ -327,6 +260,49 @@
 }
 .advanced-panel-chat-send.cancel {
   background: var(--window-close);
+}
+
+/* ===== 自定义对话侧边栏收起状态 ===== */
+.advanced-panel-chat-sidebar.is-collapsed {
+  width: 24px;
+  min-width: 24px;
+  overflow: hidden;
+  padding: 0;
+}
+.advanced-panel-chat-sidebar-expand-btn {
+  width: 24px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: 0;
+}
+.advanced-panel-chat-sidebar-expand-btn:hover {
+  color: var(--foreground);
+  background: var(--glass-bg);
+}
+/* 收起按钮：紧凑居中 */
+.advanced-panel-chat-sidebar-collapse {
+  align-self: center;
+  margin: var(--space-1) 0;
+}
+
+/* ===== 侧边栏拖拽手柄 ===== */
+.sidebar-resizer {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.sidebar-resizer:hover {
+  background: var(--accent-bright);
 }
 
 /* v0.5.2 R-5: 供应商 TTS/STT 语音配置区样式已迁移到 ProviderSection.css */

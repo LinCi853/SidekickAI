@@ -784,6 +784,7 @@ export default function MainView() {
     async (
       template: PromptTemplate,
       source: 'inline' | 'detached' = 'inline',
+      skipPreview = false,
     ): Promise<{ success: boolean; platformName?: string }> => {
       const tab = activeTab;
       if (!tab) return { success: false };
@@ -822,6 +823,24 @@ export default function MainView() {
       }
 
       const composedText = composeFinalText(template, { body: selection });
+
+      // skipPreview：双击快捷键跳过预览，直接注入（不查询相似度、不弹浮层）
+      if (skipPreview) {
+        const ok = await injectTextToWebview(el, composedText, selector);
+        try {
+          await logInjection({
+            composedText,
+            templateId: template.id,
+            windowId: source === 'detached' ? 'detached-prompt-window' : 'main',
+          });
+        } catch (e) {
+          console.warn('[MainView] 记录注入历史失败:', e);
+        }
+        if (source === 'detached') {
+          sendPromptInjectResult({ success: ok, platformName: platform?.name });
+        }
+        return { success: ok, platformName: platform?.name };
+      }
 
       // 需求 2：查询最近注入历史中相似度 ≥ 0.85 的记录
       let similarRecords: SimilarInjectionResult[] = [];
@@ -900,8 +919,8 @@ export default function MainView() {
   // 需求 2.5：提示词局内快捷键 —— 命中时走与 inline 注入相同的流程（弹预览浮层供用户确认）
   // hook 内部使用 useRef 持有最新 onTriggered 回调，不会因 handleInjectPrompt 变化而重注册
   usePromptHotkeys({
-    onTriggered: (template) => {
-      void handleInjectPrompt(template, 'inline');
+    onTriggered: (template, options) => {
+      void handleInjectPrompt(template, 'inline', options?.skipPreview);
     },
   });
 
@@ -986,7 +1005,6 @@ export default function MainView() {
     closeTabsToRight,
     setAsAIHome,
     configureApp,
-    screenshotToWhiteboard,
     handleTabContextMenu,
     commitTabUrl,
     setUrlDraft,
@@ -1237,7 +1255,6 @@ export default function MainView() {
               clearData: clearTabData,
               setAsHome: setAsAIHome,
               configureApp,
-              screenshotToWhiteboard,
               detach: detachTab,
               closeOthers: closeOtherTabs,
               closeRight: closeTabsToRight,

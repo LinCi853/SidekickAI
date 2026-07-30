@@ -34,7 +34,6 @@ import {
   updateConversation,
   getUsageStats,
   onConversationPersisted,
-  pushCardToWhiteboard,
 } from '../lib/electron-api';
 import type { Conversation, ChatMessage, LoginTrace, WindowTrace } from '../lib/electron-api';
 import { formatTime } from '../lib/datetime';
@@ -671,23 +670,6 @@ export default function HistoryView() {
                           <div className="msg-actions" data-name="history.detail.msg-actions">
                             <Button type="button" variant="outline" className="msg-action-btn" onClick={() => handleStartEditMsg(m)}>
                               编辑
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="msg-action-btn"
-                              onClick={() => void pushCardToWhiteboard({
-                                type: 'ai-reply',
-                                content: m.content,
-                                metadata: {
-                                  sourceUrl: selectedConv?.url,
-                                  platform: selectedConv?.sourceType,
-                                  createdAt: m.createdAt ?? Date.now(),
-                                },
-                              })}
-                              data-name="history.detail.msg-send-to-whiteboard"
-                            >
-                              发送到白板
                             </Button>
                             <Button type="button" variant="text" danger className="msg-action-btn danger" onClick={() => void handleDeleteMsg(m.id)}>
                               删除

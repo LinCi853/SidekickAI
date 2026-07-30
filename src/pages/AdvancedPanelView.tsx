@@ -27,26 +27,24 @@ import {
   writeAIProviderExportFile,
   readAIProviderImportFile,
   previewImportAIProviders,
-  // 白板跨窗口推送（v0.5.1：订阅提升到顶层，解决 WhiteboardView 未挂载时卡片丢失）
-  onWhiteboardPushCard,
-  pushWhiteboardAck,
   getAppSettings,
+  updateAppSettings,
 } from '../lib/electron-api';
 import type {
   CustomAIProvider,
   CustomAIProviderInput,
-  WhiteboardCard,
 } from '../lib/electron-api';
 import Badge from '../components/ui/Badge';
 import { Button, IconButton, SegmentedControl, TitleBar, Combobox } from '../components/ui';
 import type { ComboboxOption } from '../components/ui';
 import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel';
+import SidebarResizer from '../components/SidebarResizer';
 import { MessageBubble } from './MessageBubble';
 import WhiteboardView from './WhiteboardView';
-import type { WhiteboardViewHandle } from './WhiteboardView';
 import NotesView from './NotesView';
 import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
-import { useEscToCloseWindow, useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
+import { isTypingTarget } from '../lib/shared-utils';
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import './AdvancedPanelView.css';
 
 type TabKey = 'chat' | 'whiteboard' | 'notes';
@@ -80,13 +78,6 @@ export default function AdvancedPanelView() {
       .catch(() => {});
   }, []);
 
-  // ===== 白板跨窗口推送管理（v0.5.1：订阅提升到顶层） =====
-  // WhiteboardView 仅在 activeTab === 'whiteboard' 时挂载，
-  // 但截图推送可能发生在任意 tab。订阅放顶层确保不丢失。
-  const whiteboardRef = useRef<WhiteboardViewHandle>(null);
-  // 待插入的推送卡片队列：WhiteboardView 未挂载或未 ready 时暂存
-  const pendingPushCardsRef = useRef<Array<{ whiteboardId: string; card: WhiteboardCard }>>([]);
-
   // 监听主进程的 navigate 事件（单例窗口复用时切换 tab/provider）
   useEffect(() => {
     return onAdvancedPanelNavigate((payload) => {
@@ -95,6 +86,27 @@ export default function AdvancedPanelView() {
         useChatStore.getState().setCurrentProvider(payload.providerId);
       }
     });
+  }, []);
+
+  // Ctrl+1/2/3 快捷键切换进阶面板标签（对话/白板/笔记）
+  // 在输入框内不触发（避免影响输入）
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
+      if (isTypingTarget(e.target)) return;
+      const tabMap: Record<string, TabKey> = {
+        '1': 'chat',
+        '2': 'whiteboard',
+        '3': 'notes',
+      };
+      const next = tabMap[e.key];
+      if (next) {
+        e.preventDefault();
+        setActiveTab(next);
+      }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   }, []);
 
   // 初始化时若 URL 指定了 provider，切换 chat tab 并选中该 provider
@@ -109,56 +121,7 @@ export default function AdvancedPanelView() {
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
 
-  /** 尝试将待推送队列中的卡片插入到白板 canvas */
-  const flushPendingPushCards = useCallback(() => {
-    const wb = whiteboardRef.current;
-    if (!wb || !wb.isReady()) return;
-    const pending = pendingPushCardsRef.current;
-    if (pending.length === 0) return;
-    pendingPushCardsRef.current = [];
-    for (const { card } of pending) {
-      wb.insertCard(card);
-    }
-    // flush 后回 ACK，通知主进程可以继续推送
-    pushWhiteboardAck();
-  }, []);
-
-  // ===== 白板跨窗口推送订阅（始终活跃，不受 tab 切换影响） =====
-  useEffect(() => {
-    const unsubscribe = onWhiteboardPushCard((payload) => {
-      const { whiteboardId, card } = payload;
-      // 入队待插入卡片
-      pendingPushCardsRef.current.push({ whiteboardId, card });
-      // 确保切换到白板 tab（若不在）
-      if (activeTabRef.current !== 'whiteboard') {
-        setActiveTab('whiteboard');
-      } else {
-        // 已在白板 tab，尝试立即 flush
-        flushPendingPushCards();
-      }
-    });
-    return unsubscribe;
-  }, [flushPendingPushCards]);
-
-  // activeTab 变为 whiteboard 时，若 canvas 已 ready 则 flush；否则等 onReady 触发
-  useEffect(() => {
-    if (activeTab === 'whiteboard') {
-      // canvas 可能刚挂载，需等 onReady；也可能已挂载（tab 切回），直接 flush
-      // 延迟一帧让 ref 就绪
-      const timer = setTimeout(() => flushPendingPushCards(), 50);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab, flushPendingPushCards]);
-
-  // WhiteboardView canvas ready 回调：flush 待推送队列 + 回 ACK
-  const handleWhiteboardReady = useCallback(() => {
-    // 回 ACK 通知主进程白板已就绪（无论是否有待推送卡片）
-    pushWhiteboardAck();
-    flushPendingPushCards();
-  }, [flushPendingPushCards]);
-
-  // ESC / Ctrl+W 关窗：浮窗（设置面板/Modal/模板面板）由 useEscToCloseOverlay 统一处理；
-  // 进阶面板无标题编辑态，onEsc 直接关闭窗口
+  // ESC / Ctrl+W 关窗：进阶面板无标题编辑态，onEsc 直接关闭窗口
   useEscToCloseWindow();
 
   const handleMinimize = useCallback(() => void minimizeWindow().catch(() => {}), []);
@@ -227,9 +190,7 @@ export default function AdvancedPanelView() {
         {activeTab === 'chat' && <ChatTab />}
         {activeTab === 'whiteboard' && (
           <WhiteboardView
-            ref={whiteboardRef}
             onClose={() => setActiveTab('chat')}
-            onReady={handleWhiteboardReady}
             sidebarVisible={whiteboardSidebarVisible}
           />
         )}
@@ -276,28 +237,11 @@ function ChatTab() {
   } = useChatStore();
 
   const [input, setInput] = useState('');
-  // 需求 10：记录文本模板（ChatTab 为全局单例 tab，使用 localStorage 持久化）
-  const [showRecordTemplate, setShowRecordTemplate] = useState(false);
-  const [recordTextPrefix, setRecordTextPrefix] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    return localStorage.getItem('chat-tab-record-prefix') ?? '';
-  });
-  const [recordTextSuffix, setRecordTextSuffix] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    return localStorage.getItem('chat-tab-record-suffix') ?? '';
-  });
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // 需求 10：模板字段变更时持久化到 localStorage
-  const persistRecordTemplate = (next: { prefix: string; suffix: string }) => {
-    try {
-      localStorage.setItem('chat-tab-record-prefix', next.prefix);
-      localStorage.setItem('chat-tab-record-suffix', next.suffix);
-    } catch (e) {
-      console.warn('[ChatTab] 持久化记录文本模板失败:', e);
-    }
-  };
+  // 侧边栏宽度/收起状态（持久化到 app settings）
+  const [sidebarWidth, setSidebarWidth] = useState(160);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // 初始化 providers + 流式监听
   useEffect(() => {
@@ -307,8 +251,28 @@ function ChatTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ESC：记录文本模板面板打开时优先关闭模板面板（通过全局浮窗栈管理优先级）
-  useEscToCloseOverlay(showRecordTemplate, () => setShowRecordTemplate(false));
+  // 读取侧边栏宽度/收起设置
+  useEffect(() => {
+    void getAppSettings()
+      .then((cfg) => {
+        setSidebarWidth(cfg.chatSidebarWidth ?? 160);
+        setSidebarCollapsed(cfg.chatSidebarCollapsed ?? false);
+      })
+      .catch(() => {});
+  }, []);
+
+  // 侧边栏拖拽调宽：即时更新状态，松开时持久化
+  const handleSidebarResize = useCallback((w: number) => {
+    setSidebarWidth(w);
+    void updateAppSettings({ chatSidebarWidth: w });
+  }, []);
+
+  // 侧边栏收起/展开切换
+  const handleSidebarToggleCollapse = useCallback(() => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    void updateAppSettings({ chatSidebarCollapsed: next });
+  }, [sidebarCollapsed]);
 
   // provider 加载后初始化会话列表
   useEffect(() => {
@@ -343,12 +307,7 @@ function ChatTab() {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
     setInput('');
-    // 需求 10：传递记录文本模板（前缀/后缀 + tag=provider 名），主进程保存 assistant 消息前应用
-    await sendMessage(trimmed, undefined, {
-      recordTextPrefix: recordTextPrefix || undefined,
-      recordTextSuffix: recordTextSuffix || undefined,
-      tag: currentProvider?.name,
-    });
+    await sendMessage(trimmed, undefined);
     inputRef.current?.focus();
   };
 
@@ -365,7 +324,16 @@ function ChatTab() {
   return (
     <div className="advanced-panel-chat" data-name="advanced-panel.chat">
       {/* 左侧：provider 选择 + 会话列表 */}
-      <aside className="advanced-panel-chat-sidebar" data-name="advanced-panel.chat-sidebar">
+      <aside
+        className={`advanced-panel-chat-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}
+        style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px`, flex: 'none' }}
+        data-name="advanced-panel.chat-sidebar"
+      >
+        {sidebarCollapsed && (
+          <button className="advanced-panel-chat-sidebar-expand-btn" onClick={handleSidebarToggleCollapse} title="展开侧边栏" data-name="advanced-panel.chat-sidebar-expand-button">
+            »
+          </button>
+        )}
         <div className="advanced-panel-chat-provider" data-name="advanced-panel.chat-provider">
           <label className="advanced-panel-chat-provider-label" data-name="advanced-panel.chat-provider-label">当前模型</label>
           <div className="advanced-panel-chat-provider-selector" data-name="advanced-panel.chat-provider-selector">
@@ -412,6 +380,9 @@ function ChatTab() {
           </div>
         </div>
         <Button type="button" variant="outline" className="advanced-panel-chat-new" onClick={startNewConversation} data-name="advanced-panel.chat-new-conversation-button">+ 新建对话</Button>
+        <IconButton variant="default" className="advanced-panel-chat-sidebar-collapse" aria-label="收起侧边栏" onClick={handleSidebarToggleCollapse} title="收起侧边栏" data-name="advanced-panel.chat-sidebar-collapse-button">
+          «
+        </IconButton>
         <div className="advanced-panel-chat-conv-list" data-name="advanced-panel.chat-conv-list">
           {conversations.length === 0 && (
             <div className="advanced-panel-chat-empty" data-name="advanced-panel.chat-conv-empty">暂无对话</div>
@@ -446,6 +417,7 @@ function ChatTab() {
             </div>
           ))}
         </div>
+        {!sidebarCollapsed && <SidebarResizer width={sidebarWidth} minWidth={120} maxWidth={400} onResize={handleSidebarResize} />}
       </aside>
 
       {/* 右侧：消息区 + 输入框 */}
@@ -474,48 +446,6 @@ function ChatTab() {
             <div className="advanced-panel-chat-error" data-name="advanced-panel.chat-error">{streamError}</div>
           )}
           <div ref={messagesEndRef} data-name="advanced-panel.chat-messages-end" />
-        </div>
-        {/* 需求 10：记录文本模板折叠面板 */}
-        <div className="advanced-panel-chat-record-template" data-name="advanced-panel.chat-record-template-panel">
-          <button
-            type="button"
-            className="advanced-panel-chat-record-template-toggle"
-            data-name="advanced-panel.chat-record-template-toggle-button"
-            onClick={() => setShowRecordTemplate((v) => !v)}
-          >
-            {showRecordTemplate ? '▾' : '▸'} 记录文本模板
-          </button>
-          {showRecordTemplate && (
-            <div className="advanced-panel-chat-record-template-body" data-name="advanced-panel.chat-record-template-body">
-              <div className="advanced-panel-chat-record-template-row" data-name="advanced-panel.chat-record-template-prefix-row">
-                <label className="advanced-panel-chat-record-template-label" data-name="advanced-panel.chat-record-template-prefix-label">前缀</label>
-                <input
-                  type="text"
-                  className="advanced-panel-chat-record-template-input"
-                  data-name="advanced-panel.chat-record-template-prefix-input"
-                  placeholder="例如：[{{time}}] "
-                  value={recordTextPrefix}
-                  onChange={(e) => setRecordTextPrefix(e.target.value)}
-                  onBlur={() => persistRecordTemplate({ prefix: recordTextPrefix, suffix: recordTextSuffix })}
-                />
-              </div>
-              <div className="advanced-panel-chat-record-template-row" data-name="advanced-panel.chat-record-template-suffix-row">
-                <label className="advanced-panel-chat-record-template-label" data-name="advanced-panel.chat-record-template-suffix-label">后缀</label>
-                <input
-                  type="text"
-                  className="advanced-panel-chat-record-template-input"
-                  data-name="advanced-panel.chat-record-template-suffix-input"
-                  placeholder="例如：——{{tag}}"
-                  value={recordTextSuffix}
-                  onChange={(e) => setRecordTextSuffix(e.target.value)}
-                  onBlur={() => persistRecordTemplate({ prefix: recordTextPrefix, suffix: recordTextSuffix })}
-                />
-              </div>
-              <div className="advanced-panel-chat-record-template-hint" data-name="advanced-panel.chat-record-template-hint">
-                占位符：<code>{'{{time}}'}</code> 当前时间；<code>{'{{tag}}'}</code> 供应商名。仅影响保存的 AI 回复，不改变实时显示。
-              </div>
-            </div>
-          )}
         </div>
         <div className="advanced-panel-chat-input-wrap" data-name="advanced-panel.chat-input-wrap">
           <textarea

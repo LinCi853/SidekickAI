@@ -257,19 +257,25 @@ export function WebviewTab({
         await injectViewportAndPopupGuard(webview, { injectShadowStyle: true });
 
         // 3. 注入页面组件屏蔽规则（按当前域名匹配预置 + 用户自定义规则）
+        //    全局开关 disableAllBlockRules 开启时跳过所有屏蔽规则注入
         try {
-          const rules = await listBlockRules();
-          const url = webview.getURL();
-          const hostname = new URL(url).hostname;
-          const matched = rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname));
-          console.log(
-            `[WebviewTab] 屏蔽规则注入: url=${url} hostname=${hostname} total=${rules.length} matched=${matched.length}` +
-            (matched.length > 0
-              ? ` | matched=[${matched.map((r) => `${r.label}(${r.type})`).join(', ')}]`
-              : '')
-          );
-          if (matched.length > 0) {
-            await webview.executeJavaScript(buildBlockerScript(matched));
+          const settings = await getAppSettings();
+          if (!settings.disableAllBlockRules) {
+            const rules = await listBlockRules();
+            const url = webview.getURL();
+            const hostname = new URL(url).hostname;
+            const matched = rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname));
+            console.log(
+              `[WebviewTab] 屏蔽规则注入: url=${url} hostname=${hostname} total=${rules.length} matched=${matched.length}` +
+              (matched.length > 0
+                ? ` | matched=[${matched.map((r) => `${r.label}(${r.type})`).join(', ')}]`
+                : '')
+            );
+            if (matched.length > 0) {
+              await webview.executeJavaScript(buildBlockerScript(matched));
+            }
+          } else {
+            console.log('[WebviewTab] 屏蔽规则已全局关闭，跳过注入');
           }
         } catch (e) {
           console.error('[WebviewTab] 屏蔽规则注入失败:', e);

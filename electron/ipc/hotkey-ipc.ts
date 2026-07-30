@@ -68,14 +68,23 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
       }
 
       // 正常切换显隐
+      // 窗口不可见 → 显示并聚焦
+      // 窗口可见但未聚焦 → 仅聚焦到前台（不关闭，避免误操作）
+      // 窗口可见且已聚焦 → 隐藏
       const mainWindow = getMainWindow()
-      if (mainWindow?.isVisible()) {
-        mainWindow.hide()
-      } else {
-        mainWindow?.show()
-        mainWindow?.focus()
+      if (!mainWindow) return
+      if (!mainWindow.isVisible() || mainWindow.isMinimized()) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
         // 通知渲染层聚焦输入框
-        mainWindow?.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+      } else if (!mainWindow.isFocused()) {
+        // 窗口可见但不在前台：聚焦到前台而非关闭
+        mainWindow.focus()
+        mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+      } else {
+        mainWindow.hide()
       }
     },
     toggleDetachedWindows: () => {

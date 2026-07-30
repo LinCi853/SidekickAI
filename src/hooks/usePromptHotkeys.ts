@@ -15,8 +15,10 @@ import { isTypingTarget } from '../lib/shared-utils';
 import type { PromptTemplate } from '../lib/electron-api';
 
 export interface UsePromptHotkeysOptions {
-  /** 命中快捷键时调用（传入匹配的 prompt 模板） */
-  onTriggered: (template: PromptTemplate) => void;
+  /** 命中快捷键时调用（传入匹配的 prompt 模板）
+   *  options.skipPreview: true 表示用户在 800ms 内连续按两次同一快捷键，跳过预览直接注入
+   */
+  onTriggered: (template: PromptTemplate, options?: { skipPreview?: boolean }) => void;
 }
 
 /**
@@ -33,6 +35,10 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
 
   // 最新的 accelerator → prompt 映射（避免闭包过期）
   const hotkeyMapRef = useRef<Map<string, PromptTemplate>>(new Map());
+
+  // 上次触发的 promptId 和时间戳，用于检测"双击跳过预览"
+  // 800ms 内同一 prompt 快捷键按两次 → 第二次跳过预览直接注入
+  const lastTriggerRef = useRef<{ promptId: string; time: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +91,18 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
       if (matched) {
         e.preventDefault();
         e.stopPropagation();
-        onTriggeredRef.current(matched);
+        // 双击跳过预览：800ms 内同一 prompt 快捷键按两次，第二次直接注入不弹预览
+        const now = Date.now();
+        const last = lastTriggerRef.current;
+        if (last && last.promptId === matched.id && now - last.time < 800) {
+          // 第二次触发：跳过预览，并清除 lastTrigger
+          lastTriggerRef.current = null;
+          onTriggeredRef.current(matched, { skipPreview: true });
+        } else {
+          // 第一次触发：记录时间戳，正常弹预览
+          lastTriggerRef.current = { promptId: matched.id, time: now };
+          onTriggeredRef.current(matched, { skipPreview: false });
+        }
       }
     };
     // 使用捕获阶段，确保在 webview 等子元素之前拦截

@@ -169,12 +169,6 @@ export interface ChatSendPayload {
   title?: string
   /** 系统提示词：发送给 API 的 system message（可选，由 chat 窗口配置注入） */
   systemPrompt?: string
-  /** 需求 10：记录文本模板前缀（保存 assistant 消息前附加，支持 {{time}} {{tag}} 占位符） */
-  recordTextPrefix?: string
-  /** 需求 10：记录文本模板后缀 */
-  recordTextSuffix?: string
-  /** 需求 10：模板占位符 {{tag}} 的替换值（通常为 chatConfig.title 或 provider 名） */
-  tag?: string
 }
 
 /** 流式推送的块 */

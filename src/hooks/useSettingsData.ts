@@ -72,6 +72,8 @@ export interface AppSettingsState {
   setHiddenPlatforms: Dispatch<SetStateAction<string[]>>;
   hideForeignModels: boolean;
   setHideForeignModels: Dispatch<SetStateAction<boolean>>;
+  disableAllBlockRules: boolean;
+  setDisableAllBlockRules: Dispatch<SetStateAction<boolean>>;
   // 顶栏
   topBarVisibleButtons: TopBarButtonGroup[];
   setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>;
@@ -105,6 +107,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
   const [proxyFallbackMode, setProxyFallbackMode] = useState<'direct' | 'system'>('direct');
   const [hiddenPlatforms, setHiddenPlatforms] = useState<string[]>([]);
   const [hideForeignModels, setHideForeignModels] = useState(true);
+  const [disableAllBlockRules, setDisableAllBlockRules] = useState(false);
   const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([
     ...ALL_TOP_BAR_BUTTON_GROUPS,
   ]);
@@ -132,6 +135,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
       setProxyFallbackMode(cfg.proxyFallbackMode ?? 'direct');
       setHiddenPlatforms(cfg.hiddenPlatforms ?? []);
       setHideForeignModels(cfg.hideForeignModels ?? true);
+      setDisableAllBlockRules(cfg.disableAllBlockRules ?? false);
       setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
       setAltSpaceResetThreshold(cfg.altSpaceResetThreshold ?? 6);
       setUsageTrackingEnabled(cfg.usageTrackingEnabled ?? true);
@@ -168,6 +172,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
     proxyFallbackMode, setProxyFallbackMode,
     hiddenPlatforms, setHiddenPlatforms,
     hideForeignModels, setHideForeignModels,
+    disableAllBlockRules, setDisableAllBlockRules,
     topBarVisibleButtons, setTopBarVisibleButtons,
     altSpaceResetThreshold, setAltSpaceResetThreshold,
     defaultAdvancedPanelTab, setDefaultAdvancedPanelTab,

@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { Profile, TabState } from '../../lib/electron-api';
 import type { WebviewElement } from '../../lib/webview';
 import { safeReloadWebview, safeLoadURLWebview, sanitizeUrl } from '../../lib/webview';
-import { openAiAppEditor, pushCardToWhiteboard, saveWhiteboardImage } from '../../lib/electron-api';
+import { openAiAppEditor } from '../../lib/electron-api';
 
 export interface TabContextMenuParams {
   tabs: TabState[];
@@ -120,31 +120,6 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     void openAiAppEditor({ profileId: profile.id, mode: 'edit' });
   }, [tabs, getProfile]);
 
-  // 需求 12：截图当前 webview 页面到白板（生成 image 卡片）
-  const screenshotToWhiteboard = useCallback(async (tabId: string) => {
-    const webview = document.querySelector(`webview[data-tab-id="${tabId}"]`) as WebviewElement | null;
-    if (!webview) return;
-    const tab = tabs.find((t) => t.id === tabId);
-    const profile = tab ? getProfile(tab.profileId) : null;
-    try {
-      const image = await webview.capturePage();
-      const dataURL = image.toDataURL();
-      const filePath = await saveWhiteboardImage(dataURL);
-      await pushCardToWhiteboard({
-        type: 'image',
-        content: filePath,
-        width: 400,
-        metadata: {
-          sourceUrl: tab?.url,
-          platform: profile?.name,
-          createdAt: Date.now(),
-        },
-      });
-    } catch (e) {
-      console.error('[MainView] 截图到白板失败:', e);
-    }
-  }, [tabs, getProfile]);
-
   // 右键菜单打开
   const handleTabContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
@@ -203,7 +178,6 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     closeTabsToRight,
     setAsAIHome,
     configureApp,
-    screenshotToWhiteboard,
     handleTabContextMenu,
     commitTabUrl,
     setUrlDraft,
