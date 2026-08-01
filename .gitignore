@@ -56,9 +56,10 @@ ai-window-uiux-v2/
 docs/
 tests/
 showcase.html
-# 根目录散落 .md 不入库（README.md 与 LICENSE 例外）
+# 根目录散落 .md 不入库（README.md / CHANGELOG.md / LICENSE 例外）
 /*.md
 !README.md
+!CHANGELOG.md
 !LICENSE
 
 # ============================================================
