@@ -28,6 +28,20 @@
   border-bottom: 1px solid var(--glass-bd-2);
   border-radius: 0;
 }
+/* 网格中的供应商卡片：独立边框 + 背景，替代 border-bottom 分隔 */
+.provider-card-grid .provider-card {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--glass-bd-2);
+  border-bottom: 1px solid var(--glass-bd-2);
+  background: var(--glass-bg);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+.provider-card-grid .provider-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-05);
+}
 .provider-card-head {
   display: flex;
   align-items: center;

@@ -58,10 +58,12 @@ export default function SectionTitle({
         }}
         data-name="ui.section-title.collapsible"
       >
-        <span className="section-title-toggle-icon" aria-hidden="true" data-name="ui.section-title.toggle-icon">
-          {collapsed ? '▼' : '▼'}
-        </span>
-        <h3 className="section-title" data-name="ui.section-title.title">{children}</h3>
+        <div className="section-title-main" data-name="ui.section-title.main">
+          <h3 className="section-title" data-name="ui.section-title.title">{children}</h3>
+          <span className="section-title-toggle-icon" aria-hidden="true" data-name="ui.section-title.toggle-icon">
+            ▼
+          </span>
+        </div>
         {actions && <div className="section-title-actions" data-name="ui.section-title.actions">{actions}</div>}
       </div>
     );

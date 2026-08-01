@@ -1,0 +1,175 @@
+/* =====================================================================
+   经典版主题（暖砖红）
+   <html data-ui-version="classic"> 时覆写 base.css 中的靛蓝令牌。
+   仅令牌换值，选择器与 DOM 结构不变；与 UI 比例互相独立。
+   经典版保留完整的亮色 / 暗色双模式支持。
+   ===================================================================== */
+
+/* ===== 经典版 · 亮色 ===== */
+[data-ui-version="classic"] {
+  /* === brand 色阶（暖砖红） === */
+  --brand-50:  #fff4ee;
+  --brand-100: #ffe6dc;
+  --brand-200: #ffc8b5;
+  --brand-300: #ffab8f;
+  --brand-400: #ff845f;
+  --brand-500: #f7663c;
+  --brand-600: #f1481e;
+  --brand-700: #d63a14;
+  --brand-800: #ad2f13;
+  --brand-900: #8a2914;
+
+  /* === surface（暖米灰） === */
+  --background: #e3dfd9;
+  --muted:      #ece7e1;
+  --card:       #f3f0eb;
+  --popover:    #f7f4ef;
+
+  /* === text（暖调） === */
+  --foreground:         #211d1a;
+  --muted-foreground:   #5c5650;
+  --card-foreground:    #211d1a;
+  --popover-foreground: #211d1a;
+  --accent-foreground:  #211d1a;
+
+  /* === 交互色 === */
+  --primary-foreground: #fff7f3;
+  --accent:             #ded7cf;
+  --input:              #d7d1c9;
+  --border:             #cbc3ba;
+
+  /* === chart === */
+  --chart-1: #f7663c;
+  --chart-4: #84776e;
+
+  /* === Highlight 点缀 === */
+  --highlight-success: #34c759;
+  --highlight-warning: #ff9f0a;
+  --highlight-active:  #ff6b4a;
+
+  /* === Radius（原大圆角档位） === */
+  --radius:    20px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+
+  /* === 阴影（暖褐色调） === */
+  --shadow-sm: 0 1px 2px rgba(45, 30, 28, 0.18);
+  --shadow-md: 0 2px 8px rgba(45, 30, 28, 0.25);
+  --shadow-lg: 0 4px 16px rgba(45, 30, 28, 0.30);
+  --shadow-glow: 0 0 32px rgba(194, 90, 74, 0.25);
+  --shadow-card: 0 8px 32px rgba(20, 12, 10, 0.45), 0 2px 4px rgba(20, 12, 10, 0.30);
+  --shadow-card-hover: 0 12px 48px rgba(194, 90, 74, 0.20), 0 4px 12px rgba(20, 12, 10, 0.50);
+  --shadow-panel: -12px 0 48px rgba(20, 12, 10, 0.5);
+
+  /* === 玻璃态（亮色） === */
+  --glass-bg:   rgba(243, 240, 235, 0.72);
+  --glass-bg-2: rgba(236, 231, 225, 0.60);
+
+  /* === 语义扩展色 === */
+  --success:           #66bb6a;
+  --success-bg-soft:   rgba(34, 197, 94, 0.15);
+  --info:              #6495ed;
+  --info-foreground:   #ffffff;
+  --info-bg-soft:      rgba(100, 149, 237, 0.15);
+  --destructive-dim:   var(--brand-700);
+  --overlay-warm-dim:  rgba(20, 12, 10, 0.6);
+  --overlay-shadow-md: 0 24px 64px rgba(20, 12, 10, 0.6);
+  --avatar-gradient:   linear-gradient(135deg, #6a4a5a, #3a2a3a);
+
+  /* === accent 强调色扩展（砖红 alpha 梯度） === */
+  --accent-bright-foreground: #ffffff;
+  --accent-light-foreground: #ffffff;
+  --accent-90: rgba(241, 72, 30, 0.9);
+  --accent-75: rgba(241, 72, 30, 0.75);
+  --accent-50: rgba(241, 72, 30, 0.5);
+  --accent-25: rgba(241, 72, 30, 0.25);
+  --accent-10: rgba(241, 72, 30, 0.10);
+  --accent-05: rgba(241, 72, 30, 0.05);
+
+  /* === 装饰光晕 === */
+  --halo-1: radial-gradient(ellipse at top right, rgba(247, 102, 60, 0.22), transparent 60%);
+  --halo-2: radial-gradient(ellipse at bottom left, rgba(214, 58, 20, 0.20), transparent 60%);
+  --halo-3: radial-gradient(ellipse at center, rgba(241, 72, 30, 0.08), transparent 70%);
+}
+
+/* 经典版 · 三档 UI 比例的圆角 */
+[data-ui-version="classic"][data-ui-scale="small"] {
+  --radius: 18px; --radius-sm: 8px; --radius-md: 12px;
+}
+[data-ui-version="classic"][data-ui-scale="medium"] {
+  --radius: 20px; --radius-sm: 10px; --radius-md: 14px;
+}
+[data-ui-version="classic"][data-ui-scale="large"] {
+  --radius: 22px; --radius-sm: 12px; --radius-md: 16px;
+}
+
+/* ===== 经典版 · 暗色（暖砖红暗色） ===== */
+[data-ui-version="classic"].dark,
+[data-ui-version="classic"][data-theme="dark"] {
+  --background: #1f1719;
+  --muted:      #241d1f;
+  --card:       #2a2023;
+  --popover:    #3a2a2d;
+
+  --foreground:         #f0e6e3;
+  --muted-foreground:   #d4c0bc;
+  --card-foreground:    #f0e6e3;
+  --popover-foreground: #f0e6e3;
+  --accent-foreground:  #f0e6e3;
+  --secondary-foreground: #f0e6e3;
+
+  --primary:            #a8463a;
+  --primary-foreground: #fff7f3;
+  --accent:             #4a383a;
+  --input:              #3a2a2d;
+  --border:             rgba(194, 90, 74, 0.18);
+  --secondary:          #5a4448;
+  --ring:               #a8463a;
+
+  --destructive: #ff6b57;
+  --success:     #4a7a68;
+  --warning:     #8a7a4e;
+  --info:        #6495ed;
+
+  --chart-1: #a8463a;
+  --chart-3: #4a7a68;
+  --chart-4: #4e5e8a;
+  --chart-5: #8a7a4e;
+
+  --glass-bg:     rgba(58, 42, 45, 0.55);
+  --glass-bg-2:   rgba(74, 56, 58, 0.45);
+  --glass-bd:     rgba(194, 90, 74, 0.18);
+  --glass-bd-2:   rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(194, 90, 74, 0.18);
+
+  /* === Ornament 装饰元素（古典英伦细节） === */
+  --ornament-line:  1px solid rgba(212, 165, 116, 0.25);
+  --ornament-glyph: rgba(212, 165, 116, 0.4);
+
+  /* 暗色模式下的扩展令牌覆写 */
+  --text-muted: #8a7470;
+  --text-dim:   #5a4845;
+
+  --accent-bright: #c25a4a;
+  --accent-bright-foreground: #ffffff;
+  --accent-light:  #e07a64;
+  --accent-light-foreground: #ffffff;
+  --accent-dim:    #823328;
+  --accent-90: rgba(168, 70, 58, 0.9);
+  --accent-75: rgba(168, 70, 58, 0.75);
+  --accent-50: rgba(168, 70, 58, 0.5);
+  --accent-25: rgba(168, 70, 58, 0.25);
+  --accent-10: rgba(168, 70, 58, 0.1);
+  --accent-05: rgba(168, 70, 58, 0.05);
+
+  --halo-1: radial-gradient(ellipse at top right, rgba(194, 90, 74, 0.28), transparent 60%);
+  --halo-2: radial-gradient(ellipse at bottom left, rgba(130, 51, 40, 0.32), transparent 60%);
+  --halo-3: radial-gradient(ellipse at center, rgba(168, 70, 58, 0.12), transparent 70%);
+
+  /* 暗色琥珀实心徽章 */
+  --warning-badge-bg: #f0b73c;
+  --warning-badge-fg: #1f1719;
+}

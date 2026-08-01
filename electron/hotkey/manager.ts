@@ -328,9 +328,45 @@ export class HotkeyManager {
   /** uiohook keycode → Electron accelerator 主键名的反向映射 */
   private _uiohookKeyToName = new Map<number, string>()
 
+  /**
+   * 修饰键实时按下状态（独立追踪，解决 uiohook altKey 状态残留问题）。
+   *
+   * 问题场景：Windows 上 Alt+Tab 切换窗口后，Alt 的 keyup 事件可能未被
+   * uiohook 捕获，导致后续所有按键事件的 altKey 字段都为 true，
+   * 从而单独按 Space 也会误匹配 Alt+Space 热键。
+   *
+   * 解决方案：通过 keydown/keyup 事件自行追踪修饰键状态，
+   * 匹配时使用追踪值而非事件自带的 altKey/ctrlKey/shiftKey/metaKey。
+   */
+  private modAlt = false
+  private modCtrl = false
+  private modShift = false
+  private modMeta = false
+  /** 修饰键 keycode 集合（按 Alt/Ctrl/Shift/Meta 分类） */
+  private _modKeyCodes: { alt: Set<number>; ctrl: Set<number>; shift: Set<number>; meta: Set<number> } = {
+    alt: new Set(),
+    ctrl: new Set(),
+    shift: new Set(),
+    meta: new Set(),
+  }
+
   constructor() {
     this.buildUiohookKeyMap()
+    this.buildModifierKeyCodes()
     this.attachUiohookListener()
+  }
+
+  /** 扫描 UiohookKey 枚举，收集各修饰键的所有 keycode（含左/右变体） */
+  private buildModifierKeyCodes(): void {
+    for (const key of Object.keys(UiohookKey)) {
+      const kc = UiohookKey[key]
+      if (typeof kc !== 'number') continue
+      const up = key.toUpperCase()
+      if (up === 'ALT' || up === 'LEFTALT' || up === 'RIGHTALT') this._modKeyCodes.alt.add(kc)
+      else if (up === 'CTRL' || up === 'CONTROL' || up === 'LEFTCTRL' || up === 'RIGHTCTRL') this._modKeyCodes.ctrl.add(kc)
+      else if (up === 'SHIFT' || up === 'LEFTSHIFT' || up === 'RIGHTSHIFT') this._modKeyCodes.shift.add(kc)
+      else if (up === 'META' || up === 'LEFTMETA' || up === 'RIGHTMETA' || up === 'SUPER' || up === 'LEFTSUPER' || up === 'RIGHTSUPER' || up === 'COMMAND') this._modKeyCodes.meta.add(kc)
+    }
   }
 
   /** 构建 uiohook keycode → Electron 键名的反向映射 */
@@ -459,6 +495,11 @@ export class HotkeyManager {
   private attachUiohookListener(): void {
     uIOhook.on('keydown', (e) => {
       if (e.type !== EventType.EVENT_KEY_PRESSED) return
+      // 追踪修饰键按下状态（解决 uiohook altKey 状态残留导致误触发）
+      if (this._modKeyCodes.alt.has(e.keycode)) this.modAlt = true
+      if (this._modKeyCodes.ctrl.has(e.keycode)) this.modCtrl = true
+      if (this._modKeyCodes.shift.has(e.keycode)) this.modShift = true
+      if (this._modKeyCodes.meta.has(e.keycode)) this.modMeta = true
       // 录制模式：跳过常规热键匹配，仅由 handleRecordingKeydown 处理
       if (this._recordingCallback) {
         this.handleRecordingKeydown(e)
@@ -466,15 +507,15 @@ export class HotkeyManager {
       }
       // 暂停状态：跳过所有热键匹配（如使用指南窗口打开时）
       if (this._paused) return
-      // 主映射（globalShortcut 兜底）
+      // 主映射（globalShortcut 兜底）：使用追踪的修饰键状态而非事件自带字段
       for (const [acc, matcher] of this.uiohookMatchers) {
         if (!matcher.keycode) continue
         if (
           e.keycode === matcher.keycode &&
-          e.altKey === matcher.alt &&
-          e.ctrlKey === matcher.ctrl &&
-          e.shiftKey === matcher.shift &&
-          e.metaKey === matcher.meta
+          this.modAlt === matcher.alt &&
+          this.modCtrl === matcher.ctrl &&
+          this.modShift === matcher.shift &&
+          this.modMeta === matcher.meta
         ) {
           matcher.callback()
           return
@@ -485,11 +526,10 @@ export class HotkeyManager {
         const m = this.voiceMatcher
         if (
           e.keycode === m.keycode &&
-          // 必须匹配的修饰键：仅检查热键要求的那几个；其它修饰键额外按下也算
-          (m.alt ? e.altKey : true) &&
-          (m.ctrl ? e.ctrlKey : true) &&
-          (m.shift ? e.shiftKey : true) &&
-          (m.meta ? e.metaKey : true)
+          (m.alt ? this.modAlt : true) &&
+          (m.ctrl ? this.modCtrl : true) &&
+          (m.shift ? this.modShift : true) &&
+          (m.meta ? this.modMeta : true)
         ) {
           // 关键修复：长按时 OS 会重复发 keydown 事件（每 ~30ms 一次），
           // 之前每次都触发 onKeyDown → startBackgroundVoice → 上轮未 stop → 自愈循环
@@ -515,6 +555,11 @@ export class HotkeyManager {
     })
     uIOhook.on('keyup', (e) => {
       if (e.type !== EventType.EVENT_KEY_RELEASED) return
+      // 追踪修饰键释放状态（与 keydown 配对，解决 uiohook altKey 状态残留）
+      if (this._modKeyCodes.alt.has(e.keycode)) this.modAlt = false
+      if (this._modKeyCodes.ctrl.has(e.keycode)) this.modCtrl = false
+      if (this._modKeyCodes.shift.has(e.keycode)) this.modShift = false
+      if (this._modKeyCodes.meta.has(e.keycode)) this.modMeta = false
       // 语音热键 keyup：主键匹配就触发 onKeyUp
       // 1) voiceKeyPressed=true 时 → 标准路径（已记录按下态）
       // 2) voiceKeyPressed=false 时 → 兜底路径：可能 keydown 事件因任何原因丢失，

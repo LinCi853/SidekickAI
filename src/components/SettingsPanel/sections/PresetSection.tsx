@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { DevicePreset } from '../../../lib/electron-api';
 import { savePreset, deletePreset } from '../../../lib/electron-api';
-import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
-import { SectionTitle, FormRow, Combobox } from '../../ui';
-import type { ComboboxOption } from '../../ui';
+import { SectionTitle } from '../../ui';
+import PresetEditorModal from '../../PresetEditorModal';
 
 interface PresetSectionProps {
   presets: DevicePreset[];
@@ -13,30 +12,19 @@ interface PresetSectionProps {
   presetExpanded: boolean;
   setPresetExpanded: Dispatch<SetStateAction<boolean>>;
   onReload: () => void;
+  /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
+  collapsibleTitle?: boolean;
 }
 
-/** 创建空白预设草稿（新增时使用） */
-function emptyDraft(): DevicePreset {
-  return {
-    id: '',
-    name: '',
-    userAgent: '',
-    platform: 'desktop',
-    viewport: { width: 1920, height: 1080 },
-    devicePixelRatio: 1,
-    navigatorPlatform: 'Win32',
-    vendor: 'Google Inc.',
-    maxTouchPoints: 0,
-    hardwareConcurrency: 8,
-    deviceMemory: 8,
-    brands: [],
-    chPlatform: 'Windows',
-    chPlatformVersion: '10.0.0',
-    chMobile: false,
-    language: 'zh-CN',
-    timezone: 'Asia/Shanghai',
-  };
+/** 从预设名称中提取浏览器名称（去掉平台前缀，只保留浏览器标识） */
+function extractBrowserName(name: string): string {
+  // 名称格式如 "Windows / Chrome 125"、"iPhone 15 Pro / Safari" → 取 " / " 后的部分
+  const parts = name.split(' / ');
+  return parts.length > 1 ? parts[parts.length - 1].trim() : name.trim();
 }
+
+/** pending 删除确认超时时间（ms） */
+const PENDING_DELETE_TIMEOUT_MS = 3000;
 
 export default function PresetSection({
   presets,
@@ -44,404 +32,205 @@ export default function PresetSection({
   presetExpanded,
   setPresetExpanded,
   onReload,
+  collapsibleTitle = true,
 }: PresetSectionProps) {
-  // editingId: null=未编辑, 'new'=新增, 其他=正在编辑的预设 id
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<DevicePreset>(emptyDraft());
-  const [isSaving, setIsSaving] = useState(false);
+  // 编辑器遮罩状态
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit');
+  const [editorPreset, setEditorPreset] = useState<DevicePreset | null>(null);
 
-  function handleAdd() {
-    setDraft(emptyDraft());
-    setEditingId('new');
-  }
+  // 删除二次确认状态
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function handleEdit(preset: DevicePreset) {
-    setDraft({ ...preset });
-    setEditingId(preset.id);
-  }
+  const clearPendingDelete = useCallback(() => {
+    if (pendingDeleteTimerRef.current) {
+      clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = null;
+    }
+    setPendingDeleteId(null);
+  }, []);
 
-  function handleCancel() {
-    setEditingId(null);
-  }
+  useEffect(() => {
+    return () => {
+      if (pendingDeleteTimerRef.current) {
+        clearTimeout(pendingDeleteTimerRef.current);
+      }
+    };
+  }, []);
 
-  async function handleSave() {
-    if (!draft.name.trim() || !draft.userAgent.trim()) return;
-    setIsSaving(true);
+  const handleOpenEditorEdit = useCallback((preset: DevicePreset) => {
+    setEditorPreset(preset);
+    setEditorMode('edit');
+    setEditorOpen(true);
+  }, []);
+
+  const handleOpenEditorCreate = useCallback(() => {
+    setEditorPreset(null);
+    setEditorMode('create');
+    setEditorOpen(true);
+  }, []);
+
+  const handleCloseEditor = useCallback(() => {
+    setEditorOpen(false);
+  }, []);
+
+  /** 复制预设：克隆后清除 id 和 builtin 标记，名称加"副本"后缀 */
+  const handleDuplicate = useCallback(async (preset: DevicePreset) => {
     try {
-      // savePreset 为 upsert 语义：id 为空时由 store 生成 UUID，已有 id 时更新
-      await savePreset(draft);
-      setEditingId(null);
+      const existingNames = presets.map((p) => p.name);
+      let baseName = `${preset.name} 副本`;
+      let counter = 1;
+      while (existingNames.includes(baseName)) {
+        baseName = `${preset.name} 副本 ${counter}`;
+        counter++;
+      }
+      const copy: DevicePreset = {
+        ...preset,
+        id: '',
+        name: baseName,
+        builtin: false,
+      };
+      await savePreset(copy);
       onReload();
     } catch (e) {
-      console.error('保存设备预设失败:', e);
-    } finally {
-      setIsSaving(false);
+      console.error('[PresetSection] 复制预设失败:', e);
     }
-  }
+  }, [presets, onReload]);
 
-  async function handleDelete(id: string) {
-    if (!confirm('确定删除该设备预设？')) return;
-    try {
-      await deletePreset(id);
-      onReload();
-    } catch (e) {
-      console.error('删除设备预设失败:', e);
+  /** 删除预设（带二次确认） */
+  const handleDelete = useCallback((preset: DevicePreset) => {
+    if (pendingDeleteId === preset.id) {
+      // 二次确认：执行删除
+      clearPendingDelete();
+      void deletePreset(preset.id)
+        .then(() => onReload())
+        .catch((e) => console.error('[PresetSection] 删除预设失败:', e));
+    } else {
+      // 首次点击：进入 pending 状态
+      setPendingDeleteId(preset.id);
+      if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = setTimeout(() => {
+        pendingDeleteTimerRef.current = null;
+        setPendingDeleteId(null);
+      }, PENDING_DELETE_TIMEOUT_MS);
     }
-  }
-
-  /** 更新草稿标量字段 */
-  function updateField<K extends keyof DevicePreset>(key: K, value: DevicePreset[K]) {
-    setDraft((d) => ({ ...d, [key]: value }));
-  }
-
-  /** 更新视口字段 */
-  function updateViewport(field: 'width' | 'height', value: number) {
-    setDraft((d) => ({ ...d, viewport: { ...d.viewport, [field]: value } }));
-  }
+  }, [pendingDeleteId, clearPendingDelete, onReload]);
 
   return (
     <section data-name="settings.preset.section">
       <SectionTitle
-        collapsible
-        collapsed={!presetExpanded}
-        onToggle={() => setPresetExpanded((v) => !v)}
+        collapsible={collapsibleTitle}
+        collapsed={collapsibleTitle ? !presetExpanded : false}
+        onToggle={collapsibleTitle ? () => setPresetExpanded((v) => !v) : undefined}
       >
         设备预设（{presets.length}）
       </SectionTitle>
-      {presetExpanded && (
+      {(!collapsibleTitle || presetExpanded) && (
         <>
           {loading && (
             <div className="preset-loading" data-name="settings.preset.loading">
               加载中...
             </div>
           )}
-          {!loading && presets.map((p, idx) => (
-            <div
-              key={p.id}
-              className="preset-card"
-              data-name={`settings.preset.preset-item-${idx + 1}`}
-              data-index={idx + 1}
-              data-id={p.id}
-            >
-              {/* 编辑表单展开时替换卡片内容 */}
-              {editingId === p.id ? (
-                <PresetForm
-                  draft={draft}
-                  saving={isSaving}
-                  onUpdateField={updateField}
-                  onUpdateViewport={updateViewport}
-                  onSave={() => void handleSave()}
-                  onCancel={handleCancel}
-                />
-              ) : (
-                <>
-                  <div className="preset-card-head" data-name={`settings.preset.preset-item-${idx + 1}-head`}>
-                    <span className="name" data-name={`settings.preset.preset-item-${idx + 1}-name`}>{p.name}</span>
-                    <div className="preset-card-badges" data-name={`settings.preset.preset-item-${idx + 1}-badges`}>
-                      {p.builtin && <Badge variant="accent" data-name={`settings.preset.preset-item-${idx + 1}-builtin-badge`}>内置</Badge>}
-                      <Badge variant={p.platform === 'mobile' ? 'warn' : 'accent'} data-name={`settings.preset.preset-item-${idx + 1}-platform-badge`}>
-                        {p.platform === 'mobile' ? '移动端' : '桌面端'}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="preset-card-meta" title={p.userAgent} data-name={`settings.preset.preset-item-${idx + 1}-meta`}>
-                    {p.viewport.width}×{p.viewport.height} · DPR {p.devicePixelRatio} · {p.language}
-                  </div>
-                  <div className="provider-card-actions spaced" data-name={`settings.preset.preset-item-${idx + 1}-actions`}>
-                    <Button
-                      variant="text"
-                      className="btn-secondary-underline compact"
-                      onClick={() => handleEdit(p)}
-                      data-name={`settings.preset.preset-item-${idx + 1}-edit-button`}
+          {!loading && (
+            <div className="preset-card-grid" data-name="settings.preset.grid">
+              {presets.map((p, idx) => {
+                const browserName = extractBrowserName(p.name);
+                const isPendingDelete = pendingDeleteId === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    className={`preset-card preset-card-v2${isPendingDelete ? ' pending-delete' : ''}`}
+                    data-name={`settings.preset.preset-item-${idx + 1}`}
+                    data-index={idx + 1}
+                    data-id={p.id}
+                  >
+                    {/* 左侧：平台标识图标 */}
+                    <span
+                      className={`preset-card-platform-icon ${p.platform === 'mobile' ? 'is-mobile' : 'is-desktop'}`}
+                      title={p.platform === 'mobile' ? '移动端' : '桌面端'}
+                      aria-label={p.platform === 'mobile' ? '移动端' : '桌面端'}
+                      data-name={`settings.preset.preset-item-${idx + 1}-platform-badge`}
                     >
-                      编辑
-                    </Button>
-                    {!p.builtin && (
+                      {p.platform === 'mobile' ? (
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                          <line x1="12" y1="18" x2="12.01" y2="18" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                          <line x1="8" y1="21" x2="16" y2="21" />
+                          <line x1="12" y1="17" x2="12" y2="21" />
+                        </svg>
+                      )}
+                    </span>
+
+                    {/* 中间：浏览器名称 + 分辨率 */}
+                    <span className="preset-card-info" data-name={`settings.preset.preset-item-${idx + 1}-info`}>
+                      <span className="preset-card-browser-name" data-name={`settings.preset.preset-item-${idx + 1}-name`}>{browserName}</span>
+                      <span className="preset-card-resolution" data-name={`settings.preset.preset-item-${idx + 1}-meta`}>
+                        {p.viewport.width}×{p.viewport.height}
+                      </span>
+                    </span>
+
+                    {/* 右侧：操作按钮 */}
+                    <div className="preset-card-actions" data-name={`settings.preset.preset-item-${idx + 1}-actions`}>
+                      <Button
+                        variant="text"
+                        className="btn-secondary-underline compact"
+                        onClick={() => handleOpenEditorEdit(p)}
+                        data-name={`settings.preset.preset-item-${idx + 1}-edit-button`}
+                      >
+                        编辑
+                      </Button>
+                      <Button
+                        variant="text"
+                        className="btn-secondary-underline compact"
+                        onClick={() => void handleDuplicate(p)}
+                        data-name={`settings.preset.preset-item-${idx + 1}-duplicate-button`}
+                      >
+                        复制
+                      </Button>
                       <Button
                         variant="text"
                         danger
-                        className="btn-secondary-underline compact"
-                        onClick={() => void handleDelete(p.id)}
+                        className="btn-secondary-underline compact danger"
+                        onClick={() => handleDelete(p)}
+                        title={isPendingDelete ? '再次点击确认删除' : `删除 ${p.name}`}
                         data-name={`settings.preset.preset-item-${idx + 1}-delete-button`}
                       >
-                        删除
+                        {isPendingDelete ? '确认' : '删除'}
                       </Button>
-                    )}
+                    </div>
                   </div>
-                </>
-              )}
+                );
+              })}
+
+              {/* 卡片式新增按钮：追加在列表末尾 */}
+              <button
+                type="button"
+                className="preset-card preset-card-add"
+                onClick={handleOpenEditorCreate}
+                data-name="settings.preset.add-button"
+              >
+                <span className="preset-card-add-icon" aria-hidden="true">+</span>
+                <span className="preset-card-add-text">新增预设</span>
+              </button>
             </div>
-          ))}
-          {/* 新增表单 */}
-          {editingId === 'new' && (
-            <div className="preset-card" data-name="settings.preset.new-card">
-              <PresetForm
-                draft={draft}
-                saving={isSaving}
-                onUpdateField={updateField}
-                onUpdateViewport={updateViewport}
-                onSave={() => void handleSave()}
-                onCancel={handleCancel}
-              />
-            </div>
-          )}
-          {/* 新增按钮（表单未打开时显示） */}
-          {editingId !== 'new' && (
-            <button
-              type="button"
-              className="btn-outline btn-outline-sm provider-add-btn spaced"
-              onClick={handleAdd}
-              data-name="settings.preset.add-button"
-            >
-              + 新增预设
-            </button>
           )}
         </>
       )}
+
+      {/* 设备预设编辑器遮罩 */}
+      <PresetEditorModal
+        open={editorOpen}
+        onClose={handleCloseEditor}
+        preset={editorPreset}
+        mode={editorMode}
+        onSaved={onReload}
+      />
     </section>
-  );
-}
-
-/** 预设编辑/新增表单（内联展开式） */
-interface PresetFormProps {
-  draft: DevicePreset;
-  saving: boolean;
-  onUpdateField: <K extends keyof DevicePreset>(key: K, value: DevicePreset[K]) => void;
-  onUpdateViewport: (field: 'width' | 'height', value: number) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}
-
-function PresetForm({
-  draft,
-  saving,
-  onUpdateField,
-  onUpdateViewport,
-  onSave,
-  onCancel,
-}: PresetFormProps) {
-  return (
-    <div className="provider-form" data-name="settings.preset.form">
-      <FormRow label="名称" compact>
-        <input
-          type="text"
-          className="input-underline"
-          value={draft.name}
-          placeholder="Windows / Chrome 125"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => onUpdateField('name', e.target.value)}
-          data-name="settings.preset.form-name-input"
-        />
-      </FormRow>
-      <div className="provider-form-inline-row" data-name="settings.preset.form-platform-viewport-row">
-        <FormRow label="平台" compact>
-          <Combobox
-            inputValue={draft.platform}
-            onInputChange={() => {}}
-            inputPlaceholder="选择平台"
-            inputClassName="input-underline"
-            inputReadOnly
-            options={[
-              { value: 'desktop', label: 'desktop', selected: draft.platform === 'desktop' },
-              { value: 'mobile', label: 'mobile', selected: draft.platform === 'mobile' },
-            ]}
-            onSelect={(v) => onUpdateField('platform', v as DevicePreset['platform'])}
-            searchable={false}
-            dataName="settings.preset.form-platform-select"
-          />
-        </FormRow>
-        <FormRow label="视口" compact>
-          <div className="preset-viewport-pair">
-            <input
-              type="number"
-              className="input-underline"
-              value={draft.viewport.width}
-              min={1}
-              aria-label="视口宽度"
-              onChange={(e) => onUpdateViewport('width', Number(e.target.value))}
-              data-name="settings.preset.form-viewport-width-input"
-            />
-            <span className="preset-viewport-sep">×</span>
-            <input
-              type="number"
-              className="input-underline"
-              value={draft.viewport.height}
-              min={1}
-              aria-label="视口高度"
-              onChange={(e) => onUpdateViewport('height', Number(e.target.value))}
-              data-name="settings.preset.form-viewport-height-input"
-            />
-          </div>
-        </FormRow>
-      </div>
-      <FormRow label="User-Agent" compact>
-        <input
-          type="text"
-          className="input-underline"
-          value={draft.userAgent}
-          placeholder="Mozilla/5.0 ..."
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => onUpdateField('userAgent', e.target.value)}
-          data-name="settings.preset.form-user-agent-input"
-        />
-      </FormRow>
-      <div className="provider-form-inline-row" data-name="settings.preset.form-hardware-row">
-        <FormRow label="DPR" compact>
-          <input
-            type="number"
-            className="input-underline"
-            value={draft.devicePixelRatio}
-            min={0}
-            step={0.5}
-            onChange={(e) => onUpdateField('devicePixelRatio', Number(e.target.value))}
-            data-name="settings.preset.form-dpr-input"
-          />
-        </FormRow>
-        <FormRow label="触点" compact>
-          <input
-            type="number"
-            className="input-underline"
-            value={draft.maxTouchPoints}
-            min={0}
-            onChange={(e) => onUpdateField('maxTouchPoints', Number(e.target.value))}
-            data-name="settings.preset.form-touch-points-input"
-          />
-        </FormRow>
-        <FormRow label="CPU" compact>
-          <input
-            type="number"
-            className="input-underline"
-            value={draft.hardwareConcurrency}
-            min={1}
-            onChange={(e) => onUpdateField('hardwareConcurrency', Number(e.target.value))}
-            data-name="settings.preset.form-cpu-cores-input"
-          />
-        </FormRow>
-        <FormRow label="内存(GB)" compact>
-          <input
-            type="number"
-            className="input-underline"
-            value={draft.deviceMemory}
-            min={1}
-            onChange={(e) => onUpdateField('deviceMemory', Number(e.target.value))}
-            data-name="settings.preset.form-device-memory-input"
-          />
-        </FormRow>
-      </div>
-      <FormRow label="navigator.platform" compact>
-        <input
-          type="text"
-          className="input-underline"
-          value={draft.navigatorPlatform}
-          placeholder="Win32"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => onUpdateField('navigatorPlatform', e.target.value)}
-          data-name="settings.preset.form-navigator-platform-input"
-        />
-      </FormRow>
-      <FormRow label="navigator.vendor" compact>
-        <input
-          type="text"
-          className="input-underline"
-          value={draft.vendor}
-          placeholder="Google Inc."
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => onUpdateField('vendor', e.target.value)}
-          data-name="settings.preset.form-vendor-input"
-        />
-      </FormRow>
-      <div className="provider-form-inline-row" data-name="settings.preset.form-ch-row">
-        <FormRow label="CH 平台" compact>
-          <input
-            type="text"
-            className="input-underline"
-            value={draft.chPlatform}
-            placeholder="Windows"
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(e) => onUpdateField('chPlatform', e.target.value)}
-            data-name="settings.preset.form-ch-platform-input"
-          />
-        </FormRow>
-        <FormRow label="版本" compact>
-          <input
-            type="text"
-            className="input-underline"
-            value={draft.chPlatformVersion}
-            placeholder="10.0.0"
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(e) => onUpdateField('chPlatformVersion', e.target.value)}
-            data-name="settings.preset.form-ch-platform-version-input"
-          />
-        </FormRow>
-        <FormRow label="移动端" compact>
-          <Combobox
-            inputValue={draft.chMobile ? '是' : '否'}
-            onInputChange={() => {}}
-            inputPlaceholder="选择"
-            inputClassName="input-underline"
-            inputReadOnly
-            options={[
-              { value: 'false', label: '否', selected: !draft.chMobile },
-              { value: 'true', label: '是', selected: draft.chMobile },
-            ]}
-            onSelect={(v) => onUpdateField('chMobile', v === 'true')}
-            searchable={false}
-            dataName="settings.preset.form-ch-mobile-select"
-          />
-        </FormRow>
-      </div>
-      <div className="provider-form-inline-row" data-name="settings.preset.form-locale-row">
-        <FormRow label="语言" compact>
-          <input
-            type="text"
-            className="input-underline"
-            value={draft.language}
-            placeholder="zh-CN"
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(e) => onUpdateField('language', e.target.value)}
-            data-name="settings.preset.form-language-input"
-          />
-        </FormRow>
-        <FormRow label="时区" compact>
-          <input
-            type="text"
-            className="input-underline"
-            value={draft.timezone}
-            placeholder="Asia/Shanghai"
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(e) => onUpdateField('timezone', e.target.value)}
-            data-name="settings.preset.form-timezone-input"
-          />
-        </FormRow>
-      </div>
-      <div className="provider-form-actions" data-name="settings.preset.form-actions">
-        <Button
-          variant="primary-compact"
-          className="provider-form-btn"
-          disabled={saving || !draft.name.trim() || !draft.userAgent.trim()}
-          onClick={onSave}
-          data-name="settings.preset.form-save-button"
-        >
-          {saving ? '保存中…' : '保存'}
-        </Button>
-        <Button
-          variant="outline"
-          className="provider-form-btn"
-          disabled={saving}
-          onClick={onCancel}
-          data-name="settings.preset.form-cancel-button"
-        >
-          取消
-        </Button>
-      </div>
-    </div>
   );
 }

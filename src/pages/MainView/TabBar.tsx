@@ -24,6 +24,8 @@ export interface TabBarData {
   collapsed: boolean;
   /** 内置 AI 平台列表（用于查找 themeColor，驱动呼吸动画与图标背景） */
   platforms: AIPlatform[];
+  /** 标签栏最大行数（默认 1，Oxy 模式传 2 支持两行换行） */
+  maxRows?: number;
 }
 
 export interface TabBarActions {
@@ -55,7 +57,7 @@ const EXPAND_DELAY = 20;
 const COLLAPSE_DELAY = 800;
 
 export default function TabBar({ data, actions }: TabBarProps) {
-  const { tabs, activeTabId, draggingTabId, hoverTabId, collapsed, platforms } = data;
+  const { tabs, activeTabId, draggingTabId, hoverTabId, collapsed, platforms, maxRows = 1 } = data;
   const {
     getProfile,
     setActiveTab,
@@ -164,12 +166,72 @@ export default function TabBar({ data, actions }: TabBarProps) {
     ? ({ ['--tab-breath-color' as string]: breathColor } as React.CSSProperties)
     : undefined;
 
+  // Oxy 模式（maxRows > 1）：JS 计算标签栏展开高度（CSS-in-JS，不依赖浏览器 CSS 布局算法）
+  // 原理：测量每个标签的实际 offsetTop，统计真实行数，限制最多 maxRows 行
+  const barRef = useRef<HTMLDivElement>(null);
+  const [oxyHeight, setOxyHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (maxRows <= 1 || !expanded) {
+      setOxyHeight(null);
+      return;
+    }
+    const bar = barRef.current;
+    if (!bar) return;
+
+    const compute = () => {
+      const chips = bar.querySelectorAll<HTMLElement>('.tab-chip');
+      if (chips.length === 0) return;
+
+      const style = getComputedStyle(bar);
+      const padT = parseFloat(style.paddingTop) || 0;
+      const padB = parseFloat(style.paddingBottom) || 0;
+      const gapY = parseFloat(style.rowGap) || 0;
+
+      // 按实际 offsetTop 分组统计真实行数
+      const rowsMap = new Map<number, HTMLElement[]>();
+      chips.forEach((chip) => {
+        const top = chip.offsetTop;
+        if (!rowsMap.has(top)) rowsMap.set(top, []);
+        rowsMap.get(top)!.push(chip);
+      });
+
+      // 取前 maxRows 行参与高度计算
+      const sortedTops = Array.from(rowsMap.keys()).sort((a, b) => a - b).slice(0, maxRows);
+      if (sortedTops.length === 0) return;
+
+      let totalHeight = 0;
+      sortedTops.forEach((top, idx) => {
+        const rowChips = rowsMap.get(top)!;
+        // 该行实际最大高度
+        const rowH = Math.max(...rowChips.map((chip) => chip.getBoundingClientRect().height));
+        totalHeight += rowH;
+        if (idx < sortedTops.length - 1) totalHeight += gapY;
+      });
+
+      const h = totalHeight + padT + padB;
+      setOxyHeight(h);
+    };
+
+    requestAnimationFrame(compute);
+    const ro = new ResizeObserver(compute);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [maxRows, expanded, tabs.length]);
+
+  // 合并 style：呼吸色 + Oxy JS 计算高度
+  const containerStyle: React.CSSProperties = {
+    ...barStyle,
+    ...(oxyHeight != null ? { height: `${oxyHeight}px`, minHeight: `${oxyHeight}px` } : {}),
+  };
+
   return (
     <div
+      ref={barRef}
       className={`tab-bar${expanded ? ' is-expanded' : ''}${collapsed ? ' is-collapsible' : ''}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      style={barStyle}
+      style={containerStyle}
+      data-oxy-rows={maxRows > 1 ? String(maxRows) : undefined}
       data-name="main.tab-bar.container"
     >
       {tabs.map((tab, idx) => {

@@ -533,7 +533,7 @@ export function WebviewTab({
     webview.addEventListener('dom-ready', handleDomReady as EventListener);
 
     // webview 内长按 Tab 调出底栏（500ms+）。
-    // 注：Alt+1~9 / Ctrl+Tab / F11 / F12 / Ctrl+G 等应用内快捷键
+    // 注：Alt+1~9 / Ctrl+Tab / F12 / Ctrl+G 等应用内快捷键
     // 统一由主进程 before-input-event 拦截后通过 WEBVIEW_HOTKEY IPC 转发渲染层
     // （见 MainView/index.tsx 的 onWebviewHotkey 监听），此处仅保留长按 Tab 逻辑，
     // 因主进程无法实现长按计时。

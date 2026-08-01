@@ -25,6 +25,8 @@ interface PlatformUrlSectionProps {
   handleSavePlatform: (platform: AIPlatform) => Promise<void>;
   handleTogglePlatformHidden: (platform: AIPlatform) => Promise<void>;
   handleSwitchToPlatformTab: (platform: AIPlatform) => void;
+  /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
+  collapsibleTitle?: boolean;
 }
 
 export default function PlatformUrlSection({
@@ -48,6 +50,7 @@ export default function PlatformUrlSection({
   handleSavePlatform,
   handleTogglePlatformHidden,
   handleSwitchToPlatformTab,
+  collapsibleTitle = true,
 }: PlatformUrlSectionProps) {
   const desktopPresets = presets.filter((p) => p.platform === 'desktop');
   const mobilePresets = presets.filter((p) => p.platform === 'mobile');
@@ -61,18 +64,18 @@ export default function PlatformUrlSection({
   return (
     <section data-name="settings.platform-url.section">
       <SectionTitle
-        collapsible
-        collapsed={isCollapsed}
-        onToggle={() => setIsCollapsed((v) => !v)}
+        collapsible={collapsibleTitle}
+        collapsed={collapsibleTitle ? isCollapsed : false}
+        onToggle={collapsibleTitle ? () => setIsCollapsed((v) => !v) : undefined}
       >
         平台默认 URL <span className="platform-url-count" data-name="settings.platform-url.count">({visiblePlatforms.length})</span>
       </SectionTitle>
-      {hideForeignModels && !isCollapsed && (
+      {hideForeignModels && (!collapsibleTitle || !isCollapsed) && (
         <div className="platform-url-hint" data-name="settings.platform-url.hint">
           已隐藏国外平台，可在「区域与代理」中关闭。
         </div>
       )}
-      {!isCollapsed && (
+      {(!collapsibleTitle || !isCollapsed) && (
       <div className="platform-url-list" data-name="settings.platform-url.platform-item-list">
         {visiblePlatforms.map((p, idx) => {
           const profile = profiles.find(

@@ -37,6 +37,18 @@
   line-height: 1.4;
 }
 
+/* 弱化标签：突出右侧值/控件，标签作为辅助说明 */
+.form-row.muted-label .form-row-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-right: var(--space-1);
+}
+.form-row.muted-label .form-row-name {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .form-row-hint {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -51,6 +63,21 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-1);
+}
+
+/* 约束表单行内选择框宽度：不撑满，靠右自适应内容宽度 */
+.form-row-control .combobox {
+  width: auto;
+  flex: 0 1 auto;
+  max-width: 220px;
+}
+.form-row-control .combobox .combobox-trigger {
+  width: auto;
+}
+.form-row-control .combobox .combobox-input {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 80px;
 }
 
 /* 纵向堆叠变体：标签在上，控件在下 */

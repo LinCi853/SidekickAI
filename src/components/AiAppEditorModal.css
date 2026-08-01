@@ -1,0 +1,143 @@
+/* =====================================================================
+   AiAppEditorModal —— AI 应用编辑器遮罩样式
+   ===================================================================== */
+
+.ai-app-editor-modal {
+  width: 640px;
+  max-width: 92vw;
+  max-height: 88vh;
+}
+
+.ai-app-editor-loading,
+.ai-app-editor-error {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.ai-app-editor-error {
+  color: var(--danger);
+}
+
+.ai-app-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 字段分组 */
+.ai-app-editor-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ai-app-editor-field-label {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ai-app-editor-field-hint {
+  font-size: var(--text-2xs);
+  color: var(--muted-foreground);
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+/* 主题色选择行 */
+.ai-app-editor-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ai-app-editor-color-picker {
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+}
+
+/* 屏蔽规则列表 */
+.ai-app-editor-rules,
+.ai-app-editor-whitelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ai-app-editor-empty {
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  padding: var(--space-1) 0;
+}
+
+.ai-app-editor-rule-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.ai-app-editor-rule-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.ai-app-editor-rule-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-app-editor-rule-builtin {
+  margin-left: var(--space-1);
+  color: var(--accent-bright);
+  font-size: var(--text-2xs);
+}
+
+/* 屏蔽规则内嵌表单 */
+.ai-app-editor-rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.ai-app-editor-rule-form-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* 白名单添加行 */
+.ai-app-editor-whitelist-add {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* 底部操作按钮 */
+.ai-app-editor-footer {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-1);
+}

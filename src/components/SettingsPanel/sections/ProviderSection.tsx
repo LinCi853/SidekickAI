@@ -33,6 +33,8 @@ import './ProviderSection.css';
 interface ProviderSectionProps {
   /** 是否默认折叠 */
   defaultCollapsed?: boolean;
+  /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
+  collapsibleTitle?: boolean;
   /**
    * 编辑状态变化回调（editing 从 null 变为非 null，或从非 null 变为 null 时触发）。
    *
@@ -102,7 +104,7 @@ function detectProtocol(endpoint: string): 'openai' | 'anthropic' | 'custom' {
   return 'openai'; // 绝大多数供应商兼容 OpenAI 格式
 }
 
-export default function ProviderSection({ defaultCollapsed = true, onEditingChange }: ProviderSectionProps) {
+export default function ProviderSection({ defaultCollapsed = true, collapsibleTitle = true, onEditingChange }: ProviderSectionProps) {
   const {
     providers,
     loadingProviders,
@@ -583,21 +585,22 @@ export default function ProviderSection({ defaultCollapsed = true, onEditingChan
   return (
     <section data-name="settings.provider.section">
       <SectionTitle
-        collapsible
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
+        collapsible={collapsibleTitle}
+        collapsed={collapsibleTitle ? collapsed : false}
+        onToggle={collapsibleTitle ? () => setCollapsed((v) => !v) : undefined}
         data-name="settings.provider.title-row"
       >
         供应商管理（{providers.length}）
       </SectionTitle>
 
-      {!collapsed && (
+      {(!collapsibleTitle || !collapsed) && (
         <>
           {loadingProviders && providers.length === 0 && (
             <div className="advanced-panel-tab-hint" data-name="settings.provider.loading">正在加载...</div>
           )}
 
-          {/* 供应商卡片列表 */}
+          {/* 供应商卡片列表（多列网格） + 卡片式新增按钮 */}
+          <div className="provider-card-grid" data-name="settings.provider.grid">
           {providers.map((p, idx) => (
             <div className="provider-card" key={p.id} data-name={`advanced-panel.provider-card-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
               <div className="provider-card-head" data-name={`advanced-panel.provider-card-${idx + 1}-head`}>
@@ -643,6 +646,19 @@ export default function ProviderSection({ defaultCollapsed = true, onEditingChan
               </div>
             </div>
           ))}
+          {/* 卡片式新增按钮：追加在列表末尾 */}
+          {!editing && (
+            <button
+              type="button"
+              className="preset-card preset-card-add"
+              onClick={handleAdd}
+              data-name="advanced-panel.provider-add-button"
+            >
+              <span className="preset-card-add-icon" aria-hidden="true">+</span>
+              <span className="preset-card-add-text">添加供应商</span>
+            </button>
+          )}
+          </div>
 
           {/* v0.5.2 B-4：加密导出 / 导入工具栏（卡片列表下方） */}
           {!editing && (
@@ -681,18 +697,6 @@ export default function ProviderSection({ defaultCollapsed = true, onEditingChan
                 </Button>
               </div>
             </div>
-          )}
-
-          {/* 新建按钮（表单未打开时显示） */}
-          {!editing && (
-            <button
-              type="button"
-              className="btn-outline provider-add-btn"
-              onClick={handleAdd}
-              data-name="advanced-panel.provider-add-button"
-            >
-              + 添加自定义供应商
-            </button>
           )}
         </>
       )}

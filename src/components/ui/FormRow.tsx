@@ -17,6 +17,8 @@ export interface FormRowProps {
   stack?: boolean;
   /** 紧凑变体（减小间距） */
   compact?: boolean;
+  /** 弱化标签（label 使用更小字号 + text-muted，突出右侧值/控件） */
+  mutedLabel?: boolean;
   /** 关联控件 id（用于 label htmlFor） */
   htmlFor?: string;
   /** 额外 className */
@@ -29,6 +31,7 @@ export default function FormRow({
   children,
   stack = false,
   compact = false,
+  mutedLabel = false,
   htmlFor,
   className,
 }: FormRowProps) {
@@ -36,6 +39,7 @@ export default function FormRow({
     'form-row',
     stack && 'stack',
     compact && 'compact',
+    mutedLabel && 'muted-label',
     className,
   ]
     .filter(Boolean)

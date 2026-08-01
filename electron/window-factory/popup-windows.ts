@@ -101,3 +101,22 @@ export function showDataExportWindow(): void {
     setWindow: (win) => { windowState.dataExportWindow = win },
   })
 }
+
+/**
+ * 创建/显示设置独立窗口（单例）。
+ * 左导航+右内容布局，5 类分组：外观与交互、AI服务、网络与隐私、高级、关于。
+ * 已存在则聚焦，不重复打开。
+ */
+export function showSettingsWindow(): void {
+  createSingletonPopupWindow({
+    width: 760,
+    height: 600,
+    minWidth: 600,
+    minHeight: 480,
+    title: '设置',
+    windowId: 'settings',
+    mode: 'settings',
+    getExisting: () => windowState.settingsWindow,
+    setWindow: (win) => { windowState.settingsWindow = win },
+  })
+}

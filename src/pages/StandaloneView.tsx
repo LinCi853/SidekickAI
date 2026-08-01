@@ -132,7 +132,7 @@ export default function StandaloneView() {
     };
     webview.addEventListener('dom-ready', handleDomReady as EventListener);
 
-    // webview 内快捷键拦截（F11 最大化 / F12 置顶 / ` ~ ? 呼出快捷键窗口），webview 获得焦点时也生效
+    // webview 内快捷键拦截（F12 置顶 / ` ~ ? 呼出快捷键窗口），webview 获得焦点时也生效
     const handleBeforeInput = (e: Event) => {
       const inputEvent = e as unknown as {
         type: string;
@@ -146,11 +146,6 @@ export default function StandaloneView() {
       const hasCtrl = mods.includes('control') || mods.includes('ctrl');
       const hasMeta = mods.includes('meta') || mods.includes('command');
       const hasShift = mods.includes('shift');
-      if (inputEvent.key === 'F11') {
-        e.preventDefault();
-        useTabStore.getState().toggleMaximize();
-        return;
-      }
       if (inputEvent.key === 'F12') {
         e.preventDefault();
         useTabStore.getState().toggleAlwaysOnTop();
@@ -182,15 +177,10 @@ export default function StandaloneView() {
     };
   }, [activeProfile]);
 
-  // 窗口级 F11/F12 快捷键（webview 未获得焦点时生效，与顶栏按钮同一路径）
+  // 窗口级 F12 快捷键（webview 未获得焦点时生效，与顶栏按钮同一路径）
   // 注：Ctrl+W / ESC 由下方 useEscToCloseWindow 统一处理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F11') {
-        e.preventDefault();
-        useTabStore.getState().toggleMaximize();
-        return;
-      }
       if (e.key === 'F12') {
         e.preventDefault();
         useTabStore.getState().toggleAlwaysOnTop();

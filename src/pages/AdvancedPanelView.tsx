@@ -45,6 +45,9 @@ import NotesView from './NotesView';
 import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
 import { isTypingTarget } from '../lib/shared-utils';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
+import { useUiVersionStore } from '../store/useUiVersionStore';
+import { resolveParam, setManualOverride, isManual } from '../lib/oxy-override-store';
+import { OXY_PANELS } from '../lib/oxy-config';
 import './AdvancedPanelView.css';
 
 type TabKey = 'chat' | 'whiteboard' | 'notes';
@@ -239,8 +242,26 @@ function ChatTab() {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  // 侧边栏宽度/收起状态（持久化到 app settings）
-  const [sidebarWidth, setSidebarWidth] = useState(160);
+  // 侧边栏宽度/收起状态
+  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
+  const OXY_SIDEBAR_KEY = 'chatSidebar.width';
+
+  // Oxy auto 宽度计算
+  const computeAutoSidebarWidth = useCallback(() => {
+    if (typeof window === 'undefined') return 160;
+    const parentW = window.innerWidth;
+    return Math.max(
+      OXY_PANELS.sidebar.widthMin,
+      Math.min(OXY_PANELS.sidebar.widthMax, Math.round(parentW * OXY_PANELS.sidebar.parentRatio)),
+    );
+  }, []);
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    if (isOxy) {
+      return resolveParam(OXY_SIDEBAR_KEY, computeAutoSidebarWidth());
+    }
+    return 160;
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // 初始化 providers + 流式监听
@@ -253,19 +274,40 @@ function ChatTab() {
 
   // 读取侧边栏宽度/收起设置
   useEffect(() => {
-    void getAppSettings()
-      .then((cfg) => {
-        setSidebarWidth(cfg.chatSidebarWidth ?? 160);
-        setSidebarCollapsed(cfg.chatSidebarCollapsed ?? false);
-      })
-      .catch(() => {});
-  }, []);
+    if (isOxy) {
+      // Oxy 模式：auto 或 manual override
+      if (isManual(OXY_SIDEBAR_KEY)) {
+        setSidebarWidth(resolveParam(OXY_SIDEBAR_KEY, computeAutoSidebarWidth()));
+      } else {
+        setSidebarWidth(computeAutoSidebarWidth());
+      }
+    } else {
+      void getAppSettings()
+        .then((cfg) => {
+          setSidebarWidth(cfg.chatSidebarWidth ?? 160);
+          setSidebarCollapsed(cfg.chatSidebarCollapsed ?? false);
+        })
+        .catch(() => {});
+    }
+  }, [isOxy, computeAutoSidebarWidth, OXY_SIDEBAR_KEY]);
+
+  // Oxy 模式下窗口 resize 时 auto 宽度跟随
+  useEffect(() => {
+    if (!isOxy || isManual(OXY_SIDEBAR_KEY)) return;
+    const handler = () => setSidebarWidth(computeAutoSidebarWidth());
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [isOxy, computeAutoSidebarWidth, OXY_SIDEBAR_KEY]);
 
   // 侧边栏拖拽调宽：即时更新状态，松开时持久化
   const handleSidebarResize = useCallback((w: number) => {
     setSidebarWidth(w);
-    void updateAppSettings({ chatSidebarWidth: w });
-  }, []);
+    if (isOxy) {
+      setManualOverride(OXY_SIDEBAR_KEY, w);
+    } else {
+      void updateAppSettings({ chatSidebarWidth: w });
+    }
+  }, [isOxy, OXY_SIDEBAR_KEY]);
 
   // 侧边栏收起/展开切换
   const handleSidebarToggleCollapse = useCallback(() => {

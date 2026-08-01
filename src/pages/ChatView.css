@@ -264,6 +264,7 @@
 }
 .chat-avatar.assistant {
   background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
+  color: var(--accent-bright-foreground);
 }
 .chat-msg-content {
   display: flex;
@@ -356,7 +357,7 @@
 }
 .message-actions button:hover {
   background: var(--accent-bright);
-  color: var(--foreground-inverse);
+  color: var(--accent-bright-foreground);
 }
 
 /* ===== 6.5 消息编辑态 ===== */
@@ -408,7 +409,7 @@
 }
 .message-editing-actions button.save {
   background: var(--accent-bright);
-  color: var(--foreground-inverse);
+  color: var(--accent-bright-foreground);
   border: 0;
 }
 .message-editing-actions button.save:hover {
@@ -580,7 +581,7 @@
   justify-content: center;
   background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
   border-radius: var(--radius-md);
-  color: var(--foreground-inverse);
+  color: var(--accent-bright-foreground);
   font-family: var(--font-sans);
   font-weight: 800;
   font-size: var(--text-2xl);

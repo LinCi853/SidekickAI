@@ -108,7 +108,7 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     ...(options?.providerId ? { provider: options.providerId } : {}),
     ...(options?.initialTab ? { tab: options.initialTab } : {}),
   })
-  // 进阶面板不含 webview，需在主 webContents 上注册 F11/F12 拦截
+  // 进阶面板不含 webview，需在主 webContents 上注册 F12 拦截
   attachWindowHotkeyInterceptor(win.webContents)
 
   win.once('ready-to-show', () => {

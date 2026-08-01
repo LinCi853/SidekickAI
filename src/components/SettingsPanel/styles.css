@@ -73,14 +73,14 @@
   justify-content: center;
   background: transparent;
   border: 0;
-  color: var(--muted-foreground);
+  color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: color var(--duration-fast), background var(--duration-fast);
 }
 .settings-close:hover {
-  color: var(--foreground);
-  background: var(--accent-10);
+  color: var(--destructive-foreground);
+  background: var(--destructive);
 }
 .settings-close svg {
   width: var(--icon-svg-sm);
@@ -152,6 +152,140 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   overflow: visible;
+}
+
+/* ===== 多列网格容器（设置窗口宽空间下充分利用横向布局） ===== */
+.preset-card-grid,
+.provider-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-1);
+  align-items: stretch;
+}
+/* 网格中的预设卡片：独立边框 + 背景，替代 border-bottom 分隔 */
+.preset-card-grid .preset-card {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--glass-bd-2);
+  border-bottom: 1px solid var(--glass-bd-2);
+  background: var(--glass-bg);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+.preset-card-grid .preset-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-05);
+}
+
+/* ===== V2 卡片布局：左标识 + 浏览器名/分辨率 + 右操作（与 AI 应用卡片一致） ===== */
+.preset-card-v2 {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+}
+.preset-card-v2.pending-delete {
+  border-color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card));
+}
+.preset-card-platform-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+.preset-card-platform-icon.is-mobile {
+  color: var(--warn);
+}
+.preset-card-platform-icon.is-desktop {
+  color: var(--accent);
+}
+.preset-card-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.preset-card-browser-name {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--foreground);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-card-resolution {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted-foreground);
+}
+.preset-card-actions {
+  display: flex;
+  gap: 0;
+  flex: none;
+}
+
+/* ===== 卡片式新增按钮（统一与实际卡片一致的背景与边框） ===== */
+/* 默认横向布局：用于 AI 应用、设备预设等单行卡片 */
+.preset-card-add {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px dashed var(--glass-bd-2);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.preset-card-add:hover {
+  border-color: var(--accent-bright);
+  color: var(--accent-bright);
+  background: var(--accent-05);
+}
+.preset-card-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bright);
+  color: var(--accent-bright-foreground);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
+.preset-card-add-text {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+/* 供应商卡片为纵向布局，新增按钮也纵向展示 */
+.provider-card-grid .preset-card-add {
+  flex-direction: column;
+  min-height: 100%;
 }
 .preset-card-head {
   display: flex;
@@ -853,6 +987,14 @@
   margin-top: var(--space-1);
 }
 
+/* ===== 进阶配置面板 ===== */
+.advanced-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
 /* ===== Phase C 续：本次补充的行内样式类 ===== */
 
 /* 设置面板通用简介文本 */
@@ -953,7 +1095,30 @@
 .preset-card-badges {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
+}
+/* 图标式标识（替代原文字 Badge，节省卡片空间） */
+.preset-card-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  flex: none;
+}
+.preset-card-icon-badge svg {
+  display: block;
+}
+.preset-card-icon-builtin {
+  color: var(--accent);
+}
+.preset-card-icon-platform.is-mobile {
+  color: var(--warn);
+}
+.preset-card-icon-platform.is-desktop {
+  color: var(--accent);
 }
 .provider-card-actions.spaced {
   margin-top: var(--space-1);
@@ -968,10 +1133,12 @@
    此处仅补充 AI 应用卡片图标等少量专属样式。
    ===================================================================== */
 
-/* AI 应用卡片列表容器 */
+/* AI 应用卡片列表容器：多列网格布局（充分利用设置窗口横向空间） */
 .ai-app-card-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-1);
+  align-items: stretch;
 }
 
 /* AI 应用卡片：单行紧凑结构 —— 图标 + 名称/URL + 操作按钮 */
@@ -980,7 +1147,17 @@
   flex-direction: row;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-0-5) var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--glass-bd-2);
+  border-bottom: 1px solid var(--glass-bd-2);
+  background: var(--glass-bg);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+.ai-app-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-05);
 }
 
 /* AI 应用卡片：复用 preset-card 基础样式，仅补充图标与信息布局 */
@@ -1097,11 +1274,11 @@
 .topbar-chip.is-on {
   background: var(--accent-bright);
   border-color: var(--accent-bright);
-  color: var(--primary-foreground);
+  color: var(--accent-bright-foreground);
   font-weight: 600;
 }
 .topbar-chip.is-on:hover {
   background: var(--accent-light);
   border-color: var(--accent-light);
-  color: var(--primary-foreground);
+  color: var(--accent-light-foreground);
 }

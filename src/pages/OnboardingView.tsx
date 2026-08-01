@@ -77,7 +77,6 @@ const APP_SHORTCUTS: Array<{ keys: string; action: string }> = [
   { keys: 'F5', action: '刷新当前标签' },
   { keys: 'F6', action: '前进（当前标签）' },
   { keys: 'F10', action: '切换主题' },
-  { keys: 'F11', action: '最大化/还原' },
   { keys: 'F12', action: '切换置顶' },
   { keys: 'Ctrl + G', action: '切换空间导航' },
   { keys: '` / ?', action: '呼出快捷键说明' },
@@ -117,7 +116,7 @@ export default function OnboardingView() {
     })();
   }, []);
 
-  // 引导窗口不需要最大化、最小化和置顶，不监听 F11/F12
+  // 引导窗口不需要最大化、最小化和置顶，不监听 F12
   // ESC：关闭引导窗口
   useEscToCloseWindow();
 

@@ -273,6 +273,8 @@ export const IPC_CHANNELS = {
   BLOCK_RULES_UPDATE: 'blockRules:update',
   // AI 应用编辑窗口
   AI_APP_EDITOR_OPEN: 'ai-app-editor:open',
+  // 设置独立窗口（单例）
+  SETTINGS_WINDOW_OPEN: 'settings-window:open',
   // 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   ADVANCED_PANEL_OPEN: 'advancedPanel:open',
   ADVANCED_PANEL_TOGGLE: 'advancedPanel:toggle',

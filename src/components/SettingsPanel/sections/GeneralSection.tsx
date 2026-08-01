@@ -1,12 +1,10 @@
-import { updateAppSettings, listPresets, clearUsageTraces } from '../../../lib/electron-api';
-import type { DevicePreset } from '../../../lib/electron-api';
-import { useEffect, useState } from 'react';
+import { updateAppSettings, clearUsageTraces } from '../../../lib/electron-api';
+import { useState } from 'react';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
 import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
-import { SectionTitle, FormRow, Combobox } from '../../ui';
-import type { ComboboxOption } from '../../ui';
+import { SectionTitle, FormRow } from '../../ui';
 import type { GeneralSettings } from '../types';
 
 interface GeneralSectionProps {
@@ -35,8 +33,6 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
     startupOpen,
     closeBehavior,
     enterToSend,
-    defaultDesktopUaPreset,
-    defaultMobileUaPreset,
     appClickBehavior,
     usageTrackingEnabled,
   } = general;
@@ -45,15 +41,12 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
   const setStartupOpen = (v: 'home' | 'lastConversation') => onChange({ startupOpen: v });
   const setCloseBehavior = (v: 'close' | 'minimize') => onChange({ closeBehavior: v });
   const setEnterToSend = (v: boolean) => onChange({ enterToSend: v });
-  const setDefaultDesktopUaPreset = (v: string) => onChange({ defaultDesktopUaPreset: v });
-  const setDefaultMobileUaPreset = (v: string) => onChange({ defaultMobileUaPreset: v });
   const setAppClickBehavior = (v: 'switch' | 'close') => onChange({ appClickBehavior: v });
   const setUsageTrackingEnabled = (v: boolean) => onChange({ usageTrackingEnabled: v });
   const { draft, setDraft } = useSettingsDraft();
   // 使用统计清除反馈（带自动清除的字符串消息 + 独立的 success/error 类型，用于颜色区分）
   const { feedback: usageClearMsg, showFeedback: showUsageToast } = useFeedbackToast(3000);
   const [usageClearType, setUsageClearType] = useState<'success' | 'error'>('success');
-  const [presets, setPresets] = useState<DevicePreset[]>([]);
   // 开机自启动 / 静默启动（通过 useSettingsDraft 从主进程加载，不经过父组件 props）
   const autoLaunch = draft?.autoLaunch ?? false;
   const silentStart = draft?.silentStart ?? false;
@@ -64,86 +57,9 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
     showUsageToast(msg);
   };
 
-  useEffect(() => {
-    listPresets().then(setPresets).catch((e) => console.error('[general] 加载预设失败:', e));
-  }, []);
-
-  const desktopPresets = presets.filter((p) => p.platform === 'desktop');
-  const mobilePresets = presets.filter((p) => p.platform === 'mobile');
-  // 兜底：当前选中的预设 id 不在列表中（如自定义预设被删除）时，显示一个临时占位项避免下拉框空白
-  const desktopPlaceholder = desktopPresets.some((p) => p.id === defaultDesktopUaPreset)
-    ? null
-    : { id: defaultDesktopUaPreset, name: '（已失效，请重选）' };
-  const mobilePlaceholder = mobilePresets.some((p) => p.id === defaultMobileUaPreset)
-    ? null
-    : { id: defaultMobileUaPreset, name: '（已失效，请重选）' };
-
   return (
     <section data-name="settings.general.section">
       <SectionTitle>通用</SectionTitle>
-
-      {/* 默认 UA 预设（用户自选桌面端 / 移动端 UA，数据来源于设备预设） */}
-      <FormRow label="默认桌面端 UA">
-        <Combobox
-          inputValue={
-            desktopPlaceholder
-              ? desktopPlaceholder.name
-              : desktopPresets.find((p) => p.id === defaultDesktopUaPreset)?.name ?? ''
-          }
-          onInputChange={() => {}}
-          inputPlaceholder="选择桌面端 UA 预设"
-          inputClassName="input-underline ua-preset-select"
-          inputReadOnly
-          options={desktopPresets.map<ComboboxOption>((p) => ({
-            value: p.id,
-            label: p.name,
-            selected: p.id === defaultDesktopUaPreset,
-          }))}
-          onSelect={async (v) => {
-            setDefaultDesktopUaPreset(v);
-            try {
-              await updateAppSettings({ defaultDesktopUaPreset: v });
-            } catch (err) {
-              console.error('保存默认桌面端 UA 失败:', err);
-            }
-          }}
-          searchable
-          searchPlaceholder="搜索 UA 预设…"
-          emptyText="无匹配预设"
-          dataName="settings.general.desktop-ua-select"
-        />
-      </FormRow>
-
-      <FormRow label="默认移动端 UA">
-        <Combobox
-          inputValue={
-            mobilePlaceholder
-              ? mobilePlaceholder.name
-              : mobilePresets.find((p) => p.id === defaultMobileUaPreset)?.name ?? ''
-          }
-          onInputChange={() => {}}
-          inputPlaceholder="选择移动端 UA 预设"
-          inputClassName="input-underline ua-preset-select"
-          inputReadOnly
-          options={mobilePresets.map<ComboboxOption>((p) => ({
-            value: p.id,
-            label: p.name,
-            selected: p.id === defaultMobileUaPreset,
-          }))}
-          onSelect={async (v) => {
-            setDefaultMobileUaPreset(v);
-            try {
-              await updateAppSettings({ defaultMobileUaPreset: v });
-            } catch (err) {
-              console.error('保存默认移动端 UA 失败:', err);
-            }
-          }}
-          searchable
-          searchPlaceholder="搜索 UA 预设…"
-          emptyText="无匹配预设"
-          dataName="settings.general.mobile-ua-select"
-        />
-      </FormRow>
 
       {/* 启动时打开：首页 / 最近对话 */}
       <FormRow label="启动时打开">

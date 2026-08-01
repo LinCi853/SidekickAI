@@ -5,7 +5,7 @@
    - F4/F5/F6 渲染层兜底：焦点不在 webview 时（如在顶栏/设置/输入框），
      主进程 before-input-event 不触发，需在渲染层补一份。
    - Ctrl+T/Ctrl+W 渲染层兜底：同上原因，焦点不在 webview 时也需要响应。
-   注：Alt+1~9 / Ctrl+Tab / F11 / F12 / Ctrl+G 等应用内快捷键
+   注：Alt+1~9 / Ctrl+Tab / F12 / Ctrl+G 等应用内快捷键
    统一由主进程 before-input-event 拦截后通过 WEBVIEW_HOTKEY IPC 转发渲染层
    （见 MainView/index.tsx 的 onWebviewHotkey 监听），此处仅保留长按 Tab 和 F4/F5/F6
    以及 Ctrl+T/Ctrl+W 兜底。

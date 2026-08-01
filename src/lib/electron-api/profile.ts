@@ -100,6 +100,12 @@ export function openAiAppEditor(opts: {
   return api.openAiAppEditor(opts);
 }
 
+/** 打开设置独立窗口（单例，左导航+右内容布局） */
+export function openSettingsWindow(): Promise<void> {
+  const api = requireElectron();
+  return api.openSettingsWindow();
+}
+
 /**
  * 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）。
  * 可选 providerId：若提供则切换到对应自定义供应商的对话页。

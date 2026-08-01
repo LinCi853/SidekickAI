@@ -34,6 +34,7 @@
 .combobox-trigger .combobox-input {
   flex: 1;
   min-width: 0;
+  padding: var(--space-0-5) var(--space-1);
   padding-right: 28px; /* 给右侧箭头留位置 */
 }
 .combobox-arrow {

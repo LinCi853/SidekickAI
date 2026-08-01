@@ -38,6 +38,7 @@ import {
 } from '../lib/electron-api';
 import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
 import { MessageBubble } from './MessageBubble';
+import { generateChatAccentVars } from '../lib/oxy-color-engine';
 import './ChatView.css';
 
 export default function ChatView({ windowId }: { windowId?: string }) {
@@ -144,8 +145,8 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentConversationId]);
 
-  // F11/F12 由主进程 attachWindowHotkeyInterceptor 在 before-input-event 中拦截处理，
-  // 通过 onMaximizeToggled/onPinToggled IPC 通知更新状态（见上方监听器）。
+  // F12 由主进程 attachWindowHotkeyInterceptor 在 before-input-event 中拦截处理，
+  // 通过 onPinToggled IPC 通知更新状态（见上方监听器）。
   // 不在渲染层注册 keydown handler，避免与主进程拦截器双重执行导致状态抵消。
 
   // ESC / Ctrl+W 关窗：抽屉打开时 ESC 优先关闭浮窗，否则关闭窗口
@@ -273,13 +274,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   // 根据样式配置计算 CSS 变量与数据属性
   const style: ChatWindowStyle = chatConfig?.style ?? {};
   const cssVars = useMemo(() => {
-    const vars: Record<string, string> = {};
     if (style.accentColor) {
-      vars['--accent'] = style.accentColor;
-      vars['--accent-bright'] = style.accentColor;
-      vars['--accent-dim'] = style.accentColor;
+      return generateChatAccentVars(style.accentColor);
     }
-    return vars;
+    return {};
   }, [style.accentColor]);
   const density = style.density ?? 'comfortable';
   const showAvatar = style.showAvatar !== false; // 默认 true

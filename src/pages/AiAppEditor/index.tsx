@@ -165,7 +165,7 @@ export default function AiAppEditor() {
     void isWindowMaximized().then(setMaximized).catch(() => {});
   }, []);
 
-  // F11/F12 由主进程 attachWindowHotkeyInterceptor 拦截处理，渲染层仅通过 IPC 监听状态更新
+  // F12 由主进程 attachWindowHotkeyInterceptor 拦截处理，渲染层仅通过 IPC 监听状态更新
   useEffect(() => {
     void isWindowAlwaysOnTop().then(setIsPinned).catch(() => {});
   }, []);

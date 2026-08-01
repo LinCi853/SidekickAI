@@ -25,7 +25,6 @@ import { type WindowTraceAction, type ChatWindowConfig } from '../shared/types.j
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { windowState } from '../window-state.js'
 import {
-  toggleMaximizeForWindow,
   setAlwaysOnTopForWindow,
 } from '../ipc/window-control-ipc.js'
 import { buildWindowConfig } from './window-config-builder.js'
@@ -518,7 +517,7 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
     })
 
     // 3. before-input-event：应用内快捷键统一处理（主进程兜底，确保 webview 焦点时可用）。
-    //    F11/F12 直接在主进程执行窗口控制；其余快捷键通过 IPC WEBVIEW_HOTKEY 转发渲染层执行。
+    //    F12 直接在主进程执行窗口控制；其余快捷键通过 IPC WEBVIEW_HOTKEY 转发渲染层执行。
     //    统一在主进程拦截的原因：<webview> DOM 事件的 before-input-event 对 Alt/Ctrl 组合键
     //    转发不稳定（Alt+1~9 / Ctrl+Tab 可能被系统或 guest 消费），主进程 guest webContents
     //    级别的 before-input-event 是 Electron 中最可靠的拦截点。
@@ -570,16 +569,6 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         console.log('[hotkey] F10 → 切换主题')
         e.preventDefault()
         parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleTheme' })
-        return
-      }
-
-      // F11：最大化/还原
-      if (key === 'F11' && !hasCtrl) {
-        console.log('[hotkey] F11 → 最大化/还原')
-        e.preventDefault()
-        const windowId = findWindowIdByWin(win)
-        const isMax = toggleMaximizeForWindow(win, windowId)
-        parentWebContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, isMax)
         return
       }
 
@@ -727,7 +716,7 @@ export function loadRenderer(
  *   2. 居中位置计算（clamp 到工作区）
  *   3. buildWindowConfig + createDefaultWebPreferences
  *   4. loadRenderer 加载渲染进程
- *   5. attachWindowHotkeyInterceptor 注册 F11/F12 拦截
+ *   5. attachWindowHotkeyInterceptor 注册 F12 拦截
  *   6. ready-to-show 显示聚焦
  *   7. closed 清理单例引用
  *
@@ -786,7 +775,7 @@ export function createSingletonPopupWindow(opts: {
   // 5. 加载渲染进程
   loadRenderer(win, opts.windowId, opts.mode, opts.extraQuery)
 
-  // 6. F11/F12 快捷键拦截（弹出窗口不含 webview）
+  // 6. F12 快捷键拦截（弹出窗口不含 webview）
   attachWindowHotkeyInterceptor(win.webContents)
 
   // 7. ready-to-show
@@ -864,15 +853,14 @@ export function findWindowIdByWin(win: BrowserWindow): string | null {
 }
 
 /**
- * 为窗口的主 webContents 注册 F11/F12 快捷键拦截。
+ * 为窗口的主 webContents 注册 F12 快捷键拦截。
  *
  * 适用场景：不含 <webview> 的窗口（如 chat 窗口）。含 webview 的主窗口由
  * attachWebviewPopupInterceptor 在 guest webContents 上注册 before-input-event，
- * 不含 webview 的窗口需在主 webContents 上单独注册，否则 Chromium 内置 F11
- * 全屏行为会拦截按键，导致渲染层 keydown 无法生效。
+ * 不含 webview 的窗口需在主 webContents 上单独注册，否则 Chromium 内置 F12
+ * 行为会拦截按键，导致渲染层 keydown 无法生效。
  *
- * F11 → 最大化/还原（主进程直接执行 + IPC 通知渲染层）
- * F12 → 置顶/取消置顶（同上）
+ * F12 → 置顶/取消置顶（主进程直接执行 + IPC 通知渲染层）
  */
 export function attachWindowHotkeyInterceptor(parentWebContents: Electron.WebContents): void {
   parentWebContents.on('before-input-event', (e, input) => {
@@ -883,16 +871,6 @@ export function attachWindowHotkeyInterceptor(parentWebContents: Electron.WebCon
     const mods = input.modifiers || []
     const hasCtrl = mods.includes('control') || mods.includes('ctrl')
     const key = input.key
-
-    // F11：最大化/还原
-    if (key === 'F11' && !hasCtrl) {
-      console.log('[hotkey] F11 → 最大化/还原 (window-level)')
-      e.preventDefault()
-      const windowId = findWindowIdByWin(win)
-      const isMax = toggleMaximizeForWindow(win, windowId)
-      parentWebContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, isMax)
-      return
-    }
 
     // F12：置顶/取消置顶
     if (key === 'F12' && !hasCtrl) {

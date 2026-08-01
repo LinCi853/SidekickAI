@@ -275,3 +275,227 @@ export const MAIN_WINDOW_MIN_HEIGHT = 520
 export const CHAT_WINDOW_MIN_HEIGHT = 500
 /** 进阶面板最小高度 */
 export const ADVANCED_PANEL_MIN_HEIGHT = 560
+
+/* ===== Oxy Design System V2 窗口尺寸计算 ===== */
+
+/** Oxy UI 比例档位（信息性，V2 使用连续 scale） */
+export type OxyScale = 'compact' | 'standard' | 'spacious'
+
+/** Oxy 三档尺寸常量（与 oxy-layout-engine.ts SCALE_CONFIG 同步，仅向后兼容） */
+export const OXY_SCALE_CONFIG: Record<OxyScale, {
+  icon: number
+  primaryGap: number
+  actionsGap: number
+  appSwitcherMargin: number
+  sidePadding: number
+  separatorWidth: number
+  textBase: number
+}> = {
+  compact:  { icon: 26, primaryGap: 1,   actionsGap: 2,   appSwitcherMargin: 4, sidePadding: 8,  separatorWidth: 1, textBase: 14 },
+  standard: { icon: 30, primaryGap: 1,   actionsGap: 2.5, appSwitcherMargin: 5, sidePadding: 9,  separatorWidth: 1, textBase: 15 },
+  spacious: { icon: 34, primaryGap: 1,   actionsGap: 3,   appSwitcherMargin: 6, sidePadding: 10, separatorWidth: 1, textBase: 16 },
+}
+
+/**
+ * Oxy V2 基础尺寸（与 oxy-config.ts OXY_BASE_VALUES 同步）。
+ * window-size.ts 是纯函数模块，不依赖 src/lib/，因此在此复制基础值。
+ */
+const OXY_V2_BASE = {
+  icon: 30,
+  titlebarH: 46,
+  textBase: 16,
+  spaceUnit: 5,
+} as const
+
+/**
+ * Oxy V2 属性调节器（与 oxy-config.ts OXY_ADJUSTERS 同步）。
+ */
+function applyAdjusterV2(scale: number, min: number | null, max: number | null): number {
+  if (min !== null && scale < min) return min
+  if (max !== null && scale > max) return max
+  return scale
+}
+
+/** textBase 绝对下限（与 oxy-config.ts OXY_TEXT_FLOOR 同步） */
+const OXY_V2_TEXT_FLOOR = 12
+
+/**
+ * 从连续 scale 计算窗口尺寸配置（替代离散 OXY_SCALE_CONFIG 查表）。
+ * 使用与 oxy-layout-engine.ts 相同的基础值 × scale × adjuster 公式。
+ */
+export function getOxyScaleConfigByScale(scale: number) {
+  const iconScale = applyAdjusterV2(scale, 0.95, 1.08)
+  const textScale = applyAdjusterV2(scale, 1.0, 1.05)
+  const icon = Math.round(OXY_V2_BASE.icon * scale * iconScale)
+  const textBase = Math.max(OXY_V2_TEXT_FLOOR, Math.round(OXY_V2_BASE.textBase * scale * textScale))
+  const u = Math.max(3, Math.round(OXY_V2_BASE.spaceUnit * scale))
+  return {
+    icon,
+    primaryGap: Math.max(1, Math.round(u * 0.25)),
+    actionsGap: Math.max(2, Math.round(u * 0.5 * 10) / 10),
+    appSwitcherMargin: u,
+    sidePadding: Math.round(u * 2),
+    separatorWidth: 1,
+    textBase,
+  }
+}
+
+/**
+ * 将连续 scale 映射到 OxyScale 档位（信息性）。
+ */
+export function scaleToOxyScale(scale: number): OxyScale {
+  if (scale < 0.93) return 'compact'
+  if (scale < 1.05) return 'standard'
+  return 'spacious'
+}
+
+/**
+ * 计算 Oxy 模式下主窗口的最小宽度。
+ * 逻辑与 calculateMainWindowMinWidth 一致，但使用 Oxy 三档尺寸常量。
+ */
+export function calculateOxyMainWindowMinWidth(
+  oxyScale: OxyScale,
+  visibleButtons?: TopBarButtonGroup[],
+  titleText?: string,
+): number {
+  const cfg = OXY_SCALE_CONFIG[oxyScale]
+  const buttons = visibleButtons ?? (['uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle'] as TopBarButtonGroup[])
+  const title = titleText ?? '工百窗'
+
+  const hasUa = buttons.includes('uaToggle')
+  const hasNavBack = buttons.includes('navBack')
+  const hasNavForward = buttons.includes('navForward')
+  const hasNavHome = buttons.includes('navHome')
+  const hasTheme = buttons.includes('themeToggle')
+  const hasPin = buttons.includes('pinToggle')
+  const hasNavGroup = hasNavBack || hasNavForward
+
+  const alwaysVisibleIcons = 6
+  const optionalIcons =
+    (hasUa ? 1 : 0) + (hasNavBack ? 1 : 0) + (hasNavForward ? 1 : 0) +
+    (hasNavHome ? 1 : 0) + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+  const iconCount = alwaysVisibleIcons + optionalIcons
+
+  const primaryElementCount = 4 + (hasUa ? 1 : 0) + (hasNavGroup ? 1 : 0) + (hasNavHome ? 1 : 0)
+  const primaryGapCount = Math.max(0, primaryElementCount - 1)
+
+  const actionsElementCount = 5 + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+  const actionsGapCount = Math.max(0, actionsElementCount - 1)
+
+  const navGroupExtra = hasNavGroup
+    ? cfg.actionsGap + (hasNavBack && hasNavForward ? cfg.primaryGap : 0)
+    : 0
+
+  const separatorTotal = cfg.separatorWidth + 2 * cfg.actionsGap
+  const paddingTotal = 2 * cfg.sidePadding
+
+  const titleWidth = estimateTextWidth(title, cfg.textBase)
+  const dragRegionWidth = Math.max(DRAG_REGION_MIN_FLOOR, titleWidth * 2)
+
+  const total =
+    paddingTotal
+    + cfg.appSwitcherMargin
+    + iconCount * cfg.icon
+    + primaryGapCount * cfg.primaryGap
+    + navGroupExtra
+    + dragRegionWidth
+    + actionsGapCount * cfg.actionsGap
+    + separatorTotal
+
+  return Math.ceil(total / 10) * 10
+}
+
+/**
+ * V2: 从连续 scale 计算主窗口最小宽度。
+ * 替代 calculateOxyMainWindowMinWidth，使用 getOxyScaleConfigByScale。
+ */
+export function calculateOxyMainWindowMinWidthByScale(
+  scale: number,
+  visibleButtons?: TopBarButtonGroup[],
+  titleText?: string,
+): number {
+  const cfg = getOxyScaleConfigByScale(scale)
+  const buttons = visibleButtons ?? (['uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle'] as TopBarButtonGroup[])
+  const title = titleText ?? '工百窗'
+
+  const hasUa = buttons.includes('uaToggle')
+  const hasNavBack = buttons.includes('navBack')
+  const hasNavForward = buttons.includes('navForward')
+  const hasNavHome = buttons.includes('navHome')
+  const hasTheme = buttons.includes('themeToggle')
+  const hasPin = buttons.includes('pinToggle')
+  const hasNavGroup = hasNavBack || hasNavForward
+
+  const alwaysVisibleIcons = 6
+  const optionalIcons =
+    (hasUa ? 1 : 0) + (hasNavBack ? 1 : 0) + (hasNavForward ? 1 : 0) +
+    (hasNavHome ? 1 : 0) + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+  const iconCount = alwaysVisibleIcons + optionalIcons
+
+  const primaryElementCount = 4 + (hasUa ? 1 : 0) + (hasNavGroup ? 1 : 0) + (hasNavHome ? 1 : 0)
+  const primaryGapCount = Math.max(0, primaryElementCount - 1)
+
+  const actionsElementCount = 5 + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+  const actionsGapCount = Math.max(0, actionsElementCount - 1)
+
+  const navGroupExtra = hasNavGroup
+    ? cfg.actionsGap + (hasNavBack && hasNavForward ? cfg.primaryGap : 0)
+    : 0
+
+  const separatorTotal = cfg.separatorWidth + 2 * cfg.actionsGap
+  const paddingTotal = 2 * cfg.sidePadding
+
+  const titleWidth = estimateTextWidth(title, cfg.textBase)
+  const dragRegionWidth = Math.max(DRAG_REGION_MIN_FLOOR, titleWidth * 2)
+
+  const total =
+    paddingTotal
+    + cfg.appSwitcherMargin
+    + iconCount * cfg.icon
+    + primaryGapCount * cfg.primaryGap
+    + navGroupExtra
+    + dragRegionWidth
+    + actionsGapCount * cfg.actionsGap
+    + separatorTotal
+
+  return Math.ceil(total / 10) * 10
+}
+
+/**
+ * V2: 从连续 scale 计算 ChatView 窗口最小宽度。
+ */
+export function calculateOxyChatWindowMinWidthByScale(scale: number): number {
+  const cfg = getOxyScaleConfigByScale(scale)
+  const elementCount = 17
+  const gapCount = 7
+  const titleText = '自定义对话'
+  const titleScaleFactor = 1.2
+  const baseRedundancy = 80
+  const fontPixelPerChar = 12
+
+  const elementsWidth = elementCount * cfg.icon
+  const gapsWidth = gapCount * cfg.primaryGap
+  const titleWidth = titleText.length * fontPixelPerChar * titleScaleFactor
+  const total = elementsWidth + gapsWidth + titleWidth + baseRedundancy
+  return Math.ceil(total / 10) * 10
+}
+
+/**
+ * V2: 从连续 scale 计算进阶面板最小宽度。
+ */
+export function calculateOxyAdvancedPanelMinWidthByScale(scale: number): number {
+  const cfg = getOxyScaleConfigByScale(scale)
+  const elementCount = 7
+  const gapCount = 6
+  const titleText = '进阶面板'
+  const titleScaleFactor = 1.2
+  const baseRedundancy = 32
+  const fontPixelPerChar = 12
+
+  const elementsWidth = elementCount * cfg.icon
+  const gapsWidth = gapCount * cfg.primaryGap
+  const titleWidth = titleText.length * fontPixelPerChar * titleScaleFactor
+  const total = elementsWidth + gapsWidth + titleWidth + baseRedundancy
+  return Math.ceil(total / 10) * 10
+}
+

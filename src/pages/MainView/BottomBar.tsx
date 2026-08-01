@@ -221,9 +221,9 @@ export default function BottomBar({
               <div className="app-grid" data-name="main.bottom-bar.app-grid-list">
                 {/* 自定义 AI 供应商 */}
                 {aiProviders.map((p, idx) => {
-                  const accent = p.apiEndpoint.includes('mimo') || p.model.includes('mimo')
-                    ? 'var(--accent-bright)'
-                    : 'var(--info)';
+                  const isMimo = p.apiEndpoint.includes('mimo') || p.model.includes('mimo');
+                  const accent = isMimo ? 'var(--accent-bright)' : 'var(--info)';
+                  const accentForeground = isMimo ? 'var(--accent-bright-foreground)' : 'var(--info-foreground)';
                   return (
                     <button
                       key={p.id}
@@ -237,7 +237,7 @@ export default function BottomBar({
                     >
                       <span
                         className="app-grid-icon"
-                        style={{ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 87%, transparent))` }}
+                        style={{ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 87%, transparent))`, color: accentForeground }}
                         aria-hidden="true"
                         data-name={`main.bottom-bar.ai-provider-item-${idx + 1}-icon`}
                       >

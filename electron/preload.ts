@@ -357,6 +357,10 @@ const api: ElectronAPI = {
   }) => {
     return ipcRenderer.invoke(IPC_CHANNELS.AI_APP_EDITOR_OPEN, opts)
   },
+  /** 打开设置独立窗口（单例） */
+  openSettingsWindow: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_WINDOW_OPEN)
+  },
   /** 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话） */
   openAdvancedPanelWindow: (providerId?: string) => {
     return ipcRenderer.invoke(IPC_CHANNELS.ADVANCED_PANEL_OPEN, providerId)

@@ -10,7 +10,7 @@ import {
  * 窗口最大化/置顶状态 hook
  *
  * 初始化时查询当前窗口的最大化和置顶状态，
- * 并监听主进程推送的状态变更（F11/F12 拦截器触发）。
+ * 并监听主进程推送的状态变更（F12 拦截器触发）。
  * 返回状态及对应的 setter，供顶栏按钮乐观更新使用。
  */
 export function useWindowMaximizedAndPinned() {

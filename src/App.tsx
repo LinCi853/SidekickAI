@@ -18,6 +18,7 @@ import AiAppEditor from './pages/AiAppEditor';
 import AdvancedPanelView from './pages/AdvancedPanelView';
 import DataExportWindow from './pages/DataExportWindow';
 import OnboardingView from './pages/OnboardingView';
+import SettingsView from './pages/SettingsView';
 import Button from './components/ui/Button';
 import { useProfileStore } from './store/useProfileStore';
 import { useTabStore } from './store/useTabStore';
@@ -31,8 +32,15 @@ import {
   MAIN_WINDOW_MIN_HEIGHT,
   CHAT_WINDOW_MIN_HEIGHT,
   ADVANCED_PANEL_MIN_HEIGHT,
+  calculateOxyMainWindowMinWidth,
+  calculateOxyMainWindowMinWidthByScale,
+  calculateOxyChatWindowMinWidthByScale,
+  calculateOxyAdvancedPanelMinWidthByScale,
   type UiScale,
+  type OxyScale,
 } from '../electron/shared/window-size';
+import { useUiVersionStore } from './store/useUiVersionStore';
+import { getOxyLayout } from './lib/oxy-design-system';
 
 /* =====================================================================
    ErrorBoundary —— 捕获子组件渲染错误，防止单个 webview 报错导致整个应用白屏
@@ -119,7 +127,7 @@ function LoadingScreen() {
             justifyContent: 'center',
             background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))',
             borderRadius: 'var(--radius-md)',
-            color: 'var(--primary-foreground)',
+            color: 'var(--accent-bright-foreground)',
             fontFamily: 'var(--font-sans)',
             fontWeight: 800,
             fontSize: 'var(--text-md)',
@@ -173,15 +181,26 @@ export default function App() {
   const isAdvancedPanel = mode === 'advanced-panel';
   const isOnboarding = mode === 'onboarding';
   const isDataExport = mode === 'data-export';
+  const isSettings = mode === 'settings';
 
   // chat/preview/history/prompts/ai-app-editor/advanced-panel/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
+  // 设置窗口需要加载 ProfileStore（AI 应用卡片依赖），但不需 TabStore
   useEffect(() => {
-    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport) {
+    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings) {
       setReady(true);
-      // 即使是辅助窗口也应用 UI 比例
+      // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
       void getAppSettings().then((cfg) => {
-        document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+        const isOxy = useUiVersionStore.getState().version === 'oxy';
+        if (!isOxy) {
+          document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+        }
       }).catch(() => {});
+      // 设置窗口需要加载 Profile 列表（AI 应用卡片依赖 useProfileStore）
+      if (isSettings) {
+        void useProfileStore.getState().loadProfiles().catch((e) => {
+          console.error('[App] 设置窗口加载 Profile 列表失败:', e);
+        });
+      }
       return;
     }
     let cancelled = false;
@@ -227,10 +246,13 @@ export default function App() {
 
       if (!cancelled) {
         console.log('[App] 渲染视图');
-        // 应用 UI 比例设置
+        // 应用 UI 比例设置（Oxy 模式下不设置 data-ui-scale，避免 scale.css 静态值覆盖 JS 注入的变量）
         try {
-          const cfg = await getAppSettings();
-          document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+          const isOxy = useUiVersionStore.getState().version === 'oxy';
+          if (!isOxy) {
+            const cfg = await getAppSettings();
+            document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+          }
         } catch { /* ignore */ }
         setReady(true);
       }
@@ -239,34 +261,55 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport]);
+  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings]);
 
   // 监听 UI 比例变化广播：更新 data-ui-scale 属性 + 重新计算当前窗口最小尺寸。
   // 主进程在 uiScale 变更后向所有窗口推送；各窗口根据自身类型选用对应公式。
   useEffect(() => {
     const off = onUiScaleChanged(async (uiScale: UiScale) => {
-      document.documentElement.setAttribute('data-ui-scale', uiScale);
+      // Oxy 模式下不更新 data-ui-scale，避免 scale.css 静态值覆盖 JS 注入变量
+      const isOxy = useUiVersionStore.getState().version === 'oxy';
+      if (!isOxy) {
+        document.documentElement.setAttribute('data-ui-scale', uiScale);
+      }
+      // Oxy 模式下使用 V2 连续 scale 计算
+      const oxyLayout = getOxyLayout();
+      const oxyScale = oxyLayout?.scale ?? 1.0;
       // 根据当前窗口类型选择对应的最小尺寸计算公式
       let minWidth: number | null = null;
       let minHeight: number | null = null;
       if (isMain) {
-        // 重新获取设置，确保 visibleButtons 为最新值（用户可能在设置中调整过）
-        // 同时从 TabStore 读取当前激活标签标题，用于拖拽区宽度计算
         try {
           const cfg = await getAppSettings();
           const tabState = useTabStore.getState();
           const activeTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
           const title = activeTab?.title;
-          minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title);
+          if (isOxy && oxyLayout) {
+            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale, cfg.topBarVisibleButtons, title);
+          } else {
+            minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title);
+          }
         } catch {
-          minWidth = calculateMainWindowMinWidth(uiScale);
+          if (isOxy && oxyLayout) {
+            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale);
+          } else {
+            minWidth = calculateMainWindowMinWidth(uiScale);
+          }
         }
         minHeight = MAIN_WINDOW_MIN_HEIGHT;
       } else if (isChat) {
-        minWidth = calculateChatWindowMinWidth(uiScale);
+        if (isOxy && oxyLayout) {
+          minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale);
+        } else {
+          minWidth = calculateChatWindowMinWidth(uiScale);
+        }
         minHeight = CHAT_WINDOW_MIN_HEIGHT;
       } else if (mode === 'advanced-panel') {
-        minWidth = calculateAdvancedPanelMinWidth(uiScale);
+        if (isOxy && oxyLayout) {
+          minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale);
+        } else {
+          minWidth = calculateAdvancedPanelMinWidth(uiScale);
+        }
         minHeight = ADVANCED_PANEL_MIN_HEIGHT;
       }
       if (minWidth != null && minHeight != null) {
@@ -294,6 +337,7 @@ export default function App() {
   if (isAiAppEditor) return <AppErrorBoundary><AiAppEditor /></AppErrorBoundary>;
   if (isAdvancedPanel) return <AppErrorBoundary><AdvancedPanelView /></AppErrorBoundary>;
   if (isDataExport) return <AppErrorBoundary><DataExportWindow /></AppErrorBoundary>;
+  if (isSettings) return <AppErrorBoundary><SettingsView /></AppErrorBoundary>;
   if (isOnboarding) return <AppErrorBoundary><OnboardingView /></AppErrorBoundary>;
   if (isChat) return <AppErrorBoundary><ChatView windowId={mode === 'chat' ? windowId : undefined} /></AppErrorBoundary>;
   return <AppErrorBoundary>{isMain ? <MainView /> : <StandaloneView />}</AppErrorBoundary>;

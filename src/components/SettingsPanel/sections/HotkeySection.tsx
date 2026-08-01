@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { type Dispatch, type SetStateAction } from 'react';
 import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api';
 import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult, onHotkeyRecordingPartial } from '../../../lib/electron-api';
 import Button from '../../ui/Button';
@@ -14,8 +14,6 @@ interface HotkeySectionProps {
   handleSaveHotkey: (action: HotkeyAction) => Promise<void>;
   onToggleEnabled?: (action: HotkeyAction, enabled: boolean) => Promise<void>;
   onOpenShortcuts?: () => void;
-  altSpaceResetThreshold?: number;
-  onAltSpaceThresholdChange?: (value: number) => Promise<void>;
 }
 
 export default function HotkeySection({
@@ -27,33 +25,7 @@ export default function HotkeySection({
   handleSaveHotkey,
   onToggleEnabled,
   onOpenShortcuts,
-  altSpaceResetThreshold,
-  onAltSpaceThresholdChange,
 }: HotkeySectionProps) {
-  const [thresholdDraft, setThresholdDraft] = useState<string>(
-    altSpaceResetThreshold != null ? String(altSpaceResetThreshold) : '',
-  );
-
-  useEffect(() => {
-    if (altSpaceResetThreshold != null) {
-      setThresholdDraft(String(altSpaceResetThreshold));
-    }
-  }, [altSpaceResetThreshold]);
-
-  const handleThresholdBlur = () => {
-    if (!onAltSpaceThresholdChange) return;
-    const parsed = parseInt(thresholdDraft, 10);
-    if (!Number.isFinite(parsed)) {
-      if (altSpaceResetThreshold != null) setThresholdDraft(String(altSpaceResetThreshold));
-      return;
-    }
-    const clamped = Math.max(3, Math.min(20, parsed));
-    setThresholdDraft(String(clamped));
-    if (clamped !== altSpaceResetThreshold) {
-      void onAltSpaceThresholdChange(clamped);
-    }
-  };
-
   return (
     <section data-name="settings.hotkey.section">
       <SectionTitle
@@ -150,20 +122,6 @@ export default function HotkeySection({
           );
         })}
       </div>
-      {altSpaceResetThreshold !== undefined && onAltSpaceThresholdChange && (
-        <FormRow label="Alt+Space 位置恢复触发次数">
-          <input
-            type="number"
-            className="input-underline hotkey-threshold-input"
-            min={3}
-            max={20}
-            value={thresholdDraft}
-            onChange={(e) => setThresholdDraft(e.target.value)}
-            onBlur={handleThresholdBlur}
-            data-name="settings.hotkey.alt-space-threshold-input"
-          />
-        </FormRow>
-      )}
     </section>
   );
 }

@@ -53,13 +53,8 @@ export class PresetStore {
     return updated
   }
 
-  /** 删除预设（内置预设不可删除） */
+  /** 删除预设 */
   delete(id: string): void {
-    const preset = this.crud.get(id)
-    if (preset?.builtin) {
-      console.warn('[preset-store] 内置预设不可删除:', id)
-      return
-    }
     this.crud.delete(id)
   }
 

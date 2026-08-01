@@ -14,7 +14,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AIPlatform, Profile } from '../../../lib/electron-api';
-import { openAiAppEditor } from '../../../lib/electron-api';
 import { getPlatformColors } from '../../../pages/MainView/utils';
 import { findAiAppProfiles } from '../../../lib/shared-utils';
 import { useProfileStore } from '../../../store/useProfileStore';
@@ -38,19 +37,28 @@ function shortUrl(url: string): string {
 export interface AiAppSectionProps {
   platforms: AIPlatform[];
   onEditApp: (profileId: string) => void;
+  /** 新建 AI 应用回调；不传时不渲染新建按钮 */
+  onCreateNew?: () => void;
   hideForeignModels: boolean;
-  onToggleHideForeignModels: () => void;
-  disableAllBlockRules: boolean;
-  onToggleDisableAllBlockRules: () => void;
+  /** 屏蔽国外模型开关回调；不传时不渲染开关（由外部高级分类承载） */
+  onToggleHideForeignModels?: () => void;
+  /** 关闭所有广告屏蔽规则开关当前值；不传时不渲染开关 */
+  disableAllBlockRules?: boolean;
+  /** 关闭所有广告屏蔽规则开关回调；不传时不渲染开关（由外部高级分类承载） */
+  onToggleDisableAllBlockRules?: () => void;
+  /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
+  collapsibleTitle?: boolean;
 }
 
 export default function AiAppSection({
   platforms,
   onEditApp,
+  onCreateNew,
   hideForeignModels,
   onToggleHideForeignModels,
   disableAllBlockRules,
   onToggleDisableAllBlockRules,
+  collapsibleTitle = true,
 }: AiAppSectionProps) {
   const [collapsed, setCollapsed] = useState(true);
 
@@ -129,120 +137,120 @@ export default function AiAppSection({
     }
   }, []);
 
-  /** 新建 AI 应用：直接打开空白编辑器（mode='create'），用户自由配置所有字段后保存 */
+  /** 新建 AI 应用：调用外部回调打开编辑器遮罩 */
   const handleCreateNew = useCallback(() => {
-    void openAiAppEditor({ mode: 'create' }).catch((e) =>
-      console.error('[AiAppSection] 打开新建编辑器失败:', e),
-    );
-  }, []);
+    onCreateNew?.();
+  }, [onCreateNew]);
 
   return (
     <section data-name="settings.ai-app.section">
       <SectionTitle
-        collapsible
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
+        collapsible={collapsibleTitle}
+        collapsed={collapsibleTitle ? collapsed : false}
+        onToggle={collapsibleTitle ? () => setCollapsed((v) => !v) : undefined}
       >
         AI 应用（{totalCount}）
       </SectionTitle>
-      {!collapsed && (
+      {(!collapsibleTitle || !collapsed) && (
         <>
-          <FormRow label="屏蔽国外模型">
-            <Toggle
-              checked={hideForeignModels}
-              onChange={onToggleHideForeignModels}
-              aria-label="屏蔽国外模型"
-              data-name="settings.ai-app.hide-foreign-models-toggle"
-            />
-          </FormRow>
-
-          <FormRow label="关闭所有广告屏蔽规则">
-            <Toggle
-              checked={disableAllBlockRules}
-              onChange={onToggleDisableAllBlockRules}
-              aria-label="关闭所有广告屏蔽规则"
-              data-name="settings.ai-app.disable-all-block-rules-toggle"
-            />
-          </FormRow>
-
-          {/* 新建 AI 应用入口：直接打开空白编辑器自由配置 */}
-          <div className="ai-app-create-row" data-name="settings.ai-app.create-row">
-            <button
-              type="button"
-              className="btn-outline btn-outline-sm"
-              onClick={handleCreateNew}
-              data-name="settings.ai-app.create-button"
-            >
-              + 新建 AI 应用
-            </button>
-          </div>
-
-          {/* 内置 AI 应用 Profile 卡片列表（单行紧凑结构） */}
-          {aiAppProfiles.length > 0 && (
-            <div className="ai-app-card-list" data-name="settings.ai-app.app-card-list">
-              {aiAppProfiles.map((profile, idx) => {
-                const platform = profile.aiPlatformId
-                  ? platforms.find((pp) => pp.id === profile.aiPlatformId)
-                  : platforms.find((pp) => pp.url === profile.aiPlatformUrl);
-                const { themeColor: c1, gradientColor: c2 } = platform
-                  ? getPlatformColors(profile, platform, platform.id)
-                  : { themeColor: 'var(--accent)', gradientColor: 'var(--accent)' };
-                const displayName = profile.name || platform?.name || 'AI';
-                const displayUrl = platform?.url ?? profile.aiPlatformUrl ?? '';
-                const isPendingDelete = pendingDeleteId === profile.id;
-                return (
-                  <div
-                    key={profile.id}
-                    className={`preset-card ai-app-card${isPendingDelete ? ' pending-delete' : ''}`}
-                    data-name={`settings.ai-app.app-card-${idx + 1}`}
-                    data-index={idx + 1}
-                    data-id={profile.id}
-                  >
-                    <span
-                      className="ai-app-card-icon"
-                      style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
-                      aria-hidden="true"
-                      data-name={`settings.ai-app.app-card-${idx + 1}-icon`}
-                    >
-                      {displayName.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="ai-app-card-info" data-name={`settings.ai-app.app-card-${idx + 1}-info`}>
-                      <span className="ai-app-card-name" data-name={`settings.ai-app.app-card-${idx + 1}-name`}>{displayName}</span>
-                      <span className="ai-app-card-url" data-name={`settings.ai-app.app-card-${idx + 1}-url`}>{shortUrl(displayUrl)}</span>
-                    </span>
-                    <div className="ai-app-card-actions" data-name={`settings.ai-app.app-card-${idx + 1}-actions`}>
-                      <Button
-                        variant="text"
-                        className="btn-secondary-underline compact"
-                        onClick={() => onEditApp(profile.id)}
-                        data-name={`settings.ai-app.app-card-${idx + 1}-edit-button`}
-                      >
-                        编辑
-                      </Button>
-                      <Button
-                        variant="text"
-                        className="btn-secondary-underline compact"
-                        onClick={() => void handleDuplicate(profile)}
-                        data-name={`settings.ai-app.app-card-${idx + 1}-duplicate-button`}
-                      >
-                        复制
-                      </Button>
-                      <Button
-                        variant="text"
-                        danger
-                        className="btn-secondary-underline compact danger"
-                        onClick={() => handleDelete(profile)}
-                        title={isPendingDelete ? '再次点击确认删除' : `删除 ${displayName}`}
-                        data-name={`settings.ai-app.app-card-${idx + 1}-delete-button`}
-                      >
-                        {isPendingDelete ? '确认' : '删除'}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {onToggleHideForeignModels && (
+            <FormRow label="屏蔽国外模型">
+              <Toggle
+                checked={hideForeignModels}
+                onChange={onToggleHideForeignModels}
+                aria-label="屏蔽国外模型"
+                data-name="settings.ai-app.hide-foreign-models-toggle"
+              />
+            </FormRow>
           )}
+
+          {onToggleDisableAllBlockRules && (
+            <FormRow label="关闭所有广告屏蔽规则">
+              <Toggle
+                checked={disableAllBlockRules ?? false}
+                onChange={onToggleDisableAllBlockRules}
+                aria-label="关闭所有广告屏蔽规则"
+                data-name="settings.ai-app.disable-all-block-rules-toggle"
+              />
+            </FormRow>
+          )}
+
+          {/* 内置 AI 应用 Profile 卡片列表（单行紧凑结构） + 卡片式新增按钮 */}
+          <div className="ai-app-card-list" data-name="settings.ai-app.app-card-list">
+            {aiAppProfiles.map((profile, idx) => {
+              const platform = profile.aiPlatformId
+                ? platforms.find((pp) => pp.id === profile.aiPlatformId)
+                : platforms.find((pp) => pp.url === profile.aiPlatformUrl);
+              const { themeColor: c1, gradientColor: c2 } = platform
+                ? getPlatformColors(profile, platform, platform.id)
+                : { themeColor: 'var(--accent)', gradientColor: 'var(--accent)' };
+              const displayName = profile.name || platform?.name || 'AI';
+              const displayUrl = platform?.url ?? profile.aiPlatformUrl ?? '';
+              const isPendingDelete = pendingDeleteId === profile.id;
+              return (
+                <div
+                  key={profile.id}
+                  className={`ai-app-card${isPendingDelete ? ' pending-delete' : ''}`}
+                  data-name={`settings.ai-app.app-card-${idx + 1}`}
+                  data-index={idx + 1}
+                  data-id={profile.id}
+                >
+                  <span
+                    className="ai-app-card-icon"
+                    style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+                    aria-hidden="true"
+                    data-name={`settings.ai-app.app-card-${idx + 1}-icon`}
+                  >
+                    {displayName.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="ai-app-card-info" data-name={`settings.ai-app.app-card-${idx + 1}-info`}>
+                    <span className="ai-app-card-name" data-name={`settings.ai-app.app-card-${idx + 1}-name`}>{displayName}</span>
+                    <span className="ai-app-card-url" data-name={`settings.ai-app.app-card-${idx + 1}-url`}>{shortUrl(displayUrl)}</span>
+                  </span>
+                  <div className="ai-app-card-actions" data-name={`settings.ai-app.app-card-${idx + 1}-actions`}>
+                    <Button
+                      variant="text"
+                      className="btn-secondary-underline compact"
+                      onClick={() => onEditApp(profile.id)}
+                      data-name={`settings.ai-app.app-card-${idx + 1}-edit-button`}
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      variant="text"
+                      className="btn-secondary-underline compact"
+                      onClick={() => void handleDuplicate(profile)}
+                      data-name={`settings.ai-app.app-card-${idx + 1}-duplicate-button`}
+                    >
+                      复制
+                    </Button>
+                    <Button
+                      variant="text"
+                      danger
+                      className="btn-secondary-underline compact danger"
+                      onClick={() => handleDelete(profile)}
+                      title={isPendingDelete ? '再次点击确认删除' : `删除 ${displayName}`}
+                      data-name={`settings.ai-app.app-card-${idx + 1}-delete-button`}
+                    >
+                      {isPendingDelete ? '确认' : '删除'}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {/* 卡片式新增按钮：追加在列表末尾 */}
+            {onCreateNew && (
+              <button
+                type="button"
+                className="preset-card preset-card-add"
+                onClick={handleCreateNew}
+                data-name="settings.ai-app.create-button"
+              >
+                <span className="preset-card-add-icon" aria-hidden="true">+</span>
+                <span className="preset-card-add-text">新建 AI 应用</span>
+              </button>
+            )}
+          </div>
         </>
       )}
     </section>

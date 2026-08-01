@@ -5,17 +5,45 @@
     <script>
       (function(){
         try {
-          // 默认亮色（与 useThemeStore.readThemeMode 默认 'light' 一致）
-          // 支持 light / dark / system 三模式，system 读取系统 prefers-color-scheme
-          var t = localStorage.getItem('ai-window-theme') || 'light';
           var html = document.documentElement;
-          var resolved;
-          if (t === 'dark') { resolved = 'dark'; }
-          else if (t === 'system') {
-            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-          } else { resolved = 'light'; }
-          if (resolved === 'dark') { html.classList.add('dark'); html.setAttribute('data-theme','dark'); }
-          else { html.classList.remove('dark'); html.setAttribute('data-theme','light'); }
+          var v = localStorage.getItem('sidekick-ui-version');
+          var isOxy = v !== 'classic';
+          html.setAttribute('data-ui-version', isOxy ? 'oxy' : 'classic');
+
+          // 主题：Oxy 强制亮色；经典版尊重用户选择
+          if (isOxy) {
+            html.classList.remove('dark');
+            html.setAttribute('data-theme','light');
+            html.setAttribute('data-oxy','true');
+          } else {
+            var t = localStorage.getItem('ai-window-theme') || 'light';
+            var resolved;
+            if (t === 'dark') { resolved = 'dark'; }
+            else if (t === 'system') {
+              resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            } else { resolved = 'light'; }
+            if (resolved === 'dark') { html.classList.add('dark'); html.setAttribute('data-theme','dark'); }
+            else { html.classList.remove('dark'); html.setAttribute('data-theme','light'); }
+          }
+
+          // UI 比例：Oxy 根据屏幕分辨率自动计算（三档：compact/standard/spacious）；经典版读取用户手动选择
+          if (isOxy) {
+            var sh = window.screen.height;
+            var oxyScale = sh <= 1080 ? 'compact' : sh <= 1440 ? 'standard' : 'spacious';
+            html.setAttribute('data-oxy-scale', oxyScale);
+            // 注意：Oxy 模式下不设置 data-ui-scale，避免 scale.css 静态值覆盖 JS 注入的变量
+
+            // 防闪烁：恢复上次激活 app 的主题色
+            var savedColor = localStorage.getItem('sidekick-active-app-color');
+            if (savedColor) {
+              // 简易注入：仅设置 --primary 和 --brand-500，完整色阶由 JS 引擎在 React 加载后注入
+              html.style.setProperty('--primary', savedColor);
+              html.style.setProperty('--brand-500', savedColor);
+            }
+          } else {
+            var scale = localStorage.getItem('sidekick-user-ui-scale') || 'medium';
+            html.setAttribute('data-ui-scale', scale);
+          }
         } catch(e){}
       })();
     </script>

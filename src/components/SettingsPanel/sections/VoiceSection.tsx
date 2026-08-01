@@ -25,6 +25,8 @@ type ConfirmMode = 'auto' | 'manual' | 'clipboard';
 interface VoiceSectionProps {
   voice: VoiceSettings;
   onChange: (patch: Partial<VoiceSettings>) => void;
+  /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
+  collapsibleTitle?: boolean;
 }
 
 const DOWNLOAD_MODELS: Array<{ id: 'whisper-tiny' | 'whisper-base' | 'whisper-small'; label: string; desc: string }> = [
@@ -33,7 +35,7 @@ const DOWNLOAD_MODELS: Array<{ id: 'whisper-tiny' | 'whisper-base' | 'whisper-sm
   { id: 'whisper-small', label: 'Whisper Small', desc: '约 466MB · 准确率高' },
 ];
 
-export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
+export default function VoiceSection({ voice, onChange, collapsibleTitle = true }: VoiceSectionProps) {
   // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
   const {
     confirmMode: voiceConfirmMode,
@@ -372,13 +374,13 @@ export default function VoiceSection({ voice, onChange }: VoiceSectionProps) {
   return (
     <section data-name="settings.voice.section">
       <SectionTitle
-        collapsible
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
+        collapsible={collapsibleTitle}
+        collapsed={collapsibleTitle ? collapsed : false}
+        onToggle={collapsibleTitle ? () => setCollapsed((v) => !v) : undefined}
       >
         语音输入
       </SectionTitle>
-      {!collapsed && (
+      {(!collapsibleTitle || !collapsed) && (
         <>
       <FormRow stack label="识别引擎">
         <SegmentedControl

@@ -4,8 +4,8 @@
      Alt+1~9        切换到当前窗口第 N 个标签
      Ctrl+Tab       切换到下一个标签
      Ctrl+Shift+Tab 切换到上一个标签
-   注意：F11/F12 由 useMainViewKeyboard 统一管理（走 maximizeToggleWindow 接口），
-        此 hook 不再注册 F11/F12，避免重复监听导致互相抵消。
+   注意：F12 由 useMainViewKeyboard 统一管理（走 toggleAlwaysOnTop 接口），
+        此 hook 不再注册 F12，避免重复监听导致互相抵消。
    全局热键（通过 window.electron.hotkey.register 注册到主进程）：
      可选传入 accelerators 自定义注册
    ===================================================================== */

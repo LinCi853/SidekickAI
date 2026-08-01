@@ -1,0 +1,130 @@
+/* =====================================================================
+   Oxy Design System — 视觉层级系统
+   四级视觉层级：L0 环境融入 / L1 可识别 / L2 主题强调 / L3 警告提示
+   仅在 Oxy 模式下生效（[data-oxy="true"] 前缀）
+   ===================================================================== */
+
+/* ===== L0 环境融入 — 常规操作按钮 ===== */
+[data-oxy="true"] .oxy-btn-default {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+[data-oxy="true"] .oxy-btn-default:hover:not(:disabled) {
+  background: var(--muted);
+}
+[data-oxy="true"] .oxy-btn-default:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== L1 可识别 — 当前状态/选中 ===== */
+[data-oxy="true"] .oxy-btn-active {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+}
+[data-oxy="true"] .oxy-btn-active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* ===== L2 主题强调 — 主要操作 ===== */
+[data-oxy="true"] .oxy-btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: none;
+}
+[data-oxy="true"] .oxy-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+[data-oxy="true"] .oxy-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== L3 警告/提示 — 需注意 ===== */
+[data-oxy="true"] .oxy-btn-warning {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  border: none;
+  font-weight: 600;
+}
+[data-oxy="true"] .oxy-btn-warning:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+/* ===== 开关（L0-L1，不使用 L2/L3） ===== */
+[data-oxy="true"] .oxy-toggle {
+  background: var(--muted);
+}
+[data-oxy="true"] .oxy-toggle-knob {
+  background: var(--muted-foreground);
+}
+[data-oxy="true"] .oxy-toggle.is-on {
+  background: var(--primary);
+}
+[data-oxy="true"] .oxy-toggle.is-on .oxy-toggle-knob {
+  background: var(--primary-foreground);
+}
+
+/* ===== 警告/提示内容 ===== */
+
+/* 警告文字：加粗 + 警告色 */
+[data-oxy="true"] .oxy-warning-text {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* 危险文字：加粗 + destructive 色 */
+[data-oxy="true"] .oxy-danger-text {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+/* 警告区块：淡背景 + 左边框 */
+[data-oxy="true"] .oxy-warning-block {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border-left: 3px solid var(--warning);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+/* 危险区块：淡背景 + 左边框 */
+[data-oxy="true"] .oxy-danger-block {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  border-left: 3px solid var(--destructive);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+/* 警告图标：比常规图标大 20% */
+[data-oxy="true"] .oxy-warning-icon {
+  width: calc(var(--icon-svg) * 1.2);
+  height: calc(var(--icon-svg) * 1.2);
+  color: var(--warning);
+  flex: none;
+}
+
+/* 危险图标 */
+[data-oxy="true"] .oxy-danger-icon {
+  width: calc(var(--icon-svg) * 1.2);
+  height: calc(var(--icon-svg) * 1.2);
+  color: var(--destructive);
+  flex: none;
+}
+
+/* ===== 边框可见性保证（≥1.5:1 对比度） ===== */
+[data-oxy="true"] .oxy-border-visible {
+  border: 1px solid var(--border);
+}
+
+/* ===== 信息提示（L0 但可识别） ===== */
+[data-oxy="true"] .oxy-info-badge {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  border-radius: var(--radius-xs);
+  padding: var(--space-0-25) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}

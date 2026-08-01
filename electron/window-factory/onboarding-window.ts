@@ -53,7 +53,7 @@ export function showOnboardingWindow(): void {
     resizable: true,
     // 引导窗口无需最大化，禁用系统级最大化（用户也不需要从窗口标题栏最大化）
     maximizable: false,
-    // 禁用全屏，防止 F11 触发 Chromium 原生全屏（引导窗口无 F11 拦截器）
+    // 禁用全屏，防止触发 Chromium 原生全屏（引导窗口不监听全屏热键）
     fullscreenable: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: '使用指南',

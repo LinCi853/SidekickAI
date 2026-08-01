@@ -71,6 +71,7 @@ import {
   showHistoryWindow,
   showPromptWindow,
   showAiAppEditorWindow,
+  showSettingsWindow,
   openAdvancedPanelWindow,
   toggleAdvancedPanelWindow,
   showOnboardingWindow,
@@ -176,8 +177,8 @@ let sttEngine: SttEngine
  * 应用就绪：初始化所有管理器并注册 IPC
  */
 app.whenReady().then(async () => {
-  // 移除默认应用菜单：释放 F11（默认 toggleFullscreen）与 F12（默认 toggleDevTools）
-  // 等系统级快捷键，交由应用内 keydown / before-input-event 统一处理。
+  // 移除默认应用菜单：释放 F12（默认 toggleDevTools）等系统级快捷键，
+  // 交由应用内 keydown / before-input-event 统一处理。
   // DevTools 可通过 --dev-tools 启动参数或 DEV_TOOLS=1 环境变量打开（见下方 autoOpenDevTools）。
   Menu.setApplicationMenu(null)
 
@@ -275,6 +276,10 @@ app.whenReady().then(async () => {
   }) => {
     if (!opts || typeof opts !== 'object') return
     showAiAppEditorWindow(opts)
+  })
+  // 打开设置独立窗口（单例，左导航+右内容布局）
+  ipcMain.handle(IPC_CHANNELS.SETTINGS_WINDOW_OPEN, () => {
+    showSettingsWindow()
   })
   // 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   // 可选 providerId：若提供则切换到对应供应商的对话页

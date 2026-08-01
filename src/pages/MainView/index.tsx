@@ -11,7 +11,7 @@
    ===================================================================== */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import SettingsPanel from '../../components/SettingsPanel';
+import { openSettingsWindow } from '../../lib/electron-api';
 import ShortcutsModal from '../../components/ShortcutsModal';
 import DrawerPanel from '../../components/DrawerPanel';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
@@ -42,6 +42,7 @@ import {
 } from '../../lib/electron-api';
 import {
   calculateMainWindowMinWidth,
+  calculateOxyMainWindowMinWidthByScale,
   MAIN_WINDOW_MIN_HEIGHT,
   type UiScale,
 } from '../../../electron/shared/window-size';
@@ -49,6 +50,9 @@ import type { Profile, AIPlatform, HotkeyConfig, TopBarButtonGroup, PromptTempla
 import { type WebviewElement, safeReloadWebview, safeLoadURLWebview } from '../../lib/webview';
 import { composeFinalText } from '../../lib/prompt-placeholders';
 import { useThemeStore } from '../../store/useThemeStore';
+import { useUiVersionStore } from '../../store/useUiVersionStore';
+import { applyAppTheme, getOxyLayout } from '../../lib/oxy-design-system';
+import { getPlatformColors } from './utils';
 import './styles.css';
 import { WebviewTab } from './WebviewTab';
 import TabContextMenu from './TabContextMenu';
@@ -100,7 +104,7 @@ export default function MainView() {
   const updateProfile = useProfileStore((s) => s.updateProfile);
   const updateProfileUaLockMode = useProfileStore((s) => s.updateProfileUaLockMode);
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // settingsOpen 已移除：设置改为独立窗口，主窗口无需跟踪设置面板状态
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // ShortcutsModal 动态渲染全局热键（自定义 accelerator + 启用状态）
   const [hotkeys, setHotkeys] = useState<HotkeyConfig[]>([]);
@@ -175,7 +179,6 @@ export default function MainView() {
     const offHidden = onWindowHidden(() => {
       useTabStore.getState().setBottomBarExpanded(false);
       setDrawerOpen(false);
-      setSettingsOpen(false);
       setShortcutsOpen(false);
     });
     return () => { offHidden(); };
@@ -286,7 +289,7 @@ export default function MainView() {
       .catch((e) => console.error('加载全局热键失败（ShortcutsModal）:', e));
   }, [shortcutsOpen]);
 
-  // 键盘快捷键：Ctrl+Tab 切换 / F11 最大化 / F12 置顶 / Alt+1~9 / 长按 Tab 调出底栏
+  // 键盘快捷键：Ctrl+Tab 切换 / F12 置顶 / Alt+1~9 / 长按 Tab 调出底栏
   useMainViewKeyboard(bottomBarExpanded, toggleBottomBar);
 
   // 主题状态（供顶栏主题切换按钮显示当前 light/dark 图标）
@@ -370,7 +373,7 @@ export default function MainView() {
   // 监听主进程请求：Alt+Q 无对话窗口时，打开设置面板的自定义对话配置
   useEffect(() => {
     const off = onChatRequestConfig(() => {
-      setSettingsOpen(true);
+      void openSettingsWindow();
     });
     return off;
   }, []);
@@ -497,24 +500,22 @@ export default function MainView() {
     return off
   }, [filterPlatforms])
 
-  // 设置面板关闭时，重新加载设置以应用最新的 hiddenPlatforms / hideForeignModels / tabBarCollapsed
+  // 窗口重新显示时，重新加载设置以应用最新的 hiddenPlatforms / hideForeignModels / tabBarCollapsed
+  // （设置已改为独立窗口，主窗口每次获得焦点时刷新即可）
   useEffect(() => {
-    if (settingsOpen) return;
     getAppSettings()
       .then((cfg) => {
         const hiddenChanged = JSON.stringify(cfg.hiddenPlatforms ?? []) !== JSON.stringify(hiddenPlatforms);
         if (hiddenChanged) setHiddenPlatforms(cfg.hiddenPlatforms ?? []);
         const foreignChanged = (cfg.hideForeignModels ?? true) !== hideForeignModels;
         if (foreignChanged) setHideForeignModels(cfg.hideForeignModels ?? true);
-        // 注意：platforms 过滤由上面的 useEffect（依赖 hiddenPlatforms/hideForeignModels）自动处理，
-        // 这里不再重复 setPlatforms，避免竞态。
         setIsTabBarCollapsed(cfg.tabBarCollapsed ?? true);
         setEnterToSend(cfg.enterToSend ?? true);
         setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
         setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
       })
       .catch((e) => console.warn('[main-view] 操作失败:', e));
-  }, [settingsOpen, hiddenPlatforms, hideForeignModels]);
+  }, [hiddenPlatforms, hideForeignModels]);
 
   // 默认首次打开 DeepSeek（无标签时，initialized 保证 stores 已就绪）
   // 若用户设置 startupOpen='lastConversation' 且存在历史对话 URL，则加载该 URL
@@ -716,6 +717,15 @@ export default function MainView() {
       try {
         const cfg = await getAppSettings();
         if (cancelled) return;
+        const isOxy = useUiVersionStore.getState().version === 'oxy';
+        if (isOxy) {
+          const oxyLayout = getOxyLayout();
+          if (oxyLayout) {
+            const minWidth = calculateOxyMainWindowMinWidthByScale(oxyLayout.scale, topBarVisibleButtons, activeTitle);
+            await setMinimumSize(minWidth, MAIN_WINDOW_MIN_HEIGHT);
+            return;
+          }
+        }
         const uiScale = (cfg.uiScale ?? 'medium') as UiScale;
         const minWidth = calculateMainWindowMinWidth(uiScale, topBarVisibleButtons, activeTitle);
         await setMinimumSize(minWidth, MAIN_WINDOW_MIN_HEIGHT);
@@ -725,6 +735,25 @@ export default function MainView() {
     })();
     return () => { cancelled = true; };
   }, [activeTitle, topBarVisibleButtons]);
+
+  // Oxy 模式：切换标签时动态注入当前 app 的主题色
+  const uiVersion = useUiVersionStore((s) => s.version);
+  const isOxy = uiVersion === 'oxy';
+  useEffect(() => {
+    if (!isOxy) return;
+    if (!activeTabId) return;
+    const tab = tabs.find((t) => t.id === activeTabId);
+    if (!tab) return;
+    const profile = profiles.find((p) => p.id === tab.profileId);
+    const platform = profile?.isAIPlatform
+      ? platforms.find((p) => p.id === profile.aiPlatformId || p.url === profile.aiPlatformUrl)
+      : null;
+    const { themeColor } = getPlatformColors(profile, platform, tab.profileId);
+    applyAppTheme(themeColor);
+  }, [isOxy, activeTabId, tabs, profiles, platforms]);
+
+  // Oxy 模式：标签栏强制收起
+  const effectiveTabBarCollapsed = isOxy ? true : isTabBarCollapsed;
 
   // 当前激活标签对应的 Profile（用于顶栏 UA 锁定按钮状态）
   const activeProfile = activeTab ? (profiles.find((p) => p.id === activeTab.profileId) ?? null) : null;
@@ -1072,7 +1101,12 @@ export default function MainView() {
 
   return (
     <>
-      <div className="main-view app-shell" data-viewport={isNarrow ? 'narrow' : 'wide'} data-name="main.main-view.container">
+      <div
+        className="main-view app-shell"
+        data-viewport={isNarrow ? 'narrow' : 'wide'}
+        data-oxy={isOxy ? 'true' : undefined}
+        data-name="main.main-view.container"
+      >
         {/* ===== 顶栏（常驻显示：AppSwitcher + 导航 + 居中标题 + 菜单/置顶/窗口控制） ===== */}
         <TopBar
           data={{
@@ -1108,7 +1142,7 @@ export default function MainView() {
             handleMaximize,
             handleTogglePin: () => useTabStore.getState().toggleAlwaysOnTop(),
             setDrawerOpen,
-            setSettingsOpen,
+            onOpenSettings: () => void openSettingsWindow(),
             onToggleTheme: () => useThemeStore.getState().toggleTheme(),
             onToggleUaLockMode: handleToggleUaLockMode,
           }}
@@ -1121,8 +1155,9 @@ export default function MainView() {
             activeTabId,
             draggingTabId,
             hoverTabId,
-            collapsed: isTabBarCollapsed,
+            collapsed: effectiveTabBarCollapsed,
             platforms,
+            maxRows: isOxy ? 2 : 1,
           }}
           actions={{
             getProfile,
@@ -1204,7 +1239,7 @@ export default function MainView() {
           callbacks={{
             onAppClick: handleAppClick,
             onInjectPrompt: handleInjectPrompt,
-            onOpenSettings: () => setSettingsOpen(true),
+            onOpenSettings: () => void openSettingsWindow(),
             onOpenShortcuts: () => setShortcutsOpen(true),
             onToggle: toggleBottomBar,
             onHandleClick: handleHandleClick,
@@ -1219,15 +1254,8 @@ export default function MainView() {
           onClose={() => setDrawerOpen(false)}
           onOpenSearch={() => void openHistoryWindow()}
           onOpenShortcuts={() => setShortcutsOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => void openSettingsWindow()}
           onOpenPromptLibrary={() => void openPromptWindow()}
-        />
-
-        {/* 设置侧滑面板 */}
-        <SettingsPanel
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          onOpenShortcuts={() => setShortcutsOpen(true)}
         />
 
         {/* 快捷键查看弹窗 */}

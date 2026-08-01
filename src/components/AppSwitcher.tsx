@@ -271,9 +271,9 @@ export default function AppSwitcher({
             <>
               {/* 自定义 AI 供应商（按最近使用排序） */}
               {sortedProviders.map((p, idx) => {
-                const accent = p.apiEndpoint.includes('mimo') || p.model.includes('mimo')
-                  ? 'var(--accent-bright)'
-                  : 'var(--info)';
+                const isMimo = p.apiEndpoint.includes('mimo') || p.model.includes('mimo');
+                const accent = isMimo ? 'var(--accent-bright)' : 'var(--info)';
+                const accentForeground = isMimo ? 'var(--accent-bright-foreground)' : 'var(--info-foreground)';
                 return (
                   <button
                     key={p.id}
@@ -288,7 +288,7 @@ export default function AppSwitcher({
                     <span
                       className="app-switcher-item-icon"
                       data-name={`component.app-switcher.provider-item-icon-${idx + 1}`}
-                      style={{ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 87%, transparent))` }}
+                      style={{ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 87%, transparent))`, color: accentForeground }}
                       aria-hidden="true"
                     >
                       {p.name.charAt(0).toUpperCase()}

@@ -1,0 +1,224 @@
+/* =====================================================================
+   Oxy Design System — 基础令牌（亮色默认）
+   所有 CSS 变量的单一来源：品牌色阶、表面层级、文字、交互色、
+   反馈色、字体、圆角、间距、字号、阴影、玻璃态、装饰、布局。
+   暗色覆写由各主题子文件提供（经典版见 classic.css）。
+   ===================================================================== */
+
+:root {
+  /* === brand 色阶（靛蓝 Indigo） === */
+  --brand-50:  #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand-800: #3730a3;
+  --brand-900: #312e81;
+
+  /* === surface 层级（从底到顶）—— 冷中性灰阶 === */
+  --background: #f6f7f9;
+  --muted:      #eeeff3;
+  --card:       #ffffff;
+  --popover:    #ffffff;
+
+  /* === 文字 === */
+  --foreground:         #18181b;
+  --muted-foreground:   #52525b;
+  --card-foreground:    #18181b;
+  --popover-foreground: #18181b;
+  --accent-foreground:  #18181b;
+  --secondary-foreground: #ffffff;
+
+  /* === 交互色 === */
+  --primary:            var(--brand-600);
+  --primary-foreground: #ffffff;
+  --accent:             #eeeff3;
+  --input:              #d4d6dd;
+  --border:             #e4e5ea;
+  --secondary:          #1d1e20;
+  --ring:               var(--brand-500);
+
+  /* === feedback === */
+  --destructive:            #ef4444;
+  --destructive-foreground: #ffffff;
+  --success:                var(--highlight-success);
+  --warning:                var(--highlight-warning);
+  --warning-bg:             color-mix(in srgb, var(--warning) 10%, transparent);
+  --warning-bd:             color-mix(in srgb, var(--warning) 30%, transparent);
+  --warning-fg:             var(--warning);
+  --warning-bg-soft:        color-mix(in srgb, var(--warning) 15%, transparent);
+  --warning-badge-bg:       var(--warning);
+  --warning-badge-fg:       #2a1c00;
+
+  /* === chart === */
+  --chart-1: #6366f1;
+  --chart-2: #aea4fd;
+  --chart-3: #13b15a;
+  --chart-4: #94a3b8;
+  --chart-5: #fe9a45;
+
+  /* === 高饱和 Highlight 点缀 === */
+  --highlight-recording: #ff3b30;
+  --highlight-success:   #10b981;
+  --highlight-warning:   #f59e0b;
+  --highlight-active:    #6366f1;
+  --highlight-bronze:    #d4a574;
+
+  /* === Typography === */
+  --font-sans:   "Exo 2", "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif:  "Playfair Display", ui-serif, serif;
+  --font-mono:   "JetBrains Mono", "Roboto Mono", "Cascadia Code", Consolas, monospace;
+
+  /* === Radius === */
+  --radius:    12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* === Spacing === */
+  --spacing: 5px;
+  --space-1: 5px;  --space-2: 9px;   --space-3: 14px; --space-4: 18px;
+  --space-5: 23px; --space-6: 28px;  --space-8: 36px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-20: 80px; --space-24: 96px;
+  /* 半步间距网格 */
+  --space-0-25: 1px;   --space-0-5:  2.5px; --space-0-75: 4px;
+  --space-1-25: 6px;   --space-1-5:  7px;   --space-1-75: 8px;
+  --space-2-25: 10px;  --space-2-5:  11px;  --space-2-75: 13px;
+  --space-3-5: 16px;   --space-4-5: 21px;   --space-5-5: 26px;
+
+  /* === 字号 === */
+  --text-xs: 13px;  --text-sm: 14px;  --text-base: 15px;
+  --text-md: 16px;  --text-lg: 18px;  --text-xl: 20px;
+  --text-2xl: 22px; --text-3xl: 26px; --text-4xl: 34px; --text-5xl: 44px;
+
+  /* === 缓动 / 时长 === */
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --duration-fast:   100ms;
+  --duration-normal: 200ms;
+  --duration-slow:   300ms;
+  --duration-slower: 500ms;
+
+  /* === 阴影 === */
+  --shadow-sm: 0 1px 2px rgba(16, 16, 26, 0.08);
+  --shadow-md: 0 2px 8px rgba(16, 16, 26, 0.10);
+  --shadow-lg: 0 4px 16px rgba(16, 16, 26, 0.12);
+  --shadow-glow: 0 0 32px rgba(99, 102, 241, 0.25);
+  --shadow-card: 0 8px 32px rgba(8, 8, 16, 0.40), 0 2px 4px rgba(8, 8, 16, 0.28);
+  --shadow-card-hover: 0 12px 48px rgba(99, 102, 241, 0.16), 0 4px 12px rgba(8, 8, 16, 0.30);
+
+  /* === 玻璃态（亮色） === */
+  --glass-bg:              rgba(255, 255, 255, 0.72);
+  --glass-bg-2:            rgba(246, 247, 249, 0.60);
+  --glass-bd:              var(--border);
+  --glass-bd-2:            rgba(0, 0, 0, 0.06);
+  --glass-border:          var(--border);
+  --glass-border-subtle:   rgba(0, 0, 0, 0.06);
+
+  /* === 语义扩展色 === */
+  --danger:               var(--destructive);
+  --danger-bg:            color-mix(in srgb, var(--destructive) 18%, transparent);
+  --danger-bg-soft:       color-mix(in srgb, var(--destructive) 12%, transparent);
+  --success-bg-soft:      rgba(16, 185, 129, 0.15);
+  --destructive-dim:      #b91c1c;
+  --accent-green:         var(--success);
+  --accent-red:           var(--danger);
+  --info-bg-soft:         rgba(14, 165, 233, 0.15);
+  --window-close-bg:      rgba(196, 43, 28, 0.15);
+  --overlay-warm-dim:     rgba(8, 8, 14, 0.6);
+  --overlay-shadow-md:    0 24px 64px rgba(8, 8, 14, 0.55);
+  --window-close:         #c42b1c;
+  --window-close-hover:   #a02318;
+  --foreground-inverse:   #fff;
+  --code-bg:              #0d1117;
+  --code-text:            #c9d1d9;
+  --code-success:         #3fb950;
+  --code-bg-light:        #f6f8fa;
+  --code-text-light:      #24292f;
+  --info:                 #0ea5e9;
+  --info-foreground:      #ffffff;
+  --success:              #10b981;
+  --avatar-gradient:      linear-gradient(135deg, #818cf8, #4f46e5);
+
+  /* === 语义边框 / 面板阴影扩展 === */
+  --success-bd:           color-mix(in srgb, var(--success) 30%, transparent);
+  --danger-bd:            color-mix(in srgb, var(--destructive) 30%, transparent);
+  --window-close-bd:      color-mix(in srgb, var(--window-close) 30%, transparent);
+  --shadow-panel:         -12px 0 48px rgba(8, 8, 14, 0.4);
+
+  /* === 布局 === */
+  --titlebar-h: 44px;
+  --tabs-h: 36px;
+  --titlebar-icon: 28px;
+  --icon-svg: calc(var(--titlebar-icon) * 0.65);
+  --icon-svg-sm: calc(var(--icon-svg) * 0.85);
+
+  /* 开关按钮统一尺寸 */
+  --toggle-w: calc(var(--titlebar-icon) * 1.85);
+  --toggle-h: calc(var(--titlebar-icon) * 0.9);
+  --btn-h: calc(var(--titlebar-icon) * 0.82);
+  --toggle-pad: calc(var(--toggle-h) * 0.15);
+  --toggle-knob: calc(var(--toggle-h) - var(--toggle-pad) * 2);
+}
+
+/* ===== SidekickAI 扩展令牌 ===== */
+:root {
+  /* accent 强调色扩展（基于 brand 色阶） */
+  --accent-bright: var(--brand-500);
+  --accent-bright-foreground: #ffffff;
+  --accent-light:  var(--brand-400);
+  --accent-light-foreground: #ffffff;
+  --accent-dim:    var(--brand-700);
+  --accent-90:     rgba(99, 102, 241, 0.9);
+  --accent-75:     rgba(99, 102, 241, 0.75);
+  --accent-50:     rgba(99, 102, 241, 0.5);
+  --accent-25:     rgba(99, 102, 241, 0.25);
+  --accent-10:     rgba(99, 102, 241, 0.10);
+  --accent-05:     rgba(99, 102, 241, 0.05);
+
+  /* 弱化文字色 */
+  --text-muted:     var(--muted-foreground);
+  --text-dim:       var(--muted-foreground);
+
+  /* 装饰光晕 */
+  --halo-1: radial-gradient(ellipse at top right, rgba(99, 102, 241, 0.18), transparent 60%);
+  --halo-2: radial-gradient(ellipse at bottom left, rgba(79, 70, 229, 0.16), transparent 60%);
+  --halo-3: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.06), transparent 70%);
+
+  /* 额外圆角档位 */
+  --radius-xs: 4px;
+  --radius-2xs: 2px;
+
+  /* 语义化布局尺寸（固定值不随 UI 档位变化） */
+  --dropdown-max-h: min(360px, calc(100vh - var(--titlebar-h) - var(--space-4)));
+  --drawer-w: 280px;
+  --touch-target: 44px;
+  --toast-offset: calc(var(--space-12) + var(--space-2));
+
+  /* 跨窗口动态布局辅助变量 */
+  --sidebar-w: calc(var(--titlebar-icon) * 9);
+  --chat-input-min-h: calc(var(--titlebar-icon) * 1.4);
+  --app-grid-item-w: calc(var(--titlebar-icon) * 2.6);
+  --expanded-btn-w: calc(var(--titlebar-icon) * 3.1);
+  --panel-min-w: calc(var(--titlebar-icon) * 11);
+  --panel-max-w: calc(var(--titlebar-icon) * 26);
+}
+
+/* =====================================================================
+   窗口外壳边框
+   frame:false 窗口没有系统边框，给所有 .app-shell 容器加 1px 边框。
+   ===================================================================== */
+.app-shell {
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
+[data-ui-scale="large"] .app-shell {
+  box-shadow: inset 0 0 0 1px var(--glass-bd);
+}

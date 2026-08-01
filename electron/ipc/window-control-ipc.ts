@@ -192,7 +192,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
       console.error('[main] resize 失败:', err)
     }
   })
-  // F11 切换全屏：退出全屏时恢复到持久化的窄长 bounds
+  // 切换全屏：退出全屏时恢复到持久化的窄长 bounds（保留接口，当前无热键绑定）
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN, (e) => {
     const win = getSenderWindow(e)
     if (!win) return false

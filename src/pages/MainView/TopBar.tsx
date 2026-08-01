@@ -66,7 +66,7 @@ export interface TopBarActions {
   /** 切换置顶（走 store action，同步图标/高亮 + IPC + 持久化） */
   handleTogglePin: () => void;
   setDrawerOpen: (v: boolean) => void;
-  setSettingsOpen: (v: boolean) => void;
+  onOpenSettings: () => void;
   /** 切换主题（light/dark） */
   onToggleTheme: () => void;
   /** 循环切换 UA 锁定模式：auto→mobile→desktop→auto */
@@ -112,7 +112,7 @@ export default function TopBar({ data, actions }: TopBarProps) {
     handleMaximize,
     handleTogglePin,
     setDrawerOpen,
-    setSettingsOpen,
+    onOpenSettings,
     onToggleTheme,
     onToggleUaLockMode,
   } = actions;
@@ -131,7 +131,7 @@ export default function TopBar({ data, actions }: TopBarProps) {
       {/* 左：AppSwitcher（常驻）+ UA 切换 + 导航按钮组（后退/前进/刷新/主页） */}
       <AppSwitcher
         platforms={platforms}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={onOpenSettings}
         onAppClick={onAppClick}
         appClickBehavior={appClickBehavior}
         activeProfileId={activeProfileId}

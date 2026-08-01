@@ -191,6 +191,20 @@
   border-bottom: 1px solid var(--border);
   animation: none;
 }
+/* Oxy 标签栏：容器高度由 JS 计算（CSS-in-JS），仅保留排列辅助属性 */
+.main-view[data-oxy="true"] .tab-bar.is-expanded {
+  transition: none;
+  flex-wrap: wrap;
+  overflow: hidden;
+  align-items: flex-start;
+  align-content: flex-start;
+  padding: var(--space-0-5) var(--space-1);
+  gap: var(--space-0-5) var(--space-0-5);
+}
+/* Oxy 两行模式：标签按内容宽度排列，支持自然换行（外观不变） */
+.main-view[data-oxy="true"] .tab-bar.is-expanded .tab-chip {
+  flex: 0 1 auto;
+}
 /* 标签颜色标记：收起态下在底部红色痕迹上显示每个标签的颜色条（不占空间） */
 .tab-indicators {
   position: absolute;
@@ -225,9 +239,10 @@
   display: inline-flex;
 }
 .tab-chip {
+  --tab-chip-max-w: 200px;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 200px;
+  max-width: var(--tab-chip-max-w);
   display: none;
   align-items: center;
   gap: var(--space-2);
@@ -279,9 +294,8 @@
   justify-content: center;
   gap: var(--space-0-25);
   line-height: 1.1;
+  flex: 1 1 auto;
   min-width: 0;
-  /* 关闭按钮 absolute 定位后预留右侧空间，避免文本与按钮重叠 */
-  padding-right: calc(var(--icon-svg-sm) + var(--space-0-5));
 }
 .tab-chip-name {
   font-size: var(--text-sm);
@@ -305,7 +319,7 @@
   color: var(--primary);
   opacity: 0.8;
 }
-/* 标签脱离/关闭小按钮（固定在标签容器右端，悬浮显示） */
+/* 标签脱离/关闭小按钮（放在文档流末尾，自然占据空间，避免与文本重叠） */
 .tab-action {
   width: var(--icon-svg-sm); height: var(--icon-svg-sm);
   display: inline-flex;
@@ -317,11 +331,6 @@
   cursor: pointer;
   border-radius: var(--radius-2xs);
   opacity: 0;
-  /* absolute 定位贴右边缘，不随文本宽度漂移；right 用 --space-1 跟随三档 UI 比例缩放 */
-  position: absolute;
-  right: var(--space-1);
-  top: 50%;
-  transform: translateY(-50%);
   flex: none;
   transition: opacity var(--duration-fast), color var(--duration-fast);
 }
@@ -379,9 +388,10 @@
   min-height: 0;
 }
 .bottom-section-title {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
-  color: var(--primary);
+  font-weight: 600;
+  color: var(--muted-foreground);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: var(--space-1);
@@ -411,14 +421,14 @@
   justify-content: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-0-5);
-  background: var(--accent);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 .app-grid-item:hover {
-  background: var(--input);
+  background: var(--background);
   border-color: var(--ring);
 }
 /* 拖拽中：半透明（与 inline style 协同，css 兜底） */
@@ -427,7 +437,7 @@
 }
 /* 拖拽悬停目标：虚线高亮边框 */
 .app-grid-item.drag-hover {
-  outline: 2px dashed var(--accent);
+  outline: 2px dashed var(--ring);
   outline-offset: -2px;
 }
 .app-grid-item.open {
@@ -444,7 +454,7 @@
   border-color: var(--primary);
 }
 .app-grid-item-provider:hover {
-  background: color-mix(in srgb, var(--primary) 8%, var(--accent));
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
 }
 .app-grid-icon {
   width: var(--titlebar-icon);
@@ -523,7 +533,7 @@
   height: var(--space-0-75);
   background: linear-gradient(90deg, var(--brand-600), var(--brand-700));
   border-radius: var(--radius-2xs);
-  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.4);
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.4);
   transition: width var(--duration-fast), height var(--duration-fast);
   cursor: pointer;
 }
@@ -740,4 +750,30 @@
 .main-view[data-viewport="narrow"] .expanded-btn {
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
+}
+
+/* =====================================================================
+   界面版本：经典版样式还原（配合 design-tokens.css classic 令牌块）
+   仅在 <html data-ui-version="classic"> 时命中，恢复局部优化前的
+   经典样式细节；DOM 结构与交互逻辑不变。
+   ===================================================================== */
+[data-ui-version="classic"] .bottom-section-title {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--primary);
+}
+[data-ui-version="classic"] .app-grid-item {
+  background: var(--accent);
+}
+[data-ui-version="classic"] .app-grid-item:hover {
+  background: var(--input);
+}
+[data-ui-version="classic"] .app-grid-item.drag-hover {
+  outline: 2px dashed var(--accent);
+}
+[data-ui-version="classic"] .app-grid-item-provider:hover {
+  background: color-mix(in srgb, var(--primary) 8%, var(--accent));
+}
+[data-ui-version="classic"] .bottom-handle-bar {
+  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.4);
 }

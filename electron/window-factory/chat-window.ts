@@ -88,8 +88,8 @@ export function createChatWindow(): BrowserWindow | null {
     safeLogWindowTrace(CHAT_WINDOW_ID, 'create')
   })
 
-  // chat 窗口不含 webview，需在主 webContents 上注册 F11/F12 拦截
-  // 否则 Chromium 内置 F11 全屏会拦截按键，渲染层 keydown 无法生效
+  // chat 窗口不含 webview，需在主 webContents 上注册 F12 拦截
+  // 否则 Chromium 内置 F12 行为会拦截按键，渲染层 keydown 无法生效
   attachWindowHotkeyInterceptor(win.webContents)
 
   // 窗口控制 IPC 由调用方所在窗口自行处理（WIN_CONTROL_* 复用），
@@ -150,7 +150,7 @@ export function createChatDetachedWindow(windowId: string, config: ChatWindowCon
     safeLogWindowTrace(windowId, 'create')
   })
 
-  // chat 脱离窗口不含 webview，同样需要 F11/F12 拦截
+  // chat 脱离窗口不含 webview，同样需要 F12 拦截
   attachWindowHotkeyInterceptor(win.webContents)
 
   windowState.detachedWindows.set(windowId, win)

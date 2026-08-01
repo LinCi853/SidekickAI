@@ -2,7 +2,8 @@
 // 面板外壳抽取到 SettingsPanelShell.tsx。本文件仅保留编排逻辑。
 /* =====================================================================
    components/SettingsPanel/index.tsx —— 主窗口设置面板（侧滑）
-   编排 11 个 section + 新增 ProviderSection（共享 section）。
+   编排各 section：外观、通用、顶栏、热键、AI 应用、供应商、平台 URL、
+   语音、代理、设备预设、Cookie、进阶配置、关于。
    数据加载/CRUD 通过 useAppSettings/useVoiceConfig/useHotkeys/usePresets hook。
    ===================================================================== */
 
@@ -15,23 +16,22 @@ import {
   setMinimumSize,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
-import { useProfileStore } from '../../store/useProfileStore';
 import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData';
+import { usePlatformUrlConfig } from '../../hooks/usePlatformUrlConfig';
 import './styles.css';
 import type { SettingsPanelProps, VoiceSettings, GeneralSettings, ProxySettings } from './types';
 import SettingsPanelShell from './SettingsPanelShell';
 import AppearanceSection from './sections/AppearanceSection';
 import GeneralSection from './sections/GeneralSection';
-import AiAppSection from './sections/AiAppSection';
 import HotkeySection from './sections/HotkeySection';
-import PresetSection from './sections/PresetSection';
-import VoiceSection from './sections/VoiceSection';
-import ProxySection from './sections/ProxySection';
 import AboutSection from './sections/AboutSection';
 import TopBarSection from './sections/TopBarSection';
-import StorageSection from './sections/StorageSection';
-import CookieSection from './sections/CookieSection';
+import AiAppSection from './sections/AiAppSection';
 import ProviderSection from './sections/ProviderSection';
+import PlatformUrlSection from './sections/PlatformUrlSection';
+import VoiceSection from './sections/VoiceSection';
+import PresetSection from './sections/PresetSection';
+import AdvancedSection from './sections/AdvancedSection';
 
 export default function SettingsPanel({ open, onClose, onOpenShortcuts }: SettingsPanelProps) {
   // ===== 状态 hook（替代原 50+ useState） =====
@@ -44,12 +44,14 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
   const [presetExpanded, setPresetExpanded] = useState(false);
 
   // 供应商编辑状态：编辑时本地强制隐藏侧滑面板，让编辑 Modal 全屏覆盖主窗口
-  // 与进阶面板体验保持一致（侧滑面板的 transform 会破坏内部 Modal 的 fixed 定位）
   const [providerEditing, setProviderEditing] = useState(false);
 
   // 主窗口专属：已打开标签（用于顶栏按钮显隐后同步最小宽度）
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
+
+  // 平台 URL 配置状态（独立 hook 管理）
+  const platformUrlConfig = usePlatformUrlConfig(presetsState.platforms);
 
   /** 切换平台隐藏状态（已配置 ↔ 已隐藏） */
   const handleTogglePlatformHidden = async (platform: AIPlatform) => {
@@ -112,7 +114,6 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
     app.setTopBarVisibleButtons(next);
     try {
       await updateAppSettings({ topBarVisibleButtons: next });
-      // 同步更新窗口最小宽度（visibleButtons 变化影响顶栏实际占用宽度）
       try {
         const { calculateMainWindowMinWidth, MAIN_WINDOW_MIN_HEIGHT } = await import(
           '../../../electron/shared/window-size'
@@ -132,7 +133,6 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
   };
 
   // ===== 聚合 props 模式：onChange 仅更新本地 state（即时 UI 反馈），不触发持久化 =====
-  // 持久化仍由各 Section 内部调用 setVoiceConfig/updateAppSettings/applyProxy 完成
   const handleVoiceChange = useCallback((patch: Partial<VoiceSettings>) => {
     if (patch.confirmMode !== undefined) voice.setConfirmMode(patch.confirmMode);
     if (patch.enterToSend !== undefined) voice.setEnterToSend(patch.enterToSend);
@@ -153,8 +153,6 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
     if (patch.startupOpen !== undefined) app.setStartupOpen(patch.startupOpen);
     if (patch.closeBehavior !== undefined) app.setCloseBehavior(patch.closeBehavior);
     if (patch.enterToSend !== undefined) app.setEnterToSend(patch.enterToSend);
-    if (patch.defaultDesktopUaPreset !== undefined) app.setDefaultDesktopUaPreset(patch.defaultDesktopUaPreset);
-    if (patch.defaultMobileUaPreset !== undefined) app.setDefaultMobileUaPreset(patch.defaultMobileUaPreset);
     if (patch.appClickBehavior !== undefined) app.setAppClickBehavior(patch.appClickBehavior);
     if (patch.usageTrackingEnabled !== undefined) app.setUsageTrackingEnabled(patch.usageTrackingEnabled);
   }, [app]);
@@ -196,6 +194,17 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         onToggle={handleToggleTopBarButton}
       />
 
+      <HotkeySection
+        hotkeys={hotkeys.hotkeys}
+        drafts={hotkeys.drafts}
+        savingAction={hotkeys.savingAction}
+        feedback={hotkeys.feedback}
+        setDrafts={hotkeys.setDrafts}
+        handleSaveHotkey={hotkeys.saveHotkey}
+        onToggleEnabled={hotkeys.toggleEnabled}
+        onOpenShortcuts={onOpenShortcuts}
+      />
+
       <AiAppSection
         platforms={presetsState.platforms}
         onEditApp={(profileId) => {
@@ -208,31 +217,31 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
       />
 
       <ProviderSection
-        defaultCollapsed={true}
+        defaultCollapsed={false}
         onEditingChange={setProviderEditing}
       />
 
-      <HotkeySection
-        hotkeys={hotkeys.hotkeys}
-        drafts={hotkeys.drafts}
-        savingAction={hotkeys.savingAction}
-        feedback={hotkeys.feedback}
-        setDrafts={hotkeys.setDrafts}
-        handleSaveHotkey={hotkeys.saveHotkey}
-        onToggleEnabled={hotkeys.toggleEnabled}
-        onOpenShortcuts={onOpenShortcuts}
-        altSpaceResetThreshold={app.altSpaceResetThreshold}
-        onAltSpaceThresholdChange={handleAltSpaceThresholdChange}
-      />
-
-      <PresetSection
+      <PlatformUrlSection
+        platforms={presetsState.platforms}
+        profiles={platformUrlConfig.profiles}
         presets={presetsState.presets}
-        loading={presetsState.isLoading}
-        presetExpanded={presetExpanded}
-        setPresetExpanded={setPresetExpanded}
-        onReload={() => {
-          void presetsState.load();
-        }}
+        hideForeignModels={app.hideForeignModels}
+        hiddenPlatforms={app.hiddenPlatforms}
+        openProfileIds={platformUrlConfig.openProfileIds}
+        platformUrlDrafts={platformUrlConfig.platformUrlDrafts}
+        setPlatformUrlDrafts={platformUrlConfig.setPlatformUrlDrafts}
+        platformDesktopUaDrafts={platformUrlConfig.platformDesktopUaDrafts}
+        setPlatformDesktopUaDrafts={platformUrlConfig.setPlatformDesktopUaDrafts}
+        platformMobileUaDrafts={platformUrlConfig.platformMobileUaDrafts}
+        setPlatformMobileUaDrafts={platformUrlConfig.setPlatformMobileUaDrafts}
+        platformThemeColorDrafts={platformUrlConfig.platformThemeColorDrafts}
+        setPlatformThemeColorDrafts={platformUrlConfig.setPlatformThemeColorDrafts}
+        platformRegionDrafts={platformUrlConfig.platformRegionDrafts}
+        setPlatformRegionDrafts={platformUrlConfig.setPlatformRegionDrafts}
+        savingPlatformId={platformUrlConfig.savingPlatformId}
+        handleSavePlatform={platformUrlConfig.handleSavePlatform}
+        handleTogglePlatformHidden={handleTogglePlatformHidden}
+        handleSwitchToPlatformTab={platformUrlConfig.handleSwitchToPlatformTab}
       />
 
       <VoiceSection
@@ -255,7 +264,22 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         onChange={handleVoiceChange}
       />
 
-      <ProxySection
+      <PresetSection
+        presets={presetsState.presets}
+        loading={presetsState.isLoading}
+        presetExpanded={presetExpanded}
+        setPresetExpanded={setPresetExpanded}
+        onReload={() => { void presetsState.load(); }}
+      />
+
+      <AdvancedSection
+        presets={presetsState.presets}
+        altSpaceResetThreshold={app.altSpaceResetThreshold}
+        onAltSpaceThresholdChange={handleAltSpaceThresholdChange}
+        defaultDesktopUaPreset={app.defaultDesktopUaPreset}
+        defaultMobileUaPreset={app.defaultMobileUaPreset}
+        onDefaultDesktopUaPresetChange={(v) => app.setDefaultDesktopUaPreset(v)}
+        onDefaultMobileUaPresetChange={(v) => app.setDefaultMobileUaPreset(v)}
         proxy={{
           proxyMode: app.proxyMode,
           customProxy: app.customProxy,
@@ -265,11 +289,9 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
           proxyFallbackEnabled: app.proxyFallbackEnabled,
           proxyFallbackMode: app.proxyFallbackMode,
         }}
-        onChange={handleProxyChange}
+        onProxyChange={handleProxyChange}
       />
 
-      <StorageSection />
-      <CookieSection />
       <AboutSection />
     </SettingsPanelShell>
   );

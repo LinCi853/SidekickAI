@@ -91,7 +91,7 @@ export interface WindowControlAPI {
    * 主进程调用 win.setBounds 完成 resize。
    */
   resize(bounds: { x?: number; y?: number; width: number; height: number }): Promise<void>
-  /** 切换全屏（F11） */
+  /** 切换全屏（保留接口，当前无热键绑定） */
   toggleFullscreen(): Promise<boolean>
   /**
    * 动态设置当前窗口的最小尺寸（用于 UI 比例变化时重新约束窗口尺寸）。
@@ -856,6 +856,8 @@ export interface ElectronAPI {
     profileId?: string;
     mode?: 'edit' | 'create';
   }) => Promise<void>
+  /** 打开设置独立窗口（单例，左导航+右内容布局） */
+  openSettingsWindow: () => Promise<void>
   /**
    * 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）。
    * 可选 providerId：若提供则切换到对应自定义供应商的对话页。

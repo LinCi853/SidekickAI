@@ -71,7 +71,7 @@ export default function StandaloneWindowHeader({
     void isWindowMaximized().then(setIsMaximized).catch(() => {});
   }, []);
 
-  // 订阅主进程状态广播（F11/F12 拦截、其他入口触发时同步）
+  // 订阅主进程状态广播（F12 拦截、其他入口触发时同步）
   useEffect(() => {
     const offPin = onPinToggled((onTop) => setIsPinned(onTop));
     const offMax = onMaximizeToggled((max) => setIsMaximized(max));

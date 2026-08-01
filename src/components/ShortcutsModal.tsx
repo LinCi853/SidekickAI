@@ -44,7 +44,6 @@ const APP_SHORTCUTS: Array<{ keys: string; action: string; scope: string; note?:
   { keys: 'F5', action: '刷新当前标签', scope: '应用内' },
   { keys: 'F6', action: '前进（当前标签）', scope: '应用内' },
   { keys: 'F10', action: '切换主题', scope: '应用内' },
-  { keys: 'F11', action: '窗口最大化/还原', scope: '应用内', note: '与置顶互斥，进入时自动取消置顶' },
   { keys: 'F12', action: '切换当前窗口置顶', scope: '应用内', note: '最大化/全屏时不可用' },
   { keys: 'Ctrl + G', action: '切换手柄/键盘空间导航', scope: '应用内' },
   { keys: '` / ~ / ?', action: '呼出/关闭快捷键说明窗口', scope: '应用内' },

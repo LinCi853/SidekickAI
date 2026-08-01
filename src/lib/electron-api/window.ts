@@ -202,7 +202,7 @@ export async function savePreset(preset: DevicePreset): Promise<DevicePreset> {
   return api.presets.save(preset);
 }
 
-/** 删除设备预设（内置预设不可删除） */
+/** 删除设备预设 */
 export async function deletePreset(id: string): Promise<void> {
   const api = requireElectron();
   return api.presets.delete(id);

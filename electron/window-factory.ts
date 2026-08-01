@@ -27,7 +27,7 @@ export { getSenderWindow, loadRenderer, getFormBounds, findWindowIdByWin } from 
 export { createMainWindow } from './window-factory/main-window.js'
 export { createStandaloneWindow } from './window-factory/standalone-window.js'
 export { createChatWindow, createChatDetachedWindow } from './window-factory/chat-window.js'
-export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow } from './window-factory/popup-windows.js'
+export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showDataExportWindow, showSettingsWindow } from './window-factory/popup-windows.js'
 export {
   createAdvancedPanelWindow,
   openAdvancedPanelWindow,

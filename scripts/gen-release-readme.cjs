@@ -47,7 +47,6 @@ Alt+Q        进阶面板
 Alt+V        后台语音输入
 Alt+Shift+P  置顶切换
 Alt+Shift+M  静音切换
-F11          最大化
 F12          置顶切换
 `;
 
