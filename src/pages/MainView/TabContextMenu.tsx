@@ -14,6 +14,8 @@ export interface TabContextMenuActions {
   clearData: (tabId: string) => void;
   setAsHome: (tabId: string) => void;
   configureApp: (tabId: string) => void;
+  // 需求 12：截图当前 webview 页面到白板（生成 Excalidraw image 元素）
+  screenshotToWhiteboard: (tabId: string) => void;
   detach: (tabId: string) => void;
   closeOthers: (tabId: string) => void;
   closeRight: (tabId: string) => void;
@@ -52,6 +54,7 @@ export default function TabContextMenu({
     clearData,
     setAsHome,
     configureApp,
+    screenshotToWhiteboard,
     detach,
     closeOthers,
     closeRight,
@@ -220,6 +223,21 @@ export default function TabContextMenu({
               <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
             </svg>
             <span data-name="main.tab-context-menu.menu-item-5-label">清除数据并刷新</span>
+          </button>
+          <button
+            type="button"
+            className="tab-context-menu-item"
+            onClick={() => {
+              void screenshotToWhiteboard(tabId);
+              close();
+            }}
+            data-name="main.tab-context-menu.menu-item-5b"
+          >
+            <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="main.tab-context-menu.menu-item-5b-icon">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <span data-name="main.tab-context-menu.menu-item-5b-label">截图到白板</span>
           </button>
         </div>
 

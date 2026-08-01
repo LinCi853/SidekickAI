@@ -334,6 +334,12 @@ export const IPC_CHANNELS = {
   WHITEBOARD_SAVE_SNAPSHOT: 'whiteboard:saveSnapshot',
   // 同步保存（beforeunload 兜底，确保窗口关闭前完成写入）
   WHITEBOARD_SAVE_SNAPSHOT_SYNC: 'whiteboard:saveSnapshotSync',
+  // 渲染→主：保存截图 dataURL 到磁盘，返回 whiteboard-asset:// 路径（需求 12：截图到白板）
+  WHITEBOARD_SAVE_IMAGE: 'whiteboard:saveImage',
+  // 渲染→主：推送截图到白板（打开进阶面板 + 切到白板 tab + 转发载荷）
+  WHITEBOARD_PUSH_IMAGE_REQUEST: 'whiteboard:pushImageRequest',
+  // 主→渲染：白板窗口接收推送的截图（载荷：{ assetUrl, sourceUrl?, platform? }）
+  WHITEBOARD_PUSH_IMAGE: 'whiteboard:pushImage',
   // 主进程 → AdvancedPanelView 渲染：通知切换到 whiteboard tab
   STANDALONE_SWITCH_TO_WHITEBOARD: 'standalone:switchToWhiteboard',
 } as const

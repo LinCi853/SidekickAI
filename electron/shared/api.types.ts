@@ -732,6 +732,16 @@ export interface NotesAPI {
 /**
  * 白板 API（v3：Excalidraw + 多白板）
  */
+/** 推送到白板的截图载荷 */
+export interface WhiteboardPushImagePayload {
+  /** whiteboard-asset:// 协议路径（主进程已保存到磁盘） */
+  assetUrl: string
+  /** 来源页面 URL（截图网页时记录） */
+  sourceUrl?: string
+  /** 来源 AI 平台名 */
+  platform?: string
+}
+
 export interface WhiteboardAPI {
   /** 列出全部白板 */
   list(): Promise<WhiteboardMeta[]>
@@ -751,6 +761,12 @@ export interface WhiteboardAPI {
   saveSnapshot(id: string, snapshot: string): Promise<{ ok: boolean }>
   /** 同步保存 snapshot（beforeunload 兜底） */
   saveSnapshotSync(id: string, snapshot: string): { ok: boolean }
+  /** 需求 12：保存截图 dataURL 到磁盘，返回 whiteboard-asset:// 路径 */
+  saveImage(dataUrl: string): Promise<string>
+  /** 需求 12：推送截图到白板（主进程打开进阶面板 + 切 tab + 转发载荷给白板渲染层） */
+  pushImage(payload: WhiteboardPushImagePayload): Promise<{ ok: boolean }>
+  /** 主→渲染：白板窗口接收推送的截图（WhiteboardView 订阅后注入 Excalidraw 图片元素） */
+  onPushImage(callback: (payload: WhiteboardPushImagePayload) => void): () => void
 }
 
 /** 通过 contextBridge 暴露到渲染进程的完整 API */

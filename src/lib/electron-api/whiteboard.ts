@@ -5,10 +5,11 @@
 
 import type {
   WhiteboardMeta,
+  WhiteboardPushImagePayload,
 } from '../../../electron/shared/types';
 import { requireElectron } from './core';
 
-export type { WhiteboardMeta };
+export type { WhiteboardMeta, WhiteboardPushImagePayload };
 
 /** 列出全部白板（按 sort_order ASC, updated_at DESC） */
 export async function listWhiteboards(): Promise<WhiteboardMeta[]> {
@@ -62,4 +63,24 @@ export async function saveWhiteboardSnapshot(id: string, snapshot: string): Prom
 export function saveWhiteboardSnapshotSync(id: string, snapshot: string): { ok: boolean } {
   const api = requireElectron();
   return api.whiteboard.saveSnapshotSync(id, snapshot);
+}
+
+/** 需求 12：保存截图 dataURL 到磁盘，返回 whiteboard-asset:// 路径 */
+export async function saveWhiteboardImage(dataUrl: string): Promise<string> {
+  const api = requireElectron();
+  return api.whiteboard.saveImage(dataUrl);
+}
+
+/** 需求 12：推送截图到白板（主进程打开进阶面板 + 切白板 tab + 转发载荷） */
+export async function pushImageToWhiteboard(payload: WhiteboardPushImagePayload): Promise<{ ok: boolean }> {
+  const api = requireElectron();
+  return api.whiteboard.pushImage(payload);
+}
+
+/** 监听主进程推送的截图（WhiteboardView 订阅后注入 Excalidraw 图片元素） */
+export function onWhiteboardPushImage(
+  callback: (payload: WhiteboardPushImagePayload) => void,
+): () => void {
+  const api = requireElectron();
+  return api.whiteboard.onPushImage(callback);
 }

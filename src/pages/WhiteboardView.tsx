@@ -40,8 +40,9 @@ import {
   getWhiteboardSnapshot,
   saveWhiteboardSnapshot,
   saveWhiteboardSnapshotSync,
+  onWhiteboardPushImage,
 } from '../lib/electron-api';
-import type { WhiteboardMeta, WhiteboardState } from '../lib/electron-api';
+import type { WhiteboardMeta, WhiteboardState, WhiteboardPushImagePayload } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
@@ -67,6 +68,64 @@ async function assetUrlToDataUrl(url: string): Promise<string> {
     console.error('[WhiteboardView] asset → dataURL 转换失败:', url, err);
     throw err;
   }
+}
+
+/** 加载 dataURL 图片获取原始尺寸（用于 Excalidraw image 元素 width/height） */
+function loadImageSize(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error('图片加载失败'));
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * 需求 12：将推送的截图注入当前 Excalidraw 场景。
+ * 流程：assetUrl → dataURL → 加载尺寸 → addFiles + updateScene + scrollToContent。
+ * 图片最大宽度 400px（与 v1 一致），超出按比例缩放。
+ */
+async function injectPushedImageIntoCanvas(
+  api: ExcalidrawImperativeAPI,
+  payload: WhiteboardPushImagePayload,
+): Promise<void> {
+  // 1. assetUrl → dataURL
+  const dataUrl = await assetUrlToDataUrl(payload.assetUrl);
+  // 2. 加载图片获取原始尺寸
+  const { width: naturalWidth, height: naturalHeight } = await loadImageSize(dataUrl);
+  const MAX_W = 400;
+  const scale = naturalWidth > MAX_W ? MAX_W / naturalWidth : 1;
+  const width = Math.round(naturalWidth * scale);
+  const height = Math.round(naturalHeight * scale);
+  // 3. 生成 fileId + BinaryFileData，添加到 Excalidraw files map
+  const fileId = `file_push_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` as FileId;
+  api.addFiles([
+    {
+      mimeType: MIME_TYPES.png,
+      id: fileId,
+      dataURL: dataUrl as DataURL,
+      created: Date.now(),
+    },
+  ]);
+  // 4. 创建 image 元素并追加到当前场景（保留已有元素）
+  const newElements = convertToExcalidrawElements(
+    [
+      {
+        type: 'image',
+        // 随机偏移避免多张截图重叠
+        x: 80 + Math.round(Math.random() * 200),
+        y: 80 + Math.round(Math.random() * 120),
+        width,
+        height,
+        fileId,
+      },
+    ],
+    { regenerateIds: false },
+  );
+  const existing = api.getSceneElements();
+  api.updateScene({ elements: [...existing, ...newElements] });
+  // 5. 滚动视口到新元素
+  api.scrollToContent(newElements[0], { fitToContent: true });
 }
 
 // ============================================================================
@@ -249,6 +308,8 @@ function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
   const latestSceneRef = useRef<{ elements: readonly ExcalidrawElement[]; appState: AppState; files: BinaryFiles } | null>(null);
   // 是否完成首次加载（避免 initialData 还原触发保存覆盖空数据）
   const hydratedRef = useRef(false);
+  // 需求 12：截图推送到达时若 Excalidraw API 尚未就绪，暂存待处理载荷
+  const pendingImageRef = useRef<WhiteboardPushImagePayload | null>(null);
 
   activeIdRef.current = activeId;
 
@@ -330,9 +391,34 @@ function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
       requestAnimationFrame(() => {
         hydratedRef.current = true;
       });
+      // 需求 12：处理 API 就绪前到达的截图推送
+      const pending = pendingImageRef.current;
+      if (pending) {
+        pendingImageRef.current = null;
+        void injectPushedImageIntoCanvas(api, pending).catch((err) => {
+          console.error('[WhiteboardCanvas] 注入暂存截图失败:', err);
+        });
+      }
     },
     [],
   );
+
+  // 需求 12：订阅主进程推送的截图，注入当前 Excalidraw 场景
+  // 订阅在挂载时一次注册；回调读取 apiRef.current 判断 API 是否就绪
+  useEffect(() => {
+    const off = onWhiteboardPushImage((payload) => {
+      const api = apiRef.current;
+      if (!api) {
+        // API 未就绪：暂存，等 handleAPIReady 处理
+        pendingImageRef.current = payload;
+        return;
+      }
+      void injectPushedImageIntoCanvas(api, payload).catch((err) => {
+        console.error('[WhiteboardCanvas] 注入截图失败:', err);
+      });
+    });
+    return off;
+  }, []);
 
   return (
     <div className="wb-canvas-wrap" data-name="advanced-panel.wb-canvas">

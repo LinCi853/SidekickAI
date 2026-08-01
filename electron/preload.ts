@@ -337,6 +337,22 @@ const api: ElectronAPI = {
     saveSnapshot: (id, snapshot) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT, id, snapshot),
     // 同步保存（beforeunload 兜底）
     saveSnapshotSync: (id, snapshot) => ipcRenderer.sendSync(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT_SYNC, id, snapshot),
+    // 需求 12：保存截图 dataURL 到磁盘，返回 whiteboard-asset:// 路径
+    saveImage: (dataUrl: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_IMAGE, dataUrl),
+    // 需求 12：推送截图到白板（主进程打开进阶面板 + 切 tab + 转发载荷）
+    pushImage: (payload: { assetUrl: string; sourceUrl?: string; platform?: string }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE_REQUEST, payload),
+    // 主→渲染：白板窗口接收推送的截图
+    onPushImage: (
+      callback: (payload: { assetUrl: string; sourceUrl?: string; platform?: string }) => void,
+    ) => {
+      const handler = (
+        _e: unknown,
+        payload: { assetUrl: string; sourceUrl?: string; platform?: string },
+      ) => callback(payload)
+      ipcRenderer.on(IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE, handler)
+    },
   },
   // 平台能力查询（设置页显示权限状态）
   platformCapabilities: {

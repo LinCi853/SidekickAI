@@ -446,6 +446,37 @@ app.whenReady().then(async () => {
   registerWhiteboardIPC()
   registerWhiteboardAssetIPC()
 
+  // ===== 需求 12：截图到白板 —— 推送图片到进阶面板白板 =====
+  // 渲染层（MainView）调用 pushImageToWhiteboard({assetUrl, sourceUrl, platform})，
+  // 主进程负责：打开/聚焦进阶面板 → 切到 whiteboard tab → 延迟转发载荷给白板渲染层。
+  ipcMain.handle(
+    IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE_REQUEST,
+    (_e, payload: { assetUrl: string; sourceUrl?: string; platform?: string }) => {
+      // 确保进阶面板窗口可见并切到白板 tab
+      openAdvancedPanelWindow({ initialTab: 'whiteboard' })
+      const win = windowState.advancedPanelWindow
+      if (!win || win.isDestroyed()) return { ok: false }
+
+      const sendPush = () => {
+        if (win.isDestroyed()) return
+        // 通知 AdvancedPanelView 切到白板 tab（窗口已存在时复用单例）
+        win.webContents.send(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, { tab: 'whiteboard' })
+        // 延迟 200ms 发送图片载荷，等 tab 切换 + Excalidraw 挂载完成
+        setTimeout(() => {
+          if (!win.isDestroyed()) {
+            win.webContents.send(IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE, payload)
+          }
+        }, 200)
+      }
+      if (win.webContents.isLoading()) {
+        win.webContents.once('did-finish-load', sendPush)
+      } else {
+        sendPush()
+      }
+      return { ok: true }
+    },
+  )
+
   // ===== 注册语音配置 IPC（enterToSend 等） =====
   registerVoiceConfigIPC()
   registerAppSettingsIPC()

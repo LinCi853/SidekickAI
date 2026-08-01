@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { Profile, TabState } from '../../lib/electron-api';
 import type { WebviewElement } from '../../lib/webview';
 import { safeReloadWebview, safeLoadURLWebview, sanitizeUrl } from '../../lib/webview';
-import { openAiAppEditor } from '../../lib/electron-api';
+import { openAiAppEditor, saveWhiteboardImage, pushImageToWhiteboard } from '../../lib/electron-api';
 
 export interface TabContextMenuParams {
   tabs: TabState[];
@@ -120,6 +120,28 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     void openAiAppEditor({ profileId: profile.id, mode: 'edit' });
   }, [tabs, getProfile]);
 
+  // 需求 12：截图当前 webview 页面到白板（v3：保存图片 → 推送到进阶面板白板 → Excalidraw image 元素）
+  const screenshotToWhiteboard = useCallback(async (tabId: string) => {
+    const webview = document.querySelector(`webview[data-tab-id="${tabId}"]`) as WebviewElement | null;
+    if (!webview) return;
+    const tab = tabs.find((t) => t.id === tabId);
+    const profile = tab ? getProfile(tab.profileId) : null;
+    try {
+      const image = await webview.capturePage();
+      const dataURL = image.toDataURL();
+      // 1. 保存 dataURL 到磁盘 → whiteboard-asset:// 路径
+      const assetUrl = await saveWhiteboardImage(dataURL);
+      // 2. 推送到白板：主进程打开进阶面板 + 切白板 tab + 转发载荷
+      await pushImageToWhiteboard({
+        assetUrl,
+        sourceUrl: tab?.url,
+        platform: profile?.name,
+      });
+    } catch (e) {
+      console.error('[MainView] 截图到白板失败:', e);
+    }
+  }, [tabs, getProfile]);
+
   // 右键菜单打开
   const handleTabContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
@@ -178,6 +200,7 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     closeTabsToRight,
     setAsAIHome,
     configureApp,
+    screenshotToWhiteboard,
     handleTabContextMenu,
     commitTabUrl,
     setUrlDraft,
