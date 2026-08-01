@@ -4,15 +4,18 @@
 
 ## v0.0.8 — 2026-08-01
 
-> 本版本重点：白板引擎迁移至 Excalidraw（MIT 可商用）；品牌色系从砖红切换为靛蓝并系统性修复对比度；恢复截图到白板功能。
+> 本版本重点：白板引擎迁移至 Excalidraw（MIT 可商用）；品牌色系从砖红切换为靛蓝并系统性修复对比度；恢复截图到白板功能；设置面板独立窗口化。
 
 ### 重要更改
 
 - **白板引擎迁移：tldraw → Excalidraw**
-  原白板组件 tldraw 采用专有许可证，存在商用合规风险。本版本整体迁移至 Excalidraw（MIT），数据模型从卡片级 API 重构为 Excalidraw scene snapshot，遗留 v1 卡片数据自动迁移。CSP 配置同步移除 `cdn.tldraw.com` 白名单。
+  原白板组件 tldraw 采用专有许可证，存在商用合规风险。本版本整体迁移至 Excalidraw（MIT），数据模型从卡片级 API 重构为 Excalidraw scene snapshot，遗留 v1 卡片数据自动迁移。CSP 配置同步移除 `cdn.tldraw.com` 白名单，多白板管理与白板侧边栏成为管理入口。
 
 - **品牌色系迁移：砖红 → 靛蓝**
-  品牌主色从暖砖红切换为靛蓝（`--primary` = `#4F46E5`、`--ring` = `#6366F1`），与 UI 2.0 设计方向对齐。brand 色阶完整替换为 Indigo 50–900，品牌渐变统一为 `#6366F1 → #4338CA`，亮 / 暗双主题一致。
+  品牌主色从暖砖红切换为靛蓝（`--primary` = `#4F46E5`、`--ring` = `#6366F1`），与 UI 2.0 设计方向对齐。brand 色阶完整替换为 Indigo 50–900，品牌渐变统一为 `#6366F1 → #4338CA`，亮 / 暗双主题一致。表面色从暖米色调整为冷灰（亮 `#F6F7F9` / 暗 `#0E0E12`），圆角从 20–28px 收紧至 12–20px，阴影从暖褐改为中性。
+
+- **设置面板独立窗口化**
+  主窗口内的侧滑设置面板改为独立窗口（760×600，最小 600×480，单例模式），左导航（160px）+ 右内容区布局，支持 ESC 关闭。设置分组为 5 类：外观与交互、AI 服务、网络与隐私、高级、关于。脱离窗口（Alt+Q 进阶面板、独立脱离窗口）保留侧滑设置面板，AdvancedSection 支持 `compact` 模式跳过代理 / Cookie（由「网络与隐私」分类独立承载），避免功能重复。
 
 ### 新功能
 
@@ -25,10 +28,11 @@
 - **红系反馈色收敛**：错误 / 危险红统一为 `--destructive` 单一来源，`--danger` 作为其别名，消除 `#ef4444` 与 `#e57373` 双值漂移；`--window-close`（窗口控制红）、`--highlight-recording`（录制状态红）作为语义专用变体独立保留。
 - **警告徽章对比度修复**：快捷键冲突徽章从「白字 + 琥珀底」（~2:1）改用专用令牌 `--warning-badge-bg` / `-fg`（亮色深棕字、暗色提亮琥珀 + 深字），双主题一致。
 - **字体与圆角**：`--font-sans` 首位改 Exo 2（原 Geist 未加载）；`index.html` 加载 Playfair Display 使 `--font-serif` 生效；按钮圆角统一到 `--radius-sm`。
-- **WebviewTab 导航修复**：webview `src` 仅在挂载时设置一次，避免 SPA 内部导航触发 React 重渲染导致 `ERR_ABORTED`。
+- **应用内版本号动态读取**：关于页面版本号从硬编码改为通过 `app.getVersion()` 动态读取，与 `package.json` 保持一致，不再需要手动维护。
 
 ### 问题修复
 
+- **WebviewTab 导航冲突**：webview `src` 仅在挂载时设置一次，避免 SPA 内部导航触发 React 重渲染导致 `ERR_ABORTED`。
 - 修复暗色主题下 `--danger` 仍使用亮色值的历史缺陷。
 - 清理死兜底值 `var(--x, #错误值)` 与硬编码 `#fff`（统一改用 `--foreground-inverse` / `--destructive-foreground`）。
 
@@ -41,45 +45,82 @@
 
 ## v0.0.7 — 2026-07-26
 
-> AiApp 概念统一重构为 AdvancedPanel（高级面板），并完成一轮死代码清理与通用基础设施抽取。
+> 本版本重点：webview 反检测预加载解决 AI 平台环境检测问题；进阶面板概念统一与专属设置；笔记 / 白板数据迁移至 SQLite 并补齐防抖自动保存；独立窗口组件全面统一。
+
+### 重要更改
+
+- **「AI 应用」→「高级面板」概念统一**
+  原「AI 应用」概念全面重命名为「高级面板」（AdvancedPanel）。`AiAppSettingsPanel` → `AdvancedPanelSettingsPanel`、`AiProviderAppView` → `AdvancedPanelView`、`ai-app-window` → `advanced-panel-window`，所有 UI 文案同步更新。
+
+- **笔记 / 白板数据存储迁移：JSON → SQLite**
+  应用启动时自动将旧的 electron-store JSON 数据迁移到 SQLite：白板旧 `whiteboard.json`（cards / arrows / strokes 格式）→ `whiteboard.db`；笔记旧 `notes.json` → `notes.db`，纯文本转为 TipTap ProseMirror JSON 段落。迁移幂等，迁移后旧文件改名为 `.bak`。数据存储更可靠，查询更快。
 
 ### 新功能
 
-- **AiApp → AdvancedPanel 重构**：原「AI 应用」概念统一重命名为「高级面板」。新增 `AdvancedPanelView`、`AdvancedPanelSettingsPanel`、`AdvancedPanelGeneralSection` 与 `advanced-panel-window` 窗口工厂；移除旧的 `AiAppSettingsPanel` / `AiAppGeneralSection` / `AiProviderAppView` / `ai-app-window`。
-- **Combobox 通用组件**：新增下拉组合框 UI 组件，统一选择交互。
-- **webview-preload**：新增 webview 预加载脚本，为后续 webview 内部能力注入打基础。
-- **平台检测增强**：`platform-detector` 新增 `isMobile()` 导出。
+- **webview 反检测预加载脚本**
+  新增 `webview-preload.ts`，在页面脚本执行前注入，防止 AI 网站检测 Electron / WebView 环境：
+  - `navigator.webdriver` → `false`（Chromium 自动化环境信号）
+  - 补全 `window.chrome` 对象（`runtime` / `csi` / `loadTimes` 等属性）
+  - 注入 Chrome PDF Plugin 等 3 个内置插件与 MimeType（Electron 中 `navigator.plugins` 为空是检测信号）
+  - 清理 `__electron` / `__electronBinding` / `Buffer` / `process` / `require` 等泄露 Electron 环境的全局变量
+  - 将 WEBVIEW 标签伪装为 IFRAME（`frameElement` 处理）
 
-### 工程优化
+  之前可能被 AI 平台（如 DeepSeek）检测并限制功能的网页，现在可正常使用。
 
-- **死代码清理**：删除 headless 模块及 `puppeteer-core` 依赖；删除 `stt-cleaner`、`useSwipeNavigation`、`Card` / `ListItem` 等孤立文件；清理 20+ 未使用的 electron-api wrapper。
-- **主进程基础设施抽取**：新增 `ipc-utils`（安全 IPC 包装）、`broadcast`（窗口广播）；扩展 `store-paths` 提供 SQLite / JSON store 基础设施；拆分 `voice-ipc` 为 `downloader` + `zip-extractor` 模块；重构 `window-factory` 抽取 webPreferences / 单例弹窗 / 脱离窗口生命周期工厂。
-- **渲染层基础设施抽取**：新增 `useWindowMaximizedAndPinned` / `useIsNarrow` / `useEscToCloseWindow` 等 7 个 hook；新增 `StandaloneWindowHeader` / `VoiceProviderConfig` / `TitleBar` 组件；重构 SettingsPanel 聚合 props 传递。
-- **CSS 通用样式表**：新增 `app-layout` / `forms` / `cards` 通用样式表；扩展 `TitleBar.css` 通用顶栏类。
+- **进阶面板专属设置**
+  新增 `AdvancedPanelSettingsPanel`，为 Alt+Q 进阶面板提供独立设置入口：
+  - **默认打开标签选择**：通过 SegmentedControl 选择 Alt+Q 打开时默认显示的标签页（自定义对话 / 白板 / 灵感笔记）
+  - **白板侧边栏显隐开关**：控制白板视图左侧多白板管理列表的显示 / 隐藏
+
+- **Alt+Q 切换行为改进**
+  窗口可见时 → 关闭（destroy）而非隐藏，下次 Alt+Q 重新创建并根据「默认打开」设置路由到用户设置的默认标签页，行为更可预测。
+
+- **Ctrl+1/2/3 标签快捷切换**
+  进阶面板新增键盘快捷键：Ctrl+1 → 自定义对话、Ctrl+2 → 白板、Ctrl+3 → 灵感笔记。输入框聚焦时不触发。
+
+- **Combobox 可搜索下拉组件**
+  新增通用 Combobox 组件，支持自适应宽度、内嵌搜索框实时过滤、Portal 渲染。应用于进阶面板模型选择器（所有供应商主模型 + 备选模型扁平化为可搜索列表，支持备选模型间切换主 / 备角色）和 AI 应用编辑器 UA 预设选择。
+
+- **TTS 语音合成独立配置**
+  AI 供应商新增 per-provider TTS / STT 配置（复用本供应商的 endpoint / apiKey 合成语音或识别语音），TTS 默认关闭需显式开启，支持测试连接（发送短文本合成请求返回音频预览）。
+
+- **AI Provider 加密导出 / 导入**
+  供应商配置支持加密导出为 `.sapp` 文件（密码加密），支持选择性导出（勾选具体 provider）和预览导入（dry-run，返回 provider 列表 + 冲突 id，不持久化）。
+
+- **备选模型列表**
+  同一供应商下可配置多个备选模型，Combobox 中可搜索切换，支持在备选模型间切换主 / 备角色。
+
+- **提示词模板字段迁移**
+  自动检测并迁移含旧字段（prefix / suffix / injectionPosition）的模板到新格式。
+
+### 体验优化
+
+- **ESC / Ctrl+W 统一关窗行为**
+  新增 `useEscToCloseWindow` hook，为所有独立窗口提供统一键盘关窗：ESC 关闭窗口（浮窗栈非空时由栈顶优先处理，INPUT / TEXTAREA / SELECT / contentEditable 聚焦时跳过）；Ctrl+W 直接关闭。全局浮窗栈管理多浮窗 ESC 优先级。
+
+- **窗口管理组件统一化**
+  新增 `WindowResizeHandles`（统一调整手柄）、`TitleBar`（统一标题栏：最小化 / 最大化 / 关闭 / 置顶）、`StandaloneWindowHeader`（独立窗口顶栏）、`SidebarResizer`（可拖拽调整侧边栏宽度 + 持久化）。所有独立窗口（提示词库、历史、数据导出、进阶面板等）的标题栏、调整手柄、ESC 行为、窄屏适配统一一致。
+
+- **笔记防抖自动保存增强**
+  编辑后 800ms 自动保存到 SQLite，切换笔记 / 组件卸载前 flushDraft 同步保存，窗口关闭前 beforeunload 同步兜底（`saveNoteSync`），杜绝数据丢失。
+
+- **白板防抖自动保存增强**
+  编辑后 500ms 自动保存，窗口关闭前 beforeunload 同步兜底（`saveWhiteboardSnapshotSync`）。
+
+- **API Key 显隐切换**
+  供应商 API Key 输入框新增眼睛图标切换显隐，仅在 patch 显式提供非空 apiKey 时才更新（避免误清空）。
 
 ### 问题修复
 
 - 修复 `tsconfig.json` 未完整排除移动端源码导致 `tsc` 检查废弃代码的问题。
 
-### 测试覆盖
+### 工程优化
 
-本版本建立完整测试矩阵，共 **55 项** 测试用例，覆盖 13 个功能域：
-
-| 功能域 | 测试项数 | 覆盖要点 |
-|---|---|---|
-| 窗口管理 | 5 | 弹出窗口单例、脱离窗口焦点追踪与位置记忆、最大化 / 置顶状态显示与监听无泄漏 |
-| 笔记功能 | 5 | 新建切换、防抖自动保存（800ms）、关闭窗口 beforeunload 同步兜底、删除确认、IPC 错误处理 |
-| 白板功能 | 7 | 新建切换、多图 / 多线 / 连接线绘制与保存、防抖自动保存（500ms）、关闭窗口兜底、IPC 错误处理 |
-| 设置面板-通用 | 5 | 加载显示、修改保存、回滚、保存反馈提示、视觉一致性 |
-| 设置面板-代理 | 2 | 草稿编辑 dirty 状态、连接测试结果块 |
-| 设置面板-语音 | 4 | AI 语音 / 本地 STT / TTS 三配置独立编辑不互相干扰 |
-| 语音模型下载与解压 | 3 | 下载进度与镜像源、PowerShell / AdmZip 双解压、卸载释放空间 |
-| 独立窗口视图 | 7 | 提示词库 / 历史 / 引导页顶栏交互、ESC 层级关闭、输入框聚焦豁免、窄屏切换 |
-| 聊天视图 | 2 | 窄屏切换（600px 阈值）、侧边栏切换按钮 |
-| AI 应用管理 | 4 | 列表显示操作、编辑器表单、ESC 关闭、Provider 配置测试连接 |
-| Profile 管理 | 2 | CRUD 操作、变更后窗口刷新广播 |
-| CSS 视觉一致性 | 6 | 根容器布局、侧边栏列表项、空状态、Toast、卡片、顶栏图标按钮样式统一 |
-| 应用启动与基础功能 | 3 | 正常启动、Alt+Q 窗口、UI 缩放变更广播 |
+- **死代码清理**：删除 headless 模块及 `puppeteer-core` 依赖（减小安装包体积）；删除 `stt-cleaner`、`useSwipeNavigation`、`Card` / `ListItem` 等孤立文件；清理 20+ 未使用的 electron-api wrapper。
+- **主进程基础设施抽取**：新增 `ipc-utils`（安全 IPC 包装）、`broadcast`（窗口广播）；扩展 `store-paths` 提供 SQLite / JSON store 基础设施；拆分 `voice-ipc` 为 `downloader` + `zip-extractor` 模块；重构 `window-factory` 抽取 webPreferences / 单例弹窗 / 脱离窗口生命周期工厂。
+- **渲染层基础设施抽取**：新增 `useWindowMaximizedAndPinned` / `useIsNarrow` 等 hook；重构 SettingsPanel 聚合 props 传递。
+- **CSS 通用样式表**：新增 `app-layout` / `forms` / `cards` 通用样式表；扩展 `TitleBar.css` 通用顶栏类。
+- **平台检测增强**：`platform-detector` 新增 `isMobile()` 导出。
 
 ---
 

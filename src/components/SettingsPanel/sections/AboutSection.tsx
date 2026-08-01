@@ -51,7 +51,7 @@ export default function AboutSection() {
     <section data-name="settings.about.section">
       <SectionTitle>关于</SectionTitle>
       <div className="about-row" data-name="settings.about.name-row"><span data-name="settings.about.name-label">名称</span><span data-name="settings.about.name-value">SidekickAI（工百窗）</span></div>
-      <div className="about-row" data-name="settings.about.version-row"><span data-name="settings.about.version-label">版本</span><span data-name="settings.about.version-value">v0.5.1</span></div>
+      <div className="about-row" data-name="settings.about.version-row"><span data-name="settings.about.version-label">版本</span><span data-name="settings.about.version-value">v{caps?.appVersion ?? '—'}</span></div>
       <div className="about-row" data-name="settings.about.platform-row">
         <span data-name="settings.about.platform-label">平台</span>
         <span data-name="settings.about.platform-value">{caps ? `${PLATFORM_LABELS[caps.platform] ?? caps.platform} (${caps.arch})` : '—'}</span>

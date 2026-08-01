@@ -3,7 +3,7 @@
 // 提供当前运行平台的能力矩阵（安全存储、全局快捷键、辅助功能权限等），
 // 通过 IPC 暴露给渲染进程，设置页可显示当前权限状态。
 
-import { ipcMain, safeStorage, systemPreferences } from 'electron'
+import { app, ipcMain, safeStorage, systemPreferences } from 'electron'
 import { execSync } from 'child_process'
 import {
   checkAccessibilityPermission,
@@ -15,6 +15,8 @@ import {
 export interface PlatformCapabilities {
   platform: 'win32' | 'darwin' | 'linux'
   arch: string
+  /** 应用版本号（来自 package.json，格式如 0.0.8） */
+  appVersion: string
   hasAccessibility: boolean
   hasMicrophone: boolean
   hasSecureStorage: boolean
@@ -84,6 +86,7 @@ export async function getPlatformCapabilities(): Promise<PlatformCapabilities> {
   return {
     platform,
     arch: process.arch,
+    appVersion: app.getVersion(),
     hasAccessibility,
     hasMicrophone,
     hasSecureStorage,
