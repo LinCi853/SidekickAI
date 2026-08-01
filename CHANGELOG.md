@@ -4,123 +4,108 @@
 
 ## v0.0.8 — 2026-08-01
 
-> 本版本重点：白板引擎迁移至 Excalidraw（MIT 可商用）；品牌色系从砖红切换为靛蓝并系统性修复对比度；恢复截图到白板功能；设置面板独立窗口化。
+> 本版本重点：新增 Oxy Design System UI 模式；白板迁移至开源引擎；恢复截图到白板功能；设置面板独立窗口化。
 
 ### 重要更改
 
-- **白板引擎迁移：tldraw → Excalidraw**
-  原白板组件 tldraw 采用专有许可证，存在商用合规风险。本版本整体迁移至 Excalidraw（MIT），数据模型从卡片级 API 重构为 Excalidraw scene snapshot，遗留 v1 卡片数据自动迁移。CSP 配置同步移除 `cdn.tldraw.com` 白名单，多白板管理与白板侧边栏成为管理入口。
-
-- **品牌色系迁移：砖红 → 靛蓝**
-  品牌主色从暖砖红切换为靛蓝（`--primary` = `#4F46E5`、`--ring` = `#6366F1`），与 UI 2.0 设计方向对齐。brand 色阶完整替换为 Indigo 50–900，品牌渐变统一为 `#6366F1 → #4338CA`，亮 / 暗双主题一致。表面色从暖米色调整为冷灰（亮 `#F6F7F9` / 暗 `#0E0E12`），圆角从 20–28px 收紧至 12–20px，阴影从暖褐改为中性。
+- **白板引擎迁移至开源组件**
+  原白板组件采用专有许可证，存在商用合规风险。本版本整体迁移至开源引擎（MIT 许可），遗留数据自动迁移，多白板管理与白板侧边栏成为管理入口。
 
 - **设置面板独立窗口化**
-  主窗口内的侧滑设置面板改为独立窗口（760×600，最小 600×480，单例模式），左导航（160px）+ 右内容区布局，支持 ESC 关闭。设置分组为 5 类：外观与交互、AI 服务、网络与隐私、高级、关于。脱离窗口（Alt+Q 进阶面板、独立脱离窗口）保留侧滑设置面板，AdvancedSection 支持 `compact` 模式跳过代理 / Cookie（由「网络与隐私」分类独立承载），避免功能重复。
+  主窗口内的侧滑设置面板改为独立窗口，左侧导航 + 右侧内容区布局，支持 ESC 关闭。设置分组为 5 类：外观与交互、AI 服务、网络与隐私、高级、关于。脱离窗口（Alt+Q 进阶面板、独立脱离窗口）保留侧滑设置面板，避免功能重复。
 
 ### 新功能
 
+- **Oxy Design System 新 UI 模式**
+  设置 → 外观新增「Oxy Design System」开关，开启后启用全新的现代化界面体系：
+  - 全局品牌色跟随当前 AI 应用主题色，切换标签时品牌色自动跟随
+  - 基于屏幕分辨率与宽高比自动计算 UI 尺寸，竖屏 / 超宽屏 / 高分屏自动适配
+  - 强制亮色主题，颜色体系基于品牌色与背景色自动生成，保证对比度
+  - 关闭后恢复经典版（手动主题模式 + 手动 UI 比例）
+
 - **截图 AI 页面到白板**（恢复）
-  右键顶栏标签页 →「页面操作」→「截图到白板」，将当前 AI 页面截图推送至进阶面板白板。适配 v3 Excalidraw 架构：`webview.capturePage()` 捕获 → 存为 `whiteboard-asset://` 磁盘资源 → 主进程打开进阶面板并切到白板 tab → 注入为 Excalidraw image 元素并自动滚动到视口。图片宽度超过 400px 时按比例缩放，随机偏移避免多张截图重叠。
+  右键顶栏标签页 →「页面操作」→「截图到白板」，将当前 AI 页面截图推送至进阶面板白板，自动滚动到视口。图片宽度超过 400px 时按比例缩放，随机偏移避免多张截图重叠。
 
 ### 体验优化
 
-- **对比度系统性修复**：11 处「浅色背景 + 白字」场景（用户气泡、主按钮渐变、AppSwitcher 图标、提示词库标签与分段选中态、数据导出预设选中态、供应商模型标签等）对比度从 ~1.4:1 提升至 4.7:1（亮色）/ ~7:1（暗色），达到 WCAG AA 标准。
-- **红系反馈色收敛**：错误 / 危险红统一为 `--destructive` 单一来源，`--danger` 作为其别名，消除 `#ef4444` 与 `#e57373` 双值漂移；`--window-close`（窗口控制红）、`--highlight-recording`（录制状态红）作为语义专用变体独立保留。
-- **警告徽章对比度修复**：快捷键冲突徽章从「白字 + 琥珀底」（~2:1）改用专用令牌 `--warning-badge-bg` / `-fg`（亮色深棕字、暗色提亮琥珀 + 深字），双主题一致。
-- **字体与圆角**：`--font-sans` 首位改 Exo 2（原 Geist 未加载）；`index.html` 加载 Playfair Display 使 `--font-serif` 生效；按钮圆角统一到 `--radius-sm`。
-- **应用内版本号动态读取**：关于页面版本号从硬编码改为通过 `app.getVersion()` 动态读取，与 `package.json` 保持一致，不再需要手动维护。
+- **对比度系统性修复**：用户气泡、主按钮、应用切换器图标、提示词库标签、数据导出预设、供应商模型标签等 11 处「浅色背景 + 白字」场景对比度提升至 WCAG AA 标准。
+- **快捷键冲突徽章对比度修复**：从「白字 + 琥珀底」改为亮色深棕字 / 暗色提亮琥珀 + 深字，双主题一致。
+- **关于页版本号动态读取**：版本号从硬编码改为动态读取，与 `package.json` 保持一致，不再需要手动维护。
 
 ### 问题修复
 
-- **WebviewTab 导航冲突**：webview `src` 仅在挂载时设置一次，避免 SPA 内部导航触发 React 重渲染导致 `ERR_ABORTED`。
-- 修复暗色主题下 `--danger` 仍使用亮色值的历史缺陷。
-- 清理死兜底值 `var(--x, #错误值)` 与硬编码 `#fff`（统一改用 `--foreground-inverse` / `--destructive-foreground`）。
+- 修复切换标签时页面报错 `ERR_ABORTED` 的问题（SPA 内部导航触发重渲染导致）。
+- 修复暗色主题下错误红色仍使用亮色值的问题。
 
 ### 开源合规
 
 - README 新增商标声明：本项目不隶属于所聚合的任何 AI 服务提供商，仅使用平台名称首字母 + 自定义渐变色作为视觉标识，未内置 / 分发任何平台 Logo 或商标图形。
-- README 新增开源依赖许可证清单（Electron / React / Excalidraw / better-sqlite3 / Tiptap / Vite / Zustand 等 MIT，opencc-js Apache-2.0，lucide-react ISC，highlight.js BSD-3-Clause，DOMPurify MPL-2.0 / Apache-2.0）。
+- README 新增开源依赖许可证清单。
 
 ---
 
 ## v0.0.7 — 2026-07-26
 
-> 本版本重点：webview 反检测预加载解决 AI 平台环境检测问题；进阶面板概念统一与专属设置；笔记 / 白板数据迁移至 SQLite 并补齐防抖自动保存；独立窗口组件全面统一。
+> 本版本重点：webview 反检测解决 AI 平台环境检测问题；进阶面板概念统一与专属设置；笔记 / 白板数据迁移至 SQLite 并补齐防抖自动保存；独立窗口体验全面统一。
 
 ### 重要更改
 
 - **「AI 应用」→「高级面板」概念统一**
-  原「AI 应用」概念全面重命名为「高级面板」（AdvancedPanel）。`AiAppSettingsPanel` → `AdvancedPanelSettingsPanel`、`AiProviderAppView` → `AdvancedPanelView`、`ai-app-window` → `advanced-panel-window`，所有 UI 文案同步更新。
+  原「AI 应用」概念全面重命名为「高级面板」，所有 UI 文案同步更新。
 
-- **笔记 / 白板数据存储迁移：JSON → SQLite**
-  应用启动时自动将旧的 electron-store JSON 数据迁移到 SQLite：白板旧 `whiteboard.json`（cards / arrows / strokes 格式）→ `whiteboard.db`；笔记旧 `notes.json` → `notes.db`，纯文本转为 TipTap ProseMirror JSON 段落。迁移幂等，迁移后旧文件改名为 `.bak`。数据存储更可靠，查询更快。
+- **笔记 / 白板数据迁移至 SQLite**
+  应用启动时自动将旧数据迁移到 SQLite，数据存储更可靠，查询更快。迁移后旧文件备份保留。
 
 ### 新功能
 
-- **webview 反检测预加载脚本**
-  新增 `webview-preload.ts`，在页面脚本执行前注入，防止 AI 网站检测 Electron / WebView 环境：
-  - `navigator.webdriver` → `false`（Chromium 自动化环境信号）
-  - 补全 `window.chrome` 对象（`runtime` / `csi` / `loadTimes` 等属性）
-  - 注入 Chrome PDF Plugin 等 3 个内置插件与 MimeType（Electron 中 `navigator.plugins` 为空是检测信号）
-  - 清理 `__electron` / `__electronBinding` / `Buffer` / `process` / `require` 等泄露 Electron 环境的全局变量
-  - 将 WEBVIEW 标签伪装为 IFRAME（`frameElement` 处理）
+- **webview 反检测**
+  在页面脚本执行前注入反检测逻辑，防止 AI 网站检测到 Electron / WebView 环境并限制功能：
+  - 隐藏自动化环境信号
+  - 补全浏览器特征对象与插件列表
+  - 清理泄露 Electron 环境的全局变量
+  - 将 webview 标签伪装为 iframe
 
-  之前可能被 AI 平台（如 DeepSeek）检测并限制功能的网页，现在可正常使用。
+  之前可能被 AI 平台检测并限制功能的网页，现在可正常使用。
 
 - **进阶面板专属设置**
-  新增 `AdvancedPanelSettingsPanel`，为 Alt+Q 进阶面板提供独立设置入口：
-  - **默认打开标签选择**：通过 SegmentedControl 选择 Alt+Q 打开时默认显示的标签页（自定义对话 / 白板 / 灵感笔记）
-  - **白板侧边栏显隐开关**：控制白板视图左侧多白板管理列表的显示 / 隐藏
+  Alt+Q 进阶面板新增独立设置入口：
+  - 可选择默认打开的标签页（自定义对话 / 白板 / 灵感笔记）
+  - 可控制白板侧边栏的显示 / 隐藏
 
 - **Alt+Q 切换行为改进**
-  窗口可见时 → 关闭（destroy）而非隐藏，下次 Alt+Q 重新创建并根据「默认打开」设置路由到用户设置的默认标签页，行为更可预测。
+  窗口可见时再次按 Alt+Q 直接关闭窗口，下次重新打开时按「默认打开」设置路由到用户选择的标签页，行为更可预测。
 
 - **Ctrl+1/2/3 标签快捷切换**
   进阶面板新增键盘快捷键：Ctrl+1 → 自定义对话、Ctrl+2 → 白板、Ctrl+3 → 灵感笔记。输入框聚焦时不触发。
 
-- **Combobox 可搜索下拉组件**
-  新增通用 Combobox 组件，支持自适应宽度、内嵌搜索框实时过滤、Portal 渲染。应用于进阶面板模型选择器（所有供应商主模型 + 备选模型扁平化为可搜索列表，支持备选模型间切换主 / 备角色）和 AI 应用编辑器 UA 预设选择。
+- **可搜索下拉选择**
+  模型选择器与 UA 预设选择升级为可搜索列表，支持实时过滤，配置多个供应商 / 模型时切换更高效。支持备选模型配置与主 / 备角色切换。
 
 - **TTS 语音合成独立配置**
-  AI 供应商新增 per-provider TTS / STT 配置（复用本供应商的 endpoint / apiKey 合成语音或识别语音），TTS 默认关闭需显式开启，支持测试连接（发送短文本合成请求返回音频预览）。
+  AI 供应商新增 TTS / STT 配置（复用本供应商的接口合成语音或识别语音），默认关闭需显式开启，支持测试连接返回音频预览。
 
 - **AI Provider 加密导出 / 导入**
-  供应商配置支持加密导出为 `.sapp` 文件（密码加密），支持选择性导出（勾选具体 provider）和预览导入（dry-run，返回 provider 列表 + 冲突 id，不持久化）。
+  供应商配置支持加密导出为 `.sapp` 文件（密码加密），支持选择性导出和预览导入（不持久化，返回冲突列表供确认）。
 
-- **备选模型列表**
-  同一供应商下可配置多个备选模型，Combobox 中可搜索切换，支持在备选模型间切换主 / 备角色。
-
-- **提示词模板字段迁移**
-  自动检测并迁移含旧字段（prefix / suffix / injectionPosition）的模板到新格式。
+- **提示词模板字段自动迁移**
+  自动检测并迁移含旧字段的提示词模板到新格式。
 
 ### 体验优化
 
-- **ESC / Ctrl+W 统一关窗行为**
-  新增 `useEscToCloseWindow` hook，为所有独立窗口提供统一键盘关窗：ESC 关闭窗口（浮窗栈非空时由栈顶优先处理，INPUT / TEXTAREA / SELECT / contentEditable 聚焦时跳过）；Ctrl+W 直接关闭。全局浮窗栈管理多浮窗 ESC 优先级。
+- **ESC / Ctrl+W 统一关窗**
+  所有独立窗口统一键盘关窗行为：ESC 关闭窗口（有浮窗时先关浮窗，输入框聚焦时跳过）；Ctrl+W 直接关闭。
 
-- **窗口管理组件统一化**
-  新增 `WindowResizeHandles`（统一调整手柄）、`TitleBar`（统一标题栏：最小化 / 最大化 / 关闭 / 置顶）、`StandaloneWindowHeader`（独立窗口顶栏）、`SidebarResizer`（可拖拽调整侧边栏宽度 + 持久化）。所有独立窗口（提示词库、历史、数据导出、进阶面板等）的标题栏、调整手柄、ESC 行为、窄屏适配统一一致。
+- **独立窗口体验统一**
+  所有独立窗口（提示词库、历史、数据导出、进阶面板等）的标题栏、调整手柄、置顶 / 最大化按钮、窄屏适配全面统一。侧边栏宽度可拖拽调整并持久化。
 
-- **笔记防抖自动保存增强**
-  编辑后 800ms 自动保存到 SQLite，切换笔记 / 组件卸载前 flushDraft 同步保存，窗口关闭前 beforeunload 同步兜底（`saveNoteSync`），杜绝数据丢失。
+- **笔记防抖自动保存**
+  编辑后 800ms 自动保存，切换笔记或关闭窗口前同步保存，杜绝数据丢失。
 
-- **白板防抖自动保存增强**
-  编辑后 500ms 自动保存，窗口关闭前 beforeunload 同步兜底（`saveWhiteboardSnapshotSync`）。
+- **白板防抖自动保存**
+  编辑后 500ms 自动保存，关闭窗口前同步兜底保存。
 
 - **API Key 显隐切换**
-  供应商 API Key 输入框新增眼睛图标切换显隐，仅在 patch 显式提供非空 apiKey 时才更新（避免误清空）。
-
-### 问题修复
-
-- 修复 `tsconfig.json` 未完整排除移动端源码导致 `tsc` 检查废弃代码的问题。
-
-### 工程优化
-
-- **死代码清理**：删除 headless 模块及 `puppeteer-core` 依赖（减小安装包体积）；删除 `stt-cleaner`、`useSwipeNavigation`、`Card` / `ListItem` 等孤立文件；清理 20+ 未使用的 electron-api wrapper。
-- **主进程基础设施抽取**：新增 `ipc-utils`（安全 IPC 包装）、`broadcast`（窗口广播）；扩展 `store-paths` 提供 SQLite / JSON store 基础设施；拆分 `voice-ipc` 为 `downloader` + `zip-extractor` 模块；重构 `window-factory` 抽取 webPreferences / 单例弹窗 / 脱离窗口生命周期工厂。
-- **渲染层基础设施抽取**：新增 `useWindowMaximizedAndPinned` / `useIsNarrow` 等 hook；重构 SettingsPanel 聚合 props 传递。
-- **CSS 通用样式表**：新增 `app-layout` / `forms` / `cards` 通用样式表；扩展 `TitleBar.css` 通用顶栏类。
-- **平台检测增强**：`platform-detector` 新增 `isMobile()` 导出。
+  供应商 API Key 输入框新增眼睛图标切换显隐。
 
 ---
 
