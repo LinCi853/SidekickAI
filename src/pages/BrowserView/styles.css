@@ -1,0 +1,1131 @@
+/* =====================================================================
+   pages/BrowserView/styles.css —— 浏览器窗口样式（v0.0.9 三层栏）
+   第一栏：标签页栏（搜索按钮 + 标签列表 + 新建 + 窗口控制）
+   第二栏：导航与功能栏（导航按钮 + 地址栏 + 扩展/头像/设置）
+   第三栏：书签栏（可显隐）
+   分层玻璃风格：每栏 36px，玻璃背景模糊，栏间细分割线
+   ===================================================================== */
+
+/* ===== 容器 ===== */
+.browser-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ===== 三栏垂直堆叠容器 ===== */
+.browser-bar-stack {
+  flex: none;
+  background: var(--glass-bg, #1e1e1e);
+  border-bottom: 1px solid var(--glass-bd, rgba(255,255,255,0.08));
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  z-index: 10;
+}
+
+/* ===== 通用栏行 ===== */
+.browser-bar-row {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 4px 0 8px;
+  gap: 4px;
+}
+
+/* 栏间分割线 */
+.browser-bar-divider {
+  height: 1px;
+  background: var(--glass-bd, rgba(255,255,255,0.06));
+  margin: 0 8px;
+}
+
+/* ===== 第一栏：标签页栏 ===== */
+.browser-bar-row-tabs {
+  -webkit-app-region: drag;
+}
+
+/* 标签列表区为 no-drag（标签可交互），自然宽度不占满，留出拖动区 */
+.browser-tab-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 40px;
+  max-width: calc(100% - 200px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding: 2px 0;
+  -webkit-app-region: no-drag;
+}
+
+.browser-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* 标签搜索按钮（leading） —— 已统一使用 IconButton (.btn-icon) */
+.browser-search-trigger {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* 标签搜索面板 */
+.browser-tab-search-panel {
+  position: absolute;
+  top: 36px;
+  left: 8px;
+  width: 320px;
+  max-height: 480px;
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
+}
+
+.browser-tab-search-input {
+  width: 100%;
+  background: var(--muted, #252525);
+  border: 1px solid var(--border, #333);
+  color: var(--popover-foreground, var(--foreground, #fff));
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.browser-tab-search-input:focus {
+  border-color: var(--accent, #c25a4a);
+}
+
+.browser-tab-search-section {
+  font-size: 11px;
+  color: var(--muted-foreground, #777);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 4px 4px;
+}
+
+.browser-tab-search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--foreground, #ddd);
+}
+
+.browser-tab-search-item:hover {
+  background: var(--accent-dim, #333);
+}
+
+.browser-tab-search-item.favicon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.browser-tab-search-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-tab-search-item-meta {
+  font-size: 10px;
+  color: var(--muted-foreground, #666);
+  flex-shrink: 0;
+}
+
+/* 标签搜索面板中的子标签缩进（主子归属树形） */
+.browser-tab-search-item.child {
+  padding-left: 24px;
+}
+
+/* ===== 单个标签 ===== */
+.browser-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 48px;
+  max-width: 160px;
+  width: 120px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground, #999);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  font-size: 12px;
+}
+
+.browser-tab:hover {
+  background: var(--glass-bd, rgba(255,255,255,0.08));
+}
+
+.browser-tab.active {
+  background: var(--muted, #252525);
+  color: var(--popover-foreground, var(--foreground, #fff));
+  flex-shrink: 0;
+}
+
+/* v0.0.9 固定标签：仅 favicon 窄形态，排左侧，不显示关闭按钮 */
+.browser-tab.pinned {
+  min-width: 28px;
+  max-width: 32px;
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.browser-tab.pinned .browser-tab-title,
+.browser-tab.pinned .browser-tab-close {
+  display: none;
+}
+
+/* v0.0.9 静音指示器（标签内小喇叭图标） */
+.browser-tab-muted-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--muted-foreground, #999);
+}
+
+.browser-tab.audible .browser-tab-muted-icon {
+  color: var(--accent, #c25a4a);
+  animation: browser-tab-audible-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes browser-tab-audible-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ===== 标签加载进度条 ===== */
+.browser-tab-loading-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 0 0 4px 4px;
+}
+
+.browser-tab-loading-bar-inner {
+  width: 100%;
+  height: 100%;
+  background: var(--accent, #c25a4a);
+  animation: browser-tab-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes browser-tab-loading {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+/* ===== 标签 favicon ===== */
+.browser-tab-favicon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.browser-tab-favicon img {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+.browser-tab-favicon-placeholder {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* ===== 标签标题 ===== */
+.browser-tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 26px;
+  min-width: 0;
+}
+
+/* ===== 标签关闭按钮 ===== */
+.browser-tab-close {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.browser-tab:hover .browser-tab-close,
+.browser-tab.active .browser-tab-close {
+  opacity: 1;
+}
+
+.browser-tab-close:hover {
+  background: var(--muted, #444);
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.browser-tab-close svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* 新建标签按钮 —— 已统一使用 IconButton (.btn-icon) */
+
+/* 第一栏右侧操作区（置顶/下载/窗口控制） */
+.browser-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+/* ===== 第二栏：导航与功能栏 ===== */
+.browser-bar-row-nav {
+  -webkit-app-region: drag;
+}
+
+/* 导航按钮区（leading） */
+.browser-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* App 图标 */
+.browser-app-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+/* ===== 地址栏 ===== */
+.browser-address-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  min-width: 120px;
+  background: var(--muted, #252525);
+  border: 1px solid var(--border, #333);
+  border-radius: 13px;
+  padding: 0 8px;
+  position: relative;
+  margin-left: 6px;
+  transition: border-color 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.browser-address-wrapper:focus-within {
+  border-color: var(--accent, #c25a4a);
+}
+
+.browser-address-security {
+  font-size: 11px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.browser-address-input {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--popover-foreground, var(--foreground, #fff));
+  font-size: 12px;
+  line-height: 26px;
+  outline: none;
+  min-width: 0;
+}
+
+.browser-address-input::placeholder {
+  color: var(--muted-foreground, #666);
+}
+
+/* v0.0.9 站点权限按钮（地址栏左侧） */
+.browser-site-permission-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  padding: 0;
+  margin-right: 4px;
+}
+
+.browser-site-permission-btn:hover,
+.browser-site-permission-btn.active {
+  background: var(--glass-bd, rgba(255,255,255,0.1));
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.browser-site-permission-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 站点权限浮层 */
+.browser-site-permission-panel {
+  z-index: 150;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 220px;
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.browser-site-permission-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--foreground, #ddd);
+  border-radius: 4px;
+}
+
+.browser-site-permission-item:hover {
+  background: var(--accent-dim, #333);
+}
+
+/* v0.0.9 收藏星标按钮（地址栏右侧） */
+.browser-star-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.browser-star-btn:hover {
+  color: var(--accent, #c25a4a);
+}
+
+.browser-star-btn.starred {
+  color: var(--accent, #c25a4a);
+}
+
+.browser-star-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.browser-address-external {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 0;
+}
+
+.browser-address-external:hover {
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.browser-address-external svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 第二栏右侧（扩展占位 + AI 头像 + 设置） */
+.browser-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.browser-extension-slot {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.3;
+}
+
+.browser-ai-avatar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 26px;
+  border-radius: 13px;
+  font-size: 11px;
+  color: var(--foreground, #ddd);
+  max-width: 140px;
+}
+
+.browser-ai-avatar-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.browser-ai-avatar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== 搜索建议 ===== */
+.browser-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.browser-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  color: var(--popover-foreground, var(--foreground, #fff));
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.browser-suggestion-item:hover {
+  background: var(--accent-dim, #333);
+}
+
+.browser-suggestion-icon {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.browser-suggestion-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== 第三栏：书签栏 ===== */
+.browser-bar-row-bookmarks {
+  -webkit-app-region: drag;
+}
+
+.browser-bookmarks-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding: 2px 0;
+  -webkit-app-region: no-drag;
+}
+
+.browser-bookmarks-list::-webkit-scrollbar {
+  display: none;
+}
+
+.browser-bookmark-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground, #bbb);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 12px;
+  max-width: 180px;
+  transition: background 0.15s;
+}
+
+.browser-bookmark-item:hover {
+  background: var(--glass-bd, rgba(255,255,255,0.08));
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.browser-bookmark-favicon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.browser-bookmark-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-bookmark-source {
+  font-size: 9px;
+  color: var(--muted-foreground, #666);
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+/* 书签栏右侧全部书签按钮 —— 已统一使用 IconButton (.btn-icon) */
+
+/* 书签栏空状态 */
+.browser-bookmarks-empty {
+  font-size: 11px;
+  color: var(--muted-foreground, #666);
+  font-style: italic;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+}
+
+/* ===== 右键菜单（通用） ===== */
+/* ===== 右键菜单（与主窗口 TabContextMenu 样式对齐） ===== */
+.browser-context-menu,
+.browser-tab-context-menu {
+  position: fixed;
+  z-index: 200;
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-1, 4px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5, 2px);
+  width: 220px;
+  min-width: 180px;
+  max-width: min(220px, calc(100vw - 16px));
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+}
+
+.browser-context-menu button,
+.browser-tab-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-xs, 4px);
+  color: var(--popover-foreground, var(--foreground, #fff));
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--text-sm, 13px);
+  min-height: 0;
+  line-height: 1.4;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast, 0.15s);
+}
+
+.browser-context-menu button:hover,
+.browser-tab-context-menu button:hover {
+  background: var(--accent, #c25a4a);
+  color: var(--accent-foreground, #fff);
+}
+
+.browser-context-menu button.danger,
+.browser-tab-context-menu button.danger {
+  color: var(--destructive, #e55);
+}
+
+.browser-context-menu button.danger:hover,
+.browser-tab-context-menu button.danger:hover {
+  background: var(--destructive, #e55);
+  color: var(--destructive-foreground, #fff);
+}
+
+.browser-context-menu button:disabled,
+.browser-tab-context-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.browser-context-menu button.toggle-on::before,
+.browser-tab-context-menu button.toggle-on::before {
+  content: '\2713 ';
+  color: var(--accent, #c25a4a);
+  flex: none;
+  width: 12px;
+}
+
+.browser-context-divider,
+.browser-tab-context-divider {
+  height: 1px;
+  background: var(--border, #444);
+  margin: 4px 0;
+}
+
+/* ===== Webview 容器 ===== */
+.browser-webview-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== 书签管理器（新标签页） ===== */
+.browser-bookmark-manager {
+  padding: 24px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+  color: var(--popover-foreground, var(--foreground, #fff));
+  font-family: var(--font-sans, system-ui, sans-serif);
+  overflow-y: auto;
+  height: 100%;
+}
+
+.browser-bookmark-manager-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.browser-bookmark-manager-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.browser-bookmark-manager-search {
+  flex: 1;
+  background: var(--muted, #252525);
+  border: 1px solid var(--border, #333);
+  color: var(--popover-foreground, var(--foreground, #fff));
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+}
+
+.browser-bookmark-manager-search:focus {
+  border-color: var(--accent, #c25a4a);
+}
+
+.browser-bookmark-manager-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.browser-bookmark-manager-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground, #999);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.browser-bookmark-manager-table td {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.04));
+}
+
+.browser-bookmark-manager-table tr:hover td {
+  background: var(--glass-bd, rgba(255,255,255,0.03));
+}
+
+.browser-bookmark-manager-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.browser-bookmark-manager-actions button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.browser-bookmark-manager-actions button:hover {
+  background: var(--glass-bd, rgba(255,255,255,0.08));
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+/* ===== 设置标签页（保留现有样式） ===== */
+.browser-settings {
+  padding: 24px 32px;
+  max-width: 640px;
+  margin: 0 auto;
+  color: var(--popover-foreground, var(--foreground, #fff));
+  font-family: var(--font-sans, system-ui, sans-serif);
+  overflow-y: auto;
+  height: 100%;
+}
+
+.browser-settings-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.browser-settings-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.browser-settings-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+
+.browser-setting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.browser-setting-label {
+  min-width: 70px;
+  color: var(--muted-foreground, #999);
+  flex-shrink: 0;
+}
+
+.browser-setting-value {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted-foreground, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-setting-value code,
+.browser-setting-hint {
+  font-size: 12px;
+  color: var(--muted-foreground, #777);
+  word-break: break-all;
+}
+
+.browser-setting-select,
+.browser-setting-input {
+  flex: 1;
+  background: var(--muted, #252525);
+  border: 1px solid var(--border, #444);
+  color: var(--popover-foreground, var(--foreground, #fff));
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+
+.browser-setting-select:focus,
+.browser-setting-input:focus {
+  border-color: var(--ring, #6366F1);
+}
+
+.btn-outline-compact {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border, #444);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.btn-outline-compact:hover {
+  background: var(--accent-10, rgba(99,102,241,0.1));
+}
+
+
+.browser-settings-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.browser-settings-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.browser-settings-list li code {
+  background: var(--muted, #252525);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.rule-status {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.rule-status.enabled {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.rule-status.disabled {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9ca3af;
+}
+
+.browser-settings-empty {
+  font-size: 13px;
+  color: var(--muted-foreground, #666);
+  font-style: italic;
+}
+
+.browser-settings-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted-foreground, #999);
+  font-size: 14px;
+}
+
+/* ===== 下载指示器（保留现有样式） ===== */
+.browser-download-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--accent, #c25a4a);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  pointer-events: none;
+}
+
+.browser-download-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  width: 280px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+
+.browser-download-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.browser-download-item:hover {
+  background: var(--accent-dim, #333);
+}
+
+.browser-download-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.browser-download-state {
+  flex-shrink: 0;
+  color: var(--muted-foreground, #999);
+  font-size: 11px;
+}
+
+/* ===== 书签编辑弹窗（窗口遮罩） ===== */
+.browser-bookmark-edit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.browser-bookmark-edit-dialog {
+  width: 360px;
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.browser-bookmark-edit-dialog h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.browser-bookmark-edit-dialog label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted-foreground, #999);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.browser-bookmark-edit-dialog input[type="text"] {
+  width: 100%;
+  background: var(--muted, #252525);
+  border: 1px solid var(--border, #444);
+  color: var(--popover-foreground, var(--foreground, #fff));
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.browser-bookmark-edit-dialog input[type="text"]:focus {
+  border-color: var(--accent, #c25a4a);
+}
+
+.browser-bookmark-edit-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.browser-bookmark-edit-dialog-actions button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.browser-bookmark-edit-dialog-actions .cancel {
+  background: var(--muted, #252525);
+  color: var(--foreground, #ccc);
+}
+
+.browser-bookmark-edit-dialog-actions .save {
+  background: var(--accent, #c25a4a);
+  color: #fff;
+}
+

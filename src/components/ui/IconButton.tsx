@@ -4,7 +4,7 @@
    支持 default / close / active 三种状态修饰
    ===================================================================== */
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 export type IconButtonVariant = 'default' | 'close' | 'active';
 
@@ -37,15 +37,15 @@ function resolveClass(variant: IconButtonVariant, extra?: string): string {
  *   <PinIcon />
  * </IconButton>
  */
-export default function IconButton({
-  variant = 'default',
-  className,
-  children,
-  ...rest
-}: IconButtonProps) {
+const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { variant = 'default', className, children, ...rest },
+  ref,
+) {
   return (
-    <button className={resolveClass(variant, className)} {...rest}>
+    <button ref={ref} className={resolveClass(variant, className)} {...rest}>
       {children}
     </button>
   );
-}
+});
+
+export default IconButton;
