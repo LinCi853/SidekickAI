@@ -54,6 +54,10 @@ import { SttEngine } from './stt/engine.js'
 import { IPC_CHANNELS } from './shared/types.js'
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js'
 import { registerTabIpc } from './ipc/tab-ipc.js'
+import { registerBrowserIpc } from './ipc/browser-ipc.js'
+import { registerBrowserTabAudioIpc } from './ipc/browser-tab-audio-ipc.js'
+import { searchHistoryStore } from './store/search-history-store.js'
+import { browserDownloadStore } from './store/browser-download-store.js'
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js'
 import { registerVoiceIpc } from './ipc/voice-ipc.js'
 import { registerPromptIpc } from './ipc/prompt-ipc.js'
@@ -67,6 +71,7 @@ import { windowState } from './window-state.js'
 import {
   createMainWindow,
   createStandaloneWindow,
+  createBrowserWindow,
   createChatWindow,
   showHistoryWindow,
   showPromptWindow,
@@ -509,7 +514,18 @@ app.whenReady().then(async () => {
     getSenderWindow,
     findWindowIdByWin,
     createStandaloneWindow,
+    createBrowserWindow,
   })
+
+  // ===== 注册浏览器窗口 IPC（多标签浏览器：状态/标签/导航历史/搜索/下载/书签/跨窗口查询） =====
+  registerBrowserIpc({
+    createBrowserWindow,
+    getSearchHistoryStore: () => searchHistoryStore,
+    getDownloadStore: () => browserDownloadStore,
+  })
+
+  // ===== 注册浏览器标签音频 IPC（v0.0.9 预留，当前无 handler） =====
+  registerBrowserTabAudioIpc({})
 
   // ===== 注册提示词库窗口 IPC（PROMPT_OPEN_WINDOW + 注入请求/结果转发） =====
   registerPromptIpc({

@@ -3,9 +3,9 @@
    架构（对齐 PromptLibraryView 约定）：
    - 顶栏：标题 + pin/min/max/close（IconButton 组件）
    - 主体：上下堆叠
-     · 导出区：三档预设 + 5 项细粒度选项 + 体积估算 + 导出按钮
+     · 导出区：三档预设 + 4 项细粒度选项 + 体积估算 + 导出按钮
      · 导入区：警告 + 文件选择 + 确认导入
-   - 细粒度选项：basicData（必选）/ cookies / indexedDB / cache / voiceAssets
+   - 细粒度选项：basicData（必选）/ cookies / indexedDB / cache
    - 三档预设：最小迁移 / 推荐迁移 / 完整备份
    ===================================================================== */
 
@@ -44,14 +44,13 @@ interface ExportOptions {
   cookies: boolean;
   indexedDB: boolean;
   cache: boolean;
-  voiceAssets: boolean;
 }
 
 /** 三档快速预设 */
 const PRESETS: Record<string, ExportOptions> = {
-  minimal: { basicData: true, cookies: true, indexedDB: false, cache: false, voiceAssets: false },
-  recommended: { basicData: true, cookies: true, indexedDB: true, cache: false, voiceAssets: false },
-  full: { basicData: true, cookies: true, indexedDB: true, cache: true, voiceAssets: true },
+  minimal: { basicData: true, cookies: true, indexedDB: false, cache: false },
+  recommended: { basicData: true, cookies: true, indexedDB: true, cache: false },
+  full: { basicData: true, cookies: true, indexedDB: true, cache: true },
 };
 
 const PRESET_LABELS: Record<string, string> = {
@@ -91,11 +90,6 @@ const OPTION_ITEMS: OptionItem[] = [
     label: '离线缓存',
     description: 'Service Worker / Cache / GPUCache（可安全排除，不影响功能）',
   },
-  {
-    key: 'voiceAssets',
-    label: '语音模型',
-    description: 'bin/ + models/（whisper 语音模型，体积大，按需勾选）',
-  },
 ];
 
 type Status = { type: 'success' | 'error'; message: string } | null;
@@ -108,7 +102,6 @@ export default function DataExportWindow() {
     cookies: number;
     indexedDB: number;
     cache: number;
-    voiceAssets: number;
   } | null>(null);
 
   // 默认选项 = PRESETS.minimal
@@ -166,7 +159,6 @@ export default function DataExportWindow() {
     if (options.cookies) total += sizes.cookies;
     if (options.indexedDB) total += sizes.indexedDB;
     if (options.cache) total += sizes.cache;
-    if (options.voiceAssets) total += sizes.voiceAssets;
     return total;
   }, [sizes, options]);
 

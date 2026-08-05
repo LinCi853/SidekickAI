@@ -123,6 +123,14 @@ export default function AppSwitcher({
     return undefined;
   }, [activeTabId, tabs, profiles, platforms]);
 
+  // v0.0.9: 当前激活 tab 的 Profile（用于优先显示用户可编辑的 profile.name）
+  const activeProfile = useMemo(() => {
+    if (!activeTabId) return undefined;
+    const tab = tabs.find((t) => t.id === activeTabId);
+    if (!tab) return undefined;
+    return profiles.find((p) => p.id === tab.profileId);
+  }, [activeTabId, tabs, profiles]);
+
   // 下拉菜单位置：使用 fixed 定位脱离父级 stacking-context，避免被 overlay/webview 遮挡
   useEffect(() => {
     if (!isOpen || !wrapRef.current) return;
@@ -243,7 +251,7 @@ export default function AppSwitcher({
               : undefined
           }
         >
-          {activePlatform ? activePlatform.name.charAt(0).toUpperCase() : 'A'}
+          {activeProfile ? (activeProfile.name ?? activePlatform?.name ?? 'A').charAt(0).toUpperCase() : 'A'}
         </button>
       </div>
       {isOpen && createPortal(
@@ -312,7 +320,7 @@ export default function AppSwitcher({
                 const { themeColor: c1, gradientColor: c2 } = platform
                   ? getPlatformColors(profile, platform, platform.id)
                   : { themeColor: 'var(--accent)', gradientColor: 'var(--accent)' };
-                const displayName = platform?.name ?? profile.name ?? 'AI';
+                const displayName = profile.name ?? platform?.name ?? 'AI';
                 const isPlatformOpen = openProfileIds.has(profile.id);
                 const isPlatformActive = isPlatformOpen && tabs.find((t) => t.profileId === profile.id)?.id === activeTabId;
                 const isPendingClose = pendingCloseProfileId === profile.id;

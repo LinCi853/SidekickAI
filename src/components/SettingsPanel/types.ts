@@ -7,16 +7,12 @@ export interface SettingsPanelProps {
 export interface VoiceSettings {
   confirmMode: 'auto' | 'manual' | 'clipboard';
   enterToSend: boolean;
-  sttMode: 'builtin' | 'ai' | 'local' | 'download';
+  sttMode: 'ai' | 'local';
   aiProvider: string;
   language: string;
   localExePath: string;
   localArgs: string;
-  downloadModel: string;
-  downloadedModels: string[];
-  downloadStatus: string;
   inputDeviceId: string;
-  cliDownloaded: boolean;
   ttsMode: 'disable' | 'ai';
   ttsProvider: string;
 }

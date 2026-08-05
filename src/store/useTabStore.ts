@@ -81,6 +81,12 @@ export interface TabStoreState {
   getActiveTab: () => TabState | null;
   /** 标记/取消标记 tab 为窄屏自动移动端切换状态 */
   setTabAutoMobile: (tabId: string, autoMobile: boolean, originalDevicePreset?: string) => void;
+  /** 已脱离到浏览器窗口的 Profile id 集合 */
+  detachedProfiles: Set<string>;
+  /** 添加脱离 Profile */
+  addDetachedProfile: (profileId: string) => void;
+  /** 移除脱离 Profile（恢复） */
+  removeDetachedProfile: (profileId: string) => void;
   /** 防抖持久化当前状态到主进程 */
   persist: () => void;
 }
@@ -103,6 +109,7 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   _maximizingLock: false,
   _pinLock: false,
   _ipcListenersSetUp: false,
+  detachedProfiles: new Set<string>(),
 
   init: async (windowId) => {
     console.log('[useTabStore.init] 开始, windowId:', windowId);
@@ -119,17 +126,23 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
             console.error('[useTabStore.init] 恢复 tab 时 setupSession 失败:', tab.profileId, e);
           }
         }
+        // v0.0.9: 启动时清除所有 detachedProfiles（启动时不可能有浏览器窗口还开着）
+        // 同时清除 TabState 的 detachedWindowId，恢复所有标签可见性
+        const cleanedTabs = state.tabs.map((t) => ({ ...t, detachedWindowId: null as string | null }));
         set({
           windowId,
-          tabs: state.tabs,
+          tabs: cleanedTabs,
           activeTabId: state.activeTabId,
           isMaximized: state.isMaximized,
           alwaysOnTop: state.alwaysOnTop,
           bottomBarExpanded: state.bottomBarExpanded,
           bottomBarHeight: state.bottomBarHeight ?? DEFAULT_BOTTOM_BAR_HEIGHT,
+          detachedProfiles: new Set<string>(), // 清空：启动时无浏览器窗口
           initialized: true,
         });
-        console.log('[useTabStore.init] 从持久化恢复，tabs:', state.tabs.map(t => t.title));
+        console.log('[useTabStore.init] 从持久化恢复，tabs:', cleanedTabs.map(t => t.title));
+        // 持久化清理后的状态（清除遗留的 detachedProfiles）
+        get().persist();
       } else {
         set({ windowId, initialized: true });
         console.log('[useTabStore.init] 无持久化状态，使用默认（空 tabs）');
@@ -159,7 +172,11 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
 
   addTab: async (profile, opts?) => {
     const url = opts?.url;
-    const { tabs } = get();
+    const { tabs, detachedProfiles } = get();
+    // v0.0.9: 如果该 profile 之前被标记为脱离但浏览器窗口已关闭，清除脱离标记
+    if (detachedProfiles.has(profile.id)) {
+      get().removeDetachedProfile(profile.id);
+    }
     // 已存在同 profileId 的标签则激活（不传 url 时按 profile 匹配，支持首页和浏览中页面）
     const existing = tabs.find((t) => t.profileId === profile.id);
     if (existing && !url) {
@@ -365,8 +382,26 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
     get().persist();
   },
 
+  addDetachedProfile: (profileId) => {
+    set((s) => {
+      const next = new Set(s.detachedProfiles);
+      next.add(profileId);
+      return { detachedProfiles: next };
+    });
+    get().persist();
+  },
+
+  removeDetachedProfile: (profileId) => {
+    set((s) => {
+      const next = new Set(s.detachedProfiles);
+      next.delete(profileId);
+      return { detachedProfiles: next };
+    });
+    get().persist();
+  },
+
   persist: () => {
-    const { windowId, tabs, activeTabId, isMaximized, alwaysOnTop, bottomBarExpanded, bottomBarHeight } = get();
+    const { windowId, tabs, activeTabId, isMaximized, alwaysOnTop, bottomBarExpanded, bottomBarHeight, detachedProfiles } = get();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try {
@@ -380,6 +415,7 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
           tabs,
           bottomBarExpanded,
           bottomBarHeight,
+          detachedProfiles: Array.from(detachedProfiles),
         };
         await saveWindowState(windowId, state);
       } catch (e) {

@@ -5,7 +5,7 @@
 // - 加密密钥：app-key.json（随数据迁移，保证 AES 加密数据可跨设备解密）
 // - 对话数据库：chat.db / chat.db-wal / chat.db-shm
 // - Session 数据：Partitions/ 目录（cookies/localStorage/IndexedDB，保证登录态迁移）
-// - 可选：bin/ 和 models/（whisper 语音模型，体积大）
+
 
 import { app, session, BrowserWindow } from 'electron';
 import AdmZip from 'adm-zip';
@@ -14,6 +14,7 @@ import * as path from 'path';
 import { closeChatStore } from './chat-store.js';
 import { closeWhiteboardDb } from './whiteboard-db.js';
 import { closeNotesDb } from './notes-db.js';
+import { closeBookmarkStore } from './bookmark-store.js';
 import { profileStore } from './profile-store.js';
 import { getStoreCwd, isPortableMode } from './store-paths.js';
 
@@ -37,11 +38,17 @@ const BACKUP_FILES = [
   'notes.db',
   'notes.db-wal',
   'notes.db-shm',
+  'search-history.db',
+  'search-history.db-wal',
+  'search-history.db-shm',
+  'browser-downloads.db',
+  'browser-downloads.db-wal',
+  'browser-downloads.db-shm',
+  'bookmarks.db',
+  'bookmarks.db-wal',
+  'bookmarks.db-shm',
   'app-key.json',
 ];
-
-/** 可选迁移的目录（用户选择，体积大） */
-const OPTIONAL_DIRS = ['bin', 'models'];
 
 /** 基础数据中包含的资产目录（图片等，随 basicData 一起备份） */
 const ASSET_DIRS = ['whiteboard-assets', 'notes-assets'];
@@ -161,19 +168,17 @@ async function addSessionFromBaseToZip(
 }
 
 /**
- * 导出选项（细粒度控制，5 项互不重叠）
+ * 导出选项（细粒度控制，4 项互不重叠）
  * - basicData：配置 JSON + chat.db + app-key.json（必选，核心数据）
  * - cookies：登录凭据（Cookies 文件 + Local Storage 目录）
  * - indexedDB：应用数据（IndexedDB 目录，含离线应用数据）
  * - cache：离线缓存（Service Worker / Cache / GPUCache 等，可安全排除）
- * - voiceAssets：语音模型（bin/ + models/，体积大）
  */
 export interface ExportOptions {
   basicData: boolean;    // 基础数据（必选）
   cookies: boolean;      // 登录凭据（Cookies + Local Storage）
   indexedDB: boolean;    // 应用数据（IndexedDB）
   cache: boolean;        // 离线缓存（Service Worker / Cache 等）
-  voiceAssets: boolean;  // 语音模型
 }
 
 /** 各类别体积估算结果（字节） */
@@ -182,7 +187,6 @@ export interface ExportSizeEstimate {
   cookies: number;       // Cookies + Local Storage
   indexedDB: number;     // IndexedDB 目录
   cache: number;          // Service Worker / Cache 等目录
-  voiceAssets: number;
   /** 选中项的总体积（由调用方根据选中项计算） */
   total: number;
 }
@@ -205,7 +209,6 @@ export function estimateExportSizes(): ExportSizeEstimate {
   let cookiesSize = 0;
   let indexedDBSize = 0;
   let cacheSize = 0;
-  let voiceAssetsSize = 0;
 
   // 基础数据：BACKUP_FILES 的总体积
   for (const fileName of BACKUP_FILES) {
@@ -248,20 +251,11 @@ export function estimateExportSizes(): ExportSizeEstimate {
   indexedDBSize += defaultSessionSizes.indexedDB;
   cacheSize += defaultSessionSizes.cache;
 
-  // 语音模型
-  for (const dirName of OPTIONAL_DIRS) {
-    const dirPath = path.join(dataDir, dirName);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      voiceAssetsSize += getDirSize(dirPath);
-    }
-  }
-
   return {
     basicData: basicDataSize,
     cookies: cookiesSize,
     indexedDB: indexedDBSize,
     cache: cacheSize,
-    voiceAssets: voiceAssetsSize,
     total: 0, // 由调用方根据选中项计算
   };
 }
@@ -451,6 +445,7 @@ export async function exportAllData(
       closeChatStore();
       closeWhiteboardDb();
       closeNotesDb();
+      closeBookmarkStore();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }
@@ -504,17 +499,7 @@ export async function exportAllData(
       await addSessionFromBaseToZip(zip, dataDir, '', options, skippedFiles);
     }
 
-    // 5. 可选：语音模型
-    if (options.voiceAssets) {
-      for (const dirName of OPTIONAL_DIRS) {
-        const dirPath = path.join(dataDir, dirName);
-        if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-          await addFolderWithRetry(zip, dirPath, dirName, skippedFiles);
-        }
-      }
-    }
-
-    // 6. 写入 zip
+    // 5. 写入 zip
     zip.writeZip(targetPath);
     console.log('[backup-restore] 导出成功:', targetPath);
 
@@ -613,6 +598,7 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
       closeChatStore();
       closeWhiteboardDb();
       closeNotesDb();
+      closeBookmarkStore();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }

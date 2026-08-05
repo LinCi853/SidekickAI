@@ -7,6 +7,8 @@
    ===================================================================== */
 
 import { create } from 'zustand';
+import { broadcastUiVersionChanged } from '../lib/electron-api';
+import { OXY_STORAGE_KEY } from '../lib/oxy-design-system';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 /** 实际应用到 DOM 的解析后主题（system 会被解析为 light/dark） */
@@ -109,6 +111,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       attachSystemListener();
     }
     set({ theme: mode, resolved });
+    // 广播主题变更到所有窗口（跨窗口同步主题模式）
+    // 从 localStorage 读取 UI 版本（避免循环依赖 useUiVersionStore）
+    try {
+      const uiVersion = (localStorage.getItem(OXY_STORAGE_KEY) === 'classic') ? 'classic' as const : 'oxy' as const;
+      broadcastUiVersionChanged({ uiVersion, theme: mode });
+    } catch { /* 非 Electron 环境忽略 */ }
   },
 
   toggleTheme: () => {

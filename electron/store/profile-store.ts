@@ -133,6 +133,12 @@ export class ProfileStore {
   /** 删除 Profile */
   delete(id: string): void {
     const profiles = store.get('profiles')
+    // v0.0.9: 禁止删除保底内置应用
+    const target = profiles.find((p) => p.id === id)
+    if (target?.isBuiltIn) {
+      console.warn('[profile-store] 禁止删除保底内置应用:', target.name)
+      return
+    }
     store.set(
       'profiles',
       profiles.filter((p) => p.id !== id),
@@ -306,28 +312,6 @@ export function registerProfileIPC(): void {
     broadcastToAllWindows(ipc.PROFILE_REORDERED, orderedIds, 'profile')
     return true
   })
-
-  // 弹窗白名单：将 origin 加入指定 Profile 的专属白名单（Profile.popupWhitelist）
-  // 由渲染层 onPopupDenied 自动触发（用户确认后），或 AiAppEditor 手动添加
-  // 载荷：{ profileId: string, origin: string }
-  ipcMain.handle(ipc.POPUP_WHITELIST_ADD_PROFILE, async (_e, payload: { profileId: string; origin: string }) => {
-    const { profileId, origin } = payload
-    if (!profileId || !origin) return []
-    const profile = profileStore.get(profileId)
-    if (!profile) {
-      console.warn('[profile-store] POPUP_WHITELIST_ADD_PROFILE: 未找到 Profile:', profileId)
-      return []
-    }
-    const current = profile.popupWhitelist ?? []
-    if (!current.includes(origin)) {
-      const next = [...current, origin]
-      const updated = await profileStore.update(profileId, { popupWhitelist: next })
-      // 广播到所有窗口：跨窗口同步 Profile.popupWhitelist（如 AiAppEditor 列表刷新）
-      broadcastToAllWindows(ipc.PROFILE_UPDATED, { id: profileId, profile: updated }, 'profile')
-      console.log('[profile-store] Profile 专属白名单已加白:', profileId, origin)
-    }
-    return profileStore.get(profileId)?.popupWhitelist ?? []
-  })
 }
 
 /**
@@ -358,6 +342,8 @@ export function ensureDefaultProfiles(): Profile[] {
   AI_PLATFORMS.forEach((platform, index) => {
     const profile = profileStore.create({
       name: platform.name,
+      // v0.0.9: DeepSeek 为保底内置应用，不可删除、不可重命名
+      isBuiltIn: platform.id === 'deepseek',
       devicePreset: platform.defaultMobilePreset,
       userAgent: platform.defaultUA,
       platform: 'mobile',
@@ -444,6 +430,12 @@ export function migrateAIPlatformIds(): void {
       profile.aiThemeColor = platform.themeColor
       changed = true
       console.log(`[profile-store] 迁移 aiThemeColor: ${profile.name} -> ${platform.themeColor}`)
+    }
+    // v0.0.9: 迁移 isBuiltIn 标记（DeepSeek 保底应用）
+    if (platform.id === 'deepseek' && !profile.isBuiltIn) {
+      profile.isBuiltIn = true
+      changed = true
+      console.log(`[profile-store] 迁移 isBuiltIn: ${profile.name} -> true (deepseek)`)
     }
   }
   if (changed) {

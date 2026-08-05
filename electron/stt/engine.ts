@@ -1,19 +1,16 @@
-// electron/stt/engine.ts — 语音识别引擎（三路降级链路）
+// electron/stt/engine.ts — 语音识别引擎
 //
-// 降级链路：stop() 触发识别时按顺序尝试：
-//   1. whisper 本地（whisper.cpp 子进程，需 ggml-tiny.bin 模型）
-//   2. Azure Speech（需 API Key）
-//   3. 讯飞 WebSocket（需 API Key）
-// 任一引擎成功即返回文本并通知前端；全部失败返回空串并发送 STT_ERROR。
+// 支持两种模式：
+//   1. ai: 自定义 AI 接入（OpenAI 兼容 Speech-to-Text API）
+//   2. local: 自定义本地识别软件（用户配置的可执行文件）
 //
 // 录音由 audio/capture.ts 的 AudioCapture 负责（16kHz mono Float32 PCM）。
 // 通过 BrowserWindow.webContents.send 向前端推送 STT_RESULT / STT_ERROR 事件。
 
-import { app, BrowserWindow, net, safeStorage } from 'electron'
+import { BrowserWindow, net, safeStorage } from 'electron'
 import { spawn } from 'child_process'
-import path from 'path'
 import { writeFile, unlink } from 'fs/promises'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync } from 'fs'
 import { AudioCapture } from '../audio/capture.js'
 import { showNotification } from '../notify.js'
 import { IPC_CHANNELS } from '../shared/types.js'
@@ -21,51 +18,6 @@ import { getVoiceConfig } from '../store/voice-store.js'
 import { aiProviderStore, deriveAudioEndpoint } from '../store/ai-provider-store.js'
 import type { CustomAIProvider } from '../shared/chat.types.js'
 import { convertTraditionalToSimplified } from './chinese-convert.js'
-import { WHISPER_CLI_BINARIES } from './binary-resolver.js'
-
-/** whisper 模型 id 到 ggml 文件名的映射（与 voice-ipc.ts / download 流程共享） */
-export const WHISPER_MODEL_FILES: Record<string, string> = {
-  'whisper-tiny': 'ggml-tiny.bin',
-  'whisper-base': 'ggml-base.bin',
-  'whisper-small': 'ggml-small.bin',
-}
-
-/** 反向映射：文件名 → modelId（用于扫描磁盘时识别已有模型） */
-const FILE_TO_MODEL_ID: Record<string, 'whisper-tiny' | 'whisper-base' | 'whisper-small'> = {
-  'ggml-tiny.bin': 'whisper-tiny',
-  'ggml-base.bin': 'whisper-base',
-  'ggml-small.bin': 'whisper-small',
-}
-
-/** 扫描 userData/models/ 目录，返回所有已下载的模型 id 列表 */
-export function listDownloadedModelIds(): Array<'whisper-tiny' | 'whisper-base' | 'whisper-small'> {
-  try {
-    const modelsDir = path.join(app.getPath('userData'), 'models')
-    if (!existsSync(modelsDir)) return []
-    const files = readdirSync(modelsDir)
-    const ids: Array<'whisper-tiny' | 'whisper-base' | 'whisper-small'> = []
-    for (const f of files) {
-      const id = FILE_TO_MODEL_ID[f]
-      if (id) ids.push(id)
-    }
-    return ids
-  } catch (err) {
-    console.warn('[voice] 扫描 models 目录失败:', err)
-    return []
-  }
-}
-
-/** 检查指定 modelId 的文件是否实际存在（不依赖 cfg） */
-export function isModelFileExists(modelId: string): boolean {
-  const file = WHISPER_MODEL_FILES[modelId]
-  if (!file) return false
-  try {
-    const p = path.join(app.getPath('userData'), 'models', file)
-    return existsSync(p)
-  } catch {
-    return false
-  }
-}
 
 /** whisper 标准输入采样率 */
 const SAMPLE_RATE = 16000
@@ -78,20 +30,19 @@ const ERROR_LOG_MAX_LEN_SHORT = 200
 /**
  * 语音识别引擎
  *
- * 三路降级：whisper 本地 -> Azure -> 讯飞。
- * MVP 阶段：
- * - whisper 本地：完整实现（检查模型 + 调用 whisper-cli）
- * - Azure / 讯飞：仅检查 API Key，无 Key 则跳过；完整 SDK 调用留作 TODO
+ * 支持两种模式：
+ * - ai: 自定义 AI 接入（OpenAI 兼容 Speech-to-Text API）
+ * - local: 自定义本地识别软件（用户配置的可执行文件）
  */
 export class SttEngine {
   private recording = false
-  private currentEngine: 'whisper' | 'azure' | 'xunfei' | null = null
+  private currentEngine: 'ai' | 'local' | null = null
   private audioCapture = new AudioCapture()
   /** 发起本次录音的窗口，用于把识别结果发回正确窗口（多窗口下避免错位） */
   private sourceWindow: BrowserWindow | null = null
   /**
    * 最近一次录音的失败原因（人类可读）。由 notifyError 设置，被 main.ts 读取以生成
-   * 精确的预览窗提示文本，避免误报 "whisper-cli 未下载"（实际可能是 getUserMedia 失败）。
+   * 精确的预览窗提示文本。
    */
   private lastError: string = ''
 
@@ -195,23 +146,7 @@ export class SttEngine {
     }
 
     if (pcm.length === 0) {
-      // 关键修复：根据不同失败场景给出精确的错误信息，避免误导
-      // - 渲染进程模式失败（getUserMedia 拒绝/设备不可用）→ 提示麦克风权限
-      // - whisper-cli 缺失 → 提示下载
-      // - 通用 → 提示"未采集到音频数据"
-      const config = getVoiceConfig()
-      if (config.sttMode === 'download') {
-        const binDir = path.join(app.getPath('userData'), 'bin')
-        const names = ['whisper-cli.exe', 'whisper.exe', 'main.exe']
-        const hasCli = names.some((n) => existsSync(path.join(binDir, n)))
-        if (!hasCli) {
-          this.lastError = 'whisper-cli 引擎未下载，请在设置中下载'
-        } else {
-          this.lastError = '未采集到音频数据（请检查麦克风权限与设备）'
-        }
-      } else {
-        this.lastError = '未采集到音频数据（请检查麦克风权限与设备）'
-      }
+      this.lastError = '未采集到音频数据（请检查麦克风权限与设备）'
       console.warn('[SttEngine]', this.lastError)
       this.notifyError(this.lastError)
       return ''
@@ -221,43 +156,11 @@ export class SttEngine {
     const config = getVoiceConfig()
     console.log('[SttEngine] 当前识别模式:', config.sttMode)
 
-    // builtin 模式由渲染层 Web Speech API 处理，主进程 stop() 不应被调用。
-    // 异常路径兜底：返回空串并记录日志，避免误报 "whisper-cli 引擎未下载"。
-    // 正常流程下 main.ts stopBackgroundVoice 会在 builtin 模式调用 stopCaptureOnly()
-    // 释放麦克风，然后通过 IPC 通知渲染层执行 webkitSpeechRecognition。
-    if (config.sttMode === 'builtin') {
-      console.warn('[SttEngine] builtin 模式应在渲染层通过 Web Speech API 处理，主进程 stop() 收到调用，返回空串')
-      this.lastError = 'builtin 模式由渲染层处理，主进程不应执行识别'
-      return ''
-    }
-
     // ---- 引擎选择 ----
-    // 1. download: whisper 本地
-    //    用户明确选 whisper 时（download），不自动降级到 AI 模式，即便 AI 模式已配置。原因：
-    //    - 用户选择的引擎是 Whisper Small，输出预期是纯转写文本
-    //    - 自动降级到 Mimo 会出现 "(speaking in foreign language)" 等占位符
-    //    - 应该让用户清楚地知道 whisper 不可用，而不是悄悄换引擎
-    let whisperFailed = false
-    if (config.sttMode === 'download') {
-      try {
-        this.currentEngine = 'whisper'
-        const text = await this.recognizeWithWhisper(pcm)
-        if (text) {
-          this.notifyResult(text)
-          return text
-        }
-        whisperFailed = true
-      } catch (err) {
-        console.error('[SttEngine] whisper 识别失败:', err)
-        whisperFailed = true
-      }
-    }
-
-    // 2. ai: 自定义 AI 接入（OpenAI 兼容 API）
-    //    仅在用户显式选择 ai 模式时使用，不再作为 whisper 的自动 fallback
+    // 1. ai: 自定义 AI 接入（OpenAI 兼容 API）
     if (config.sttMode === 'ai') {
       try {
-        this.currentEngine = 'azure'
+        this.currentEngine = 'ai'
         const text = await this.recognizeWithAiApi(pcm, { providerId: config.aiProvider, language: config.language })
         if (text) {
           this.notifyResult(text)
@@ -266,22 +169,9 @@ export class SttEngine {
       } catch (err) {
         console.error('[SttEngine] AI API 识别失败:', err)
       }
-    } else if (whisperFailed && config.sttMode === 'download') {
-      // whisper 模式失败时给出明确的本地引擎错误（不再静默切到 Mimo）
-      const binDir = path.join(app.getPath('userData'), 'bin')
-      const names = WHISPER_CLI_BINARIES
-      const hasCli = names.some((n) => existsSync(path.join(binDir, n)))
-      if (!hasCli) {
-        this.lastError = 'whisper-cli 引擎未下载，请在设置中下载（注意：模型和引擎是两部分，都需要下载）'
-      } else {
-        this.lastError = 'whisper 本地识别失败，请检查模型文件或重新下载'
-      }
-      console.error('[SttEngine]', this.lastError)
-      this.notifyError(this.lastError)
-      return ''
     }
 
-    // 3. local: 自定义本地识别软件
+    // 2. local: 自定义本地识别软件
     if (config.sttMode === 'local') {
       try {
         const text = await this.recognizeWithLocalExe(pcm, config)
@@ -296,57 +186,8 @@ export class SttEngine {
 
     // 全部失败
     this.currentEngine = null
-    let modeHint: string
-    if (config.sttMode === 'download') {
-      // 检查 bin 目录是否有 whisper-cli
-      const binDir = path.join(app.getPath('userData'), 'bin')
-      const possibleNames = WHISPER_CLI_BINARIES
-      const hasCli = possibleNames.some((n) => existsSync(path.join(binDir, n)))
-      const hasModel = (() => {
-        const modelFileMap: Record<string, string> = {
-          'whisper-tiny': 'ggml-tiny.bin',
-          'whisper-base': 'ggml-base.bin',
-          'whisper-small': 'ggml-small.bin',
-        }
-        const modelFile = modelFileMap[config.downloadModel || 'whisper-tiny'] || 'ggml-tiny.bin'
-        return existsSync(path.join(app.getPath('userData'), 'models', modelFile))
-      })()
-      if (!hasCli && !hasModel) {
-        modeHint = 'whisper-cli 引擎和模型均未下载，请在设置中下载'
-      } else if (!hasCli) {
-        modeHint = 'whisper-cli 引擎未下载，请在设置中下载「识别引擎」'
-      } else if (!hasModel) {
-        modeHint = '模型未下载，请在设置中下载模型'
-      } else {
-        modeHint = 'whisper-cli 执行失败，请检查引擎版本'
-      }
-    } else {
-      modeHint = '请检查语音识别设置'
-    }
-    this.notifyError('语音识别失败：' + modeHint)
+    this.notifyError('语音识别失败：请检查语音识别设置')
     return ''
-  }
-
-  /**
-   * 仅停止录音（释放麦克风），不执行识别。
-   * 用于 builtin 模式：主进程不识别，识别由渲染层 Web Speech API 完成。
-   * 调用后 recording 置 false，PCM 数据被丢弃。
-   * 关键：必须先释放 getUserMedia 持有的麦克风，否则 webkitSpeechRecognition 无法获取设备。
-   */
-  async stopCaptureOnly(): Promise<void> {
-    if (!this.recording) {
-      console.warn('[SttEngine] 未在录音中，stopCaptureOnly 直接返回')
-      return
-    }
-    this.recording = false
-    try {
-      // 停止 audioCapture（发送 VOICE_RECORD_STOP 到渲染层，等待 PCM 回传后释放麦克风）
-      // PCM 数据被丢弃——builtin 模式的识别结果来自渲染层 Web Speech，不需要这段音频
-      await this.audioCapture.stop()
-      console.log('[SttEngine] stopCaptureOnly 完成，麦克风已释放')
-    } catch (err) {
-      console.error('[SttEngine] stopCaptureOnly 停止录音失败:', err)
-    }
   }
 
   /** 清理资源（应用退出时调用） */
@@ -388,166 +229,7 @@ export class SttEngine {
   }
 
   // ------------------------------------------------------------------------
-  // 引擎 1：whisper 本地（whisper.cpp）
-  // ------------------------------------------------------------------------
-
-  /**
-   * whisper 本地识别
-   * - 根据 downloadModel 配置选择模型文件（tiny/base/small）
-   * - 模型目录：userData/models/
-   * - 存在：将 PCM 写入临时 WAV，调用 whisper-cli 识别
-   * - 不存在：跳过并提示用户下载模型
-   */
-  private async recognizeWithWhisper(pcm: Float32Array): Promise<string> {
-    const config = getVoiceConfig()
-    // 模型 id 到文件名的映射（ggml 格式）
-    const modelFileMap: Record<string, string> = {
-      'whisper-tiny': 'ggml-tiny.bin',
-      'whisper-base': 'ggml-base.bin',
-      'whisper-small': 'ggml-small.bin',
-    }
-    const modelId = config.downloadModel || 'whisper-tiny'
-    const modelFile = modelFileMap[modelId] || 'ggml-tiny.bin'
-    const modelPath = path.join(app.getPath('userData'), 'models', modelFile)
-
-    if (!existsSync(modelPath)) {
-      console.info('[SttEngine] whisper 模型不存在，跳过本地识别:', modelPath)
-      console.info('[SttEngine] 请在设置的「轻量级下载」中下载模型以启用本地离线识别')
-      return ''
-    }
-
-    // 写入临时 WAV 供 whisper-cli 读取
-    const wavPath = path.join(
-      app.getPath('temp'),
-      `ai-window-stt-${Date.now()}.wav`,
-    )
-    try {
-      const wavBuf = this.float32ToWav(pcm, SAMPLE_RATE)
-      await writeFile(wavPath, wavBuf)
-    } catch (err) {
-      console.error('[SttEngine] 写入临时 WAV 失败:', err)
-      return ''
-    }
-
-    try {
-      // 优先尝试 whisper-rs（内嵌 Rust 绑定，无需外部二进制）
-      // 用 createRequire 避免 Rollup 静态分析 import('whisper-rs')
-      try {
-        const { createRequire } = await import('module')
-        const require = createRequire(import.meta.url)
-        const whisperRs = require('whisper-rs')
-        const Whisper = whisperRs.Whisper || whisperRs.default
-        if (Whisper) {
-          const whisper = new Whisper(modelPath)
-          // whisper-rs 暂未支持直接传 language 参数；多语种识别由模型自动判断
-          const result = typeof whisper.transcribeFile === 'function'
-            ? whisper.transcribeFile(wavPath)
-            : (typeof whisper.transcribe === 'function' ? whisper.transcribe(wavPath) : '')
-          if (result && result.trim()) {
-            return result.trim()
-          }
-        }
-      } catch (err) {
-        // whisper-rs 未安装或调用失败，回退到 whisper-cli
-        console.log('[SttEngine] whisper-rs 不可用，回退到 whisper-cli')
-      }
-
-      // 回退：whisper-cli 外部二进制
-      return await this.runWhisperCli(modelPath, wavPath)
-    } finally {
-      await unlink(wavPath).catch(() => {
-        /* 忽略临时文件清理失败 */
-      })
-    }
-  }
-
-  /**
-   * 调用 whisper.cpp 二进制（whisper-cli）识别 WAV
-   * -nt：不输出时间戳  -np：无进度条，仅输出纯文本
-   */
-  private runWhisperCli(modelPath: string, wavPath: string): Promise<string> {
-    return new Promise((resolve) => {
-      // 优先查找 userData/bin/ 下下载的 whisper-cli，回退到 PATH 中的系统安装
-      // whisper.cpp v1.7.x 重命名了二进制：main → whisper-cli，兼容多种命名
-      const possibleNames = WHISPER_CLI_BINARIES
-      const binDir = path.join(app.getPath('userData'), 'bin')
-      let binary = ''
-      for (const name of possibleNames) {
-        const full = path.join(binDir, name)
-        if (existsSync(full)) {
-          binary = full
-          break
-        }
-      }
-      // 未在 userData/bin 找到，回退到 PATH 中查找
-      if (!binary) {
-        binary = possibleNames[0] // 让 spawn 尝试 PATH 查找
-      }
-      const binaryExists = path.isAbsolute(binary) ? existsSync(binary) : false
-      console.log('[SttEngine] whisper-cli 路径:', binary, '(exists:', binaryExists, path.isAbsolute(binary) ? '' : '[PATH 回退模式]', ')')
-      console.log('[SttEngine] bin 目录内容:', existsSync(binDir) ? readdirSync(binDir) : '目录不存在')
-      // 关键：传入语种参数 -l <lang>，避免 whisper 把中文识别为英文/其他语种
-      // 语言码：whisper.cpp 使用 ISO 639-1（zh / en / ja / ko / auto）
-      // auto 时不传 -l，让 whisper 自动检测
-      // 关键修复：之前误用了不存在的 `config` 变量，导致 ReferenceError: config is not defined
-      // 改为内联调 getVoiceConfig() 读取
-      const voiceCfg = getVoiceConfig()
-      const lang = (voiceCfg.language || 'auto').toLowerCase()
-      const langCodeMap: Record<string, string> = {
-        zh: 'zh',
-        'zh-cn': 'zh',
-        en: 'en',
-        ja: 'ja',
-        ko: 'ko',
-        fr: 'fr',
-        de: 'de',
-        es: 'es',
-        ru: 'ru',
-      }
-      const langCode = langCodeMap[lang] || (lang === 'auto' ? '' : lang)
-      const args: string[] = ['-m', modelPath, '-f', wavPath, '-nt', '-np']
-      if (langCode) {
-        args.push('-l', langCode)
-        console.log(`[SttEngine] whisper-cli 语种参数: -l ${langCode}`)
-      } else {
-        console.log('[SttEngine] whisper-cli 使用自动语种检测')
-      }
-
-      const proc = spawn(binary, args, { windowsHide: true, env: process.env })
-      let stdout = ''
-      let stderr = ''
-
-      proc.stdout?.on('data', (d: Buffer) => {
-        stdout += d.toString()
-      })
-      proc.stderr?.on('data', (d: Buffer) => {
-        stderr += d.toString()
-      })
-
-      proc.on('error', (err) => {
-        // 二进制不存在（ENOENT）
-        console.error(
-          `[SttEngine] whisper-cli 不可用 (${err.message})，请在设置中下载 whisper-cli 引擎`,
-        )
-        resolve('')
-      })
-
-      proc.on('exit', (code) => {
-        if (code !== 0) {
-          console.error(
-            `[SttEngine] whisper-cli 退出码 ${code}: ${stderr.slice(-512)}`,
-          )
-          resolve('')
-          return
-        }
-        // 繁→简转换：whisper.cpp 多语种模型对中文音频常输出繁体
-        resolve(convertTraditionalToSimplified(stdout.trim()))
-      })
-    })
-  }
-
-  // ------------------------------------------------------------------------
-  // 引擎 2：自定义 AI 接入（OpenAI 兼容 Speech-to-Text API）
+  // 引擎 1：自定义 AI 接入（OpenAI 兼容 Speech-to-Text API）
   // ------------------------------------------------------------------------
 
   /**

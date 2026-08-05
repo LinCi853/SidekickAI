@@ -116,6 +116,12 @@ export async function setMinimumSize(width: number, height: number): Promise<voi
   return api.windowControl.setMinimumSize(width, height);
 }
 
+/** 切换当前窗口全屏状态 */
+export async function toggleFullscreenWindow(): Promise<boolean> {
+  const api = requireElectron();
+  return api.windowControl.toggleFullscreen();
+}
+
 /**
  * 获取当前窗口的最小尺寸（主进程 BrowserWindow.getMinimumSize）。
  * 用于 resize 拖拽时动态获取真实下限，而非硬编码。
@@ -238,37 +244,6 @@ export function onWebviewPopupUrl(
 }
 
 /**
- * 监听弹窗被连续拒绝达阈值事件（主进程默认 3 次后触发）。
- * 渲染层收到后提示用户是否将该 origin 加入白名单。返回取消监听的函数。
- */
-export function onPopupDenied(
-  callback: (payload: { url: string; origin: string; count: number }) => void,
-): () => void {
-  const api = requireElectron();
-  return api.onPopupDenied(callback);
-}
-
-/** 请求将 origin 加入弹窗白名单（持久化到 AppSettings.popupWhitelist） */
-export function addToPopupWhitelist(origin: string): Promise<string[]> {
-  const api = requireElectron();
-  return api.addToPopupWhitelist(origin);
-}
-
-/**
- * 请求将 origin 加入指定 Profile 的专属白名单（持久化到 Profile.popupWhitelist）。
- *
- * 与 addToPopupWhitelist 的区别：本函数将白名单条目隔离到具体 AI 应用，
- * 避免不同 AI 应用的关联域互相污染全局白名单。onPopupDenied 自动加白时优先调用本函数。
- */
-export function addToProfilePopupWhitelist(
-  profileId: string,
-  origin: string,
-): Promise<string[]> {
-  const api = requireElectron();
-  return api.addToProfilePopupWhitelist(profileId, origin);
-}
-
-/**
  * 监听窗口重新显示/聚焦到前台事件（主进程 show/focus 后触发）。
  * 用于每次唤出窗口时聚焦 AI 输入框。返回取消监听的函数。
  */
@@ -288,6 +263,29 @@ export function onWindowHidden(callback: () => void): () => void {
 }
 
 /**
+ * 监听弹窗被连续拦截事件（主进程拦截 popup 达到阈值后通知渲染层提示用户加白）。
+ * 返回取消监听的函数。
+ */
+export function onPopupDenied(
+  callback: (data: { origin: string; count: number }) => void,
+): () => void {
+  const api = requireElectron();
+  return api.onPopupDenied(callback);
+}
+
+/** 添加 origin 到全局弹窗白名单 */
+export async function addToPopupWhitelist(origin: string): Promise<void> {
+  const api = requireElectron();
+  return api.addToPopupWhitelist(origin);
+}
+
+/** 添加 origin 到 Profile 专属弹窗白名单 */
+export async function addToProfilePopupWhitelist(profileId: string, origin: string): Promise<void> {
+  const api = requireElectron();
+  return api.addToProfilePopupWhitelist(profileId, origin);
+}
+
+/**
  * 监听 webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）。
  * 统一拦截点：Alt+1~9 / Ctrl+Tab / Ctrl+G / ` / ? 等快捷键在 webview 焦点时也能生效。
  */
@@ -301,26 +299,4 @@ export function onWebviewHotkey(
   return api.onWebviewHotkey(callback);
 }
 
-/* =====================================================================
-   语音模型 / 引擎下载 —— 对应 window.electron.voice
-   ===================================================================== */
 
-/** 下载 whisper 模型文件（ggml-tiny/base/small.bin） */
-export function downloadVoiceModel(modelId: string): Promise<void> {
-  const api = requireElectron();
-  return api.voice.downloadModel(modelId);
-}
-
-/** 下载 whisper-cli 识别引擎二进制 */
-export function downloadWhisperCli(): Promise<void> {
-  const api = requireElectron();
-  return api.voice.downloadWhisperCli();
-}
-
-/** 监听语音模型/引擎下载进度（主进程 → 渲染层），返回取消监听函数 */
-export function onVoiceDownloadProgress(
-  cb: (p: { type: 'model' | 'cli'; percent: number; status: string; detail?: string }) => void,
-): () => void {
-  const api = requireElectron();
-  return api.voice.onDownloadProgress(cb);
-}

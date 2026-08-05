@@ -67,9 +67,9 @@
   color: var(--accent-bright);
 }
 
-/* 下拉面板（Portal 渲染到 document.body） */
+/* 下拉面板（Portal 渲染到 document.body，absolute 定位避免 transform 祖先影响） */
 .combobox-panel {
-  position: fixed;
+  position: absolute;
   z-index: 1000;
   background: var(--card);
   border: 1px solid var(--border);

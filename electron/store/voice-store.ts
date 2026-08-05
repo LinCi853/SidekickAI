@@ -3,19 +3,15 @@
 // 使用 electron-store 将语音配置持久化到磁盘（voice-config.json）。
 // 字段：
 //   - enterToSend: boolean  后台语音快速输入后是否自动回车发送（默认 false）
-//   - sttMode: 识别引擎模式 builtin/ai/local/download（默认 builtin）
+//   - sttMode: 识别引擎模式 ai/local（默认 ai）
 //   - aiProvider/ttsProvider: 自定义 AI 接入（存储 provider UUID）
 //   - localExePath/localArgs: 自定义本地识别软件
-//   - downloadModel/downloadStatus: 轻量级下载模型
 //
 // 主窗口与自定义对话窗口共用同一份配置（全局设置）。
 
-import { ipcMain, app } from 'electron'
-import { statSync } from 'fs'
-import * as path from 'path'
+import { ipcMain } from 'electron'
 import { IPC_CHANNELS, type AudioDeviceInfo } from '../shared/types.js'
 import { createJsonStore } from './store-paths.js'
-import { getWhisperCliBinaryNames } from '../stt/binary-resolver.js'
 
 // 持久化存储实例（写入 voice-config.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
@@ -33,21 +29,8 @@ export interface VoiceConfig {
   confirmMode: 'auto' | 'manual' | 'clipboard'
   /** 前台注入后是否自动回车发送（后台粘贴场景不受此字段影响，粘贴即结束） */
   enterToSend: boolean
-  /**
-   * 已下载完成的模型 ID 列表（每个模型独立跟踪下载状态）
-   * 修复：之前用单一 downloadStatus 字段导致"切换模型时丢失状态、已下载的模型仍提示下载"
-   */
-  downloadedModels: string[]
-  /** 当前选中的模型 ID（用于 UI 展示，不一定已下载） */
-  downloadModel: string
-  /**
-   * 当前选中模型的下载状态（向后兼容老配置）：
-   * - 'idle' / 'ready' / 'downloading' / 'failed'
-   * 真正的"已下载"判断应看 `downloadedModels` 是否包含 `downloadModel`
-   */
-  downloadStatus: 'idle' | 'ready' | 'downloading' | 'failed'
   /** 识别引擎模式 */
-  sttMode: 'builtin' | 'ai' | 'local' | 'download'
+  sttMode: 'ai' | 'local'
   /** AI 接入：服务商协议（存储 provider UUID） */
   aiProvider: string
   /**
@@ -77,14 +60,6 @@ export interface VoiceConfig {
   localExePath: string
   /** 本地识别：启动参数 */
   localArgs: string
-  /**
-   * whisper-cli 引擎二进制是否已下载（**持久化字段**）。
-   * - 下载成功后置 true，存入 voice-config.json
-   * - 启动时由 getVoiceConfig() 主动扫描磁盘进行修正（兜底：用户手动删文件/移动路径）
-   * - 修复用户报告"每次打开设置页都看到下载按钮 / 点了又马上成功"的问题
-   * - 与"下载后离线使用"语义一致：用户**完成过**下载，就不再提示下载
-   */
-  cliDownloaded: boolean
   // ===== v0.5.2 regress-2：TTS（语音合成）独立配置 =====
   /** TTS 引擎模式：disable=关闭 / ai=自定义 AI 接入 */
   ttsMode?: 'disable' | 'ai'
@@ -96,16 +71,9 @@ const DEFAULT_VOICE_CONFIG: VoiceConfig = {
   // 默认：自动上屏（前台注入 + 后台粘贴），无需用户二次确认
   confirmMode: 'auto',
   // 默认：前台注入后不自动回车发送（用户可在设置中开启）
-  // 改为 false 避免误触发发送；老用户已存储的 true 保持不变（不强制迁移）
   enterToSend: false,
-  // 默认：未下载任何模型
-  downloadedModels: [],
-  // 默认选中 tiny（体积最小，推荐新手先下这个）
-  downloadModel: 'whisper-tiny',
-  // 默认：未开始下载
-  downloadStatus: 'idle',
-  // 默认使用本地内置识别（不再预置 Mimo API 端点，需用户自行配置 AI 接入）
-  sttMode: 'builtin',
+  // 默认使用自定义 AI 接入（需用户自行配置服务商）
+  sttMode: 'ai',
   aiProvider: '',
   // 默认中文（绝大多数使用场景是中文输入）
   language: 'zh',
@@ -114,47 +82,9 @@ const DEFAULT_VOICE_CONFIG: VoiceConfig = {
   // 默认空 = 系统默认麦克风；用户可在设置中切换
   inputDeviceId: '',
   inputDeviceList: [],
-  // 默认 false，下载成功后置 true 并持久化
-  cliDownloaded: false,
   // v0.5.2 regress-2：TTS 默认关闭，需用户在设置中显式开启
   ttsMode: 'disable',
   ttsProvider: '',
-}
-
-/**
- * 同步扫描 userData/bin/ 目录，查找 whisper-cli 引擎二进制。
- * 返回 true 表示磁盘上已存在可执行文件。
- * 使用同步 API 方便在 getVoiceConfig 同步返回的路径里直接调用。
- *
- * 关键：必须用 ESM import 引入 statSync。
- * 修复用户反馈"每次打开都看到下载按钮"——之前用 `require('fs')` 在 ESM 模块中
- * 会抛 ReferenceError（require 未定义），被外层 try/catch 吞掉，
- * 始终返回 false，导致 cfg.cliDownloaded 被错误地重置为 false 并持久化。
- */
-function scanWhisperCliExists(): boolean {
-  try {
-    const binDir = path.join(app.getPath('userData'), 'bin')
-    // 候选名按平台区分，统一从 binary-resolver 获取（跨平台一致）
-    const candidates = getWhisperCliBinaryNames()
-    for (const name of candidates) {
-      const full = path.join(binDir, name)
-      try {
-        // 同步检查：用 ESM 顶层 import 的 statSync
-        // 仅 import 同步 fs，避免在主进程阻塞事件循环
-        // （这是配置读取，路径已知且小，开销可忽略）
-        const s = statSync(full)
-        if (s.isFile() && s.size > 1024) {
-          return true
-        }
-      } catch {
-        // 文件不存在或无权限，继续找下一个
-      }
-    }
-    return false
-  } catch (err) {
-    console.warn('[voice-store] 扫描 whisper-cli 失败:', err)
-    return false
-  }
 }
 
 const store = createJsonStore<{ config: VoiceConfig; version: number }>({
@@ -175,29 +105,9 @@ export function getVoiceConfig(): VoiceConfig {
     merged.confirmMode = 'auto'
   }
   // 老用户：旧值 'manual' 保留兼容（行为等同 'auto'），不强制改写避免频繁写盘
-  // 老用户：仅有 downloadStatus='ready' + downloadModel 但无 downloadedModels 时，
-  // 把当前已 ready 的 model 迁移到 downloadedModels 数组（单元素）。
-  // 这样首次升级到本版本后，旧的"已下载"模型不会显示下载按钮。
-  if (
-    Array.isArray(merged.downloadedModels) &&
-    merged.downloadedModels.length === 0 &&
-    stored.downloadStatus === 'ready' &&
-    stored.downloadModel
-  ) {
-    merged.downloadedModels = [stored.downloadModel]
-  }
-  // 关键修复：以磁盘为最终标准修正 cfg.cliDownloaded（**只升不降**，与"下载后离线使用"语义一致）。
-  // 启动时若磁盘已存在二进制但 cfg.cliDownloaded=false（迁移场景 / cfg 被清理），
-  // 主动修正为 true 并持久化。
-  // 反之：若磁盘不存在但 cfg=true（用户手动删了文件 / 路径变化），
-  // **不**自动降级为 false——一旦用户"完成过"下载，状态就永久保持，
-  // 避免因为文件被清理/移动/安全软件误删后再次误显下载按钮。
-  // 修复用户报告"每次打开设置页都看到下载按钮 / 点了又马上成功 / 重启后仍提示下载"的问题。
-  const onDisk = scanWhisperCliExists()
-  if (onDisk && !merged.cliDownloaded) {
-    merged.cliDownloaded = true
-    // 持久化修正（仅在状态变化时写一次，避免每次 getVoiceConfig 都写盘）
-    store.set('config', merged)
+  // 老用户迁移：旧的 builtin/download 模式统一迁移到 ai
+  if (merged.sttMode === 'builtin' || merged.sttMode === 'download') {
+    merged.sttMode = 'ai'
   }
   return merged
 }

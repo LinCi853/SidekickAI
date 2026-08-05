@@ -16,35 +16,6 @@ import { IPC_CHANNELS, ALL_TOP_BAR_BUTTON_GROUPS, type TopBarButtonGroup } from 
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { createJsonStore, isPortableMode } from './store-paths.js'
 
-/**
- * 默认弹窗白名单：各 AI 平台登录/认证/账户域。
- *
- * 这些域是 AI 平台登录态必需的独立窗口场景（accounts/auth/passport 等），
- * 与「应用外页面」语义不同——前者是平台账户体系的必要部分，
- * 后者是用户感知的"被弹出去打开了别的东西"。
- *
- * 预填默认值避免新用户首次登录被拦截 3 次才能加白的糟糕体验，
- * 也避免同域登录 popup 被强制页面内跳转破坏模态登录流程。
- */
-const DEFAULT_POPUP_WHITELIST: string[] = [
-  // ChatGPT
-  'https://auth.openai.com/',
-  'https://auth0.openai.com/',
-  'https://login.openai.com/',
-  // Claude
-  'https://auth.anthropic.com/',
-  // Gemini
-  'https://accounts.google.com/',
-  'https://myaccount.google.com/',
-  // 豆包
-  'https://passport.volcengine.com/',
-  // 文心一言
-  'https://passport.baidu.com/',
-  // 小米 Mimo
-  'https://account.xiaomi.com/',
-  'https://auth.mi.com/',
-]
-
 // 持久化存储实例（写入 app-settings.json）
 export interface AppSettings {
   /** 是否隐藏国外模型/平台 */
@@ -85,8 +56,6 @@ export interface AppSettings {
   topBarVisibleButtons: TopBarButtonGroup[]
   /** 点击已打开应用时的行为：switch=切换到该标签（默认）/ close=关闭该标签 */
   appClickBehavior: 'switch' | 'close'
-  /** 弹窗白名单：URL 前缀数组，匹配的 URL 允许弹独立 BrowserWindow（登录/OAuth/验证页等） */
-  popupWhitelist: string[]
   /** 缓存自动清理频率：never=不自动 / daily / weekly / monthly */
   cacheAutoClean: 'never' | 'daily' | 'weekly' | 'monthly'
   /** 上次缓存清理时间戳（ms），用于自动清理触发判定 */
@@ -125,6 +94,8 @@ export interface AppSettings {
   chatSidebarWidth: number
   /** 自定义对话侧边栏是否收起 */
   chatSidebarCollapsed: boolean
+  /** 弹窗白名单：URL 前缀数组，匹配的 URL 允许弹独立 BrowserWindow（登录/OAuth/验证页等） */
+  popupWhitelist: string[]
 }
 
 const store = createJsonStore<{ settings: AppSettings; version: number }>({
@@ -152,9 +123,6 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       topBarVisibleButtons: ['navBack', 'navForward', 'navHome', 'pinToggle'],
       // 点击已打开应用时默认切换到该标签（不关闭），需用户主动改为 close 才关闭
       appClickBehavior: 'switch',
-      // 弹窗白名单默认值：预填各 AI 平台登录/认证域，避免新用户首次登录被拦截 3 次才能加白
-      // （这些域是登录/账户体系必需的独立窗口场景，不是「应用外页面」）
-      popupWhitelist: DEFAULT_POPUP_WHITELIST,
       // 缓存清理：默认不自动清理（用户主动触发），首次启动 lastCacheCleanAt=0
       cacheAutoClean: 'never',
       lastCacheCleanAt: 0,
@@ -185,6 +153,8 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       // 自定义对话侧边栏：默认 160px 宽，未收起
       chatSidebarWidth: 160,
       chatSidebarCollapsed: false,
+      // 弹窗白名单：默认为空（登录域白名单硬编码在 helpers.ts LOGIN_POPUP_WHITELIST）
+      popupWhitelist: [],
     },
     version: 1,
   },
@@ -206,21 +176,6 @@ export function getAppSettings(): AppSettings {
   // 过滤已废弃的按钮组（appSwitcher/menu 已改为常驻，不再可自定义）
   const valid = new Set<TopBarButtonGroup>(ALL_TOP_BAR_BUTTON_GROUPS)
   s.topBarVisibleButtons = migrated.filter((g) => valid.has(g as TopBarButtonGroup)) as TopBarButtonGroup[]
-  // 兼容旧版本设置文件：popupWhitelist 字段可能不存在
-  // 同时合并默认登录域：老用户已编辑过的条目保留，缺失的默认登录域补齐
-  // （登录域是 AI 平台账户体系必需，不应让用户删除导致登录失败）
-  const existingPopupWhitelist = (s.popupWhitelist ?? []) as string[]
-  const mergedWhitelist = [...existingPopupWhitelist]
-  for (const def of DEFAULT_POPUP_WHITELIST) {
-    // 已存在等价或包含/被包含的条目则跳过
-    const alreadyExists = mergedWhitelist.some(
-      (y) => y === def || y.startsWith(def) || def.startsWith(y),
-    )
-    if (!alreadyExists) {
-      mergedWhitelist.push(def)
-    }
-  }
-  s.popupWhitelist = mergedWhitelist
   // 兼容旧版本设置文件：缓存清理与下载相关字段可能不存在
   s.cacheAutoClean = s.cacheAutoClean ?? 'never'
   s.lastCacheCleanAt = s.lastCacheCleanAt ?? 0
@@ -439,6 +394,8 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
   if (patch.uiScale && patch.uiScale !== current.uiScale) {
     broadcastUiScaleChanged(next.uiScale)
   }
+  // 广播设置变更到所有窗口（跨窗口同步：顶栏按钮、标签栏、主题、屏蔽规则等）
+  broadcastAppSettingsChanged(next)
   return next
 }
 
@@ -450,9 +407,26 @@ function broadcastUiScaleChanged(uiScale: 'small' | 'medium' | 'large'): void {
   broadcastToAllWindows(IPC_CHANNELS.UI_SCALE_CHANGED, uiScale, 'app-settings')
 }
 
+/** 向所有 BrowserWindow 广播应用设置变更（跨窗口同步） */
+function broadcastAppSettingsChanged(settings: AppSettings): void {
+  broadcastToAllWindows(IPC_CHANNELS.APP_SETTINGS_CHANGED, settings, 'app-settings')
+}
+
+/**
+ * 向所有 BrowserWindow 广播 UI 版本 / 主题变更。
+ * 任意窗口修改 Oxy Design System 开关或主题模式后，通过 IPC 调用此函数通知所有窗口同步。
+ */
+export function broadcastUiVersionChanged(payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }): void {
+  broadcastToAllWindows(IPC_CHANNELS.APP_UI_VERSION_CHANGED, payload, 'app-settings')
+}
+
 /** 注册应用设置 IPC 处理器（含代理测试与即时生效） */
 export function registerAppSettingsIPC(): void {
   ipcMain.handle(IPC_CHANNELS.APP_GET_SETTINGS, () => getAppSettings())
+  // 渲染层请求广播 UI 版本/主题变更到所有窗口
+  ipcMain.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, (_e, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
+    broadcastUiVersionChanged(payload)
+  })
   ipcMain.handle(IPC_CHANNELS.APP_UPDATE_SETTINGS, (_e, patch: Partial<AppSettings>) =>
     updateAppSettings(patch),
   )
@@ -524,18 +498,6 @@ export function registerAppSettingsIPC(): void {
   ipcMain.handle(IPC_CHANNELS.APP_OPEN_EXPORT_WINDOW, async () => {
     const { showDataExportWindow } = await import('../window-factory/popup-windows.js')
     showDataExportWindow()
-  })
-
-  // 弹窗白名单：渲染层请求将 origin 加入白名单（持久化到 AppSettings.popupWhitelist）
-  ipcMain.handle(IPC_CHANNELS.POPUP_WHITELIST_ADD, (_e, origin: string) => {
-    const current = getAppSettings()
-    const whitelist = current.popupWhitelist ?? []
-    if (!whitelist.includes(origin)) {
-      const next = [...whitelist, origin]
-      updateAppSettings({ popupWhitelist: next })
-      console.log('[app-settings] 已加入弹窗白名单:', origin)
-    }
-    return getAppSettings().popupWhitelist ?? []
   })
 
   // 缓存清理：清理缓存数据（仅缓存类目录与 session cache，保留登录态）

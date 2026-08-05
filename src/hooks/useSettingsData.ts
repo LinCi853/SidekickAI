@@ -28,7 +28,280 @@ import type {
 } from '../lib/electron-api';
 
 /* =====================================================================
-   useAppSettings —— app-settings-store 的所有字段
+   useAppearanceSettings —— 外观设置（tabBarCollapsed / uiScale）
+   ===================================================================== */
+
+export interface AppearanceSettingsState {
+  tabBarCollapsed: boolean;
+  setTabBarCollapsed: Dispatch<SetStateAction<boolean>>;
+  uiScale: 'small' | 'medium' | 'large';
+  setUiScale: Dispatch<SetStateAction<'small' | 'medium' | 'large'>>;
+  load: () => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+export function useAppearanceSettings(enabled: boolean): AppearanceSettingsState {
+  const [tabBarCollapsed, setTabBarCollapsed] = useState(true);
+  const [uiScale, setUiScale] = useState<'small' | 'medium' | 'large'>('medium');
+
+  const load = useCallback(async () => {
+    try {
+      const cfg = await getAppSettings();
+      setTabBarCollapsed(cfg.tabBarCollapsed ?? true);
+      setUiScale(cfg.uiScale ?? 'medium');
+      document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+    } catch (e) {
+      console.error('[useAppearanceSettings] 加载失败:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) void load();
+  }, [enabled, load]);
+
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    await updateAppSettings(patch);
+  }, []);
+
+  return {
+    tabBarCollapsed, setTabBarCollapsed,
+    uiScale, setUiScale,
+    load,
+    update,
+  };
+}
+
+/* =====================================================================
+   useGeneralSettings —— 通用设置
+   ===================================================================== */
+
+export interface GeneralSettingsState {
+  enterToSend: boolean;
+  setEnterToSend: Dispatch<SetStateAction<boolean>>;
+  defaultDesktopUaPreset: string;
+  setDefaultDesktopUaPreset: Dispatch<SetStateAction<string>>;
+  defaultMobileUaPreset: string;
+  setDefaultMobileUaPreset: Dispatch<SetStateAction<string>>;
+  closeBehavior: 'close' | 'minimize';
+  setCloseBehavior: Dispatch<SetStateAction<'close' | 'minimize'>>;
+  startupOpen: 'home' | 'lastConversation';
+  setStartupOpen: Dispatch<SetStateAction<'home' | 'lastConversation'>>;
+  appClickBehavior: 'switch' | 'close';
+  setAppClickBehavior: Dispatch<SetStateAction<'switch' | 'close'>>;
+  usageTrackingEnabled: boolean;
+  setUsageTrackingEnabled: Dispatch<SetStateAction<boolean>>;
+  altSpaceResetThreshold: number;
+  setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>;
+  load: () => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+export function useGeneralSettings(enabled: boolean): GeneralSettingsState {
+  const [enterToSend, setEnterToSend] = useState(true);
+  const [defaultDesktopUaPreset, setDefaultDesktopUaPreset] = useState('win-chrome-125');
+  const [defaultMobileUaPreset, setDefaultMobileUaPreset] = useState('iphone-15-pro-safari');
+  const [closeBehavior, setCloseBehavior] = useState<'close' | 'minimize'>('close');
+  const [startupOpen, setStartupOpen] = useState<'home' | 'lastConversation'>('home');
+  const [appClickBehavior, setAppClickBehavior] = useState<'switch' | 'close'>('switch');
+  const [usageTrackingEnabled, setUsageTrackingEnabled] = useState(true);
+  const [altSpaceResetThreshold, setAltSpaceResetThreshold] = useState(6);
+
+  const load = useCallback(async () => {
+    try {
+      const cfg = await getAppSettings();
+      setEnterToSend(cfg.enterToSend ?? true);
+      setDefaultDesktopUaPreset(cfg.defaultDesktopUaPreset ?? 'win-chrome-125');
+      setDefaultMobileUaPreset(cfg.defaultMobileUaPreset ?? 'iphone-15-pro-safari');
+      setCloseBehavior(cfg.closeBehavior ?? 'close');
+      setStartupOpen(cfg.startupOpen ?? 'home');
+      setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
+      setAltSpaceResetThreshold(cfg.altSpaceResetThreshold ?? 6);
+      setUsageTrackingEnabled(cfg.usageTrackingEnabled ?? true);
+    } catch (e) {
+      console.error('[useGeneralSettings] 加载失败:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) void load();
+  }, [enabled, load]);
+
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    await updateAppSettings(patch);
+  }, []);
+
+  return {
+    enterToSend, setEnterToSend,
+    defaultDesktopUaPreset, setDefaultDesktopUaPreset,
+    defaultMobileUaPreset, setDefaultMobileUaPreset,
+    closeBehavior, setCloseBehavior,
+    startupOpen, setStartupOpen,
+    appClickBehavior, setAppClickBehavior,
+    usageTrackingEnabled, setUsageTrackingEnabled,
+    altSpaceResetThreshold, setAltSpaceResetThreshold,
+    load,
+    update,
+  };
+}
+
+/* =====================================================================
+   useProxySettings —— 代理设置
+   ===================================================================== */
+
+export interface ProxySettingsState {
+  proxyMode: 'system' | 'direct' | 'custom';
+  setProxyMode: Dispatch<SetStateAction<'system' | 'direct' | 'custom'>>;
+  customProxy: string;
+  setCustomProxy: Dispatch<SetStateAction<string>>;
+  proxyUsername: string;
+  setProxyUsername: Dispatch<SetStateAction<string>>;
+  proxyPassword: string;
+  setProxyPassword: Dispatch<SetStateAction<string>>;
+  proxyBypass: string;
+  setProxyBypass: Dispatch<SetStateAction<string>>;
+  proxyFallbackEnabled: boolean;
+  setProxyFallbackEnabled: Dispatch<SetStateAction<boolean>>;
+  proxyFallbackMode: 'direct' | 'system';
+  setProxyFallbackMode: Dispatch<SetStateAction<'direct' | 'system'>>;
+  load: () => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+export function useProxySettings(enabled: boolean): ProxySettingsState {
+  const [proxyMode, setProxyMode] = useState<'system' | 'direct' | 'custom'>('system');
+  const [customProxy, setCustomProxy] = useState('');
+  const [proxyUsername, setProxyUsername] = useState('');
+  const [proxyPassword, setProxyPassword] = useState('');
+  const [proxyBypass, setProxyBypass] = useState('');
+  const [proxyFallbackEnabled, setProxyFallbackEnabled] = useState(false);
+  const [proxyFallbackMode, setProxyFallbackMode] = useState<'direct' | 'system'>('direct');
+
+  const load = useCallback(async () => {
+    try {
+      const cfg = await getAppSettings();
+      setProxyMode(cfg.proxyMode);
+      setCustomProxy(cfg.customProxy);
+      setProxyUsername(cfg.proxyUsername ?? '');
+      setProxyPassword(cfg.proxyPassword ?? '');
+      setProxyBypass(cfg.proxyBypass ?? '');
+      setProxyFallbackEnabled(cfg.proxyFallbackEnabled ?? false);
+      setProxyFallbackMode(cfg.proxyFallbackMode ?? 'direct');
+    } catch (e) {
+      console.error('[useProxySettings] 加载失败:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) void load();
+  }, [enabled, load]);
+
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    await updateAppSettings(patch);
+  }, []);
+
+  return {
+    proxyMode, setProxyMode,
+    customProxy, setCustomProxy,
+    proxyUsername, setProxyUsername,
+    proxyPassword, setProxyPassword,
+    proxyBypass, setProxyBypass,
+    proxyFallbackEnabled, setProxyFallbackEnabled,
+    proxyFallbackMode, setProxyFallbackMode,
+    load,
+    update,
+  };
+}
+
+/* =====================================================================
+   usePlatformSettings —— 平台与模型设置
+   ===================================================================== */
+
+export interface PlatformSettingsState {
+  hiddenPlatforms: string[];
+  setHiddenPlatforms: Dispatch<SetStateAction<string[]>>;
+  hideForeignModels: boolean;
+  setHideForeignModels: Dispatch<SetStateAction<boolean>>;
+  disableAllBlockRules: boolean;
+  setDisableAllBlockRules: Dispatch<SetStateAction<boolean>>;
+  load: () => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+export function usePlatformSettings(enabled: boolean): PlatformSettingsState {
+  const [hiddenPlatforms, setHiddenPlatforms] = useState<string[]>([]);
+  const [hideForeignModels, setHideForeignModels] = useState(true);
+  const [disableAllBlockRules, setDisableAllBlockRules] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const cfg = await getAppSettings();
+      setHiddenPlatforms(cfg.hiddenPlatforms ?? []);
+      setHideForeignModels(cfg.hideForeignModels ?? true);
+      setDisableAllBlockRules(cfg.disableAllBlockRules ?? false);
+    } catch (e) {
+      console.error('[usePlatformSettings] 加载失败:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) void load();
+  }, [enabled, load]);
+
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    await updateAppSettings(patch);
+  }, []);
+
+  return {
+    hiddenPlatforms, setHiddenPlatforms,
+    hideForeignModels, setHideForeignModels,
+    disableAllBlockRules, setDisableAllBlockRules,
+    load,
+    update,
+  };
+}
+
+/* =====================================================================
+   useTopBarSettings —— 顶栏按钮设置
+   ===================================================================== */
+
+export interface TopBarSettingsState {
+  topBarVisibleButtons: TopBarButtonGroup[];
+  setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>;
+  load: () => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>;
+}
+
+export function useTopBarSettings(enabled: boolean): TopBarSettingsState {
+  const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([
+    ...ALL_TOP_BAR_BUTTON_GROUPS,
+  ]);
+
+  const load = useCallback(async () => {
+    try {
+      const cfg = await getAppSettings();
+      setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
+    } catch (e) {
+      console.error('[useTopBarSettings] 加载失败:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) void load();
+  }, [enabled, load]);
+
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    await updateAppSettings(patch);
+  }, []);
+
+  return {
+    topBarVisibleButtons, setTopBarVisibleButtons,
+    load,
+    update,
+  };
+}
+
+/* =====================================================================
+   useAppSettings —— 组合所有设置域（向后兼容的统一接口）
    ===================================================================== */
 
 export interface AppSettingsState {
@@ -87,90 +360,32 @@ export interface AppSettingsState {
 }
 
 export function useAppSettings(enabled: boolean): AppSettingsState {
-  const [tabBarCollapsed, setTabBarCollapsed] = useState(true);
-  const [uiScale, setUiScale] = useState<'small' | 'medium' | 'large'>('medium');
-  const [enterToSend, setEnterToSend] = useState(true);
-  const [defaultDesktopUaPreset, setDefaultDesktopUaPreset] = useState('win-chrome-125');
-  const [defaultMobileUaPreset, setDefaultMobileUaPreset] = useState('iphone-15-pro-safari');
-  const [closeBehavior, setCloseBehavior] = useState<'close' | 'minimize'>('close');
-  const [startupOpen, setStartupOpen] = useState<'home' | 'lastConversation'>('home');
-  const [appClickBehavior, setAppClickBehavior] = useState<'switch' | 'close'>('switch');
-  const [usageTrackingEnabled, setUsageTrackingEnabled] = useState(true);
-  const [proxyMode, setProxyMode] = useState<'system' | 'direct' | 'custom'>('system');
-  const [customProxy, setCustomProxy] = useState('');
-  const [proxyUsername, setProxyUsername] = useState('');
-  const [proxyPassword, setProxyPassword] = useState('');
-  const [proxyBypass, setProxyBypass] = useState('');
-  const [proxyFallbackEnabled, setProxyFallbackEnabled] = useState(false);
-  const [proxyFallbackMode, setProxyFallbackMode] = useState<'direct' | 'system'>('direct');
-  const [hiddenPlatforms, setHiddenPlatforms] = useState<string[]>([]);
-  const [hideForeignModels, setHideForeignModels] = useState(true);
-  const [disableAllBlockRules, setDisableAllBlockRules] = useState(false);
-  const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([
-    ...ALL_TOP_BAR_BUTTON_GROUPS,
-  ]);
-  const [altSpaceResetThreshold, setAltSpaceResetThreshold] = useState(6);
+  const appearance = useAppearanceSettings(enabled);
+  const general = useGeneralSettings(enabled);
+  const proxy = useProxySettings(enabled);
+  const platform = usePlatformSettings(enabled);
+  const topBar = useTopBarSettings(enabled);
 
   const load = useCallback(async () => {
-    try {
-      const cfg = await getAppSettings();
-      setTabBarCollapsed(cfg.tabBarCollapsed ?? true);
-      setEnterToSend(cfg.enterToSend ?? true);
-      setDefaultDesktopUaPreset(cfg.defaultDesktopUaPreset ?? 'win-chrome-125');
-      setDefaultMobileUaPreset(cfg.defaultMobileUaPreset ?? 'iphone-15-pro-safari');
-      setCloseBehavior(cfg.closeBehavior ?? 'close');
-      setUiScale(cfg.uiScale ?? 'medium');
-      document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
-      setStartupOpen(cfg.startupOpen ?? 'home');
-      setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
-      setProxyMode(cfg.proxyMode);
-      setCustomProxy(cfg.customProxy);
-      setProxyUsername(cfg.proxyUsername ?? '');
-      setProxyPassword(cfg.proxyPassword ?? '');
-      setProxyBypass(cfg.proxyBypass ?? '');
-      setProxyFallbackEnabled(cfg.proxyFallbackEnabled ?? false);
-      setProxyFallbackMode(cfg.proxyFallbackMode ?? 'direct');
-      setHiddenPlatforms(cfg.hiddenPlatforms ?? []);
-      setHideForeignModels(cfg.hideForeignModels ?? true);
-      setDisableAllBlockRules(cfg.disableAllBlockRules ?? false);
-      setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
-      setAltSpaceResetThreshold(cfg.altSpaceResetThreshold ?? 6);
-      setUsageTrackingEnabled(cfg.usageTrackingEnabled ?? true);
-    } catch (e) {
-      console.error('[useAppSettings] 加载失败:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    await Promise.all([
+      appearance.load(),
+      general.load(),
+      proxy.load(),
+      platform.load(),
+      topBar.load(),
+    ]);
+  }, [appearance.load, general.load, proxy.load, platform.load, topBar.load]);
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
     await updateAppSettings(patch);
   }, []);
 
   return {
-    tabBarCollapsed, setTabBarCollapsed,
-    uiScale, setUiScale,
-    enterToSend, setEnterToSend,
-    defaultDesktopUaPreset, setDefaultDesktopUaPreset,
-    defaultMobileUaPreset, setDefaultMobileUaPreset,
-    closeBehavior, setCloseBehavior,
-    startupOpen, setStartupOpen,
-    appClickBehavior, setAppClickBehavior,
-    usageTrackingEnabled, setUsageTrackingEnabled,
-    proxyMode, setProxyMode,
-    customProxy, setCustomProxy,
-    proxyUsername, setProxyUsername,
-    proxyPassword, setProxyPassword,
-    proxyBypass, setProxyBypass,
-    proxyFallbackEnabled, setProxyFallbackEnabled,
-    proxyFallbackMode, setProxyFallbackMode,
-    hiddenPlatforms, setHiddenPlatforms,
-    hideForeignModels, setHideForeignModels,
-    disableAllBlockRules, setDisableAllBlockRules,
-    topBarVisibleButtons, setTopBarVisibleButtons,
-    altSpaceResetThreshold, setAltSpaceResetThreshold,
+    ...appearance,
+    ...general,
+    ...proxy,
+    ...platform,
+    ...topBar,
     load,
     update,
   };
@@ -185,8 +400,8 @@ export interface VoiceConfigState {
   setConfirmMode: Dispatch<SetStateAction<'auto' | 'manual' | 'clipboard'>>;
   enterToSend: boolean;
   setEnterToSend: Dispatch<SetStateAction<boolean>>;
-  sttMode: 'builtin' | 'ai' | 'local' | 'download';
-  setSttMode: Dispatch<SetStateAction<'builtin' | 'ai' | 'local' | 'download'>>;
+  sttMode: 'ai' | 'local';
+  setSttMode: Dispatch<SetStateAction<'ai' | 'local'>>;
   aiProvider: string;
   setAiProvider: Dispatch<SetStateAction<string>>;
   language: string;
@@ -197,14 +412,6 @@ export interface VoiceConfigState {
   setLocalExePath: Dispatch<SetStateAction<string>>;
   localArgs: string;
   setLocalArgs: Dispatch<SetStateAction<string>>;
-  downloadModel: string;
-  setDownloadModel: Dispatch<SetStateAction<string>>;
-  downloadedModels: string[];
-  setDownloadedModels: Dispatch<SetStateAction<string[]>>;
-  downloadStatus: string;
-  setDownloadStatus: Dispatch<SetStateAction<string>>;
-  cliDownloaded: boolean;
-  setCliDownloaded: Dispatch<SetStateAction<boolean>>;
   ttsMode: 'disable' | 'ai';
   setTtsMode: Dispatch<SetStateAction<'disable' | 'ai'>>;
   ttsProvider: string;
@@ -216,16 +423,12 @@ export interface VoiceConfigState {
 export function useVoiceConfig(enabled: boolean): VoiceConfigState {
   const [confirmMode, setConfirmMode] = useState<'auto' | 'manual' | 'clipboard'>('auto');
   const [enterToSend, setEnterToSend] = useState(false);
-  const [sttMode, setSttMode] = useState<'builtin' | 'ai' | 'local' | 'download'>('builtin');
+  const [sttMode, setSttMode] = useState<'ai' | 'local'>('ai');
   const [aiProvider, setAiProvider] = useState('openai');
   const [language, setLanguage] = useState('zh');
   const [inputDeviceId, setInputDeviceId] = useState('');
   const [localExePath, setLocalExePath] = useState('');
   const [localArgs, setLocalArgs] = useState('');
-  const [downloadModel, setDownloadModel] = useState('');
-  const [downloadedModels, setDownloadedModels] = useState<string[]>([]);
-  const [downloadStatus, setDownloadStatus] = useState('idle');
-  const [cliDownloaded, setCliDownloaded] = useState(false);
   const [ttsMode, setTtsMode] = useState<'disable' | 'ai'>('disable');
   const [ttsProvider, setTtsProvider] = useState('openai');
 
@@ -234,16 +437,12 @@ export function useVoiceConfig(enabled: boolean): VoiceConfigState {
       const cfg = await getVoiceConfig();
       setConfirmMode(cfg.confirmMode ?? 'auto');
       setEnterToSend(cfg.enterToSend ?? true);
-      setSttMode(cfg.sttMode ?? 'builtin');
+      setSttMode(cfg.sttMode ?? 'ai');
       setAiProvider(cfg.aiProvider ?? 'openai');
       setLanguage(cfg.language ?? 'zh');
       setInputDeviceId(cfg.inputDeviceId ?? '');
       setLocalExePath(cfg.localExePath ?? '');
       setLocalArgs(cfg.localArgs ?? '');
-      setDownloadModel(cfg.downloadModel ?? '');
-      setDownloadedModels(Array.isArray(cfg.downloadedModels) ? cfg.downloadedModels : []);
-      setDownloadStatus(cfg.downloadStatus ?? 'idle');
-      setCliDownloaded(Boolean(cfg.cliDownloaded));
       setTtsMode(cfg.ttsMode ?? 'disable');
       setTtsProvider(cfg.ttsProvider ?? 'openai');
     } catch (e) {
@@ -268,10 +467,6 @@ export function useVoiceConfig(enabled: boolean): VoiceConfigState {
     inputDeviceId, setInputDeviceId,
     localExePath, setLocalExePath,
     localArgs, setLocalArgs,
-    downloadModel, setDownloadModel,
-    downloadedModels, setDownloadedModels,
-    downloadStatus, setDownloadStatus,
-    cliDownloaded, setCliDownloaded,
     ttsMode, setTtsMode,
     ttsProvider, setTtsProvider,
     load,

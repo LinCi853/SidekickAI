@@ -134,6 +134,37 @@ export function onUiScaleChanged(
   return api.onUiScaleChanged(callback);
 }
 
+/**
+ * 监听应用设置变更广播（任意窗口修改设置后，主进程向所有窗口推送最新设置）。
+ * 渲染层收到后可同步更新本地状态（顶栏按钮、标签栏、主题等）。
+ */
+export function onAppSettingsChanged(
+  callback: (settings: import('../../../electron/shared/types').AppSettings) => void,
+): () => void {
+  const api = requireElectron();
+  return api.onAppSettingsChanged(callback);
+}
+
+/**
+ * 请求广播 UI 版本/主题变更到所有窗口（Oxy Design System 切换 / 主题模式切换时调用）。
+ * 调用后主进程向所有 BrowserWindow 推送最新 uiVersion + theme。
+ */
+export function broadcastUiVersionChanged(payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }): void {
+  const api = requireElectron();
+  api.broadcastUiVersionChanged(payload);
+}
+
+/**
+ * 监听 UI 版本/主题变更广播（任意窗口切换 Oxy 或主题后，主进程向所有窗口推送）。
+ * 渲染层收到后应同步应用 DOM 变更并更新本地状态。
+ */
+export function onUiVersionChanged(
+  callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void,
+): () => void {
+  const api = requireElectron();
+  return api.onUiVersionChanged(callback);
+}
+
 /* =====================================================================
    指纹脚本 —— 对应 window.electron.fingerprint
    ===================================================================== */

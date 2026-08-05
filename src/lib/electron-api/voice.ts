@@ -106,52 +106,6 @@ export function updateInputDeviceList(list: AudioDeviceInfo[]): Promise<{ ok: bo
   return api.stt.updateInputDeviceList(list);
 }
 
-/**
- * 扫描 userData/models/ 目录，列出所有已下载的 whisper 模型 id 列表。
- * 关键用途：设置页 mount 时调用一次，把磁盘上真实存在的模型同步进 downloadedModels。
- * 该调用会主动修正 cfg.downloadedModels（以磁盘为最终标准）。
- */
-export interface ListDownloadedModelsResult {
-  ok: boolean;
-  models: string[];
-  error?: string;
-}
-export function listDownloadedModels(): Promise<ListDownloadedModelsResult> {
-  const api = requireElectron();
-  return api.stt.listDownloadedModels();
-}
-
-/**
- * 卸载 whisper-cli 引擎二进制：删除 userData/bin/ 下的可执行文件 + 配套 dll + 残留 zip + 修正 cfg。
- * 返回 { ok, removed, reason? }，removed 是已删除的文件名列表。
- * 不删除整个 bin 目录（避免误删用户后续手动放入的工具）。
- */
-export interface UninstallCliResult {
-  ok: boolean;
-  removed: string[];
-  reason?: string;
-}
-export function uninstallWhisperCli(): Promise<UninstallCliResult> {
-  const api = requireElectron();
-  return api.voice.uninstallWhisperCli();
-}
-
-/**
- * 卸载指定 whisper 模型文件：删除对应 ggml-*.bin + 从 cfg.downloadedModels 移除。
- * 返回 { ok, path?, reason? }。
- */
-export interface UninstallModelResult {
-  ok: boolean;
-  path?: string;
-  reason?: string;
-}
-export function uninstallVoiceModel(
-  modelId: 'whisper-tiny' | 'whisper-base' | 'whisper-small',
-): Promise<UninstallModelResult> {
-  const api = requireElectron();
-  return api.voice.uninstallModel(modelId);
-}
-
 /* =====================================================================
    语音热键 + 后台语音 + 预览窗 —— 对应 window.electron.onVoiceInjectAndSend
    ===================================================================== */
@@ -233,32 +187,4 @@ export function sendVoiceRecordData(data: number[]): void {
   api.sendVoiceRecordData(data);
 }
 
-/* =====================================================================
-   builtin 模式 Web Speech API —— 对应 window.electron.onVoiceBuiltinStart 等
-   主进程在 builtin 模式下通过 IPC 通知预览窗启动 webkitSpeechRecognition，
-   渲染层识别完成后回传文本。预览窗（RecordIndicator）订阅此事件。
-   ===================================================================== */
 
-/**
- * 监听 builtin 模式启动指令（主进程→预览窗渲染）。
- * 载荷 { language: string } 为 BCP-47 语种标签（如 'zh-CN'）。
- * @returns 取消监听函数
- */
-export function onVoiceBuiltinStart(
-  callback: (payload: { language: string }) => void,
-): () => void {
-  const api = requireElectron();
-  return api.onVoiceBuiltinStart(callback);
-}
-
-/** 回传 builtin 模式识别结果到主进程（预览窗渲染→主进程） */
-export function sendVoiceBuiltinResult(text: string): void {
-  const api = requireElectron();
-  api.sendVoiceBuiltinResult(text);
-}
-
-/** 回传 builtin 模式识别错误到主进程（预览窗渲染→主进程） */
-export function sendVoiceBuiltinError(error: string): void {
-  const api = requireElectron();
-  api.sendVoiceBuiltinError(error);
-}

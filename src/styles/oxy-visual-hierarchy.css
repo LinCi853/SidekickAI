@@ -67,6 +67,23 @@
   background: var(--primary-foreground);
 }
 
+/* Oxy 模式下统一开关样式（.toggle-track 与 .oxy-toggle 共用） */
+[data-oxy="true"] .toggle-track {
+  background: var(--muted);
+  border-color: var(--border);
+}
+[data-oxy="true"] .toggle-track::before {
+  background: var(--muted-foreground);
+  box-shadow: none;
+}
+[data-oxy="true"] .toggle input:checked + .toggle-track {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+[data-oxy="true"] .toggle input:checked + .toggle-track::before {
+  background: var(--primary-foreground);
+}
+
 /* ===== 警告/提示内容 ===== */
 
 /* 警告文字：加粗 + 警告色 */

@@ -189,9 +189,6 @@ export default function SettingsView() {
     if (patch.language !== undefined) voice.setLanguage(patch.language);
     if (patch.localExePath !== undefined) voice.setLocalExePath(patch.localExePath);
     if (patch.localArgs !== undefined) voice.setLocalArgs(patch.localArgs);
-    if (patch.downloadModel !== undefined) voice.setDownloadModel(patch.downloadModel);
-    if (patch.downloadedModels !== undefined) voice.setDownloadedModels(patch.downloadedModels);
-    if (patch.downloadStatus !== undefined) voice.setDownloadStatus(patch.downloadStatus);
     if (patch.inputDeviceId !== undefined) voice.setInputDeviceId(patch.inputDeviceId);
     if (patch.ttsMode !== undefined) voice.setTtsMode(patch.ttsMode);
     if (patch.ttsProvider !== undefined) voice.setTtsProvider(patch.ttsProvider);
@@ -390,11 +387,7 @@ export default function SettingsView() {
               language: voice.language,
               localExePath: voice.localExePath,
               localArgs: voice.localArgs,
-              downloadModel: voice.downloadModel,
-              downloadedModels: voice.downloadedModels,
-              downloadStatus: voice.downloadStatus,
               inputDeviceId: voice.inputDeviceId,
-              cliDownloaded: voice.cliDownloaded,
               ttsMode: voice.ttsMode,
               ttsProvider: voice.ttsProvider,
             }}

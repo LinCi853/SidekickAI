@@ -1,0 +1,259 @@
+/* =====================================================================
+   components/ui/Popover.css —— 通用二级菜单/弹出层样式
+   参考主窗口 TabContextMenu 和 DrawerPanel 设计
+   ===================================================================== */
+
+/* ===== 基础弹出层 ===== */
+.popover {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--text-sm, 13px);
+  overflow: hidden;
+}
+
+/* ===== 背景样式 ===== */
+.popover-bg-solid {
+  background: var(--popover, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-card, 0 4px 16px rgba(0, 0, 0, 0.4));
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+.popover-bg-glass {
+  background: var(--glass-bg, rgba(30, 30, 30, 0.85));
+  border: 1px solid var(--glass-bd, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-card, 0 4px 16px rgba(0, 0, 0, 0.4));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: var(--popover-foreground, var(--foreground, #fff));
+}
+
+/* ===== 遮罩层 ===== */
+.popover-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.popover-overlay.glass {
+  background: var(--overlay-warm-dim, rgba(0, 0, 0, 0.3));
+}
+
+/* ===== 变体样式 ===== */
+
+/* 下拉菜单 */
+.popover-dropdown {
+  min-width: 160px;
+  max-width: 280px;
+  max-height: 300px;
+  padding: 4px;
+}
+
+/* 右键菜单 */
+.popover-context-menu {
+  min-width: 180px;
+  max-width: 240px;
+  max-height: calc(100vh - 16px);
+  padding: 4px;
+}
+
+/* 面板 */
+.popover-panel {
+  width: 320px;
+  max-height: 480px;
+  padding: 8px;
+}
+
+/* 对话框 */
+.popover-dialog {
+  width: 360px;
+  max-height: 80vh;
+  padding: 20px;
+}
+
+/* 提示框 */
+.popover-tooltip {
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: var(--text-xs, 12px);
+}
+
+/* ===== 内容区域 ===== */
+.popover-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5, 2px);
+  overflow-y: auto;
+}
+
+.popover-sections {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.popover-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5, 2px);
+  padding: var(--space-1, 4px) 0;
+}
+
+.popover-section:first-child {
+  padding-top: 0;
+}
+
+.popover-section:last-child {
+  padding-bottom: 0;
+}
+
+.popover-section-label {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 11px);
+  color: var(--muted-foreground, #777);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: var(--space-0-5, 2px) var(--space-2, 8px);
+}
+
+.popover-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5, 2px);
+}
+
+.popover-divider {
+  height: 1px;
+  background: var(--border, #444);
+  margin: var(--space-0-5, 2px) var(--space-1, 4px);
+}
+
+/* ===== 搜索框 ===== */
+.popover-search {
+  padding: 0 0 var(--space-1, 4px) 0;
+}
+
+.popover-search-input {
+  width: 100%;
+  background: var(--muted, #252525);
+  border: 1px solid var(--border, #333);
+  color: var(--foreground, #fff);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--text-sm, 13px);
+  outline: none;
+  transition: border-color var(--duration-fast, 0.15s);
+}
+
+.popover-search-input:focus {
+  border-color: var(--accent-bright, #c25a4a);
+}
+
+.popover-search-input::placeholder {
+  color: var(--muted-foreground, #666);
+}
+
+/* ===== 菜单项 ===== */
+.popover-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-xs, 4px);
+  color: inherit;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.4;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast, 0.15s), color var(--duration-fast, 0.15s);
+}
+
+.popover-item:hover {
+  background: var(--accent-bright, #c25a4a);
+  color: var(--accent-bright-foreground, #fff);
+}
+
+.popover-item:active {
+  opacity: 0.9;
+}
+
+.popover-item.disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.popover-item.danger {
+  color: var(--destructive, #e55);
+}
+
+.popover-item.danger:hover {
+  background: var(--destructive, #e55);
+  color: var(--destructive-foreground, #fff);
+}
+
+.popover-item.active {
+  background: var(--accent-dim, #823328);
+  color: var(--accent-bright-foreground, #fff);
+}
+
+.popover-item-icon {
+  flex: none;
+  width: var(--icon-svg, 16px);
+  height: var(--icon-svg, 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground, #999);
+}
+
+.popover-item:hover .popover-item-icon {
+  color: inherit;
+}
+
+.popover-item-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.popover-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover-item-shortcut {
+  flex: none;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 11px);
+  color: var(--muted-foreground, #666);
+  margin-left: auto;
+}
+
+.popover-item:hover .popover-item-shortcut {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* ===== 标签页样式（用于 toggle 状态） ===== */
+.popover-item.toggle-on::before {
+  content: '\2713 ';
+  color: var(--accent-bright, #c25a4a);
+  flex: none;
+  width: 12px;
+}
+
+.popover-item:hover.toggle-on::before {
+  color: inherit;
+}

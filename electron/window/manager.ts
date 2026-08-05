@@ -10,7 +10,8 @@ import type { FingerprintEngine } from '../fingerprint/engine.js'
 import type { Profile } from '../shared/types.js'
 import { profileStore } from '../store/profile-store.js'
 import { getPreset } from '../store/preset-store.js'
-import { applyProxyToSession } from '../store/proxy-helper.js'
+import { applyProxyToSession, applyRegionBasedProxy } from '../store/proxy-helper.js'
+import { copySessionCookies } from '../store/cookie-copy.js'
 import { WINDOW_BACKGROUND_COLOR } from '../window-factory/helpers.js'
 
 /** Profile 窗口最小宽度 */
@@ -383,6 +384,74 @@ export class WindowManager {
       console.error(`[WindowManager] setupSession 失败 (${profileId}):`, err)
       throw new Error(
         `setupSession 失败: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
+  /**
+   * 为浏览器窗口准备独立 session（persist:${profileId}-browser）。
+   *
+   * 与 setupSession 的区别：
+   *   - 使用独立 partition（与主窗口隔离）
+   *   - 从主窗口 session 复制 Cookie（继承登录态）
+   *   - 默认使用桌面端 UA（浏览器窗口是桌面尺寸）
+   *   - 使用 region 感知代理（cn 直连 / global 系统代理）
+   */
+  async setupBrowserSession(profileId: string): Promise<void> {
+    try {
+      const profile = profileStore.get(profileId)
+      if (!profile) {
+        throw new Error(`Profile 不存在: ${profileId}`)
+      }
+
+      const browserPartition = `persist:${profileId}-browser`
+      const ses = session.fromPartition(browserPartition)
+
+      // 1. Cookie 复制：从主窗口 session 继承登录态
+      const sourceSession = session.fromPartition(`persist:${profileId}`)
+      await copySessionCookies(sourceSession, ses)
+
+      // 2. 设置桌面端 UA（浏览器窗口默认桌面端）
+      // 查找桌面端预设
+      const desktopPreset = profile.aiDesktopPreset
+        ? getPreset(profile.aiDesktopPreset)
+        : null
+      const desktopUA = desktopPreset?.userAgent || profile.userAgent
+      if (desktopUA) {
+        ses.setUserAgent(desktopUA)
+      }
+
+      // 3. Client Hints（桌面端）
+      const desktopProfile: Profile = {
+        ...profile,
+        userAgent: desktopUA,
+        platform: 'desktop',
+        devicePreset: profile.aiDesktopPreset || profile.devicePreset,
+      }
+      const hints = this.buildClientHints(desktopProfile)
+      this.clientHints.set(`${profileId}-browser`, hints)
+
+      ses.webRequest.onBeforeSendHeaders((details, callback) => {
+        const h = this.clientHints.get(`${profileId}-browser`)
+        if (h && h.secChUa) {
+          details.requestHeaders['Sec-CH-UA'] = h.secChUa
+          details.requestHeaders['Sec-CH-UA-Mobile'] = h.secChUaMobile
+          details.requestHeaders['Sec-CH-UA-Platform'] = h.secChUaPlatform
+        } else if (h && !h.secChUa) {
+          delete details.requestHeaders['Sec-CH-UA']
+          delete details.requestHeaders['Sec-CH-UA-Mobile']
+          delete details.requestHeaders['Sec-CH-UA-Platform']
+          delete details.requestHeaders['Sec-CH-UA-Full-Version-List']
+        }
+        callback({ requestHeaders: details.requestHeaders })
+      })
+
+      // 4. Region 感知代理
+      await applyRegionBasedProxy(ses, profile)
+    } catch (err) {
+      console.error(`[WindowManager] setupBrowserSession 失败 (${profileId}):`, err)
+      throw new Error(
+        `setupBrowserSession 失败: ${err instanceof Error ? err.message : String(err)}`,
       )
     }
   }

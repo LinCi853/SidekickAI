@@ -82,6 +82,9 @@ export interface ComboboxProps {
 /**
  * 计算下拉面板的位置和尺寸
  *
+ * 使用 position:absolute + document-relative 坐标，避免祖先元素 transform 创建新包含块
+ * 导致 position:fixed 定位偏移的问题。
+ *
  * 规则：
  * - 宽度：触发器宽度 + 一定 padding，但不超过 maxViewportWidth
  * - 高度：根据内容量自适应，但不超过 maxViewportHeight
@@ -106,24 +109,27 @@ function calculatePanelPosition(
   // 决定弹出方向：默认下方，若下方空间 < 200 且上方更宽裕则向上
   const placement: 'bottom' | 'top' = spaceBelow < 200 && spaceAbove > spaceBelow ? 'top' : 'bottom';
 
+  // 转换为 document-relative 坐标（absolute 定位需要）
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+
   let top: number;
-  // 面板最大高度由可用空间决定
   let maxHeight: number;
   if (placement === 'bottom') {
-    top = triggerRect.bottom + GAP;
+    top = triggerRect.bottom + GAP + scrollY;
     maxHeight = Math.min(MAX_HEIGHT, spaceBelow - 8);
   } else {
     const panelHeight = Math.min(MAX_HEIGHT, spaceAbove - 8);
-    top = triggerRect.top - GAP - panelHeight;
+    top = triggerRect.top - GAP - panelHeight + scrollY;
     maxHeight = panelHeight;
   }
 
   // 防止超出右边界
-  let left = triggerRect.left;
-  if (left + width > viewportWidth - 8) {
-    left = viewportWidth - width - 8;
+  let left = triggerRect.left + scrollX;
+  if (left + width > viewportWidth + scrollX - 8) {
+    left = viewportWidth + scrollX - width - 8;
   }
-  if (left < 8) left = 8;
+  if (left < scrollX + 8) left = scrollX + 8;
 
   return {
     style: {

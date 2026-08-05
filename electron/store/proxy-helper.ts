@@ -11,6 +11,7 @@
 import { session, app, net, type Session } from 'electron'
 import { getAppSettings, type AppSettings } from './app-settings-store.js'
 import { profileStore } from './profile-store.js'
+import type { Profile } from '../shared/types.js'
 
 /** 代理连通性测试 URL */
 const PROXY_TEST_URL = 'https://www.baidu.com/blank.html'
@@ -90,6 +91,42 @@ export async function applyProxyToSession(
 }
 
 /**
+ * Region 感知代理（用于浏览器窗口）。
+ * 优先级：Profile.proxy > region 判断 > 全局 AppSettings
+ *
+ * region 判断规则：
+ * - region = cn 且 hideForeignModels = false → 直连（国内平台不走代理）
+ * - region = global → 系统代理
+ * - 其他情况 → 回退到全局 AppSettings 代理
+ */
+export async function applyRegionBasedProxy(
+  ses: Session,
+  profile: Profile,
+): Promise<void> {
+  const profileRules = (profile.proxy || '').trim()
+  if (profileRules) {
+    await ses.setProxy({ mode: 'fixed_servers', proxyRules: profileRules })
+    return
+  }
+
+  const region = profile.aiPlatformRegion
+  const appSettings = getAppSettings()
+
+  if (region === 'cn' && !appSettings.hideForeignModels) {
+    await ses.setProxy({ mode: 'direct' })
+    return
+  }
+
+  if (region === 'global') {
+    await ses.setProxy({ mode: 'system' })
+    return
+  }
+
+  const config = computeProxyConfig()
+  await ses.setProxy(config)
+}
+
+/**
  * 将全局代理配置即时应用到默认 session + 所有已知 Profile partition session。
  * 在用户修改代理设置后调用，无需重启应用。
  */
@@ -108,6 +145,13 @@ export async function applyProxyToAllSessions(): Promise<void> {
       await ses.setProxy({ mode: 'fixed_servers', proxyRules: profileRules })
     } else {
       await ses.setProxy(config)
+    }
+    // 浏览器窗口独立 session 也同步代理设置
+    const browserSes = session.fromPartition(`persist:${profile.id}-browser`)
+    if (profileRules) {
+      await browserSes.setProxy({ mode: 'fixed_servers', proxyRules: profileRules })
+    } else {
+      await browserSes.setProxy(config)
     }
   }
 }
@@ -205,6 +249,9 @@ export async function applyProxyFallback(): Promise<{
     for (const profile of profiles) {
       const ses = session.fromPartition(`persist:${profile.id}`)
       await ses.setProxy(config)
+      // 浏览器窗口独立 session 也应用兜底
+      const browserSes = session.fromPartition(`persist:${profile.id}-browser`)
+      await browserSes.setProxy(config)
     }
   } catch (err) {
     console.error('[proxy] 兜底切换失败:', err)

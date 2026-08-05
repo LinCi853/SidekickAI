@@ -17,3 +17,4 @@ export * from './platform';
 export * from './onboarding';
 export * from './notes';
 export * from './whiteboard';
+export * from './browser';

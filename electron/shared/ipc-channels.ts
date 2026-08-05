@@ -86,6 +86,12 @@ export const IPC_CHANNELS = {
   WINDOW_HIDDEN: 'window:hidden',
   // 新标签页（主进程 → 渲染层：拦截 webview 弹窗后通知渲染层新建标签）
   RENDERER_NEW_TAB: 'renderer:newTab',
+  // 弹窗白名单（主进程 → 渲染层：弹窗被连续拦截 N 次后提示用户加白）
+  POPUP_DENIED: 'popup:denied',
+  // 弹窗白名单（渲染层 → 主进程：添加 origin 到全局白名单）
+  POPUP_ADD_WHITELIST: 'popup:addWhitelist',
+  // 弹窗白名单（渲染层 → 主进程：添加 origin 到 Profile 专属白名单）
+  POPUP_ADD_PROFILE_WHITELIST: 'popup:addProfileWhitelist',
   // AI Platform
   AI_PLATFORM_LIST: 'aiPlatform:list',
   // Prompt（明输入明注入）
@@ -222,6 +228,10 @@ export const IPC_CHANNELS = {
   WEBVIEW_FILE_DROP: 'webview:fileDrop',
   // 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后，各窗口重新计算最小尺寸）
   UI_SCALE_CHANGED: 'app:uiScaleChanged',
+  // 主→渲染：应用设置变更广播（任意窗口修改设置后，通知所有窗口同步更新）
+  APP_SETTINGS_CHANGED: 'app:settingsChanged',
+  // 主→渲染：UI 版本/主题变更广播（Oxy Design System 切换 / 主题模式切换后通知所有窗口）
+  APP_UI_VERSION_CHANGED: 'app:uiVersionChanged',
   // 代理测试（渲染层 → 主进程：测试当前代理配置连通性）
   APP_TEST_PROXY: 'app:testProxy',
   // 代理即时生效（渲染层 → 主进程：设置变更后将代理应用到所有 session）
@@ -236,34 +246,13 @@ export const IPC_CHANNELS = {
   VOICE_RECORD_START: 'voice:recordStart',
   VOICE_RECORD_STOP: 'voice:recordStop',
   VOICE_RECORD_DATA: 'voice:recordData',
-  // 语音模型/引擎下载（渲染层 → 主进程：触发下载；主进程 → 渲染层：推送进度）
-  VOICE_DOWNLOAD_MODEL: 'voice:downloadModel',
-  VOICE_DOWNLOAD_WHISPER_CLI: 'voice:downloadWhisperCli',
-  VOICE_DOWNLOAD_PROGRESS: 'voice:downloadProgress',
   // 测试 AI 接入配置连通性（渲染层 → 主进程：发送静音样本验证；主进程 → 渲染层：返回结果）
   VOICE_TEST_AI: 'voice:testAi',
   // 渲染层请求强制停止当前录音（主进程 keyup 丢失时由 RecordIndicator 客户端兜底触发）
   VOICE_FORCE_STOP: 'voice:forceStop',
-  // builtin 模式 Web Speech API 识别（主→渲染：通知渲染层启动 webkitSpeechRecognition）
-  VOICE_BUILTIN_START: 'voice:builtinStart',
-  // builtin 模式识别结果回传（渲染→主：携带识别到的文本）
-  VOICE_BUILTIN_RESULT: 'voice:builtinResult',
-  // builtin 模式识别错误回传（渲染→主：携带错误信息）
-  VOICE_BUILTIN_ERROR: 'voice:builtinError',
   // 麦克风设备列表（渲染层 → 主进程：上报 enumerateDevices 结果；主进程 → 渲染层：拉取最新列表）
   VOICE_INPUT_DEVICES_UPDATE: 'voice:inputDevicesUpdate',
   VOICE_INPUT_DEVICES_REFRESH: 'voice:inputDevicesRefresh',
-  // 渲染层 → 主进程：检查 whisper-cli 二进制文件是否实际存在（不依赖 cfg.downloadStatus）
-  VOICE_CHECK_CLI_EXISTS: 'voice:checkCliExists',
-  // 渲染层 → 主进程：检查单个模型文件是否实际存在（按 modelId，如 'whisper-tiny'）
-  VOICE_CHECK_MODEL_EXISTS: 'voice:checkModelExists',
-  // 渲染层 → 主进程：列出所有已下载的模型 id（扫描 userData/models/ 目录）
-  // 用于设置页 mount 时纠正 downloadedModels 数组（解决"已下载却仍提示下载"）
-  VOICE_LIST_DOWNLOADED_MODELS: 'voice:listDownloadedModels',
-  // 卸载 whisper-cli 引擎二进制（删除 userData/bin/ 下的可执行文件 + 修正 cfg.cliDownloaded=false）
-  VOICE_UNINSTALL_WHISPER_CLI: 'voice:uninstallWhisperCli',
-  // 卸载指定 whisper 模型文件（删除 userData/models/ggml-*.bin + 从 cfg.downloadedModels 移除）
-  VOICE_UNINSTALL_MODEL: 'voice:uninstallModel',
   // v0.5.2 regress-2：测试 TTS 配置连通性（渲染层 → 主进程：发送短文本合成请求；返回 { ok, message, audioDataUrl? }）
   VOICE_TEST_TTS: 'voice:testTts',
   // 页面组件屏蔽规则
@@ -288,15 +277,6 @@ export const IPC_CHANNELS = {
   // 将 URL 发回渲染层，由渲染层在当前 webview 内导航，避免弹出独立窗口）
   // 载荷：{ url: string, webContentsId: number }
   WEBVIEW_POPUP_URL: 'webview:popupUrl',
-  // 主→渲染：webview 弹窗被连续拒绝达阈值（默认3次），提示用户加白名单
-  // 载荷：{ url: string, origin: string, count: number }
-  WEBVIEW_POPUP_DENIED: 'webview:popupDenied',
-  // 渲染→主：用户确认将 origin 加入白名单（持久化到 AppSettings.popupWhitelist）
-  // 载荷：origin: string
-  POPUP_WHITELIST_ADD: 'popup:whitelistAdd',
-  // 渲染→主：用户确认将 origin 加入某 Profile 的专属白名单（持久化到 Profile.popupWhitelist）
-  // 载荷：{ profileId: string, origin: string }
-  POPUP_WHITELIST_ADD_PROFILE: 'popup:whitelistAddProfile',
   // 平台能力查询（设置页显示权限状态）
   PLATFORM_CAPABILITIES: 'platform:capabilities',
   // 引导（首次启动引导窗）
@@ -342,4 +322,56 @@ export const IPC_CHANNELS = {
   WHITEBOARD_PUSH_IMAGE: 'whiteboard:pushImage',
   // 主进程 → AdvancedPanelView 渲染：通知切换到 whiteboard tab
   STANDALONE_SWITCH_TO_WHITEBOARD: 'standalone:switchToWhiteboard',
+  // ===== 浏览器窗口（v0.0.9：多标签浏览器） =====
+  // 窗口状态
+  BROWSER_GET_STATE: 'browser:getState',
+  BROWSER_SAVE_STATE: 'browser:saveState',
+  // 标签操作（渲染→主，主进程只做持久化与窗口级动作）
+  BROWSER_NEW_TAB: 'browser:newTab',
+  BROWSER_CLOSE_TAB: 'browser:closeTab',
+  BROWSER_SWITCH_TAB: 'browser:switchTab',
+  BROWSER_NAVIGATE: 'browser:navigate',
+  // 在系统默认浏览器中打开 URL
+  BROWSER_OPEN_EXTERNAL: 'browser:openExternal',
+  // 搜索历史
+  BROWSER_SEARCH_HISTORY_ADD: 'browser:searchHistory:add',
+  BROWSER_SEARCH_HISTORY_LIST: 'browser:searchHistory:list',
+  // 下载记录
+  BROWSER_DOWNLOAD_LIST: 'browser:download:list',
+  BROWSER_DOWNLOAD_OPEN_FILE: 'browser:download:openFile',
+  BROWSER_DOWNLOAD_SHOW_IN_FOLDER: 'browser:download:showInFolder',
+  // 主→渲染：下载状态变化推送（BrowserDownloadRecord）
+  BROWSER_DOWNLOAD_UPDATED: 'browser:download:updated',
+  // 主→渲染：F12 切换 DevTools（浏览器窗口内 webview 焦点时主进程拦截转发）
+  BROWSER_TOGGLE_DEVTOOLS: 'browser:toggleDevTools',
+  // 主→渲染：F11 切换全屏（同上）
+  BROWSER_TOGGLE_FULLSCREEN: 'browser:toggleFullscreen',
+  // 主→渲染：脱离完成，通知源窗口关闭 tab（载荷：tabId）
+  BROWSER_TAB_DETACHED: 'browser:tabDetached',
+  // 浏览器窗口关闭时，将当前标签迁移回主窗口（渲染→主→主窗口渲染）
+  BROWSER_TAB_MIGRATE_BACK: 'browser:tabMigrateBack',
+  // ===== 导航历史追踪（主窗口渲染 → 主进程，内存存储） =====
+  NAV_HISTORY_RECORD: 'navHistory:record',
+  NAV_HISTORY_GET: 'navHistory:get',
+  NAV_HISTORY_CLEAR: 'navHistory:clear',
+  // ===== 书签系统（v0.0.9，SQLite 持久化） =====
+  // 渲染→主：查询书签列表（filter?: {profileId?, barOnly?}）
+  BOOKMARK_LIST: 'bookmark:list',
+  // 渲染→主：新增书签（BookmarkInput）
+  BOOKMARK_ADD: 'bookmark:add',
+  // 渲染→主：更新书签（{id, patch: BookmarkPatch}）
+  BOOKMARK_UPDATE: 'bookmark:update',
+  // 渲染→主：删除书签（id）
+  BOOKMARK_DELETE: 'bookmark:delete',
+  // 渲染→主：重排序书签（{ids: string[]}）
+  BOOKMARK_REORDER: 'bookmark:reorder',
+  // ===== 浏览器标签音频（v0.0.9） =====
+  // 渲染→主：设置标签静音（{windowId, tabId, muted}）
+  BROWSER_TAB_SET_MUTED: 'browser:tab:setMuted',
+  // 主→渲染：标签音频状态变化推送（{windowId, tabId, audible}）
+  BROWSER_TAB_AUDIO_CHANGED: 'browser:tab:audioChanged',
+  // ===== 跨窗口标签聚合查询（v0.0.9，主子标签归属） =====
+  // 渲染→主：查询所有窗口的标签树（返回 {main: TabState[], browsers: {windowId, parentTabId, profileId, tabs}[]]}）
+  BROWSER_FOCUS_WINDOW: 'browser:focusWindow',
+  BROWSER_TABS_QUERY: 'browser:tabs:query',
 } as const

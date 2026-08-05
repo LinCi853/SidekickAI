@@ -19,12 +19,13 @@ import AdvancedPanelView from './pages/AdvancedPanelView';
 import DataExportWindow from './pages/DataExportWindow';
 import OnboardingView from './pages/OnboardingView';
 import SettingsView from './pages/SettingsView';
+import BrowserView from './pages/BrowserView';
 import Button from './components/ui/Button';
 import { useProfileStore } from './store/useProfileStore';
 import { useTabStore } from './store/useTabStore';
 import { useWindowStore } from './store/useWindowStore';
 import { usePromptStore } from './store/usePromptStore';
-import { getAppSettings, onUiScaleChanged, setMinimumSize } from './lib/electron-api';
+import { getAppSettings, onUiScaleChanged, onAppSettingsChanged, onUiVersionChanged, setMinimumSize } from './lib/electron-api';
 import {
   calculateMainWindowMinWidth,
   calculateChatWindowMinWidth,
@@ -40,7 +41,8 @@ import {
   type OxyScale,
 } from '../electron/shared/window-size';
 import { useUiVersionStore } from './store/useUiVersionStore';
-import { getOxyLayout } from './lib/oxy-design-system';
+import { useThemeStore } from './store/useThemeStore';
+import { getOxyLayout, activateOxy, deactivateOxy } from './lib/oxy-design-system';
 
 /* =====================================================================
    ErrorBoundary —— 捕获子组件渲染错误，防止单个 webview 报错导致整个应用白屏
@@ -182,11 +184,12 @@ export default function App() {
   const isOnboarding = mode === 'onboarding';
   const isDataExport = mode === 'data-export';
   const isSettings = mode === 'settings';
+  const isBrowser = mode === 'browser';
 
   // chat/preview/history/prompts/ai-app-editor/advanced-panel/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
   // 设置窗口需要加载 ProfileStore（AI 应用卡片依赖），但不需 TabStore
   useEffect(() => {
-    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings) {
+    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings || isBrowser) {
       setReady(true);
       // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
       void getAppSettings().then((cfg) => {
@@ -261,7 +264,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings]);
+  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings, isBrowser]);
 
   // 监听 UI 比例变化广播：更新 data-ui-scale 属性 + 重新计算当前窗口最小尺寸。
   // 主进程在 uiScale 变更后向所有窗口推送；各窗口根据自身类型选用对应公式。
@@ -321,6 +324,87 @@ export default function App() {
     return off;
   }, [isMain, isChat, mode]);
 
+  // 监听应用设置变更广播：任意窗口修改设置后，主进程向所有窗口推送最新设置。
+  // 更新 data-ui-scale + 重新计算窗口最小尺寸（与 onUiScaleChanged 逻辑一致，
+  // 但覆盖所有设置变更场景，不仅限于 uiScale）。
+  useEffect(() => {
+    const off = onAppSettingsChanged(async (cfg) => {
+      const isOxy = useUiVersionStore.getState().version === 'oxy';
+      if (!isOxy) {
+        document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+      }
+      // 重新计算窗口最小尺寸
+      const oxyLayout = getOxyLayout();
+      const oxyScale = oxyLayout?.scale ?? 1.0;
+      const uiScale = (cfg.uiScale ?? 'medium') as UiScale;
+      let minWidth: number | null = null;
+      let minHeight: number | null = null;
+      if (isMain) {
+        try {
+          const tabState = useTabStore.getState();
+          const activeTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
+          const title = activeTab?.title;
+          if (isOxy && oxyLayout) {
+            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale, cfg.topBarVisibleButtons, title);
+          } else {
+            minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title);
+          }
+        } catch {
+          if (isOxy && oxyLayout) {
+            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale);
+          } else {
+            minWidth = calculateMainWindowMinWidth(uiScale);
+          }
+        }
+        minHeight = MAIN_WINDOW_MIN_HEIGHT;
+      } else if (isChat) {
+        if (isOxy && oxyLayout) {
+          minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale);
+        } else {
+          minWidth = calculateChatWindowMinWidth(uiScale);
+        }
+        minHeight = CHAT_WINDOW_MIN_HEIGHT;
+      } else if (mode === 'advanced-panel') {
+        if (isOxy && oxyLayout) {
+          minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale);
+        } else {
+          minWidth = calculateAdvancedPanelMinWidth(uiScale);
+        }
+        minHeight = ADVANCED_PANEL_MIN_HEIGHT;
+      }
+      if (minWidth != null && minHeight != null) {
+        void setMinimumSize(minWidth, minHeight).catch((e) =>
+          console.warn('[App] setMinimumSize 失败:', e),
+        );
+      }
+    });
+    return off;
+  }, [isMain, isChat, mode]);
+
+  // 监听 UI 版本/主题变更广播：任意窗口切换 Oxy Design System 或主题模式后实时同步。
+  // UI 版本直接调用 activateOxy/deactivateOxy；主题通过 setTheme 应用。
+  // setTheme 内部也会广播，但接收端 curTheme 已更新所以不会产生循环。
+  useEffect(() => {
+    const off = onUiVersionChanged(({ uiVersion, theme }) => {
+      // 同步 UI 版本（Oxy / 经典版）——直接调用控制器，不经过 setVersion 避免循环广播
+      const curVersion = useUiVersionStore.getState().version;
+      if (uiVersion !== curVersion) {
+        if (uiVersion === 'oxy') {
+          activateOxy();
+        } else {
+          deactivateOxy();
+        }
+        useUiVersionStore.setState({ version: uiVersion });
+      }
+      // 同步主题模式
+      const curTheme = useThemeStore.getState().theme;
+      if (theme !== curTheme) {
+        useThemeStore.getState().setTheme(theme);
+      }
+    });
+    return off;
+  }, []);
+
   if (!ready) {
     return <LoadingScreen />;
   }
@@ -340,5 +424,6 @@ export default function App() {
   if (isSettings) return <AppErrorBoundary><SettingsView /></AppErrorBoundary>;
   if (isOnboarding) return <AppErrorBoundary><OnboardingView /></AppErrorBoundary>;
   if (isChat) return <AppErrorBoundary><ChatView windowId={mode === 'chat' ? windowId : undefined} /></AppErrorBoundary>;
+  if (isBrowser) return <AppErrorBoundary><BrowserView /></AppErrorBoundary>;
   return <AppErrorBoundary>{isMain ? <MainView /> : <StandaloneView />}</AppErrorBoundary>;
 }

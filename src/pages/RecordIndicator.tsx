@@ -19,63 +19,10 @@ import {
   onPreviewHide,
   onVoiceRecordStart,
   onVoiceRecordStop,
-  onVoiceBuiltinStart,
   sendVoiceRecordData,
-  sendVoiceBuiltinResult,
-  sendVoiceBuiltinError,
   updateInputDeviceList,
 } from '../lib/electron-api';
 import './RecordIndicator.css';
-
-/* =====================================================================
-   Web Speech API 类型声明（Chromium 私有 API，不在标准 DOM lib 中）
-   webkitSpeechRecognition 仅在渲染进程（浏览器上下文）可用，主进程无法调用。
-   ===================================================================== */
-
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-interface SpeechRecognitionResult {
-  readonly length: number;
-  isFinal: boolean;
-  item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
-}
-interface SpeechRecognitionResultList {
-  readonly length: number;
-  item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
-}
-interface SpeechRecognitionEvent extends Event {
-  readonly resultIndex: number;
-  readonly results: SpeechRecognitionResultList;
-}
-interface SpeechRecognitionErrorEvent extends Event {
-  readonly error: string;
-  readonly message: string;
-}
-interface ISpeechRecognition extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-}
-type SpeechRecognitionConstructor = { new (): ISpeechRecognition };
-
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    SpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
 
 type RecordStatus = 'recording' | 'transcribing' | 'done' | 'sent';
 
@@ -280,93 +227,6 @@ export default function RecordIndicator() {
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
-      }
-    };
-  }, []);
-
-  // ===== builtin 模式：Web Speech API 识别（Chromium 渲染层 API） =====
-  // 主进程在 builtin 模式下停止 PCM 录音（释放麦克风）后，通过 voice:builtinStart
-  // 通知本组件启动 webkitSpeechRecognition。识别结果通过 voice:builtinResult 回传主进程。
-  // 关键：webkitSpeechRecognition 自己管理麦克风访问，与 getUserMedia 互斥，
-  //       因此主进程必须先停止 PCM 录音（stopCaptureOnly）释放设备后再发送 start 信号。
-  const recognitionRef = useRef<ISpeechRecognition | null>(null);
-
-  useEffect(() => {
-    const offBuiltinStart = onVoiceBuiltinStart((payload) => {
-      // 选择可用的 SpeechRecognition 构造器（Chromium 用 webkitSpeechRecognition）
-      const Ctor = window.webkitSpeechRecognition || window.SpeechRecognition;
-      if (!Ctor) {
-        console.error('[RecordIndicator] webkitSpeechRecognition 不可用（可能未联网或浏览器不支持）');
-        sendVoiceBuiltinError('浏览器不支持 Web Speech API');
-        return;
-      }
-
-      // 中止上一次未结束的识别实例（避免重叠）
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          /* ignore */
-        }
-        recognitionRef.current = null;
-      }
-
-      try {
-        const recognition = new Ctor();
-        recognition.lang = payload.language || 'zh-CN';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-
-        let gotResult = false;
-
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-          // 提取最终识别文本（interimResults=false 时 results 中只有 final 结果）
-          const result = event.results[event.results.length - 1];
-          if (result && result.isFinal) {
-            const transcript = result[0]?.transcript || '';
-            gotResult = true;
-            console.log('[RecordIndicator] Web Speech 识别结果:', transcript);
-            sendVoiceBuiltinResult(transcript);
-          }
-        };
-
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-          const errMsg = event.error || 'unknown';
-          console.warn('[RecordIndicator] Web Speech 识别错误:', errMsg, event.message);
-          // no-speech（未检测到语音）/ network（网络问题）/ not-allowed（麦克风拒绝）
-          // 统一回传错误，主进程展示通用提示
-          sendVoiceBuiltinError(`Web Speech 识别失败：${errMsg}`);
-        };
-
-        recognition.onend = () => {
-          // 识别结束（正常结束或被 abort）。若无结果回传，发空结果触发主进程兜底提示
-          if (!gotResult) {
-            console.warn('[RecordIndicator] Web Speech 结束但无结果');
-            sendVoiceBuiltinResult('');
-          }
-          recognitionRef.current = null;
-        };
-
-        recognitionRef.current = recognition;
-        console.log('[RecordIndicator] 启动 webkitSpeechRecognition, lang=' + recognition.lang);
-        recognition.start();
-      } catch (err) {
-        console.error('[RecordIndicator] 启动 webkitSpeechRecognition 失败:', err);
-        sendVoiceBuiltinError('启动 Web Speech 失败：' + (err instanceof Error ? err.message : String(err)));
-      }
-    });
-
-    return () => {
-      offBuiltinStart();
-      // 组件卸载时中止残留的识别实例
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          /* ignore */
-        }
-        recognitionRef.current = null;
       }
     };
   }, []);

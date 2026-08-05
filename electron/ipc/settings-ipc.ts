@@ -106,4 +106,24 @@ export function registerSettingsIpc(): void {
       .map((pr) => synthesizeCustomPlatform(pr))
     return [...presetResults, ...customResults]
   })
+
+  // 弹窗白名单：添加 origin 到全局 AppSettings.popupWhitelist
+  ipcMain.handle(IPC_CHANNELS.POPUP_ADD_WHITELIST, async (_e, origin: string) => {
+    const { getAppSettings, updateAppSettings } = await import('../store/app-settings-store.js')
+    const cfg = getAppSettings()
+    const list = cfg.popupWhitelist ?? []
+    if (!list.includes(origin)) {
+      updateAppSettings({ popupWhitelist: [...list, origin] })
+    }
+  })
+
+  // 弹窗白名单：添加 origin 到 Profile 专属 popupWhitelist
+  ipcMain.handle(IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST, async (_e, profileId: string, origin: string) => {
+    const profile = profileStore.get(profileId)
+    if (!profile) return
+    const list = profile.popupWhitelist ?? []
+    if (!list.includes(origin)) {
+      profileStore.update(profileId, { popupWhitelist: [...list, origin] })
+    }
+  })
 }

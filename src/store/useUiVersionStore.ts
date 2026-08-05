@@ -13,6 +13,8 @@ import {
   initOxy,
   OXY_STORAGE_KEY,
 } from '../lib/oxy-design-system';
+import { useThemeStore } from './useThemeStore';
+import { broadcastUiVersionChanged } from '../lib/electron-api';
 
 // 从控制器重新导出类型，保持外部导入路径不变
 export type { UiVersion } from '../lib/oxy-design-system';
@@ -49,6 +51,11 @@ export const useUiVersionStore = create<UiVersionState>((set) => ({
       deactivateOxy();
     }
     set({ version: v });
+    // 广播 UI 版本变更到所有窗口（跨窗口同步 Oxy Design System 开关）
+    try {
+      const theme = useThemeStore.getState().theme;
+      broadcastUiVersionChanged({ uiVersion: v, theme });
+    } catch { /* 非 Electron 环境忽略 */ }
   },
 
   initUiVersion: () => {

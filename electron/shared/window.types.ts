@@ -26,6 +26,10 @@ export interface TabState {
   autoMobile?: boolean
   /** 自动切换前的原始 devicePreset id（用于恢复） */
   originalDevicePreset?: string
+  /** 标签种类（主窗口标签恒为 'home'，为与 BrowserTabState 统一类型而加） */
+  kind?: 'home'
+  /** 已脱离到浏览器窗口的 windowId（null=未脱离；非空时主窗口隐藏该标签，标签栏仅在管理面板展示派生子标签） */
+  detachedWindowId?: string | null
 }
 
 /** 窗口持久化状态：主窗口 + 每个脱离的独立窗口各一份 */
@@ -58,6 +62,8 @@ export interface WindowStateData {
   chatConfig?: ChatWindowConfig
   /** 最近一次打开使用的时间戳（AppSwitcher 排序依据；null=从未使用，排在最后） */
   lastUsedAt?: number | null
+  /** 已脱离到浏览器窗口的 Profile id 集合（这些标签在主窗口中隐藏） */
+  detachedProfiles?: string[]
 }
 
 /** 自定义对话窗口配置（mode='chat' 时绑定） */

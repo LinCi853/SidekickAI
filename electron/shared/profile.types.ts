@@ -105,6 +105,8 @@ export interface Profile {
   // AI 聚合扩展（AI 窗口特有）
   /** 是否为 AI 平台 Profile（聚合 9 个内置 AI 平台） */
   isAIPlatform?: boolean
+  /** v0.0.9: 保底内置应用（不可删除、不可重命名，如默认 DeepSeek） */
+  isBuiltIn?: boolean
   /** AI 平台 URL（isAIPlatform=true 时有效） */
   aiPlatformUrl?: string
   /** 内置 AI 平台 id（isAIPlatform=true 时有效，用于稳定关联平台与 Profile） */

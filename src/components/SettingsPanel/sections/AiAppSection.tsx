@@ -109,6 +109,8 @@ export default function AiAppSection({
    */
   const handleDelete = useCallback(
     (profile: Profile) => {
+      // v0.0.9: 禁止删除保底内置应用
+      if (profile.isBuiltIn) return;
       if (pendingDeleteId === profile.id) {
         // 3 秒内第二次点击：执行删除
         clearPendingDelete();

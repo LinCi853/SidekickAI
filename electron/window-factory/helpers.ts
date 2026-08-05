@@ -19,8 +19,6 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { getChatStore } from '../store/chat-store.js'
-import { getAppSettings } from '../store/app-settings-store.js'
-import { profileStore } from '../store/profile-store.js'
 import { type WindowTraceAction, type ChatWindowConfig } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { windowState } from '../window-state.js'
@@ -28,7 +26,6 @@ import {
   setAlwaysOnTopForWindow,
 } from '../ipc/window-control-ipc.js'
 import { buildWindowConfig } from './window-config-builder.js'
-import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 
 /** 应用窗口统一背景色（与渲染层主题色一致，避免启动白闪） */
 export const WINDOW_BACKGROUND_COLOR = '#1f1719'
@@ -90,11 +87,7 @@ export const ADVANCED_PANEL_WINDOW_ID = 'advanced-panel'
 // 引导独立窗口（单例，首次启动或「使用指南」入口）
 export const ONBOARDING_WINDOW_ID = 'onboarding'
 
-// 弹窗拒绝计数器（内存，不持久化，应用重启重置）
-// key=URL origin 前缀（scheme + host），value=连续拒绝次数
-const popupDenyCounter = new Map<string, number>()
-
-/** 从完整 URL 提取 origin 前缀（scheme + host + '/'），用于白名单匹配与拒绝计数 */
+/** 从完整 URL 提取 origin 前缀（scheme + host + '/'），用于日志 */
 function extractUrlOrigin(url: string): string {
   try {
     const u = new URL(url)
@@ -105,132 +98,27 @@ function extractUrlOrigin(url: string): string {
 }
 
 /**
- * 判断目标 URL 的 origin 是否被当前页所属 AI 平台的 allowedOrigins 清单覆盖。
- *
- * 用途：解决各 AI 平台多域名场景（如 mimo 的 mimo.xiaomi.com / aistudio.xiaomimimo.com、
- * ChatGPT 的 chat.openai.com / chatgpt.com）下，跨域 popup 被误判为「应用外页面」
- * 而开独立窗口的问题。
- *
- * 匹配规则：
- * 1. 取当前页 URL 的 origin，反查 AI_PLATFORMS 中第一个 allowedOrigins 命中的平台
- * 2. 若找到平台，再判断目标 URL 的 origin 是否在该平台的 allowedOrigins 内
- * 3. origin 比较统一规范化为 `protocol//host/`（与 extractUrlOrigin 一致）
- *
- * @returns true 表示目标 URL 与当前页属于同一平台相关域（应作为页面内跳转），
- *          false 表示无关联（保持原跨域处理逻辑）
+ * 硬编码的登录/OAuth 域名白名单（仅放行需要独立窗口的认证流程）。
+ * 不再使用用户可配置的三层白名单系统（全局 + 平台 + Profile）。
  */
-function isTargetOriginAllowedByPlatform(currentUrl: string, targetUrl: string): boolean {
-  if (!currentUrl || !targetUrl) return false
-  let currentOrigin = ''
-  let targetOrigin = ''
-  try {
-    currentOrigin = extractUrlOrigin(currentUrl)
-    targetOrigin = extractUrlOrigin(targetUrl)
-  } catch {
-    return false
-  }
-  if (!currentOrigin || !targetOrigin || currentOrigin === targetOrigin) {
-    // 同 origin 不需要走此分支；交由调用方按同域处理
-    return false
-  }
-  // 反查当前页所属平台（任一平台的 allowedOrigins 命中当前 origin 即视为该平台）
-  let platformAllowedOrigins: string[] | undefined
-  for (const p of AI_PLATFORMS) {
-    if (!p.allowedOrigins || p.allowedOrigins.length === 0) continue
-    const currentHit = p.allowedOrigins.some(
-      (o) => extractUrlOrigin(o) === currentOrigin || currentOrigin.startsWith(o),
-    )
-    if (currentHit) {
-      platformAllowedOrigins = p.allowedOrigins
-      break
-    }
-  }
-  if (!platformAllowedOrigins) return false
-  // 检查目标 origin 是否在平台 allowedOrigins 内
-  return platformAllowedOrigins.some(
-    (o) => extractUrlOrigin(o) === targetOrigin || targetOrigin.startsWith(o),
-  )
-}
-
-/**
- * 同步读取全局 popupWhitelist（避免 setWindowOpenHandler 内 await 导致时序问题）。
- * 通过模块顶部静态 import getAppSettings，调用为同步函数。
- * 注：不能用 require() —— electron-vite 打包后模块路径不存在。
- */
-function getGlobalPopupWhitelistSync(): string[] {
-  try {
-    return getAppSettings().popupWhitelist || []
-  } catch (e) {
-    console.warn('[webview-popup] 读取全局 popupWhitelist 失败:', e)
-    return []
-  }
-}
-
-/**
- * 从 webview 的 session partition 字符串中提取 profileId。
- *
- * partition 格式为 `persist:<profileId>`（见 WebviewTab.tsx 与 window/manager.ts）。
- * 非 persist: 开头（如默认 session）返回 null。
- */
-function extractProfileIdFromPartition(partition: string): string | null {
-  if (!partition || !partition.startsWith('persist:')) return null
-  return partition.slice('persist:'.length) || null
-}
-
-/**
- * 同步合并三层弹窗白名单（全局 + 平台 + Profile），用于 setWindowOpenHandler 内的判断。
- *
- * 三层来源（任一命中即放行）：
- * ① 全局默认登录域：AppSettings.popupWhitelist（DEFAULT_POPUP_WHITELIST 自动合并）
- * ② 平台关联域：当前页所属 AI 平台的 AIPlatform.allowedOrigins
- * ③ Profile 专属自定义：当前 webview 所属 Profile 的 popupWhitelist
- *
- * @param wc webview 的 guest webContents
- * @param currentUrl 当前页 URL（用于反查平台 allowedOrigins）
- * @returns 合并去重后的 origin 前缀数组
- */
-function getMergedPopupWhitelistSync(wc: Electron.WebContents, currentUrl: string): string[] {
-  const result = new Set<string>()
-
-  // ① 全局默认
-  for (const prefix of getGlobalPopupWhitelistSync()) {
-    if (prefix) result.add(prefix)
-  }
-
-  // ② 平台 allowedOrigins
-  if (currentUrl) {
-    const currentOrigin = extractUrlOrigin(currentUrl)
-    for (const p of AI_PLATFORMS) {
-      if (!p.allowedOrigins || p.allowedOrigins.length === 0) continue
-      const currentHit = p.allowedOrigins.some(
-        (o) => extractUrlOrigin(o) === currentOrigin || currentOrigin.startsWith(o),
-      )
-      if (currentHit) {
-        for (const o of p.allowedOrigins) result.add(o)
-        break
-      }
-    }
-  }
-
-  // ③ Profile 专属
-  try {
-    const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
-    const partition = sessionWithPartition.getPartition?.() || ''
-    const profileId = extractProfileIdFromPartition(partition)
-    if (profileId) {
-      const profile = profileStore.get(profileId)
-      if (profile?.popupWhitelist) {
-        for (const prefix of profile.popupWhitelist) {
-          if (prefix) result.add(prefix)
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[webview-popup] 读取 Profile.popupWhitelist 失败:', e)
-  }
-
-  return Array.from(result)
-}
+const LOGIN_POPUP_WHITELIST: string[] = [
+  // ChatGPT
+  'https://auth.openai.com/',
+  'https://auth0.openai.com/',
+  'https://login.openai.com/',
+  // Claude
+  'https://auth.anthropic.com/',
+  // Gemini
+  'https://accounts.google.com/',
+  'https://myaccount.google.com/',
+  // 豆包
+  'https://passport.volcengine.com/',
+  // 文心一言
+  'https://passport.baidu.com/',
+  // 小米 Mimo
+  'https://account.xiaomi.com/',
+  'https://auth.mi.com/',
+]
 
 /** 获取调用方所在的 BrowserWindow */
 export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow | null {
@@ -382,6 +270,10 @@ export function attachWebviewAntiDetection(parentWebContents: Electron.WebConten
  * 内导航（页面内跳转），避免弹出独立 BrowserWindow。
  */
 export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebContents): void {
+  // 弹窗拦截计数器：per-origin 连续被拦截次数，达到阈值时通知渲染层提示用户加白
+  const popupDenialCount = new Map<string, number>()
+  const POPUP_DENIAL_THRESHOLD = 3
+
   parentWebContents.on('did-attach-webview', (_e, wc) => {
     // 需求 8：Ctrl+click 放行 —— setWindowOpenHandler 内无法读取修饰键，
     // 通过 before-input-event 维护 per-webview Ctrl 按下状态。
@@ -390,12 +282,9 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
 
     // 1. setWindowOpenHandler：拦截 window.open() / target="_blank"
     //    策略：
-    //    a) 白名单放行（用户主动加入的登录/OAuth/验证页）
-    //    b) 跨域 popup：自动放行为独立窗口（登录/OAuth/支付等典型场景，
-    //       跨域 loadURL 易触发 ERR_FAILED 导致 guest 崩溃，独立窗口更安全）
-    //    c) 同域 popup：deny + 页面内跳转（保留 session 与登录态）
-    //    d) 拒绝计数：同域连续 3 次提示加白名单
-    //    e) 需求 8：Ctrl+click 链接放行为独立窗口（用户主动行为）
+    //    a) Ctrl+click 放行（用户主动行为）
+    //    b) 登录/OAuth 域名白名单放行（硬编码，不需要用户配置）
+    //    c) 其余所有 popup：deny + 页面内跳转（保留 session 与登录态）
     wc.setWindowOpenHandler((details) => {
       const url = details.url
       if (!url || url === 'about:blank') {
@@ -403,9 +292,7 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         return { action: 'deny' }
       }
 
-      // 0) 需求 8：Ctrl+click 放行 —— http(s) 链接且 Ctrl 当前按下时，允许新窗口
-      //    判断时机：用户按住 Ctrl 点击链接 → 浏览器触发 window.open，
-      //    此时 before-input-event 已捕获 Ctrl keydown，ctrlPressed=true
+      // Ctrl+click 放行 —— http(s) 链接且 Ctrl 当前按下时，允许新窗口
       if (ctrlPressed && (url.startsWith('http://') || url.startsWith('https://'))) {
         console.log('[webview-popup] Ctrl+click 放行新窗口:', url)
         const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
@@ -418,21 +305,13 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         }
       }
 
-      // 1) 白名单检查（origin 前缀匹配）
-      //    合并三层：全局默认登录域 + 平台 allowedOrigins + Profile 专属自定义
-      //    提前计算 currentUrl 用于反查平台 allowedOrigins 和 Profile popupWhitelist
+      // 登录/OAuth 域名白名单放行（origin 前缀匹配）
       const origin = extractUrlOrigin(url)
-      let currentUrlForWhitelist = ''
-      try { currentUrlForWhitelist = wc.getURL() } catch { /* guest 未就绪 */ }
-      const whitelist = getMergedPopupWhitelistSync(wc, currentUrlForWhitelist)
-      const isWhitelisted = whitelist.some(
+      const isLoginDomain = LOGIN_POPUP_WHITELIST.some(
         (prefix) => url.startsWith(prefix) || origin.startsWith(prefix),
       )
-
-      if (isWhitelisted) {
-        console.log('[webview-popup] 白名单允许弹窗:', url)
-        // 允许弹独立窗口，继承当前 webview 的 partition 保证登录态共享
-        // 注：session.getPartition() 运行时存在但未在 Electron 类型定义中声明，需类型断言
+      if (isLoginDomain) {
+        console.log('[webview-popup] 登录域放行:', url)
         const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
         const partition = sessionWithPartition.getPartition?.() || ''
         return {
@@ -443,62 +322,22 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         }
       }
 
-      // 2) 跨域 popup：自动放行为独立窗口
-      //    跨域 loadURL 在 SPA 内易触发 ERR_FAILED (-2) 导致 guest 崩溃；
-      //    而跨域 window.open 通常是登录/OAuth/支付等需要独立窗口的场景。
-      //    通过 origin 比较（scheme+host）判断是否跨域，path/hash/query 不影响。
-      //
-      //    例外：若目标 origin 命中当前页所属 AI 平台的 allowedOrigins 清单
-      //    （如 mimo.xiaomi.com ↔ aistudio.xiaomimimo.com、chat.openai.com ↔ chatgpt.com），
-      //    视为同平台关联域，作为页面内跳转处理，避免误开独立窗口被用户感知为
-      //    「跳转到应用外页面」。loadURL 失败由 safeLoadURLWebview 的 remount 机制兜底。
-      const currentUrl = currentUrlForWhitelist
-      const currentOrigin = currentUrl ? extractUrlOrigin(currentUrl) : ''
-      const isCrossOrigin = !!currentOrigin && origin !== currentOrigin
-      const isPlatformRelated = isTargetOriginAllowedByPlatform(currentUrl, url)
-      if (isCrossOrigin && !isPlatformRelated) {
-        console.log('[webview-popup] 跨域 popup 自动放行:', url, '当前:', currentUrl.slice(0, 80))
-        const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
-        const partition = sessionWithPartition.getPartition?.() || ''
-        return {
-          action: 'allow',
-          overrideBrowserWindowOptions: {
-            webPreferences: partition ? { partition } : {},
-          },
-        }
-      }
-      if (isCrossOrigin && isPlatformRelated) {
-        console.log('[webview-popup] 平台关联域 popup，页面内跳转:', url, '当前:', currentUrl.slice(0, 80))
-        // 落入下方同域处理分支（deny + 转发渲染层 safeLoadURLWebview）
-      }
-
-      // 3) 同域 popup：统计拒绝次数（按 origin 聚合）
-      const denyCount = (popupDenyCounter.get(origin) || 0) + 1
-      popupDenyCounter.set(origin, denyCount)
-      console.log(`[webview-popup] 拦截同域弹窗 (${denyCount}次):`, url)
-
-      // 4) 连续拒绝 ≥3 次：通知渲染层提示用户加白名单，并重置该 origin 计数避免重复打扰
-      if (denyCount >= 3) {
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_POPUP_DENIED, {
-          url,
-          origin,
-          count: denyCount,
-        })
-        popupDenyCounter.delete(origin)
-      }
-
-      // 5) 默认：deny + 页面内跳转（保留现有行为，保留 session 与登录态）
-      // 不在主进程直接 wc.loadURL：主进程和渲染层的 loadURL 都通过 GUEST_VIEW_MANAGER_CALL IPC，
-      // guest 死亡时均会 ERR_FAILED，但只有渲染层能触发 remount 恢复。
-      // 因此统一通过 IPC 转发到渲染层，由 safeLoadURLWebview 处理（包含 fatal-failure remount 逻辑）。
+      // 其余 popup 一律 deny + 页面内跳转（跨域/同域均走此路径）
+      console.log('[webview-popup] 拦截 popup，页面内跳转:', url)
       parentWebContents.send(IPC_CHANNELS.WEBVIEW_POPUP_URL, { url, webContentsId: wc.id })
+
+      // 弹窗拦截计数：连续拦截同一 origin 达到阈值后通知渲染层提示用户加白
+      const denialCount = (popupDenialCount.get(origin) ?? 0) + 1
+      popupDenialCount.set(origin, denialCount)
+      if (denialCount === POPUP_DENIAL_THRESHOLD) {
+        parentWebContents.send(IPC_CHANNELS.POPUP_DENIED, { origin, count: denialCount })
+      }
+
       return { action: 'deny' }
     })
 
     // 2. new-window：已废弃事件，setWindowOpenHandler 返回 deny 后不会触发，
-    //    仅在极少数浏览器内部导航场景兜底。为兼容性保留，但不再无条件拦截 ——
-    //    跨域场景已在 setWindowOpenHandler 中 allow，此处重复 preventDefault 会
-    //    把已允许的窗口创建流程打断，导致登录页打不开。
+    //    仅在极少数浏览器内部导航场景兜底。为兼容性保留，仅记录日志。
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(wc as any).on('new-window', (e: Event, url: string, _frameName: string, disposition: string) => {
       // foreground-tab / background-tab 是同域链接打开（已由 setWindowOpenHandler 处理）
@@ -572,8 +411,21 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         return
       }
 
-      // F12：置顶/取消置顶（与最大化/全屏互斥，冲突时先退出最大化/全屏再置顶）
+      // F12：浏览器窗口中切换 DevTools，其他窗口置顶/取消置顶
       if (key === 'F12' && !hasCtrl) {
+        // 判断是否为浏览器窗口（URL 含 mode=browser）
+        const winUrl = parentWebContents.getURL?.() || ''
+        const isBrowserWindow = winUrl.includes('mode=browser')
+
+        if (isBrowserWindow) {
+          // 浏览器窗口：通知渲染层切换 DevTools
+          console.log('[hotkey] F12 → DevTools 切换 (browser window)')
+          e.preventDefault()
+          parentWebContents.send(IPC_CHANNELS.BROWSER_TOGGLE_DEVTOOLS)
+          return
+        }
+
+        // 非浏览器窗口：置顶/取消置顶
         console.log('[hotkey] F12 → 置顶切换')
         e.preventDefault()
         // 最大化/全屏与置顶互斥：先退出最大化/全屏，再切换置顶
