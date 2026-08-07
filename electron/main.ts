@@ -56,6 +56,8 @@ import { registerWindowControlIpc } from './ipc/window-control-ipc.js'
 import { registerTabIpc } from './ipc/tab-ipc.js'
 import { registerBrowserIpc } from './ipc/browser-ipc.js'
 import { registerBrowserTabAudioIpc } from './ipc/browser-tab-audio-ipc.js'
+import { registerAccumulatedLinksIpc } from './ipc/accumulated-links-ipc.js'
+import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js'
 import { searchHistoryStore } from './store/search-history-store.js'
 import { browserDownloadStore } from './store/browser-download-store.js'
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js'
@@ -77,6 +79,7 @@ import {
   showPromptWindow,
   showAiAppEditorWindow,
   showSettingsWindow,
+  showHistoryDownloadWindow,
   openAdvancedPanelWindow,
   toggleAdvancedPanelWindow,
   showOnboardingWindow,
@@ -285,6 +288,10 @@ app.whenReady().then(async () => {
   // 打开设置独立窗口（单例，左导航+右内容布局）
   ipcMain.handle(IPC_CHANNELS.SETTINGS_WINDOW_OPEN, () => {
     showSettingsWindow()
+  })
+  // 打开历史记录与下载管理独立窗口（单例，导航历史 + 下载管理）
+  ipcMain.handle(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN, () => {
+    showHistoryDownloadWindow()
   })
   // 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   // 可选 providerId：若提供则切换到对应供应商的对话页
@@ -526,6 +533,12 @@ app.whenReady().then(async () => {
 
   // ===== 注册浏览器标签音频 IPC（v0.0.9 预留，当前无 handler） =====
   registerBrowserTabAudioIpc({})
+
+  // ===== 注册累积链接 IPC（E1：AI 应用内新窗口链接累积） =====
+  registerAccumulatedLinksIpc()
+
+  // ===== 注册导航历史持久化 CRUD IPC（list/search/delete/clearAll） =====
+  registerNavHistoryIpc()
 
   // ===== 注册提示词库窗口 IPC（PROMPT_OPEN_WINDOW + 注入请求/结果转发） =====
   registerPromptIpc({

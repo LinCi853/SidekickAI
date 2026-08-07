@@ -42,7 +42,7 @@ const APP_SHORTCUTS: Array<{ keys: string; action: string; scope: string; note?:
   { keys: '双击标题', action: '编辑标签标题', scope: '窗口内' },
   { keys: 'F4', action: '后退（当前标签）', scope: '应用内' },
   { keys: 'F5', action: '刷新当前标签', scope: '应用内' },
-  { keys: 'F6', action: '前进（当前标签）', scope: '应用内' },
+  { keys: 'F6', action: '聚焦地址栏/AI 输入框（循环）', scope: '应用内' },
   { keys: 'F10', action: '切换主题', scope: '应用内' },
   { keys: 'F12', action: '切换当前窗口置顶', scope: '应用内', note: '最大化/全屏时不可用' },
   { keys: 'Ctrl + G', action: '切换手柄/键盘空间导航', scope: '应用内' },

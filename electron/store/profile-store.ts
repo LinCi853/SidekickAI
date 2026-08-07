@@ -58,6 +58,8 @@ function createDefaultProfile(): Profile {
     height: 720,
     alwaysOnTop: false,
     order: 0,
+    // 浏览器独立窗口主页 URL（留空时回退到 aiPlatformUrl）
+    browserHomePage: '',
   }
 }
 
@@ -123,6 +125,10 @@ export class ProfileStore {
       updatedAt: Date.now(),
       viewport: { ...current.viewport, ...(patch.viewport ?? {}) },
       fingerprint: { ...current.fingerprint, ...(patch.fingerprint ?? {}) },
+      // proxyConfig 深合并：支持局部更新（如仅修改 proxyMode），未传时保留原值
+      proxyConfig: patch.proxyConfig
+        ? { ...(current.proxyConfig ?? {}), ...patch.proxyConfig }
+        : current.proxyConfig,
     }
 
     profiles[idx] = updated
@@ -264,7 +270,7 @@ export function registerProfileIPC(): void {
     // 为新 profile 的 partition 挂载 will-download 监听（与 main.ts 启动时批量挂载保持一致）
     try {
       const { attachDownloadHandler } = await import('../utils/download-handler.js')
-      attachDownloadHandler(session.fromPartition(`persist:${profile.id}`))
+      attachDownloadHandler(session.fromPartition(`persist:${profile.id}`), profile.id)
     } catch (err) {
       console.warn('[profile-store] 新 profile 挂载下载监听失败:', err)
     }

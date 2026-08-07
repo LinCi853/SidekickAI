@@ -20,6 +20,7 @@ import DataExportWindow from './pages/DataExportWindow';
 import OnboardingView from './pages/OnboardingView';
 import SettingsView from './pages/SettingsView';
 import BrowserView from './pages/BrowserView';
+import HistoryDownloadView from './pages/HistoryDownloadView';
 import Button from './components/ui/Button';
 import { useProfileStore } from './store/useProfileStore';
 import { useTabStore } from './store/useTabStore';
@@ -185,11 +186,12 @@ export default function App() {
   const isDataExport = mode === 'data-export';
   const isSettings = mode === 'settings';
   const isBrowser = mode === 'browser';
+  const isHistoryDownload = mode === 'history-download';
 
   // chat/preview/history/prompts/ai-app-editor/advanced-panel/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
   // 设置窗口需要加载 ProfileStore（AI 应用卡片依赖），但不需 TabStore
   useEffect(() => {
-    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings || isBrowser) {
+    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings || isBrowser || isHistoryDownload) {
       setReady(true);
       // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
       void getAppSettings().then((cfg) => {
@@ -264,7 +266,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings, isBrowser]);
+  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings, isBrowser, isHistoryDownload]);
 
   // 监听 UI 比例变化广播：更新 data-ui-scale 属性 + 重新计算当前窗口最小尺寸。
   // 主进程在 uiScale 变更后向所有窗口推送；各窗口根据自身类型选用对应公式。
@@ -425,5 +427,6 @@ export default function App() {
   if (isOnboarding) return <AppErrorBoundary><OnboardingView /></AppErrorBoundary>;
   if (isChat) return <AppErrorBoundary><ChatView windowId={mode === 'chat' ? windowId : undefined} /></AppErrorBoundary>;
   if (isBrowser) return <AppErrorBoundary><BrowserView /></AppErrorBoundary>;
+  if (isHistoryDownload) return <AppErrorBoundary><HistoryDownloadView /></AppErrorBoundary>;
   return <AppErrorBoundary>{isMain ? <MainView /> : <StandaloneView />}</AppErrorBoundary>;
 }

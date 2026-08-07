@@ -10,6 +10,11 @@ import Popover from '../../../components/ui/Popover';
 import type { BrowserTabState, TabState } from '../../../lib/electron-api';
 import { focusBrowserWindow } from '../../../lib/electron-api';
 import { useRecentClosedStore } from '../RecentClosedStore';
+import { useBrowserTabStore } from '../../../store/useBrowserTabStore';
+import { useProfileStore } from '../../../store/useProfileStore';
+import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms';
+import { extractDomainInitial } from '../utils/favicon-placeholder';
+import { VolumeIcon, PinIcon, RotateIcon } from '@/components/icons';
 
 interface TabSearchPanelProps {
   /** 当前窗口标签 */
@@ -49,6 +54,17 @@ export default function TabSearchPanel({
   const [query, setQuery] = useState('');
   const recentClosed = useRecentClosedStore((s) => s.entries);
   const removeRecent = useRecentClosedStore((s) => s.remove);
+
+  // 主题色：与 BrowserTabItem 保持一致（profile 覆盖 → 平台默认 → 兜底）
+  const profileId = useBrowserTabStore((s) => s.profileId);
+  const profiles = useProfileStore((s) => s.profiles);
+  const themeColor = useMemo(() => {
+    const profile = profiles.find((p) => p.id === profileId);
+    const platformDef = profile?.aiPlatformId
+      ? AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)
+      : null;
+    return profile?.aiThemeColor || platformDef?.themeColor || '#c25a4a';
+  }, [profileId, profiles]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return tabs;
@@ -123,14 +139,14 @@ export default function TabSearchPanel({
             {tab.favicon ? (
               <img src={tab.favicon} alt="" width={14} height={14} />
             ) : (
-              <span className="browser-tab-favicon-placeholder" style={{ width: 14, height: 14, fontSize: 8 }} data-name="browser.tab-search-favicon">
-                {(tab.title || '?').charAt(0).toUpperCase()}
+              <span className="browser-tab-favicon-placeholder" style={{ background: tab.themeColor || themeColor, width: 14, height: 14, fontSize: 8 }} data-name="browser.tab-search-favicon">
+                {extractDomainInitial(tab.url) || (tab.title || '?').charAt(0).toUpperCase()}
               </span>
             )}
           </span>
           <span className="browser-tab-search-item-title" data-name="browser.tab-search-item-title">{tab.title || tab.url || '新标签'}</span>
-          {tab.audible && <span className="browser-tab-search-item-meta" data-name="browser.tab-search-item-meta">🔊</span>}
-          {tab.pinned && <span className="browser-tab-search-item-meta" data-name="browser.tab-search-item-meta">📌</span>}
+          {tab.audible && <span className="browser-tab-search-item-meta" data-name="browser.tab-search-item-meta"><VolumeIcon className="browser-tab-search-meta-icon" /></span>}
+          {tab.pinned && <span className="browser-tab-search-item-meta" data-name="browser.tab-search-item-meta"><PinIcon className="browser-tab-search-meta-icon" /></span>}
         </div>
       ))}
 
@@ -162,7 +178,7 @@ export default function TabSearchPanel({
                     {tab.favicon ? (
                       <img src={tab.favicon} alt="" width={14} height={14} />
                     ) : (
-                      <span className="browser-tab-favicon-placeholder" style={{ width: 14, height: 14, fontSize: 8 }} data-name="browser.tab-search-favicon">
+                      <span className="browser-tab-favicon-placeholder" style={{ background: themeColor, width: 14, height: 14, fontSize: 8 }} data-name="browser.tab-search-favicon">
                         {(tab.title || '?').charAt(0).toUpperCase()}
                       </span>
                     )}
@@ -189,7 +205,7 @@ export default function TabSearchPanel({
                 onClose();
               }}
             >
-              <span className="browser-tab-search-item favicon">↻</span>
+              <span className="browser-tab-search-item favicon"><RotateIcon className="browser-tab-search-restore-icon" /></span>
               <span className="browser-tab-search-item-title" data-name="browser.tab-search-item-title">{entry.title || entry.url}</span>
             </div>
           ))}

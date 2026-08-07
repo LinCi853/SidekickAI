@@ -18,6 +18,7 @@ import {
 import { useBrowserTabStore } from '../../store/useBrowserTabStore';
 import { IconButton } from '../../components/ui';
 import WindowControls from '../../components/ui/WindowControls';
+import { LockIcon, AlertIcon, SearchIcon } from '@/components/icons';
 
 /* =====================================================================
    工具函数
@@ -421,7 +422,7 @@ export default function BrowserNavBar({
         {/* 地址栏 */}
         <div className="browser-address-wrapper" data-name="browser.nav-bar.address">
           <span className="browser-address-security">
-            {isSecure ? '🔒' : activeTab?.url ? '⚠' : ''}
+            {isSecure ? <LockIcon className="browser-address-security-icon" /> : activeTab?.url ? <AlertIcon className="browser-address-security-icon" /> : null}
           </span>
           <input
             ref={addressBarRef}
@@ -459,7 +460,7 @@ export default function BrowserNavBar({
                   className="browser-suggestion-item"
                   onMouseDown={() => handleSuggestionClick(entry)}
                 >
-                  <span className="browser-suggestion-icon">🔍</span>
+                  <span className="browser-suggestion-icon"><SearchIcon className="browser-suggestion-svg" /></span>
                   <span className="browser-suggestion-text">{entry.query}</span>
                 </button>
               ))}

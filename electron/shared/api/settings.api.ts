@@ -87,6 +87,13 @@ export interface AppSettings {
   chatSidebarWidth: number
   /** 自定义对话侧边栏是否收起 */
   chatSidebarCollapsed: boolean
+  /** 浏览器标签累积持久化模式：memory=内存模式（默认，主窗口关闭清空）/ persistent=持久化到磁盘 */
+  browserTabPersistence: 'memory' | 'persistent'
+  /** 默认搜索引擎配置（G1：地址栏非 URL 输入时使用，urlTemplate 使用 {query} 占位符） */
+  defaultSearchEngine: {
+    name: string
+    urlTemplate: string
+  }
 }
 
 /** 顶栏可显隐的按钮组标识（appSwitcher/menu/刷新始终显示，不在此列） */
@@ -123,6 +130,18 @@ export interface AppSettingsAPI {
    * 返回 { switched, mode } —— switched=true 表示已切换，mode 为切换到的模式。
    */
   applyProxyFallback(): Promise<{ switched: boolean; mode: 'direct' | 'system' | null }>
+  /** 测试指定 Profile 的代理连通性 */
+  testProfileProxy(profileId: string): Promise<{ ok: boolean; latencyMs?: number; message: string }>
+  /** 将 Profile.proxyConfig 即时应用到其 session（无需重启） */
+  applyProfileProxy(profileId: string): Promise<void>
+  /** Profile 级代理失败兜底（浏览器窗口 webview 加载失败时触发） */
+  applyProfileProxyFallback(profileId: string): Promise<{ switched: boolean; mode: 'direct' | 'system' | null }>
+  /**
+   * 保存/清除指定 Profile 的浏览器窗口开关快捷键。
+   * 主进程会调用 reregisterProfileShortcuts() 重注册全局快捷键。
+   * @param accelerator accelerator 字符串，传 null 清除快捷键
+   */
+  setProfileShortcut(profileId: string, accelerator: string | null): Promise<unknown>
   /** 清除所有用户数据（恢复出厂设置），完成后应用自动重启 */
   clearAllData(): Promise<boolean>
   /** 选择导出文件保存路径（弹出系统保存对话框） */
@@ -219,7 +238,7 @@ export type OnUiVersionChangedCallback = (callback: (payload: { uiVersion: 'clas
 /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
 export type OnWebviewHotkeyCallback = (
   callback: (payload: {
-    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab' | 'detachCurrent'
+    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFullscreen' | 'focusCycle' | 'addBookmark' | 'openHistory' | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print'
     data?: unknown
   }) => void,
 ) => () => void

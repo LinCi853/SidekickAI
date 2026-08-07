@@ -84,6 +84,15 @@ export default function StandaloneView() {
       .catch((e) => console.warn('[standalone] 操作失败:', e));
   }, [initialized, setMaximized]);
 
+  // D3: 独立窗口关闭时触发主窗口 AI 输入框聚焦
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      useTabStore.getState().triggerFocusAiInput();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0] ?? null;
   const activeProfile: Profile | null = activeTab
     ? profiles.find((p) => p.id === activeTab.profileId) ?? null

@@ -28,6 +28,7 @@ import {
   selectImportFile,
   importData,
 } from '../../lib/electron-api';
+import { AlertIcon } from '@/components/icons';
 import './index.css';
 
 /** 格式化字节为可读字符串 */
@@ -456,7 +457,7 @@ export default function DataExportWindow() {
 
             {/* 警告 */}
             <div className="data-export-import-warning" data-name="data-export.import-warning">
-              <div className="data-export-import-warning-title" data-name="data-export.import-warning-title">⚠ 严重警告：</div>
+              <div className="data-export-import-warning-title" data-name="data-export.import-warning-title"><AlertIcon className="data-export-warning-icon" /> 严重警告：</div>
               <div data-name="data-export.import-warning-line-1">· 导入将完全覆盖当前所有数据（包括 AI 平台登录态、对话记录、设置等）</div>
               <div data-name="data-export.import-warning-line-2">· 导入后应用将自动重启</div>
               <div data-name="data-export.import-warning-line-3">· 建议先导出当前数据作为备份</div>

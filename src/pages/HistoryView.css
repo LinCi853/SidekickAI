@@ -336,29 +336,25 @@
   flex: none;
   flex-wrap: wrap;
 }
-.conv-toolbar-btn {
-  flex: 1;
-  min-width: 70px;
+/* I2：导入菜单项样式，与 Popover 弹层搭配，参考 SettingsPanel 按钮风格 */
+.history-import-menu-item {
+  display: block;
+  width: 100%;
   padding: var(--space-1) var(--space-2);
   min-height: 0;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: 1.4;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-bd-2);
   color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
   transition: background var(--duration-fast), color var(--duration-fast);
 }
-.conv-toolbar-btn:hover {
+.history-import-menu-item:hover {
   background: var(--accent-10);
   color: var(--foreground);
-}
-.conv-toolbar-btn.danger:hover {
-  background: var(--danger-bg-soft);
-  color: var(--danger);
 }
 
 /* 消息操作按钮 */
@@ -431,35 +427,4 @@
   min-width: 0;
 }
 
-/* 导入格式选择 */
-.import-dropdown {
-  position: relative;
-  display: inline-block;
-}
-.import-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: var(--space-1);
-  background: var(--muted);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 100;
-  min-width: 140px;
-  overflow: hidden;
-}
-.import-menu-item {
-  padding: var(--space-1) var(--space-2);
-  min-height: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: 1.4;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: background var(--duration-fast);
-}
-.import-menu-item:hover {
-  background: var(--accent-10);
-  color: var(--foreground);
-}
+/* I2：旧的 .import-dropdown / .import-menu / .import-menu-item 已移除，改用 Popover 组件 + .history-import-menu-item */

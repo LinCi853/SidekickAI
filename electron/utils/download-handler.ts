@@ -10,9 +10,11 @@
 
 import { app, BrowserWindow, dialog, session, type Session, type DownloadItem } from 'electron'
 import path from 'path'
+import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { getAppSettings, updateAppSettings } from '../store/app-settings-store.js'
 import { profileStore } from '../store/profile-store.js'
+import { browserDownloadStore } from '../store/browser-download-store.js'
 
 /**
  * 为指定 session 注册 will-download 监听。
@@ -27,21 +29,25 @@ import { profileStore } from '../store/profile-store.js'
  *
  * @param ses 要挂载的 session（defaultSession 或 persist:<profileId> partition）
  */
-export function attachDownloadHandler(ses: Session): void {
+export function attachDownloadHandler(ses: Session, profileId?: string): void {
   // 避免重复挂载（同一 session 多次调用会叠加监听器）
   if ((ses as unknown as { __downloadHandlerAttached?: boolean }).__downloadHandlerAttached) {
     return
   }
   ;(ses as unknown as { __downloadHandlerAttached?: boolean }).__downloadHandlerAttached = true
 
+  // profileId 由调用方传入；未传入时回退为 'default'
+  const resolvedProfileId = profileId || 'default'
+
   ses.on('will-download', async (_e, item: DownloadItem) => {
     const settings = getAppSettings()
     const dir = settings.downloadDir || app.getPath('downloads')
     const filename = item.getFilename() || 'download'
 
+    let savePath: string
     if (settings.downloadBehavior === 'auto' && dir) {
       // 自动保存到指定目录
-      const savePath = path.join(dir, filename)
+      savePath = path.join(dir, filename)
       item.setSavePath(savePath)
     } else {
       // 每次询问：弹保存框（默认目录为 downloadDir 或系统下载目录）
@@ -53,7 +59,8 @@ export function attachDownloadHandler(ses: Session): void {
           item.cancel()
           return
         }
-        item.setSavePath(result.filePath)
+        savePath = result.filePath
+        item.setSavePath(savePath)
       } catch (err) {
         console.error('[download-handler] 保存对话框失败:', err)
         item.cancel()
@@ -61,8 +68,91 @@ export function attachDownloadHandler(ses: Session): void {
       }
     }
 
+    // 写入下载记录到存储
+    const downloadId = randomUUID()
+    const startTime = Date.now()
+    try {
+      browserDownloadStore.add({
+        id: downloadId,
+        windowId: 'main',
+        profileId: resolvedProfileId,
+        url: item.getURL(),
+        filename,
+        savePath,
+        state: 'progressing',
+        totalBytes: item.getTotalBytes(),
+        receivedBytes: 0,
+        startTime,
+      })
+    } catch (err) {
+      console.error('[download-handler] 写入下载记录失败:', err)
+    }
+
+    // 广播下载开始事件给所有窗口
+    broadcastDownload({
+      id: downloadId,
+      windowId: 'main',
+      profileId: resolvedProfileId,
+      url: item.getURL(),
+      filename,
+      savePath,
+      state: 'progressing',
+      totalBytes: item.getTotalBytes(),
+      receivedBytes: 0,
+      startTime,
+    })
+
+    // 监听下载进度
+    item.on('updated', (_e2, state) => {
+      if (state === 'progressing') {
+        const received = item.getReceivedBytes()
+        const total = item.getTotalBytes()
+        try {
+          browserDownloadStore.update(downloadId, { receivedBytes: received, totalBytes: total, state: 'progressing' })
+        } catch { /* ignore */ }
+        broadcastDownload({
+          id: downloadId,
+          windowId: 'main',
+          profileId: resolvedProfileId,
+          url: item.getURL(),
+          filename,
+          savePath,
+          state: 'progressing',
+          totalBytes: total,
+          receivedBytes: received,
+          startTime,
+        })
+      }
+    })
+
     // 监听下载完成，向所有窗口广播通知
     item.once('done', (_e2, state) => {
+      const endTime = Date.now()
+      const finalState = state === 'completed' ? 'completed' : state === 'interrupted' ? 'interrupted' : 'cancelled'
+      // 更新存储
+      try {
+        browserDownloadStore.update(downloadId, {
+          state: finalState,
+          receivedBytes: item.getReceivedBytes(),
+          totalBytes: item.getTotalBytes(),
+          endTime,
+        })
+      } catch { /* ignore */ }
+      // 广播下载状态更新
+      broadcastDownload({
+        id: downloadId,
+        windowId: 'main',
+        profileId: resolvedProfileId,
+        url: item.getURL(),
+        filename,
+        savePath,
+        state: finalState,
+        totalBytes: item.getTotalBytes(),
+        receivedBytes: item.getReceivedBytes(),
+        startTime,
+        endTime,
+      })
+      // 兼容旧逻辑：completed 时广播 APP_DOWNLOAD_DONE
       if (state === 'completed') {
         const info = { filename: item.getFilename(), path: item.getSavePath() }
         console.log('[download-handler] 下载完成:', info)
@@ -80,6 +170,29 @@ export function attachDownloadHandler(ses: Session): void {
   })
 }
 
+/** 广播下载状态更新给所有窗口 */
+function broadcastDownload(payload: {
+  id: string
+  windowId: string
+  profileId: string
+  url: string
+  filename: string
+  savePath: string
+  state: string
+  totalBytes: number
+  receivedBytes: number
+  startTime: number
+  endTime?: number
+}): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) {
+      try {
+        w.webContents.send(IPC_CHANNELS.BROWSER_DOWNLOAD_UPDATED, payload)
+      } catch { /* ignore */ }
+    }
+  }
+}
+
 /**
  * 为所有 profile partitions 批量挂载 will-download 监听。
  * 在 app.whenReady() 内、Profile 加载完成后调用一次。
@@ -92,7 +205,7 @@ export function attachDownloadHandlersForAllProfiles(): void {
   try {
     for (const profile of profileStore.list()) {
       try {
-        attachDownloadHandler(session.fromPartition(`persist:${profile.id}`))
+        attachDownloadHandler(session.fromPartition(`persist:${profile.id}`), profile.id)
       } catch { /* ignore */ }
     }
   } catch (err) {

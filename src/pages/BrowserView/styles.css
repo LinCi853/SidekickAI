@@ -143,6 +143,20 @@
   font-size: 10px;
   color: var(--muted-foreground, #666);
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.browser-tab-search-meta-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.browser-tab-search-restore-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 /* 标签搜索面板中的子标签缩进（主子归属树形） */
@@ -237,6 +251,25 @@
   100% { transform: translateX(100%); }
 }
 
+/* ===== B2: NavBar 底部加载进度条（Chrome 风格细条） ===== */
+.browser-nav-progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.browser-nav-progress-bar {
+  height: 100%;
+  background: var(--accent, #c25a4a);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 4px var(--accent, #c25a4a);
+}
+
 /* ===== 标签 favicon ===== */
 .browser-tab-favicon {
   width: 14px;
@@ -324,6 +357,7 @@
 /* ===== 第二栏：导航与功能栏 ===== */
 .browser-bar-row-nav {
   -webkit-app-region: drag;
+  position: relative; /* B2: NavBar 底部进度条绝对定位锚点 */
 }
 
 /* 导航按钮区（leading） */
@@ -375,6 +409,14 @@
   font-size: 11px;
   margin-right: 4px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.browser-address-security-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .browser-address-input {
@@ -591,6 +633,14 @@
 .browser-suggestion-icon {
   font-size: 11px;
   opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+}
+
+.browser-suggestion-svg {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .browser-suggestion-text {

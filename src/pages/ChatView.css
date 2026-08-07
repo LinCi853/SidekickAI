@@ -639,6 +639,15 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   border-top: 1px solid var(--window-close-bd);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-error-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 /* ===== 窄屏适配（< 600px） ===== */

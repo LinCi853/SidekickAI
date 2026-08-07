@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { AIPlatform, Profile, TopBarButtonGroup } from '../../lib/electron-api';
 import AppSwitcher from '../../components/AppSwitcher';
@@ -116,6 +117,24 @@ export default function TopBar({ data, actions }: TopBarProps) {
     onToggleTheme,
     onToggleUaLockMode,
   } = actions;
+
+  // 最小化收回动画：先给 body 添加 .window-minimizing 播放 200ms 透明度+缩放过渡，
+  // 动画结束后再调用真正的 minimizeWindow()；动画期间禁用按钮点击。
+  // 与浏览器窗口 TabsPanel 共用 .window-minimizing 全局动画类。
+  const [isMinimizing, setIsMinimizing] = useState(false);
+  const handleMinimizeClick = useCallback(() => {
+    if (isMinimizing) return;
+    setIsMinimizing(true);
+    document.body.classList.add('window-minimizing');
+    setTimeout(() => {
+      void minimizeWindow();
+      // 窗口最小化后不会触发 cleanup，延迟重置状态供下次聚焦使用
+      setTimeout(() => {
+        setIsMinimizing(false);
+        document.body.classList.remove('window-minimizing');
+      }, 100);
+    }, 200);
+  }, [isMinimizing]);
 
   // 标题编辑态紧凑模式：编辑中且（窄屏 或 窗口宽度 < 720）时启用
   // 隐藏导航按钮组与部分右侧操作按钮，标题输入区占满顶栏
@@ -336,7 +355,8 @@ export default function TopBar({ data, actions }: TopBarProps) {
           type="button"
           aria-label="最小化"
           title="最小化"
-          onClick={() => void minimizeWindow()}
+          disabled={isMinimizing}
+          onClick={handleMinimizeClick}
           data-name="main.top-bar.minimize-icon-button"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" data-name="main.top-bar.minimize-icon">

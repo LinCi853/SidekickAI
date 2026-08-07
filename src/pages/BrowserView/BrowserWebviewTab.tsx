@@ -18,6 +18,7 @@ import { buildBlockerScript, matchDomain } from '../../lib/webview-blocker';
 import { useBrowserTabStore } from '../../store/useBrowserTabStore';
 import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms';
 import { WIN_CHROME_UA } from '../../../electron/presets/devices';
+import { extractThemeColor } from './utils/favicon-placeholder';
 
 interface BrowserWebviewTabProps {
   tab: BrowserTabState;
@@ -40,6 +41,9 @@ export default function BrowserWebviewTab({
   const [remountKey, setRemountKey] = useState(0);
   const domReadyRef = useRef(false);
   const store = useBrowserTabStore();
+  // B2: NavBar 加载进度条 —— 渐进模拟 interval 与隐藏定时器
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Navigate when navigateUrl changes (from address bar)
   useEffect(() => {
@@ -139,6 +143,13 @@ export default function BrowserWebviewTab({
           store.updateTabFavicon(tab.id, faviconDataUrl);
         }
       } catch { /* ignore */ }
+      // P1-5：提取网站主题色（meta[name="theme-color"]），用于 favicon 占位背景
+      try {
+        const color = await extractThemeColor(webview);
+        if (color) {
+          store.updateTabThemeColor(tab.id, color);
+        }
+      } catch { /* ignore */ }
     }
   }, [profile.id, profile.devicePreset, profile.userAgent, tab.id, tab.source, store]);
 
@@ -148,6 +159,15 @@ export default function BrowserWebviewTab({
     const url = navEvent.url;
     if (url && url !== tab.url) {
       store.navigateTab(tab.id, url);
+      // P1-1：记录导航历史到该 Profile 的独立历史中
+      console.log('[BrowserWebviewTab] 记录导航历史:', profile.id, url);
+      void recordNavHistory(profile.id, {
+        id: '',
+        profileId: profile.id,
+        url,
+        title: '',
+        timestamp: Date.now(),
+      }).catch((err) => console.error('[BrowserWebviewTab] 记录导航历史失败:', err));
     }
     try {
       const wv = webviewRef.current;
@@ -163,26 +183,34 @@ export default function BrowserWebviewTab({
             void wv.executeJavaScript('document.title').then((title) => {
               if (title && typeof title === 'string') {
                 store.updateTabTitle(tab.id, title);
+                // 更新导航历史的 title（同 URL 连续记录会更新 title 而非新增）
+                if (url) {
+                  void recordNavHistory(profile.id, {
+                    id: '',
+                    profileId: profile.id,
+                    url,
+                    title,
+                    timestamp: Date.now(),
+                  }).catch(() => { /* ignore */ });
+                }
               }
             }).catch(() => { /* ignore */ });
           }
         } catch { /* ignore */ }
       }, 500);
     }
-  }, [tab.id, tab.url, tab.source, store]);
+  }, [tab.id, tab.url, tab.source, store, profile.id]);
 
   // Title update
-  // v0.0.9: 主页标签（从主窗口脱离的）保持用户编辑的名称，不随网页标题变化；
-  // 新开的网页标签显示网页标题
+  // D5: 所有标签都使用 webview 的 page-title-updated 事件返回的标题
   const handleTitleUpdate = useCallback((e: Event) => {
-    if (tab.source === 'initial') return; // 主页标签保持 profile.name
     // Electron webview page-title-updated 事件：title 可能在 e.title 或 e.detail.title
     const ev = e as unknown as { title?: string; detail?: { title?: string } };
     const title = ev.title || ev.detail?.title;
     if (title) {
       store.updateTabTitle(tab.id, title);
     }
-  }, [tab.id, tab.source, store]);
+  }, [tab.id, store]);
 
   // Favicon update - 将 favicon URL 转换为 data URL 以确保渲染进程可加载
   const handleFaviconUpdate = useCallback((e: Event) => {
@@ -236,10 +264,69 @@ export default function BrowserWebviewTab({
   // Loading state
   const handleStartLoading = useCallback(() => {
     store.updateTabLoading(tab.id, true);
+    store.updateTabLoadingStatus(tab.id, '正在连接...');
+    // B2: 启动进度条 —— 设为 10，并启动渐进模拟（10→30→50→70→90）
+    if (progressHideTimerRef.current) {
+      clearTimeout(progressHideTimerRef.current);
+      progressHideTimerRef.current = null;
+    }
+    store.updateTabLoadingProgress(tab.id, 10);
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    const steps = [30, 50, 70, 90];
+    let stepIdx = 0;
+    progressIntervalRef.current = setInterval(() => {
+      if (stepIdx < steps.length) {
+        store.updateTabLoadingProgress(tab.id, steps[stepIdx]);
+        stepIdx += 1;
+      } else {
+        // 停在 90，等待实际加载完成事件跳到 100
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+      }
+    }, 400);
+  }, [tab.id, store]);
+
+  // B2: did-finish-navigation —— 导航完成（DOM 开始构建）设为 60
+  const handleFinishNavigation = useCallback(() => {
+    store.updateTabLoadingProgress(tab.id, 60);
+    store.updateTabLoadingStatus(tab.id, '等待响应...');
+  }, [tab.id, store]);
+
+  // B2: did-finish-load —— 页面完全加载：设为 100，500ms 后隐藏（设为 0 + isLoading=false）
+  const handleFinishLoad = useCallback(() => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    store.updateTabLoadingProgress(tab.id, 100);
+    store.updateTabLoadingStatus(tab.id, '已完成');
+    if (progressHideTimerRef.current) return; // 已有定时器，避免重复
+    progressHideTimerRef.current = setTimeout(() => {
+      progressHideTimerRef.current = null;
+      store.updateTabLoadingProgress(tab.id, 0);
+      store.updateTabLoadingStatus(tab.id, '');
+      store.updateTabLoading(tab.id, false);
+    }, 500);
   }, [tab.id, store]);
 
   const handleStopLoading = useCallback(() => {
-    store.updateTabLoading(tab.id, false);
+    // B2: 兜底 —— did-finish-load 未触发时由 did-stop-loading 完成隐藏流程
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    store.updateTabLoadingProgress(tab.id, 100);
+    store.updateTabLoadingStatus(tab.id, '已完成');
+    if (!progressHideTimerRef.current) {
+      progressHideTimerRef.current = setTimeout(() => {
+        progressHideTimerRef.current = null;
+        store.updateTabLoadingProgress(tab.id, 0);
+        store.updateTabLoadingStatus(tab.id, '');
+        store.updateTabLoading(tab.id, false);
+      }, 500);
+    }
 
     // 兜底：页面加载完成后主动读取 title 和 favicon
     // 解决 page-title-updated / page-favicon-updated 事件可能不触发的问题
@@ -296,6 +383,23 @@ export default function BrowserWebviewTab({
     setRemountKey((k) => k + 1);
   }, [tab.url]);
 
+  // did-fail-load —— 加载失败：更新状态文本
+  const handleFailLoad = useCallback(() => {
+    store.updateTabLoadingStatus(tab.id, '加载失败');
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    if (!progressHideTimerRef.current) {
+      progressHideTimerRef.current = setTimeout(() => {
+        progressHideTimerRef.current = null;
+        store.updateTabLoadingProgress(tab.id, 0);
+        store.updateTabLoadingStatus(tab.id, '');
+        store.updateTabLoading(tab.id, false);
+      }, 800);
+    }
+  }, [tab.id, store]);
+
   // ===== v0.0.9 音频集成 =====
   // 页面开始播放音频 → 更新 audible 状态
   const handleMediaStartedPlaying = useCallback(() => {
@@ -344,6 +448,10 @@ export default function BrowserWebviewTab({
     webview.addEventListener('page-favicon-updated', handleFaviconUpdate as EventListener);
     webview.addEventListener('did-start-loading', handleStartLoading as EventListener);
     webview.addEventListener('did-stop-loading', handleStopLoading as EventListener);
+    // B2: NavBar 进度条 —— 导航完成与页面完全加载事件
+    webview.addEventListener('did-finish-navigation', handleFinishNavigation as EventListener);
+    webview.addEventListener('did-finish-load', handleFinishLoad as EventListener);
+    webview.addEventListener('did-fail-load', handleFailLoad as EventListener);
 
     // v0.0.9 音频事件（webview 的 media-started-playing / media-paused）
     webview.addEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
@@ -379,12 +487,29 @@ export default function BrowserWebviewTab({
       webview.removeEventListener('page-favicon-updated', handleFaviconUpdate as EventListener);
       webview.removeEventListener('did-start-loading', handleStartLoading as EventListener);
       webview.removeEventListener('did-stop-loading', handleStopLoading as EventListener);
+      webview.removeEventListener('did-finish-navigation', handleFinishNavigation as EventListener);
+      webview.removeEventListener('did-finish-load', handleFinishLoad as EventListener);
+      webview.removeEventListener('did-fail-load', handleFailLoad as EventListener);
       webview.removeEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
       webview.removeEventListener('media-paused', handleMediaPaused as EventListener);
       webview.removeEventListener('ai-webview-fatal-failure', handleFatalFailure);
       webview.removeEventListener('before-input-event', handleBeforeInput);
     };
-  }, [handleDomReady, handleNavigate, handleTitleUpdate, handleFaviconUpdate, handleStartLoading, handleStopLoading, handleFatalFailure, handleMediaStartedPlaying, handleMediaPaused]);
+  }, [handleDomReady, handleNavigate, handleTitleUpdate, handleFaviconUpdate, handleStartLoading, handleStopLoading, handleFinishNavigation, handleFinishLoad, handleFailLoad, handleFatalFailure, handleMediaStartedPlaying, handleMediaPaused]);
+
+  // B2: 卸载时清理进度条 interval/timer，避免泄漏与跨标签串扰
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      if (progressHideTimerRef.current) {
+        clearTimeout(progressHideTimerRef.current);
+        progressHideTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // 浏览器窗口始终锁定为桌面端 UA（不受 profile 的 uaLockMode 影响）
   const prevUaRef = useRef<string>('');
@@ -432,6 +557,18 @@ export default function BrowserWebviewTab({
     };
     window.addEventListener('browser-tab-reload', handler);
     return () => window.removeEventListener('browser-tab-reload', handler);
+  }, [tab.id]);
+
+  // Listen for force-reload (clear cache) events from tab context menu
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.tabId === tab.id && webviewRef.current) {
+        (webviewRef.current as WebviewElement & { reloadIgnoringCache: () => void }).reloadIgnoringCache();
+      }
+    };
+    window.addEventListener('browser-tab-force-reload', handler);
+    return () => window.removeEventListener('browser-tab-force-reload', handler);
   }, [tab.id]);
 
   // 使用与主窗口相同的 partition，保留全部登录态和页面数据

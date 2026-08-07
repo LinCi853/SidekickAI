@@ -1,0 +1,230 @@
+{
+  "title": "SidekickAI 窗口最大化管理 + F11 快捷键 + 供应商管理 UI 同步",
+  "columns": ["测试项", "预期结果"],
+  "modules": [
+    {
+      "name": "窗口最大化管理组件 (WindowMaximizeManager)",
+      "items": [
+        {
+          "测试项": "TypeScript 编译检查",
+          "预期结果": "无新增类型错误（仅有 4 个预存在无关错误：voice-store.ts / stt/engine.ts）",
+          "priority": "高",
+          "owner": "自动化",
+          "testDetail": "npm run typecheck，检查 electron/window-factory/window-maximize-manager.ts 无 TS 错误"
+        },
+        {
+          "测试项": "生产构建检查",
+          "预期结果": "npm run build 成功，无编译错误",
+          "priority": "高",
+          "owner": "自动化",
+          "testDetail": "npm run build，检查 Vite + Electron 构建流程完整通过"
+        },
+        {
+          "测试项": "maximize() 调用 win.maximize() 同步原生状态",
+          "预期结果": "win.isMaximized() 返回 true，TitleBar 显示还原图标",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "electron/window-factory/window-maximize-manager.ts maximize() 方法：先调用 win.maximize() 设置原生标记，再 setBounds() 覆盖尺寸到工作区全屏"
+        },
+        {
+          "测试项": "unmaximize() 调用 win.unmaximize() 同步原生状态",
+          "预期结果": "win.isMaximized() 返回 false，OS 原生标题栏行为正确",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "electron/window-factory/window-maximize-manager.ts unmaximize() 方法：先更新 state.isMaximized=false，再 win.unmaximize() 清除原生标记，最后 setBounds(restored) 应用自定义尺寸"
+        }
+      ]
+    },
+    {
+      "name": "主窗口最大化还原",
+      "items": [
+        {
+          "测试项": "主窗口 F11 切换最大化/还原",
+          "预期结果": "F11 最大化到工作区全屏，再 F11 还原到之前的尺寸（normalBounds 策略）",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "主窗口中按 F11（webview 焦点或非焦点均生效），检查窗口最大化；再按 F11，检查窗口还原到之前的位置和大小"
+        },
+        {
+          "测试项": "主窗口 TitleBar 最大化按钮",
+          "预期结果": "点击最大化按钮后窗口最大化，图标变为还原图标；再点击还原",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "src/pages/MainView/TopBar.tsx 的 handleMaximize 回调 → IPC WIN_CONTROL_MAXIMIZE_TOGGLE → toggleMaximizeForWindow"
+        },
+        {
+          "测试项": "主窗口 OS 原生最大化（双击标题栏）",
+          "预期结果": "双击标题栏最大化，再双击还原到原尺寸",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "setupBoundsTracking 的 maximize/unmaximize 事件同步 state.isMaximized 和 normalBounds"
+        },
+        {
+          "测试项": "主窗口关闭后重新打开记忆位置",
+          "预期结果": "重新打开后窗口位置和大小与上次关闭时一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "main-window.ts close 事件用 win.isMaximized() 保存状态，bounds 持久化到 windowStore"
+        }
+      ]
+    },
+    {
+      "name": "浏览器窗口最大化还原",
+      "items": [
+        {
+          "测试项": "浏览器窗口 F11 切换最大化/还原",
+          "预期结果": "F11 最大化到工作区全屏，再 F11 还原为工作区居中 70% 尺寸（centered70 固定设计）",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "浏览器窗口中按 F11，检查窗口最大化；再按 F11，检查窗口还原为屏幕中央、占工作区 70% 的固定尺寸"
+        },
+        {
+          "测试项": "浏览器窗口 TitleBar 最大化按钮",
+          "预期结果": "点击最大化按钮后窗口最大化，图标变为还原图标；再点击还原为 70% 居中",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "BrowserView/index.tsx 的 onMaximize → maximizeToggleWindow → toggleMaximizeForWindow → WindowMaximizeManager(centered70)"
+        },
+        {
+          "测试项": "浏览器窗口不记忆 bounds",
+          "预期结果": "取消最大化后始终还原为 70% 居中，不记忆用户手动调整的窗口大小",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "browser-window.ts attachDetachedWindowLifecycle(trackBounds:false)，不保存 bounds，取消最大化时由 WindowMaximizeManager 的 centered70 策略计算"
+        },
+        {
+          "测试项": "浏览器窗口默认最大化打开",
+          "预期结果": "新打开的浏览器窗口默认最大化（isMaximized=true）",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "browser-window.ts 第 210 行 const isMaximized = saved?.isMaximized ?? true"
+        }
+      ]
+    },
+    {
+      "name": "进阶面板窗口最大化还原",
+      "items": [
+        {
+          "测试项": "进阶面板默认打开即最大化",
+          "预期结果": "打开进阶面板时窗口已最大化，TitleBar 显示还原图标（非最大化图标）",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "advanced-panel-window.ts shouldMaximize = saved.isMaximized || !hasSavedBounds，win.maximize() 同步原生状态"
+        },
+        {
+          "测试项": "进阶面板 F11 切换最大化/还原",
+          "预期结果": "F11 还原为工作区居中 70% 尺寸，再 F11 重新最大化",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "进阶面板中按 F11（无 webview，走 attachWindowHotkeyInterceptor），检查窗口还原为 70% 居中；再按 F11 检查重新最大化"
+        },
+        {
+          "测试项": "进阶面板 TitleBar 最大化按钮",
+          "预期结果": "点击最大化按钮后窗口最大化，图标变为还原图标；再点击还原为 70% 居中",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "AdvancedPanelView.tsx useWindowMaximizedAndPinned hook 提供 handleMaximize → maximizeToggleWindow"
+        },
+        {
+          "测试项": "进阶面板不记忆 bounds",
+          "预期结果": "取消最大化后始终还原为 70% 居中，与浏览器窗口行为一致",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "advanced-panel-window.ts attachDetachedWindowLifecycle(trackBounds:false)，centered70 还原策略"
+        }
+      ]
+    },
+    {
+      "name": "弹出窗口 bounds 持久化",
+      "items": [
+        {
+          "测试项": "历史搜索窗口位置记忆",
+          "预期结果": "关闭后重新打开，窗口位置和大小与上次一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "helpers.ts createSingletonPopupWindow 添加 setupBoundsTracking + saved bounds 加载 + close 持久化"
+        },
+        {
+          "测试项": "提示词库窗口位置记忆",
+          "预期结果": "关闭后重新打开，窗口位置和大小与上次一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "popup-windows.ts showPromptWindow → createSingletonPopupWindow"
+        },
+        {
+          "测试项": "设置窗口位置记忆",
+          "预期结果": "关闭后重新打开，窗口位置和大小与上次一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "popup-windows.ts showSettingsWindow → createSingletonPopupWindow"
+        },
+        {
+          "测试项": "数据迁移窗口位置记忆",
+          "预期结果": "关闭后重新打开，窗口位置和大小与上次一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "popup-windows.ts showDataExportWindow → createSingletonPopupWindow"
+        },
+        {
+          "测试项": "历史记录与下载窗口位置记忆",
+          "预期结果": "关闭后重新打开，窗口位置和大小与上次一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "history-download-window.ts showHistoryDownloadWindow → createSingletonPopupWindow"
+        },
+        {
+          "测试项": "AI 应用编辑器窗口位置记忆",
+          "预期结果": "关闭后重新打开，窗口位置和大小与上次一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "popup-windows.ts showAiAppEditorWindow → createSingletonPopupWindow"
+        }
+      ]
+    },
+    {
+      "name": "供应商管理 UI 同步",
+      "items": [
+        {
+          "测试项": "供应商管理添加按钮为卡片式设计",
+          "预期结果": "添加供应商按钮显示为卡片式（+ 图标 + 文字），位于供应商列表末尾",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "src/components/SettingsPanel/sections/ProviderSection.tsx 第 641-652 行，使用 preset-card preset-card-add 类，样式在 styles.css 第 241-289 行"
+        },
+        {
+          "测试项": "添加供应商卡片与 AI 应用卡片样式一致",
+          "预期结果": "供应商添加卡片的样式（边框、hover 效果、图标大小）与 AI 应用添加卡片完全一致",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "对比 AiAppSection.tsx 的 preset-card-add 和 ProviderSection.tsx 的 preset-card-add，共享 styles.css 中的统一样式"
+        },
+        {
+          "测试项": "编辑供应商时添加按钮隐藏",
+          "预期结果": "打开编辑/新建供应商表单时，添加供应商卡片不显示",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "ProviderSection.tsx {!editing && (...)} 条件渲染"
+        }
+      ]
+    },
+    {
+      "name": "置顶功能兼容性",
+      "items": [
+        {
+          "测试项": "最大化时自动取消置顶",
+          "预期结果": "窗口最大化时自动取消置顶状态，F12 置顶按钮恢复默认样式",
+          "priority": "高",
+          "owner": "手动",
+          "testDetail": "setupMaximizeSync/setupBoundsTracking 的 cancelAlwaysOnTopOnConflict 监听 maximize/enter-full-screen 事件"
+        },
+        {
+          "测试项": "F12 置顶在非最大化状态下正常工作",
+          "预期结果": "F12 切换置顶/取消置顶，按钮图标正确变化",
+          "priority": "中",
+          "owner": "手动",
+          "testDetail": "helpers.ts attachWindowHotkeyInterceptor 的 F12 处理，setAlwaysOnTopForWindow"
+        }
+      ]
+    }
+  ]
+}

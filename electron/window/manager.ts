@@ -71,8 +71,8 @@ export class WindowManager {
         ses.setUserAgent(profile.userAgent)
       }
 
-      // 设置代理（全局 AppSettings 代理 + Profile 级覆盖）
-      await applyProxyToSession(ses, profile.proxy)
+      // 设置代理（Profile.proxyConfig > Profile.proxy > 全局 AppSettings）
+      await applyProxyToSession(ses, profile)
 
       // 计算 Client Hints 并缓存（供 webRequest 拦截器读取）
       const hints = this.buildClientHints(profile)
@@ -354,8 +354,8 @@ export class WindowManager {
         ses.setUserAgent(profile.userAgent)
       }
 
-      // 设置代理（全局 AppSettings 代理 + Profile 级覆盖）
-      await applyProxyToSession(ses, profile.proxy)
+      // 设置代理（Profile.proxyConfig > Profile.proxy > 全局 AppSettings）
+      await applyProxyToSession(ses, profile)
 
       // 计算 Client Hints 并缓存（供 webRequest 拦截器读取）
       const hints = this.buildClientHints(profile)

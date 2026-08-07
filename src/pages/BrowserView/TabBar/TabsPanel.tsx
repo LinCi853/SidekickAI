@@ -14,8 +14,9 @@ import {
   pinCurrentWindow,
 } from '../../../lib/electron-api';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore';
+import { useWindowMaximizedAndPinned } from '../../../hooks/useWindowMaximizedAndPinned';
 import { IconButton } from '../../../components/ui';
-import WindowControls from '../../../components/ui/WindowControls';
+import { MinimizeIcon, MaximizeIcon, RestoreIcon, CloseIcon } from '@/components/icons';
 import { BrowserTabItem } from './BrowserTabItem';
 import BrowserTabContextMenu from './BrowserTabContextMenu';
 import TabSearchPanel from './TabSearchPanel';
@@ -43,9 +44,16 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
     windowId,
   } = useBrowserTabStore();
 
+  // 全屏状态由 useWindowMaximizedAndPinned 跟踪（通过 WIN_CONTROL_FULLSCREEN_TOGGLED 事件同步）；
+  // isMaximized 复用 store（初始值来自 browserWindowStore，与浏览器窗口原生最大化初始态一致）。
+  // 两者任一为真时置顶按钮禁用：最大化/全屏与置顶互斥。
+  const { isFullscreen } = useWindowMaximizedAndPinned();
+  const pinDisabled = isMaximized || isFullscreen;
+
   const [showSearch, setShowSearch] = useState(false);
   const [allTabsTree, setAllTabsTree] = useState<AllTabsTree | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const [isMinimizing, setIsMinimizing] = useState(false);
   const dragRef = useRef<string | null>(null);
   const searchBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -61,10 +69,33 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
     setMaximized(maximized);
   }, [setMaximized]);
 
+  // 最小化收回动画：先给 body 添加 .window-minimizing 播放 200ms 过渡，
+  // 动画结束后再调用真正的 minimizeWindow()；动画期间禁用按钮点击。
+  const handleMinimize = useCallback(() => {
+    if (isMinimizing) return;
+    setIsMinimizing(true);
+    document.body.classList.add('window-minimizing');
+    setTimeout(() => {
+      void minimizeWindow();
+      // 窗口最小化后不会触发 cleanup，延迟重置状态供下次聚焦使用
+      setTimeout(() => {
+        setIsMinimizing(false);
+        document.body.classList.remove('window-minimizing');
+      }, 100);
+    }, 200);
+  }, [isMinimizing]);
+
   const handlePin = useCallback(async () => {
     const next = !alwaysOnTop;
     setAlwaysOnTop(next);
-    try { await pinCurrentWindow(next); } catch { setAlwaysOnTop(!next); }
+    try {
+      // pinCurrentWindow 返回主进程实际置顶状态；最大化/全屏时主进程会拒绝并返回 false，
+      // 此时回滚乐观更新，避免 UI 与实际状态脱节。
+      const actual = await pinCurrentWindow(next);
+      if (actual !== next) setAlwaysOnTop(actual);
+    } catch {
+      setAlwaysOnTop(!next);
+    }
   }, [alwaysOnTop, setAlwaysOnTop]);
 
   /* ===== 标签事件 ===== */
@@ -104,6 +135,9 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
         break;
       case 'reload':
         window.dispatchEvent(new CustomEvent('browser-tab-reload', { detail: { tabId } }));
+        break;
+      case 'forceReload':
+        window.dispatchEvent(new CustomEvent('browser-tab-force-reload', { detail: { tabId } }));
         break;
       case 'duplicate':
         newTab(tab.url, { kind: 'web' });
@@ -192,7 +226,8 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
           variant={alwaysOnTop ? 'active' : 'default'}
           aria-label="置顶"
           onClick={() => void handlePin()}
-          title={alwaysOnTop ? '取消置顶' : '置顶'}
+          disabled={pinDisabled}
+          title={pinDisabled ? '全屏/最大化模式下不可置顶' : alwaysOnTop ? '取消置顶' : '置顶'}
           data-name="browser.pin"
         >
           <svg viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -201,11 +236,34 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
             <path d="M5 21h14" />
           </svg>
         </IconButton>
-        <WindowControls
-          onMinimize={() => void minimizeWindow()}
-          onMaximize={() => void handleMaximize()}
-          onClose={() => void closeCurrentWindow()}
-        />
+        <IconButton
+          aria-label="最小化"
+          variant="default"
+          disabled={isMinimizing}
+          onClick={handleMinimize}
+          title="最小化"
+          data-name="browser.window.minimize"
+        >
+          <MinimizeIcon />
+        </IconButton>
+        <IconButton
+          aria-label={isMaximized ? '还原' : '最大化'}
+          variant="default"
+          onClick={() => void handleMaximize()}
+          title={isMaximized ? '还原' : '最大化'}
+          data-name="browser.window.maximize"
+        >
+          {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
+        </IconButton>
+        <IconButton
+          aria-label="关闭"
+          variant="close"
+          onClick={() => void closeCurrentWindow()}
+          title="关闭"
+          data-name="browser.window.close"
+        >
+          <CloseIcon />
+        </IconButton>
       </div>
 
       {/* 右键菜单 */}
@@ -216,6 +274,7 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
           onClose={() => setContextMenu(null)}
           onNewToRight={() => handleContextAction('newToRight')}
           onReload={() => handleContextAction('reload')}
+          onForceReload={() => handleContextAction('forceReload')}
           onDuplicate={() => handleContextAction('duplicate')}
           onTogglePin={() => handleContextAction('togglePin')}
           onToggleMute={() => handleContextAction('toggleMute')}

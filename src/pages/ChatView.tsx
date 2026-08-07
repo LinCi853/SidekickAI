@@ -39,6 +39,7 @@ import {
 import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
 import { MessageBubble } from './MessageBubble';
 import { generateChatAccentVars } from '../lib/oxy-color-engine';
+import { AlertIcon } from '@/components/icons';
 import './ChatView.css';
 
 export default function ChatView({ windowId }: { windowId?: string }) {
@@ -549,7 +550,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
               )}
             </div>
 
-            {streamError && <div className="chat-error-bar" data-name="chat.error-bar">⚠ {streamError}</div>}
+            {streamError && <div className="chat-error-bar" data-name="chat.error-bar"><AlertIcon className="chat-error-icon" /> {streamError}</div>}
 
             <div className="chat-input-area" data-name="chat.input-area">
               <div className="chat-input-wrap" data-name="chat.input-wrap">

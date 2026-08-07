@@ -47,6 +47,8 @@ export const IPC_CHANNELS = {
   WIN_CONTROL_MAXIMIZE_TOGGLED: 'winControl:maximizeToggled',
   WIN_CONTROL_FULLSCREEN_TOGGLED: 'winControl:fullscreenToggled',
   WIN_CONTROL_PIN_TOGGLED: 'winControl:pinToggled',
+  // 主→渲染：窗口即将最小化（主进程延迟 200ms minimize，渲染层在此期间播放淡出+收缩动画）
+  WIN_CONTROL_WINDOW_MINIMIZING: 'winControl:windowMinimizing',
   // 窗口状态持久化
   WIN_STATE_GET: 'winState:get',
   WIN_STATE_SAVE: 'winState:save',
@@ -239,6 +241,15 @@ export const IPC_CHANNELS = {
   // 代理失败兜底（渲染层 → 主进程：webview 加载失败时代理错误码触发，临时切换到兜底模式）
   // 返回 { switched: boolean, mode: 'direct' | 'system' | null }
   APP_PROXY_FALLBACK: 'app:proxyFallback',
+  // Profile 级代理测试（渲染层 → 主进程：测试指定 Profile 的代理连通性）
+  // 参数：profileId，返回 { ok, latencyMs?, message }
+  APP_TEST_PROFILE_PROXY: 'app:testProfileProxy',
+  // Profile 级代理即时生效（渲染层 → 主进程：将 Profile.proxyConfig 应用到其 session）
+  // 参数：profileId
+  APP_APPLY_PROFILE_PROXY: 'app:applyProfileProxy',
+  // Profile 级代理失败兜底（渲染层 → 主进程：浏览器窗口 webview 加载失败时触发）
+  // 参数：profileId，返回 { switched, mode }
+  APP_PROFILE_PROXY_FALLBACK: 'app:profileProxyFallback',
   // 预览窗更新（主→预览窗渲染）
   PREVIEW_UPDATE: 'preview:update',
   PREVIEW_HIDE: 'preview:hide',
@@ -264,6 +275,8 @@ export const IPC_CHANNELS = {
   AI_APP_EDITOR_OPEN: 'ai-app-editor:open',
   // 设置独立窗口（单例）
   SETTINGS_WINDOW_OPEN: 'settings-window:open',
+  // 历史记录与下载管理独立窗口（单例）
+  HISTORY_DOWNLOAD_OPEN: 'history-download:open',
   // 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   ADVANCED_PANEL_OPEN: 'advancedPanel:open',
   ADVANCED_PANEL_TOGGLE: 'advancedPanel:toggle',
@@ -340,6 +353,10 @@ export const IPC_CHANNELS = {
   BROWSER_DOWNLOAD_LIST: 'browser:download:list',
   BROWSER_DOWNLOAD_OPEN_FILE: 'browser:download:openFile',
   BROWSER_DOWNLOAD_SHOW_IN_FOLDER: 'browser:download:showInFolder',
+  // 删除单条下载记录
+  BROWSER_DOWNLOAD_DELETE: 'browser:download:delete',
+  // 清空全部下载记录（可选按 windowId 过滤）
+  BROWSER_DOWNLOAD_CLEAR_ALL: 'browser:download:clearAll',
   // 主→渲染：下载状态变化推送（BrowserDownloadRecord）
   BROWSER_DOWNLOAD_UPDATED: 'browser:download:updated',
   // 主→渲染：F12 切换 DevTools（浏览器窗口内 webview 焦点时主进程拦截转发）
@@ -354,6 +371,11 @@ export const IPC_CHANNELS = {
   NAV_HISTORY_RECORD: 'navHistory:record',
   NAV_HISTORY_GET: 'navHistory:get',
   NAV_HISTORY_CLEAR: 'navHistory:clear',
+  // 导航历史持久化（SQLite）CRUD：分页列表 / 关键词搜索 / 删除单条 / 清空（可选按 profileId）
+  NAV_HISTORY_LIST: 'navHistory:list',
+  NAV_HISTORY_SEARCH: 'navHistory:search',
+  NAV_HISTORY_DELETE: 'navHistory:delete',
+  NAV_HISTORY_CLEAR_ALL: 'navHistory:clearAll',
   // ===== 书签系统（v0.0.9，SQLite 持久化） =====
   // 渲染→主：查询书签列表（filter?: {profileId?, barOnly?}）
   BOOKMARK_LIST: 'bookmark:list',
@@ -371,7 +393,20 @@ export const IPC_CHANNELS = {
   // 主→渲染：标签音频状态变化推送（{windowId, tabId, audible}）
   BROWSER_TAB_AUDIO_CHANGED: 'browser:tab:audioChanged',
   // ===== 跨窗口标签聚合查询（v0.0.9，主子标签归属） =====
-  // 渲染→主：查询所有窗口的标签树（返回 {main: TabState[], browsers: {windowId, parentTabId, profileId, tabs}[]]}）
+  // 渲染→主：查询所有窗口的标签树（返回 {main: TabState[], browsers: {windowId, parentTabId, profileId, tabs}[]}）
   BROWSER_FOCUS_WINDOW: 'browser:focusWindow',
   BROWSER_TABS_QUERY: 'browser:tabs:query',
+  // ===== 浏览器窗口快捷键（每应用独立开关快捷键） =====
+  // 渲染→主：保存/清除指定 Profile 的浏览器窗口快捷键（{ profileId, accelerator: string | null }）
+  // 主进程保存到 Profile.browserWindowShortcut 并重注册全局快捷键
+  PROFILE_SHORTCUT_SET: 'profile:shortcut:set',
+  // ===== 累积链接（E1：AI 应用内新窗口链接累积） =====
+  // 渲染→主：添加一条累积链接（profileId, url, title）
+  ACCUMULATED_LINK_ADD: 'accumulated-link:add',
+  // 渲染→主：列出指定 Profile 的全部累积链接
+  ACCUMULATED_LINK_LIST: 'accumulated-link:list',
+  // 渲染→主：取出并清空指定 Profile 的全部累积链接
+  ACCUMULATED_LINK_CONSUME: 'accumulated-link:consume',
+  // 渲染→主：清空指定 Profile 的全部累积链接
+  ACCUMULATED_LINK_CLEAR: 'accumulated-link:clear',
 } as const

@@ -9,6 +9,12 @@ export const appSettingsApi = {
     testProxy: () => ipcRenderer.invoke(IPC_CHANNELS.APP_TEST_PROXY),
     applyProxy: () => ipcRenderer.invoke(IPC_CHANNELS.APP_APPLY_PROXY),
     applyProxyFallback: () => ipcRenderer.invoke(IPC_CHANNELS.APP_PROXY_FALLBACK),
+    testProfileProxy: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_TEST_PROFILE_PROXY, profileId),
+    applyProfileProxy: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_APPLY_PROFILE_PROXY, profileId),
+    applyProfileProxyFallback: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_PROFILE_PROXY_FALLBACK, profileId),
+    // 每应用浏览器窗口开关快捷键（保存 accelerator 或传 null 清除）
+    setProfileShortcut: (profileId: string, accelerator: string | null) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROFILE_SHORTCUT_SET, { profileId, accelerator }),
     clearAllData: () => ipcRenderer.invoke(IPC_CHANNELS.APP_CLEAR_ALL_DATA),
     selectExportPath: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_EXPORT_PATH),
     selectImportFile: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_IMPORT_FILE),

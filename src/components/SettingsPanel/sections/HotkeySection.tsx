@@ -1,9 +1,14 @@
 import { type Dispatch, type SetStateAction } from 'react';
 import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api';
-import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult, onHotkeyRecordingPartial } from '../../../lib/electron-api';
+import {
+  startHotkeyRecording,
+  stopHotkeyRecording,
+  onHotkeyRecordingResult,
+  onHotkeyRecordingPartial,
+} from '../../../lib/electron-api';
 import Button from '../../ui/Button';
 import HotkeyRecorder from '../../ui/HotkeyRecorder';
-import { SectionTitle, FormRow } from '../../ui';
+import { SectionTitle } from '../../ui';
 
 interface HotkeySectionProps {
   hotkeys: HotkeyConfig[];
@@ -16,6 +21,12 @@ interface HotkeySectionProps {
   onOpenShortcuts?: () => void;
 }
 
+/**
+ * 主窗口内置全局热键设置分区（toggleMainWindow / toggleDetachedWindows / backgroundVoice）。
+ *
+ * 浏览器窗口开关快捷键已迁移到 BrowserSettingsTab 的「窗口快捷键」section
+ * （每应用独立配置 Profile.browserWindowShortcut，默认无快捷键）。
+ */
 export default function HotkeySection({
   hotkeys,
   drafts,

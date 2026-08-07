@@ -50,6 +50,19 @@ body {
   background: var(--background);
 }
 
+/* ===== 窗口最小化收回动画（主窗口 + 浏览器窗口共用） =====
+   渲染层先添加 .window-minimizing 播放 200ms 透明度+缩放过渡，
+   动画结束后再调用真正的 win.minimize()，避免窗口直接消失无过渡。 */
+body.window-minimizing {
+  animation: window-minimize-out 200ms ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes window-minimize-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.85); }
+}
+
 a { color: var(--accent-bright); text-decoration: none; transition: color var(--duration-fast) var(--ease-out); }
 a:hover { color: var(--accent-light); }
 
@@ -496,6 +509,29 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   flex: 1 1 auto;
   overflow-y: auto;
   padding: var(--space-4);
+}
+
+/* ===== 确认对话框 ===== */
+.confirm-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 280px;
+  max-width: 420px;
+}
+.confirm-dialog-message {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 /* ===== 徽章 ===== */

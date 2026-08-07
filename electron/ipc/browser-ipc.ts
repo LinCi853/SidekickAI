@@ -34,6 +34,8 @@ export interface BrowserIpcDeps {
   getDownloadStore?: () => {
     list: (windowId?: string, limit?: number) => BrowserDownloadRecord[]
     get: (id: string) => BrowserDownloadRecord | null
+    delete: (id: string) => void
+    clearAll: (windowId?: string) => void
   } | null
 }
 
@@ -135,6 +137,28 @@ export function registerBrowserIpc(deps: BrowserIpcDeps): void {
     if (!record) return { ok: false, error: 'record not found' }
     try {
       shell.showItemInFolder(record.savePath)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROWSER_DOWNLOAD_DELETE, (_e, id: string) => {
+    const store = deps.getDownloadStore?.()
+    if (!store) return { ok: false, error: 'download store not available' }
+    try {
+      store.delete(id)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.BROWSER_DOWNLOAD_CLEAR_ALL, (_e, windowId?: string) => {
+    const store = deps.getDownloadStore?.()
+    if (!store) return { ok: false, error: 'download store not available' }
+    try {
+      store.clearAll(windowId)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: String(err) }

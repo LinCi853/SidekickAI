@@ -47,7 +47,8 @@
   color: var(--warning-fg);
   font-family: var(--font-sans); font-size: var(--text-sm); line-height: 1.5;
 }
-.injection-preview-warning-icon { flex: none; font-size: var(--text-md); }
+.injection-preview-warning-icon { flex: none; font-size: var(--text-md); display: inline-flex; align-items: center; }
+.injection-preview-warning-svg { width: 14px; height: 14px; display: block; }
 .injection-preview-textarea {
   width: 100%; box-sizing: border-box;
   min-height: 200px; max-height: 400px;

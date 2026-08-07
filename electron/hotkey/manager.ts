@@ -268,9 +268,22 @@ function parseAccelerator(acc: string): {
  * accelerator 格式遵循 Electron 规范，如 "Alt+Space"、"Ctrl+Shift+P"。
  * 内部维护 accelerator -> callback 映射，用于 isRegistered 查询与批量注销。
  */
+
+// 模块级单例引用：供 app-settings-store 注册浏览器快捷键 IPC 时获取，
+// 避免修改 main.ts 调用链（registerAppSettingsIPC 不接受 hotkeyManager 参数）。
+// HotkeyManager 在 main.ts 中仅 new 一次，此引用在构造时设置。
+let _hotkeyManagerInstance: HotkeyManager | null = null
+
+/** 获取全局唯一的 HotkeyManager 实例（未初始化时返回 null） */
+export function getHotkeyManagerInstance(): HotkeyManager | null {
+  return _hotkeyManagerInstance
+}
+
 export class HotkeyManager {
   /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底） */
   private registered = new Map<string, () => void>()
+  /** 浏览器窗口快捷键 accelerator -> 回调（C4：scope='global' 的浏览器快捷键，独立跟踪） */
+  private browserShortcuts = new Map<string, () => void>()
   /** action -> accelerator（当前已注册的内置热键映射） */
   private actionAccelerators = new Map<HotkeyAction, string>()
   /** uiohook 是否已启动 */
@@ -354,6 +367,8 @@ export class HotkeyManager {
     this.buildUiohookKeyMap()
     this.buildModifierKeyCodes()
     this.attachUiohookListener()
+    // 记录单例引用（供 app-settings-store 注册浏览器快捷键 IPC 时获取）
+    _hotkeyManagerInstance = this
   }
 
   /** 扫描 UiohookKey 枚举，收集各修饰键的所有 keycode（含左/右变体） */
@@ -646,6 +661,73 @@ export class HotkeyManager {
   }
 
   /**
+   * 注册浏览器窗口全局快捷键（C4：scope='global' 的浏览器快捷键）。
+   *
+   * 走 globalShortcut 主路径 + uiohook 兜底，与内置热键 register() 一致；
+   * 独立跟踪到 browserShortcuts 映射，避免与内置热键回调混淆，
+   * 注销时可按 accelerator 精确移除。
+   *
+   * @returns globalShortcut 是否注册成功（失败时仍有 uiohook 兜底）
+   */
+  registerBrowserShortcut(accelerator: string, callback: () => void): boolean {
+    // 若已注册同名浏览器快捷键，先注销
+    if (this.browserShortcuts.has(accelerator)) {
+      this.unregisterBrowserShortcut(accelerator)
+    }
+    this.browserShortcuts.set(accelerator, callback)
+    // 加入 uiohook 匹配器（兜底），复用主映射机制
+    if (!this.uiohookMatchers.has(accelerator)) {
+      this.uiohookMatchers.set(accelerator, {
+        ...parseAccelerator(accelerator),
+        callback,
+      })
+    }
+    this.ensureUiohookStarted()
+    // 主路径：globalShortcut
+    try {
+      if (globalShortcut.isRegistered(accelerator)) {
+        globalShortcut.unregister(accelerator)
+      }
+      const ok = globalShortcut.register(accelerator, callback)
+      if (ok) {
+        console.log(`[HotkeyManager] 浏览器全局快捷键注册成功: ${accelerator}`)
+        return true
+      }
+      console.warn(
+        `[HotkeyManager] 浏览器全局快捷键注册失败: ${accelerator}，已启用 uiohook 兜底`,
+      )
+    } catch (err) {
+      console.warn(`[HotkeyManager] 浏览器全局快捷键注册异常: ${accelerator}`, err)
+    }
+    return false
+  }
+
+  /** 注销浏览器窗口全局快捷键 */
+  unregisterBrowserShortcut(accelerator: string): void {
+    try {
+      globalShortcut.unregister(accelerator)
+    } catch (err) {
+      console.warn(`[HotkeyManager] 注销浏览器全局快捷键异常: ${accelerator}`, err)
+    }
+    this.browserShortcuts.delete(accelerator)
+    // 仅当内置热键主映射未使用该 accelerator 时才清理 uiohook 匹配器
+    if (!this.registered.has(accelerator)) {
+      this.uiohookMatchers.delete(accelerator)
+    }
+    this.lastTriggeredAt.delete(accelerator)
+  }
+
+  /**
+   * 注销全部浏览器窗口全局快捷键（reregisterProfileShortcuts 调用前置清理）。
+   * 遍历 browserShortcuts 映射逐条注销，避免影响内置热键 registered 映射。
+   */
+  unregisterAllBrowserShortcuts(): void {
+    for (const accelerator of Array.from(this.browserShortcuts.keys())) {
+      this.unregisterBrowserShortcut(accelerator)
+    }
+  }
+
+  /**
    * 检查是否已注册
    * 基于本管理器内部映射判断（含 uiohook 兜底项）。
    */
@@ -661,6 +743,7 @@ export class HotkeyManager {
       console.warn('[HotkeyManager] unregisterAll 异常', err)
     }
     this.registered.clear()
+    this.browserShortcuts.clear()
     this.actionAccelerators.clear()
     this.uiohookMatchers.clear()
     this.lastTriggeredAt.clear()

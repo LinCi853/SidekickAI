@@ -96,6 +96,7 @@ export default function AiAppEditorModal({
   // 表单字段
   const [aiPlatformName, setAiPlatformName] = useState('');
   const [aiPlatformUrl, setAiPlatformUrl] = useState('');
+  const [browserHomePage, setBrowserHomePage] = useState('');
   const [aiDesktopPreset, setAiDesktopPreset] = useState('');
   const [aiMobilePreset, setAiMobilePreset] = useState('');
   const [aiInputSelector, setAiInputSelector] = useState('');
@@ -134,6 +135,7 @@ export default function AiAppEditorModal({
         setProfile(null);
         setAiPlatformName('');
         setAiPlatformUrl('');
+        setBrowserHomePage('');
         setAiDesktopPreset('');
         setAiMobilePreset('');
         setAiInputSelector('');
@@ -166,6 +168,7 @@ export default function AiAppEditorModal({
       setProfile(matchedProfile);
       setAiPlatformName(matchedProfile.name ?? found?.name ?? '');
       setAiPlatformUrl(matchedProfile.aiPlatformUrl ?? found?.url ?? '');
+      setBrowserHomePage(matchedProfile.browserHomePage ?? '');
       setAiDesktopPreset(matchedProfile.aiDesktopPreset ?? found?.defaultDesktopPreset ?? '');
       setAiMobilePreset(matchedProfile.aiMobilePreset ?? found?.defaultMobilePreset ?? '');
       setAiInputSelector(matchedProfile.aiInputSelector ?? '');
@@ -195,6 +198,7 @@ export default function AiAppEditorModal({
       setProfile(data.profile);
       if (data.profile.name !== undefined) setAiPlatformName(data.profile.name);
       if (data.profile.aiPlatformUrl !== undefined) setAiPlatformUrl(data.profile.aiPlatformUrl);
+      if (data.profile.browserHomePage !== undefined) setBrowserHomePage(data.profile.browserHomePage);
       if (data.profile.aiInputSelector !== undefined) setAiInputSelector(data.profile.aiInputSelector);
       if (data.profile.aiSendSelector !== undefined) setAiSendSelector(data.profile.aiSendSelector);
       if (data.profile.aiThemeColor !== undefined) setAiThemeColor(data.profile.aiThemeColor);
@@ -247,6 +251,7 @@ export default function AiAppEditorModal({
       const patch: Partial<Profile> = {
         name: finalName,
         aiPlatformUrl: aiPlatformUrl.trim(),
+        browserHomePage: browserHomePage.trim() || undefined,
         aiDesktopPreset: aiDesktopPreset || undefined,
         aiMobilePreset: aiMobilePreset || undefined,
         aiInputSelector: aiInputSelector.trim() || undefined,
@@ -261,6 +266,7 @@ export default function AiAppEditorModal({
           isAIPlatform: true,
           aiPlatformId: platform?.id,
           aiPlatformUrl: patch.aiPlatformUrl,
+          browserHomePage: patch.browserHomePage,
           name: patch.name,
           aiDesktopPreset: patch.aiDesktopPreset,
           aiMobilePreset: patch.aiMobilePreset,
@@ -419,6 +425,17 @@ export default function AiAppEditorModal({
               onChange={(e) => setAiPlatformUrl(e.target.value)}
               placeholder="https://chat.example.com"
               data-name="ai-app-editor.url-input"
+            />
+          </FieldGroup>
+
+          <FieldGroup label="浏览器主页">
+            <input
+              type="text"
+              className="ai-editor-input"
+              value={browserHomePage}
+              onChange={(e) => setBrowserHomePage(e.target.value)}
+              placeholder="留空则使用平台 URL"
+              data-name="ai-app-editor.browser-home-page-input"
             />
           </FieldGroup>
 

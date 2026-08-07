@@ -1,13 +1,13 @@
 /* =====================================================================
    pages/BrowserView/BookmarksBar/BookmarkContextMenu.tsx —— 书签右键菜单（v0.0.9）
-   9 项：在新标签打开 / 修改(窗口遮罩) / 剪切 / 复制 / 粘贴 / 删除 /
+   9 项：在新标签打开 / 修改(Modal 弹窗) / 剪切 / 复制 / 粘贴 / 删除 /
         是否显示到书签栏 / 是否展示书签栏 / 书签管理器
    ===================================================================== */
 
-import { useEffect, useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 
-import { createPortal } from 'react-dom';
 import Popover, { PopoverItem, PopoverDivider } from '../../../components/ui/Popover';
+import { Button, FormRow, Modal } from '../../../components/ui';
 import type { Bookmark } from '../../../lib/electron-api';
 
 interface BookmarkContextMenuProps {
@@ -91,7 +91,7 @@ export default function BookmarkContextMenu({
   );
 }
 
-/** 书签编辑弹窗（窗口遮罩，使用 Portal 渲染到 body 确保覆盖整个 browser.container） */
+/** 书签编辑弹窗（使用共享 Modal 组件，ESC + 遮罩点击关闭由 Modal 自动处理；portal 渲染到 body 覆盖整个 browser.container） */
 export function BookmarkEditDialog({
   bookmark,
   onSave,
@@ -104,29 +104,54 @@ export function BookmarkEditDialog({
   const [title, setTitle] = useState(bookmark.title);
   const [url, setUrl] = useState(bookmark.url);
 
-  // ESC 关闭
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onCancel]);
+  // Modal 内部已处理 ESC 与遮罩点击关闭，无需手动监听
+  const inputStyle: CSSProperties = {
+    width: '100%',
+    background: 'var(--card)',
+    border: '1px solid var(--border)',
+    color: 'var(--foreground)',
+    padding: '6px 10px',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: 'var(--text-sm)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
 
-  return createPortal(
-    <div className="browser-bookmark-edit-overlay" data-name="browser.bookmark-edit-overlay" onClick={onCancel}>
-      <div className="browser-bookmark-edit-dialog" data-name="browser.bookmark-edit-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>修改书签</h3>
-        <label>名称</label>
-        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus data-name="browser.bookmark-edit-title-input" />
-        <label>网址</label>
-        <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} data-name="browser.bookmark-edit-url-input" />
-        <div className="browser-bookmark-edit-dialog-actions" data-name="browser.bookmark-edit-actions">
-          <button type="button" className="cancel" onClick={onCancel} data-name="browser.bookmark-edit-cancel">取消</button>
-          <button type="button" className="save" onClick={() => onSave(title, url)} data-name="browser.bookmark-edit-save">保存</button>
-        </div>
+  return (
+    <Modal
+      open={true}
+      onClose={onCancel}
+      title="修改书签"
+      portal
+      className="browser-bookmark-edit-modal"
+      data-name="browser.bookmark-edit-dialog"
+    >
+      <FormRow label="名称" stack data-name="browser.bookmark-edit-title-row">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          autoFocus
+          style={inputStyle}
+          data-name="browser.bookmark-edit-title-input"
+        />
+      </FormRow>
+      <FormRow label="网址" stack data-name="browser.bookmark-edit-url-row">
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          style={inputStyle}
+          data-name="browser.bookmark-edit-url-input"
+        />
+      </FormRow>
+      <div
+        style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-1)', marginTop: 'var(--space-3)' }}
+        data-name="browser.bookmark-edit-actions"
+      >
+        <Button type="button" variant="outline" onClick={onCancel} data-name="browser.bookmark-edit-cancel">取消</Button>
+        <Button type="button" variant="primary" onClick={() => onSave(title, url)} data-name="browser.bookmark-edit-save">保存</Button>
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }

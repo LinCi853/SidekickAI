@@ -98,6 +98,8 @@ export interface ElectronAPI {
   }) => Promise<void>
   /** 打开设置独立窗口（单例，左导航+右内容布局） */
   openSettingsWindow: () => Promise<void>
+  /** 打开历史记录与下载管理独立窗口（单例，导航历史 + 下载管理） */
+  openHistoryDownloadWindow: () => Promise<void>
   /**
    * 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）。
    * 可选 providerId：若提供则切换到对应自定义供应商的对话页。

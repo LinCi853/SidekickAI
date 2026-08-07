@@ -4,7 +4,7 @@
    支持 primary / ghost / danger / link / primary-compact / text 六种变体
    ===================================================================== */
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 export type ButtonVariant =
   | 'primary'
@@ -51,16 +51,18 @@ function resolveClass(variant: ButtonVariant, danger?: boolean, extra?: string):
  * <Button variant="danger" onClick={handleDelete}>删除</Button>
  * <Button variant="text" danger onClick={handleForceQuit}>强制退出</Button>
  */
-export default function Button({
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   variant = 'primary',
   danger = false,
   className,
   children,
   ...rest
-}: ButtonProps) {
+}, ref) {
   return (
-    <button className={resolveClass(variant, danger, className)} {...rest}>
+    <button ref={ref} className={resolveClass(variant, danger, className)} {...rest}>
       {children}
     </button>
   );
-}
+});
+
+export default Button;

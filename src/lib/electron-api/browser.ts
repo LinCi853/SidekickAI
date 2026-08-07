@@ -9,6 +9,8 @@ import type {
   NavHistoryEntry,
   BrowserTabState,
   TabState,
+  AccumulatedLink,
+  MigratedTabInfo,
 } from '../../../electron/shared/types';
 import type {
   Bookmark,
@@ -20,6 +22,8 @@ import { requireElectron } from './core';
 
 // re-export 书签类型，供渲染层通过 electron-api 桶导出使用
 export type { Bookmark, BookmarkInput, BookmarkFilter, BookmarkPatch };
+// E1：累积链接类型 re-export（供 BrowserView 消费累积链接时使用）
+export type { AccumulatedLink, MigratedTabInfo };
 
 /* =====================================================================
    浏览器窗口 —— 对应 window.electron.browser
@@ -73,6 +77,18 @@ export async function showDownloadInFolder(id: string): Promise<{ ok: boolean; e
   return api.browser.showDownloadInFolder(id);
 }
 
+/** 删除单条下载记录（仅删除记录，不删除文件） */
+export async function deleteDownload(id: string): Promise<{ ok: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.browser.deleteDownload(id);
+}
+
+/** 清空全部下载记录（可选按 windowId 过滤；仅删除记录，不删除文件） */
+export async function clearAllDownloads(windowId?: string): Promise<{ ok: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.browser.clearAllDownloads(windowId);
+}
+
 /** 主→渲染：下载状态变化推送。返回取消监听函数。 */
 export function onDownloadUpdated(callback: (record: BrowserDownloadRecord) => void): () => void {
   const api = requireElectron();
@@ -113,13 +129,43 @@ export async function clearNavHistory(profileId: string): Promise<void> {
   return api.navHistory.clear(profileId);
 }
 
+/** 分页查询导航历史（按时间倒序；profileId 省略时跨 Profile 聚合） */
+export async function listNavHistory(profileId: string | undefined, page: number, pageSize: number): Promise<NavHistoryEntry[]> {
+  const api = requireElectron();
+  return api.navHistory.list(profileId, page, pageSize);
+}
+
+/** 关键词搜索导航历史（URL / title 模糊匹配；profileId 省略时跨 Profile 聚合） */
+export async function searchNavHistory(profileId: string | undefined, keyword: string): Promise<NavHistoryEntry[]> {
+  const api = requireElectron();
+  return api.navHistory.search(profileId, keyword);
+}
+
+/** 删除单条导航历史 */
+export async function deleteNavHistory(id: string): Promise<void> {
+  const api = requireElectron();
+  return api.navHistory.delete(id);
+}
+
+/** 清空全部导航历史（可选按 profileId 过滤） */
+export async function clearAllNavHistory(profileId?: string): Promise<void> {
+  const api = requireElectron();
+  return api.navHistory.clearAll(profileId);
+}
+
+/** 打开历史记录与下载管理独立窗口（单例） */
+export async function openHistoryDownloadWindow(): Promise<void> {
+  const api = requireElectron();
+  return api.openHistoryDownloadWindow();
+}
+
 /** 浏览器窗口关闭时，将当前标签迁移回主窗口 */
 export function browserTabMigrateBack(payload: {
   profileId: string;
   url: string;
   title: string;
   /** v0.0.9: 所有标签的最终 URL（按 parentTabId 精确恢复多标签） */
-  finalUrls?: Array<{ tabId: string; url: string; title: string }>;
+  finalUrls?: MigratedTabInfo[];
 }): void {
   const api = requireElectron();
   api.browser.tabMigrateBack(payload);
@@ -127,7 +173,7 @@ export function browserTabMigrateBack(payload: {
 
 /** 监听浏览器窗口标签迁移回主窗口的事件（主窗口渲染层使用） */
 export function onBrowserTabMigrateBack(
-  callback: (payload: { profileId: string; url: string; title: string; finalUrls?: Array<{ tabId: string; url: string; title: string }> }) => void,
+  callback: (payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }) => void,
 ): () => void {
   const api = requireElectron();
   return api.browser.onTabMigrateBack(callback);
@@ -211,4 +257,32 @@ export async function deleteBookmark(id: string): Promise<void> {
 export async function reorderBookmarks(ids: string[]): Promise<void> {
   const api = requireElectron();
   return api.browser.bookmark.reorder(ids);
+}
+
+/* =====================================================================
+   累积链接 —— E1：AI 应用内新窗口链接累积
+   ===================================================================== */
+
+/** 添加一条累积链接（主窗口 AI 应用内拦截的新窗口链接） */
+export async function addAccumulatedLink(profileId: string, url: string, title: string): Promise<void> {
+  const api = requireElectron();
+  return api.browser.accumulatedLinks.add(profileId, url, title);
+}
+
+/** 列出指定 Profile 的全部累积链接（按 timestamp 升序） */
+export async function listAccumulatedLinks(profileId: string): Promise<AccumulatedLink[]> {
+  const api = requireElectron();
+  return api.browser.accumulatedLinks.list(profileId);
+}
+
+/** 取出并清空指定 Profile 的全部累积链接（窗口初始化时消费） */
+export async function consumeAccumulatedLinks(profileId: string): Promise<AccumulatedLink[]> {
+  const api = requireElectron();
+  return api.browser.accumulatedLinks.consume(profileId);
+}
+
+/** 清空指定 Profile 的全部累积链接 */
+export async function clearAccumulatedLinks(profileId: string): Promise<void> {
+  const api = requireElectron();
+  return api.browser.accumulatedLinks.clear(profileId);
 }

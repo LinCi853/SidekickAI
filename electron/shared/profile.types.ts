@@ -2,6 +2,7 @@
 // 由 shared/types.ts 拆分而来；类型定义内容保持原样，仅做物理拆分。
 
 import type { FingerprintConfig } from './fingerprint.types.js'
+import type { ProfileProxyConfig } from './proxy.types.js'
 
 /** 平台类型：桌面端 / 移动端 */
 export type PlatformType = 'desktop' | 'mobile'
@@ -81,8 +82,15 @@ export interface Profile {
   language: string
   /** 时区 */
   timezone: string
-  /** 代理配置（空字符串=直连） */
+  /** 代理配置（空字符串=直连）—— 旧字段，仅作兼容；优先使用 proxyConfig */
   proxy: string
+  /**
+   * Profile 级独立代理配置（完整对象）。
+   * - 设置后该 Profile 的 session 使用此配置，覆盖全局 AppSettings 代理。
+   * - 未定义（undefined）时回退到 proxy 字符串，再回退到全局 AppSettings。
+   * - 在浏览器窗口设置标签页中编辑。
+   */
+  proxyConfig?: ProfileProxyConfig
 
   // 指纹层
   /** 指纹配置 */
@@ -109,6 +117,8 @@ export interface Profile {
   isBuiltIn?: boolean
   /** AI 平台 URL（isAIPlatform=true 时有效） */
   aiPlatformUrl?: string
+  /** 浏览器独立窗口主页 URL（用户可自定义，留空时回退到 aiPlatformUrl） */
+  browserHomePage?: string
   /** 内置 AI 平台 id（isAIPlatform=true 时有效，用于稳定关联平台与 Profile） */
   aiPlatformId?: string
   /** AI 平台地区标识（用户可覆盖：cn=国内 / global=国外，与一键隐藏国外模型联动） */
@@ -143,6 +153,14 @@ export interface Profile {
    * - 留空时仅依赖 ①② 两层兜底
    */
   popupWhitelist?: string[]
+  /**
+   * 该 AI 应用浏览器窗口的全局开关快捷键（accelerator 字符串，如 'Ctrl+Shift+D'）。
+   * - 按下该快捷键将打开/关闭当前应用的浏览器窗口（类比 Alt+Q 切换进阶面板）。
+   * - 默认 undefined（无快捷键，不注册到系统）。
+   * - 每个 AI 应用独立配置，在浏览器窗口设置标签页中编辑。
+   * - 注册为系统级全局快捷键（globalShortcut），应用未聚焦也生效。
+   */
+  browserWindowShortcut?: string
 }
 
 // ============================================================================

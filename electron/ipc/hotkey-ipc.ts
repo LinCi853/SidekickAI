@@ -224,6 +224,11 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
   // 注册 2 个默认内置热键（从持久化配置读取 accelerator）
   void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks)
 
+  // 启动时注册所有 Profile 的浏览器窗口开关快捷键（Profile.browserWindowShortcut）
+  void import('../store/app-settings-store.js').then(({ reregisterProfileShortcuts }) => {
+    void reregisterProfileShortcuts()
+  })
+
   // 注册 Alt+V 后台语音热键（hold-to-record，仅 uiohook keydown/keyup）
   // 统一走主进程 SttEngine + 预览窗 + IPC 注入+发送 路径，
   // 语音 UI 始终为独立预览窗（PreviewView），不再使用内嵌浮层。

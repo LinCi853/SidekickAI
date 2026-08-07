@@ -1,15 +1,39 @@
 import { useState } from 'react';
 import { Button, SegmentedControl, Toggle, SectionTitle } from '../../ui';
 import type { ProxySettings } from '../types';
-import { updateAppSettings, testProxy, applyProxy } from '../../../lib/electron-api';
+import {
+  updateAppSettings,
+  testProxy,
+  applyProxy,
+  updateProfile,
+  applyProfileProxy,
+  testProfileProxy,
+} from '../../../lib/electron-api';
+import type { ProfileProxyConfig } from '../../../lib/electron-api';
 import { useDraftState } from '../../../hooks/useDraftState';
 
 interface ProxySectionProps {
   proxy: ProxySettings;
   onChange: (patch: Partial<ProxySettings>) => void;
+  /**
+   * 作用域：
+   * - 'global'（默认）：读写全局 AppSettings 代理
+   * - 'profile'：读写 Profile.proxyConfig（当前 AI 应用窗口独立代理）
+   * profile scope 时需提供 profileId。
+   */
+  scope?: 'global' | 'profile';
+  /** Profile id（scope='profile' 时必需） */
+  profileId?: string;
 }
 
-export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
+export default function ProxySection({
+  proxy,
+  onChange,
+  scope = 'global',
+  profileId,
+}: ProxySectionProps) {
+  const isProfile = scope === 'profile';
+
   // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
   const {
     proxyMode,
@@ -21,7 +45,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
     proxyFallbackMode,
   } = proxy;
 
-  // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部 updateAppSettings/applyProxy 完成
+  // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部完成
   const setProxyMode = (v: 'system' | 'direct' | 'custom') => onChange({ proxyMode: v });
   const setCustomProxy = (v: string) => onChange({ customProxy: v });
   const setProxyUsername = (v: string) => onChange({ proxyUsername: v });
@@ -29,11 +53,34 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
   const setProxyBypass = (v: string) => onChange({ proxyBypass: v });
   const setProxyFallbackEnabled = (v: boolean) => onChange({ proxyFallbackEnabled: v });
   const setProxyFallbackMode = (v: 'direct' | 'system') => onChange({ proxyFallbackMode: v });
+
+  /** 持久化 patch + 即时生效（按 scope 分发） */
+  const persist = async (patch: Partial<ProxySettings>) => {
+    if (isProfile) {
+      if (!profileId) return;
+      // proxyConfig 在主进程 update() 中深合并，此处传部分字段即可；
+      // 类型上 ProfileProxyConfig 要求完整对象，故用 as 转换（运行时安全）。
+      await updateProfile(profileId, { proxyConfig: patch as ProfileProxyConfig });
+      await applyProfileProxy(profileId);
+    } else {
+      await updateAppSettings(patch);
+      await applyProxy();
+    }
+  };
+
+  /** 测试连通性（按 scope 分发） */
+  const runTest = async () => {
+    if (isProfile && profileId) {
+      return testProfileProxy(profileId);
+    }
+    return testProxy();
+  };
+
   // 草稿：编辑中的值（保存前不写回父级 state）
   const { draft: proxyDraft, setDraft: setProxyDraft, isDirty: dirty, save: saveProxyDraft } = useDraftState({
     initial: { proxy: customProxy, user: proxyUsername, pass: proxyPassword, bypass: proxyBypass },
     onSave: async (d) => {
-      await updateAppSettings({
+      await persist({
         customProxy: d.proxy,
         proxyUsername: d.user,
         proxyPassword: d.pass,
@@ -43,8 +90,6 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
       setProxyUsername(d.user);
       setProxyPassword(d.pass);
       setProxyBypass(d.bypass);
-      // 即时生效
-      await applyProxy();
     },
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -64,8 +109,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
   const handleModeChange = async (mode: 'system' | 'direct' | 'custom') => {
     setProxyMode(mode);
     try {
-      await updateAppSettings({ proxyMode: mode });
-      await applyProxy();
+      await persist({ proxyMode: mode });
     } catch (e) {
       console.error('保存代理模式失败:', e);
     }
@@ -90,7 +134,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const result = await testProxy();
+      const result = await runTest();
       setTestResult(result);
     } catch (e) {
       setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
@@ -101,7 +145,13 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
 
   return (
     <section data-name="settings.proxy.section">
-      <SectionTitle>区域与代理</SectionTitle>
+      <SectionTitle>{isProfile ? '应用代理设置' : '区域与代理'}</SectionTitle>
+
+      {isProfile && (
+        <div className="proxy-section-hint" data-name="settings.proxy.scope-hint">
+          此代理仅对当前 AI 应用窗口生效，不影响主窗口与其他应用。
+        </div>
+      )}
 
       {/* 代理模式 */}
       <div className="proxy-section-block" data-name="settings.proxy.block">
@@ -228,7 +278,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
               onChange={async (checked) => {
                 setProxyFallbackEnabled(checked);
                 try {
-                  await updateAppSettings({ proxyFallbackEnabled: checked });
+                  await persist({ proxyFallbackEnabled: checked });
                 } catch (e) {
                   console.error('保存代理兜底开关失败:', e);
                 }
@@ -246,7 +296,7 @@ export default function ProxySection({ proxy, onChange }: ProxySectionProps) {
                 onChange={async (mode) => {
                   setProxyFallbackMode(mode);
                   try {
-                    await updateAppSettings({ proxyFallbackMode: mode });
+                    await persist({ proxyFallbackMode: mode });
                   } catch (e) {
                     console.error('保存代理兜底模式失败:', e);
                   }

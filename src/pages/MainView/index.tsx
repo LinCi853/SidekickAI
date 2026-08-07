@@ -26,9 +26,11 @@ import ShortcutsModal from '../../components/ShortcutsModal';
 import DrawerPanel from '../../components/DrawerPanel';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useThemeStore } from '../../store/useThemeStore';
+import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms';
 import './styles.css';
 import { WebviewTab } from './WebviewTab';
 import TabContextMenu from './TabContextMenu';
@@ -83,6 +85,9 @@ export default function MainView() {
   const profiles = useProfileStore((s) => s.profiles);
   const updateProfile = useProfileStore((s) => s.updateProfile);
   const updateProfileUaLockMode = useProfileStore((s) => s.updateProfileUaLockMode);
+
+  // D3: 监听 AI 输入框聚焦触发器（标签迁回主窗口时触发）
+  const focusAiInputTrigger = useTabStore((s) => s.focusAiInputTrigger);
 
   // Extracted hooks
   const {
@@ -167,31 +172,43 @@ export default function MainView() {
   useMainViewKeyboard(bottomBarExpanded, toggleBottomBar);
   useShortcutsToggle(shortcutsOpen, setShortcutsOpen);
 
-  // Browser tab migration
+  // D3: focusAiInputTrigger 变化时聚焦当前激活标签的 AI 输入框
   useEffect(() => {
-    const off = onBrowserTabMigrateBack(({ profileId, url, title, finalUrls }) => {
+    if (focusAiInputTrigger <= 0) return;
+    const activeTabId = useTabStore.getState().activeTabId;
+    if (!activeTabId) return;
+    const wv = document.querySelector(`webview[data-tab-id="${activeTabId}"]`) as WebviewLike | null;
+    if (!wv) return;
+    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
+    const profile = tab ? useProfileStore.getState().profiles.find((p) => p.id === tab.profileId) : null;
+    const platform = profile?.aiPlatformId
+      ? AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)
+      : null;
+    const selector = profile?.aiInputSelector || platform?.inputSelector || null;
+    wv.focus?.();
+    void focusInputInWebview(wv, selector);
+  }, [focusAiInputTrigger]);
+
+  // Browser tab migration
+  // P0-4：一个 AI 应用 = 一个主标签。浏览器窗口关闭时仅恢复主标签（更新 URL/title），
+  // 不再迁移多个标签。浏览器窗口内的浏览历史通过 navHistoryStore 独立保存。
+  useEffect(() => {
+    const off = onBrowserTabMigrateBack(({ profileId, url }) => {
       removeDetachedProfile(profileId);
       const allTabs = useTabStore.getState().tabs;
-      if (finalUrls && finalUrls.length > 0) {
-        for (const f of finalUrls) {
-          const tab = allTabs.find((t) => t.id === f.tabId);
-          if (tab && f.url) {
-            void useTabStore.getState().updateTabUrl(tab.id, f.url);
-          }
+
+      // 按 profileId 查找主窗口中的已有标签（即被脱离的父标签）
+      const existingTab = allTabs.find((t) => t.profileId === profileId);
+      if (existingTab) {
+        // 更新主标签 URL 为浏览器窗口中最后浏览的页面
+        if (url) {
+          void useTabStore.getState().updateTabUrl(existingTab.id, url);
         }
-        const firstTab = allTabs.find((t) => t.id === finalUrls[0]?.tabId);
-        if (firstTab) {
-          useTabStore.getState().setActiveTab(firstTab.id);
-        }
-      } else {
-        const existingTab = allTabs.find((t) => t.profileId === profileId);
-        if (existingTab) {
-          if (url) {
-            void useTabStore.getState().updateTabUrl(existingTab.id, url);
-          }
-          useTabStore.getState().setActiveTab(existingTab.id);
-        }
+        useTabStore.getState().setActiveTab(existingTab.id);
       }
+
+      // D3: 标签迁回后触发 AI 输入框聚焦
+      useTabStore.getState().triggerFocusAiInput();
     });
     return () => off();
   }, [removeDetachedProfile]);

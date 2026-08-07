@@ -13,6 +13,7 @@
 
 export * from './fingerprint.types.js'
 export * from './profile.types.js'
+export * from './proxy.types.js'
 export * from './window.types.js'
 export * from './chat.types.js'
 export * from './block-rules.types.js'

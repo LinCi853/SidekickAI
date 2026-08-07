@@ -85,6 +85,15 @@ class BrowserDownloadStore {
   delete(id: string): void {
     this.db.prepare(`DELETE FROM browser_downloads WHERE id = ?`).run(id)
   }
+
+  /** 清空全部下载记录（可选按 windowId 过滤） */
+  clearAll(windowId?: string): void {
+    if (windowId) {
+      this.db.prepare(`DELETE FROM browser_downloads WHERE window_id = ?`).run(windowId)
+    } else {
+      this.db.prepare(`DELETE FROM browser_downloads`).run()
+    }
+  }
 }
 
 export const browserDownloadStore = new BrowserDownloadStore()

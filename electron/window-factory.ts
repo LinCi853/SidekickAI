@@ -26,9 +26,10 @@
 export { getSenderWindow, loadRenderer, getFormBounds, findWindowIdByWin } from './window-factory/helpers.js'
 export { createMainWindow } from './window-factory/main-window.js'
 export { createStandaloneWindow } from './window-factory/standalone-window.js'
-export { createBrowserWindow } from './window-factory/browser-window.js'
+export { createBrowserWindow, toggleBrowserWindow } from './window-factory/browser-window.js'
 export { createChatWindow, createChatDetachedWindow } from './window-factory/chat-window.js'
 export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showDataExportWindow, showSettingsWindow } from './window-factory/popup-windows.js'
+export { showHistoryDownloadWindow } from './window-factory/history-download-window.js'
 export {
   createAdvancedPanelWindow,
   openAdvancedPanelWindow,

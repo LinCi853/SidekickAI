@@ -17,6 +17,7 @@ import {
   addToProfilePopupWhitelist,
   applyProxyFallback,
   getAppSettings,
+  recordNavHistory,
 } from '../../lib/electron-api';
 import type { Profile } from '../../lib/electron-api';
 import { injectViewportAndPopupGuard, sanitizeUrl, safeLoadURLWebview, type WebviewElement } from '../../lib/webview';
@@ -581,6 +582,30 @@ export function WebviewTab({
       console.log('[WebviewTab] did-navigate, type=', (e as Event).type, 'newUrl=', newUrl, 'oldTabUrl=', tab.url);
       if (newUrl && newUrl !== tab.url) {
         void useTabStore.getState().updateTabUrl(tab.id, newUrl);
+        // P1-1：记录导航历史到该 Profile 的独立历史中
+        void recordNavHistory(profile.id, {
+          id: '',
+          profileId: profile.id,
+          url: newUrl,
+          title: '',
+          timestamp: Date.now(),
+        }).catch(() => { /* ignore */ });
+        // 延迟读取 title 并更新历史记录
+        setTimeout(() => {
+          try {
+            void webview.executeJavaScript('document.title').then((title) => {
+              if (title && typeof title === 'string') {
+                void recordNavHistory(profile.id, {
+                  id: '',
+                  profileId: profile.id,
+                  url: newUrl,
+                  title,
+                  timestamp: Date.now(),
+                }).catch(() => { /* ignore */ });
+              }
+            }).catch(() => { /* ignore */ });
+          } catch { /* ignore */ }
+        }, 500);
       }
       // 导航后上报导航能力（顶栏后退/前进按钮 disabled 状态）
       try { onNavigationChangeRef.current?.(webview.canGoBack(), webview.canGoForward()); } catch { /* ignore */ }

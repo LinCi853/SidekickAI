@@ -44,6 +44,10 @@ export interface TabStoreState {
   _pinLock: boolean;
   /** IPC 监听器是否已设置（避免重复注册） */
   _ipcListenersSetUp: boolean;
+  /** AI 输入框聚焦触发器（每次自增触发 useEffect） */
+  focusAiInputTrigger: number;
+  /** 触发 AI 输入框聚焦 */
+  triggerFocusAiInput: () => void;
 
   /** 初始化：从主进程加载持久化状态 */
   init: (windowId: string) => Promise<void>;
@@ -61,6 +65,14 @@ export interface TabStoreState {
   updateTabHomeUrl: (tabId: string, homeUrl: string) => Promise<void>;
   /** 移动标签排序 */
   moveTab: (dragId: string, hoverId: string) => void;
+  /**
+   * E2：将一组标签插入到指定父标签右侧（依次追加）。
+   * 用于浏览器窗口关闭后，迁移回主窗口的标签按 parentTabId 分组、组内按 originalOrder
+   * 排序后插入到父标签右侧，还原用户在浏览器窗口内的标签顺序。
+   * @param parentTabId  主窗口内的父标签 id
+   * @param tabsToInsert 待插入的 TabState 数组（已按 originalOrder 排序）
+   */
+  insertTabAfterParent: (parentTabId: string, tabsToInsert: TabState[]) => void;
   /** 脱离标签为独立窗口 */
   detachTab: (tabId: string) => Promise<void>;
   /** 设置置顶 */
@@ -109,7 +121,10 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   _maximizingLock: false,
   _pinLock: false,
   _ipcListenersSetUp: false,
+  focusAiInputTrigger: 0,
   detachedProfiles: new Set<string>(),
+
+  triggerFocusAiInput: () => set((state) => ({ focusAiInputTrigger: state.focusAiInputTrigger + 1 })),
 
   init: async (windowId) => {
     console.log('[useTabStore.init] 开始, windowId:', windowId);
@@ -275,6 +290,21 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
     newTabs.splice(hoverIndex, 0, dragged);
     const reorderedTabs = newTabs.map((t, i) => ({ ...t, order: i }));
     set({ tabs: reorderedTabs });
+    get().persist();
+  },
+
+  insertTabAfterParent: (parentTabId, tabsToInsert) => {
+    if (tabsToInsert.length === 0) return;
+    set((state) => {
+      const parentIdx = state.tabs.findIndex((t) => t.id === parentTabId);
+      if (parentIdx === -1) return state;
+      const newTabs = [...state.tabs];
+      // 在父标签右侧依次追加插入（保持 tabsToInsert 顺序）
+      newTabs.splice(parentIdx + 1, 0, ...tabsToInsert);
+      // 重新分配 order，保证连续
+      const reorderedTabs = newTabs.map((t, i) => ({ ...t, order: i }));
+      return { tabs: reorderedTabs };
+    });
     get().persist();
   },
 

@@ -17,20 +17,32 @@ export interface BrowserTabState {
   url: string
   /** 站点 favicon（data URL 或 http URL，可选） */
   favicon?: string
+  /** 网站主题色（从 meta[name="theme-color"] 提取，用于 favicon 占位背景） */
+  themeColor?: string
   /** 是否正在加载 */
   isLoading: boolean
+  /** 加载进度估算（0-100，0 表示未加载/隐藏进度条） */
+  loadingProgress?: number
+  /** 加载状态文本（如 "正在连接..." / "等待响应..." / "已完成"） */
+  loadingStatus?: string
   /** 是否可后退 */
   canGoBack: boolean
   /** 是否可前进 */
   canGoForward: boolean
   /** 在标签栏中的排序（从 0 开始） */
   order: number
-  /** 标签来源：initial=脱离时从导航历史恢复 / new=用户新建 / external=外部链接打开 / settings=内部设置页 / bookmark-manager=书签管理器 */
-  source: 'initial' | 'new' | 'external' | 'settings' | 'bookmark-manager'
+  /** 标签来源：initial=脱离时从导航历史恢复 / new=用户新建 / external=外部链接打开 / settings=内部设置页 / bookmark-manager=书签管理器 / history=导航历史内嵌页 / downloads=下载管理内嵌页 */
+  source: 'initial' | 'new' | 'external' | 'settings' | 'bookmark-manager' | 'history' | 'downloads'
   /** 标签种类：home=AI应用首页 / web=派生网页。决定标签栏图标与默认行为 */
   kind: 'home' | 'web'
   /** 主窗口父标签 id（脱离时记录原 TabState.id，用于跨窗口归属查询） */
   parentTabId?: string
+  /**
+   * E2：标签在浏览器窗口内的原始排序（filter 后的 idx）。
+   * 关闭浏览器窗口迁移回主窗口时，主窗口按 parentTabId 分组、组内按 originalOrder
+   * 排序后依次插入到父标签右侧，还原用户在浏览器窗口内的标签顺序。
+   */
+  originalOrder?: number
   /** 是否固定标签（固定标签排在左侧、占用最小宽度、不显示关闭按钮） */
   pinned?: boolean
   /** 是否被用户主动静音（audible 为页面实际在播放音频） */
@@ -76,8 +88,12 @@ export interface BrowserWindowState {
   platformName?: string
 }
 
-/** 导航历史条目（内存中，不持久化；重启后清空） */
+/** 导航历史条目（SQLite 持久化 + 内存双写；重启后仍可见） */
 export interface NavHistoryEntry {
+  /** 记录唯一 id（UUID，主进程生成） */
+  id: string
+  /** 关联的 Profile id */
+  profileId: string
   url: string
   title: string
   timestamp: number

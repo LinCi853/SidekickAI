@@ -5,7 +5,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { BrowserTabState, Profile, SearchHistoryEntry } from '../../../lib/electron-api';
-import { listSearchHistory, openExternal } from '../../../lib/electron-api';
+import { listSearchHistory, openExternal, getAppSettings, onAppSettingsChanged } from '../../../lib/electron-api';
+import { LockIcon, AlertIcon, SearchIcon } from '@/components/icons';
 import SitePermissionButton from './SitePermissionButton';
 import StarButton from './StarButton';
 
@@ -24,8 +25,10 @@ function isUrl(input: string): boolean {
   return false;
 }
 
-function toSearchUrl(query: string): string {
-  return `https://www.bing.com/search?q=${encodeURIComponent(query.trim())}`;
+/** G1：根据配置的 urlTemplate 生成搜索 URL（{query} 占位符替换为编码后的查询词） */
+function toSearchUrl(query: string, urlTemplate: string): string {
+  const template = urlTemplate || 'https://www.bing.com/search?q={query}';
+  return template.replace('{query}', encodeURIComponent(query.trim()));
 }
 
 export default function AddressBar({ tab, profile, themeColor, onNavigate, addressBarRef }: AddressBarProps) {
@@ -33,10 +36,26 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
   const [isEditing, setIsEditing] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchHistoryEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  // G1：当前默认搜索引擎的 urlTemplate（订阅全局设置变更以保持同步）
+  const [searchUrlTemplate, setSearchUrlTemplate] = useState<string>('https://www.bing.com/search?q={query}');
 
   useEffect(() => {
     setUrlDraft(tab?.url || '');
   }, [tab?.url]);
+
+  // G1：加载默认搜索引擎配置，并订阅跨窗口设置变更
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    void getAppSettings().then((s) => {
+      setSearchUrlTemplate(s.defaultSearchEngine?.urlTemplate || 'https://www.bing.com/search?q={query}');
+    });
+    unsubscribe = onAppSettingsChanged((s) => {
+      setSearchUrlTemplate(s.defaultSearchEngine?.urlTemplate || 'https://www.bing.com/search?q={query}');
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     setIsEditing(true);
@@ -55,22 +74,26 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
   }, []);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         const input = urlDraft.trim();
         if (!input) return;
-        const url = isUrl(input) ? (input.startsWith('http') ? input : `https://${input}`) : toSearchUrl(input);
+        const url = isUrl(input) ? (input.startsWith('http') ? input : `https://${input}`) : toSearchUrl(input, searchUrlTemplate);
         onNavigate(url);
         setIsEditing(false);
         setShowSuggestions(false);
       } else if (e.key === 'Escape') {
-        setIsEditing(false);
-        setShowSuggestions(false);
+        // G2：ESC 退出地址栏编辑状态，恢复 urlDraft 并失焦（焦点交回 webview）
+        e.preventDefault();
+        e.stopPropagation();
         setUrlDraft(tab?.url || '');
+        setShowSuggestions(false);
+        setIsEditing(false);
+        e.currentTarget.blur();
       }
     },
-    [urlDraft, tab?.url, onNavigate],
+    [urlDraft, tab?.url, onNavigate, searchUrlTemplate],
   );
 
   const isSecure = tab?.url?.startsWith('https://');
@@ -79,7 +102,7 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
     <div className="browser-address-wrapper" data-name="browser.address-bar">
       <SitePermissionButton tab={tab} />
       <span className="browser-address-security" data-name="browser.address-security">
-        {isSecure ? '🔒' : tab?.url ? '⚠' : ''}
+        {isSecure ? <LockIcon className="browser-address-security-icon" /> : tab?.url ? <AlertIcon className="browser-address-security-icon" /> : null}
       </span>
       <input
         ref={addressBarRef}
@@ -130,7 +153,7 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
                 setShowSuggestions(false);
               }}
             >
-              <span className="browser-suggestion-icon" data-name="browser.suggestion-icon">🔍</span>
+              <span className="browser-suggestion-icon" data-name="browser.suggestion-icon"><SearchIcon className="browser-suggestion-svg" /></span>
               <span className="browser-suggestion-text" data-name="browser.suggestion-text">{entry.query}</span>
             </button>
           ))}

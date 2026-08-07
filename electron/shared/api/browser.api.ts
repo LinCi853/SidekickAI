@@ -9,6 +9,24 @@ import type {
 } from '../browser.types.js'
 import type { Bookmark, BookmarkInput, BookmarkPatch } from '../bookmark.types.js'
 import type { TabState } from '../window.types.js'
+// E1：累积链接类型（与 store 中的 AccumulatedLink 结构一致）
+export type { AccumulatedLink } from '../../store/accumulated-links-store.js'
+import type { AccumulatedLink } from '../../store/accumulated-links-store.js'
+
+/** 浏览器窗口关闭时迁移回主窗口的单条标签信息 */
+export interface MigratedTabInfo {
+  /** 主窗口父标签 id（用于在父标签右侧插入；可能为 undefined，由消费方兜底） */
+  parentTabId?: string
+  /** 该标签在浏览器窗口内的原排序（用于同 parentTabId 内按序插入） */
+  originalOrder?: number
+  /** 标签来源：'initial' | 'new' | 'external' | 'settings' | 'bookmark-manager'。
+   *  'settings' 迁移后通知主窗口切换至主页，不作为主窗口主页插入 */
+  source?: BrowserTabState['source']
+  /** 兼容旧字段：tabId（等同于 parentTabId 或浏览器窗口内 tab id） */
+  tabId?: string
+  url: string
+  title: string
+}
 
 /** 浏览器窗口 API（多标签浏览器窗口：状态持久化 / 搜索历史 / 下载 / 外部打开） */
 export interface BrowserAPI {
@@ -28,6 +46,10 @@ export interface BrowserAPI {
   openDownloadFile(id: string): Promise<{ ok: boolean; error?: string }>
   /** 在文件管理器中显示已下载文件 */
   showDownloadInFolder(id: string): Promise<{ ok: boolean; error?: string }>
+  /** 删除单条下载记录（仅删除记录，不删除文件） */
+  deleteDownload(id: string): Promise<{ ok: boolean; error?: string }>
+  /** 清空全部下载记录（可选按 windowId 过滤；仅删除记录，不删除文件） */
+  clearAllDownloads(windowId?: string): Promise<{ ok: boolean; error?: string }>
   /** 主→渲染：下载状态变化推送。返回取消监听函数。 */
   onDownloadUpdated(callback: (record: BrowserDownloadRecord) => void): () => void
   /** 主→渲染：F12 切换 DevTools（webview 焦点时主进程拦截转发）。返回取消监听函数。 */
@@ -35,17 +57,33 @@ export interface BrowserAPI {
   /** 主→渲染：F11 切换全屏（webview 焦点时主进程拦截转发）。返回取消监听函数。 */
   onToggleFullscreen(callback: () => void): () => void
   /** 浏览器窗口关闭时，将当前标签迁移回主窗口 */
-  tabMigrateBack(payload: { profileId: string; url: string; title: string; finalUrls?: Array<{ tabId: string; url: string; title: string }> }): void
+  tabMigrateBack(payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }): void
   /** 主→渲染：监听浏览器标签迁移回主窗口的事件。返回取消监听函数。 */
-  onTabMigrateBack(callback: (payload: { profileId: string; url: string; title: string; finalUrls?: Array<{ tabId: string; url: string; title: string }> }) => void): () => void
+  onTabMigrateBack(callback: (payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }) => void): () => void
   /** 主→渲染：标签已脱离到浏览器窗口（载荷：profileId, newActiveTabId）。返回取消监听函数。 */
   onTabDetached(callback: (profileId: string, newActiveTabId: string | null) => void): () => void
   /** 主→渲染：标签音频状态变化（页面开始/停止播放音频）。返回取消监听函数。 */
   onTabAudioChanged(callback: (payload: { windowId: string; tabId: string; audible: boolean }) => void): () => void
   /** 跨窗口标签聚合查询（主窗口 A 标签 ↔ 浏览器窗口 A1/A2/A3 子标签） */
   queryAllTabs(): Promise<{ main: TabState[]; browsers: { windowId: string; parentTabId: string | null; profileId: string; platformName: string | null; tabs: BrowserTabState[] }[] }>
+  /** 聚焦指定浏览器窗口 */
+  focusWindow(windowId: string): Promise<boolean>
   /** 书签系统 API */
   bookmark: BookmarkAPI
+  /** E1：AI 应用内新窗口链接累积 API */
+  accumulatedLinks: AccumulatedLinksAPI
+}
+
+/** E1：AI 应用内新窗口链接累积 API（双模式：内存 / 持久化，由设置决定） */
+export interface AccumulatedLinksAPI {
+  /** 添加一条累积链接 */
+  add(profileId: string, url: string, title: string): Promise<void>
+  /** 列出指定 Profile 的全部累积链接（按 timestamp 升序） */
+  list(profileId: string): Promise<AccumulatedLink[]>
+  /** 取出并清空指定 Profile 的全部累积链接（窗口初始化时消费） */
+  consume(profileId: string): Promise<AccumulatedLink[]>
+  /** 清空指定 Profile 的全部累积链接 */
+  clear(profileId: string): Promise<void>
 }
 
 /** 书签系统 API（v0.0.9） */
@@ -64,12 +102,20 @@ export interface BookmarkAPI {
 
 /** 导航历史 API（主窗口渲染层上报导航，脱离时聚合为浏览器初始标签） */
 export interface NavHistoryAPI {
-  /** 记录一次导航（内存存储，同 URL 连续去重） */
+  /** 记录一次导航（SQLite 持久化 + 内存双写，同 URL 连续去重） */
   record(profileId: string, entry: NavHistoryEntry): Promise<void>
   /** 获取某 Profile 的全部导航历史 */
   get(profileId: string): Promise<NavHistoryEntry[]>
   /** 清除某 Profile 的导航历史 */
   clear(profileId: string): Promise<void>
+  /** 分页查询导航历史（按时间倒序；profileId 省略时跨 Profile 聚合） */
+  list(profileId: string | undefined, page: number, pageSize: number): Promise<NavHistoryEntry[]>
+  /** 关键词搜索导航历史（URL / title 模糊匹配；profileId 省略时跨 Profile 聚合） */
+  search(profileId: string | undefined, keyword: string): Promise<NavHistoryEntry[]>
+  /** 删除单条导航历史 */
+  delete(id: string): Promise<void>
+  /** 清空全部导航历史（可选按 profileId 过滤） */
+  clearAll(profileId?: string): Promise<void>
 }
 
 /** 内置热键动作标识 */

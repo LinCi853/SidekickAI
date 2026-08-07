@@ -153,6 +153,18 @@ export function onPinToggled(
   return api.windowControl.onPinToggled(callback);
 }
 
+/**
+ * 监听全屏状态变更事件（主进程切换全屏时通知渲染层，
+ * 用于置顶按钮禁用态等与全屏互斥的 UI 同步）。
+ * 返回取消监听的函数。
+ */
+export function onFullscreenToggled(
+  callback: (isFullscreen: boolean) => void,
+): () => void {
+  const api = requireElectron();
+  return api.windowControl.onFullscreenToggled(callback);
+}
+
 /* =====================================================================
    窗口状态持久化 —— 对应 window.electron.windowState
    ===================================================================== */
@@ -291,7 +303,7 @@ export async function addToProfilePopupWhitelist(profileId: string, origin: stri
  */
 export function onWebviewHotkey(
   callback: (payload: {
-    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab' | 'detachCurrent';
+    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFullscreen' | 'focusCycle' | 'addBookmark' | 'openHistory' | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print';
     data?: unknown;
   }) => void,
 ): () => void {

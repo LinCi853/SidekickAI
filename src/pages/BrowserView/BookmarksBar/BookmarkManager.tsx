@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useBookmarkStore } from '../../../store/useBookmarkStore';
+import { IconButton } from '../../../components/ui';
 import { BookmarkEditDialog } from './BookmarkContextMenu';
 
 interface BookmarkManagerProps {
@@ -52,10 +53,14 @@ export default function BookmarkManager({ onOpenInNewTab }: BookmarkManagerProps
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ padding: '24px', textAlign: 'center', color: '#666', fontSize: 13 }}>
+        <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 'var(--text-xs)' }}>
           {query ? '无匹配书签' : '暂无书签，点击地址栏星标收藏网页'}
         </div>
       ) : (
+        <div
+          style={{ background: 'var(--card)', border: '1px solid var(--glass-bd-2)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}
+          data-name="browser.bookmark-manager-table-card"
+        >
         <table className="browser-bookmark-manager-table" data-name="browser.bookmark-manager-table">
           <thead>
             <tr>
@@ -77,12 +82,12 @@ export default function BookmarkManager({ onOpenInNewTab }: BookmarkManagerProps
                       e.preventDefault();
                       onOpenInNewTab(b.url);
                     }}
-                    style={{ color: '#6ea8fe', textDecoration: 'none' }}
+                    style={{ color: 'var(--accent-bright)', textDecoration: 'none' }}
                   >
                     {b.url}
                   </a>
                 </td>
-                <td style={{ fontSize: 11, color: '#999' }}>
+                <td style={{ fontSize: 'var(--text-xs)', color: 'var(--muted-foreground)' }}>
                   {b.profileName}{b.platformName ? ` / ${b.platformName}` : ''}
                 </td>
                 <td>
@@ -93,31 +98,32 @@ export default function BookmarkManager({ onOpenInNewTab }: BookmarkManagerProps
                   />
                 </td>
                 <td>
-                  <div className="browser-bookmark-manager-actions" data-name="browser.bookmark-manager-actions">
-                    <button title="在新标签打开" onClick={() => onOpenInNewTab(b.url)}>
-                      <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2">
+                  <div style={{ display: 'flex', gap: 'var(--space-0-5)' }} data-name="browser.bookmark-manager-actions">
+                    <IconButton aria-label="在新标签打开" title="在新标签打开" onClick={() => onOpenInNewTab(b.url)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                         <polyline points="15 3 21 3 21 9" />
                       </svg>
-                    </button>
-                    <button title="修改" onClick={() => setEditing(b.id)}>
-                      <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2">
+                    </IconButton>
+                    <IconButton aria-label="修改" title="修改" onClick={() => setEditing(b.id)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M12 20h9" />
                         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                       </svg>
-                    </button>
-                    <button title="删除" onClick={() => void remove(b.id)}>
-                      <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2">
+                    </IconButton>
+                    <IconButton aria-label="删除" title="删除" onClick={() => void remove(b.id)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
-                    </button>
+                    </IconButton>
                   </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {editingBookmark && (

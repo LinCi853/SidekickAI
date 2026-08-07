@@ -14,6 +14,7 @@ interface BrowserTabContextMenuProps {
   onClose: () => void;
   onNewToRight: () => void;
   onReload: () => void;
+  onForceReload: () => void;
   onDuplicate: () => void;
   onTogglePin: () => void;
   onToggleMute: () => void;
@@ -28,6 +29,7 @@ export default function BrowserTabContextMenu({
   onClose,
   onNewToRight,
   onReload,
+  onForceReload,
   onDuplicate,
   onTogglePin,
   onToggleMute,
@@ -53,6 +55,7 @@ export default function BrowserTabContextMenu({
     >
       <PopoverItem onClick={run(onNewToRight)} label="在右侧新建标签页" dataName="browser.tab-ctx-new-to-right" />
       <PopoverItem onClick={run(onReload)} label="重新加载" dataName="browser.tab-ctx-reload" />
+      <PopoverItem onClick={run(onForceReload)} label="强制刷新（清除缓存）" dataName="browser.tab-ctx-force-reload" />
       <PopoverItem onClick={run(onDuplicate)} label="复制" dataName="browser.tab-ctx-duplicate" />
       <PopoverDivider />
       <PopoverItem 

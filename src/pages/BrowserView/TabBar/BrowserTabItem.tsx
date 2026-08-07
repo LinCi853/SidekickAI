@@ -5,6 +5,7 @@
 
 import { memo } from 'react';
 import type { BrowserTabState } from '../../../lib/electron-api';
+import { extractDomainInitial } from '../utils/favicon-placeholder';
 
 interface BrowserTabItemProps {
   tab: BrowserTabState;
@@ -58,8 +59,8 @@ function BrowserTabItemInner({
         {tab.favicon ? (
           <img src={tab.favicon} alt="" width={14} height={14} data-name="browser.tab-favicon-img" />
         ) : (
-          <span className="browser-tab-favicon-placeholder" style={{ background: themeColor }} data-name="browser.tab-favicon-placeholder">
-            {(tab.title || '?').charAt(0).toUpperCase()}
+          <span className="browser-tab-favicon-placeholder" style={{ background: tab.themeColor || themeColor }} data-name="browser.tab-favicon-placeholder">
+            {extractDomainInitial(tab.url) || (tab.title || '?').charAt(0).toUpperCase()}
           </span>
         )}
       </span>

@@ -9,6 +9,7 @@ import type { SimilarInjectionResult } from '../lib/electron-api';
 import { formatTime } from '../lib/datetime';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
+import { AlertIcon } from '@/components/icons';
 import './InjectionPreviewModal.css';
 
 export interface InjectionPreviewModalProps {
@@ -123,7 +124,7 @@ export default function InjectionPreviewModal({
               className="injection-preview-warning"
               data-name="component.injection-preview.warning"
             >
-              <span className="injection-preview-warning-icon" data-name="component.injection-preview.warning-icon">⚠</span>
+              <span className="injection-preview-warning-icon" data-name="component.injection-preview.warning-icon"><AlertIcon className="injection-preview-warning-svg" /></span>
               <span data-name="component.injection-preview.warning-text">
                 与 {formatTime(topSimilar.createdAt)} 注入的内容相似度 ≥{' '}
                 {(topSimilar.similarity * 100).toFixed(0)}%，是否继续？

@@ -45,6 +45,42 @@ export function applyProxyFallback(): Promise<{
   return api.appSettings.applyProxyFallback();
 }
 
+/** 测试指定 Profile 的代理连通性 */
+export function testProfileProxy(
+  profileId: string,
+): Promise<{ ok: boolean; latencyMs?: number; message: string }> {
+  const api = requireElectron();
+  return api.appSettings.testProfileProxy(profileId);
+}
+
+/** 将 Profile.proxyConfig 即时应用到其 session（无需重启） */
+export function applyProfileProxy(profileId: string): Promise<void> {
+  const api = requireElectron();
+  return api.appSettings.applyProfileProxy(profileId);
+}
+
+/** Profile 级代理失败兜底（浏览器窗口 webview 加载失败时触发） */
+export function applyProfileProxyFallback(profileId: string): Promise<{
+  switched: boolean;
+  mode: 'direct' | 'system' | null;
+}> {
+  const api = requireElectron();
+  return api.appSettings.applyProfileProxyFallback(profileId);
+}
+
+/**
+ * 保存/清除指定 Profile 的浏览器窗口开关快捷键。
+ * 主进程会调用 reregisterProfileShortcuts() 重注册全局快捷键。
+ * @param accelerator accelerator 字符串，传 null 清除快捷键
+ */
+export function setProfileShortcut(
+  profileId: string,
+  accelerator: string | null,
+): Promise<unknown> {
+  const api = requireElectron();
+  return api.appSettings.setProfileShortcut(profileId, accelerator);
+}
+
 /** 清除所有用户数据（恢复出厂设置），完成后应用自动重启 */
 export function clearAllData(): Promise<boolean> {
   const api = requireElectron();

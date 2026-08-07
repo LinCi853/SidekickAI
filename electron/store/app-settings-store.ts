@@ -15,6 +15,7 @@ import fs from 'fs'
 import { IPC_CHANNELS, ALL_TOP_BAR_BUTTON_GROUPS, type TopBarButtonGroup } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { createJsonStore, isPortableMode } from './store-paths.js'
+import { getHotkeyManagerInstance } from '../hotkey/manager.js'
 
 // 持久化存储实例（写入 app-settings.json）
 export interface AppSettings {
@@ -96,6 +97,13 @@ export interface AppSettings {
   chatSidebarCollapsed: boolean
   /** 弹窗白名单：URL 前缀数组，匹配的 URL 允许弹独立 BrowserWindow（登录/OAuth/验证页等） */
   popupWhitelist: string[]
+  /** 浏览器标签累积持久化模式：memory=内存模式（默认，主窗口关闭清空）/ persistent=持久化到磁盘 */
+  browserTabPersistence: 'memory' | 'persistent'
+  /** 默认搜索引擎配置（G1：地址栏非 URL 输入时使用的搜索引擎，urlTemplate 使用 {query} 占位符） */
+  defaultSearchEngine: {
+    name: string
+    urlTemplate: string
+  }
 }
 
 const store = createJsonStore<{ settings: AppSettings; version: number }>({
@@ -155,6 +163,10 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       chatSidebarCollapsed: false,
       // 弹窗白名单：默认为空（登录域白名单硬编码在 helpers.ts LOGIN_POPUP_WHITELIST）
       popupWhitelist: [],
+      // 浏览器标签累积持久化：默认内存模式（主窗口关闭清空），persistent=持久化到磁盘可重启恢复
+      browserTabPersistence: 'memory',
+      // G1：默认搜索引擎（Bing），地址栏非 URL 输入时使用
+      defaultSearchEngine: { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' },
     },
     version: 1,
   },
@@ -207,6 +219,10 @@ export function getAppSettings(): AppSettings {
   // 兼容旧版本设置文件：默认 UA 预设字段可能不存在
   s.defaultDesktopUaPreset = s.defaultDesktopUaPreset || 'win-chrome-125'
   s.defaultMobileUaPreset = s.defaultMobileUaPreset || 'iphone-15-pro-safari'
+  // 兼容旧版本：浏览器标签累积持久化模式
+  s.browserTabPersistence = s.browserTabPersistence ?? 'memory'
+  // G1：兼容旧版本设置文件，默认搜索引擎字段可能不存在
+  s.defaultSearchEngine = s.defaultSearchEngine ?? { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' }
   return s
 }
 
@@ -451,6 +467,21 @@ export function registerAppSettingsIPC(): void {
     const { applyProxyFallback } = await import('./proxy-helper.js')
     return applyProxyFallback()
   })
+  // Profile 级代理测试：测试指定 Profile 的代理连通性
+  ipcMain.handle(IPC_CHANNELS.APP_TEST_PROFILE_PROXY, async (_e, profileId: string) => {
+    const { testProfileProxyConnectivity } = await import('./proxy-helper.js')
+    return testProfileProxyConnectivity(profileId)
+  })
+  // Profile 级代理即时生效：将 Profile.proxyConfig 应用到其 session
+  ipcMain.handle(IPC_CHANNELS.APP_APPLY_PROFILE_PROXY, async (_e, profileId: string) => {
+    const { applyProfileProxy } = await import('./proxy-helper.js')
+    await applyProfileProxy(profileId)
+  })
+  // Profile 级代理失败兜底：浏览器窗口 webview 加载失败时触发
+  ipcMain.handle(IPC_CHANNELS.APP_PROFILE_PROXY_FALLBACK, async (_e, profileId: string) => {
+    const { applyProxyFallback } = await import('./proxy-helper.js')
+    return applyProxyFallback(profileId)
+  })
 
   // 数据迁移：选择导出文件保存路径（弹出系统保存对话框）
   ipcMain.handle(IPC_CHANNELS.APP_SELECT_EXPORT_PATH, async () => {
@@ -539,6 +570,72 @@ export function registerAppSettingsIPC(): void {
     const { readFilesAsDataUrls } = await import('../utils/file-drop-handler.js')
     return readFilesAsDataUrls(filePaths)
   })
+
+  // ===== 每应用浏览器窗口快捷键（开关快捷键） =====
+  // 保存/清除指定 Profile 的浏览器窗口快捷键，并重注册全局快捷键
+  ipcMain.handle(
+    IPC_CHANNELS.PROFILE_SHORTCUT_SET,
+    async (_e, { profileId, accelerator }: { profileId: string; accelerator: string | null }) => {
+      const { profileStore } = await import('./profile-store.js')
+      const updated = await profileStore.update(profileId, {
+        browserWindowShortcut: accelerator || undefined,
+      })
+      await reregisterProfileShortcuts()
+      return updated
+    },
+  )
+}
+
+/**
+ * 重新注册所有 Profile 的浏览器窗口开关快捷键。
+ *
+ * 遍历所有 Profile，注册非空 browserWindowShortcut（accelerator 字符串）到系统 globalShortcut。
+ * 触发时调用 toggleBrowserWindow(profileId) 打开/关闭对应应用浏览器窗口。
+ *
+ * 设计要点：
+ * - 按 accelerator 去重避免同一组合键被多次注册（先到先得）
+ * - 默认无快捷键（Profile.browserWindowShortcut 为 undefined 时不注册）
+ * - 全部为系统级全局快捷键（应用未聚焦也生效）
+ */
+export async function reregisterProfileShortcuts(): Promise<void> {
+  const mgr = getHotkeyManagerInstance()
+  if (!mgr) return
+
+  // 1. 注销所有旧的浏览器全局快捷键
+  mgr.unregisterAllBrowserShortcuts()
+
+  // 2. 收集所有 Profile 的快捷键（按 accelerator 去重，先到先得）
+  const seen = new Set<string>()
+  const toRegister: Array<{ accelerator: string; profileId: string }> = []
+
+  try {
+    const { profileStore } = await import('./profile-store.js')
+    for (const profile of profileStore.list()) {
+      const acc = profile.browserWindowShortcut
+      if (!acc) continue
+      if (seen.has(acc)) {
+        console.warn(`[reregisterProfileShortcuts] 快捷键 ${acc} 已被其他应用占用，跳过 Profile ${profile.id}（${profile.name}）`)
+        continue
+      }
+      seen.add(acc)
+      toRegister.push({ accelerator: acc, profileId: profile.id })
+    }
+  } catch (err) {
+    console.warn('[reregisterProfileShortcuts] 读取 profileStore 失败:', err)
+    return
+  }
+
+  // 3. 注册新的全局快捷键
+  for (const { accelerator, profileId } of toRegister) {
+    mgr.registerBrowserShortcut(accelerator, () => {
+      // ESM 环境中 require 未定义,使用动态 import() 避免闪退
+      import('../window-factory.js').then(({ toggleBrowserWindow }) => {
+        toggleBrowserWindow(profileId)
+      }).catch((e) => {
+        console.error('[reregisterProfileShortcuts] 动态导入失败:', e)
+      })
+    })
+  }
 }
 
 /**

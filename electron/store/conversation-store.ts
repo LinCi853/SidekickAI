@@ -517,7 +517,7 @@ export class ConversationStore {
     lines.push('---')
     lines.push('')
     for (const m of messages) {
-      const roleLabel = m.role === 'user' ? '🧑 用户' : m.role === 'assistant' ? '🤖 助手' : '⚙️ 系统'
+      const roleLabel = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '系统'
       const autoTag = m.autoGrabbed ? ' [自动抓取]' : ''
       lines.push(`## ${roleLabel}${autoTag}`)
       lines.push('')

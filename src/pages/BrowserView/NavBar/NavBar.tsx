@@ -3,12 +3,12 @@
    左：后退/前进/刷新/主页 / 中：地址栏 / 右：扩展占位 + AI 头像 + 设置
    ===================================================================== */
 
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import Popover from '../../../components/ui/Popover';
+import { useEffect, useState, type MutableRefObject } from 'react';
 
 import type { BrowserTabState, Profile, BrowserDownloadRecord } from '../../../lib/electron-api';
 import { onDownloadUpdated } from '../../../lib/electron-api';
 import { IconButton } from '../../../components/ui';
+import { HistoryIcon, DownloadIcon } from '@/components/icons';
 import AddressBar from './AddressBar';
 
 interface NavBarProps {
@@ -23,6 +23,8 @@ interface NavBarProps {
   onGoHome: () => void;
   onNavigate: (url: string) => void;
   onOpenSettings: () => void;
+  onOpenHistory: () => void;
+  onOpenDownloads: () => void;
   addressBarRef: MutableRefObject<HTMLInputElement | null>;
 }
 
@@ -38,15 +40,13 @@ export default function NavBar({
   onGoHome,
   onNavigate,
   onOpenSettings,
+  onOpenHistory,
+  onOpenDownloads,
   addressBarRef,
 }: NavBarProps) {
-  // v0.0.9: 下载指示器（从第一栏移至第二栏）
+  // v0.0.9: 下载指示器（仅用于角标显示进行中下载数量，点击打开下载管理内嵌标签页）
   const [downloads, setDownloads] = useState<BrowserDownloadRecord[]>([]);
-  const [showDownloads, setShowDownloads] = useState(false);
-  const downloadPanelRef = useRef<HTMLDivElement>(null);
   const activeDownloads = downloads.filter((d) => d.state === 'progressing');
-
-
 
   useEffect(() => {
     const off = onDownloadUpdated((record) => {
@@ -132,44 +132,28 @@ export default function NavBar({
             <line x1="7" y1="7" x2="7.01" y2="7" />
           </svg>
         </div>
-        {/* 下载指示器（v0.0.9 从第一栏移至第二栏） */}
-        <div style={{ position: 'relative' }} ref={downloadPanelRef}>
-          <IconButton
-            aria-label="下载"
-            onClick={() => setShowDownloads((v) => !v)}
-            title="下载"
-            data-name="browser.downloads"
-            variant={activeDownloads.length > 0 ? 'active' : 'default'}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            {activeDownloads.length > 0 && (
-              <span className="browser-download-badge">{activeDownloads.length}</span>
-            )}
-          </IconButton>
-          <Popover
-            isOpen={showDownloads && downloads.length > 0}
-            onClose={() => setShowDownloads(false)}
-            triggerRef={downloadPanelRef}
-            variant="dropdown"
-            config={{ closeOnOutsideClick: true, closeOnEsc: true }}
-            style={{ width: 280, maxHeight: 300 }}
-            dataName="browser.download-panel"
-          >
-              {downloads.slice(0, 10).map((d) => (
-                <div key={d.id} className="browser-download-item" data-name="browser.download-item">
-                  <span className="browser-download-name" data-name="browser.download-name">{d.filename}</span>
-                  <span className="browser-download-state" data-name="browser.download-state">
-                    {d.state === 'progressing' ? `${Math.round((d.receivedBytes / Math.max(d.totalBytes, 1)) * 100)}%` :
-                     d.state === 'completed' ? '✓' : d.state}
-                  </span>
-                </div>
-              ))}
-</Popover>
-        </div>
+        {/* 历史记录入口（内嵌标签页） */}
+        <IconButton
+          aria-label="历史记录"
+          onClick={onOpenHistory}
+          title="历史记录"
+          data-name="browser.nav.history"
+        >
+          <HistoryIcon />
+        </IconButton>
+        {/* 下载管理入口（内嵌标签页，进行中下载显示角标） */}
+        <IconButton
+          aria-label="下载管理"
+          onClick={onOpenDownloads}
+          title="下载管理"
+          data-name="browser.nav.downloads"
+          variant={activeDownloads.length > 0 ? 'active' : 'default'}
+        >
+          <DownloadIcon />
+          {activeDownloads.length > 0 && (
+            <span className="browser-download-badge">{activeDownloads.length}</span>
+          )}
+        </IconButton>
         {/* AI 应用头像与名称 */}
         <div className="browser-ai-avatar" title={profile.name} data-name="browser.ai-avatar">
           <span className="browser-ai-avatar-icon" data-name="browser.ai-avatar-icon" style={{ background: themeColor }}>
@@ -190,6 +174,16 @@ export default function NavBar({
           </svg>
         </IconButton>
       </div>
+
+      {/* B2: NavBar 底部加载进度条（仅 isLoading 时显示） */}
+      {activeTab?.isLoading && (
+        <div className="browser-nav-progress-track">
+          <div
+            className="browser-nav-progress-bar"
+            style={{ width: `${activeTab.loadingProgress ?? 30}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

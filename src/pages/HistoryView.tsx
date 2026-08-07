@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { Button, SegmentedControl } from '../components/ui';
+import Popover from '../components/ui/Popover';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import {
   listConversations,
@@ -71,7 +72,7 @@ export default function HistoryView() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [usageStats, setUsageStats] = useState<{ totalTokens: number; todayTokens: number; todayCount: number } | null>(null);
-  const importMenuRef = useRef<HTMLDivElement | null>(null);
+  const importMenuRef = useRef<HTMLButtonElement | null>(null);
 
   // ESC / Ctrl+W 关窗：导入菜单展开时 ESC 优先收起菜单，否则关闭窗口
   // 注：消息/标题编辑态的 ESC 由各自 input/textarea 自行处理；hook 默认跳过输入框聚焦
@@ -308,17 +309,7 @@ export default function HistoryView() {
     setEditTitleValue('');
   };
 
-  // 点击外部关闭导入菜单
-  useEffect(() => {
-    if (!showImportMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (importMenuRef.current && !importMenuRef.current.contains(e.target as Node)) {
-        setShowImportMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showImportMenu]);
+  // I2：导入菜单的点击外部关闭由 Popover 组件的 closeOnOutsideClick 处理，无需自定义监听
 
   const selectedConv = useMemo(
     () => conversations.find((c) => c.id === selectedConvId) ?? null,
@@ -405,34 +396,52 @@ export default function HistoryView() {
               {tab === 'conversations' && (
                 <>
                   <div className="conv-toolbar" data-name="history.sidebar.conv-toolbar">
-                    <div className="import-dropdown" ref={importMenuRef} data-name="history.sidebar.import-dropdown">
-                      <Button
-                        variant="ghost"
+                    <Button
+                      variant="outline"
+                      type="button"
+                      ref={importMenuRef}
+                      data-name="history.sidebar.import-button"
+                      onClick={() => setShowImportMenu((v) => !v)}
+                    >
+                      导入
+                    </Button>
+                    <Popover
+                      isOpen={showImportMenu}
+                      onClose={() => setShowImportMenu(false)}
+                      triggerRef={importMenuRef}
+                      variant="dropdown"
+                      config={{ closeOnOutsideClick: true, closeOnEsc: true }}
+                      style={{ minWidth: 160 }}
+                      dataName="history.sidebar.import-menu"
+                    >
+                      <button
                         type="button"
-                        className="conv-toolbar-btn"
-                        data-name="history.sidebar.import-button"
-                        onClick={() => setShowImportMenu((v) => !v)}
+                        className="history-import-menu-item"
+                        data-name="history.sidebar.import-menu-item-1"
+                        onClick={() => { setShowImportMenu(false); void handleImport('json'); }}
                       >
-                        导入 ▾
-                      </Button>
-                      {showImportMenu && (
-                        <div className="import-menu" data-name="history.sidebar.import-menu">
-                          <div className="import-menu-item" data-name="history.sidebar.import-menu-item-1" onClick={() => void handleImport('json')}>
-                            本地格式 (JSON)
-                          </div>
-                          <div className="import-menu-item" data-name="history.sidebar.import-menu-item-2" onClick={() => void handleImport('deepseek')}>
-                            DeepSeek 导出
-                          </div>
-                          <div className="import-menu-item" data-name="history.sidebar.import-menu-item-3" onClick={() => void handleImport('md')}>
-                            Markdown
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                        本地格式 (JSON)
+                      </button>
+                      <button
+                        type="button"
+                        className="history-import-menu-item"
+                        data-name="history.sidebar.import-menu-item-2"
+                        onClick={() => { setShowImportMenu(false); void handleImport('deepseek'); }}
+                      >
+                        DeepSeek 导出
+                      </button>
+                      <button
+                        type="button"
+                        className="history-import-menu-item"
+                        data-name="history.sidebar.import-menu-item-3"
+                        onClick={() => { setShowImportMenu(false); void handleImport('md'); }}
+                      >
+                        Markdown
+                      </button>
+                    </Popover>
                     <Button
                       variant="danger"
                       type="button"
-                      className="conv-toolbar-btn"
                       data-name="history.sidebar.clear-all-button"
                       onClick={() => void handleClearAll()}
                     >
@@ -472,7 +481,6 @@ export default function HistoryView() {
                     <Button
                       variant="danger"
                       type="button"
-                      className="conv-toolbar-btn"
                       data-name="history.sidebar.clear-logins-button"
                       onClick={() => void handleClearLogins()}
                       disabled={loginTraces.length === 0}
@@ -501,7 +509,6 @@ export default function HistoryView() {
                     <Button
                       variant="danger"
                       type="button"
-                      className="conv-toolbar-btn"
                       data-name="history.sidebar.clear-windows-button"
                       onClick={() => void handleClearWindows()}
                       disabled={windowTraces.length === 0}
