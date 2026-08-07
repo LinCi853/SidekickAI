@@ -10,9 +10,10 @@
 //
 // 在 app.whenReady 后由 main.ts 调用 registerWindowControlIpc(deps) 完成注册。
 
-import { ipcMain, screen, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
+import { createMaximizeManager } from '../window-factory/window-maximize-manager.js'
 import {
   IPC_CHANNELS,
   type WindowStateData,
@@ -134,7 +135,19 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
 
   // ===== 窗口控制 IPC（操作调用方所在窗口本身）=====
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_MINIMIZE, (e) => {
-    getSenderWindow(e)?.minimize()
+    const win = getSenderWindow(e)
+    if (!win || win.isDestroyed()) return
+    // 通知渲染层播放最小化动画（淡出 + 向下收缩），主进程延迟 200ms 再真正最小化，
+    // 使 CSS 动画与系统最小化衔接，避免内容突变带来的闪烁。
+    try {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_WINDOW_MINIMIZING)
+    } catch (err) {
+      console.error('[minimize] 发送 WINDOW_MINIMIZING 失败:', err)
+    }
+    setTimeout(() => {
+      if (win.isDestroyed()) return
+      win.minimize()
+    }, 200)
   })
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLE, (e) => {
     const win = getSenderWindow(e)
@@ -192,32 +205,29 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
       console.error('[main] resize 失败:', err)
     }
   })
-  // 切换全屏：退出全屏时恢复到持久化的窄长 bounds（保留接口，当前无热键绑定）
+  // 切换全屏：进入前记录当前 bounds，退出时由 leave-full-screen 事件恢复
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN, (e) => {
     const win = getSenderWindow(e)
     if (!win) return false
     if (win.isFullScreen()) {
+      // 退出全屏：leave-full-screen 事件会恢复到 fullscreenNormalBounds
       win.setFullScreen(false)
-      // 退出全屏后恢复到持久化尺寸（窄长条形）
-      const windowId = findWindowIdByWin(win)
-      if (windowId) {
-        const state = windowStore.getOrDefault(windowId)
-        if (state.bounds.width && state.bounds.height) {
-          try {
-            win.setBounds({
-              x: state.bounds.x,
-              y: state.bounds.y,
-              width: state.bounds.width,
-              height: state.bounds.height,
-            })
-          } catch {
-            // 忽略 setBounds 失败
-          }
-        }
+      if (!win.isDestroyed()) {
+        win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, false)
       }
       return false
     }
+    // 进入全屏前：记录当前 bounds 到 fullscreenNormalBounds，供退出时精确恢复
+    const windowId = findWindowIdByWin(win)
+    if (windowId) {
+      const state = windowStore.getOrDefault(windowId)
+      state.fullscreenNormalBounds = win.getBounds()
+      windowStore.save(windowId, state)
+    }
     win.setFullScreen(true)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, true)
+    }
     return true
   })
   // 动态设置当前窗口的最小尺寸（UI 比例变化时重新约束）
@@ -277,57 +287,10 @@ export function toggleMaximizeForWindow(
   windowId: string | null,
 ): boolean {
   if (!windowId) return win.isMaximized()
-  const state = windowStore.getOrDefault(windowId)
-
-  if (state.isMaximized) {
-    const saved = state.normalBounds || state.bounds
-    if (saved.width && saved.height) {
-      try {
-        win.setBounds({
-          x: saved.x ?? undefined,
-          y: saved.y ?? undefined,
-          width: saved.width,
-          height: saved.height,
-        })
-        console.log('[maximize] 还原到:', saved.width, 'x', saved.height)
-      } catch (err) {
-        console.error('[maximize] 还原 setBounds 失败:', err)
-      }
-    }
-    state.isMaximized = false
-    state.normalBounds = undefined
-    windowStore.save(windowId, state)
-    win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
-    return false
-  } else {
-    const currentBounds = win.getBounds()
-    state.normalBounds = { ...currentBounds }
-    state.bounds = { ...currentBounds }
-    const display = screen.getDisplayMatching(currentBounds)
-    const workArea = display.workArea
-    try {
-      win.setBounds({
-        x: workArea.x,
-        y: workArea.y,
-        width: workArea.width,
-        height: workArea.height,
-      })
-      console.log('[maximize] 最大化到工作区:', workArea.width, 'x', workArea.height)
-    } catch (err) {
-      console.error('[maximize] 最大化 setBounds 失败:', err)
-    }
-    state.isMaximized = true
-    // 最大化与置顶互斥：进入最大化时自动取消置顶
-    if (state.alwaysOnTop) {
-      state.alwaysOnTop = false
-      win.setAlwaysOnTop(false)
-      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, false)
-      console.log('[maximize] 最大化时自动取消置顶')
-    }
-    windowStore.save(windowId, state)
-    win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, true)
-    return true
-  }
+  // 使用统一的最大化管理组件，自动推断还原策略：
+  // 浏览器窗口 → centered70，其他窗口 → normalBounds
+  const mgr = createMaximizeManager(win, windowId)
+  return mgr.toggle()
 }
 
 /**

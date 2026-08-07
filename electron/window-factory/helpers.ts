@@ -24,8 +24,11 @@ import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { windowState } from '../window-state.js'
 import {
   setAlwaysOnTopForWindow,
+  toggleMaximizeForWindow,
 } from '../ipc/window-control-ipc.js'
 import { buildWindowConfig } from './window-config-builder.js'
+import { accumulatedLinksStore } from '../store/accumulated-links-store.js'
+import { getAppSettings } from '../store/app-settings-store.js'
 
 /** 应用窗口统一背景色（与渲染层主题色一致，避免启动白闪） */
 export const WINDOW_BACKGROUND_COLOR = '#1f1719'
@@ -86,6 +89,8 @@ export const PROMPT_WINDOW_ID = 'prompts'
 export const ADVANCED_PANEL_WINDOW_ID = 'advanced-panel'
 // 引导独立窗口（单例，首次启动或「使用指南」入口）
 export const ONBOARDING_WINDOW_ID = 'onboarding'
+// 历史记录与下载管理独立窗口（单例，导航历史 + 下载管理）
+export const HISTORY_DOWNLOAD_WINDOW_ID = 'history-download'
 
 /** 从完整 URL 提取 origin 前缀（scheme + host + '/'），用于日志 */
 function extractUrlOrigin(url: string): string {
@@ -131,6 +136,76 @@ export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow |
  * 若窗口应保持置顶（state.alwaysOnTop）则重新应用，
  * 避免被 Windows 全屏窗口覆盖后失效。
  */
+/**
+ * 为窗口设置 maximize/unmaximize/alwaysOnTop 事件同步（不保存 bounds）。
+ * 适用于浏览器窗口和进阶面板窗口：取消最大化时使用 WindowMaximizeManager
+ * 的 centered70 等策略还原，不需要记忆 bounds。
+ */
+function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
+  // 重新应用置顶（Windows 上被全屏窗口/任务栏覆盖后常见失效原因）
+  const reapplyAlwaysOnTop = () => {
+    if (win.isMaximized() || win.isFullScreen()) return
+    const state = windowStore.getOrDefault(windowId)
+    if (state.alwaysOnTop && !win.isAlwaysOnTop()) {
+      win.setAlwaysOnTop(true, 'screen-saver')
+    } else if (!state.alwaysOnTop && win.isAlwaysOnTop()) {
+      win.setAlwaysOnTop(false)
+    }
+  }
+  win.on('show', reapplyAlwaysOnTop)
+  win.on('focus', reapplyAlwaysOnTop)
+  win.on('restore', reapplyAlwaysOnTop)
+
+  // 最大化/全屏 → 自动取消置顶（冲突关系：两种状态不能共存）
+  const cancelAlwaysOnTopOnConflict = () => {
+    if (!win.isAlwaysOnTop()) return
+    win.setAlwaysOnTop(false)
+    const state = windowStore.getOrDefault(windowId)
+    state.alwaysOnTop = false
+    windowStore.save(windowId, state)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, false)
+    }
+    console.log(`[helpers] 窗口 ${windowId} 进入最大化/全屏，自动取消置顶`)
+  }
+  win.on('maximize', cancelAlwaysOnTopOnConflict)
+  win.on('enter-full-screen', cancelAlwaysOnTopOnConflict)
+
+  // 最大化/还原事件 → 同步 state + 渲染层按钮图标
+  win.on('maximize', () => {
+    safeLogWindowTrace(windowId, 'maximize')
+    const state = windowStore.getOrDefault(windowId)
+    if (!state.isMaximized) {
+      state.isMaximized = true
+      windowStore.save(windowId, state)
+    }
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, true)
+    }
+  })
+  win.on('unmaximize', () => {
+    safeLogWindowTrace(windowId, 'unmaximize')
+    const state = windowStore.getOrDefault(windowId)
+    if (state.isMaximized) {
+      state.isMaximized = false
+      state.normalBounds = undefined
+      windowStore.save(windowId, state)
+    }
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
+    }
+  })
+  win.on('minimize', () => safeLogWindowTrace(windowId, 'minimize'))
+  win.on('restore', () => safeLogWindowTrace(windowId, 'restore'))
+  win.on('show', () => safeLogWindowTrace(windowId, 'show'))
+  win.on('hide', () => {
+    safeLogWindowTrace(windowId, 'hide')
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
+    }
+  })
+}
+
 export function setupBoundsTracking(win: BrowserWindow, windowId: string): void {
   const debouncedSave = () => {
     const existing = windowState.boundsSaveTimers.get(windowId)
@@ -183,9 +258,36 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
   win.on('maximize', cancelAlwaysOnTopOnConflict)
   win.on('enter-full-screen', cancelAlwaysOnTopOnConflict)
 
-  // 窗口操作痕迹记录到 SQLite（集中处理，覆盖所有窗口类型）
-  win.on('maximize', () => safeLogWindowTrace(windowId, 'maximize'))
-  win.on('unmaximize', () => safeLogWindowTrace(windowId, 'unmaximize'))
+  // 最大化/还原事件 → 同步 state + 渲染层按钮图标（统一处理，覆盖所有窗口类型）
+  // OS 原生最大化（Win+Up、Aero Snap、双击标题栏）也会触发，需同步 state.isMaximized
+  // 和 normalBounds，否则 state 与 win.isMaximized() 不一致，导致 bounds 持久化错误。
+  // IPC 最大化由 WindowMaximizeManager 使用 setBounds 实现（不触发 'maximize' 事件），
+  // 此处仅处理 OS 原生最大化，不会与 WindowMaximizeManager 冲突。
+  win.on('maximize', () => {
+    safeLogWindowTrace(windowId, 'maximize')
+    const state = windowStore.getOrDefault(windowId)
+    if (!state.isMaximized) {
+      // OS 原生最大化：记录 normalBounds 供还原使用
+      state.normalBounds = state.bounds
+      state.isMaximized = true
+      windowStore.save(windowId, state)
+    }
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, true)
+    }
+  })
+  win.on('unmaximize', () => {
+    safeLogWindowTrace(windowId, 'unmaximize')
+    const state = windowStore.getOrDefault(windowId)
+    if (state.isMaximized) {
+      state.isMaximized = false
+      state.normalBounds = undefined
+      windowStore.save(windowId, state)
+    }
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
+    }
+  })
   win.on('minimize', () => safeLogWindowTrace(windowId, 'minimize'))
   win.on('restore', () => safeLogWindowTrace(windowId, 'restore'))
   win.on('show', () => safeLogWindowTrace(windowId, 'show'))
@@ -202,21 +304,29 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
  * 为脱离窗口（chat / standalone / ai-app）附加统一的生命周期管理。
  *
  * 统一处理：
- *   1. bounds 持久化追踪（setupBoundsTracking）
+ *   1. bounds 持久化追踪（setupBoundsTracking）或轻量 maximize 事件同步
  *   2. focus 追踪（更新 windowState.lastFocusedWin）
- *   3. close 事件：持久化 bounds + 最大化/置顶状态到 windowStore
+ *   3. close 事件：持久化 isMaximized/alwaysOnTop（可选保存 bounds）到 windowStore
  *   4. closed 事件：从 windowState.detachedWindows 清理 + 可选自定义清理
  *
- * 调用方仍需自行完成 detachedWindows.set / advancedPanelWindow 赋值等注册操作
- * （注册时机因窗口类型而异）。onClosed 回调用于窗口类型的额外清理
- * （如 ai-app 窗口需清空 windowState.advancedPanelWindow）。
+ * @param options.trackBounds 是否追踪并保存 bounds（默认 true）。
+ *   设为 false 时仅追踪 maximize/unmaximize/alwaysOnTop 事件，不保存 bounds。
+ *   适用于浏览器窗口和进阶面板窗口：取消最大化时使用 WindowMaximizeManager
+ *   的 centered70 策略还原，不需要记忆 bounds。
  */
 export function attachDetachedWindowLifecycle(
   win: BrowserWindow,
   windowId: string,
   onClosed?: () => void,
+  options?: { trackBounds?: boolean },
 ): void {
-  setupBoundsTracking(win, windowId)
+  const trackBounds = options?.trackBounds ?? true
+
+  if (trackBounds) {
+    setupBoundsTracking(win, windowId)
+  } else {
+    setupMaximizeSync(win, windowId)
+  }
 
   win.on('focus', () => {
     windowState.lastFocusedWin = win
@@ -225,7 +335,7 @@ export function attachDetachedWindowLifecycle(
   win.on('close', () => {
     const state = windowStore.getOrDefault(windowId)
     if (!win.isDestroyed()) {
-      if (!win.isMaximized()) {
+      if (trackBounds && !win.isMaximized()) {
         state.bounds = win.getBounds()
       }
       state.isMaximized = win.isMaximized()
@@ -326,6 +436,31 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
       console.log('[webview-popup] 拦截 popup，页面内跳转:', url)
       parentWebContents.send(IPC_CHANNELS.WEBVIEW_POPUP_URL, { url, webContentsId: wc.id })
 
+      // E1：主窗口 AI 应用模式 —— 累积被拦截的新窗口链接到后台。
+      // 当用户将 AI 应用独立为浏览器窗口时，BrowserView 初始化后会通过 consume
+      // 取出全部累积链接并转为标签页。浏览器窗口模式（mode=browser）不累积，
+      // 保持现有行为（关闭时通过 BROWSER_TAB_MIGRATE_BACK 迁移）。
+      const parentUrl = parentWebContents.getURL?.() || ''
+      const isMainWindowMode = !parentUrl.includes('mode=browser')
+      if (isMainWindowMode) {
+        try {
+          const sessionWithPartition = wc.session as unknown as { getPartition?: () => string }
+          const partition = sessionWithPartition.getPartition?.() || ''
+          const profileId = partition.startsWith('persist:')
+            ? partition.slice('persist:'.length)
+            : ''
+          if (profileId) {
+            const persistent = getAppSettings().browserTabPersistence === 'persistent'
+            // 拦截时无页面 title，暂用 URL 作为 title；BrowserView 消费后由 webview 加载
+            // 页面时 page-title-updated 事件自动更新为真实标题
+            accumulatedLinksStore.add(profileId, url, url, persistent)
+            console.log('[webview-popup] E1 累积链接:', { profileId, url, persistent })
+          }
+        } catch (e) {
+          console.warn('[webview-popup] E1 累积链接失败:', e)
+        }
+      }
+
       // 弹窗拦截计数：连续拦截同一 origin 达到阈值后通知渲染层提示用户加白
       const denialCount = (popupDenialCount.get(origin) ?? 0) + 1
       popupDenialCount.set(origin, denialCount)
@@ -387,6 +522,17 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         return
       }
 
+      // Ctrl+Shift+R 或 Ctrl+F5：强制刷新（清除缓存）
+      if (
+        !hasAlt &&
+        ((hasCtrl && hasShift && key.toLowerCase() === 'r') || (hasCtrl && key === 'F5'))
+      ) {
+        console.log('[hotkey] Ctrl+Shift+R/Ctrl+F5 → 强制刷新')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'forceRefresh' })
+        return
+      }
+
       // F5：刷新当前标签
       if (key === 'F5' && !hasCtrl && !hasAlt) {
         console.log('[hotkey] F5 → 刷新')
@@ -395,11 +541,11 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         return
       }
 
-      // F6：前进
-      if (key === 'F6' && !hasCtrl && !hasAlt) {
-        console.log('[hotkey] F6 → 前进')
+      // F6：通过 IPC 转发到渲染层处理（主窗口聚焦 AI 输入框，浏览器窗口循环聚焦）
+      if (key === 'F6' && !hasCtrl && !hasAlt && !hasShift) {
+        console.log('[hotkey] F6 → 聚焦循环')
         e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'navForward' })
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'focusCycle' })
         return
       }
 
@@ -408,6 +554,19 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         console.log('[hotkey] F10 → 切换主题')
         e.preventDefault()
         parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleTheme' })
+        return
+      }
+
+      // F11：切换最大化/还原（接入 WindowMaximizeManager，等效 TitleBar 最大化按钮）
+      // 统一在主进程直接处理，避免 webview 焦点时渲染层收不到 keydown。
+      // 调用 toggleMaximizeForWindow（与 IPC WIN_CONTROL_MAXIMIZE_TOGGLE 同一入口），
+      // 保证图标变化（WIN_CONTROL_MAXIMIZE_TOGGLED 广播）和实现效果（按窗口类型应用
+      // 还原策略：主窗口 normalBounds / 浏览器+进阶面板 centered70）完全一致。
+      if (key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
+        console.log('[hotkey] F11 → 切换最大化')
+        e.preventDefault()
+        const winId = findWindowIdByWin(win)
+        toggleMaximizeForWindow(win, winId)
         return
       }
 
@@ -492,6 +651,62 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         console.log('[hotkey] Ctrl+G → 切换空间导航模式')
         e.preventDefault()
         parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleSpatialNav' })
+        return
+      }
+
+      // Ctrl+D：添加当前页面到书签
+      if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'd') {
+        console.log('[hotkey] Ctrl+D → 添加书签')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'addBookmark' })
+        return
+      }
+
+      // Ctrl+H：打开历史标签
+      if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'h') {
+        console.log('[hotkey] Ctrl+H → 打开历史')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'openHistory' })
+        return
+      }
+
+      // Ctrl+J：打开下载标签
+      if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'j') {
+        console.log('[hotkey] Ctrl+J → 打开下载')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'openDownloads' })
+        return
+      }
+
+      // Ctrl+K / Ctrl+E：聚焦地址栏并进入搜索模式
+      if (hasCtrl && !hasShift && !hasAlt && !hasMeta && (key.toLowerCase() === 'k' || key.toLowerCase() === 'e')) {
+        console.log(`[hotkey] Ctrl+${key.toUpperCase()} → 聚焦搜索`)
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'focusSearch' })
+        return
+      }
+
+      // Ctrl+Shift+Del：清除浏览数据
+      if (hasCtrl && hasShift && !hasAlt && !hasMeta && key === 'Delete') {
+        console.log('[hotkey] Ctrl+Shift+Del → 清除浏览数据')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'clearBrowsingData' })
+        return
+      }
+
+      // Ctrl+F：页内查找
+      if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'f') {
+        console.log('[hotkey] Ctrl+F → 页内查找')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'findInPage' })
+        return
+      }
+
+      // Ctrl+P：打印当前页面
+      if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'p') {
+        console.log('[hotkey] Ctrl+P → 打印')
+        e.preventDefault()
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'print' })
         return
       }
 
@@ -596,12 +811,19 @@ export function createSingletonPopupWindow(opts: {
     return existing
   }
 
-  // 2. 居中位置计算（clamp 到工作区）
+  // 2. 位置计算：优先使用保存的 bounds，否则用默认尺寸居中
+  //    与主窗口/进阶面板一致，弹出窗口也支持位置/大小记忆
+  const saved = windowStore.getOrDefault(opts.windowId)
+  const hasSavedBounds = !!windowStore.get(opts.windowId)
   const workArea = screen.getPrimaryDisplay().workArea
-  const width = Math.min(opts.width, workArea.width - 80)
-  const height = Math.min(opts.height, workArea.height - 80)
-  const x = workArea.x + Math.round((workArea.width - width) / 2)
-  const y = workArea.y + Math.round((workArea.height - height) / 2)
+  const width = (hasSavedBounds && saved.bounds.width) || Math.min(opts.width, workArea.width - 80)
+  const height = (hasSavedBounds && saved.bounds.height) || Math.min(opts.height, workArea.height - 80)
+  const x = (hasSavedBounds && saved.bounds.x != null)
+    ? saved.bounds.x
+    : workArea.x + Math.round((workArea.width - width) / 2)
+  const y = (hasSavedBounds && saved.bounds.y != null)
+    ? saved.bounds.y
+    : workArea.y + Math.round((workArea.height - height) / 2)
 
   // 3. 创建 BrowserWindow
   const win = new BrowserWindow(buildWindowConfig({
@@ -613,6 +835,7 @@ export function createSingletonPopupWindow(opts: {
     minHeight: opts.minHeight,
     show: false,
     frame: false,
+    alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: opts.title,
     webPreferences: createDefaultWebPreferences({
@@ -620,6 +843,11 @@ export function createSingletonPopupWindow(opts: {
       webviewTag: false,
     }),
   }))
+
+  // 恢复最大化状态（与主窗口/进阶面板一致）
+  if (saved.isMaximized) {
+    win.maximize()
+  }
 
   // 4. 缓存单例引用
   opts.setWindow(win)
@@ -630,13 +858,31 @@ export function createSingletonPopupWindow(opts: {
   // 6. F12 快捷键拦截（弹出窗口不含 webview）
   attachWindowHotkeyInterceptor(win.webContents)
 
-  // 7. ready-to-show
+  // 7. bounds 持久化 + 最大化/置顶事件追踪（与其他窗口同步）
+  setupBoundsTracking(win, opts.windowId)
+
+  // 8. close 事件：持久化 bounds + isMaximized + alwaysOnTop（与主窗口一致）
+  win.on('close', () => {
+    const state = windowStore.getOrDefault(opts.windowId)
+    if (!win.isDestroyed()) {
+      const isMax = win.isMaximized()
+      if (!isMax && !win.isFullScreen()) {
+        state.bounds = win.getBounds()
+      }
+      state.isMaximized = isMax
+      state.alwaysOnTop = win.isAlwaysOnTop()
+      windowStore.save(opts.windowId, state)
+    }
+    safeLogWindowTrace(opts.windowId, 'close')
+  })
+
+  // 9. ready-to-show
   win.once('ready-to-show', () => {
     win.show()
     win.focus()
   })
 
-  // 8. closed 清理
+  // 10. closed 清理
   win.on('closed', () => {
     opts.setWindow(null)
   })
@@ -691,6 +937,7 @@ export function findWindowIdByWin(win: BrowserWindow): string | null {
   if (win === windowState.promptWindow) return PROMPT_WINDOW_ID
   if (win === windowState.advancedPanelWindow) return ADVANCED_PANEL_WINDOW_ID
   if (win === windowState.onboardingWindow) return ONBOARDING_WINDOW_ID
+  if (win === windowState.historyDownloadWindow) return HISTORY_DOWNLOAD_WINDOW_ID
   if (win === windowState.previewWindow) return 'preview'
   for (const [id, w] of windowState.detachedWindows) {
     if (w === win) return id
@@ -723,6 +970,16 @@ export function attachWindowHotkeyInterceptor(parentWebContents: Electron.WebCon
     const mods = input.modifiers || []
     const hasCtrl = mods.includes('control') || mods.includes('ctrl')
     const key = input.key
+
+    // F11：切换最大化/还原（接入 WindowMaximizeManager，等效 TitleBar 最大化按钮）
+    // 与 attachWebviewPopupInterceptor 中的 F11 处理一致，统一走 toggleMaximizeForWindow
+    if (key === 'F11' && !hasCtrl && !mods.includes('alt') && !mods.includes('shift')) {
+      console.log('[hotkey] F11 → 切换最大化 (window-level)')
+      e.preventDefault()
+      const winId = findWindowIdByWin(win)
+      toggleMaximizeForWindow(win, winId)
+      return
+    }
 
     // F12：置顶/取消置顶
     if (key === 'F12' && !hasCtrl) {

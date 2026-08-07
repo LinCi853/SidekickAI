@@ -118,27 +118,15 @@ export function createMainWindow(): void {
     safeLogWindowTrace(MAIN_WINDOW_ID, 'create')
   })
 
-  // 最大化/还原：同步渲染层按钮图标 + 窗口圆角
-  win.on('maximize', () => {
-    if (!win.isDestroyed()) {
-      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, true)
-    }
-  })
-  win.on('unmaximize', () => {
-    if (!win.isDestroyed()) {
-      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
-    }
-  })
+  // 最大化/还原事件由 setupBoundsTracking 统一处理（所有窗口共用），此处不再重复监听
 
-  // 全屏状态变化：持久化 isFullscreen + 记录/还原全屏前 bounds
+  // 全屏状态变化：持久化 isFullscreen + 还原全屏前 bounds
+  // 注意：fullscreenNormalBounds 已在 WIN_CONTROL_TOGGLE_FULLSCREEN IPC handler 中
+  // 于 setFullScreen(true) 之前正确记录，此处不再重复记录（enter-full-screen 触发时
+  // win.getBounds() 已是全屏尺寸，直接使用会导致退出全屏时恢复到全屏尺寸）
   win.on('enter-full-screen', () => {
     const state = windowStore.getOrDefault(MAIN_WINDOW_ID)
     if (!win.isDestroyed()) {
-      // 仅在未记录过非全屏 bounds 时记录，避免覆盖启动时保存的 saved.bounds
-      // （enter-full-screen 触发时 win.getBounds() 已是全屏尺寸，不能直接用）
-      if (!state.fullscreenNormalBounds) {
-        state.fullscreenNormalBounds = win.getBounds()
-      }
       state.isFullscreen = true
       windowStore.save(MAIN_WINDOW_ID, state)
       win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, true)
@@ -229,13 +217,16 @@ export function createMainWindow(): void {
       console.log('[main] 主窗口隐藏到托盘（closeBehavior=minimize）')
       return
     }
-    // 正常关闭：保存 bounds + alwaysOnTop + isFullscreen
+    // 正常关闭：保存 bounds + isMaximized + alwaysOnTop + isFullscreen
+    // 用 win.isMaximized() 而非 state.isMaximized，避免 OS 原生最大化时 state 未同步
     const state = windowStore.getOrDefault(MAIN_WINDOW_ID)
     if (!win.isDestroyed()) {
       const isFs = win.isFullScreen()
-      if (!state.isMaximized && !isFs) {
+      const isMax = win.isMaximized()
+      if (!isMax && !isFs) {
         state.bounds = win.getBounds()
       }
+      state.isMaximized = isMax
       state.alwaysOnTop = win.isAlwaysOnTop()
       state.isFullscreen = isFs
       windowStore.save(MAIN_WINDOW_ID, state)

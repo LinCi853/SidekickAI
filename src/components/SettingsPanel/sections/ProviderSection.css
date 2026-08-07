@@ -16,78 +16,101 @@
   margin-bottom: var(--space-2);
 }
 
-/* ===== 自定义 AI 提供商卡片列表（列表行风格） ===== */
-.provider-card {
+/* ===== J1：自定义 AI 供应商列表（紧凑单列行风格，参考 PresetSection） ===== */
+.provider-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.provider-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-0-5);
-  padding: var(--space-0-5) 0;
-  margin-bottom: 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
+  gap: var(--space-1);
 }
-/* 网格中的供应商卡片：独立边框 + 背景，替代 border-bottom 分隔 */
-.provider-card-grid .provider-card {
+.provider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--glass-bd-2);
-  border-bottom: 1px solid var(--glass-bd-2);
   background: var(--glass-bg);
   border-radius: var(--radius-sm);
   transition: border-color var(--duration-fast) var(--ease-out),
               background var(--duration-fast) var(--ease-out);
 }
-.provider-card-grid .provider-card:hover {
+.provider-row:hover {
   border-color: var(--accent);
   background: var(--accent-05);
 }
-.provider-card-head {
+.provider-row-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #fff;
+}
+.provider-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.provider-row-name-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
-.provider-card-name {
+.provider-row-name {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--foreground);
-}
-.provider-card-model {
-  display: flex;
-  align-items: center;
-  font-size: var(--text-xs);
-}
-.provider-card-model .combobox {
-  width: 100%;
-  min-width: 0;
-}
-.provider-card-model-select {
-  font-family: var(--font-mono) !important;
-  font-size: var(--text-xs) !important;
-  padding: 2px 6px !important;
-  min-height: auto !important;
-  height: 22px;
-}
-.provider-card-model:has(.combobox[aria-disabled="true"]) .provider-card-model-select {
-  cursor: default;
-}
-.provider-card-endpoint {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  word-break: break-all;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.provider-card-actions {
+.provider-row-endpoint {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.provider-row-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-1);
+  flex: none;
+}
+.provider-row-export-check {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-xs);
+}
+.provider-row-export-check:hover {
+  background: var(--accent-10);
+}
+.provider-row-export-check input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0;
 }
 .provider-action-btn {
   flex: none;
+}
+.provider-action-btn.compact {
+  padding: 2px 6px;
+  font-size: var(--text-xs);
 }
 .provider-action-btn.danger {
   color: var(--destructive);
@@ -100,9 +123,7 @@
   cursor: not-allowed;
 }
 
-.provider-add-btn {
-  margin-top: var(--space-1);
-}
+/* J1：旧的 .provider-add-btn 已移除，添加按钮改用 .provider-list-toolbar 内的 Button */
 
 /* ===== 供应商编辑表单（Modal 内部布局） ===== */
 /* 注：表单字段已改用 ui/FormRow，.provider-form 保留以兼容表单内仍引用的部分
@@ -221,13 +242,22 @@ input[type="number"].provider-form-input {
   flex-shrink: 0;
   user-select: none;
 }
+/* 供应商编辑表单操作按钮 —— sticky 固定在底部，滚动时始终可见 */
 .provider-form-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   gap: var(--space-1);
   align-items: center;
   flex-wrap: wrap;
-  margin-top: var(--space-0-5);
-  padding-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-2);
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  margin-bottom: calc(-1 * var(--space-4));
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  z-index: 10;
 }
 .provider-form-btn {
   flex: none;
@@ -586,22 +616,7 @@ input[type="number"].provider-form-input {
   color: var(--accent-bright);
 }
 
-/* v0.5.2 B-4：provider 卡片右上角导出勾选 */
-.provider-card-export-check {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  padding: var(--space-0-5);
-  border-radius: var(--radius-xs);
-}
-.provider-card-export-check:hover {
-  background: var(--accent-10);
-}
-.provider-card-export-check input[type="checkbox"] {
-  cursor: pointer;
-  margin: 0;
-}
+/* J1：旧的 .provider-card-export-check 已移除，导出勾选改用 .provider-row-export-check */
 
 /* ===== v0.5.2 R-5: 供应商 TTS/STT 语音配置区（紧凑同行布局） ===== */
 .provider-voice-compact {

@@ -38,7 +38,13 @@ export interface BrowserTabStoreState {
   navigateTab: (tabId: string, url: string) => void;
   updateTabTitle: (tabId: string, title: string) => void;
   updateTabFavicon: (tabId: string, favicon: string) => void;
+  /** 更新网站主题色（从 meta[name="theme-color"] 提取，用于 favicon 占位） */
+  updateTabThemeColor: (tabId: string, themeColor: string) => void;
   updateTabLoading: (tabId: string, isLoading: boolean) => void;
+  /** 更新标签加载进度估算（0-100，0 表示隐藏进度条） */
+  updateTabLoadingProgress: (tabId: string, progress: number) => void;
+  /** 更新标签加载状态文本（如 "正在连接..." / "等待响应..." / "已完成"） */
+  updateTabLoadingStatus: (tabId: string, status: string) => void;
   updateTabNavState: (tabId: string, canGoBack: boolean, canGoForward: boolean) => void;
   moveTab: (dragId: string, hoverId: string) => void;
   /** 切换标签固定状态（固定标签排左侧、占用最小宽度、不显示关闭按钮） */
@@ -109,12 +115,16 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
       ? 'SidekickAI 设置'
       : source === 'bookmark-manager'
         ? '书签管理器'
-        : profile?.name || '新标签';
+        : source === 'history'
+          ? '导航历史'
+          : source === 'downloads'
+            ? '下载管理'
+            : profile?.name || '新标签';
     const newTab: BrowserTabState = {
       id,
       profileId,
       title,
-      url: url || profile?.aiPlatformUrl || '',
+      url: url || profile?.browserHomePage || profile?.aiPlatformUrl || '',
       isLoading: false,
       canGoBack: false,
       canGoForward: false,
@@ -130,10 +140,15 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
   },
 
   closeTab: (tabId: string) => {
-    const { tabs, activeTabId } = get();
+    const { tabs, activeTabId, profileId } = get();
     const closingTab = tabs.find((t) => t.id === tabId);
+    if (!closingTab) return;
+
+    const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads'];
+    const isInternal = internalSources.includes(closingTab.source);
+
     // 推入最近关闭记录（仅网页标签，设置页等内部标签不记录）
-    if (closingTab && closingTab.kind === 'web' && closingTab.url && closingTab.source !== 'settings' && closingTab.source !== 'bookmark-manager') {
+    if (closingTab.kind === 'web' && closingTab.url && !isInternal) {
       useRecentClosedStore.getState().push({
         id: closingTab.id,
         title: closingTab.title || closingTab.url,
@@ -142,6 +157,30 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
         closedAt: Date.now(),
       });
     }
+
+    // P1-3：当关闭的是最后一个非内部标签时，不关闭窗口，替换为空白标签
+    const nonInternalTabs = tabs.filter((t) => !internalSources.includes(t.source));
+    if (!isInternal && nonInternalTabs.length === 1 && nonInternalTabs[0].id === tabId) {
+      const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId);
+      const blankTab: BrowserTabState = {
+        ...closingTab,
+        source: 'initial',
+        url: profile?.browserHomePage || '',
+        title: profile?.name || '新标签',
+        kind: 'home',
+        isLoading: false,
+        loadingProgress: 0,
+        loadingStatus: undefined,
+        canGoBack: false,
+        canGoForward: false,
+        favicon: undefined,
+      };
+      const newTabs = tabs.map((t) => (t.id === tabId ? blankTab : t));
+      set({ tabs: newTabs, activeTabId: tabId });
+      get().persist();
+      return;
+    }
+
     const newTabs = tabs.filter((t) => t.id !== tabId);
     let newActiveId = activeTabId;
     if (activeTabId === tabId) {
@@ -149,10 +188,6 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
     }
     set({ tabs: newTabs, activeTabId: newActiveId });
     get().persist();
-    // 最后一个标签关闭时关闭窗口
-    if (newTabs.length === 0) {
-      void import('../lib/electron-api').then((api) => api.closeCurrentWindow());
-    }
   },
 
   switchTab: (tabId: string) => {
@@ -181,9 +216,32 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
     // favicon 变化不触发持久化（高频且非关键）
   },
 
+  updateTabThemeColor: (tabId: string, themeColor: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, themeColor } : t)),
+    }));
+    // themeColor 变化不触发持久化（非关键数据）
+  },
+
   updateTabLoading: (tabId: string, isLoading: boolean) => {
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isLoading } : t)),
+    }));
+  },
+
+  updateTabLoadingProgress: (tabId: string, progress: number) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, loadingProgress: progress } : t,
+      ),
+    }));
+  },
+
+  updateTabLoadingStatus: (tabId: string, status: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, loadingStatus: status } : t,
+      ),
     }));
   },
 

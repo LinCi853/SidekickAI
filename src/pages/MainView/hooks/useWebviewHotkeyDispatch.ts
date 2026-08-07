@@ -4,6 +4,8 @@ import { useTabStore } from '../../../store/useTabStore';
 import { useProfileStore } from '../../../store/useProfileStore';
 import { useThemeStore } from '../../../store/useThemeStore';
 import { safeReloadWebview, type WebviewElement } from '../../../lib/webview';
+import { focusInputInWebview } from '../../../hooks/useWebViewControl';
+import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms';
 
 /**
  * Dispatches webview hotkey events (forwarded from main process) to the appropriate handlers.
@@ -49,7 +51,7 @@ export function useWebviewHotkeyDispatch(
         setShortcutsOpen(true);
       } else if (payload.action === 'toggleTheme') {
         useThemeStore.getState().toggleTheme();
-      } else if (payload.action === 'navBack' || payload.action === 'navForward' || payload.action === 'navRefresh') {
+      } else if (payload.action === 'navBack' || payload.action === 'navForward' || payload.action === 'navRefresh' || payload.action === 'forceRefresh') {
         const activeTabId = store.activeTabId;
         if (!activeTabId) return;
         const wv = document.querySelector(`webview[data-tab-id="${activeTabId}"]`) as WebviewElement | null;
@@ -62,6 +64,14 @@ export function useWebviewHotkeyDispatch(
             const prof = tab ? useProfileStore.getState().profiles.find((p) => p.id === tab.profileId) : null;
             const url = (tab?.url || prof?.aiPlatformUrl || '') as string;
             safeReloadWebview(wv, url, activeTabDomReadyRef.current);
+          } else if (payload.action === 'forceRefresh') {
+            // 强制刷新：清除缓存重新加载
+            const wvWithReload = wv as WebviewElement & { reloadIgnoringCache?: () => void };
+            if (typeof wvWithReload.reloadIgnoringCache === 'function') {
+              wvWithReload.reloadIgnoringCache();
+            } else {
+              wv.reload();
+            }
           }
         } catch (e) {
           console.error(`[MainView] ${payload.action} 失败:`, e);
@@ -77,6 +87,20 @@ export function useWebviewHotkeyDispatch(
         if (target) void addTab(target);
       } else if (payload.action === 'closeTab') {
         if (store.activeTabId) void closeTab(store.activeTabId);
+      } else if (payload.action === 'focusCycle') {
+        // 主窗口：聚焦当前 webview 内的 AI 输入框
+        const activeTabId = store.activeTabId;
+        if (!activeTabId) return;
+        const wv = document.querySelector(`webview[data-tab-id="${activeTabId}"]`) as WebviewElement | null;
+        if (!wv) return;
+        const tab = store.tabs.find((t) => t.id === activeTabId);
+        const profile = tab ? useProfileStore.getState().profiles.find((p) => p.id === tab.profileId) : null;
+        const platform = profile?.aiPlatformId
+          ? AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)
+          : null;
+        const selector = profile?.aiInputSelector || platform?.inputSelector || null;
+        wv.focus?.();
+        void focusInputInWebview(wv, selector);
       }
     });
     return off;

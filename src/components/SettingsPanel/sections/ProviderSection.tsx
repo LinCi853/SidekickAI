@@ -2,7 +2,7 @@
    SettingsPanel/sections/ProviderSection —— 自定义 AI 供应商管理分区
    从 pages/AdvancedPanelView.tsx 的 ProvidersModal 迁移而来。
    - 外层 SectionTitle collapsible（替代 .providers-modal-header）
-   - 卡片列表保留 .provider-card 类（列表行风格，与 SettingsPanel 其他 section 一致）
+   - J1：供应商列表改为紧凑单列行风格（.provider-row，参考 PresetSection）
    - 编辑表单 / 加密导出 / 加密导入 改用 ui/Modal（ESC + 遮罩关闭由 Modal 自动处理）
    - 表单字段改用 ui/FormRow（替代 .provider-form-row + .provider-form-label）
    数据源：useChatStore（providers / addProvider / editProvider / removeProvider / testProviderConn）
@@ -452,16 +452,6 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
     }
   };
 
-  // 卡片列表中切换当前使用模型：将选中模型设为主模型，原主模型降级为备选
-  const handleSwitchProviderModel = async (provider: CustomAIProvider, modelName: string) => {
-    if (provider.model === modelName) return;
-    const alts = provider.alternativeModels ?? [];
-    const newAlts = alts.includes(modelName)
-      ? [...alts.filter((m) => m !== modelName), provider.model]
-      : [...alts, provider.model];
-    await editProvider(provider.id, { model: modelName, alternativeModels: newAlts });
-  };
-
   // v0.5.2 B-4：加密导出（文件对话框 + 选择性导出）
   const handleStartExport = () => {
     setExportPassword('');
@@ -599,54 +589,56 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
             <div className="advanced-panel-tab-hint" data-name="settings.provider.loading">正在加载...</div>
           )}
 
-          {/* 供应商卡片列表（多列网格） + 卡片式新增按钮 */}
-          <div className="provider-card-grid" data-name="settings.provider.grid">
-          {providers.map((p, idx) => (
-            <div className="provider-card" key={p.id} data-name={`advanced-panel.provider-card-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
-              <div className="provider-card-head" data-name={`advanced-panel.provider-card-${idx + 1}-head`}>
-                <span className="provider-card-name" data-name={`advanced-panel.provider-card-${idx + 1}-name`}>{p.name}</span>
-                <Badge variant="accent" data-name={`advanced-panel.provider-card-${idx + 1}-protocol-badge`}>{p.protocol}</Badge>
-                {!editing && (
-                  <label
-                    className="provider-card-export-check"
-                    title="勾选后点加密导出，仅导出选中项"
-                    data-name={`advanced-panel.provider-card-${idx + 1}-export-check-label`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedExportIds.has(p.id)}
-                      onChange={(e) => handleToggleExportSelect(p.id, e.target.checked)}
-                      data-name={`advanced-panel.provider-card-${idx + 1}-export-check-input`}
-                    />
-                  </label>
-                )}
+          {/* J1：供应商列表（紧凑单列行风格，参考 PresetSection / AiAppSection） */}
+          <div className="provider-list" data-name="settings.provider.list">
+          {providers.map((p, idx) => {
+            // 根据协议生成主题色（用于图标背景）
+            const protoColor = p.protocol === 'anthropic' ? '#d97757' : p.protocol === 'openai' ? '#10a37f' : '#6366f1';
+            return (
+              <div className="provider-row" key={p.id} data-name={`advanced-panel.provider-card-${idx + 1}`} data-index={idx + 1} data-id={p.id}>
+                {/* 左侧：首字母图标 */}
+                <span
+                  className="provider-row-icon"
+                  style={{ background: protoColor }}
+                  aria-hidden="true"
+                  data-name={`advanced-panel.provider-card-${idx + 1}-icon`}
+                >
+                  {p.name.charAt(0).toUpperCase()}
+                </span>
+
+                {/* 中间：名称 + endpoint */}
+                <span className="provider-row-info" data-name={`advanced-panel.provider-card-${idx + 1}-info`}>
+                  <span className="provider-row-name-line" data-name={`advanced-panel.provider-card-${idx + 1}-name-line`}>
+                    <span className="provider-row-name" data-name={`advanced-panel.provider-card-${idx + 1}-name`}>{p.name}</span>
+                    <Badge variant="accent" data-name={`advanced-panel.provider-card-${idx + 1}-protocol-badge`}>{p.protocol}</Badge>
+                  </span>
+                  <span className="provider-row-endpoint" title={p.apiEndpoint} data-name={`advanced-panel.provider-card-${idx + 1}-endpoint`}>{p.apiEndpoint}</span>
+                </span>
+
+                {/* 右侧：导出勾选 + 操作按钮 */}
+                <div className="provider-row-actions" data-name={`advanced-panel.provider-card-${idx + 1}-actions`}>
+                  {!editing && (
+                    <label
+                      className="provider-row-export-check"
+                      title="勾选后点加密导出，仅导出选中项"
+                      data-name={`advanced-panel.provider-card-${idx + 1}-export-check-label`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedExportIds.has(p.id)}
+                        onChange={(e) => handleToggleExportSelect(p.id, e.target.checked)}
+                        data-name={`advanced-panel.provider-card-${idx + 1}-export-check-input`}
+                      />
+                    </label>
+                  )}
+                  <Button type="button" variant="text" className="provider-action-btn compact" onClick={() => handleEdit(p)} data-name={`advanced-panel.provider-card-${idx + 1}-edit-button`}>编辑</Button>
+                  <Button type="button" variant="text" danger className="provider-action-btn compact danger" onClick={() => void handleDelete(p.id)} data-name={`advanced-panel.provider-card-${idx + 1}-delete-button`}>删除</Button>
+                </div>
               </div>
-              <div className="provider-card-model" data-name={`advanced-panel.provider-card-${idx + 1}-model`}>
-                <Combobox
-                  inputValue={p.model}
-                  onInputChange={() => {}}
-                  inputReadOnly
-                  inputClassName="provider-card-model-select"
-                  disabled={(p.alternativeModels?.length ?? 0) === 0}
-                  options={[p.model, ...(p.alternativeModels ?? [])].map<ComboboxOption>((m) => ({
-                    value: m,
-                    label: m,
-                    selected: m === p.model,
-                  }))}
-                  onSelect={(v) => void handleSwitchProviderModel(p, v)}
-                  searchable={false}
-                  emptyText="仅一个模型"
-                  dataName={`advanced-panel.provider-card-${idx + 1}-model-select`}
-                />
-              </div>
-              <div className="provider-card-endpoint" title={p.apiEndpoint} data-name={`advanced-panel.provider-card-${idx + 1}-endpoint`}>{p.apiEndpoint}</div>
-              <div className="provider-card-actions" data-name={`advanced-panel.provider-card-${idx + 1}-actions`}>
-                <Button type="button" variant="text" className="provider-action-btn" onClick={() => handleEdit(p)} data-name={`advanced-panel.provider-card-${idx + 1}-edit-button`}>编辑</Button>
-                <Button type="button" variant="text" danger className="provider-action-btn danger" onClick={() => void handleDelete(p.id)} data-name={`advanced-panel.provider-card-${idx + 1}-delete-button`}>删除</Button>
-              </div>
-            </div>
-          ))}
-          {/* 卡片式新增按钮：追加在列表末尾 */}
+            );
+          })}
+
+          {/* 卡片式新增按钮：追加在列表末尾（与 AI 应用卡片式新增同步） */}
           {!editing && (
             <button
               type="button"

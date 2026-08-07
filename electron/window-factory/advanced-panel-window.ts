@@ -76,6 +76,10 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   const x = saved.bounds.x ?? workArea.x + Math.round((workArea.width - width) / 2)
   const y = saved.bounds.y ?? workArea.y + Math.round((workArea.height - height) / 2)
 
+  // 进阶窗口默认全屏（最大化）：首次打开（无保存状态）或用户上次以最大化关闭时
+  // 与浏览器窗口行为同步，取消最大化时还原为工作区居中 70% 尺寸
+  const shouldMaximize = saved.isMaximized || !hasSavedBounds
+
   // 根据 UI 比例动态计算最小宽度
   const uiScale = getUiScaleFromSettings()
   const minWidth = calculateAdvancedPanelMinWidth(uiScale)
@@ -100,8 +104,13 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
 
   windowState.advancedPanelWindow = win
 
-  if (saved.isMaximized) {
+  // 默认最大化：记录初始 normalBounds 供取消最大化时还原
+  if (shouldMaximize) {
+    const state = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
+    state.normalBounds = { x, y, width, height }
+    state.isMaximized = true
     win.maximize()
+    windowStore.save(ADVANCED_PANEL_WINDOW_ID, state)
   }
 
   loadRenderer(win, ADVANCED_PANEL_WINDOW_ID, 'advanced-panel', {
@@ -117,9 +126,11 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
   })
 
+  // 进阶面板：不保存 bounds，取消最大化时由 WindowMaximizeManager 使用
+  // centered70 策略还原为工作区居中 70% 尺寸（与浏览器窗口同步）
   attachDetachedWindowLifecycle(win, ADVANCED_PANEL_WINDOW_ID, () => {
     windowState.advancedPanelWindow = null
-  })
+  }, { trackBounds: false })
 
   return win
 }

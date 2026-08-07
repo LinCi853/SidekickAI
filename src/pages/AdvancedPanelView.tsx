@@ -14,7 +14,6 @@ import WindowResizeHandles from '../components/WindowResizeHandles';
 import { useChatStore } from '../store/useChatStore';
 import {
   minimizeWindow,
-  maximizeToggleWindow,
   closeCurrentWindow,
   onAdvancedPanelNavigate,
   pinCurrentWindow,
@@ -68,7 +67,7 @@ function readInitialProviderId(): string | null {
 
 export default function AdvancedPanelView() {
   const [activeTab, setActiveTab] = useState<TabKey>(readInitialTab);
-  const { isMaximized, isPinned, setIsMaximized, setIsPinned } = useWindowMaximizedAndPinned();
+  const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } = useWindowMaximizedAndPinned();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initialProviderId = useMemo(() => readInitialProviderId(), []);
 
@@ -128,11 +127,7 @@ export default function AdvancedPanelView() {
   useEscToCloseWindow();
 
   const handleMinimize = useCallback(() => void minimizeWindow().catch(() => {}), []);
-  const handleMaximize = useCallback(() => {
-    void maximizeToggleWindow()
-      .then(setIsMaximized)
-      .catch(() => {});
-  }, []);
+  // handleMaximize 由 useWindowMaximizedAndPinned 统一提供
   const handleClose = useCallback(() => void closeCurrentWindow().catch(() => {}), []);
 
   return (
