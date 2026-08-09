@@ -72,7 +72,6 @@ import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache } from './uti
 import { windowState } from './window-state.js'
 import {
   createMainWindow,
-  createStandaloneWindow,
   createBrowserWindow,
   createChatWindow,
   showHistoryWindow,
@@ -520,7 +519,6 @@ app.whenReady().then(async () => {
     windowManager,
     getSenderWindow,
     findWindowIdByWin,
-    createStandaloneWindow,
     createBrowserWindow,
   })
 

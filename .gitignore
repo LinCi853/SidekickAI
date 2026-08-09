@@ -51,6 +51,10 @@ Thumbs.db
 # 仅保留源码 + README + LICENSE；其余文档/测试/设计稿一律不入库
 .trae/
 .uploads/
+.claude/
+.mimocode/
+.workbuddy/
+_fixes/
 ai-window-uiux/
 ai-window-uiux-v2/
 docs/

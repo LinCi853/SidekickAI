@@ -30,8 +30,6 @@ export interface TabIpcDeps {
   getSenderWindow: (e: IpcMainInvokeEvent) => BrowserWindow | null
   /** 通过 BrowserWindow 实例反查 windowId */
   findWindowIdByWin: (win: BrowserWindow) => string | null
-  /** 创建脱离窗口（单标签独立窗口，保留用于向后兼容） */
-  createStandaloneWindow: (windowId: string) => BrowserWindow
   /** 创建浏览器窗口（多标签） */
   createBrowserWindow: (windowId: string, profileId: string) => BrowserWindow
 }

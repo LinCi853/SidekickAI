@@ -7,7 +7,8 @@
 // 录音由 audio/capture.ts 的 AudioCapture 负责（16kHz mono Float32 PCM）。
 // 通过 BrowserWindow.webContents.send 向前端推送 STT_RESULT / STT_ERROR 事件。
 
-import { BrowserWindow, net, safeStorage } from 'electron'
+import { BrowserWindow, net, safeStorage, app } from 'electron'
+import path from 'path'
 import { spawn } from 'child_process'
 import { writeFile, unlink } from 'fs/promises'
 import { existsSync } from 'fs'

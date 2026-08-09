@@ -1,7 +1,6 @@
 // electron/window-factory/browser-window.ts — 多标签浏览器窗口创建
 //
-// v0.0.9：从独立窗口升级为 Chrome 风格多标签浏览器窗口。
-// 与 createStandaloneWindow 的区别：
+// v0.0.9：Chrome 风格多标签浏览器窗口。
 //   - 默认最大化，还原尺寸 1280×800
 //   - minWidth 800 / minHeight 600
 //   - 使用独立 session（persist:${profileId}-browser）

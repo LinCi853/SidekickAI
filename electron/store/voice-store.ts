@@ -106,7 +106,10 @@ export function getVoiceConfig(): VoiceConfig {
   }
   // 老用户：旧值 'manual' 保留兼容（行为等同 'auto'），不强制改写避免频繁写盘
   // 老用户迁移：旧的 builtin/download 模式统一迁移到 ai
-  if (merged.sttMode === 'builtin' || merged.sttMode === 'download') {
+  // （sttMode 类型已收窄为 'ai' | 'local'，但旧磁盘数据可能仍存有 builtin/download，
+  //   需基于原始存储值判断，避免类型断言把迁移逻辑判为永不成立）
+  const rawSttMode = (stored as { sttMode?: string }).sttMode
+  if (rawSttMode === 'builtin' || rawSttMode === 'download') {
     merged.sttMode = 'ai'
   }
   return merged

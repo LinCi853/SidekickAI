@@ -1,18 +1,8 @@
 // electron/window-factory.ts — 桶导出（barrel）
 //
-// 原文件（831 行）已按窗口类型物理拆分到 window-factory/ 子目录：
-//   - helpers.ts           纯辅助函数 + 常量（setupBoundsTracking / loadRenderer /
-//                          safeLogWindowTrace / getFormBounds / resolveUserAgent /
-//                          findWindowIdByWin / attachWebviewPopupInterceptor 等）
-//   - main-window.ts       createMainWindow
-//   - standalone-window.ts createStandaloneWindow
-//   - chat-window.ts       createChatWindow / createChatDetachedWindow /
-//                          toggleChatDetachedWindows
-//   - popup-windows.ts     showHistoryWindow / showPromptWindow / showAiAppEditorWindow
-//
+// 原文件（831 行）已按窗口类型物理拆分到 window-factory/ 子目录。
 // 本文件保留为桶导出，使 main.ts 的 `from './window-factory.js'` import 路径
-// 无需修改。仅 re-export 原 window-factory.ts 对外公开的 12 个函数，保持公共
-// API 完全不变（setupBoundsTracking / safeLogWindowTrace 等仍为模块私有，不暴露）。
+// 无需修改。
 //
 // 为什么不删除本文件改用 window-factory/index.ts？
 //   main.ts 的 import 是 `from './window-factory.js'`（带 .js 扩展名）。在
@@ -25,9 +15,8 @@
 
 export { getSenderWindow, loadRenderer, getFormBounds, findWindowIdByWin } from './window-factory/helpers.js'
 export { createMainWindow } from './window-factory/main-window.js'
-export { createStandaloneWindow } from './window-factory/standalone-window.js'
 export { createBrowserWindow, toggleBrowserWindow } from './window-factory/browser-window.js'
-export { createChatWindow, createChatDetachedWindow } from './window-factory/chat-window.js'
+export { createChatWindow } from './window-factory/chat-window.js'
 export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showDataExportWindow, showSettingsWindow } from './window-factory/popup-windows.js'
 export { showHistoryDownloadWindow } from './window-factory/history-download-window.js'
 export {
