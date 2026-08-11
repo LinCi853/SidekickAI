@@ -224,7 +224,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
   // 注册 2 个默认内置热键（从持久化配置读取 accelerator）
   void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks)
 
-  // 启动时注册所有 Profile 的浏览器窗口开关快捷键（Profile.browserWindowShortcut）
+  // 启动时注册所有 Profile 的浏览器窗口脱离/回归快捷键（Profile.browserWindowShortcut）
   void import('../store/app-settings-store.js').then(({ reregisterProfileShortcuts }) => {
     void reregisterProfileShortcuts()
   })

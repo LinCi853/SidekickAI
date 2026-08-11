@@ -86,6 +86,16 @@ export const windowApi = {
       ipcRenderer.invoke(IPC_CHANNELS.TAB_UPDATE_URL, windowId, tabId, url),
     updateHomeUrl: (windowId: string, tabId: string, homeUrl: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TAB_UPDATE_HOME_URL, windowId, tabId, homeUrl),
+    // 主→渲染：窗口快捷键兜底请求（主窗口无该 Profile 标签时，要求渲染层创建并返回 tabId）
+    onEnsureAndDetach: (callback: (profileId: string) => void) => {
+      const handler = (_e: unknown, profileId: string) => callback(profileId)
+      ipcRenderer.on(IPC_CHANNELS.TAB_ENSURE_AND_DETACH, handler)
+      return () =>
+        ipcRenderer.removeListener(IPC_CHANNELS.TAB_ENSURE_AND_DETACH, handler)
+    },
+    // 渲染→主：回复兜底请求结果（tabId 或 null）
+    reportEnsureAndDetachResult: (payload: { profileId: string; tabId: string | null }) =>
+      ipcRenderer.send(IPC_CHANNELS.TAB_ENSURE_AND_DETACH_RESULT, payload),
   },
   // 窗口重新显示/聚焦到前台（主→渲染：每次 show/focus 通知渲染层聚焦输入框）
   onWindowShown: (callback: () => void) => {

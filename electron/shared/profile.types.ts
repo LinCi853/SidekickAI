@@ -154,8 +154,9 @@ export interface Profile {
    */
   popupWhitelist?: string[]
   /**
-   * 该 AI 应用浏览器窗口的全局开关快捷键（accelerator 字符串，如 'Ctrl+Shift+D'）。
-   * - 按下该快捷键将打开/关闭当前应用的浏览器窗口（类比 Alt+Q 切换进阶面板）。
+   * 该 AI 应用浏览器窗口的脱离/回归快捷键（accelerator 字符串，如 'Ctrl+Shift+D'）。
+   * - 按下该快捷键将当前 AI 应用在主窗口与独立浏览器窗口之间快速脱离/回归
+   *   （脱离：主窗口标签迁出为浏览器窗口；回归：关闭浏览器窗口，标签回迁主窗口）。
    * - 默认 undefined（无快捷键，不注册到系统）。
    * - 每个 AI 应用独立配置，在浏览器窗口设置标签页中编辑。
    * - 注册为系统级全局快捷键（globalShortcut），应用未聚焦也生效。

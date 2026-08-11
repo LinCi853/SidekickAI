@@ -6,7 +6,7 @@
 //   - 使用独立 session（persist:${profileId}-browser）
 //   - 加载 mode='browser' 渲染进程
 
-import { BrowserWindow, nativeImage, screen, session, type DownloadItem } from 'electron'
+import { BrowserWindow, ipcMain, nativeImage, screen, session, type DownloadItem } from 'electron'
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
@@ -30,6 +30,7 @@ import {
 } from './helpers.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
+import { detachProfileToBrowserWindow } from './detach-profile.js'
 import type { BrowserTabState, BrowserWindowState } from '../shared/browser.types.js'
 
 /** 广播下载状态更新给所有窗口（含浏览器窗口和历史下载管理窗口） */
@@ -357,63 +358,81 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
 }
 
 /**
- * 切换指定 Profile 的浏览器窗口显隐（快捷键触发）。
+ * 切换指定 Profile 的浏览器窗口（窗口快捷键触发）：脱离 / 回归。
  *
- * 行为类比 Alt+Q 切换进阶面板：
- * - 浏览器窗口已打开 → 关闭它（win.close()）
- * - 浏览器窗口未打开 → 创建新的浏览器窗口，初始标签为该 Profile 的 AI 平台 URL
+ * - 浏览器窗口已打开 → 回归：关闭浏览器窗口，标签自动回迁主窗口
+ *   （closed 事件检测到 parentTabId 后触发 BROWSER_TAB_MIGRATE_BACK）
+ * - 浏览器窗口未打开 → 脱离：将主窗口中该 Profile 的标签迁出为独立浏览器窗口
+ *   - 主窗口有该 Profile 标签 → 直接脱离（复用 DETACH_TAB 逻辑，带 parentTabId）
+ *   - 主窗口无该 Profile 标签 → 先在主窗口创建标签，再脱离（保证快捷键始终有效）
  *
- * 独立打开的窗口（非从主窗口脱离）关闭时不回迁标签到主窗口（closed 事件检查 parentTabId）。
+ * 与「打开/关闭」不同：脱离/回归保留主窗口标签与浏览器窗口的归属关系，
+ * 回归时标签回到主窗口原位并恢复最后浏览的 URL。
  *
  * @param profileId 目标 Profile id
  */
-export function toggleBrowserWindow(profileId: string): void {
+export async function toggleBrowserWindow(profileId: string): Promise<void> {
+  // 串行化锁：同 Profile 的快捷键若上一次尚未完成（含兜底等待渲染层创建标签），
+  // 直接忽略本次，避免连续触发开出多个窗口。
+  if (toggleInFlight.has(profileId)) return
+  toggleInFlight.add(profileId)
+  try {
+    await toggleBrowserWindowInner(profileId)
+  } finally {
+    toggleInFlight.delete(profileId)
+  }
+}
+
+/** 正在执行 toggleBrowserWindow 的 Profile id 集合（防并发重复触发） */
+const toggleInFlight = new Set<string>()
+
+async function toggleBrowserWindowInner(profileId: string): Promise<void> {
+  // 回归分支：浏览器窗口已打开 → 关闭（closed 事件自动回迁标签）
   const existing = windowState.browserWindowsByProfile.get(profileId)
   if (existing && !existing.isDestroyed()) {
-    // 已打开 → 关闭
     existing.close()
     return
   }
 
-  // 未打开 → 创建新的浏览器窗口
-  const profile = profileStore.get(profileId)
-  if (!profile) {
-    console.warn(`[toggleBrowserWindow] Profile ${profileId} 不存在`)
+  // 脱离分支：浏览器窗口未打开 → 将主窗口该 Profile 标签迁出
+  const mainState = windowStore.getOrDefault(MAIN_WINDOW_ID)
+  const existingTab = mainState.tabs.find((t) => t.profileId === profileId)
+
+  if (existingTab) {
+    // 主窗口已有该 Profile 标签 → 直接脱离（带 parentTabId，回归时可回迁）
+    await detachProfileToBrowserWindow(MAIN_WINDOW_ID, existingTab.id, { createBrowserWindow })
     return
   }
 
-  const windowId = randomUUID()
-  const tabId = randomUUID()
-  const initialUrl = profile.aiPlatformUrl || ''
-
-  const tab: BrowserTabState = {
-    id: tabId,
-    profileId,
-    title: profile.name || '',
-    url: initialUrl,
-    isLoading: false,
-    canGoBack: false,
-    canGoForward: false,
-    order: 0,
-    source: 'initial',
-    kind: 'home',
-    // 独立打开：不设 parentTabId，closed 时不回迁主窗口
+  // 兜底：主窗口无该 Profile 标签 → 请求主窗口渲染层创建标签（渲染层为标签真源，
+  // 创建后 persist 保证数据一致），收到 tabId 后再脱离
+  const mainWindow = windowState.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    console.warn(`[toggleBrowserWindow] 主窗口不可用，无法兜底创建标签`)
+    return
   }
 
-  const state: BrowserWindowState = {
-    windowId,
-    profileId,
-    bounds: { width: 0, height: 0 },
-    isMaximized: true,
-    isFullscreen: false,
-    alwaysOnTop: false,
-    activeTabId: tabId,
-    tabs: [tab],
-    aiPlatformId: profile.aiPlatformId,
-    platformName: profile.aiPlatformId
-      ? AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)?.name
-      : undefined,
-  }
-  browserWindowStore.save(windowId, state)
-  createBrowserWindow(windowId, profileId)
+  const tabId = await new Promise<string | null>((resolve) => {
+    let settled = false
+    const onResult = (_e: unknown, payload: { profileId: string; tabId: string | null }) => {
+      if (payload.profileId !== profileId || settled) return
+      settled = true
+      ipcMain.off(IPC_CHANNELS.TAB_ENSURE_AND_DETACH_RESULT, onResult)
+      resolve(payload.tabId)
+    }
+    ipcMain.on(IPC_CHANNELS.TAB_ENSURE_AND_DETACH_RESULT, onResult)
+    mainWindow.webContents.send(IPC_CHANNELS.TAB_ENSURE_AND_DETACH, profileId)
+    // 超时兜底：3 秒内无回复则放弃（避免泄漏 listener）
+    setTimeout(() => {
+      if (settled) return
+      settled = true
+      ipcMain.off(IPC_CHANNELS.TAB_ENSURE_AND_DETACH_RESULT, onResult)
+      console.warn(`[toggleBrowserWindow] 兜底创建标签超时`)
+      resolve(null)
+    }, 3000)
+  })
+
+  if (!tabId) return
+  await detachProfileToBrowserWindow(MAIN_WINDOW_ID, tabId, { createBrowserWindow })
 }
+

@@ -20,6 +20,8 @@ import {
   onBrowserTabMigrateBack,
   onBrowserTabDetached,
   onChatRequestConfig,
+  onTabEnsureAndDetach,
+  reportTabEnsureAndDetachResult,
 } from '../../lib/electron-api';
 import type { Profile } from '../../lib/electron-api';
 import ShortcutsModal from '../../components/ShortcutsModal';
@@ -222,6 +224,28 @@ export default function MainView() {
     });
     return () => off();
   }, [addDetachedProfile]);
+
+  // 窗口快捷键兜底：主窗口无该 Profile 标签时，主进程请求渲染层创建标签并返回 tabId。
+  // 渲染层作为标签真源创建后 persist，主进程收到 tabId 再脱离，保证数据一致。
+  useEffect(() => {
+    const off = onTabEnsureAndDetach(async (profileId) => {
+      const store = useTabStore.getState();
+      const existing = store.tabs.find((t) => t.profileId === profileId);
+      if (existing) {
+        reportTabEnsureAndDetachResult({ profileId, tabId: existing.id });
+        return;
+      }
+      const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId);
+      if (!profile) {
+        reportTabEnsureAndDetachResult({ profileId, tabId: null });
+        return;
+      }
+      await store.addTab(profile);
+      const created = useTabStore.getState().tabs.find((t) => t.profileId === profileId);
+      reportTabEnsureAndDetachResult({ profileId, tabId: created?.id ?? null });
+    });
+    return () => off();
+  }, []);
 
   // Chat request config: open settings on Alt+Q
   useEffect(() => {

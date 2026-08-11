@@ -571,7 +571,7 @@ export function registerAppSettingsIPC(): void {
     return readFilesAsDataUrls(filePaths)
   })
 
-  // ===== 每应用浏览器窗口快捷键（开关快捷键） =====
+  // ===== 每应用浏览器窗口脱离/回归快捷键 =====
   // 保存/清除指定 Profile 的浏览器窗口快捷键，并重注册全局快捷键
   ipcMain.handle(
     IPC_CHANNELS.PROFILE_SHORTCUT_SET,
@@ -587,10 +587,11 @@ export function registerAppSettingsIPC(): void {
 }
 
 /**
- * 重新注册所有 Profile 的浏览器窗口开关快捷键。
+ * 重新注册所有 Profile 的浏览器窗口脱离/回归快捷键。
  *
  * 遍历所有 Profile，注册非空 browserWindowShortcut（accelerator 字符串）到系统 globalShortcut。
- * 触发时调用 toggleBrowserWindow(profileId) 打开/关闭对应应用浏览器窗口。
+ * 触发时调用 toggleBrowserWindow(profileId) 脱离/回归对应应用的浏览器窗口
+ * （已打开则回归关闭、未打开则脱离主窗口标签迁出）。
  *
  * 设计要点：
  * - 按 accelerator 去重避免同一组合键被多次注册（先到先得）

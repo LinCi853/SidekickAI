@@ -69,7 +69,7 @@ export function applyProfileProxyFallback(profileId: string): Promise<{
 }
 
 /**
- * 保存/清除指定 Profile 的浏览器窗口开关快捷键。
+ * 保存/清除指定 Profile 的浏览器窗口脱离/回归快捷键。
  * 主进程会调用 reregisterProfileShortcuts() 重注册全局快捷键。
  * @param accelerator accelerator 字符串，传 null 清除快捷键
  */

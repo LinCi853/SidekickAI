@@ -24,7 +24,7 @@ interface HotkeySectionProps {
 /**
  * 主窗口内置全局热键设置分区（toggleMainWindow / toggleDetachedWindows / backgroundVoice）。
  *
- * 浏览器窗口开关快捷键已迁移到 BrowserSettingsTab 的「窗口快捷键」section
+ * 浏览器窗口脱离/回归快捷键已迁移到 BrowserSettingsTab 的「窗口快捷键」section
  * （每应用独立配置 Profile.browserWindowShortcut，默认无快捷键）。
  */
 export default function HotkeySection({

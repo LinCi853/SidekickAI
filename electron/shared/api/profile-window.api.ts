@@ -106,6 +106,10 @@ export interface TabAPI {
   updateUrl(windowId: string, tabId: string, url: string): Promise<void>
   /** 更新标签首页地址 */
   updateHomeUrl(windowId: string, tabId: string, homeUrl: string): Promise<void>
+  /** 主→渲染：窗口快捷键兜底请求（主窗口无该 Profile 标签时，要求渲染层创建并返回 tabId） */
+  onEnsureAndDetach(callback: (profileId: string) => void): () => void
+  /** 渲染→主：回复兜底请求结果（tabId 或 null） */
+  reportEnsureAndDetachResult(payload: { profileId: string; tabId: string | null }): void
 }
 
 /** 设备预设接口 */

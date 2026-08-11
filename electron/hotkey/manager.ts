@@ -674,12 +674,17 @@ export class HotkeyManager {
     if (this.browserShortcuts.has(accelerator)) {
       this.unregisterBrowserShortcut(accelerator)
     }
-    this.browserShortcuts.set(accelerator, callback)
+    // 包装回调：加入 200ms 去重窗口（与内置热键 register() 一致）。
+    // 浏览器快捷键同时走 globalShortcut 主路径 + uiohook 兜底，若不包 trigger()，
+    // 同一次按键会被两路各触发一次 → toggleBrowserWindow 连续开关（闪一下关闭）
+    // 或在窗口入映射前各开一个（同应用多窗口）。
+    const throttledCallback = () => this.trigger(accelerator, callback)
+    this.browserShortcuts.set(accelerator, throttledCallback)
     // 加入 uiohook 匹配器（兜底），复用主映射机制
     if (!this.uiohookMatchers.has(accelerator)) {
       this.uiohookMatchers.set(accelerator, {
         ...parseAccelerator(accelerator),
-        callback,
+        callback: throttledCallback,
       })
     }
     this.ensureUiohookStarted()
@@ -688,7 +693,7 @@ export class HotkeyManager {
       if (globalShortcut.isRegistered(accelerator)) {
         globalShortcut.unregister(accelerator)
       }
-      const ok = globalShortcut.register(accelerator, callback)
+      const ok = globalShortcut.register(accelerator, throttledCallback)
       if (ok) {
         console.log(`[HotkeyManager] 浏览器全局快捷键注册成功: ${accelerator}`)
         return true

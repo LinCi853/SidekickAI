@@ -58,6 +58,10 @@ export const IPC_CHANNELS = {
   TAB_UPDATE_TITLE: 'tab:updateTitle',
   TAB_UPDATE_URL: 'tab:updateUrl',
   TAB_UPDATE_HOME_URL: 'tab:updateHomeUrl',
+  // 窗口快捷键兜底：主窗口无该 Profile 标签时，主进程请求主窗口渲染层创建标签并脱离
+  // 主→渲染：请求（profileId），渲染→主：回复（{ profileId, tabId } | null）
+  TAB_ENSURE_AND_DETACH: 'tab:ensureAndDetach',
+  TAB_ENSURE_AND_DETACH_RESULT: 'tab:ensureAndDetach:result',
   // Fingerprint
   FINGERPRINT_GET_SCRIPT: 'fingerprint:getScript', // 获取指纹注入脚本
   // Presets
@@ -396,7 +400,7 @@ export const IPC_CHANNELS = {
   // 渲染→主：查询所有窗口的标签树（返回 {main: TabState[], browsers: {windowId, parentTabId, profileId, tabs}[]}）
   BROWSER_FOCUS_WINDOW: 'browser:focusWindow',
   BROWSER_TABS_QUERY: 'browser:tabs:query',
-  // ===== 浏览器窗口快捷键（每应用独立开关快捷键） =====
+  // ===== 浏览器窗口脱离/回归快捷键（每应用独立） =====
   // 渲染→主：保存/清除指定 Profile 的浏览器窗口快捷键（{ profileId, accelerator: string | null }）
   // 主进程保存到 Profile.browserWindowShortcut 并重注册全局快捷键
   PROFILE_SHORTCUT_SET: 'profile:shortcut:set',

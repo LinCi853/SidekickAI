@@ -198,6 +198,21 @@ export async function updateTabHomeUrl(windowId: string, tabId: string, homeUrl:
   return api.tab.updateHomeUrl(windowId, tabId, homeUrl);
 }
 
+/**
+ * 监听窗口快捷键兜底请求（主→渲染）。
+ * 主进程在主窗口无该 Profile 标签时，请求渲染层创建标签并返回 tabId。
+ */
+export function onTabEnsureAndDetach(callback: (profileId: string) => void): () => void {
+  const api = requireElectron();
+  return api.tab.onEnsureAndDetach(callback);
+}
+
+/** 回复兜底请求结果给主进程（tabId 或 null） */
+export function reportTabEnsureAndDetachResult(payload: { profileId: string; tabId: string | null }): void {
+  const api = requireElectron();
+  return api.tab.reportEnsureAndDetachResult(payload);
+}
+
 /* =====================================================================
    设备预设 / AI 平台 —— 对应 window.electron.presets / aiPlatform
    ===================================================================== */

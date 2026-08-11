@@ -14,8 +14,15 @@
    4. onLostPointerCapture 兜底：系统抢占手势时清理状态，避免卡死。
    ===================================================================== */
 
-import { useCallback, useRef, useState } from 'react';
-import { resizeWindow, getWindowBounds, getMinimumSize } from '../lib/electron-api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  resizeWindow,
+  getWindowBounds,
+  getMinimumSize,
+  isWindowMaximized,
+  maximizeToggleWindow,
+  onMaximizeToggled,
+} from '../lib/electron-api';
 
 type Edge = 'n' | 'sl' | 'sr' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -57,11 +64,24 @@ const handleStyle = (edge: Edge): React.CSSProperties => {
 export interface WindowResizeHandlesProps {
   /** 禁用所有 resize 手柄（如底栏展开时释放窗口调整限制） */
   disabled?: boolean;
+  /**
+   * 最大化/全屏状态下的 resize 行为：
+   * - 'block'：隐藏 resize 手柄，不允许拖拽调整大小（默认）
+   * - 'unmaximize'：拖拽时自动退出最大化，然后正常 resize
+   */
+  fullscreenMode?: 'block' | 'unmaximize';
 }
 
-export default function WindowResizeHandles({ disabled = false }: WindowResizeHandlesProps) {
+export default function WindowResizeHandles({ disabled = false, fullscreenMode = 'block' }: WindowResizeHandlesProps) {
   // 仅用于触发光标样式重渲染；拖拽逻辑全部用 ref，避免闭包陈旧
   const [activeEdge, setActiveEdge] = useState<Edge | null>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    isWindowMaximized().then(setIsMaximized).catch(() => {});
+    const unsub = onMaximizeToggled(setIsMaximized);
+    return unsub;
+  }, []);
   const startRef = useRef<{ x: number; y: number; bounds: { x: number; y: number; width: number; height: number } } | null>(null);
   const minSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const rafRef = useRef<number | null>(null);
@@ -109,10 +129,23 @@ export default function WindowResizeHandles({ disabled = false }: WindowResizeHa
     e.preventDefault();
     e.stopPropagation();
 
+    // 最大化状态下：'block' 模式不渲染手柄所以不会到这里；
+    // 'unmaximize' 模式先退出最大化再开始 resize
+    if (isMaximized && fullscreenMode === 'unmaximize') {
+      void maximizeToggleWindow().then(() => {
+        setIsMaximized(false);
+        // 退出最大化后重新获取 bounds，再开始 resize
+        startPointerCapture(edge, e);
+      });
+      return;
+    }
+
+    startPointerCapture(edge, e);
+  }, [isMaximized, fullscreenMode, cleanup]);
+
+  /** 同步 capture + 异步获取 bounds 的实际逻辑 */
+  const startPointerCapture = useCallback((edge: Edge, e: React.PointerEvent<HTMLDivElement>) => {
     // ★ 同步阶段调用 setPointerCapture——此时 e.currentTarget 有效。
-    // 之前的 bug：在 await Promise.all() 之后访问 e.currentTarget，React 合成事件
-    // 已清空 currentTarget，setPointerCapture 静默失败，导致 pointermove/pointerup
-    // 无法路由到元素，isDragging 卡死。
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -122,9 +155,6 @@ export default function WindowResizeHandles({ disabled = false }: WindowResizeHa
     edgeRef.current = edge;
     setActiveEdge(edge);
 
-    // 异步获取 bounds/minSize（不阻塞 capture）
-    // startRef 在 then 中设置；在就绪前 handlePointerMove 会因 startRef null 而 return，
-    // 丢弃最初几帧位移（IPC 延迟极短，用户感知不到）
     const sx = e.screenX;
     const sy = e.screenY;
     void Promise.all([getWindowBounds(), getMinimumSize()]).then(([bounds, minSize]) => {
@@ -185,6 +215,9 @@ export default function WindowResizeHandles({ disabled = false }: WindowResizeHa
   const edges: Edge[] = ['n', 'sl', 'sr', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
   if (disabled) return null;
+
+  // block 模式下最大化/全屏时隐藏 resize 手柄
+  if (isMaximized && fullscreenMode === 'block') return null;
 
   return (
     <>

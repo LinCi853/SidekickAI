@@ -123,7 +123,7 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
     }
   }, []);
 
-  // ===== 浏览器窗口开关快捷键（每应用独立，默认无快捷键） =====
+  // ===== 浏览器窗口脱离/回归快捷键（每应用独立，默认无快捷键） =====
   // 草稿值：从 liveProfile.browserWindowShortcut 初始化（undefined=无快捷键）
   const [shortcutDraft, setShortcutDraft] = useState<string>('');
   const shortcutSourceKey = liveProfile.browserWindowShortcut ?? '';
@@ -351,13 +351,13 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
           />
         </section>
 
-        {/* Shortcut Section —— 当前 AI 应用浏览器窗口开关快捷键（Profile.browserWindowShortcut） */}
+        {/* Shortcut Section —— 当前 AI 应用浏览器窗口脱离/回归快捷键（Profile.browserWindowShortcut） */}
         <section style={sectionStyle} data-name="browser.settings.shortcut-section">
           <SectionTitle>窗口快捷键</SectionTitle>
           <p style={hintStyle} data-name="browser.settings.shortcut-hint">
-            按下该快捷键可打开或关闭当前应用的浏览器窗口（系统级全局快捷键，应用未聚焦也生效）。默认无快捷键。
+            按下该快捷键可将当前 AI 应用在主窗口与独立浏览器窗口之间快速脱离/回归（系统级全局快捷键，应用未聚焦也生效）。默认无快捷键。
           </p>
-          <FormRow label="开关快捷键">
+          <FormRow label="脱离/回归快捷键">
             <HotkeyRecorder
               value={shortcutDraft}
               placeholder="未设置（点击录制）"

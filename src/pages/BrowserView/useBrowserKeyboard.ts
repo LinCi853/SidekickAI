@@ -11,7 +11,7 @@
    - Ctrl+K / Ctrl+E 聚焦地址栏搜索模式
    - Ctrl+Shift+Del 清除浏览数据 / Ctrl+F 页内查找 / Ctrl+P 打印
 
-   浏览器窗口的"打开/关闭"全局快捷键由主进程 globalShortcut 注册
+   浏览器窗口的"脱离/回归"全局快捷键由主进程 globalShortcut 注册
    （Profile.browserWindowShortcut），与本 hook 无关。
 
    webview 焦点时 keydown 不触发，主进程 before-input-event 通过
