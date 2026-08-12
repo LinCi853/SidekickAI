@@ -5,7 +5,7 @@
 //
 // 关键约束（PoC 验证）：冻结后 executeJavaScript 会 hang，故必须「先抓取再冻结」。
 
-import { ipcMain, webContents, BrowserWindow, clipboard, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, webContents, BrowserWindow, clipboard, app, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { registerWebview, getWebviewByTabId } from './webview-registry.js'
 import {
@@ -112,9 +112,40 @@ function broadcastFreezeState(tabId: string, state: string): void {
   }
 }
 
+/**
+ * 宿主 webContents 的 Alt+P 拦截（冻结/恢复）。
+ * 冻结后用户点击选择层（tabIndex 聚焦）→ 键盘焦点转移到宿主，Alt+P 路由
+ * 宿主；而原 Alt+P 拦截（helpers.ts）只挂在 guest → 宿主焦点时快捷键失效。
+ * 此处对每个窗口宿主 webContents 挂一份，与 guest 侧钩子（attachTabHotkey）
+ * 互补，确保前台任意焦点 Alt+P 都能触发。
+ */
+const hostAltPHotkeySet = new Set<number>()
+
+function attachHostAltPHotkey(win: BrowserWindow): void {
+  if (win.isDestroyed() || hostAltPHotkeySet.has(win.webContents.id)) return
+  hostAltPHotkeySet.add(win.webContents.id)
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown') return
+    const mods = input.modifiers || []
+    const hasAlt = mods.includes('alt')
+    const hasCtrl = mods.includes('control') || mods.includes('ctrl')
+    const hasShift = mods.includes('shift')
+    const hasMeta = mods.includes('meta') || mods.includes('command')
+    if (hasAlt && !hasCtrl && !hasShift && !hasMeta && (input.key || '').toLowerCase() === 'p') {
+      e.preventDefault()
+      console.log('[freeze-ipc] 宿主焦点 Alt+P → toggleFreeze')
+      win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' })
+    }
+  })
+}
+
 export function registerFreezeIpc(): void {
   // freeze-manager 内部触发的状态变化（Alt+P 恢复 / 窗口失焦自动恢复）广播到渲染层
   setFreezeStateBroadcaster((tabId, state) => broadcastFreezeState(tabId, state))
+
+  // 宿主 Alt+P 拦截：焦点在宿主 UI 区域（选择层聚焦后）时快捷键仍可触发
+  for (const w of BrowserWindow.getAllWindows()) attachHostAltPHotkey(w)
+  app.on('browser-window-created', (_e, w) => attachHostAltPHotkey(w))
 
   // 注册 webview 到冻结注册表（渲染层在 webview attach 后上报）
   ipcMain.handle(

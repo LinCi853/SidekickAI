@@ -1,14 +1,15 @@
 /* =====================================================================
-   pages/BrowserView/FreezeOverlay.tsx —— 冻结态覆盖层（应用组件选中预览）
+   pages/BrowserView/FreezeOverlay.tsx —— 冻结态覆盖层（应用组件原位选中）
    冻结画面绝对定格（Debugger.pause，永不解除）；选中/复制完全由本组件
    （应用 UI）实现：
    - 覆盖层对齐到 webview 元素（ResizeObserver 实时跟随），选中坐标系与
-     文本层（guest 视口坐标系）一致 —— 修复选中偏移
-   - 拖拽 → 应用渲染高亮矩形（选中预览）
+     文本层（guest 视口坐标系）一致
+   - 拖拽 → 应用渲染高亮矩形（拖拽中预览）
    - 滚轮 → 转发 guest（compositor 滚动画面）+ 累计偏移（文本层跟随）
-   - mouseup → 矩形 ∩ 文本层 → 拼文本 → **预览浮层**（不直接复制），
-     浮层上「复制」按钮确认后才写入系统剪贴板
-   文本层在冻结前由主进程 DOMSnapshot 提取（文档坐标 + 冻结瞬间滚动偏移）。
+   - mouseup → 矩形 ∩ 文本层 → **选中文本在原位置高亮展示**（每个命中
+     文本项按精确坐标渲染背景块，文字从冻结画面透出，效果同原生 selection）
+   - 底部操作条：「已选 N 字 [复制]」，确认后才写入系统剪贴板
+   文本层在冻结前由主进程提取（DOMSnapshot 主路径 + JS 降级路径）。
    ===================================================================== */
 
 import { useEffect, useRef, useState } from 'react';
@@ -27,29 +28,40 @@ interface SelRect {
   h: number;
 }
 
-/** 复制预览浮层状态 */
-interface ToastState {
-  /** 完整选中文本（点复制时使用） */
+/** 命中文本项（含视口坐标，供原位高亮渲染） */
+interface HitItem {
   text: string;
+  vx: number;
+  vy: number;
+  w: number;
+  h: number;
+}
+
+/** 操作条状态 */
+interface ActionBar {
   title: string;
-  preview: string;
   copied: boolean;
 }
 
-/** 选中矩形（视口坐标）∩ 文本层（文档坐标 - 偏移）→ 拼接选中文本 */
-function computeSelectedText(layer: TextLayer, sel: SelRect, wheelOffsetY: number): string {
+/** 选中矩形（视口坐标）∩ 文本层（文档坐标 - 偏移）→ 命中文本项（视口坐标） */
+function computeHitItems(layer: TextLayer, sel: SelRect, wheelOffsetY: number): HitItem[] {
   const baseY = layer.scrollOffsetY + wheelOffsetY;
-  const hits: Array<{ text: string; y: number; x: number }> = [];
+  const hits: HitItem[] = [];
   for (const it of layer.items) {
     const vy = it.y - baseY;
     // x 轴相交
     if (sel.x > it.x + it.w || it.x > sel.x + sel.w) continue;
     // y 轴相交
     if (sel.y > vy + it.h || vy > sel.y + sel.h) continue;
-    hits.push({ text: it.text, y: vy, x: it.x });
+    hits.push({ text: it.text, vx: it.x, vy, w: it.w, h: it.h });
   }
   // 按文档顺序（y 为主，x 为辅）
-  hits.sort((a, b) => a.y - b.y || a.x - b.x);
+  hits.sort((a, b) => a.vy - b.vy || a.vx - b.vx);
+  return hits;
+}
+
+/** 命中项 → 完整选中文本 */
+function hitsToText(hits: HitItem[]): string {
   return hits
     .map((h) => h.text.trim())
     .filter(Boolean)
@@ -62,7 +74,9 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
   const textLayer = useFreezeStore((s) => (activeTabId ? s.textLayers[activeTabId] : undefined));
   const [showFlash, setShowFlash] = useState(false);
   const [sel, setSel] = useState<SelRect | null>(null);
-  const [toast, setToast] = useState<ToastState | null>(null);
+  /** 拖拽结束后的命中文本项（原位高亮展示） */
+  const [selItems, setSelItems] = useState<HitItem[] | null>(null);
+  const [actionBar, setActionBar] = useState<ActionBar | null>(null);
   const [wheelOffsetY, setWheelOffsetY] = useState(0);
   /** 覆盖层对齐 webview 的位置（相对窗口根） */
   const [layerPos, setLayerPos] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
@@ -71,7 +85,7 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
   const dragRef = useRef<{ startX: number; startY: number; curX: number; curY: number } | null>(null);
   const layerRef = useRef<TextLayer | undefined>(textLayer);
   const wheelRef = useRef(0);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   layerRef.current = textLayer;
   wheelRef.current = wheelOffsetY;
 
@@ -84,11 +98,12 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
     }
   }, [state, activeTabId]);
 
-  // 恢复/切换标签时重置选中、滚动偏移与浮层
+  // 恢复/切换标签时重置全部状态
   useEffect(() => {
     setSel(null);
+    setSelItems(null);
+    setActionBar(null);
     setWheelOffsetY(0);
-    setToast(null);
     dragRef.current = null;
   }, [activeTabId, state]);
 
@@ -120,7 +135,7 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
 
   if (state !== 'frozen' && !showFlash) return null;
 
-  // ——— 拖拽选中（mouseup 只预览，不复制）———
+  // ——— 拖拽选中（mouseup 原位高亮，不直接复制）———
   const onMouseDown = (e: React.MouseEvent) => {
     if (state !== 'frozen' || e.button !== 0) return;
     const rect = viewportRef.current?.getBoundingClientRect();
@@ -129,7 +144,9 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
     const y = e.clientY - rect.top;
     dragRef.current = { startX: x, startY: y, curX: x, curY: y };
     setSel({ x, y, w: 0, h: 0 });
-    setToast(null); // 开始新选择时隐藏旧预览
+    // 开始新选择时清除旧选中与操作条
+    setSelItems(null);
+    setActionBar(null);
 
     const onMove = (ev: MouseEvent) => {
       const d = dragRef.current;
@@ -156,27 +173,32 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
         w: Math.abs(d.curX - d.startX),
         h: Math.abs(d.curY - d.startY),
       };
-      // 单击（无有效拖拽）不预览
+      // 单击（无有效拖拽）
       if (rect.w < 3 || rect.h < 3) {
         setSel(null);
         return;
       }
-      const layer = layerRef.current;
-      const text = layer ? computeSelectedText(layer, rect, wheelRef.current) : '';
       setSel(null);
-      if (text.trim()) {
-        // 只预览：显示选中内容，用户点「复制」才写入剪贴板
-        const clean = text.trim();
-        setToast({
-          text: clean,
-          title: `选中 ${clean.length} 字`,
-          preview: clean.length > 140 ? clean.slice(0, 140) + '…' : clean,
-          copied: false,
-        });
-        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        // 未复制 8s 后自动消失
-        toastTimerRef.current = setTimeout(() => setToast(null), 8000);
+      const layer = layerRef.current;
+      const hits = layer ? computeHitItems(layer, rect, wheelRef.current) : [];
+      const text = hitsToText(hits);
+      if (!layer || layer.items.length === 0) {
+        // 诊断：文本层为空（未提取到页面文本）
+        setSelItems(null);
+        setActionBar({ title: '未提取到页面文本，无法选中', copied: false });
+        return;
       }
+      if (!text.trim()) {
+        setSelItems(null);
+        setActionBar({ title: '选中区域无文本', copied: false });
+        return;
+      }
+      // 原位高亮展示命中文本（文字从冻结画面透出，效果同原生 selection）
+      setSelItems(hits);
+      setActionBar({ title: `已选 ${text.trim().length} 字`, copied: false });
+      if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+      // 8s 后操作条消失（原位高亮保留）
+      actionTimerRef.current = setTimeout(() => setActionBar(null), 8000);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -184,11 +206,17 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
 
   // ——— 复制确认 ———
   const onCopyClick = () => {
-    if (!toast) return;
-    copyFrozenText(toast.text);
-    setToast({ ...toast, copied: true });
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 1500);
+    const hits = selItems;
+    if (!hits) return;
+    const text = hitsToText(hits);
+    if (!text.trim()) return;
+    copyFrozenText(text);
+    setActionBar({ title: `已选 ${text.trim().length} 字`, copied: true });
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    actionTimerRef.current = setTimeout(() => {
+      setActionBar(null);
+      setSelItems(null);
+    }, 1500);
   };
 
   // ——— 滚轮：转发 guest 滚动画面 + 累计偏移 ———
@@ -204,6 +232,9 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
     if (Math.abs(real) > 0.5) {
       scrollFrozenTab(activeTabId!, e.deltaX, real);
       setWheelOffsetY(next);
+      // 滚动后原位高亮位置失效，清除
+      setSelItems(null);
+      setActionBar(null);
     }
   };
 
@@ -259,13 +290,13 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
                 outline: 'none',
               }}
               onMouseDown={(e) => {
-                // 聚焦选择层：键盘路由回到宿主（Alt+P 走原有拦截链路）
+                // 聚焦选择层：键盘路由回到宿主（宿主已挂 Alt+P 拦截）
                 viewportRef.current?.focus();
                 onMouseDown(e);
               }}
               onWheel={onWheel}
             >
-              {/* 选中预览高亮（应用渲染） */}
+              {/* 拖拽中的选中矩形（预览） */}
               {sel && (
                 <div
                   style={{
@@ -280,8 +311,26 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
                   }}
                 />
               )}
-              {/* 选中内容预览浮层（不直接复制，确认后才写入剪贴板） */}
-              {toast && (
+
+              {/* 原位高亮：命中文本项按精确坐标渲染背景块（文字从冻结画面透出） */}
+              {selItems &&
+                selItems.map((it, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: it.vx,
+                      top: it.vy,
+                      width: it.w,
+                      height: it.h,
+                      background: 'rgba(37, 99, 235, 0.32)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ))}
+
+              {/* 操作条：已选字数 + 复制确认 */}
+              {actionBar && (
                 <div
                   style={{
                     position: 'absolute',
@@ -289,21 +338,24 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
                     left: '50%',
                     transform: 'translateX(-50%)',
                     zIndex: 10001,
-                    maxWidth: '88%',
-                    padding: '10px 16px',
-                    borderRadius: 10,
-                    background: 'rgba(15, 23, 42, 0.95)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    background: 'rgba(15, 23, 42, 0.92)',
                     color: '#e2e8f0',
                     fontSize: 13,
                     fontFamily: 'var(--font-sans, system-ui)',
-                    boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600, color: '#a5b4fc' }}>{toast.title}</span>
-                    {toast.copied ? (
-                      <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ 已复制</span>
-                    ) : (
+                  <span style={{ fontWeight: 600, color: '#a5b4fc' }}>{actionBar.title}</span>
+                  {actionBar.copied ? (
+                    <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ 已复制</span>
+                  ) : (
+                    selItems && (
                       <button
                         onClick={onCopyClick}
                         style={{
@@ -319,20 +371,8 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
                       >
                         复制
                       </button>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      opacity: 0.92,
-                      maxHeight: 72,
-                      overflow: 'hidden',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-all',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {toast.preview}
-                  </div>
+                    )
+                  )}
                 </div>
               )}
             </div>
