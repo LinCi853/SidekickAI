@@ -14,7 +14,7 @@
 // 不能「先冻结再读 DOM」。
 
 import type { WebContents } from 'electron'
-import { getWebviewByTabId } from './webview-registry.js'
+import { getWebviewByTabId, listRegisteredWebviews } from './webview-registry.js'
 
 /** 冻结状态 */
 export type FreezeState = 'idle' | 'attached' | 'frozen'
@@ -56,7 +56,7 @@ async function attach(wc: WebContents): Promise<void> {
 export async function freezeTab(tabId: string): Promise<boolean> {
   const wc = getWebviewByTabId(tabId)
   if (!wc) {
-    console.warn(`[freeze] tab ${tabId} 的 webview 未找到`)
+    console.warn(`[freeze] tab ${tabId} 的 webview 未找到（注册表: ${listRegisteredWebviews().length} 条）`)
     return false
   }
 

@@ -3,6 +3,7 @@ import { onWebviewHotkey } from '../../../lib/electron-api';
 import { useTabStore } from '../../../store/useTabStore';
 import { useProfileStore } from '../../../store/useProfileStore';
 import { useThemeStore } from '../../../store/useThemeStore';
+import { useFreezeStore } from '../../../store/useFreezeStore';
 import { safeReloadWebview, type WebviewElement } from '../../../lib/webview';
 import { focusInputInWebview } from '../../../hooks/useWebViewControl';
 import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms';
@@ -87,6 +88,20 @@ export function useWebviewHotkeyDispatch(
         if (target) void addTab(target);
       } else if (payload.action === 'closeTab') {
         if (store.activeTabId) void closeTab(store.activeTabId);
+      } else if (payload.action === 'toggleFreeze') {
+        // Alt+P 冻结/恢复当前页面（防撤回保险）
+        const activeTabId = store.activeTabId;
+        if (!activeTabId) return;
+        const tab = store.tabs.find((t) => t.id === activeTabId);
+        if (!tab) return;
+        const fs = useFreezeStore.getState();
+        const cur = fs.states[activeTabId];
+        console.log('[MainView] Alt+P 触发冻结，当前状态', cur, 'tabId', activeTabId);
+        if (cur === 'frozen') {
+          void fs.doResume(activeTabId);
+        } else {
+          void fs.doFreeze(activeTabId, tab.profileId);
+        }
       } else if (payload.action === 'focusCycle') {
         // 主窗口：聚焦当前 webview 内的 AI 输入框
         const activeTabId = store.activeTabId;

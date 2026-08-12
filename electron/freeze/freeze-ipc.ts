@@ -145,11 +145,14 @@ export function registerFreezeIpc(): void {
 
       // 已冻结 → 幂等返回
       if (isFrozen(payload.tabId)) {
+        console.log('[freeze-ipc] tab 已冻结，幂等返回', payload.tabId)
         return { frozen: true, snapshot: null }
       }
 
+      console.log('[freeze-ipc] 开始冻结 tab', payload.tabId, 'webContentsId=', wc.id, 'url=', wc.getURL?.())
       // 1. 先抓取对话快照（未冻结态，executeJavaScript 可正常返回）
       const snapshot = await scrapeSnapshot(wc)
+      console.log('[freeze-ipc] 抓取快照完成, pairs=', snapshot?.pairs.length ?? 0)
       // 2. 入库（复用对话存储链路）
       if (snapshot && snapshot.pairs.length > 0) {
         try {
@@ -187,6 +190,7 @@ export function registerFreezeIpc(): void {
 
       // 3. pause 冻结页面
       const ok = await freezeTab(payload.tabId)
+      console.log('[freeze-ipc] freezeTab 返回', ok, '当前状态', getFreezeState(payload.tabId))
       if (ok) broadcastFreezeState(payload.tabId, 'frozen')
       return { frozen: ok, snapshot }
     },

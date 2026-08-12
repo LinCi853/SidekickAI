@@ -18,6 +18,7 @@ import {
   applyProxyFallback,
   getAppSettings,
   recordNavHistory,
+  registerFreezeWebview,
 } from '../../lib/electron-api';
 import type { Profile } from '../../lib/electron-api';
 import { injectViewportAndPopupGuard, sanitizeUrl, safeLoadURLWebview, type WebviewElement } from '../../lib/webview';
@@ -949,6 +950,24 @@ export function WebviewTab({
     if (!webview) return;
     let cancelled = false;
 
+    // 注册 webview 到冻结注册表（did-attach/dom-ready 后 webContentsId 可用）
+    // 防撤回保险：主进程按 tabId 查找 guest webContents 执行 Debugger.pause
+    const register = () => {
+      try {
+        const wcId = webview.getWebContentsId?.();
+        if (wcId === undefined) return;
+        void registerFreezeWebview({
+          tabId: tab.id,
+          windowId: 'main',
+          profileId: profile.id,
+          webContentsId: wcId,
+        }).catch(() => { /* ignore */ });
+      } catch { /* webview 未 attach */ }
+    };
+    webview.addEventListener('did-attach', register as EventListener);
+    const domReadyReg = () => register();
+    webview.addEventListener('dom-ready', domReadyReg as EventListener);
+
     // 持久化多轮对话（全量 pairs），按需创建会话。
     // 数据库 UNIQUE INDEX (conversation_id, content_hash) 自动去重，
     // 因此全量重写同一对话也安全，不会出现 DeepSeek 重复保存问题。
@@ -1094,6 +1113,8 @@ export function WebviewTab({
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      webview.removeEventListener('did-attach', register as EventListener);
+      webview.removeEventListener('dom-ready', domReadyReg as EventListener);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id, profile.name, profile.isAIPlatform, profile.aiPlatformId, tab.id, remountKey]);

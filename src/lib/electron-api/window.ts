@@ -318,7 +318,7 @@ export async function addToProfilePopupWhitelist(profileId: string, origin: stri
  */
 export function onWebviewHotkey(
   callback: (payload: {
-    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFullscreen' | 'focusCycle' | 'addBookmark' | 'openHistory' | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print';
+    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFreeze' | 'toggleFullscreen' | 'focusCycle' | 'addBookmark' | 'openHistory' | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print';
     data?: unknown;
   }) => void,
 ): () => void {

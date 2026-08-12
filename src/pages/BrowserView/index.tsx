@@ -384,8 +384,12 @@ export default function BrowserView() {
     onFindInPage: handleFindInPage,
     onPrint: handlePrint,
     onToggleFreeze: () => {
-      if (!activeTabId || !profileId) return;
+      if (!activeTabId || !profileId) {
+        console.warn('[BrowserView] 冻结跳过：activeTabId 或 profileId 为空', { activeTabId, profileId });
+        return;
+      }
       const freezeState = useFreezeStore.getState().states[activeTabId];
+      console.log('[BrowserView] Alt+P 触发冻结，当前状态', freezeState, 'tabId', activeTabId);
       if (freezeState === 'frozen') {
         void useFreezeStore.getState().doResume(activeTabId);
       } else {
