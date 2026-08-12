@@ -28,13 +28,17 @@ import { getWebviewByTabId, listRegisteredWebviews } from './webview-registry.js
 /** 冻结状态 */
 export type FreezeState = 'idle' | 'attached' | 'frozen'
 
-/** 文本层单项：文本 + 文档坐标（CSS 像素，相对文档左上角） */
+/** 文本层单项：行盒文本 + 文档坐标 + 字体（反色副本同字体渲染对齐） */
 export interface TextLayerItem {
   text: string
   x: number
   y: number
   w: number
   h: number
+  /** 行盒字体（页面 computedStyle），渲染反色副本时保持与原文重叠 */
+  fontSize?: number
+  fontFamily?: string
+  fontWeight?: string
 }
 
 /** 冻结时提取的文本层（供渲染层选择层做选中/复制） */
@@ -176,31 +180,63 @@ const TEXT_LAYER_MAX_ITEMS = 5000
 const TEXT_LAYER_MAX_LEN = 500
 
 /**
- * 降级提取脚本（DOMSnapshot 不可用/为空时）：遍历文本节点，取父元素
- * getBoundingClientRect（视口坐标 + 滚动偏移 = 文档坐标）。
- * 冻结前调用（executeJavaScript 需未冻结态）。
+ * 行盒提取脚本（主路径，冻结前 executeJavaScript 执行）：
+ *   - Range.getClientRects() 每行精确行盒（视口坐标，跨行自动拆分 → 换行识别）
+ *   - getComputedStyle 每行 fontSize/fontFamily/fontWeight（反色副本同字体渲染，
+ *     不同字号行不错位）
+ *   - canvas measureText 逐字符累计宽度 → 按行盒宽度切分每行文本（精确换行）
+ * freeze-poc-glyph.cjs 验证：跨行拆分精确、拼接还原原文、字号正确区分。
  */
-const FALLBACK_EXTRACT_SCRIPT = `(function() {
+const GLYPH_EXTRACT_SCRIPT = `(function() {
   try {
     var scrolled = window.scrollY || document.documentElement.scrollTop || 0
     var items = []
     var MAX = ${TEXT_LAYER_MAX_ITEMS}
+    var MAX_LEN = ${TEXT_LAYER_MAX_LEN}
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     var n
+    var canvas = document.createElement('canvas')
+    var ctx = canvas.getContext('2d')
     while ((n = walker.nextNode()) && items.length < MAX) {
-      var text = (n.nodeValue || '').trim()
-      if (!text) continue
+      var text = n.nodeValue || ''
+      if (!text.trim()) continue
       var el = n.parentElement
       if (!el) continue
-      var r = el.getBoundingClientRect()
-      if (!r || (r.width === 0 && r.height === 0)) continue
-      items.push({
-        text: text.length > ${TEXT_LAYER_MAX_LEN} ? text.slice(0, ${TEXT_LAYER_MAX_LEN}) : text,
-        x: r.left,
-        y: r.top + scrolled,
-        w: r.width,
-        h: r.height
-      })
+      var cs = getComputedStyle(el)
+      var fontSize = parseFloat(cs.fontSize) || 16
+      var fontFamily = cs.fontFamily || 'sans-serif'
+      var fontWeight = cs.fontWeight || '400'
+      ctx.font = fontWeight + ' ' + fontSize + 'px ' + fontFamily
+      var range = document.createRange()
+      range.selectNodeContents(n)
+      var rects = range.getClientRects()
+      if (!rects.length) continue
+      var chars = Array.from(text)
+      var charWidths = chars.map(function(c) { return ctx.measureText(c).width })
+      var charIdx = 0
+      for (var i = 0; i < rects.length && items.length < MAX; i++) {
+        var r = rects[i]
+        if (r.width === 0 && r.height === 0) continue
+        var lineChars = []
+        var acc = 0
+        while (charIdx < charWidths.length && acc < r.width - 0.5) {
+          lineChars.push(chars[charIdx])
+          acc += charWidths[charIdx]
+          charIdx++
+        }
+        var lineText = lineChars.join('')
+        if (lineText.length > MAX_LEN) lineText = lineText.slice(0, MAX_LEN)
+        items.push({
+          text: lineText,
+          x: r.left,
+          y: r.top + scrolled,
+          w: r.width,
+          h: r.height,
+          fontSize: fontSize,
+          fontFamily: fontFamily,
+          fontWeight: fontWeight
+        })
+      }
     }
     return JSON.stringify({
       items: items,
@@ -213,13 +249,61 @@ const FALLBACK_EXTRACT_SCRIPT = `(function() {
 })()`
 
 /**
- * 提取页面文本层（冻结前调用；DOMSnapshot 读取布局树，不执行 JS）。
- * 主路径使用 textBoxes（行盒级：每行文本的精确坐标 + 文本起止），粒度接近
- * 原生 selection 高亮（freeze-poc-textbox.cjs 验证：跨行文本拆行盒、
- * 坐标精确、文档坐标系）。失败/为空时降级到 executeJavaScript 提取。
+ * 提取页面文本层（冻结前调用）。
+ * 主路径：executeJavaScript 行盒提取（Range.getClientRects + 样式 + canvas
+ * 切分，freeze-poc-glyph.cjs 验证：跨行拆分精确、字号区分、换行识别）。
+ * 降级路径：DOMSnapshot textBoxes（无字体样式，渲染层仅背景高亮）。
  */
 export async function extractTextLayer(wc: WebContents): Promise<TextLayer | null> {
-  // ——— 主路径：DOMSnapshot textBoxes（行盒级，精确坐标）———
+  // ——— 主路径：行盒提取（样式 + 精确换行切分）———
+  try {
+    const ret = await wc.executeJavaScript(GLYPH_EXTRACT_SCRIPT)
+    const parsed = JSON.parse(String(ret)) as {
+      items?: Array<{
+        text?: string
+        x?: number
+        y?: number
+        w?: number
+        h?: number
+        fontSize?: number
+        fontFamily?: string
+        fontWeight?: string
+      }>
+      scrollOffsetY?: number
+      contentHeight?: number
+      error?: string
+    }
+    if (parsed.error) {
+      console.warn('[freeze] 行盒提取失败，降级到 DOMSnapshot:', parsed.error)
+    } else {
+      const items: TextLayerItem[] = (parsed.items || [])
+        .map((i) => ({
+          text: (i.text || '').slice(0, TEXT_LAYER_MAX_LEN),
+          x: Number(i.x) || 0,
+          y: Number(i.y) || 0,
+          w: Number(i.w) || 0,
+          h: Number(i.h) || 0,
+          fontSize: Number(i.fontSize) || undefined,
+          fontFamily: i.fontFamily,
+          fontWeight: i.fontWeight,
+        }))
+        .filter((i) => i.text.trim())
+      if (items.length > 0) {
+        console.log(`[freeze] 文本层提取完成（行盒+样式）: items=${items.length}`)
+        return {
+          items,
+          scrollOffsetY: Number(parsed.scrollOffsetY) || 0,
+          contentHeight: Number(parsed.contentHeight) || 0,
+          viewportHeight: 0,
+        }
+      }
+      console.warn('[freeze] 行盒提取为空，降级到 DOMSnapshot')
+    }
+  } catch (err) {
+    console.warn('[freeze] 行盒提取异常，降级到 DOMSnapshot:', err)
+  }
+
+  // ——— 降级路径：DOMSnapshot textBoxes（无字体样式，坐标精确）———
   try {
     const snap = await wc.debugger.sendCommand('DOMSnapshot.captureSnapshot', {
       computedStyles: [],
@@ -263,46 +347,11 @@ export async function extractTextLayer(wc: WebContents): Promise<TextLayer | nul
       }
     }
     if (items.length > 0) {
-      console.log(`[freeze] 文本层提取完成（textBoxes 行盒）: items=${items.length}`)
+      console.log(`[freeze] 文本层提取完成（DOMSnapshot textBoxes 降级）: items=${items.length}`)
       return { items, scrollOffsetY, contentHeight, viewportHeight: 0 }
     }
-    console.warn('[freeze] DOMSnapshot 文本层为空，降级到 JS 提取')
-  } catch (err) {
-    console.warn('[freeze] DOMSnapshot 提取失败，降级到 JS 提取:', err)
-  }
-
-  // ——— 降级路径：executeJavaScript 文本节点提取（未冻结态可执行）———
-  try {
-    const ret = await wc.executeJavaScript(FALLBACK_EXTRACT_SCRIPT)
-    const parsed = JSON.parse(String(ret)) as {
-      items?: Array<{ text?: string; x?: number; y?: number; w?: number; h?: number }>
-      scrollOffsetY?: number
-      contentHeight?: number
-      error?: string
-    }
-    if (parsed.error) {
-      console.warn('[freeze] 降级提取失败:', parsed.error)
-      return null
-    }
-    const items: TextLayerItem[] = (parsed.items || [])
-      .map((i) => ({
-        text: (i.text || '').slice(0, TEXT_LAYER_MAX_LEN),
-        x: Number(i.x) || 0,
-        y: Number(i.y) || 0,
-        w: Number(i.w) || 0,
-        h: Number(i.h) || 0,
-      }))
-      .filter((i) => i.text.trim())
-    if (items.length === 0) {
-      console.warn('[freeze] 降级提取文本层为空（页面无可选文本？）')
-      return null
-    }
-    return {
-      items,
-      scrollOffsetY: Number(parsed.scrollOffsetY) || 0,
-      contentHeight: Number(parsed.contentHeight) || 0,
-      viewportHeight: 0,
-    }
+    console.warn('[freeze] DOMSnapshot 文本层为空（页面无可选文本？）')
+    return null
   } catch (err) {
     console.warn('[freeze] 提取文本层失败:', err)
     return null

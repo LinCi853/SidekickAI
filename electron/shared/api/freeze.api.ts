@@ -11,13 +11,17 @@ export interface FreezeSnapshot {
 /** 冻结状态 */
 export type FreezeState = 'idle' | 'attached' | 'frozen'
 
-/** 文本层单项：文本 + 文档坐标（CSS 像素，相对文档左上角） */
+/** 文本层单项：行盒文本 + 文档坐标 + 字体（反色副本同字体渲染对齐） */
 export interface TextLayerItem {
   text: string
   x: number
   y: number
   w: number
   h: number
+  /** 行盒字体（页面 computedStyle），渲染反色副本时保持与原文重叠 */
+  fontSize?: number
+  fontFamily?: string
+  fontWeight?: string
 }
 
 /** 冻结时提取的文本层（供渲染层选择层做选中/复制） */
