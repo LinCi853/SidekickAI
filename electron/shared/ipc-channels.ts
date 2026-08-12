@@ -413,4 +413,17 @@ export const IPC_CHANNELS = {
   ACCUMULATED_LINK_CONSUME: 'accumulated-link:consume',
   // 渲染→主：清空指定 Profile 的全部累积链接
   ACCUMULATED_LINK_CLEAR: 'accumulated-link:clear',
+  // ===== 页面冻结（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） =====
+  // 渲染→主：注册 webview 到冻结注册表（did-attach-webview 后渲染层上报 { tabId, windowId, profileId, webContentsId }）
+  FREEZE_REGISTER_WEBVIEW: 'freeze:registerWebview',
+  // 渲染→主：冻结指定 tab（先抓取对话入库再 pause，返回冻结结果 + 抓取到的对话快照）
+  FREEZE_TAB: 'freeze:tab',
+  // 渲染→主：恢复指定 tab（解除冻结，页面无缝继续）
+  FREEZE_RESUME: 'freeze:resume',
+  // 渲染→主：彻底分离调试器（退出冻结模式）
+  FREEZE_DETACH: 'freeze:detach',
+  // 渲染→主：查询冻结状态（返回 'idle' | 'attached' | 'frozen'）
+  FREEZE_STATUS: 'freeze:status',
+  // 主→渲染：冻结状态变化推送（{ tabId, state }）
+  FREEZE_STATE_CHANGED: 'freeze:stateChanged',
 } as const

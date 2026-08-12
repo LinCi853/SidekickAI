@@ -58,6 +58,7 @@ import { registerBrowserIpc } from './ipc/browser-ipc.js'
 import { registerBrowserTabAudioIpc } from './ipc/browser-tab-audio-ipc.js'
 import { registerAccumulatedLinksIpc } from './ipc/accumulated-links-ipc.js'
 import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js'
+import { registerFreezeIpc } from './freeze/freeze-ipc.js'
 import { searchHistoryStore } from './store/search-history-store.js'
 import { browserDownloadStore } from './store/browser-download-store.js'
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js'
@@ -537,6 +538,9 @@ app.whenReady().then(async () => {
 
   // ===== 注册导航历史持久化 CRUD IPC（list/search/delete/clearAll） =====
   registerNavHistoryIpc()
+
+  // ===== 注册页面冻结 IPC（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） =====
+  registerFreezeIpc()
 
   // ===== 注册提示词库窗口 IPC（PROMPT_OPEN_WINDOW + 注入请求/结果转发） =====
   registerPromptIpc({

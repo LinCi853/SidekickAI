@@ -6,6 +6,7 @@ import type { SttAPI, VoiceConfigAPI } from './voice.api.js'
 import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings } from './settings.api.js'
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
 import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
+import type { FreezeAPI } from './freeze.api.js'
 import type { PromptTemplate } from '../chat.types.js'
 
 /** 通过 contextBridge 暴露到渲染进程的完整 API */
@@ -123,4 +124,6 @@ export interface ElectronAPI {
   browser: BrowserAPI
   /** 导航历史追踪（主窗口上报，脱离时聚合） */
   navHistory: NavHistoryAPI
+  /** 页面冻结（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） */
+  freeze: FreezeAPI
 }

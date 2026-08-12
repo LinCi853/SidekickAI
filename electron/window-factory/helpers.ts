@@ -572,6 +572,20 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
 
       // F12：浏览器窗口中切换 DevTools，其他窗口置顶/取消置顶
       if (key === 'F12' && !hasCtrl) {
+        // 冻结期间短路 F12：debugger 已占用，开 DevTools 会冲突
+        const wcId = wc.id
+        const { isFrozen } = require('../freeze/freeze-manager.js') as typeof import('../freeze/freeze-manager.js')
+        // 按 webContentsId 反查 tabId 较重，这里用「任意冻结中」粗判即可（冻结态本就罕见）
+        if (wcId !== undefined) {
+          const { getRecordByWebContentsId } = require('../freeze/webview-registry.js') as typeof import('../freeze/webview-registry.js')
+          const rec = getRecordByWebContentsId(wcId)
+          if (rec && isFrozen(rec.tabId)) {
+            console.log('[hotkey] F12 跳过：该 webview 处于冻结态')
+            e.preventDefault()
+            return
+          }
+        }
+
         // 判断是否为浏览器窗口（URL 含 mode=browser）
         const winUrl = parentWebContents.getURL?.() || ''
         const isBrowserWindow = winUrl.includes('mode=browser')

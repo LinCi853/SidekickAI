@@ -76,8 +76,8 @@ export type CustomAIProviderInput = Omit<CustomAIProvider, 'id' | 'createdAt' | 
 // 对话持久化（SQLite）
 // ============================================================================
 
-/** 对话来源类型：webview=网页抓取 / api=API 直连 */
-export type ConversationSourceType = 'webview' | 'api'
+/** 对话来源类型：webview=网页抓取 / api=API 直连 / freeze-snapshot=冻结快照（防撤回保险） */
+export type ConversationSourceType = 'webview' | 'api' | 'freeze-snapshot'
 
 /** 对话会话 */
 export interface Conversation {

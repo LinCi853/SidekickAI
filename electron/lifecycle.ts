@@ -100,6 +100,11 @@ export function cleanupOnQuit(deps: LifecycleDeps): void {
     console.warn('[main] logAppEnd 失败:', e)
   }
   closeChatStore()
+  // 退出前恢复所有冻结的 webview（避免残留 debugger 阻止退出）
+  // 异步执行，before-quit 不等待；detachTab 内部对已销毁 webview 容错
+  import('./freeze/freeze-manager.js')
+    .then(({ detachAll }) => { void detachAll() })
+    .catch(() => { /* ignore */ })
   // 销毁托盘
   destroyTray()
   // 销毁预览窗（避免进程残留）

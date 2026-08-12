@@ -15,6 +15,7 @@ import { browserApi } from './preload/browser.js'
 import { appSettingsApi } from './preload/appSettings.js'
 import { notesApi } from './preload/notes.js'
 import { whiteboardApi } from './preload/whiteboard.js'
+import { freezeApi } from './preload/freeze.js'
 import { bootstrapApi, setupDomSideEffects } from './preload/bootstrap.js'
 
 const api: ElectronAPI = {
@@ -28,6 +29,7 @@ const api: ElectronAPI = {
   ...appSettingsApi,
   ...notesApi,
   ...whiteboardApi,
+  ...freezeApi,
   ...bootstrapApi,
 }
 

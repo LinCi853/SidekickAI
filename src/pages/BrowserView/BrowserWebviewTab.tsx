@@ -12,6 +12,7 @@ import {
   onWebviewPopupUrl,
   getPreset,
   recordNavHistory,
+  registerFreezeWebview,
 } from '../../lib/electron-api';
 import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } from '../../lib/webview';
 import { buildBlockerScript, matchDomain } from '../../lib/webview-blocker';
@@ -546,6 +547,34 @@ export default function BrowserWebviewTab({
     });
     return off;
   }, []);
+
+  // 注册 webview 到冻结注册表（did-attach 后 webContentsId 可用）
+  // 防撤回保险：主进程按 tabId 查找 guest webContents 执行 Debugger.pause
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview) return;
+    const register = () => {
+      try {
+        const wcId = webview.getWebContentsId?.();
+        if (wcId === undefined) return;
+        void registerFreezeWebview({
+          tabId: tab.id,
+          windowId: 'browser', // 浏览器窗口的 windowId 由主进程按 profileId 索引，此处占位
+          profileId: profile.id,
+          webContentsId: wcId,
+        }).catch(() => { /* ignore */ });
+      } catch { /* webview 未 attach，getWebContentsId 抛错 */ }
+    };
+    // did-attach 后 webContentsId 才可用
+    webview.addEventListener('did-attach', register as EventListener);
+    // 兜底：dom-ready 时再注册一次（若 did-attach 已过则直接成功）
+    const domReadyReg = () => register();
+    webview.addEventListener('dom-ready', domReadyReg as EventListener);
+    return () => {
+      webview.removeEventListener('did-attach', register as EventListener);
+      webview.removeEventListener('dom-ready', domReadyReg as EventListener);
+    };
+  }, [tab.id, profile.id]);
 
   // Listen for reload events from tab context menu
   useEffect(() => {
