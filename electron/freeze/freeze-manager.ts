@@ -1,4 +1,4 @@
-// electron/freeze/freeze-manager.ts — 页面冻结管理器（Debugger.pause 彻底定格 + 智能解冻点击）
+// electron/freeze/freeze-manager.ts — 页面冻结管理器（Debugger.pause 彻底定格 + 智能解冻交互）
 //
 // 防撤回保险的核心：对 webview 的 guest webContents 执行 Debugger.pause，
 // 锁死 JS 主线程（定时器/rAF/事件/SSE 回调全部停止），页面画面彻底定格。
@@ -6,32 +6,30 @@
 // 冻结策略演进（scripts/freeze-poc-*.cjs 逐轮验证）：
 //   v1 Debugger.pause 单层 —— 有效，但「冻结后加载提示还在动」？
 //       → 排查发现是 CSS compositor 动画不受 JS 暂停影响。
-//   v2 + Emulation.setVirtualTimePolicy(pause) 双层 —— 在无网络页面（data: URL）
-//       counter/spin/performance.now 全部定格；但真实 AI 页面有活跃 SSE 连接时，
-//       SSE 消息会「唤醒」虚拟时间推进，CSS 动画照转、内容照更新（POC 实测），
-//       虚拟时间方案在真实场景不可靠 → 已移除。
-//   v3 纯 Debugger.pause —— 画面彻底定格（capturePage 两次截图一致），滚轮滚动
-//       仍可用（compositor 层处理，不依赖主线程），冻结态可滚动查看完整对话
-//       （freeze-poc-scroll.cjs 验证）；但按钮点击/复制不可用（JS 冻结）。
-//   v4 + 智能解冻点击 —— 冻结态在 before-input-event 层监听 mouseDown，
-//       检测到点击时瞬时 resume → 让该次点击（含 click 的 JS 响应）执行完 →
-//       立即重新 pause。滚动本就可用（compositor）无需解冻。
-//   v5 + 应用内置复制（当前）—— 冻结态可拖拽选中文本（mouseDown 解冻窗口
-//       持续到 mouseUp，上限 5s，选中高亮保留在定格画面上）；Ctrl+C 由应用
-//       拦截：解冻 → 主进程读选中文本 → 写系统剪贴板 → 重新冻结。复制全程
-//       应用内置，与网页 JS/剪贴板权限无关。
-//       「内容定格」与「页面交互」在浏览器底层互斥（已穷举验证：虚拟时间/
-//       断网/限速均无法阻止已建立 SSE 连接的数据流），智能解冻是唯一两全路径。
+//   v2 + Emulation.setVirtualTimePolicy(pause) 双层 —— 无网络页面全定格；但真实
+//       AI 页面有活跃 SSE 连接时消息会唤醒虚拟时间，动画照转内容照更新 → 移除。
+//   v3 纯 Debugger.pause —— 画面彻底定格，滚轮滚动可用（compositor 层）。
+//   v4 智能解冻点击 —— before-input-event 监听 mouseDown 触发解冻。实测失败：
+//       Electron 的 before-input-event 只保证 keydown/keyup（鼠标不触发），
+//       宿主 DOM 也收不到路由到 guest 的真实鼠标事件（POC 逐项证伪）。
+//   v5 应用内置复制 —— 冻结态 Ctrl+C（before-input-event 键盘，实测触发 ✓）：
+//       主进程读选中文本写剪贴板，与网页无关。
+//   v6 uiohook 系统级鼠标钩子（当前）—— uiohook（libuiohook）是系统级钩子，
+//       与 Electron 渲染无关、冻结不影响（POC 实测 mousedown/mouseup 事件收到）。
+//       坐标不直接用 uiohook（DPI 缩放差异），仅作触发器，命中判断取
+//       screen.getCursorScreenPoint()（与窗口 bounds 同坐标系）。
+//       webview 屏幕区域 = 窗口 bounds + 渲染层上报的 rect（FREEZE_TAB/窗口
+//       move/resize 时同步）。命中后 resume → 补发 mouseDown → 拖拽选中 →
+//       mouseUp（或 5s 超时）→ 缓冲后重新 pause。
 //
 // 已知边界（用户已确认取舍）：
-//   - 解冻窗口内（拖拽/点击期间）积压的 SSE 推送会被一次性处理（内容可能
-//     快速跳变到最新，然后重新定格）；防撤回数据保险依赖冻结前已入库的快照
-//
-// 关键约束（PoC 中确认）：Debugger.pause 后 executeJavaScript 会 hang（注入脚本
-// 无法在暂停的 isolate 上返回）。因此防撤回流程必须是「先抓取（未冻结态）→ 入库 →
-// 再冻结锁现场」，不能「先冻结再读 DOM」。
+//   - 解冻窗口内（拖拽/点击期间）积压的 SSE 推送会被一次性处理（内容可能快速
+//     跳变到最新，然后重新定格）；防撤回数据保险依赖冻结前已入库的快照
+//   - 文本选中后的 Ctrl+C 由应用内置复制完成（v5），与网页无关
 
-import { clipboard, type Input, type WebContents } from 'electron'
+import { clipboard, screen, type BrowserWindow, type Input, type WebContents } from 'electron'
+import { createRequire } from 'node:module'
+import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { getWebviewByTabId, listRegisteredWebviews } from './webview-registry.js'
 
 /** 冻结状态 */
@@ -47,12 +45,26 @@ interface FreezeSession {
   frozenAt: number | null
   /** 智能解冻窗口进行中（避免重复进入） */
   unfreezing?: boolean
-  /** 冻结态点击解冻的输入监听（detach 时移除） */
-  inputHandler?: (event: Electron.Event, input: Input) => void
+  /** webview 在窗口内的边界（物理像素）+ dpr（uiohook 命中检测用） */
+  rect?: { x: number; y: number; width: number; height: number; dpr: number }
+  /** mouseUp 时结束解冻窗口的回调（uiohook 触发） */
+  unfreezeFinish?: () => void
+  /** 冻结态 Ctrl+C 应用内置复制的键盘监听（detach 时移除） */
+  keyboardHandler?: (event: Electron.Event, input: Input) => void
 }
 
 /** tabId → 冻结会话 */
 const sessions = new Map<string, FreezeSession>()
+
+/**
+ * 获取 guest webContents 所属窗口。
+ * webContents.getOwnerBrowserWindow 运行时存在（POC 验证）但 Electron 30 类型
+ * 定义缺失，用类型断言访问。
+ */
+function getOwnerWindow(wc: WebContents): BrowserWindow | null {
+  const fn = (wc as unknown as { getOwnerBrowserWindow?: () => BrowserWindow | null }).getOwnerBrowserWindow
+  return typeof fn === 'function' ? (fn.call(wc) ?? null) : null
+}
 
 /** 附加调试器并启用递归子目标 attach（不 pause） */
 async function attach(wc: WebContents): Promise<void> {
@@ -72,13 +84,169 @@ const UNFREEZE_TIMEOUT_MS = 5000 // 解冻窗口上限（拖拽选中大段文�
 const CLICK_SETTLE_MS = 200 // mouseUp 后留给 click 事件与 JS 同步响应的缓冲
 const COPY_SETTLE_MS = 300 // Ctrl+C 复制后留给剪贴板写入的缓冲
 
-/** 移除冻结态智能解冻的输入监听 */
-function removeClickUnfreeze(wc: WebContents, session: FreezeSession): void {
-  if (session.inputHandler && !wc.isDestroyed()) {
-    wc.removeListener('before-input-event', session.inputHandler)
+// ==================== uiohook 系统级鼠标钩子 ====================
+// 触发链：冻结态页面收不到鼠标事件（before-input-event 只保证键盘、宿主 DOM
+// 收不到路由到 guest 的事件——POC 逐项证伪），改用 uiohook 系统级钩子检测
+// 真实鼠标按下/松开（与 Electron 渲染无关，冻结不影响）。
+// 坐标不采用 uiohook（存在 DPI 缩放差异），仅作触发器，命中判断取
+// screen.getCursorScreenPoint()（与窗口 bounds 同坐标系）。
+
+interface UiohookMouseModule {
+  uIOhook: {
+    start(): void
+    stop(): void
+    on(event: string, cb: () => void): void
   }
-  session.inputHandler = undefined
 }
+
+let mouseHookInstalled = false
+
+/** 安装 uiohook 鼠标钩子（全局单例，幂等）。不重复 start（HotkeyManager 可能已启动）。 */
+function ensureMouseHook(): void {
+  if (mouseHookInstalled) return
+  mouseHookInstalled = true
+  try {
+    const require = createRequire(import.meta.url)
+    const mod = require('uiohook-napi') as UiohookMouseModule
+    const uio = mod.uIOhook
+    try {
+      uio.start()
+    } catch {
+      /* 可能已由 HotkeyManager 启动 */
+    }
+    uio.on('mousedown', () => handleGlobalMouseDown())
+    uio.on('mouseup', () => handleGlobalMouseUp())
+    console.log('[freeze] uiohook 鼠标钩子已安装（冻结态点击/拖拽检测）')
+  } catch (err) {
+    console.warn('[freeze] uiohook 加载失败，冻结态点击/拖拽不可用:', err)
+  }
+}
+
+/** 命中检测：屏幕坐标是否落在某冻结 tab 的 webview 区域内 */
+function findFrozenTabAt(
+  sx: number,
+  sy: number,
+): { tabId: string; wc: WebContents; session: FreezeSession; localX: number; localY: number } | null {
+  for (const [tabId, s] of sessions) {
+    if (s.state !== 'frozen' || s.unfreezing || !s.rect) continue
+    const wc = getWebviewByTabId(tabId)
+    if (!wc || wc.isDestroyed()) continue
+    const win = getOwnerWindow(wc)
+    if (!win || win.isDestroyed()) continue
+    const wb = win.getBounds()
+    const r = s.rect
+    const absX = wb.x + r.x
+    const absY = wb.y + r.y
+    if (sx >= absX && sx <= absX + r.width && sy >= absY && sy <= absY + r.height) {
+      return { tabId, wc, session: s, localX: (sx - absX) / r.dpr, localY: (sy - absY) / r.dpr }
+    }
+  }
+  return null
+}
+
+/** 全局鼠标按下：命中冻结 tab → 瞬时解冻 + 补发 mouseDown（开始点击/拖拽选中） */
+function handleGlobalMouseDown(): void {
+  const p = screen.getCursorScreenPoint()
+  const hit = findFrozenTabAt(p.x, p.y)
+  if (!hit) return
+  const { tabId, wc, session, localX, localY } = hit
+  console.log(`[freeze] tab ${tabId} 冻结态检测到鼠标按下 (${Math.round(localX)},${Math.round(localY)})，瞬时解冻`)
+  session.unfreezing = true
+
+  let finished = false
+  const refreeze = () => {
+    if (finished) return
+    finished = true
+    void (async () => {
+      // 缓冲：让 click 合成 + JS 同步响应执行完
+      await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
+      try {
+        if (!wc.isDestroyed() && wc.debugger.isAttached()) {
+          await wc.debugger.sendCommand('Debugger.pause')
+          console.log(`[freeze] tab ${tabId} 交互已执行，重新冻结`)
+        }
+      } catch {
+        /* ignore */
+      }
+      session.unfreezing = false
+      session.unfreezeFinish = undefined
+    })()
+  }
+  session.unfreezeFinish = refreeze
+
+  void (async () => {
+    try {
+      await wc.debugger.sendCommand('Debugger.resume')
+    } catch (err) {
+      console.warn(`[freeze] tab ${tabId} 瞬时解冻失败:`, err)
+      session.unfreezing = false
+      session.unfreezeFinish = undefined
+      return
+    }
+    // 补发 mouseDown：冻结期间按下的事件已丢失，解冻后需补发才能开始选择
+    try {
+      wc.sendInputEvent({
+        type: 'mouseDown',
+        x: Math.round(localX),
+        y: Math.round(localY),
+        button: 'left',
+        clickCount: 1,
+      })
+    } catch {
+      /* ignore */
+    }
+    // 超时兜底：mouseUp 事件丢失时强制重新冻结
+    setTimeout(refreeze, UNFREEZE_TIMEOUT_MS)
+  })()
+}
+
+/** 全局鼠标松开：结束进行中的解冻窗口 */
+function handleGlobalMouseUp(): void {
+  for (const s of sessions.values()) {
+    if (s.state === 'frozen' && s.unfreezing && s.unfreezeFinish) {
+      s.unfreezeFinish()
+    }
+  }
+}
+
+// ==================== webview 区域 rect 同步 ====================
+
+/** 已绑定 move/resize 同步监听的窗口（幂等） */
+const windowRectSyncSet = new Set<number>()
+
+/** 窗口移动/缩放时请求渲染层重新上报冻结 tab 的 webview rect */
+function ensureWindowRectSync(win: BrowserWindow): void {
+  if (windowRectSyncSet.has(win.id)) return
+  windowRectSyncSet.add(win.id)
+  const sync = () => {
+    const tabIds: string[] = []
+    for (const [tabId, s] of sessions) {
+      if (s.state !== 'frozen') continue
+      const wc = getWebviewByTabId(tabId)
+      if (wc && !wc.isDestroyed() && getOwnerWindow(wc)?.id === win.id) tabIds.push(tabId)
+    }
+    if (tabIds.length && !win.isDestroyed()) {
+      try {
+        win.webContents.send(IPC_CHANNELS.FREEZE_SYNC_RECT, { tabIds })
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  win.on('move', sync)
+  win.on('resize', sync)
+}
+
+/** 渲染层上报 webview 位置（窗口内物理像素 + dpr），供 uiohook 命中检测 */
+export function updateSessionRect(
+  tabId: string,
+  rect: { x: number; y: number; width: number; height: number; dpr: number },
+): void {
+  const s = sessions.get(tabId)
+  if (s) s.rect = rect
+}
+
+// ==================== 应用内置复制（Ctrl+C，键盘） ====================
 
 /**
  * 应用内置复制：冻结态 Ctrl+C → 瞬时 resume → 主进程读取页面选中文本
@@ -107,83 +275,46 @@ function appCopySelection(wc: WebContents, tabId: string, session: FreezeSession
         if (!wc.isDestroyed() && wc.debugger.isAttached()) {
           await wc.debugger.sendCommand('Debugger.pause')
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       session.unfreezing = false
     }
   })()
 }
 
-/**
- * 智能解冻（点击 + 拖拽选中 + 应用内置复制）：
- * - mouseDown：瞬时 resume → 窗口持续到 mouseUp（或 5s 超时）→ 缓冲后重新 pause。
- *   期间页面可点击按钮、可拖拽选中文本（高亮保留在定格画面上）。
- * - keyDown Ctrl+C：应用内置复制（appCopySelection）。
- *
- * 为什么需要：内容定格要求 JS 冻结，但冻结后交互无效。浏览器底层无法
- * 「JS 活着 + SSE 内容不动」（已穷举验证），只能解冻瞬间执行交互再锁回。
- */
-function installClickUnfreeze(wc: WebContents, tabId: string, session: FreezeSession): void {
-  removeClickUnfreeze(wc, session)
-
+/** 安装冻结态键盘监听（Ctrl+C 应用内置复制；before-input-event 只保证键盘事件） */
+function installFreezeKeyboardHook(wc: WebContents, tabId: string, session: FreezeSession): void {
+  // 先移除旧的（幂等）
+  if (session.keyboardHandler && !wc.isDestroyed()) {
+    wc.removeListener('before-input-event', session.keyboardHandler)
+    session.keyboardHandler = undefined
+  }
   const handler = (event: Electron.Event, input: Input) => {
-    // 应用内置复制：冻结态 Ctrl+C（拦截事件，页面不感知）
     if (
       input.type === 'keyDown' &&
       input.control && !input.alt && !input.meta &&
-      (input.key?.toLowerCase() === 'c')
+      input.key?.toLowerCase() === 'c'
     ) {
       if (session.state !== 'frozen' || session.unfreezing) return
       event.preventDefault()
       console.log(`[freeze] tab ${tabId} 冻结态检测到 Ctrl+C，应用内置复制`)
       appCopySelection(wc, tabId, session)
-      return
     }
-    // 点击/拖拽：mouseDown 解冻 → mouseUp 或超时重新冻结
-    if (input.type !== 'mouseDown' || session.state !== 'frozen' || session.unfreezing) return
-    session.unfreezing = true
-    console.log(`[freeze] tab ${tabId} 冻结态检测到点击/拖拽，瞬时解冻执行`)
-
-    let finished = false
-    const refreeze = () => {
-      if (finished) return
-      finished = true
-      void (async () => {
-        // 缓冲：让 click 合成 + JS 同步响应执行完
-        await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
-        try {
-          if (!wc.isDestroyed() && wc.debugger.isAttached()) {
-            await wc.debugger.sendCommand('Debugger.pause')
-            console.log(`[freeze] tab ${tabId} 交互已执行，重新冻结`)
-          }
-        } catch { /* ignore */ }
-        session.unfreezing = false
-      })()
-    }
-
-    // 解冻窗口内监听 mouseUp（用户松开即结束窗口）
-    const onUp = (e: Electron.Event, i: Input) => {
-      if (i.type === 'mouseUp') refreeze()
-    }
-
-    void (async () => {
-      try {
-        await wc.debugger.sendCommand('Debugger.resume')
-      } catch (err) {
-        console.warn(`[freeze] tab ${tabId} 瞬时解冻失败:`, err)
-        session.unfreezing = false
-        return
-      }
-      wc.on('before-input-event', onUp)
-      setTimeout(() => {
-        wc.removeListener('before-input-event', onUp)
-        refreeze()
-      }, UNFREEZE_TIMEOUT_MS)
-    })()
   }
-
   wc.on('before-input-event', handler)
-  session.inputHandler = handler
+  session.keyboardHandler = handler
 }
+
+/** 移除冻结态键盘监听 */
+function removeFreezeKeyboardHook(wc: WebContents, session: FreezeSession): void {
+  if (session.keyboardHandler && !wc.isDestroyed()) {
+    wc.removeListener('before-input-event', session.keyboardHandler)
+  }
+  session.keyboardHandler = undefined
+}
+
+// ==================== 冻结 / 恢复 / 分离 ====================
 
 /**
  * 冻结指定 tabId 的 webview。
@@ -213,8 +344,11 @@ export async function freezeTab(tabId: string): Promise<boolean> {
         frozenAt: Date.now(),
       }
       sessions.set(tabId, session)
-      // 冻结态点击可用：智能解冻（点击瞬间 resume → 执行 → 重新 pause）
-      installClickUnfreeze(wc, tabId, session)
+      // 冻结态交互：uiohook 鼠标钩子 + Ctrl+C 应用内置复制 + 窗口 rect 同步
+      ensureMouseHook()
+      installFreezeKeyboardHook(wc, tabId, session)
+      const win = getOwnerWindow(wc)
+      if (win && !win.isDestroyed()) ensureWindowRectSync(win)
       console.log(`[freeze] tab ${tabId} 已冻结`)
       return true
     }
@@ -224,7 +358,10 @@ export async function freezeTab(tabId: string): Promise<boolean> {
       existing.state = 'frozen'
       existing.frozenAt = Date.now()
       sessions.set(tabId, existing)
-      installClickUnfreeze(wc, tabId, existing)
+      installFreezeKeyboardHook(wc, tabId, existing)
+      ensureMouseHook()
+      const win = getOwnerWindow(wc)
+      if (win && !win.isDestroyed()) ensureWindowRectSync(win)
       console.log(`[freeze] tab ${tabId} 已冻结（复用已 attach 的 debugger）`)
       return true
     }
@@ -254,8 +391,10 @@ export async function resumeTab(tabId: string): Promise<boolean> {
     return false
   }
   try {
-    // 用户主动恢复：移除智能解冻监听（页面恢复完全交互）
-    removeClickUnfreeze(wc, session)
+    // 用户主动恢复：移除冻结态键盘监听（页面恢复完全交互）
+    removeFreezeKeyboardHook(wc, session)
+    session.unfreezing = false
+    session.unfreezeFinish = undefined
     await wc.debugger.sendCommand('Debugger.resume')
     session.state = 'attached'
     session.frozenAt = null
@@ -278,7 +417,7 @@ export async function detachTab(tabId: string): Promise<void> {
   const wc = getWebviewByTabId(tabId)
   if (wc && !wc.isDestroyed()) {
     try {
-      removeClickUnfreeze(wc, session)
+      removeFreezeKeyboardHook(wc, session)
       if (session.state === 'frozen') {
         await wc.debugger.sendCommand('Debugger.resume')
       }

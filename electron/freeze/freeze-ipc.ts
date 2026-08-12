@@ -14,6 +14,7 @@ import {
   detachTab,
   getFreezeState,
   isFrozen,
+  updateSessionRect,
 } from './freeze-manager.js'
 
 /** 冻结时抓取的对话快照（用于入库 + 返回给渲染层显示） */
@@ -135,7 +136,13 @@ export function registerFreezeIpc(): void {
     IPC_CHANNELS.FREEZE_TAB,
     async (
       _e: IpcMainInvokeEvent,
-      payload: { tabId: string; profileId: string },
+      payload: {
+        tabId: string
+        profileId: string
+        /** webview 在窗口内的位置（CSS 像素）+ dpr，用于 uiohook 命中检测 */
+        rect?: { x: number; y: number; width: number; height: number }
+        dpr?: number
+      },
     ): Promise<{ frozen: boolean; snapshot: FreezeSnapshot | null }> => {
       const wc = getWebviewByTabId(payload.tabId)
       if (!wc) {
@@ -191,7 +198,20 @@ export function registerFreezeIpc(): void {
       // 3. pause 冻结页面
       const ok = await freezeTab(payload.tabId)
       console.log('[freeze-ipc] freezeTab 返回', ok, '当前状态', getFreezeState(payload.tabId))
-      if (ok) broadcastFreezeState(payload.tabId, 'frozen')
+      if (ok) {
+        // 记录 webview 位置（uiohook 命中检测）：CSS 像素 → 物理像素
+        if (payload.rect) {
+          const dpr = payload.dpr || 1
+          updateSessionRect(payload.tabId, {
+            x: payload.rect.x * dpr,
+            y: payload.rect.y * dpr,
+            width: payload.rect.width * dpr,
+            height: payload.rect.height * dpr,
+            dpr,
+          })
+        }
+        broadcastFreezeState(payload.tabId, 'frozen')
+      }
       return { frozen: ok, snapshot }
     },
   )
@@ -221,6 +241,24 @@ export function registerFreezeIpc(): void {
     IPC_CHANNELS.FREEZE_STATUS,
     (_e: IpcMainInvokeEvent, tabId: string): string => {
       return getFreezeState(tabId)
+    },
+  )
+
+  // 渲染层上报 webview 位置（窗口 move/resize 后主进程请求，渲染层回传）
+  ipcMain.on(
+    IPC_CHANNELS.FREEZE_REPORT_RECT,
+    (
+      _e: IpcMainInvokeEvent,
+      payload: { tabId: string; rect: { x: number; y: number; width: number; height: number }; dpr: number },
+    ) => {
+      const dpr = payload.dpr || 1
+      updateSessionRect(payload.tabId, {
+        x: payload.rect.x * dpr,
+        y: payload.rect.y * dpr,
+        width: payload.rect.width * dpr,
+        height: payload.rect.height * dpr,
+        dpr,
+      })
     },
   )
 }

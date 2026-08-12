@@ -21,7 +21,13 @@ export interface FreezeAPI {
     webContentsId: number
   }) => Promise<boolean>
   /** 冻结指定 tab（先抓取对话入库再 pause，返回冻结结果 + 快照） */
-  freezeTab: (payload: { tabId: string; profileId: string }) => Promise<{
+  freezeTab: (payload: {
+    tabId: string
+    profileId: string
+    /** webview 在窗口内的位置（CSS 像素）+ dpr，用于冻结态点击命中检测 */
+    rect?: { x: number; y: number; width: number; height: number }
+    dpr?: number
+  }) => Promise<{
     frozen: boolean
     snapshot: FreezeSnapshot | null
   }>
@@ -33,4 +39,12 @@ export interface FreezeAPI {
   status: (tabId: string) => Promise<FreezeState>
   /** 主→渲染：冻结状态变化推送 */
   onStateChanged: (callback: (payload: { tabId: string; state: FreezeState }) => void) => () => void
+  /** 主→渲染：窗口 move/resize 后请求重新上报冻结 tab 的 webview 位置 */
+  onSyncRect: (callback: (payload: { tabIds: string[] }) => void) => () => void
+  /** 渲染→主：上报 webview 位置（窗口内 CSS 像素 + dpr） */
+  reportRect: (payload: {
+    tabId: string
+    rect: { x: number; y: number; width: number; height: number }
+    dpr: number
+  }) => void
 }

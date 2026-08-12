@@ -23,6 +23,8 @@ export function registerFreezeWebview(payload: {
 export async function freezeTab(payload: {
   tabId: string;
   profileId: string;
+  rect?: { x: number; y: number; width: number; height: number };
+  dpr?: number;
 }): Promise<{ frozen: boolean; snapshot: FreezeSnapshot | null }> {
   const api = requireElectron();
   return api.freeze.freezeTab(payload);
@@ -52,4 +54,33 @@ export function onFreezeStateChanged(
 ): () => void {
   const api = requireElectron();
   return api.freeze.onStateChanged(callback);
+}
+
+/** 监听窗口 move/resize 后主进程请求重新上报 webview 位置 */
+export function onFreezeSyncRect(
+  callback: (payload: { tabIds: string[] }) => void,
+): () => void {
+  const api = requireElectron();
+  return api.freeze.onSyncRect(callback);
+}
+
+/** 上报 webview 位置（窗口内 CSS 像素 + dpr） */
+export function reportFreezeRect(payload: {
+  tabId: string;
+  rect: { x: number; y: number; width: number; height: number };
+  dpr: number;
+}): void {
+  const api = requireElectron();
+  api.freeze.reportRect(payload);
+}
+
+/** 计算指定 tab 的 webview 元素在窗口内的位置（CSS 像素） */
+export function getWebviewRect(tabId: string): { rect: { x: number; y: number; width: number; height: number }; dpr: number } | null {
+  const wv = document.querySelector(`webview[data-tab-id="${tabId}"]`) as HTMLElement | null;
+  if (!wv || !wv.getBoundingClientRect) return null;
+  const r = wv.getBoundingClientRect();
+  return {
+    rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+    dpr: window.devicePixelRatio || 1,
+  };
 }

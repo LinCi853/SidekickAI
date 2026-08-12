@@ -10,6 +10,9 @@ import {
   detachFreeze,
   getFreezeStatus,
   onFreezeStateChanged,
+  onFreezeSyncRect,
+  reportFreezeRect,
+  getWebviewRect,
   type FreezeState,
 } from '../lib/electron-api';
 
@@ -35,7 +38,7 @@ export const useFreezeStore = create<FreezeStore>((set, get) => ({
   snapshots: {},
 
   init: () => {
-    return onFreezeStateChanged(({ tabId, state }) => {
+    const offState = onFreezeStateChanged(({ tabId, state }) => {
       set((s) => ({
         states: { ...s.states, [tabId]: state },
       }));
@@ -48,10 +51,27 @@ export const useFreezeStore = create<FreezeStore>((set, get) => ({
         });
       }
     });
+    // 窗口 move/resize 后主进程请求重新上报 webview 位置（冻结态点击命中检测）
+    const offRect = onFreezeSyncRect(({ tabIds }) => {
+      for (const tabId of tabIds) {
+        const info = getWebviewRect(tabId);
+        if (info) reportFreezeRect({ tabId, ...info });
+      }
+    });
+    return () => {
+      offState();
+      offRect();
+    };
   },
 
   doFreeze: async (tabId, profileId) => {
-    const result = await freezeTab({ tabId, profileId });
+    // 上报 webview 位置（窗口内 CSS 像素 + dpr），供冻结态点击命中检测
+    const info = getWebviewRect(tabId);
+    const result = await freezeTab({
+      tabId,
+      profileId,
+      ...(info ?? {}),
+    });
     if (result.frozen) {
       set((s) => ({
         states: { ...s.states, [tabId]: 'frozen' },
