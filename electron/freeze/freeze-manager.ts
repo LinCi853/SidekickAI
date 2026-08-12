@@ -1,18 +1,19 @@
-// electron/freeze/freeze-manager.ts — 页面冻结管理器（底层内存级冻结）
+// electron/freeze/freeze-manager.ts — 页面冻结管理器（Debugger.pause 彻底定格）
 //
-// 防撤回保险的核心。冻结 = 两层 CDP 机制叠加（scripts/freeze-poc-deepfreeze.cjs 验证）：
-//   1. Emulation.setVirtualTimePolicy({ policy: 'pause' }) —— 暂停虚拟时钟
-//      这是「底层冻结」的关键：CSS 动画（loading 转圈/脉冲/进度条）、rAF、定时器、
-//      performance.now() 全部随之定格。仅 Debugger.pause 时 CSS compositor 动画
-//      仍会继续转（用户实测「冻结后加载提示还在动」的根因），必须叠加虚拟时间暂停。
-//   2. Debugger.pause —— 锁死 JS 主线程（事件/注入全部挂起），双保险。
-//   Target.setAutoAttach 递归冻结 Worker / iframe 子目标。
+// 防撤回保险的核心：对 webview 的 guest webContents 执行 Debugger.pause，
+// 锁死 JS 主线程（定时器/rAF/事件/SSE 回调全部停止），页面画面彻底定格。
 //
-// 已验证（Electron 30.5.1 / Chromium 124）：
-//   - 虚拟时间暂停后 counter/spin/pulse/performance.now() 全部定格，恢复后继续
-//   - 页面无感知（不触发 freeze/pagehide 事件）
-//   - host webContents 不受影响（独立进程）
-//   - 恢复顺序：Debugger.resume → Emulation 恢复 advance（积压定时器追帧后正常）
+// 冻结策略演进（scripts/freeze-poc-*.cjs 逐轮验证）：
+//   v1 Debugger.pause 单层 —— 有效，但「冻结后加载提示还在动」？
+//       → 排查发现是 CSS compositor 动画不受 JS 暂停影响。
+//   v2 + Emulation.setVirtualTimePolicy(pause) 双层 —— 在无网络页面（data: URL）
+//       counter/spin/performance.now 全部定格；但真实 AI 页面有活跃 SSE 连接时，
+//       SSE 消息会「唤醒」虚拟时间推进，CSS 动画照转、内容照更新（POC 实测），
+//       虚拟时间方案在真实场景不可靠 → 已移除。
+//   v3 纯 Debugger.pause（当前）—— 画面彻底定格（capturePage 两次截图一致），
+//      且滚轮滚动仍可用（compositor 层处理，不依赖主线程），冻结态可滚动查看
+//      完整对话（freeze-poc-scroll.cjs 验证）；按钮点击/文本选择不可用（JS 冻结，
+//      这是防撤回的前提）。
 //
 // 关键约束（PoC 中确认）：Debugger.pause 后 executeJavaScript 会 hang（注入脚本
 // 无法在暂停的 isolate 上返回）。因此防撤回流程必须是「先抓取（未冻结态）→ 入库 →
@@ -51,19 +52,6 @@ async function attach(wc: WebContents): Promise<void> {
 }
 
 /**
- * 暂停虚拟时钟（底层冻结：CSS 动画 / rAF / 定时器 / performance.now 全部定格）。
- * 页面无感知（不触发 freeze/pagehide 事件）。
- */
-async function pauseVirtualClock(wc: WebContents): Promise<void> {
-  await wc.debugger.sendCommand('Emulation.setVirtualTimePolicy', { policy: 'pause' })
-}
-
-/** 恢复虚拟时钟推进（advance：积压定时器追帧后恢复正常节律） */
-async function resumeVirtualClock(wc: WebContents): Promise<void> {
-  await wc.debugger.sendCommand('Emulation.setVirtualTimePolicy', { policy: 'advance' })
-}
-
-/**
  * 冻结指定 tabId 的 webview。
  *
  * 注意：调用方应在调用此方法**之前**完成对话抓取（executeJavaScript 读取 DOM），
@@ -82,8 +70,7 @@ export async function freezeTab(tabId: string): Promise<boolean> {
   try {
     if (!existing || existing.state === 'idle') {
       await attach(wc)
-      // 底层冻结：先暂停虚拟时钟（动画/计时器定格），再锁死 JS
-      await pauseVirtualClock(wc)
+      // 彻底定格：Debugger.pause 锁死 JS（动画/定时器/SSE 回调全停，画面定格）
       await wc.debugger.sendCommand('Debugger.pause')
       sessions.set(tabId, {
         webContentsId: wc.id,
@@ -91,12 +78,11 @@ export async function freezeTab(tabId: string): Promise<boolean> {
         attachedAt: existing?.attachedAt ?? Date.now(),
         frozenAt: Date.now(),
       })
-      console.log(`[freeze] tab ${tabId} 已冻结（虚拟时钟+JS 双层定格）`)
+      console.log(`[freeze] tab ${tabId} 已冻结`)
       return true
     }
     if (existing.state === 'attached') {
-      // 已 attach 未冻结 → 直接双层冻结
-      await pauseVirtualClock(wc)
+      // 已 attach 未冻结 → 直接 pause
       await wc.debugger.sendCommand('Debugger.pause')
       existing.state = 'frozen'
       existing.frozenAt = Date.now()
@@ -130,13 +116,11 @@ export async function resumeTab(tabId: string): Promise<boolean> {
     return false
   }
   try {
-    // 恢复顺序：先放 JS，再恢复虚拟时钟（advance 追帧积压定时器后恢复正常节律）
     await wc.debugger.sendCommand('Debugger.resume')
-    await resumeVirtualClock(wc)
     session.state = 'attached'
     session.frozenAt = null
     sessions.set(tabId, session)
-    console.log(`[freeze] tab ${tabId} 已恢复（虚拟时钟+JS）`)
+    console.log(`[freeze] tab ${tabId} 已恢复`)
     return true
   } catch (err) {
     console.error(`[freeze] 恢复 tab ${tabId} 失败:`, err)
@@ -155,9 +139,7 @@ export async function detachTab(tabId: string): Promise<void> {
   if (wc && !wc.isDestroyed()) {
     try {
       if (session.state === 'frozen') {
-        // 与 resumeTab 相同的完整恢复序列（先 JS 后虚拟时钟）
         await wc.debugger.sendCommand('Debugger.resume')
-        await resumeVirtualClock(wc)
       }
       if (wc.debugger.isAttached()) {
         await wc.debugger.detach()
