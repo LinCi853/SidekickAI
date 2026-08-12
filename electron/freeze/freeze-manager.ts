@@ -1,4 +1,4 @@
-// electron/freeze/freeze-manager.ts — 页面冻结管理器（Debugger.pause 彻底定格）
+// electron/freeze/freeze-manager.ts — 页面冻结管理器（Debugger.pause 彻底定格 + 智能解冻点击）
 //
 // 防撤回保险的核心：对 webview 的 guest webContents 执行 Debugger.pause，
 // 锁死 JS 主线程（定时器/rAF/事件/SSE 回调全部停止），页面画面彻底定格。
@@ -10,16 +10,25 @@
 //       counter/spin/performance.now 全部定格；但真实 AI 页面有活跃 SSE 连接时，
 //       SSE 消息会「唤醒」虚拟时间推进，CSS 动画照转、内容照更新（POC 实测），
 //       虚拟时间方案在真实场景不可靠 → 已移除。
-//   v3 纯 Debugger.pause（当前）—— 画面彻底定格（capturePage 两次截图一致），
-//      且滚轮滚动仍可用（compositor 层处理，不依赖主线程），冻结态可滚动查看
-//      完整对话（freeze-poc-scroll.cjs 验证）；按钮点击/文本选择不可用（JS 冻结，
-//      这是防撤回的前提）。
+//   v3 纯 Debugger.pause —— 画面彻底定格（capturePage 两次截图一致），滚轮滚动
+//       仍可用（compositor 层处理，不依赖主线程），冻结态可滚动查看完整对话
+//       （freeze-poc-scroll.cjs 验证）；但按钮点击/复制不可用（JS 冻结）。
+//   v4 + 智能解冻点击（当前）—— 冻结态在 before-input-event 层监听 mouseDown，
+//       检测到点击时瞬时 resume → 让该次点击（含 click 的 JS 响应）执行完 →
+//       立即重新 pause（窗口约 200ms）。滚动本就可用（compositor）无需解冻。
+//       「内容定格」与「点击可用」在浏览器底层互斥（已穷举验证：虚拟时间/断网/
+//       限速均无法阻止已建立 SSE 连接的数据流），智能解冻是唯一两全路径。
+//
+// 已知边界（用户已确认取舍）：
+//   - 文本选中/拖拽复制不可用（需要持续解冻，窗口只覆盖单次点击）
+//   - 点击瞬间，冻结期间积压的 SSE 推送会被一次性处理（内容可能快速跳变
+//     到最新，然后重新定格）；防撤回数据保险依赖冻结前已入库的快照
 //
 // 关键约束（PoC 中确认）：Debugger.pause 后 executeJavaScript 会 hang（注入脚本
 // 无法在暂停的 isolate 上返回）。因此防撤回流程必须是「先抓取（未冻结态）→ 入库 →
 // 再冻结锁现场」，不能「先冻结再读 DOM」。
 
-import type { WebContents } from 'electron'
+import type { Input, WebContents } from 'electron'
 import { getWebviewByTabId, listRegisteredWebviews } from './webview-registry.js'
 
 /** 冻结状态 */
@@ -33,6 +42,10 @@ interface FreezeSession {
   attachedAt: number
   /** pause 时间戳（未冻结为 null） */
   frozenAt: number | null
+  /** 智能解冻窗口进行中（避免重复进入） */
+  unfreezing?: boolean
+  /** 冻结态点击解冻的输入监听（detach 时移除） */
+  inputHandler?: (event: Electron.Event, input: Input) => void
 }
 
 /** tabId → 冻结会话 */
@@ -49,6 +62,75 @@ async function attach(wc: WebContents): Promise<void> {
     waitForDebuggerOnStart: false,
     flatten: true,
   })
+}
+
+/** 智能解冻窗口参数 */
+const CLICK_UNFREEZE_TIMEOUT_MS = 2000 // 解冻窗口上限（等待 mouseUp）
+const CLICK_SETTLE_MS = 200 // mouseUp 后留给 click 事件与 JS 同步响应的缓冲
+
+/** 移除冻结态点击解冻的输入监听 */
+function removeClickUnfreeze(wc: WebContents, session: FreezeSession): void {
+  if (session.inputHandler && !wc.isDestroyed()) {
+    wc.removeListener('before-input-event', session.inputHandler)
+  }
+  session.inputHandler = undefined
+}
+
+/**
+ * 智能解冻点击：冻结态监听 mouseDown，检测到点击时瞬时 resume →
+ * 等 mouseUp（或 2s 超时）→ 缓冲 200ms 让 click 的 JS 响应执行完 → 立即重新 pause。
+ *
+ * 为什么需要：内容定格要求 JS 冻结，但冻结后点击无效。浏览器底层无法
+ * 「JS 活着 + SSE 内容不动」（已穷举验证），只能解冻瞬间执行点击再锁回。
+ */
+function installClickUnfreeze(wc: WebContents, tabId: string, session: FreezeSession): void {
+  removeClickUnfreeze(wc, session)
+
+  const handler = (event: Electron.Event, input: Input) => {
+    if (input.type !== 'mouseDown' || session.state !== 'frozen' || session.unfreezing) return
+    session.unfreezing = true
+    console.log(`[freeze] tab ${tabId} 冻结态检测到点击，瞬时解冻执行`)
+
+    let finished = false
+    const refreeze = () => {
+      if (finished) return
+      finished = true
+      void (async () => {
+        // 缓冲：让 click 合成 + JS 同步响应（如复制按钮）执行完
+        await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
+        try {
+          if (!wc.isDestroyed() && wc.debugger.isAttached()) {
+            await wc.debugger.sendCommand('Debugger.pause')
+            console.log(`[freeze] tab ${tabId} 点击已执行，重新冻结`)
+          }
+        } catch { /* ignore */ }
+        session.unfreezing = false
+      })()
+    }
+
+    // 解冻窗口内监听 mouseUp（用户松开即结束窗口）
+    const onUp = (e: Electron.Event, i: Input) => {
+      if (i.type === 'mouseUp') refreeze()
+    }
+
+    void (async () => {
+      try {
+        await wc.debugger.sendCommand('Debugger.resume')
+      } catch (err) {
+        console.warn(`[freeze] tab ${tabId} 瞬时解冻失败:`, err)
+        session.unfreezing = false
+        return
+      }
+      wc.on('before-input-event', onUp)
+      setTimeout(() => {
+        wc.removeListener('before-input-event', onUp)
+        refreeze()
+      }, CLICK_UNFREEZE_TIMEOUT_MS)
+    })()
+  }
+
+  wc.on('before-input-event', handler)
+  session.inputHandler = handler
 }
 
 /**
@@ -72,12 +154,15 @@ export async function freezeTab(tabId: string): Promise<boolean> {
       await attach(wc)
       // 彻底定格：Debugger.pause 锁死 JS（动画/定时器/SSE 回调全停，画面定格）
       await wc.debugger.sendCommand('Debugger.pause')
-      sessions.set(tabId, {
+      const session: FreezeSession = {
         webContentsId: wc.id,
         state: 'frozen',
         attachedAt: existing?.attachedAt ?? Date.now(),
         frozenAt: Date.now(),
-      })
+      }
+      sessions.set(tabId, session)
+      // 冻结态点击可用：智能解冻（点击瞬间 resume → 执行 → 重新 pause）
+      installClickUnfreeze(wc, tabId, session)
       console.log(`[freeze] tab ${tabId} 已冻结`)
       return true
     }
@@ -87,6 +172,7 @@ export async function freezeTab(tabId: string): Promise<boolean> {
       existing.state = 'frozen'
       existing.frozenAt = Date.now()
       sessions.set(tabId, existing)
+      installClickUnfreeze(wc, tabId, existing)
       console.log(`[freeze] tab ${tabId} 已冻结（复用已 attach 的 debugger）`)
       return true
     }
@@ -116,6 +202,8 @@ export async function resumeTab(tabId: string): Promise<boolean> {
     return false
   }
   try {
+    // 用户主动恢复：移除智能解冻监听（页面恢复完全交互）
+    removeClickUnfreeze(wc, session)
     await wc.debugger.sendCommand('Debugger.resume')
     session.state = 'attached'
     session.frozenAt = null
@@ -138,6 +226,7 @@ export async function detachTab(tabId: string): Promise<void> {
   const wc = getWebviewByTabId(tabId)
   if (wc && !wc.isDestroyed()) {
     try {
+      removeClickUnfreeze(wc, session)
       if (session.state === 'frozen') {
         await wc.debugger.sendCommand('Debugger.resume')
       }
