@@ -214,11 +214,12 @@ const FALLBACK_EXTRACT_SCRIPT = `(function() {
 
 /**
  * 提取页面文本层（冻结前调用；DOMSnapshot 读取布局树，不执行 JS）。
- * 文本项 = 布局树中非空文本节点（文档坐标）。失败/为空时降级到
- * executeJavaScript 提取（父元素 rect）。
+ * 主路径使用 textBoxes（行盒级：每行文本的精确坐标 + 文本起止），粒度接近
+ * 原生 selection 高亮（freeze-poc-textbox.cjs 验证：跨行文本拆行盒、
+ * 坐标精确、文档坐标系）。失败/为空时降级到 executeJavaScript 提取。
  */
 export async function extractTextLayer(wc: WebContents): Promise<TextLayer | null> {
-  // ——— 主路径：DOMSnapshot（精确布局 bounds）———
+  // ——— 主路径：DOMSnapshot textBoxes（行盒级，精确坐标）———
   try {
     const snap = await wc.debugger.sendCommand('DOMSnapshot.captureSnapshot', {
       computedStyles: [],
@@ -233,15 +234,24 @@ export async function extractTextLayer(wc: WebContents): Promise<TextLayer | nul
       scrollOffsetY = Math.max(scrollOffsetY, Number(doc.scrollOffsetY) || 0)
       contentHeight = Math.max(contentHeight, Number(doc.contentHeight) || 0)
       const layouts = doc.layout
-      if (!layouts) continue
+      const textBoxes = doc.textBoxes
+      if (!layouts || !textBoxes) continue
       const textIndexes: number[] = layouts.text || []
-      const boundsArr: number[][] = layouts.bounds || []
-      for (let i = 0; i < textIndexes.length && items.length < TEXT_LAYER_MAX_ITEMS; i++) {
-        const sIdx = textIndexes[i]
+      const boxLayoutIdx: number[] = textBoxes.layoutIndex || []
+      const boxStart: number[] = textBoxes.start || []
+      const boxLen: number[] = textBoxes.length || []
+      const boxBounds: number[][] = textBoxes.bounds || []
+      for (let i = 0; i < boxLayoutIdx.length && items.length < TEXT_LAYER_MAX_ITEMS; i++) {
+        const li = boxLayoutIdx[i]
+        if (li === undefined || li < 0 || li >= textIndexes.length) continue
+        const sIdx = textIndexes[li]
         if (sIdx === undefined || sIdx === -1) continue
-        const text = strings[sIdx]
+        const full = strings[sIdx] || ''
+        const start = boxStart[i] || 0
+        const len = boxLen[i] || 0
+        const text = full.slice(start, start + len)
         if (!text || !text.trim()) continue
-        const b = boundsArr[i]
+        const b = boxBounds[i]
         if (!b || b.length < 4) continue
         items.push({
           text: text.length > TEXT_LAYER_MAX_LEN ? text.slice(0, TEXT_LAYER_MAX_LEN) : text,
@@ -253,6 +263,7 @@ export async function extractTextLayer(wc: WebContents): Promise<TextLayer | nul
       }
     }
     if (items.length > 0) {
+      console.log(`[freeze] 文本层提取完成（textBoxes 行盒）: items=${items.length}`)
       return { items, scrollOffsetY, contentHeight, viewportHeight: 0 }
     }
     console.warn('[freeze] DOMSnapshot 文本层为空，降级到 JS 提取')

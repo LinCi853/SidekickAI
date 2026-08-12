@@ -43,17 +43,27 @@ interface ActionBar {
   copied: boolean;
 }
 
-/** 选中矩形（视口坐标）∩ 文本层（文档坐标 - 偏移）→ 命中文本项（视口坐标） */
+/**
+ * 选中矩形（视口坐标）∩ 文本层行盒（文档坐标 - 偏移）→ 命中项（视口坐标）。
+ * 行盒级裁剪：高亮块 = 行盒 ∩ 选中矩形的 x 方向交集（精确位置/大小），
+ * 文本按宽度比例截取子串（CJK 近似等宽）——接近原生 selection 粒度。
+ */
 function computeHitItems(layer: TextLayer, sel: SelRect, wheelOffsetY: number): HitItem[] {
   const baseY = layer.scrollOffsetY + wheelOffsetY;
   const hits: HitItem[] = [];
   for (const it of layer.items) {
     const vy = it.y - baseY;
-    // x 轴相交
-    if (sel.x > it.x + it.w || it.x > sel.x + sel.w) continue;
-    // y 轴相交
+    // y 轴相交（行盒整行高亮，同原生 selection）
     if (sel.y > vy + it.h || vy > sel.y + sel.h) continue;
-    hits.push({ text: it.text, vx: it.x, vy, w: it.w, h: it.h });
+    // x 轴裁剪：高亮块 = 行盒 ∩ 选中矩形
+    const hl = Math.max(it.x, sel.x);
+    const hr = Math.min(it.x + it.w, sel.x + sel.w);
+    const hw = hr - hl;
+    if (hw <= 0) continue;
+    // 按宽度比例截取子串
+    const ratio = hw / it.w;
+    const n = Math.max(1, Math.round(it.text.length * ratio));
+    hits.push({ text: it.text.slice(0, n), vx: hl, vy, w: hw, h: it.h });
   }
   // 按文档顺序（y 为主，x 为辅）
   hits.sort((a, b) => a.vy - b.vy || a.vx - b.vx);
