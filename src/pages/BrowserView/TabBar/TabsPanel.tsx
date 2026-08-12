@@ -14,6 +14,7 @@ import {
   pinCurrentWindow,
 } from '../../../lib/electron-api';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore';
+import { useFreezeStore } from '../../../store/useFreezeStore';
 import { useWindowMaximizedAndPinned } from '../../../hooks/useWindowMaximizedAndPinned';
 import { IconButton } from '../../../components/ui';
 import { MinimizeIcon, MaximizeIcon, RestoreIcon, CloseIcon } from '@/components/icons';
@@ -148,6 +149,15 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
       case 'toggleMute':
         setMuted(tabId, !tab.muted);
         break;
+      case 'toggleFreeze': {
+        const fs = useFreezeStore.getState();
+        if (fs.states[tabId] === 'frozen') {
+          void fs.doResume(tabId);
+        } else {
+          void fs.doFreeze(tabId, profile.id);
+        }
+        break;
+      }
       case 'closeOthers':
         tabs.filter((t) => t.id !== tabId).forEach((t) => closeTab(t.id));
         break;
@@ -157,7 +167,7 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
         break;
       }
     }
-  }, [contextMenu, tabs, newTab, togglePin, setMuted, closeTab, profile.aiPlatformUrl]);
+  }, [contextMenu, tabs, newTab, togglePin, setMuted, closeTab, profile.aiPlatformUrl, profile.id]);
 
   return (
     <div className="browser-bar-row browser-bar-row-tabs" data-name="browser.tabs-panel">
@@ -278,6 +288,8 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
           onDuplicate={() => handleContextAction('duplicate')}
           onTogglePin={() => handleContextAction('togglePin')}
           onToggleMute={() => handleContextAction('toggleMute')}
+          onToggleFreeze={() => handleContextAction('toggleFreeze')}
+          isFrozen={useFreezeStore.getState().states[contextMenu.tabId] === 'frozen'}
           onCloseTab={() => { closeTab(contextMenu.tabId); }}
           onCloseOthers={() => handleContextAction('closeOthers')}
           onCloseRight={() => handleContextAction('closeRight')}

@@ -33,6 +33,8 @@ import NavHistoryPanel from '../HistoryDownloadView/NavHistoryPanel';
 import DownloadPanel from '../HistoryDownloadView/DownloadPanel';
 import { useBrowserKeyboard } from './useBrowserKeyboard';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
+import { useFreezeStore } from '../../store/useFreezeStore';
+import FreezeOverlay from './FreezeOverlay';
 import './styles.css';
 
 /** 从 URL 查询参数获取值 */
@@ -381,6 +383,15 @@ export default function BrowserView() {
     onFocusSearch: handleFocusSearch,
     onFindInPage: handleFindInPage,
     onPrint: handlePrint,
+    onToggleFreeze: () => {
+      if (!activeTabId || !profileId) return;
+      const freezeState = useFreezeStore.getState().states[activeTabId];
+      if (freezeState === 'frozen') {
+        void useFreezeStore.getState().doResume(activeTabId);
+      } else {
+        void useFreezeStore.getState().doFreeze(activeTabId, profileId);
+      }
+    },
   });
 
   /* ===== 主进程事件监听 ===== */
@@ -437,6 +448,15 @@ export default function BrowserView() {
       }
     });
     return () => { offDevTools(); };
+  }, [activeTabId]);
+
+  // 冻结状态订阅 + 切换标签时同步冻结状态
+  useEffect(() => {
+    const off = useFreezeStore.getState().init();
+    return off;
+  }, []);
+  useEffect(() => {
+    if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
   }, [activeTabId]);
 
   // v0.0.9 B4：接收主进程 before-input-event 转发的 Ctrl+W（closeTab），
@@ -600,6 +620,9 @@ export default function BrowserView() {
 
       {/* 底部状态栏：加载进度 + 状态文本 */}
       <BrowserStatusBar />
+
+      {/* 冻结态覆盖层 + 控制条（防撤回保险） */}
+      <FreezeOverlay activeTabId={activeTabId} />
 
       <WindowResizeHandles />
     </div>

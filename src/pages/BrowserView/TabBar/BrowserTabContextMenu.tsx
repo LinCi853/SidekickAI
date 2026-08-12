@@ -21,6 +21,10 @@ interface BrowserTabContextMenuProps {
   onCloseTab: () => void;
   onCloseOthers: () => void;
   onCloseRight: () => void;
+  /** 冻结/恢复此页面（防撤回保险） */
+  onToggleFreeze?: () => void;
+  /** 当前是否处于冻结态（控制菜单文案） */
+  isFrozen?: boolean;
 }
 
 export default function BrowserTabContextMenu({
@@ -36,6 +40,8 @@ export default function BrowserTabContextMenu({
   onCloseTab,
   onCloseOthers,
   onCloseRight,
+  onToggleFreeze,
+  isFrozen,
 }: BrowserTabContextMenuProps) {
 
 
@@ -64,12 +70,23 @@ export default function BrowserTabContextMenu({
         active={tab.pinned}
         dataName="browser.tab-ctx-toggle-pin" 
       />
-      <PopoverItem 
-        onClick={run(onToggleMute)} 
+      <PopoverItem
+        onClick={run(onToggleMute)}
         label={tab.muted ? '取消静音' : '静音标签页'}
         active={tab.muted}
-        dataName="browser.tab-ctx-toggle-mute" 
+        dataName="browser.tab-ctx-toggle-mute"
       />
+      {onToggleFreeze && (
+        <>
+          <PopoverDivider />
+          <PopoverItem
+            onClick={run(onToggleFreeze)}
+            label={isFrozen ? '恢复页面（解除冻结）' : '冻结此页面（防撤回）'}
+            active={isFrozen}
+            dataName="browser.tab-ctx-toggle-freeze"
+          />
+        </>
+      )}
       <PopoverDivider />
       <PopoverItem onClick={run(onCloseOthers)} label="关闭其他标签页" dataName="browser.tab-ctx-close-others" />
       <PopoverItem onClick={run(onCloseRight)} label="关闭右侧标签页" dataName="browser.tab-ctx-close-right" />

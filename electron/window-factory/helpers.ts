@@ -620,6 +620,13 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
 
       // Alt+1~9：切换到第 N 个标签（仅 Alt，无其它修饰键）
       if (hasAlt && !hasCtrl && !hasMeta && !hasShift) {
+        // Alt+P：冻结/恢复当前页面（防撤回保险，浏览器窗口专用）
+        if (key.toLowerCase() === 'p') {
+          console.log('[hotkey] Alt+P → 冻结/恢复当前页面')
+          e.preventDefault()
+          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' })
+          return
+        }
         let n: number | null = null
         if (code.startsWith('Digit')) {
           const parsed = parseInt(code.slice('Digit'.length), 10)

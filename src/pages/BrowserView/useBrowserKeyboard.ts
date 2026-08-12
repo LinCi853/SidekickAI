@@ -52,6 +52,8 @@ interface BrowserKeyboardOptions {
   onFindInPage?: () => void;
   /** Ctrl+P：打印当前页面 */
   onPrint?: () => void;
+  /** Alt+P：冻结/恢复当前页面（防撤回保险） */
+  onToggleFreeze?: () => void;
 }
 
 export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
@@ -190,6 +192,13 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
         return;
       }
 
+      // Alt+P: 冻结/恢复当前页面（防撤回保险）
+      if (hasAlt && !hasCtrl && !hasShift && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        optsRef.current.onToggleFreeze?.();
+        return;
+      }
+
       // F6: Focus cycle (address bar → page input → no focus)
       if (e.key === 'F6' && !hasCtrl && !hasAlt && !hasShift) {
         e.preventDefault();
@@ -279,6 +288,8 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
         optsRef.current.onFindInPage?.();
       } else if (action === 'print') {
         optsRef.current.onPrint?.();
+      } else if (action === 'toggleFreeze') {
+        optsRef.current.onToggleFreeze?.();
       }
     });
 
