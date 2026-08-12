@@ -52,7 +52,7 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
   const textLayer = useFreezeStore((s) => (activeTabId ? s.textLayers[activeTabId] : undefined));
   const [showFlash, setShowFlash] = useState(false);
   const [sel, setSel] = useState<SelRect | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ title: string; preview: string } | null>(null);
   const [wheelOffsetY, setWheelOffsetY] = useState(0);
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -126,9 +126,14 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
       setSel(null);
       if (text.trim()) {
         copyFrozenText(text);
-        setToast(`已复制 ${text.trim().length} 字`);
+        // 选中内容预览：统计 + 文本片段
+        const clean = text.trim();
+        setToast({
+          title: `已复制 ${clean.length} 字`,
+          preview: clean.length > 140 ? clean.slice(0, 140) + '…' : clean,
+        });
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => setToast(null), 1800);
+        toastTimerRef.current = setTimeout(() => setToast(null), 2200);
       }
     };
     window.addEventListener('mousemove', onMove);
@@ -188,6 +193,7 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
             ref={viewportRef}
             className="freeze-selection-layer"
             data-name="browser.freeze-selection"
+            tabIndex={0}
             style={{
               position: 'absolute',
               inset: 0,
@@ -195,8 +201,13 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
               cursor: 'text',
               touchAction: 'none',
               userSelect: 'none',
+              outline: 'none',
             }}
-            onMouseDown={onMouseDown}
+            onMouseDown={(e) => {
+              // 聚焦选择层：键盘路由回到宿主（Alt+P 走原有拦截链路）
+              viewportRef.current?.focus();
+              onMouseDown(e);
+            }}
             onWheel={onWheel}
           >
             {/* 选中预览高亮（应用渲染） */}
@@ -214,7 +225,7 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
                 }}
               />
             )}
-            {/* 复制结果浮层（预览反馈） */}
+            {/* 复制结果浮层（内容预览反馈） */}
             {toast && (
               <div
                 style={{
@@ -223,18 +234,30 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
                   left: '50%',
                   transform: 'translateX(-50%)',
                   zIndex: 10001,
-                  padding: '7px 16px',
+                  maxWidth: '72%',
+                  padding: '9px 16px',
                   borderRadius: 8,
-                  background: 'rgba(15, 23, 42, 0.92)',
+                  background: 'rgba(15, 23, 42, 0.94)',
                   color: '#e2e8f0',
                   fontSize: 13,
                   fontFamily: 'var(--font-sans, system-ui)',
                   boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
                   pointerEvents: 'none',
-                  whiteSpace: 'nowrap',
                 }}
               >
-                {toast}
+                <div style={{ fontWeight: 600, color: '#a5b4fc', marginBottom: 3 }}>{toast.title}</div>
+                <div
+                  style={{
+                    opacity: 0.92,
+                    maxHeight: 64,
+                    overflow: 'hidden',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {toast.preview}
+                </div>
               </div>
             )}
           </div>

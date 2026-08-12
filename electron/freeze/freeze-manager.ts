@@ -21,7 +21,8 @@
 //   - DOMSnapshot 在 paused 下调用行为不稳定（可能隐式 resume），必须
 //     在冻结前提取。
 
-import { type WebContents } from 'electron'
+import { type BrowserWindow, type Input, type WebContents } from 'electron'
+import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { getWebviewByTabId, listRegisteredWebviews } from './webview-registry.js'
 
 /** 冻结状态 */
@@ -60,6 +61,102 @@ interface FreezeSession {
 
 /** tabId → 冻结会话 */
 const sessions = new Map<string, FreezeSession>()
+
+/**
+ * 获取 guest webContents 所属窗口。
+ * webContents.getOwnerBrowserWindow 运行时存在（POC 验证）但 Electron 30 类型
+ * 定义缺失，用类型断言访问。
+ */
+function getOwnerWindow(wc: WebContents): BrowserWindow | null {
+  const fn = (wc as unknown as { getOwnerBrowserWindow?: () => BrowserWindow | null }).getOwnerBrowserWindow
+  return typeof fn === 'function' ? (fn.call(wc) ?? null) : null
+}
+
+/** 状态变化广播回调（freeze-ipc 注入，用于通知渲染层） */
+type StateBroadcaster = (tabId: string, state: FreezeState) => void
+let stateBroadcaster: StateBroadcaster | null = null
+
+/** 注册状态广播回调（freeze-ipc 调用） */
+export function setFreezeStateBroadcaster(cb: StateBroadcaster): void {
+  stateBroadcaster = cb
+}
+
+function broadcast(tabId: string, state: FreezeState): void {
+  stateBroadcaster?.(tabId, state)
+}
+
+// ==================== guest 侧 Alt+P 钩子（前台任意焦点可触发） ====================
+// 焦点在 webview 时键盘路由到 guest，宿主（helpers.ts）的 before-input-event
+// 收不到 Alt+P。webview 注册时挂一次 guest 钩子：
+//   - 冻结态 → 恢复
+//   - 未冻结 → 转发宿主渲染层走原有冻结流程（toggleFreeze）
+
+const hotkeyHandlers = new Map<string, (event: Electron.Event, input: Input) => void>()
+
+/** 给 guest webContents 挂 Alt+P 键盘钩子（webview 注册时调用，幂等） */
+export function attachTabHotkey(tabId: string): void {
+  if (hotkeyHandlers.has(tabId)) return
+  const wc = getWebviewByTabId(tabId)
+  if (!wc || wc.isDestroyed()) return
+  const handler = (event: Electron.Event, input: Input) => {
+    if (input.type !== 'keyDown') return
+    if (!(input.alt && !input.control && !input.meta && !input.shift)) return
+    if ((input.key || '').toLowerCase() !== 'p') return
+    const s = sessions.get(tabId)
+    event.preventDefault()
+    if (s?.state === 'frozen') {
+      // 冻结态：直接恢复（焦点在 guest 时宿主拦截不到）
+      console.log(`[freeze] tab ${tabId} Alt+P → 恢复`)
+      void resumeTab(tabId).then((ok) => {
+        if (ok) broadcast(tabId, 'attached')
+      })
+    } else {
+      // 未冻结：转发宿主渲染层走原有冻结流程
+      const win = getOwnerWindow(wc)
+      if (win && !win.isDestroyed()) {
+        console.log(`[freeze] tab ${tabId} Alt+P → 请求冻结（guest 侧兜底）`)
+        win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' })
+      }
+    }
+  }
+  wc.on('before-input-event', handler)
+  hotkeyHandlers.set(tabId, handler)
+}
+
+/** 移除 guest 侧 Alt+P 钩子（detach 时调用） */
+function detachTabHotkey(tabId: string): void {
+  const h = hotkeyHandlers.get(tabId)
+  if (h) {
+    const wc = getWebviewByTabId(tabId)
+    if (wc && !wc.isDestroyed()) wc.removeListener('before-input-event', h)
+    hotkeyHandlers.delete(tabId)
+  }
+}
+
+// ==================== 窗口失焦自动恢复 ====================
+// 「应用切换到后台自动取消暂停」：冻结 tab 所属窗口 blur（切后台/最小化/Alt+Tab）
+// 时自动解除该窗口全部冻结。
+
+const blurWatched = new Set<number>()
+
+function ensureBlurAutoResume(wc: WebContents): void {
+  const win = getOwnerWindow(wc)
+  if (!win || win.isDestroyed()) return
+  if (blurWatched.has(win.id)) return
+  blurWatched.add(win.id)
+  win.on('blur', () => {
+    for (const [tabId, s] of sessions) {
+      if (s.state !== 'frozen') continue
+      const w = getWebviewByTabId(tabId)
+      if (w && !w.isDestroyed() && getOwnerWindow(w)?.id === win.id) {
+        console.log(`[freeze] 窗口失焦（应用切后台），自动恢复 tab ${tabId}`)
+        void resumeTab(tabId).then((ok) => {
+          if (ok) broadcast(tabId, 'attached')
+        })
+      }
+    }
+  })
+}
 
 /** 附加调试器并启用递归子目标 attach（不 pause） */
 async function attach(wc: WebContents): Promise<void> {
@@ -152,6 +249,8 @@ export async function freezeTab(tabId: string, textLayer?: TextLayer | null): Pr
         frozenAt: Date.now(),
         textLayer: textLayer ?? undefined,
       })
+      // 窗口失焦（应用切后台）自动恢复
+      ensureBlurAutoResume(wc)
       console.log(`[freeze] tab ${tabId} 已冻结`)
       return true
     }
@@ -162,6 +261,7 @@ export async function freezeTab(tabId: string, textLayer?: TextLayer | null): Pr
       existing.frozenAt = Date.now()
       if (textLayer) existing.textLayer = textLayer
       sessions.set(tabId, existing)
+      ensureBlurAutoResume(wc)
       console.log(`[freeze] tab ${tabId} 已冻结（复用已 attach 的 debugger）`)
       return true
     }
@@ -223,6 +323,8 @@ export async function detachTab(tabId: string): Promise<void> {
       console.warn(`[freeze] detach tab ${tabId} 异常:`, err)
     }
   }
+  // 移除 guest 侧 Alt+P 钩子（webview 销毁/分离时清理）
+  detachTabHotkey(tabId)
   sessions.delete(tabId)
   console.log(`[freeze] tab ${tabId} 已分离调试器`)
 }

@@ -16,6 +16,8 @@ import {
   isFrozen,
   extractTextLayer,
   getFreezeSession,
+  attachTabHotkey,
+  setFreezeStateBroadcaster,
   type TextLayer,
 } from './freeze-manager.js'
 
@@ -111,6 +113,9 @@ function broadcastFreezeState(tabId: string, state: string): void {
 }
 
 export function registerFreezeIpc(): void {
+  // freeze-manager 内部触发的状态变化（Alt+P 恢复 / 窗口失焦自动恢复）广播到渲染层
+  setFreezeStateBroadcaster((tabId, state) => broadcastFreezeState(tabId, state))
+
   // 注册 webview 到冻结注册表（渲染层在 webview attach 后上报）
   ipcMain.handle(
     IPC_CHANNELS.FREEZE_REGISTER_WEBVIEW,
@@ -129,6 +134,8 @@ export function registerFreezeIpc(): void {
         windowId: payload.windowId,
         profileId: payload.profileId,
       })
+      // 挂 guest 侧 Alt+P 钩子（焦点在 webview 时宿主拦截不到，前台任意焦点可触发）
+      attachTabHotkey(payload.tabId)
       return true
     },
   )
