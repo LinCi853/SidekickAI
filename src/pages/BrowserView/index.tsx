@@ -462,6 +462,14 @@ export default function BrowserView() {
   useEffect(() => {
     if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
   }, [activeTabId]);
+  // 窗口回到前台时兜底同步冻结状态（主进程 blur 自动恢复的广播可能丢失）
+  useEffect(() => {
+    const onFocus = () => {
+      if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [activeTabId]);
 
   // v0.0.9 B4：接收主进程 before-input-event 转发的 Ctrl+W（closeTab），
   // 确保浏览器窗口任意位置（含 webview 焦点）都能关闭当前标签。

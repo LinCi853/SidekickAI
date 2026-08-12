@@ -171,11 +171,54 @@ async function attach(wc: WebContents): Promise<void> {
   })
 }
 
+/** 文本层上限（防真实 AI 页面超大 DOM 导致 IPC 传输失败） */
+const TEXT_LAYER_MAX_ITEMS = 5000
+const TEXT_LAYER_MAX_LEN = 500
+
+/**
+ * 降级提取脚本（DOMSnapshot 不可用/为空时）：遍历文本节点，取父元素
+ * getBoundingClientRect（视口坐标 + 滚动偏移 = 文档坐标）。
+ * 冻结前调用（executeJavaScript 需未冻结态）。
+ */
+const FALLBACK_EXTRACT_SCRIPT = `(function() {
+  try {
+    var scrolled = window.scrollY || document.documentElement.scrollTop || 0
+    var items = []
+    var MAX = ${TEXT_LAYER_MAX_ITEMS}
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    var n
+    while ((n = walker.nextNode()) && items.length < MAX) {
+      var text = (n.nodeValue || '').trim()
+      if (!text) continue
+      var el = n.parentElement
+      if (!el) continue
+      var r = el.getBoundingClientRect()
+      if (!r || (r.width === 0 && r.height === 0)) continue
+      items.push({
+        text: text.length > ${TEXT_LAYER_MAX_LEN} ? text.slice(0, ${TEXT_LAYER_MAX_LEN}) : text,
+        x: r.left,
+        y: r.top + scrolled,
+        w: r.width,
+        h: r.height
+      })
+    }
+    return JSON.stringify({
+      items: items,
+      scrollOffsetY: scrolled,
+      contentHeight: document.body.scrollHeight || 0
+    })
+  } catch (e) {
+    return JSON.stringify({ error: String((e && e.message) || e) })
+  }
+})()`
+
 /**
  * 提取页面文本层（冻结前调用；DOMSnapshot 读取布局树，不执行 JS）。
- * 文本项 = 布局树中非空文本节点（文档坐标）。
+ * 文本项 = 布局树中非空文本节点（文档坐标）。失败/为空时降级到
+ * executeJavaScript 提取（父元素 rect）。
  */
 export async function extractTextLayer(wc: WebContents): Promise<TextLayer | null> {
+  // ——— 主路径：DOMSnapshot（精确布局 bounds）———
   try {
     const snap = await wc.debugger.sendCommand('DOMSnapshot.captureSnapshot', {
       computedStyles: [],
@@ -193,21 +236,62 @@ export async function extractTextLayer(wc: WebContents): Promise<TextLayer | nul
       if (!layouts) continue
       const textIndexes: number[] = layouts.text || []
       const boundsArr: number[][] = layouts.bounds || []
-      for (let i = 0; i < textIndexes.length; i++) {
+      for (let i = 0; i < textIndexes.length && items.length < TEXT_LAYER_MAX_ITEMS; i++) {
         const sIdx = textIndexes[i]
         if (sIdx === undefined || sIdx === -1) continue
         const text = strings[sIdx]
         if (!text || !text.trim()) continue
         const b = boundsArr[i]
         if (!b || b.length < 4) continue
-        items.push({ text, x: b[0], y: b[1], w: b[2], h: b[3] })
+        items.push({
+          text: text.length > TEXT_LAYER_MAX_LEN ? text.slice(0, TEXT_LAYER_MAX_LEN) : text,
+          x: b[0],
+          y: b[1],
+          w: b[2],
+          h: b[3],
+        })
       }
     }
-    if (items.length === 0) {
-      console.warn('[freeze] 文本层为空（页面无可选文本？）')
+    if (items.length > 0) {
+      return { items, scrollOffsetY, contentHeight, viewportHeight: 0 }
+    }
+    console.warn('[freeze] DOMSnapshot 文本层为空，降级到 JS 提取')
+  } catch (err) {
+    console.warn('[freeze] DOMSnapshot 提取失败，降级到 JS 提取:', err)
+  }
+
+  // ——— 降级路径：executeJavaScript 文本节点提取（未冻结态可执行）———
+  try {
+    const ret = await wc.executeJavaScript(FALLBACK_EXTRACT_SCRIPT)
+    const parsed = JSON.parse(String(ret)) as {
+      items?: Array<{ text?: string; x?: number; y?: number; w?: number; h?: number }>
+      scrollOffsetY?: number
+      contentHeight?: number
+      error?: string
+    }
+    if (parsed.error) {
+      console.warn('[freeze] 降级提取失败:', parsed.error)
       return null
     }
-    return { items, scrollOffsetY, contentHeight, viewportHeight: 0 }
+    const items: TextLayerItem[] = (parsed.items || [])
+      .map((i) => ({
+        text: (i.text || '').slice(0, TEXT_LAYER_MAX_LEN),
+        x: Number(i.x) || 0,
+        y: Number(i.y) || 0,
+        w: Number(i.w) || 0,
+        h: Number(i.h) || 0,
+      }))
+      .filter((i) => i.text.trim())
+    if (items.length === 0) {
+      console.warn('[freeze] 降级提取文本层为空（页面无可选文本？）')
+      return null
+    }
+    return {
+      items,
+      scrollOffsetY: Number(parsed.scrollOffsetY) || 0,
+      contentHeight: Number(parsed.contentHeight) || 0,
+      viewportHeight: 0,
+    }
   } catch (err) {
     console.warn('[freeze] 提取文本层失败:', err)
     return null

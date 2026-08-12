@@ -235,6 +235,14 @@ export default function MainView() {
   useEffect(() => {
     if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
   }, [activeTabId]);
+  // 窗口回到前台时兜底同步冻结状态（主进程 blur 自动恢复的广播可能丢失）
+  useEffect(() => {
+    const onFocus = () => {
+      if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [activeTabId]);
 
   // 窗口快捷键兜底：主窗口无该 Profile 标签时，主进程请求渲染层创建标签并返回 tabId。
   // 渲染层作为标签真源创建后 persist，主进程收到 tabId 再脱离，保证数据一致。
