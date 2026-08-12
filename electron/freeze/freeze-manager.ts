@@ -13,22 +13,25 @@
 //   v3 纯 Debugger.pause —— 画面彻底定格（capturePage 两次截图一致），滚轮滚动
 //       仍可用（compositor 层处理，不依赖主线程），冻结态可滚动查看完整对话
 //       （freeze-poc-scroll.cjs 验证）；但按钮点击/复制不可用（JS 冻结）。
-//   v4 + 智能解冻点击（当前）—— 冻结态在 before-input-event 层监听 mouseDown，
+//   v4 + 智能解冻点击 —— 冻结态在 before-input-event 层监听 mouseDown，
 //       检测到点击时瞬时 resume → 让该次点击（含 click 的 JS 响应）执行完 →
-//       立即重新 pause（窗口约 200ms）。滚动本就可用（compositor）无需解冻。
-//       「内容定格」与「点击可用」在浏览器底层互斥（已穷举验证：虚拟时间/断网/
-//       限速均无法阻止已建立 SSE 连接的数据流），智能解冻是唯一两全路径。
+//       立即重新 pause。滚动本就可用（compositor）无需解冻。
+//   v5 + 应用内置复制（当前）—— 冻结态可拖拽选中文本（mouseDown 解冻窗口
+//       持续到 mouseUp，上限 5s，选中高亮保留在定格画面上）；Ctrl+C 由应用
+//       拦截：解冻 → 主进程读选中文本 → 写系统剪贴板 → 重新冻结。复制全程
+//       应用内置，与网页 JS/剪贴板权限无关。
+//       「内容定格」与「页面交互」在浏览器底层互斥（已穷举验证：虚拟时间/
+//       断网/限速均无法阻止已建立 SSE 连接的数据流），智能解冻是唯一两全路径。
 //
 // 已知边界（用户已确认取舍）：
-//   - 文本选中/拖拽复制不可用（需要持续解冻，窗口只覆盖单次点击）
-//   - 点击瞬间，冻结期间积压的 SSE 推送会被一次性处理（内容可能快速跳变
-//     到最新，然后重新定格）；防撤回数据保险依赖冻结前已入库的快照
+//   - 解冻窗口内（拖拽/点击期间）积压的 SSE 推送会被一次性处理（内容可能
+//     快速跳变到最新，然后重新定格）；防撤回数据保险依赖冻结前已入库的快照
 //
 // 关键约束（PoC 中确认）：Debugger.pause 后 executeJavaScript 会 hang（注入脚本
 // 无法在暂停的 isolate 上返回）。因此防撤回流程必须是「先抓取（未冻结态）→ 入库 →
 // 再冻结锁现场」，不能「先冻结再读 DOM」。
 
-import type { Input, WebContents } from 'electron'
+import { clipboard, type Input, type WebContents } from 'electron'
 import { getWebviewByTabId, listRegisteredWebviews } from './webview-registry.js'
 
 /** 冻结状态 */
@@ -65,10 +68,11 @@ async function attach(wc: WebContents): Promise<void> {
 }
 
 /** 智能解冻窗口参数 */
-const CLICK_UNFREEZE_TIMEOUT_MS = 2000 // 解冻窗口上限（等待 mouseUp）
+const UNFREEZE_TIMEOUT_MS = 5000 // 解冻窗口上限（拖拽选中大段文本可能需要数秒）
 const CLICK_SETTLE_MS = 200 // mouseUp 后留给 click 事件与 JS 同步响应的缓冲
+const COPY_SETTLE_MS = 300 // Ctrl+C 复制后留给剪贴板写入的缓冲
 
-/** 移除冻结态点击解冻的输入监听 */
+/** 移除冻结态智能解冻的输入监听 */
 function removeClickUnfreeze(wc: WebContents, session: FreezeSession): void {
   if (session.inputHandler && !wc.isDestroyed()) {
     wc.removeListener('before-input-event', session.inputHandler)
@@ -77,31 +81,79 @@ function removeClickUnfreeze(wc: WebContents, session: FreezeSession): void {
 }
 
 /**
- * 智能解冻点击：冻结态监听 mouseDown，检测到点击时瞬时 resume →
- * 等 mouseUp（或 2s 超时）→ 缓冲 200ms 让 click 的 JS 响应执行完 → 立即重新 pause。
+ * 应用内置复制：冻结态 Ctrl+C → 瞬时 resume → 主进程读取页面选中文本
+ * （executeJavaScript）→ 写入系统剪贴板 → 重新 pause。
+ * 全程由应用完成，与网页自身的复制逻辑/权限无关。
+ */
+function appCopySelection(wc: WebContents, tabId: string, session: FreezeSession): void {
+  session.unfreezing = true
+  void (async () => {
+    try {
+      await wc.debugger.sendCommand('Debugger.resume')
+      // 等 JS 恢复后读取选中文本
+      await new Promise((r) => setTimeout(r, 80))
+      const sel = (await wc.executeJavaScript('window.getSelection()?.toString() ?? ""').catch(() => '')) as string
+      if (sel) {
+        clipboard.writeText(sel)
+        console.log(`[freeze] tab ${tabId} 应用内置复制: ${sel.length} 字符已入剪贴板`)
+      } else {
+        console.log(`[freeze] tab ${tabId} 复制: 无选中文本`)
+      }
+    } catch (err) {
+      console.warn(`[freeze] tab ${tabId} 应用内置复制失败:`, err)
+    } finally {
+      await new Promise((r) => setTimeout(r, COPY_SETTLE_MS))
+      try {
+        if (!wc.isDestroyed() && wc.debugger.isAttached()) {
+          await wc.debugger.sendCommand('Debugger.pause')
+        }
+      } catch { /* ignore */ }
+      session.unfreezing = false
+    }
+  })()
+}
+
+/**
+ * 智能解冻（点击 + 拖拽选中 + 应用内置复制）：
+ * - mouseDown：瞬时 resume → 窗口持续到 mouseUp（或 5s 超时）→ 缓冲后重新 pause。
+ *   期间页面可点击按钮、可拖拽选中文本（高亮保留在定格画面上）。
+ * - keyDown Ctrl+C：应用内置复制（appCopySelection）。
  *
- * 为什么需要：内容定格要求 JS 冻结，但冻结后点击无效。浏览器底层无法
- * 「JS 活着 + SSE 内容不动」（已穷举验证），只能解冻瞬间执行点击再锁回。
+ * 为什么需要：内容定格要求 JS 冻结，但冻结后交互无效。浏览器底层无法
+ * 「JS 活着 + SSE 内容不动」（已穷举验证），只能解冻瞬间执行交互再锁回。
  */
 function installClickUnfreeze(wc: WebContents, tabId: string, session: FreezeSession): void {
   removeClickUnfreeze(wc, session)
 
   const handler = (event: Electron.Event, input: Input) => {
+    // 应用内置复制：冻结态 Ctrl+C（拦截事件，页面不感知）
+    if (
+      input.type === 'keyDown' &&
+      input.control && !input.alt && !input.meta &&
+      (input.key?.toLowerCase() === 'c')
+    ) {
+      if (session.state !== 'frozen' || session.unfreezing) return
+      event.preventDefault()
+      console.log(`[freeze] tab ${tabId} 冻结态检测到 Ctrl+C，应用内置复制`)
+      appCopySelection(wc, tabId, session)
+      return
+    }
+    // 点击/拖拽：mouseDown 解冻 → mouseUp 或超时重新冻结
     if (input.type !== 'mouseDown' || session.state !== 'frozen' || session.unfreezing) return
     session.unfreezing = true
-    console.log(`[freeze] tab ${tabId} 冻结态检测到点击，瞬时解冻执行`)
+    console.log(`[freeze] tab ${tabId} 冻结态检测到点击/拖拽，瞬时解冻执行`)
 
     let finished = false
     const refreeze = () => {
       if (finished) return
       finished = true
       void (async () => {
-        // 缓冲：让 click 合成 + JS 同步响应（如复制按钮）执行完
+        // 缓冲：让 click 合成 + JS 同步响应执行完
         await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
         try {
           if (!wc.isDestroyed() && wc.debugger.isAttached()) {
             await wc.debugger.sendCommand('Debugger.pause')
-            console.log(`[freeze] tab ${tabId} 点击已执行，重新冻结`)
+            console.log(`[freeze] tab ${tabId} 交互已执行，重新冻结`)
           }
         } catch { /* ignore */ }
         session.unfreezing = false
@@ -125,7 +177,7 @@ function installClickUnfreeze(wc: WebContents, tabId: string, session: FreezeSes
       setTimeout(() => {
         wc.removeListener('before-input-event', onUp)
         refreeze()
-      }, CLICK_UNFREEZE_TIMEOUT_MS)
+      }, UNFREEZE_TIMEOUT_MS)
     })()
   }
 
