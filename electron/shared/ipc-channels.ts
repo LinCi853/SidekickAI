@@ -426,8 +426,8 @@ export const IPC_CHANNELS = {
   FREEZE_STATUS: 'freeze:status',
   // 主→渲染：冻结状态变化推送（{ tabId, state }）
   FREEZE_STATE_CHANGED: 'freeze:stateChanged',
-  // 主→渲染：请求重新上报冻结 tab 的 webview 位置（窗口 move/resize 后，{ tabIds }）
-  FREEZE_SYNC_RECT: 'freeze:syncRect',
-  // 渲染→主：上报 webview 位置（窗口内物理像素 + dpr，{ tabId, rect, dpr }）
-  FREEZE_REPORT_RECT: 'freeze:reportRect',
+  // 渲染→主：冻结态滚轮转发（选择层收到滚轮 → guest compositor 滚动画面）
+  FREEZE_SCROLL: 'freeze:scroll',
+  // 渲染→主：冻结态应用内置复制（选中文本 → 主进程写系统剪贴板）
+  FREEZE_COPY_TEXT: 'freeze:copyText',
 } as const

@@ -5,7 +5,7 @@
 //
 // 关键约束（PoC 验证）：冻结后 executeJavaScript 会 hang，故必须「先抓取再冻结」。
 
-import { ipcMain, webContents, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, webContents, BrowserWindow, clipboard, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { registerWebview, getWebviewByTabId } from './webview-registry.js'
 import {
@@ -14,7 +14,9 @@ import {
   detachTab,
   getFreezeState,
   isFrozen,
-  updateSessionRect,
+  extractTextLayer,
+  getFreezeSession,
+  type TextLayer,
 } from './freeze-manager.js'
 
 /** 冻结时抓取的对话快照（用于入库 + 返回给渲染层显示） */
@@ -131,35 +133,33 @@ export function registerFreezeIpc(): void {
     },
   )
 
-  // 冻结指定 tab：先抓取对话快照 → 入库 → pause 冻结
+  // 冻结指定 tab：先抓取对话快照 → 提取文本层 → 入库 → pause 冻结
   ipcMain.handle(
     IPC_CHANNELS.FREEZE_TAB,
     async (
       _e: IpcMainInvokeEvent,
-      payload: {
-        tabId: string
-        profileId: string
-        /** webview 在窗口内的位置（CSS 像素）+ dpr，用于 uiohook 命中检测 */
-        rect?: { x: number; y: number; width: number; height: number }
-        dpr?: number
-      },
-    ): Promise<{ frozen: boolean; snapshot: FreezeSnapshot | null }> => {
+      payload: { tabId: string; profileId: string },
+    ): Promise<{ frozen: boolean; snapshot: FreezeSnapshot | null; textLayer: TextLayer | null }> => {
       const wc = getWebviewByTabId(payload.tabId)
       if (!wc) {
         console.warn('[freeze-ipc] 冻结失败：tab webview 未找到', payload.tabId)
-        return { frozen: false, snapshot: null }
+        return { frozen: false, snapshot: null, textLayer: null }
       }
 
       // 已冻结 → 幂等返回
       if (isFrozen(payload.tabId)) {
         console.log('[freeze-ipc] tab 已冻结，幂等返回', payload.tabId)
-        return { frozen: true, snapshot: null }
+        const session = getFreezeSession(payload.tabId)
+        return { frozen: true, snapshot: null, textLayer: session?.textLayer ?? null }
       }
 
       console.log('[freeze-ipc] 开始冻结 tab', payload.tabId, 'webContentsId=', wc.id, 'url=', wc.getURL?.())
       // 1. 先抓取对话快照（未冻结态，executeJavaScript 可正常返回）
       const snapshot = await scrapeSnapshot(wc)
       console.log('[freeze-ipc] 抓取快照完成, pairs=', snapshot?.pairs.length ?? 0)
+      // 1.5 提取文本层（冻结前：DOMSnapshot 在 paused 下行为不稳定，必须冻结前提取）
+      const textLayer = await extractTextLayer(wc)
+      console.log('[freeze-ipc] 提取文本层完成, items=', textLayer?.items.length ?? 0)
       // 2. 入库（复用对话存储链路）
       if (snapshot && snapshot.pairs.length > 0) {
         try {
@@ -195,24 +195,11 @@ export function registerFreezeIpc(): void {
         }
       }
 
-      // 3. pause 冻结页面
-      const ok = await freezeTab(payload.tabId)
+      // 3. pause 冻结页面（附文本层，供渲染层选中复制）
+      const ok = await freezeTab(payload.tabId, textLayer)
       console.log('[freeze-ipc] freezeTab 返回', ok, '当前状态', getFreezeState(payload.tabId))
-      if (ok) {
-        // 记录 webview 位置（uiohook 命中检测）：CSS 像素 → 物理像素
-        if (payload.rect) {
-          const dpr = payload.dpr || 1
-          updateSessionRect(payload.tabId, {
-            x: payload.rect.x * dpr,
-            y: payload.rect.y * dpr,
-            width: payload.rect.width * dpr,
-            height: payload.rect.height * dpr,
-            dpr,
-          })
-        }
-        broadcastFreezeState(payload.tabId, 'frozen')
-      }
-      return { frozen: ok, snapshot }
+      if (ok) broadcastFreezeState(payload.tabId, 'frozen')
+      return { frozen: ok, snapshot, textLayer }
     },
   )
 
@@ -244,21 +231,36 @@ export function registerFreezeIpc(): void {
     },
   )
 
-  // 渲染层上报 webview 位置（窗口 move/resize 后主进程请求，渲染层回传）
+  // 冻结态滚动：渲染层选择层收到滚轮 → 主进程转发给 guest（compositor 滚动画面）
+  // 冻结画面内容不动，仅视口移动；文本层偏移由渲染层按 deltaY 累计
   ipcMain.on(
-    IPC_CHANNELS.FREEZE_REPORT_RECT,
+    IPC_CHANNELS.FREEZE_SCROLL,
     (
       _e: IpcMainInvokeEvent,
-      payload: { tabId: string; rect: { x: number; y: number; width: number; height: number }; dpr: number },
+      payload: { tabId: string; deltaX: number; deltaY: number },
     ) => {
-      const dpr = payload.dpr || 1
-      updateSessionRect(payload.tabId, {
-        x: payload.rect.x * dpr,
-        y: payload.rect.y * dpr,
-        width: payload.rect.width * dpr,
-        height: payload.rect.height * dpr,
-        dpr,
-      })
+      const wc = getWebviewByTabId(payload.tabId)
+      if (!wc || wc.isDestroyed()) return
+      try {
+        wc.sendInputEvent({
+          type: 'mouseWheel',
+          x: 10,
+          y: 10,
+          deltaX: payload.deltaX || 0,
+          deltaY: payload.deltaY || 0,
+          canScroll: true,
+        })
+      } catch {
+        /* ignore */
+      }
     },
   )
+
+  // 冻结态复制：渲染层选择层计算选中文本 → 主进程写入系统剪贴板（应用内置）
+  ipcMain.on(IPC_CHANNELS.FREEZE_COPY_TEXT, (_e: IpcMainInvokeEvent, text: string) => {
+    if (text && typeof text === 'string' && text.trim()) {
+      clipboard.writeText(text)
+      console.log('[freeze-ipc] 应用内置复制:', text.length, '字符')
+    }
+  })
 }

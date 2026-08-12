@@ -10,10 +10,8 @@ import {
   detachFreeze,
   getFreezeStatus,
   onFreezeStateChanged,
-  onFreezeSyncRect,
-  reportFreezeRect,
-  getWebviewRect,
   type FreezeState,
+  type TextLayer,
 } from '../lib/electron-api';
 
 interface FreezeStore {
@@ -21,9 +19,11 @@ interface FreezeStore {
   states: Record<string, FreezeState>;
   /** 冻结时抓取的快照信息（用于控制条显示） */
   snapshots: Record<string, { pairsCount: number; title: string; url: string } | null>;
+  /** 冻结前提取的文本层（冻结态选择层选中/复制用） */
+  textLayers: Record<string, TextLayer>;
   /** 初始化：订阅主进程冻结状态变化 */
   init: () => () => void;
-  /** 触发冻结（先抓取入库再 pause） */
+  /** 触发冻结（先抓取入库 + 提取文本层再 pause） */
   doFreeze: (tabId: string, profileId: string) => Promise<void>;
   /** 恢复 */
   doResume: (tabId: string) => Promise<void>;
@@ -36,42 +36,28 @@ interface FreezeStore {
 export const useFreezeStore = create<FreezeStore>((set, get) => ({
   states: {},
   snapshots: {},
+  textLayers: {},
 
   init: () => {
-    const offState = onFreezeStateChanged(({ tabId, state }) => {
+    return onFreezeStateChanged(({ tabId, state }) => {
       set((s) => ({
         states: { ...s.states, [tabId]: state },
       }));
-      // 恢复/分离后清除快照
+      // 恢复/分离后清除快照与文本层
       if (state !== 'frozen') {
         set((s) => {
           const snaps = { ...s.snapshots };
+          const layers = { ...s.textLayers };
           delete snaps[tabId];
-          return { snapshots: snaps };
+          delete layers[tabId];
+          return { snapshots: snaps, textLayers: layers };
         });
       }
     });
-    // 窗口 move/resize 后主进程请求重新上报 webview 位置（冻结态点击命中检测）
-    const offRect = onFreezeSyncRect(({ tabIds }) => {
-      for (const tabId of tabIds) {
-        const info = getWebviewRect(tabId);
-        if (info) reportFreezeRect({ tabId, ...info });
-      }
-    });
-    return () => {
-      offState();
-      offRect();
-    };
   },
 
   doFreeze: async (tabId, profileId) => {
-    // 上报 webview 位置（窗口内 CSS 像素 + dpr），供冻结态点击命中检测
-    const info = getWebviewRect(tabId);
-    const result = await freezeTab({
-      tabId,
-      profileId,
-      ...(info ?? {}),
-    });
+    const result = await freezeTab({ tabId, profileId });
     if (result.frozen) {
       set((s) => ({
         states: { ...s.states, [tabId]: 'frozen' },
@@ -84,6 +70,10 @@ export const useFreezeStore = create<FreezeStore>((set, get) => ({
                 url: result.snapshot.url,
               }
             : null,
+        },
+        textLayers: {
+          ...s.textLayers,
+          [tabId]: result.textLayer ?? { items: [], scrollOffsetY: 0, contentHeight: 0, viewportHeight: 0 },
         },
       }));
     }
