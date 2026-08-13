@@ -85,12 +85,12 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow-y: auto;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
 }
 
 /* 内容区内的 section 间距 */
 .settings-content > section {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 /* ===== Oxy 模式适配 ===== */

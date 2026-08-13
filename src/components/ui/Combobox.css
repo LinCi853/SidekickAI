@@ -17,10 +17,6 @@
 /* 只读模式：输入框不可编辑，点击展开下拉 */
 .combobox.is-readonly .combobox-input {
   cursor: pointer;
-  background: var(--muted);
-}
-.combobox.is-readonly .combobox-input:hover {
-  border-color: var(--accent-50);
 }
 
 /* 触发器容器（输入框 + 下拉箭头） */
@@ -31,11 +27,31 @@
   width: 100%;
   min-width: 0;
 }
+/* 统一基础样式：对标 .provider-form-input（边框式暗色主题） */
 .combobox-trigger .combobox-input {
   flex: 1;
   min-width: 0;
-  padding: var(--space-0-5) var(--space-1);
-  padding-right: 28px; /* 给右侧箭头留位置 */
+  padding: 6px 10px;
+  padding-right: 28px;
+  box-sizing: border-box;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combobox-trigger .combobox-input:hover {
+  border-color: var(--accent-50);
+}
+.combobox-trigger .combobox-input:focus {
+  border-color: var(--accent);
 }
 .combobox-arrow {
   position: absolute;
@@ -67,7 +83,8 @@
   color: var(--accent-bright);
 }
 
-/* 下拉面板（Portal 渲染到 document.body，absolute 定位避免 transform 祖先影响） */
+/* 下拉面板（Portal 渲染到 document.body，absolute 定位避免 transform 祖先影响）
+   min-width 由 JS panelMinWidth prop 控制（默认 240），此处不硬编码 */
 .combobox-panel {
   position: absolute;
   z-index: 1000;
@@ -77,7 +94,6 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   display: flex;
   flex-direction: column;
-  min-width: 220px;
   max-width: min(80vw, 560px);
   max-height: min(60vh, 420px);
   overflow: hidden;

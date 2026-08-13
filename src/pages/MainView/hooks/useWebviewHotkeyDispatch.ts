@@ -90,18 +90,15 @@ export function useWebviewHotkeyDispatch(
         if (store.activeTabId) void closeTab(store.activeTabId);
       } else if (payload.action === 'toggleFreeze') {
         // Alt+P 冻结/恢复当前页面（防撤回保险）
-        const activeTabId = store.activeTabId;
-        if (!activeTabId) return;
-        const tab = store.tabs.find((t) => t.id === activeTabId);
+        const requestedTabId = (payload.data as { tabId?: string } | undefined)?.tabId;
+        const targetTabId = requestedTabId && store.tabs.some((tab) => tab.id === requestedTabId)
+          ? requestedTabId
+          : store.activeTabId;
+        if (!targetTabId) return;
+        const tab = store.tabs.find((t) => t.id === targetTabId);
         if (!tab) return;
-        const fs = useFreezeStore.getState();
-        const cur = fs.states[activeTabId];
-        console.log('[MainView] Alt+P 触发冻结，当前状态', cur, 'tabId', activeTabId);
-        if (cur === 'frozen') {
-          void fs.doResume(activeTabId);
-        } else {
-          void fs.doFreeze(activeTabId, tab.profileId);
-        }
+        console.log('[MainView] Alt+P 请求主进程切换冻结状态, tabId', targetTabId);
+        void useFreezeStore.getState().doToggle(targetTabId, tab.profileId);
       } else if (payload.action === 'focusCycle') {
         // 主窗口：聚焦当前 webview 内的 AI 输入框
         const activeTabId = store.activeTabId;

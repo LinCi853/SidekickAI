@@ -317,7 +317,7 @@ export default function SettingsView() {
                   }
                   onInputChange={() => {}}
                   inputPlaceholder="选择桌面端 UA"
-                  inputClassName="input-underline ua-preset-select"
+                  inputClassName="ua-preset-select"
                   inputReadOnly
                   options={desktopPresets.map<ComboboxOption>((p) => ({
                     value: p.id,
@@ -347,7 +347,7 @@ export default function SettingsView() {
                   }
                   onInputChange={() => {}}
                   inputPlaceholder="选择移动端 UA"
-                  inputClassName="input-underline ua-preset-select"
+                  inputClassName="ua-preset-select"
                   inputReadOnly
                   options={mobilePresets.map<ComboboxOption>((p) => ({
                     value: p.id,

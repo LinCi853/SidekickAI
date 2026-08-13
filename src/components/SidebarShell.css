@@ -1,0 +1,179 @@
+/* =====================================================================
+   components/SidebarShell.css —— 通用侧边栏壳样式
+   ===================================================================== */
+
+.sidebar-shell {
+  flex: none;
+  width: calc(var(--titlebar-icon) * 8);
+  min-width: calc(var(--titlebar-icon) * 5);
+  display: flex;
+  flex-direction: column;
+  background: var(--muted);
+  border-right: 1px solid var(--glass-bd);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== 列表区（通用，子组件可覆盖） ===== */
+.sidebar-shell-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  background: var(--background);
+}
+
+/* ===== 底栏：设置 + 收起（高度对齐输入区） ===== */
+.sidebar-shell-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  margin-top: auto;
+  border-top: 1px solid var(--glass-bd-2);
+  min-height: var(--compact-h);
+  box-sizing: border-box;
+}
+.sidebar-shell-footer-btn {
+  flex: none;
+}
+.sidebar-shell-footer-btn svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+
+/* ===== 新建按钮（内联于 header） ===== */
+.sidebar-shell-new-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  background: var(--accent-10);
+  border: 1px solid var(--accent-25);
+  border-radius: var(--radius-sm);
+  color: var(--accent-bright);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.sidebar-shell-new-btn:hover {
+  background: var(--accent-25);
+  border-color: var(--accent-50);
+}
+.sidebar-shell-new-btn svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+
+/* ===== 头部（搜索、新建按钮等） ===== */
+.sidebar-shell-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-2);
+  background: var(--card);
+  border-bottom: 1px solid var(--glass-bd-2);
+}
+
+/* ===== 收起状态 ===== */
+.sidebar-shell.is-collapsed {
+  width: 36px;
+  min-width: 36px;
+  overflow: hidden;
+  padding: 0;
+}
+.sidebar-shell.is-collapsed .sidebar-shell-header,
+.sidebar-shell.is-collapsed .sidebar-shell-list,
+.sidebar-shell.is-collapsed .sidebar-shell-footer,
+.sidebar-shell.is-collapsed .sidebar-resizer {
+  display: none;
+}
+.sidebar-shell-collapsed-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-0-5);
+  padding: var(--space-1) 0;
+  height: 100%;
+}
+.sidebar-shell-collapsed-spacer {
+  flex: 1;
+}
+.sidebar-shell-collapsed-btn {
+  flex: none;
+}
+.sidebar-shell-collapsed-btn svg {
+  width: var(--icon-svg);
+  height: var(--icon-svg);
+}
+/* 收起态可点击条目列表 */
+.sidebar-shell-collapsed-items {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-0-5) 0;
+  min-height: 0;
+}
+.sidebar-shell-collapsed-item {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast), color var(--duration-fast);
+  flex-shrink: 0;
+}
+.sidebar-shell-collapsed-item:hover {
+  background: var(--accent-10);
+  color: var(--foreground);
+}
+.sidebar-shell-collapsed-item.active {
+  background: var(--accent-10);
+  color: var(--accent-bright);
+  border: 1px solid var(--accent-25);
+}
+/* 收起态模型选择器 */
+.sidebar-shell-collapsed-select {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  font-size: 0;
+  text-align: center;
+  overflow: hidden;
+  background: var(--accent-10);
+  border: 1px solid var(--accent-25);
+  border-radius: var(--radius-sm);
+  color: var(--accent-bright);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.sidebar-shell-collapsed-select:hover {
+  background: var(--accent-25);
+  border-color: var(--accent-50);
+}
+/* 收起态模型选择器隐藏展开箭头 */
+.sidebar-shell-collapsed-bar .combobox-arrow {
+  display: none;
+}
+.sidebar-shell-collapsed-bar .combobox-input {
+  padding-right: 4px;
+}

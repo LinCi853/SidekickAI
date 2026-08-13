@@ -28,6 +28,8 @@ import {
   previewImportAIProviders,
   getAppSettings,
   updateAppSettings,
+  resizeWindow,
+  onAppSettingsChanged,
 } from '../lib/electron-api';
 import type {
   CustomAIProvider,
@@ -37,16 +39,14 @@ import Badge from '../components/ui/Badge';
 import { Button, IconButton, SegmentedControl, TitleBar, Combobox } from '../components/ui';
 import type { ComboboxOption } from '../components/ui';
 import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel';
-import SidebarResizer from '../components/SidebarResizer';
+import SidebarShell from '../components/SidebarShell';
 import { MessageBubble } from './MessageBubble';
 import WhiteboardView from './WhiteboardView';
 import NotesView from './NotesView';
 import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
 import { isTypingTarget } from '../lib/shared-utils';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { useUiVersionStore } from '../store/useUiVersionStore';
-import { resolveParam, setManualOverride, isManual } from '../lib/oxy-override-store';
-import { OXY_PANELS } from '../lib/oxy-config';
+import { MAIN_WINDOW_MIN_HEIGHT } from '../../electron/shared/window-size';
 import './AdvancedPanelView.css';
 
 type TabKey = 'chat' | 'whiteboard' | 'notes';
@@ -90,26 +90,46 @@ export default function AdvancedPanelView() {
     });
   }, []);
 
-  // Ctrl+1/2/3 快捷键切换进阶面板标签（对话/白板/笔记）
-  // 在输入框内不触发（避免影响输入）
+  // Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab、Ctrl+Shift+Tab 切换进阶面板标签
+  // 输入框内也生效（可通过设置关闭，立即生效）
+  const tabOrder: TabKey[] = ['chat', 'whiteboard', 'notes'];
+  const tabSwitchRef = useRef(true);
+  useEffect(() => {
+    void getAppSettings().then((cfg) => { tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false; }).catch(() => {});
+    const off = onAppSettingsChanged((cfg) => {
+      tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false;
+    });
+    return off;
+  }, []);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
-      if (isTypingTarget(e.target)) return;
-      const tabMap: Record<string, TabKey> = {
-        '1': 'chat',
-        '2': 'whiteboard',
-        '3': 'notes',
-      };
-      const next = tabMap[e.key];
-      if (next) {
-        e.preventDefault();
-        setActiveTab(next);
+      if (!tabSwitchRef.current) return;
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const tabMap: Record<string, TabKey> = { '1': 'chat', '2': 'whiteboard', '3': 'notes' };
+        const next = tabMap[e.key];
+        if (next) { e.preventDefault(); setActiveTab(next); }
+        return;
       }
+      if (!e.ctrlKey || e.altKey || e.metaKey) return;
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const currentIndex = tabOrder.indexOf(activeTab);
+        const nextIndex = e.shiftKey
+          ? (currentIndex - 1 + tabOrder.length) % tabOrder.length
+          : (currentIndex + 1) % tabOrder.length;
+        setActiveTab(tabOrder[nextIndex]);
+        return;
+      }
+
+      if (e.shiftKey) return;
+      const tabMap: Record<string, TabKey> = { '1': 'chat', '2': 'whiteboard', '3': 'notes' };
+      const next = tabMap[e.key];
+      if (next) { e.preventDefault(); setActiveTab(next); }
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, []);
+  }, [activeTab]);
 
   // 初始化时若 URL 指定了 provider，切换 chat tab 并选中该 provider
   useEffect(() => {
@@ -185,14 +205,15 @@ export default function AdvancedPanelView() {
         }
       />
       <div className="advanced-panel-provider-body" data-name="advanced-panel.body">
-        {activeTab === 'chat' && <ChatTab />}
+        {activeTab === 'chat' && <ChatTab onOpenSettings={() => setSettingsOpen(true)} />}
         {activeTab === 'whiteboard' && (
           <WhiteboardView
             onClose={() => setActiveTab('chat')}
             sidebarVisible={whiteboardSidebarVisible}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
-        {activeTab === 'notes' && <NotesView />}
+        {activeTab === 'notes' && <NotesView onOpenSettings={() => setSettingsOpen(true)} />}
       </div>
       <AdvancedPanelSettingsPanel
         open={settingsOpen}
@@ -212,7 +233,7 @@ export default function AdvancedPanelView() {
 /* =====================================================================
    「自定义对话」tab —— 会话列表 + 消息区（复用 useChatStore）
    ===================================================================== */
-function ChatTab() {
+function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
   const {
     providers,
     currentProviderId,
@@ -237,27 +258,22 @@ function ChatTab() {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const cursorPosRef = useRef<number>(0);
   // 侧边栏宽度/收起状态
-  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
-  const OXY_SIDEBAR_KEY = 'chatSidebar.width';
-
-  // Oxy auto 宽度计算
-  const computeAutoSidebarWidth = useCallback(() => {
-    if (typeof window === 'undefined') return 160;
-    const parentW = window.innerWidth;
-    return Math.max(
-      OXY_PANELS.sidebar.widthMin,
-      Math.min(OXY_PANELS.sidebar.widthMax, Math.round(parentW * OXY_PANELS.sidebar.parentRatio)),
-    );
-  }, []);
-
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    if (isOxy) {
-      return resolveParam(OXY_SIDEBAR_KEY, computeAutoSidebarWidth());
-    }
-    return 160;
-  });
+  const [sidebarWidth, setSidebarWidth] = useState(130);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // 窗口是否过窄（宽度 < 主窗口最小高度时隐藏模型选择器）
+  const [isNarrowWindow, setIsNarrowWindow] = useState(false);
+
+  // 监听窗口宽度，动态判断是否过窄（宽度 < 主窗口最小高度 * 1.5 时隐藏模型选择器）
+  useEffect(() => {
+    const checkNarrow = () => {
+      setIsNarrowWindow(window.innerWidth < MAIN_WINDOW_MIN_HEIGHT * 1.5);
+    };
+    checkNarrow();
+    window.addEventListener('resize', checkNarrow);
+    return () => window.removeEventListener('resize', checkNarrow);
+  }, []);
 
   // 初始化 providers + 流式监听
   useEffect(() => {
@@ -267,49 +283,53 @@ function ChatTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 自动聚焦输入框并恢复光标位置
+  useEffect(() => {
+    void getAppSettings().then((cfg) => {
+      const savedPos = cfg.chatInputCursorPos ?? 0;
+      cursorPosRef.current = savedPos;
+      requestAnimationFrame(() => {
+        const ta = inputRef.current;
+        if (!ta) return;
+        ta.focus();
+        const pos = Math.min(savedPos, ta.value.length);
+        ta.setSelectionRange(pos, pos);
+      });
+    }).catch(() => {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    });
+  }, []);
+
   // 读取侧边栏宽度/收起设置
   useEffect(() => {
-    if (isOxy) {
-      // Oxy 模式：auto 或 manual override
-      if (isManual(OXY_SIDEBAR_KEY)) {
-        setSidebarWidth(resolveParam(OXY_SIDEBAR_KEY, computeAutoSidebarWidth()));
-      } else {
-        setSidebarWidth(computeAutoSidebarWidth());
-      }
-    } else {
-      void getAppSettings()
-        .then((cfg) => {
-          setSidebarWidth(cfg.chatSidebarWidth ?? 160);
-          setSidebarCollapsed(cfg.chatSidebarCollapsed ?? false);
-        })
-        .catch(() => {});
-    }
-  }, [isOxy, computeAutoSidebarWidth, OXY_SIDEBAR_KEY]);
-
-  // Oxy 模式下窗口 resize 时 auto 宽度跟随
-  useEffect(() => {
-    if (!isOxy || isManual(OXY_SIDEBAR_KEY)) return;
-    const handler = () => setSidebarWidth(computeAutoSidebarWidth());
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, [isOxy, computeAutoSidebarWidth, OXY_SIDEBAR_KEY]);
+    void getAppSettings()
+      .then((cfg) => {
+        setSidebarWidth(cfg.chatSidebarWidth ?? 130);
+        setSidebarCollapsed(cfg.chatSidebarCollapsed ?? false);
+      })
+      .catch(() => {});
+  }, []);
 
   // 侧边栏拖拽调宽：即时更新状态，松开时持久化
   const handleSidebarResize = useCallback((w: number) => {
     setSidebarWidth(w);
-    if (isOxy) {
-      setManualOverride(OXY_SIDEBAR_KEY, w);
-    } else {
-      void updateAppSettings({ chatSidebarWidth: w });
-    }
-  }, [isOxy, OXY_SIDEBAR_KEY]);
+    void updateAppSettings({ chatSidebarWidth: w });
+  }, []);
 
-  // 侧边栏收起/展开切换
+  // 侧边栏收起/展开切换：窄窗口展开时自动扩展宽度
   const handleSidebarToggleCollapse = useCallback(() => {
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
     void updateAppSettings({ chatSidebarCollapsed: next });
-  }, [sidebarCollapsed]);
+    // 展开侧边栏时，如果窗口太窄，自动扩展到合适的宽度
+    if (next === false) {
+      const currentWidth = window.innerWidth;
+      const targetWidth = sidebarWidth + 500; // 侧边栏 + 内容区最小宽度
+      if (currentWidth < targetWidth) {
+        void resizeWindow({ width: targetWidth, height: window.innerHeight });
+      }
+    }
+  }, [sidebarCollapsed, sidebarWidth]);
 
   // provider 加载后初始化会话列表
   useEffect(() => {
@@ -321,6 +341,12 @@ function ChatTab() {
         const last = localStorage.getItem(`chat-last-conv-${currentProviderId}`);
         if (last && state.conversations.some((c) => c.id === last)) {
           void state.selectConversation(last);
+          return;
+        }
+        // 无上次记录时，默认打开最新对话（按 updatedAt 降序）
+        if (state.conversations.length > 0) {
+          const sorted = [...state.conversations].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+          void state.selectConversation(sorted[0].id);
         }
       });
     }
@@ -340,10 +366,17 @@ function ChatTab() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingText]);
 
+  // 保存光标位置到设置
+  const saveCursorPos = useCallback((pos: number) => {
+    cursorPosRef.current = pos;
+    void updateAppSettings({ chatInputCursorPos: pos }).catch(() => {});
+  }, []);
+
   const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
     setInput('');
+    saveCursorPos(0);
     await sendMessage(trimmed, undefined);
     inputRef.current?.focus();
   };
@@ -358,69 +391,100 @@ function ChatTab() {
 
   const currentProvider = providers.find((p) => p.id === currentProviderId);
 
+  // 两个模型选择器（侧边栏 + 输入区）共享同一套 options 和 onSelect
+  const modelSelectOptions = providers.flatMap<ComboboxOption>((p) => {
+    const models = [p.model, ...(p.alternativeModels ?? [])];
+    return models.map((m) => ({
+      value: `${p.id}::${m}`,
+      label: m,
+      selected: p.id === currentProviderId && p.model === m,
+    }));
+  });
+  const handleModelSelect = async (v: string) => {
+    const sepIdx = v.indexOf('::');
+    if (sepIdx < 0) return;
+    const pid = v.slice(0, sepIdx);
+    const modelName = v.slice(sepIdx + 2);
+    const target = providers.find((p) => p.id === pid);
+    if (!target) return;
+    if (pid !== currentProviderId) setCurrentProvider(pid);
+    if (target.model !== modelName) {
+      const alts = target.alternativeModels ?? [];
+      const newAlts = alts.includes(modelName)
+        ? [...alts.filter((m) => m !== modelName), target.model]
+        : [...alts, target.model];
+      await editProvider(pid, { model: modelName, alternativeModels: newAlts });
+    }
+  };
+
   return (
     <div className="advanced-panel-chat" data-name="advanced-panel.chat">
       {/* 左侧：provider 选择 + 会话列表 */}
-      <aside
-        className={`advanced-panel-chat-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}
-        style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px`, flex: 'none' }}
-        data-name="advanced-panel.chat-sidebar"
-      >
-        {sidebarCollapsed && (
-          <button className="advanced-panel-chat-sidebar-expand-btn" onClick={handleSidebarToggleCollapse} title="展开侧边栏" data-name="advanced-panel.chat-sidebar-expand-button">
-            »
-          </button>
-        )}
-        <div className="advanced-panel-chat-provider" data-name="advanced-panel.chat-provider">
-          <label className="advanced-panel-chat-provider-label" data-name="advanced-panel.chat-provider-label">当前模型</label>
-          <div className="advanced-panel-chat-provider-selector" data-name="advanced-panel.chat-provider-selector">
+      <SidebarShell
+        collapsed={sidebarCollapsed}
+        width={sidebarWidth}
+        onResize={handleSidebarResize}
+        onToggleCollapse={handleSidebarToggleCollapse}
+        onOpenSettings={onOpenSettings}
+        onNew={startNewConversation}
+        newTitle="新建对话"
+        collapsedItems={conversations.map((c) => ({
+          id: c.id,
+          label: c.title || '未命名对话',
+          active: c.id === currentConversationId,
+          onClick: () => void selectConversation(c.id),
+        }))}
+        collapsedHeader={
+          <Combobox
+            inputValue="M"
+            onInputChange={() => {}}
+            inputClassName="sidebar-shell-collapsed-select"
+            inputReadOnly
+            disabled={providers.length === 0}
+            options={modelSelectOptions}
+            onSelect={handleModelSelect}
+            searchable
+            searchPlaceholder="搜索模型…"
+            emptyText="无匹配模型"
+            panelClassName="advanced-panel-chat-provider-panel"
+            dataName="advanced-panel.chat-sidebar-model-select"
+          />
+        }
+        dataName="advanced-panel.chat-sidebar"
+        header={
+          <div className="advanced-panel-chat-provider sidebar-shell-header" data-name="advanced-panel.chat-provider">
             <Combobox
-              inputValue={(() => {
-                if (providers.length === 0) return '未配置供应商';
-                const cur = providers.find((p) => p.id === currentProviderId);
-                return cur ? cur.model : '';
-              })()}
+              inputValue={currentProvider?.model ?? ''}
               onInputChange={() => {}}
               inputPlaceholder="选择模型"
               inputClassName="advanced-panel-chat-provider-select"
               inputReadOnly
               disabled={providers.length === 0}
-              options={providers.flatMap<ComboboxOption>((p) => {
-                const models = [p.model, ...(p.alternativeModels ?? [])];
-                return models.map((m) => ({
-                  value: `${p.id}::${m}`,
-                  label: m,
-                  selected: p.id === currentProviderId && p.model === m,
-                }));
-              })}
-              onSelect={async (v) => {
-                const sepIdx = v.indexOf('::');
-                if (sepIdx < 0) return;
-                const pid = v.slice(0, sepIdx);
-                const modelName = v.slice(sepIdx + 2);
-                const target = providers.find((p) => p.id === pid);
-                if (!target) return;
-                if (pid !== currentProviderId) setCurrentProvider(pid);
-                if (target.model !== modelName) {
-                  const alts = target.alternativeModels ?? [];
-                  const newAlts = alts.includes(modelName)
-                    ? [...alts.filter((m) => m !== modelName), target.model]
-                    : [...alts, target.model];
-                  await editProvider(pid, { model: modelName, alternativeModels: newAlts });
-                }
-              }}
+              options={modelSelectOptions}
+              onSelect={handleModelSelect}
               searchable
               searchPlaceholder="搜索模型…"
               emptyText="无匹配模型"
+              panelClassName="advanced-panel-chat-provider-panel"
               dataName="advanced-panel.chat-provider-select"
             />
+            <IconButton
+              type="button"
+              className="sidebar-shell-new-btn"
+              onClick={startNewConversation}
+              title="新建对话"
+              aria-label="新建对话"
+              data-name="advanced-panel.chat-new-conversation-button"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </IconButton>
           </div>
-        </div>
-        <Button type="button" variant="outline" className="advanced-panel-chat-new" onClick={startNewConversation} data-name="advanced-panel.chat-new-conversation-button">+ 新建对话</Button>
-        <IconButton variant="default" className="advanced-panel-chat-sidebar-collapse" aria-label="收起侧边栏" onClick={handleSidebarToggleCollapse} title="收起侧边栏" data-name="advanced-panel.chat-sidebar-collapse-button">
-          «
-        </IconButton>
-        <div className="advanced-panel-chat-conv-list" data-name="advanced-panel.chat-conv-list">
+        }
+      >
+        <div className="sidebar-shell-list" data-name="advanced-panel.chat-conv-list">
           {conversations.length === 0 && (
             <div className="advanced-panel-chat-empty" data-name="advanced-panel.chat-conv-empty">暂无对话</div>
           )}
@@ -454,8 +518,7 @@ function ChatTab() {
             </div>
           ))}
         </div>
-        {!sidebarCollapsed && <SidebarResizer width={sidebarWidth} minWidth={120} maxWidth={400} onResize={handleSidebarResize} />}
-      </aside>
+      </SidebarShell>
 
       {/* 右侧：消息区 + 输入框 */}
       <section className="advanced-panel-chat-main" data-name="advanced-panel.chat-main">
@@ -485,18 +548,53 @@ function ChatTab() {
           <div ref={messagesEndRef} data-name="advanced-panel.chat-messages-end" />
         </div>
         <div className="advanced-panel-chat-input-wrap" data-name="advanced-panel.chat-input-wrap">
+          {!isNarrowWindow && (
+            <Combobox
+              inputValue={currentProvider?.model ?? ''}
+              onInputChange={() => {}}
+              inputPlaceholder="模型"
+              inputClassName="advanced-panel-chat-model-select"
+              inputReadOnly
+              disabled={providers.length === 0}
+              options={modelSelectOptions}
+              onSelect={handleModelSelect}
+              searchable
+              searchPlaceholder="搜索模型…"
+              emptyText="无匹配模型"
+              panelClassName="advanced-panel-chat-model-panel"
+              dataName="advanced-panel.chat-input-model-select"
+            />
+          )}
           <textarea
             ref={inputRef}
             className="advanced-panel-chat-input"
             value={input}
             placeholder={currentProvider ? `发送给 ${currentProvider.name}...` : '请先选择供应商'}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              saveCursorPos(e.target.selectionStart);
+            }}
+            onSelect={(e) => saveCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
+            onClick={(e) => saveCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
             onKeyDown={handleKeyDown}
             rows={1}
             disabled={!currentProviderId}
             data-name="advanced-panel.chat-input-textarea"
           />
           <div className="advanced-panel-chat-input-actions" data-name="advanced-panel.chat-input-actions">
+            <IconButton
+              type="button"
+              className="advanced-panel-chat-new-btn"
+              onClick={startNewConversation}
+              title="新建对话"
+              aria-label="新建对话"
+              data-name="advanced-panel.chat-input-new-button"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </IconButton>
             {streaming ? (
               <button type="button" className="btn-primary-flat advanced-panel-chat-send cancel" onClick={() => void cancelStream()} data-name="advanced-panel.chat-stop-button">停止</button>
             ) : (

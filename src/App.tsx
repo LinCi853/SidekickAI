@@ -26,11 +26,12 @@ import { useProfileStore } from './store/useProfileStore';
 import { useTabStore } from './store/useTabStore';
 import { useWindowStore } from './store/useWindowStore';
 import { usePromptStore } from './store/usePromptStore';
-import { getAppSettings, onUiScaleChanged, onAppSettingsChanged, onUiVersionChanged, setMinimumSize } from './lib/electron-api';
+import { getAppSettings, onUiScaleChanged, onAppSettingsChanged, onUiVersionChanged, onThemeColorChanged, setMinimumSize } from './lib/electron-api';
 import {
   calculateMainWindowMinWidth,
   calculateChatWindowMinWidth,
-  calculateAdvancedPanelMinWidth,
+  getAdvancedPanelMinWidth,
+  updateAdvancedPanelMinWidth,
   MAIN_WINDOW_MIN_HEIGHT,
   CHAT_WINDOW_MIN_HEIGHT,
   ADVANCED_PANEL_MIN_HEIGHT,
@@ -43,7 +44,7 @@ import {
 } from '../electron/shared/window-size';
 import { useUiVersionStore } from './store/useUiVersionStore';
 import { useThemeStore } from './store/useThemeStore';
-import { getOxyLayout, activateOxy, deactivateOxy } from './lib/oxy-design-system';
+import { getOxyLayout, activateOxy, deactivateOxy, applyAppTheme } from './lib/oxy-design-system';
 
 /* =====================================================================
    ErrorBoundary —— 捕获子组件渲染错误，防止单个 webview 报错导致整个应用白屏
@@ -302,6 +303,8 @@ export default function App() {
           }
         }
         minHeight = MAIN_WINDOW_MIN_HEIGHT;
+        // 主窗口计算完后更新进阶面板缓存，供其他窗口读取
+        if (!isOxy) updateAdvancedPanelMinWidth(uiScale);
       } else if (isChat) {
         if (isOxy && oxyLayout) {
           minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale);
@@ -313,7 +316,8 @@ export default function App() {
         if (isOxy && oxyLayout) {
           minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale);
         } else {
-          minWidth = calculateAdvancedPanelMinWidth(uiScale);
+          // 直接读取缓存值（由主窗口计算并更新）
+          minWidth = getAdvancedPanelMinWidth(uiScale);
         }
         minHeight = ADVANCED_PANEL_MIN_HEIGHT;
       }
@@ -370,7 +374,8 @@ export default function App() {
         if (isOxy && oxyLayout) {
           minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale);
         } else {
-          minWidth = calculateAdvancedPanelMinWidth(uiScale);
+          // 直接读取缓存值（由主窗口计算并更新）
+          minWidth = getAdvancedPanelMinWidth(uiScale);
         }
         minHeight = ADVANCED_PANEL_MIN_HEIGHT;
       }
@@ -406,6 +411,16 @@ export default function App() {
     });
     return off;
   }, []);
+
+  // 监听 Oxy 主题色变更广播：主窗口切换 AI 应用后，其他窗口同步主题色
+  // 浏览器窗口跳过（有自己的主题色）
+  useEffect(() => {
+    if (isBrowser) return;
+    const off = onThemeColorChanged((hex) => {
+      applyAppTheme(hex);
+    });
+    return off;
+  }, [isBrowser]);
 
   if (!ready) {
     return <LoadingScreen />;

@@ -6,25 +6,24 @@
    由 globals.css 统一引入，供所有页面/组件复用。
    ===================================================================== */
 
-/* ===== 下划线输入框（无边框，仅底部下划线；聚焦高亮） ===== */
+/* ===== 统一输入框样式（对标 .provider-form-input / Combobox 基础样式） ===== */
 .input-underline {
   width: 100%;
   box-sizing: border-box;
   min-height: 0;
-  padding: var(--space-0-5) var(--space-1);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--glass-bd-2);
-  border-radius: 0;
+  padding: 6px 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--foreground);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
-  outline: none;
   line-height: 1.4;
-  transition: border-bottom-color var(--duration-fast);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 .input-underline:focus {
-  border-bottom-color: var(--accent-50);
+  border-color: var(--accent);
 }
 .input-underline::placeholder {
   color: var(--text-muted);

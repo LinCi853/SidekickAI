@@ -41,9 +41,12 @@ import {
   saveWhiteboardSnapshot,
   saveWhiteboardSnapshotSync,
   onWhiteboardPushImage,
+  getAppSettings,
+  updateAppSettings,
 } from '../lib/electron-api';
 import type { WhiteboardMeta, WhiteboardState, WhiteboardPushImagePayload } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
+import SidebarShell from '../components/SidebarShell';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
 import './WhiteboardView.css';
@@ -214,13 +217,18 @@ async function convertLegacySnapshot(
 interface WhiteboardSidebarProps {
   whiteboards: WhiteboardMeta[];
   activeId: string | null;
+  width: number;
+  collapsed: boolean;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onResize: (w: number) => void;
+  onToggleCollapse: () => void;
+  onOpenSettings?: () => void;
 }
 
-function WhiteboardSidebar({ whiteboards, activeId, onSelect, onCreate, onRename, onDelete }: WhiteboardSidebarProps) {
+function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, onCreate, onRename, onDelete, onResize, onToggleCollapse, onOpenSettings }: WhiteboardSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
@@ -238,14 +246,34 @@ function WhiteboardSidebar({ whiteboards, activeId, onSelect, onCreate, onRename
   };
 
   return (
-    <div className="wb-sidebar app-sidebar-narrow" data-name="advanced-panel.wb-sidebar">
-      <div className="wb-sidebar-header" data-name="advanced-panel.wb-sidebar-header">
-        <span className="wb-sidebar-title" data-name="advanced-panel.wb-sidebar-title">白板列表</span>
-        <IconButton variant="default" aria-label="新建白板" onClick={onCreate} title="新建白板" data-name="advanced-panel.wb-sidebar-create-button">
-          +
-        </IconButton>
-      </div>
-      <div className="wb-sidebar-list" data-name="advanced-panel.wb-sidebar-list">
+    <SidebarShell
+      collapsed={collapsed}
+      width={width}
+      onResize={onResize}
+      onToggleCollapse={onToggleCollapse}
+      onOpenSettings={onOpenSettings}
+      onNew={onCreate}
+      newTitle="新建白板"
+      dataName="advanced-panel.wb-sidebar"
+      header={
+        <div className="sidebar-shell-header" data-name="advanced-panel.wb-sidebar-header">
+          <IconButton
+            type="button"
+            className="sidebar-shell-new-btn"
+            onClick={onCreate}
+            title="新建白板"
+            aria-label="新建白板"
+            data-name="advanced-panel.wb-sidebar-create-button"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </IconButton>
+        </div>
+      }
+    >
+      <div className="sidebar-shell-list" data-name="advanced-panel.wb-sidebar-list">
         {whiteboards.length === 0 && <div className="wb-sidebar-empty app-empty-state" data-name="advanced-panel.wb-sidebar-empty">暂无白板</div>}
         {whiteboards.map((wb, idx) => (
           <div
@@ -290,7 +318,7 @@ function WhiteboardSidebar({ whiteboards, activeId, onSelect, onCreate, onRename
           </div>
         ))}
       </div>
-    </div>
+    </SidebarShell>
   );
 }
 
@@ -439,21 +467,17 @@ function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
 
 interface WhiteboardViewProps {
   onClose?: () => void;
-  /**
-   * 应用层侧边栏是否可见（默认 false）。
-   *
-   * Excalidraw 没有内置多页面切换 UI，
-   * 应用层侧边栏是管理多白板的唯一入口，默认隐藏（单白板模式）。
-   * 如需传统的列表管理可在设置中开启。
-   */
   sidebarVisible?: boolean;
+  onOpenSettings?: () => void;
 }
 
-function WhiteboardView({ onClose, sidebarVisible = false }: WhiteboardViewProps) {
+function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: WhiteboardViewProps) {
   const [whiteboards, setWhiteboards] = useState<WhiteboardMeta[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(130);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { toast, showToast } = useToast();
 
   // 加载白板列表 + 激活白板 snapshot
@@ -466,6 +490,14 @@ function WhiteboardView({ onClose, sidebarVisible = false }: WhiteboardViewProps
   const loadSnapshotFor = useCallback(async (id: string) => {
     const snap = await getWhiteboardSnapshot(id);
     setSnapshot(snap);
+  }, []);
+
+  // 读取侧边栏宽度/收起设置
+  useEffect(() => {
+    void getAppSettings().then((cfg) => {
+      setSidebarWidth(cfg.whiteboardSidebarWidth ?? 130);
+      setSidebarCollapsed(cfg.whiteboardSidebarCollapsed ?? false);
+    }).catch(() => {});
   }, []);
 
   // 初始化
@@ -552,6 +584,19 @@ function WhiteboardView({ onClose, sidebarVisible = false }: WhiteboardViewProps
     }
   }, [refreshList, activeId, loadSnapshotFor, showToast]);
 
+  // 侧边栏拖拽调宽
+  const handleSidebarResize = useCallback((w: number) => {
+    setSidebarWidth(w);
+    void updateAppSettings({ whiteboardSidebarWidth: w });
+  }, []);
+
+  // 侧边栏收起/展开
+  const handleSidebarToggleCollapse = useCallback(() => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    void updateAppSettings({ whiteboardSidebarCollapsed: next });
+  }, [sidebarCollapsed]);
+
   if (loading) {
     return (
       <div className="whiteboard-view app-view-root" data-name="advanced-panel.whiteboard-view-loading">
@@ -567,10 +612,15 @@ function WhiteboardView({ onClose, sidebarVisible = false }: WhiteboardViewProps
           <WhiteboardSidebar
             whiteboards={whiteboards}
             activeId={activeId}
+            width={sidebarWidth}
+            collapsed={sidebarCollapsed}
             onSelect={handleSelect}
             onCreate={handleCreate}
             onRename={handleRename}
             onDelete={handleDelete}
+            onResize={handleSidebarResize}
+            onToggleCollapse={handleSidebarToggleCollapse}
+            onOpenSettings={onOpenSettings}
           />
         )}
         {activeId ? (

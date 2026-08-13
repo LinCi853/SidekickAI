@@ -150,12 +150,7 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
         setMuted(tabId, !tab.muted);
         break;
       case 'toggleFreeze': {
-        const fs = useFreezeStore.getState();
-        if (fs.states[tabId] === 'frozen') {
-          void fs.doResume(tabId);
-        } else {
-          void fs.doFreeze(tabId, profile.id);
-        }
+        void useFreezeStore.getState().doToggle(tabId, profile.id);
         break;
       }
       case 'closeOthers':

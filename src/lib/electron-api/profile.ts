@@ -165,6 +165,22 @@ export function onUiVersionChanged(
   return api.onUiVersionChanged(callback);
 }
 
+/**
+ * 请求广播 Oxy 主题色变更到所有窗口（主窗口切换 AI 应用时调用）。
+ */
+export function broadcastThemeColorChanged(hex: string): void {
+  const api = requireElectron();
+  api.broadcastThemeColorChanged(hex);
+}
+
+/**
+ * 监听 Oxy 主题色变更广播（主窗口切换 AI 应用后，主进程向所有窗口推送）。
+ */
+export function onThemeColorChanged(callback: (hex: string) => void): () => void {
+  const api = requireElectron();
+  return api.onThemeColorChanged(callback);
+}
+
 /* =====================================================================
    指纹脚本 —— 对应 window.electron.fingerprint
    ===================================================================== */

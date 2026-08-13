@@ -200,7 +200,7 @@ export default function PlatformUrlSection({
                     inputValue={desktopPresets.find((preset) => preset.id === desktopPresetDraft)?.name ?? ''}
                     onInputChange={() => {}}
                     inputPlaceholder="选择桌面端 UA"
-                    inputClassName="platform-ua-preset-select input-underline"
+                    inputClassName="platform-ua-preset-select"
                     inputReadOnly
                     options={desktopPresets.map<ComboboxOption>((preset, presetIdx) => ({
                       value: preset.id,
@@ -225,7 +225,7 @@ export default function PlatformUrlSection({
                     inputValue={mobilePresets.find((preset) => preset.id === mobilePresetDraft)?.name ?? ''}
                     onInputChange={() => {}}
                     inputPlaceholder="选择移动端 UA"
-                    inputClassName="platform-ua-preset-select input-underline"
+                    inputClassName="platform-ua-preset-select"
                     inputReadOnly
                     options={mobilePresets.map<ComboboxOption>((preset, presetIdx) => ({
                       value: preset.id,

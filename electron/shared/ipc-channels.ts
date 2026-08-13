@@ -238,6 +238,8 @@ export const IPC_CHANNELS = {
   APP_SETTINGS_CHANGED: 'app:settingsChanged',
   // 主→渲染：UI 版本/主题变更广播（Oxy Design System 切换 / 主题模式切换后通知所有窗口）
   APP_UI_VERSION_CHANGED: 'app:uiVersionChanged',
+  // 主→渲染：Oxy 主题色变更广播（切换 AI 应用时通知所有窗口同步主题色）
+  APP_THEME_COLOR_CHANGED: 'app:themeColorChanged',
   // 代理测试（渲染层 → 主进程：测试当前代理配置连通性）
   APP_TEST_PROXY: 'app:testProxy',
   // 代理即时生效（渲染层 → 主进程：设置变更后将代理应用到所有 session）
@@ -418,6 +420,8 @@ export const IPC_CHANNELS = {
   FREEZE_REGISTER_WEBVIEW: 'freeze:registerWebview',
   // 渲染→主：冻结指定 tab（先抓取对话入库再 pause，返回冻结结果 + 抓取到的对话快照）
   FREEZE_TAB: 'freeze:tab',
+  /** 按主进程真实状态冻结或恢复，避免渲染层缓存状态竞态 */
+  FREEZE_TOGGLE: 'freeze:toggle',
   // 渲染→主：恢复指定 tab（解除冻结，页面无缝继续）
   FREEZE_RESUME: 'freeze:resume',
   // 渲染→主：彻底分离调试器（退出冻结模式）

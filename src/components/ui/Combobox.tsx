@@ -77,6 +77,10 @@ export interface ComboboxProps {
    * 不可编辑，用户通过下拉箭头 + 搜索框选择。避免用户在输入框输入文本造成困惑。
    */
   inputReadOnly?: boolean;
+  /** 下拉面板最小宽度（px，默认 240）。紧凑场景可设为 0 让面板贴合触发器宽度。 */
+  panelMinWidth?: number;
+  /** 自定义下拉面板类名（portaled 到 body，用于外部 CSS 定位） */
+  panelClassName?: string;
 }
 
 /**
@@ -94,14 +98,14 @@ function calculatePanelPosition(
   triggerRect: DOMRect,
   viewportWidth: number,
   viewportHeight: number,
+  minWidth = 240,
 ): { style: CSSProperties; placement: 'bottom' | 'top' } {
   const GAP = 4;
-  const MIN_WIDTH = 240;
   const MAX_WIDTH = Math.min(viewportWidth * 0.8, 560);
   const MAX_HEIGHT = Math.min(viewportHeight * 0.6, 420);
 
-  // 宽度：触发器宽度，但不小于 MIN_WIDTH，不大于 MAX_WIDTH
-  const width = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, triggerRect.width));
+  // 宽度：触发器宽度，但不小于 minWidth，不大于 MAX_WIDTH
+  const width = Math.max(minWidth, Math.min(MAX_WIDTH, triggerRect.width));
 
   // 下方剩余空间
   const spaceBelow = viewportHeight - triggerRect.bottom - GAP;
@@ -119,9 +123,9 @@ function calculatePanelPosition(
     top = triggerRect.bottom + GAP + scrollY;
     maxHeight = Math.min(MAX_HEIGHT, spaceBelow - 8);
   } else {
-    const panelHeight = Math.min(MAX_HEIGHT, spaceAbove - 8);
-    top = triggerRect.top - GAP - panelHeight + scrollY;
-    maxHeight = panelHeight;
+    // 上方展开：锚定面板底部到触发器顶部，用 transform:translateY(-100%) 在 CSS 中翻转
+    top = triggerRect.top - GAP + scrollY;
+    maxHeight = Math.min(MAX_HEIGHT, spaceAbove - 8);
   }
 
   // 防止超出右边界
@@ -137,6 +141,7 @@ function calculatePanelPosition(
       maxHeight: `${Math.max(160, maxHeight)}px`,
       top: `${top}px`,
       left: `${left}px`,
+      ...(placement === 'top' ? { transform: 'translateY(-100%)' } : {}),
     },
     placement,
   };
@@ -163,6 +168,8 @@ export default function Combobox({
   dataName = 'combobox',
   autoFocusInput = false,
   inputReadOnly = false,
+  panelMinWidth,
+  panelClassName,
 }: ComboboxProps) {
   const triggerRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -193,7 +200,7 @@ export default function Combobox({
     const rect = trigger.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const { style } = calculatePanelPosition(rect, vw, vh);
+    const { style } = calculatePanelPosition(rect, vw, vh, panelMinWidth);
     setPanelStyle(style);
     // 聚焦搜索框（如有）
     if (searchable) {
@@ -210,7 +217,7 @@ export default function Combobox({
       const trigger = triggerRef.current;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
-      const { style } = calculatePanelPosition(rect, window.innerWidth, window.innerHeight);
+      const { style } = calculatePanelPosition(rect, window.innerWidth, window.innerHeight, panelMinWidth);
       setPanelStyle(style);
     };
     window.addEventListener('resize', reposition);
@@ -292,7 +299,7 @@ export default function Combobox({
 
   return (
     <div className={rootClasses.join(' ')} data-name={dataName}>
-      <div className="combobox-trigger">
+      <div className="combobox-trigger" data-name={`${dataName}.trigger`}>
         <input
           ref={triggerRef}
           type="text"
@@ -325,7 +332,7 @@ export default function Combobox({
         createPortal(
           <div
             ref={panelRef}
-            className="combobox-panel"
+            className={`combobox-panel${panelClassName ? ` ${panelClassName}` : ''}`}
             style={panelStyle}
             data-name={`${dataName}.panel`}
           >
@@ -337,6 +344,13 @@ export default function Combobox({
                   className="combobox-search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setOpen(false);
+                    }
+                  }}
                   placeholder={searchPlaceholder}
                   spellCheck={false}
                   autoComplete="off"

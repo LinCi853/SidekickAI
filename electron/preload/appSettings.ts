@@ -83,4 +83,14 @@ export const appSettingsApi = {
     ipcRenderer.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_UI_VERSION_CHANGED, handler)
   },
+  /** 渲染→主：请求广播 Oxy 主题色变更到所有窗口（切换 AI 应用时调用） */
+  broadcastThemeColorChanged: (hex: string) => {
+    ipcRenderer.send(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, hex)
+  },
+  /** 主→渲染：Oxy 主题色变更广播（主窗口切换 AI 应用后通知所有窗口同步主题色） */
+  onThemeColorChanged: (callback: (hex: string) => void) => {
+    const handler = (_e: unknown, hex: string) => callback(hex)
+    ipcRenderer.on(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, handler)
+  },
 }

@@ -59,7 +59,12 @@ export function useEscToCloseWindow(opts: {
       if (e.key === 'Escape') {
         const target = e.target as HTMLElement;
         const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+        // 焦点在输入框内时，先 blur 退出输入态，下次 ESC 再执行关闭
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+          (target as HTMLElement).blur();
+          e.preventDefault();
+          return;
+        }
         // 浮窗栈非空时，让栈顶浮窗的 onClose 先执行（不关窗）
         if (hasOverlay()) return;
         if (onEscRef.current?.(e)) return;
@@ -100,7 +105,12 @@ export function useEscToCloseOverlay(open: boolean, onClose: () => void): void {
       if (e.key !== 'Escape') return;
       const target = e.target as HTMLElement;
       const tag = target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+      // 焦点在输入框内时，先 blur 退出输入态，下次 ESC 再关闭浮窗
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+        (target as HTMLElement).blur();
+        e.preventDefault();
+        return;
+      }
       // 只有栈顶浮窗处理 ESC（后打开的优先）
       if (!isTopOverlay(close)) return;
       e.preventDefault();

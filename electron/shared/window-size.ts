@@ -261,12 +261,27 @@ export function calculateChatWindowMinWidth(uiScale: UiScale): number {
  *   - 左侧分页切换(3) + 顶部操作按钮(4) = 7
  *   - gap 计数 ≈ 6
  */
-export function calculateAdvancedPanelMinWidth(uiScale: UiScale): number {
-  const elementCount = 7
-  const gapCount = 6
-  return calculateMinWidthByElements(uiScale, elementCount, gapCount, {
-    titleText: '进阶面板',
-  })
+
+/** 缓存的进阶面板最小宽度（模块级，一次计算，到处读取） */
+let cachedAdvancedPanelMinWidth = 0
+
+/**
+ * 计算并缓存进阶面板最小宽度。
+ * 在主窗口打开时、设置变更时调用一次即可。
+ */
+export function updateAdvancedPanelMinWidth(uiScale: UiScale): void {
+  cachedAdvancedPanelMinWidth = calculateMainWindowMinWidth(uiScale)
+}
+
+/**
+ * 获取缓存的进阶面板最小宽度。
+ * 如果尚未初始化（缓存为 0），则按当前 UI 比例计算一次。
+ */
+export function getAdvancedPanelMinWidth(uiScale: UiScale): number {
+  if (cachedAdvancedPanelMinWidth === 0) {
+    cachedAdvancedPanelMinWidth = calculateMainWindowMinWidth(uiScale)
+  }
+  return cachedAdvancedPanelMinWidth
 }
 
 /** 主窗口最小高度（不受 UI 比例显著影响） */

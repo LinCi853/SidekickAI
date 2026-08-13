@@ -30,7 +30,7 @@ import {
 } from './helpers.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import {
-  calculateAdvancedPanelMinWidth,
+  getAdvancedPanelMinWidth,
   getUiScaleFromSettings,
   ADVANCED_PANEL_MIN_HEIGHT,
 } from './window-size-helpers.js'
@@ -66,23 +66,25 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   }
 
   const saved = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
+  const isWhiteboard = options?.initialTab === 'whiteboard'
   // 区分"用户真实保存的 bounds"与 getOrDefault 返回的默认占位 bounds（420×820，为 webview 主窗口设计的窄长形态）。
   // 本窗口为 API 直连聊天界面（webviewTag:false），首次打开应使用 900×680，仅在用户曾保存过时才用 saved 尺寸。
-  const hasSavedBounds = !!windowStore.get(ADVANCED_PANEL_WINDOW_ID)
+  // 白板模式不恢复 bounds，始终使用默认尺寸居中显示。
+  const hasSavedBounds = !!windowStore.get(ADVANCED_PANEL_WINDOW_ID) && !isWhiteboard
   const workArea = screen.getPrimaryDisplay().workArea
   // 默认尺寸 900×680，居中显示；用户已保存 bounds 则优先用
   const width = (hasSavedBounds && saved.bounds.width) || Math.min(900, workArea.width - 80)
   const height = (hasSavedBounds && saved.bounds.height) || Math.min(680, workArea.height - 80)
-  const x = saved.bounds.x ?? workArea.x + Math.round((workArea.width - width) / 2)
-  const y = saved.bounds.y ?? workArea.y + Math.round((workArea.height - height) / 2)
+  const x = (hasSavedBounds && saved.bounds.x != null) ? saved.bounds.x : workArea.x + Math.round((workArea.width - width) / 2)
+  const y = (hasSavedBounds && saved.bounds.y != null) ? saved.bounds.y : workArea.y + Math.round((workArea.height - height) / 2)
 
   // 进阶窗口默认全屏（最大化）：首次打开（无保存状态）或用户上次以最大化关闭时
-  // 与浏览器窗口行为同步，取消最大化时还原为工作区居中 70% 尺寸
-  const shouldMaximize = saved.isMaximized || !hasSavedBounds
+  // 白板模式始终最大化；其他模式恢复上次状态
+  const shouldMaximize = isWhiteboard ? true : (saved.isMaximized || !hasSavedBounds)
 
-  // 根据 UI 比例动态计算最小宽度
+  // 根据 UI 比例动态计算最小宽度（缓存值由主窗口计算并更新）
   const uiScale = getUiScaleFromSettings()
-  const minWidth = calculateAdvancedPanelMinWidth(uiScale)
+  const minWidth = getAdvancedPanelMinWidth(uiScale)
 
   const win = new BrowserWindow(buildWindowConfig({
     width,
@@ -121,16 +123,18 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   attachWindowHotkeyInterceptor(win.webContents)
 
   win.once('ready-to-show', () => {
+    // 确保最小尺寸与缓存值一致（UI 比例变化时由 App.tsx 更新缓存）
+    const currentMinWidth = getAdvancedPanelMinWidth(getUiScaleFromSettings())
+    win.setMinimumSize(currentMinWidth, ADVANCED_PANEL_MIN_HEIGHT)
     win.show()
     win.focus()
     safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
   })
 
-  // 进阶面板：不保存 bounds，取消最大化时由 WindowMaximizeManager 使用
-  // centered70 策略还原为工作区居中 70% 尺寸（与浏览器窗口同步）
+  // 进阶面板：保存 bounds，下次打开时恢复窗口大小和位置（白板模式除外）
   attachDetachedWindowLifecycle(win, ADVANCED_PANEL_WINDOW_ID, () => {
     windowState.advancedPanelWindow = null
-  }, { trackBounds: false })
+  }, { trackBounds: true })
 
   return win
 }

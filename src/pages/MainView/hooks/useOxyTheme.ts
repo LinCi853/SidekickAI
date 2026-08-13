@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useUiVersionStore } from '../../../store/useUiVersionStore';
 import { applyAppTheme } from '../../../lib/oxy-design-system';
+import { broadcastThemeColorChanged } from '../../../lib/electron-api';
 import { getPlatformColors } from '../utils';
 import type { AIPlatform, Profile } from '../../../lib/electron-api';
 
@@ -12,6 +13,7 @@ interface Tab {
 /**
  * Inject the active app's brand color as the Oxy theme color on tab switch.
  * Only active when UI version is 'oxy'.
+ * Broadcasts the color change to all other windows.
  */
 export function useOxyTheme(
   activeTabId: string | null,
@@ -23,7 +25,6 @@ export function useOxyTheme(
   const isOxy = uiVersion === 'oxy';
 
   useEffect(() => {
-    if (!isOxy) return;
     if (!activeTabId) return;
     const tab = tabs.find((t) => t.id === activeTabId);
     if (!tab) return;
@@ -32,7 +33,12 @@ export function useOxyTheme(
       ? platforms.find((p) => p.id === profile.aiPlatformId || p.url === profile.aiPlatformUrl)
       : null;
     const { themeColor } = getPlatformColors(profile, platform, tab.profileId);
-    applyAppTheme(themeColor);
+    // Oxy 模式下应用主题色到当前窗口
+    if (isOxy) {
+      applyAppTheme(themeColor);
+    }
+    // 广播到其他窗口（进阶面板、设置、对话等同步主题色）
+    broadcastThemeColorChanged(themeColor);
   }, [isOxy, activeTabId, tabs, profiles, platforms]);
 
   return { isOxy };

@@ -31,7 +31,7 @@ import {
 } from '../lib/electron-api';
 import type { Note, NoteSaveInput } from '../lib/electron-api';
 import { IconButton } from '../components/ui';
-import SidebarResizer from '../components/SidebarResizer';
+import SidebarShell from '../components/SidebarShell';
 import SaveAsPromptModal from '../components/SaveAsPromptModal';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
@@ -64,6 +64,7 @@ interface NotesSidebarProps {
   collapsed: boolean;
   onResize: (w: number) => void;
   onToggleCollapse: () => void;
+  onOpenSettings?: () => void;
 }
 
 function NotesSidebar({
@@ -81,6 +82,7 @@ function NotesSidebar({
   collapsed,
   onResize,
   onToggleCollapse,
+  onOpenSettings,
 }: NotesSidebarProps) {
   const pinnedNotes = notes.filter((n) => n.pinned);
   const normalNotes = notes.filter((n) => !n.pinned);
@@ -132,33 +134,50 @@ function NotesSidebar({
     </div>
   );
 
+  const collapsedItems = notes.map((n) => ({
+    id: n.id,
+    label: n.title || n.content.split('\n').find((l) => l.trim())?.slice(0, 20) || '空白笔记',
+    active: n.id === activeId,
+    onClick: () => onSelect(n),
+  }));
+
   return (
-    <div
-      className={`notes-sidebar app-sidebar-narrow${collapsed ? ' is-collapsed' : ''}`}
-      style={collapsed ? undefined : { width: `${width}px`, flex: 'none' }}
-      data-name="advanced-panel.notes-sidebar"
+    <SidebarShell
+      collapsed={collapsed}
+      width={width}
+      onResize={onResize}
+      onToggleCollapse={onToggleCollapse}
+      onOpenSettings={onOpenSettings}
+      onNew={onCreate}
+      newTitle="新建笔记"
+      collapsedItems={collapsedItems}
+      dataName="advanced-panel.notes-sidebar"
+      header={
+        <div className="sidebar-shell-header" data-name="advanced-panel.notes-sidebar-search">
+          <input
+            type="text"
+            className="notes-search-input"
+            placeholder="搜索笔记…"
+            value={searchKeyword}
+            onChange={(e) => onSearchChange(e.target.value)}
+            data-name="advanced-panel.notes-sidebar-search-input"
+          />
+          <IconButton
+            type="button"
+            className="sidebar-shell-new-btn"
+            onClick={onCreate}
+            title="新建笔记"
+            aria-label="新建笔记"
+            data-name="advanced-panel.notes-sidebar-create-button"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </IconButton>
+        </div>
+      }
     >
-      {collapsed && (
-        <button className="notes-sidebar-expand-btn" onClick={onToggleCollapse} title="展开侧边栏" data-name="advanced-panel.notes-sidebar-expand-button">
-          »
-        </button>
-      )}
-      <div className="notes-sidebar-search" data-name="advanced-panel.notes-sidebar-search">
-        <input
-          type="text"
-          className="notes-search-input"
-          placeholder="搜索笔记…"
-          value={searchKeyword}
-          onChange={(e) => onSearchChange(e.target.value)}
-          data-name="advanced-panel.notes-sidebar-search-input"
-        />
-        <IconButton variant="default" aria-label="新建笔记" onClick={onCreate} title="新建笔记" data-name="advanced-panel.notes-sidebar-create-button">
-          +
-        </IconButton>
-        <IconButton variant="default" aria-label="收起侧边栏" onClick={onToggleCollapse} title="收起侧边栏" data-name="advanced-panel.notes-sidebar-collapse-button">
-          «
-        </IconButton>
-      </div>
       {allTags.length > 0 && (
         <div className="notes-sidebar-tags" data-name="advanced-panel.notes-sidebar-tags">
           <button
@@ -181,7 +200,7 @@ function NotesSidebar({
           ))}
         </div>
       )}
-      <div className="notes-sidebar-list" data-name="advanced-panel.notes-sidebar-list">
+      <div className="sidebar-shell-list" data-name="advanced-panel.notes-sidebar-list">
         {notes.length === 0 && (
           <div className="notes-sidebar-empty app-empty-state" data-name="advanced-panel.notes-sidebar-empty">
             {searchKeyword || filterTag ? '无匹配笔记' : '点击 + 新建笔记'}
@@ -200,8 +219,7 @@ function NotesSidebar({
           </>
         )}
       </div>
-      {!collapsed && <SidebarResizer width={width} minWidth={120} maxWidth={400} onResize={onResize} />}
-    </div>
+    </SidebarShell>
   );
 }
 
@@ -228,20 +246,75 @@ function NotesEditor({
 }: NotesEditorProps) {
   const [tagInput, setTagInput] = useState('');
   // 编辑模式：'source' = 编辑 markdown 源码；'preview' = 渲染预览
-  const [mode, setMode] = useState<'source' | 'preview'>('preview');
+  const [mode, setMode] = useState<'source' | 'preview'>('source');
   // 编辑器内的 markdown 源码（受控）
   const [markdownText, setMarkdownText] = useState(note?.content ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // 光标位置持久化 key
+  const CURSOR_STORAGE_KEY = 'notes-cursor-positions';
 
-  // 笔记切换时同步内容到编辑器，并切到预览模式
+  // 从 localStorage 读取光标位置
+  const getCursorPos = useCallback((noteId: string): number | null => {
+    try {
+      const raw = localStorage.getItem(CURSOR_STORAGE_KEY);
+      if (!raw) return null;
+      const map = JSON.parse(raw) as Record<string, number>;
+      return map[noteId] ?? null;
+    } catch { return null; }
+  }, []);
+
+  // 保存光标位置到 localStorage
+  const setCursorPos = useCallback((noteId: string, pos: number) => {
+    try {
+      const raw = localStorage.getItem(CURSOR_STORAGE_KEY);
+      const map = raw ? JSON.parse(raw) as Record<string, number> : {};
+      map[noteId] = pos;
+      localStorage.setItem(CURSOR_STORAGE_KEY, JSON.stringify(map));
+    } catch { /* ignore */ }
+  }, []);
+
+  // 笔记切换时同步内容到编辑器；始终进入编辑模式，恢复上次光标位置
   useEffect(() => {
     const content = note?.content ?? '';
     setMarkdownText(content);
-    setMode('preview');
+    setMode('source');
   }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 编辑模式下自动聚焦并恢复光标位置
+  useEffect(() => {
+    if (mode !== 'source') return;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    // 先获取设置，再用 rAF 确保 DOM 更新后设置光标
+    void getAppSettings().then((cfg) => {
+      requestAnimationFrame(() => {
+        if (!textareaRef.current) return;
+        textareaRef.current.focus();
+        const noteId = note?.id ?? '';
+        const savedPos = cfg.notesRestoreCursor !== false ? getCursorPos(noteId) : null;
+        const pos = savedPos != null ? Math.min(savedPos, textareaRef.current.value.length) : textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(pos, pos);
+      });
+    }).catch(() => {
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(textareaRef.current.value.length, textareaRef.current.value.length);
+        }
+      });
+    });
+  }, [note?.id, mode, getCursorPos]);
+
+  // 保存当前光标位置（编辑时实时记录）
+  const saveCursorPosition = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta || !note?.id) return;
+    setCursorPos(note.id, ta.selectionStart);
+  }, [note?.id, setCursorPos]);
 
   const handleContentChange = (value: string) => {
     setMarkdownText(value);
+    saveCursorPosition();
     // contentJson 传空字符串（已废弃 TipTap JSON，新笔记存 markdown 字符串到 content）
     onContentChange(value, '');
   };
@@ -493,6 +566,8 @@ function NotesEditor({
             spellCheck={false}
             placeholder="记录你的灵感…（支持 Markdown 语法）"
             onChange={(e) => handleContentChange(e.target.value)}
+            onSelect={saveCursorPosition}
+            onClick={saveCursorPosition}
             onPaste={handlePaste}
             onDrop={handleDrop}
             onKeyDown={handleKeyDown}
@@ -534,9 +609,10 @@ function NotesEditor({
 
 interface NotesViewProps {
   onClose?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export default function NotesView(_: NotesViewProps) {
+export default function NotesView({ onOpenSettings }: NotesViewProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNoteState] = useState<Note | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -600,13 +676,17 @@ export default function NotesView(_: NotesViewProps) {
   }, [refreshList, refreshTags]);
 
   // ===== 初始化 =====
+  // StrictMode 防护：开发模式下 useEffect 执行两次，防止重复创建笔记
+  const initDoneRef = useRef(false);
   useEffect(() => {
+    if (initDoneRef.current) return;
+    initDoneRef.current = true;
     void (async () => {
       try {
         const [list, active] = await Promise.all([listNotes(), getActiveNote()]);
         setNotes(list);
-        setActiveNoteState(active);
         if (active) {
+          setActiveNoteState(active);
           draftRef.current = {
             id: active.id,
             title: active.title,
@@ -614,6 +694,25 @@ export default function NotesView(_: NotesViewProps) {
             contentJson: active.contentJson,
           };
           latestContentRef.current = active.content;
+        } else if (list.length === 0) {
+          // 无笔记时自动创建一个空白笔记
+          const saved = await saveNote({});
+          const updated = await listNotes();
+          setNotes(updated);
+          if (saved?.id) {
+            await setActiveNote(saved.id);
+            setActiveNoteState(saved);
+            draftRef.current = { id: saved.id, title: null, content: '', contentJson: '' };
+            latestContentRef.current = '';
+          }
+        } else {
+          // 有笔记但无活跃笔记，选中最新的
+          const sorted = [...list].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+          const newest = sorted[0];
+          await setActiveNote(newest.id);
+          setActiveNoteState(newest);
+          draftRef.current = { id: newest.id, title: newest.title, content: newest.content, contentJson: newest.contentJson };
+          latestContentRef.current = newest.content;
         }
         await refreshTags();
       } catch (e) {
@@ -829,6 +928,7 @@ export default function NotesView(_: NotesViewProps) {
           collapsed={sidebarCollapsed}
           onResize={handleSidebarResize}
           onToggleCollapse={handleSidebarToggleCollapse}
+          onOpenSettings={onOpenSettings}
         />
         <NotesEditor
           note={activeNote}

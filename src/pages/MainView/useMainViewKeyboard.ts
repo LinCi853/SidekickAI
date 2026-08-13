@@ -32,6 +32,7 @@ export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar:
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       // ===== Alt+1~9：切换到第 N 个可见标签（渲染层兜底） =====
       // 主进程 before-input-event 仅在 webview 焦点时拦截；焦点在顶栏/设置/输入框时不触发。
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {

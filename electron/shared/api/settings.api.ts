@@ -83,10 +83,20 @@ export interface AppSettings {
   notesSidebarWidth: number
   /** 灵感笔记侧边栏是否收起 */
   notesSidebarCollapsed: boolean
+  /** 灵感笔记是否恢复上次光标位置（默认 true） */
+  notesRestoreCursor: boolean
   /** 自定义对话侧边栏宽度（默认 160px，范围 120-400） */
   chatSidebarWidth: number
   /** 自定义对话侧边栏是否收起 */
   chatSidebarCollapsed: boolean
+  /** 自定义对话输入框光标位置（持久化，关闭重开后恢复） */
+  chatInputCursorPos: number
+  /** 进阶面板标签切换快捷键（Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab，默认 true） */
+  advancedPanelTabSwitchShortcuts: boolean
+  /** 白板侧边栏宽度（默认 130px） */
+  whiteboardSidebarWidth: number
+  /** 白板侧边栏是否收起 */
+  whiteboardSidebarCollapsed: boolean
   /** 浏览器标签累积持久化模式：memory=内存模式（默认，主窗口关闭清空）/ persistent=持久化到磁盘 */
   browserTabPersistence: 'memory' | 'persistent'
   /** 默认搜索引擎配置（G1：地址栏非 URL 输入时使用，urlTemplate 使用 {query} 占位符） */

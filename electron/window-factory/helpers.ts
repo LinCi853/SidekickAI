@@ -503,6 +503,7 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         else if (input.type === 'keyUp') ctrlPressed = false
       }
       if (input.type !== 'keyDown') return
+      if (input.isAutoRepeat) return
       const win = BrowserWindow.fromWebContents(parentWebContents)
       if (!win || win.isDestroyed()) return
 
@@ -624,7 +625,12 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
         if (key.toLowerCase() === 'p') {
           console.log('[hotkey] Alt+P → 冻结/恢复当前页面')
           e.preventDefault()
-          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' })
+          const { getRecordByWebContentsId } = require('../freeze/webview-registry.js') as typeof import('../freeze/webview-registry.js')
+          const record = getRecordByWebContentsId(wc.id)
+          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, {
+            action: 'toggleFreeze',
+            data: record ? { tabId: record.tabId } : undefined,
+          })
           return
         }
         let n: number | null = null

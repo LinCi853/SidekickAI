@@ -20,6 +20,7 @@ import {
   onMaximizeToggled,
   onPinToggled,
 } from '../lib/electron-api';
+import { useFreezeStore } from './useFreezeStore';
 
 export interface TabStoreState {
   /** 当前窗口 id（'main' 或 UUID） */
@@ -227,6 +228,7 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   },
 
   closeTab: async (tabId) => {
+    void useFreezeStore.getState().doDetach(tabId);
     const { tabs, activeTabId } = get();
     const newTabs = tabs.filter((t) => t.id !== tabId).map((t, i) => ({ ...t, order: i }));
     const newActive = activeTabId === tabId

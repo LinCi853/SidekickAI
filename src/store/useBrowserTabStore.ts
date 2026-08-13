@@ -18,6 +18,7 @@ import {
 } from '../lib/electron-api';
 import { useProfileStore } from './useProfileStore';
 import { useRecentClosedStore } from '../pages/BrowserView/RecentClosedStore';
+import { useFreezeStore } from './useFreezeStore';
 
 export interface BrowserTabStoreState {
   windowId: string;
@@ -143,6 +144,7 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
     const { tabs, activeTabId, profileId } = get();
     const closingTab = tabs.find((t) => t.id === tabId);
     if (!closingTab) return;
+    void useFreezeStore.getState().doDetach(tabId);
 
     const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads'];
     const isInternal = internalSources.includes(closingTab.source);

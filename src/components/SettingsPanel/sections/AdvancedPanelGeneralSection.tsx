@@ -23,6 +23,8 @@ export default function AdvancedPanelGeneralSection() {
 
   const defaultTab: AdvancedPanelTab = draft?.defaultAdvancedPanelTab ?? 'chat';
   const whiteboardSidebarVisible = draft?.whiteboardSidebarVisible ?? false;
+  const notesRestoreCursor = draft?.notesRestoreCursor ?? true;
+  const tabSwitchShortcuts = draft?.advancedPanelTabSwitchShortcuts ?? true;
 
   const handleChangeTab = async (value: AdvancedPanelTab) => {
     const prev = defaultTab;
@@ -46,6 +48,28 @@ export default function AdvancedPanelGeneralSection() {
     }
   };
 
+  const handleToggleRestoreCursor = async (value: boolean) => {
+    const prev = notesRestoreCursor;
+    setDraft({ notesRestoreCursor: value });
+    try {
+      await updateAppSettings({ notesRestoreCursor: value });
+    } catch (e) {
+      console.error('[AdvancedPanelGeneralSection] 保存光标恢复设置失败:', e);
+      setDraft({ notesRestoreCursor: prev });
+    }
+  };
+
+  const handleToggleTabSwitch = async (value: boolean) => {
+    const prev = tabSwitchShortcuts;
+    setDraft({ advancedPanelTabSwitchShortcuts: value });
+    try {
+      await updateAppSettings({ advancedPanelTabSwitchShortcuts: value });
+    } catch (e) {
+      console.error('[AdvancedPanelGeneralSection] 保存标签切换快捷键设置失败:', e);
+      setDraft({ advancedPanelTabSwitchShortcuts: prev });
+    }
+  };
+
   return (
     <section data-name="settings.advanced-panel-general.section">
       <SectionTitle>通用</SectionTitle>
@@ -65,6 +89,26 @@ export default function AdvancedPanelGeneralSection() {
           checked={whiteboardSidebarVisible}
           onChange={(v) => void handleToggleSidebar(v)}
           aria-label="白板侧边栏"
+        />
+      </FormRow>
+      <FormRow
+        label="笔记恢复光标位置"
+        hint="关闭后每次打开笔记都定位到末尾"
+      >
+        <Toggle
+          checked={notesRestoreCursor}
+          onChange={(v) => void handleToggleRestoreCursor(v)}
+          aria-label="笔记恢复光标位置"
+        />
+      </FormRow>
+      <FormRow
+        label="标签切换快捷键"
+        hint="Ctrl/Alt+1/2/3、Ctrl+Tab 切换对话/白板/笔记"
+      >
+        <Toggle
+          checked={tabSwitchShortcuts}
+          onChange={(v) => void handleToggleTabSwitch(v)}
+          aria-label="标签切换快捷键"
         />
       </FormRow>
     </section>

@@ -120,6 +120,10 @@ export interface ElectronAPI {
   broadcastUiVersionChanged: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void
   /** 主→渲染：UI 版本/主题变更广播 */
   onUiVersionChanged: (callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void) => () => void
+  /** 渲染→主：请求广播 Oxy 主题色变更到所有窗口 */
+  broadcastThemeColorChanged: (hex: string) => void
+  /** 主→渲染：Oxy 主题色变更广播 */
+  onThemeColorChanged: (callback: (hex: string) => void) => () => void
   /** 浏览器窗口（v0.0.9：多标签浏览器） */
   browser: BrowserAPI
   /** 导航历史追踪（主窗口上报，脱离时聚合） */

@@ -131,7 +131,6 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
             }
             onInputChange={() => {}}
             inputPlaceholder="选择麦克风设备"
-            inputClassName="input-underline"
             inputReadOnly
             options={[
               { value: '', label: '系统默认麦克风', selected: voiceInputDeviceId === '' },
@@ -214,7 +213,7 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
                     })()}
                     onInputChange={() => {}}
                     inputPlaceholder="选择服务商"
-                    inputClassName="input-underline"
+        
                     inputReadOnly
                     options={[
                       { value: 'openai', label: 'OpenAI (Whisper API)', selected: draft.provider === 'openai' },
@@ -248,7 +247,7 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
                     })()}
                     onInputChange={() => {}}
                     inputPlaceholder="选择识别语言"
-                    inputClassName="input-underline"
+        
                     inputReadOnly
                     options={[
                       { value: 'zh', label: '中文（普通话）', selected: voiceLanguage === 'zh' },
@@ -396,7 +395,7 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
                   })()}
                   onInputChange={() => {}}
                   inputPlaceholder="选择服务商"
-                  inputClassName="input-underline"
+      
                   inputReadOnly
                   options={[
                     { value: 'openai', label: 'OpenAI (TTS API)', selected: draft.provider === 'openai' },
@@ -428,7 +427,6 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
           })()}
           onInputChange={() => {}}
           inputPlaceholder="选择上屏方式"
-          inputClassName="input-underline"
           inputReadOnly
           options={[
             { value: 'auto', label: '自动上屏（前台注入 / 后台粘贴）', selected: (voiceConfirmMode === 'manual' ? 'auto' : voiceConfirmMode) === 'auto' },

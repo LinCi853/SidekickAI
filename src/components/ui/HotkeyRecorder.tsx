@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { checkSystemHotkeyConflict } from '../../lib/system-hotkeys'
+import { useEscToCloseOverlay } from '../../hooks/useEscToCloseWindow'
 
 /**
  * 模块级：当前活跃的录制器重置函数。
@@ -58,6 +59,15 @@ export default function HotkeyRecorder({
   const [error, setError] = useState<string | null>(null)
   const [partialText, setPartialText] = useState<string | null>(null)
   const recordingRef = useRef(false)
+
+  // 录制时注册为浮窗层，ESC 优先停止录制而非关闭窗口
+  useEscToCloseOverlay(recording, () => {
+    recordingRef.current = false
+    setRecording(false)
+    setPartialText(null)
+    resetActiveRecorder = null
+    void stopRecording()
+  })
 
   // 录制结果监听：组件挂载时订阅，录制状态下处理结果
   useEffect(() => {

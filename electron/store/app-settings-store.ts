@@ -91,10 +91,20 @@ export interface AppSettings {
   notesSidebarWidth: number
   /** 灵感笔记侧边栏是否收起 */
   notesSidebarCollapsed: boolean
+  /** 灵感笔记是否恢复上次光标位置（默认 true） */
+  notesRestoreCursor: boolean
   /** 自定义对话侧边栏宽度（默认 160px，范围 120-400） */
   chatSidebarWidth: number
   /** 自定义对话侧边栏是否收起 */
   chatSidebarCollapsed: boolean
+  /** 自定义对话输入框光标位置（持久化，关闭重开后恢复） */
+  chatInputCursorPos: number
+  /** 进阶面板标签切换快捷键（Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab，默认 true） */
+  advancedPanelTabSwitchShortcuts: boolean
+  /** 白板侧边栏宽度（默认 130px） */
+  whiteboardSidebarWidth: number
+  /** 白板侧边栏是否收起 */
+  whiteboardSidebarCollapsed: boolean
   /** 弹窗白名单：URL 前缀数组，匹配的 URL 允许弹独立 BrowserWindow（登录/OAuth/验证页等） */
   popupWhitelist: string[]
   /** 浏览器标签累积持久化模式：memory=内存模式（默认，主窗口关闭清空）/ persistent=持久化到磁盘 */
@@ -158,9 +168,18 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       // 灵感笔记侧边栏：默认 160px 宽，未收起
       notesSidebarWidth: 160,
       notesSidebarCollapsed: false,
-      // 自定义对话侧边栏：默认 160px 宽，未收起
-      chatSidebarWidth: 160,
+      // 灵感笔记恢复光标位置：默认开启
+      notesRestoreCursor: true,
+      // 自定义对话侧边栏：默认 130px 宽，未收起
+      chatSidebarWidth: 130,
       chatSidebarCollapsed: false,
+      // 自定义对话输入框光标位置：默认 0（行首）
+      chatInputCursorPos: 0,
+      // 进阶面板标签切换快捷键：默认开启
+      advancedPanelTabSwitchShortcuts: true,
+      // 白板侧边栏：默认 130px 宽，未收起
+      whiteboardSidebarWidth: 130,
+      whiteboardSidebarCollapsed: false,
       // 弹窗白名单：默认为空（登录域白名单硬编码在 helpers.ts LOGIN_POPUP_WHITELIST）
       popupWhitelist: [],
       // 浏览器标签累积持久化：默认内存模式（主窗口关闭清空），persistent=持久化到磁盘可重启恢复
@@ -213,9 +232,14 @@ export function getAppSettings(): AppSettings {
   // 灵感笔记侧边栏宽度/收起：老用户无此字段时使用默认值
   s.notesSidebarWidth = s.notesSidebarWidth ?? 160
   s.notesSidebarCollapsed = s.notesSidebarCollapsed ?? false
+  s.notesRestoreCursor = s.notesRestoreCursor ?? true
   // 自定义对话侧边栏宽度/收起：老用户无此字段时使用默认值
-  s.chatSidebarWidth = s.chatSidebarWidth ?? 160
+  s.chatSidebarWidth = s.chatSidebarWidth ?? 130
   s.chatSidebarCollapsed = s.chatSidebarCollapsed ?? false
+  s.chatInputCursorPos = s.chatInputCursorPos ?? 0
+  s.advancedPanelTabSwitchShortcuts = s.advancedPanelTabSwitchShortcuts ?? true
+  s.whiteboardSidebarWidth = s.whiteboardSidebarWidth ?? 130
+  s.whiteboardSidebarCollapsed = s.whiteboardSidebarCollapsed ?? false
   // 兼容旧版本设置文件：默认 UA 预设字段可能不存在
   s.defaultDesktopUaPreset = s.defaultDesktopUaPreset || 'win-chrome-125'
   s.defaultMobileUaPreset = s.defaultMobileUaPreset || 'iphone-15-pro-safari'
@@ -442,6 +466,10 @@ export function registerAppSettingsIPC(): void {
   // 渲染层请求广播 UI 版本/主题变更到所有窗口
   ipcMain.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, (_e, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
     broadcastUiVersionChanged(payload)
+  })
+  // 渲染层请求广播 Oxy 主题色变更到所有窗口
+  ipcMain.on(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, (_e, hex: string) => {
+    broadcastToAllWindows(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, hex, 'app-settings')
   })
   ipcMain.handle(IPC_CHANNELS.APP_UPDATE_SETTINGS, (_e, patch: Partial<AppSettings>) =>
     updateAppSettings(patch),

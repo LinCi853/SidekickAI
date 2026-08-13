@@ -205,6 +205,8 @@
   /* 跨窗口动态布局辅助变量 */
   --sidebar-w: calc(var(--titlebar-icon) * 9);
   --chat-input-min-h: calc(var(--titlebar-icon) * 1.4);
+  /* 紧凑输入框/按钮统一高度（搜索框、模型选择、发送按钮等） */
+  --compact-h: calc(var(--titlebar-icon) * 0.75);
   --app-grid-item-w: calc(var(--titlebar-icon) * 2.6);
   --expanded-btn-w: calc(var(--titlebar-icon) * 3.1);
   --panel-min-w: calc(var(--titlebar-icon) * 11);

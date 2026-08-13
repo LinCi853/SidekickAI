@@ -299,13 +299,33 @@ export function deactivateOxy(): void {
   const scale = readUserUiScale();
   document.documentElement.setAttribute('data-ui-scale', scale);
 
-  // 5. 停止分辨率监听
+  // 5. 恢复用户保存的主题（OXY 激活时强制亮色，停用后需还原）
+  const THEME_KEY = 'ai-window-theme';
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark' || saved === 'light' || saved === 'system') {
+      const html = document.documentElement;
+      if (saved === 'system') {
+        const sysDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+        html.classList.toggle('dark', !!sysDark);
+        html.setAttribute('data-theme', sysDark ? 'dark' : 'light');
+      } else if (saved === 'dark') {
+        html.classList.add('dark');
+        html.setAttribute('data-theme', 'dark');
+      } else {
+        html.classList.remove('dark');
+        html.setAttribute('data-theme', 'light');
+      }
+    }
+  } catch { /* 忽略 */ }
+
+  // 6. 停止分辨率监听
   detachResizeListener();
 
-  // 6. 清除布局缓存
+  // 7. 清除布局缓存
   currentLayout = null;
 
-  // 7. 持久化
+  // 8. 持久化
   persistVersion('classic');
 
   // --- 后续新增联动逻辑请在此处添加 ---

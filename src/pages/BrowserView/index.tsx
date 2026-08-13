@@ -383,18 +383,16 @@ export default function BrowserView() {
     onFocusSearch: handleFocusSearch,
     onFindInPage: handleFindInPage,
     onPrint: handlePrint,
-    onToggleFreeze: () => {
-      if (!activeTabId || !profileId) {
-        console.warn('[BrowserView] 冻结跳过：activeTabId 或 profileId 为空', { activeTabId, profileId });
+    onToggleFreeze: (requestedTabId) => {
+      const targetTabId = requestedTabId && useBrowserTabStore.getState().tabs.some((tab) => tab.id === requestedTabId)
+        ? requestedTabId
+        : activeTabId;
+      if (!targetTabId || !profileId) {
+        console.warn('[BrowserView] 冻结跳过：tabId 或 profileId 为空', { targetTabId, profileId });
         return;
       }
-      const freezeState = useFreezeStore.getState().states[activeTabId];
-      console.log('[BrowserView] Alt+P 触发冻结，当前状态', freezeState, 'tabId', activeTabId);
-      if (freezeState === 'frozen') {
-        void useFreezeStore.getState().doResume(activeTabId);
-      } else {
-        void useFreezeStore.getState().doFreeze(activeTabId, profileId);
-      }
+      console.log('[BrowserView] Alt+P 请求主进程切换冻结状态, tabId', targetTabId);
+      void useFreezeStore.getState().doToggle(targetTabId, profileId);
     },
   });
 

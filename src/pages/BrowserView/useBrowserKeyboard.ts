@@ -53,7 +53,7 @@ interface BrowserKeyboardOptions {
   /** Ctrl+P：打印当前页面 */
   onPrint?: () => void;
   /** Alt+P：冻结/恢复当前页面（防撤回保险） */
-  onToggleFreeze?: () => void;
+  onToggleFreeze?: (tabId?: string) => void;
 }
 
 export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
@@ -62,6 +62,7 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const store = useBrowserTabStore.getState();
       const hasCtrl = e.ctrlKey || e.metaKey;
       const hasAlt = e.altKey;
@@ -289,7 +290,7 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
       } else if (action === 'print') {
         optsRef.current.onPrint?.();
       } else if (action === 'toggleFreeze') {
-        optsRef.current.onToggleFreeze?.();
+        optsRef.current.onToggleFreeze?.((payload.data as { tabId?: string } | undefined)?.tabId);
       }
     });
 
