@@ -1,12 +1,11 @@
 // electron/store/injection-history-store.ts — 注入历史持久化（需求 2：注入预览 + Jaccard 去重）
 //
-// 使用 electron-store 将注入历史持久化到 injection-history.json。
+// 持久化到 SQLite settings.db（injection_history 表，createSqliteJsonStore）。
 // 提供注入日志记录、最近 N 条查询、Jaccard 相似度查找、清空操作。
 // 最多保留 200 条，超出按时间淘汰（最旧的先删）。
 
-import Store from 'electron-store'
 import { randomUUID } from 'crypto'
-import { getStoreCwd } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 
 /** 单条注入历史记录 */
 export interface InjectionRecord {
@@ -30,9 +29,9 @@ export interface SimilarInjectionResult extends InjectionRecord {
 
 const MAX_RECORDS = 200
 
-const store = new Store<{ records: InjectionRecord[]; version: number }>({
-  name: 'injection-history',
-  cwd: getStoreCwd(),
+const store = createSqliteJsonStore<{ records: InjectionRecord[]; version: number }>({
+  tableName: 'injection_history',
+  legacyName: 'injection-history',
   defaults: { records: [], version: 1 },
 })
 
@@ -60,7 +59,7 @@ function jaccardSimilarity(a: string, b: string): number {
 export class InjectionHistoryStore {
   /** 记录一次注入。超出 MAX_RECORDS 时淘汰最旧记录。 */
   log(record: Omit<InjectionRecord, 'id' | 'createdAt'>): InjectionRecord {
-    const records = store.get('records')
+    const records = store.get('records') as InjectionRecord[]
     const now = Date.now()
     const full: InjectionRecord = {
       ...record,

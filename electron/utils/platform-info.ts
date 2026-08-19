@@ -10,6 +10,7 @@ import {
   getStorageBackend,
   type StorageBackend,
 } from './permission-manager.js'
+import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 
 /** 平台能力矩阵 */
 export interface PlatformCapabilities {
@@ -99,5 +100,5 @@ export async function getPlatformCapabilities(): Promise<PlatformCapabilities> {
 
 /** 注册平台能力查询 IPC（必须在 app.whenReady 后调用） */
 export function registerPlatformInfoIPC(): void {
-  ipcMain.handle('platform:capabilities', () => getPlatformCapabilities())
+  ipcMain.handle(IPC_CHANNELS.PLATFORM_CAPABILITIES, () => getPlatformCapabilities())
 }

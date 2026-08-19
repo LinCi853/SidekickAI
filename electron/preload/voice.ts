@@ -59,6 +59,12 @@ export const voiceApi = {
     ipcRenderer.on(IPC_CHANNELS.PREVIEW_HIDE, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.PREVIEW_HIDE, handler)
   },
+  // 流式识别部分结果（主→预览窗渲染：实时推送已识别的部分文本）
+  onPreviewPartial: (callback: (payload: { text: string }) => void) => {
+    const handler = (_e: unknown, payload: { text: string }) => callback(payload)
+    ipcRenderer.on(IPC_CHANNELS.PREVIEW_PARTIAL, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PREVIEW_PARTIAL, handler)
+  },
   // 渲染进程音频采集：开始录音（主→预览窗渲染）
   onVoiceRecordStart: (callback: () => void) => {
     const handler = () => callback()

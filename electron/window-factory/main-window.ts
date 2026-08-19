@@ -7,6 +7,7 @@ import { app, BrowserWindow, screen } from 'electron'
 import path from 'path'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../window-state.js'
+import * as focusManager from '../utils/focus-manager.js'
 import { getAppSettings } from '../store/app-settings-store.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import {
@@ -60,6 +61,7 @@ export function createMainWindow(): void {
     // 原生 resize 边框由 thickFrame:false 禁用，用户无法通过窗口边缘拖拽 resize。
     resizable: true,
     alwaysOnTop: saved.alwaysOnTop,
+    title: '工百窗',
     webPreferences: {
       ...createDefaultWebPreferences({
         preload: getPreloadPath(),
@@ -70,6 +72,7 @@ export function createMainWindow(): void {
     },
   }))
   windowState.mainWindow = win
+  focusManager.track(win)
 
   // 拦截 <webview> 内弹窗（target="_blank" / window.open()）
   // 必须通过 did-attach-webview 在 webview 的 guest webContents 上注册 handler，
@@ -213,6 +216,9 @@ export function createMainWindow(): void {
     const isQuitting = (app as unknown as { isQuitting?: boolean }).isQuitting
     if (settings.closeBehavior === 'minimize' && !isQuitting) {
       e.preventDefault()
+      // minimize + skipTaskbar 彻底隐藏：屏幕、Alt+Tab、任务栏均不可见
+      win.minimize()
+      win.setSkipTaskbar(true)
       win.hide()
       console.log('[main] 主窗口隐藏到托盘（closeBehavior=minimize）')
       return
@@ -276,6 +282,7 @@ export function resetMainWindowToDefault(): void {
   }
 
   // 显示并聚焦
+  win.setSkipTaskbar(false)
   if (!win.isVisible()) win.show()
   win.focus()
 

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import Popover, { PopoverItem, PopoverDivider } from '../../components/ui/Popover';
+import { GearIcon } from '../../components/icons';
+import { useModuleStore } from '../../store/useModuleStore';
 import type { WebviewElement } from '../../lib/webview';
 
 /* =====================================================================
@@ -60,6 +62,8 @@ export default function TabContextMenu({
     setEditingUrl,
     close,
   } = actions;
+  // 模块门控：浏览器模块关闭时隐藏「独立为浏览器窗口」
+  const browserEnabled = useModuleStore((s) => s.isEnabled('browser'));
 
   // URL 编辑区域
   const renderUrlSection = () => (
@@ -191,12 +195,7 @@ export default function TabContextMenu({
         <PopoverItem
           onClick={() => { void configureApp(tabId); close(); }}
           label="配置此 AI 应用"
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          }
+          icon={<GearIcon />}
           dataName="main.tab-context-menu.menu-item-6"
         />
       )}
@@ -217,6 +216,7 @@ export default function TabContextMenu({
   const renderTabManagementSection = () => (
     <div className="tab-context-menu-section" data-name="main.tab-context-menu.section-4">
       <div className="tab-context-menu-label" data-name="main.tab-context-menu.section-4-label">标签管理</div>
+      {browserEnabled && (
       <PopoverItem
         onClick={() => { void detach(tabId); close(); }}
         label="独立为浏览器窗口"
@@ -229,6 +229,7 @@ export default function TabContextMenu({
         }
         dataName="main.tab-context-menu.menu-item-8"
       />
+      )}
       <PopoverItem
         onClick={() => { closeOthers(tabId); close(); }}
         label="关闭其他标签"

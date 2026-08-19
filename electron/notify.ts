@@ -1,7 +1,7 @@
 // electron/notify.ts — 系统通知工具
 //
 // 封装 Electron Notification，供主进程各模块（ai/handler、stt/engine、main）统一调用。
-// 通知由主进程发起，渲染层无需改动。Notification.isSupported() 为 false 时静默降级到 console.log。
+// 通知由主进程发起，渲染层无需改动。Notification.isSupported() 为 false 时降级到 console.log。
 
 import { Notification } from 'electron'
 
@@ -12,6 +12,7 @@ import { Notification } from 'electron'
 export function showNotification(title: string, body: string): void {
   try {
     if (!Notification.isSupported()) {
+      console.warn(`[notify] ⚠️ 降级实现: Notification.isSupported() 为 false，使用 console.log 替代`)
       console.log(`[通知] ${title}: ${body}`)
       return
     }

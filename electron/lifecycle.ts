@@ -70,7 +70,8 @@ export function runUiohookHealthCheck(hotkeyManager: HotkeyManager): void {
 /** 由 main.ts 注入的依赖（hotkeyManager/sttEngine 仍为 main.ts 全局实例） */
 export interface LifecycleDeps {
   hotkeyManager: HotkeyManager
-  sttEngine: SttEngine
+  /** 语音模块未启用时为 null（sttEngine?.cleanup() 天然容忍） */
+  sttEngine: SttEngine | null
 }
 
 /**

@@ -50,7 +50,7 @@ export const hotkeyApi = {
   // 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）
   onWebviewHotkey: (
     callback: (payload: {
-      action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab'
+      action: import('../shared/types.js').WebviewHotkeyAction
       data?: unknown
     }) => void,
   ) => {

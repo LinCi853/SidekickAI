@@ -398,6 +398,8 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
 export interface VoiceConfigState {
   confirmMode: 'auto' | 'manual' | 'clipboard';
   setConfirmMode: Dispatch<SetStateAction<'auto' | 'manual' | 'clipboard'>>;
+  inputMethod: 'layered' | 'clipboard' | 'type';
+  setInputMethod: Dispatch<SetStateAction<'layered' | 'clipboard' | 'type'>>;
   enterToSend: boolean;
   setEnterToSend: Dispatch<SetStateAction<boolean>>;
   sttMode: 'ai' | 'local';
@@ -422,6 +424,7 @@ export interface VoiceConfigState {
 
 export function useVoiceConfig(enabled: boolean): VoiceConfigState {
   const [confirmMode, setConfirmMode] = useState<'auto' | 'manual' | 'clipboard'>('auto');
+  const [inputMethod, setInputMethod] = useState<'layered' | 'clipboard' | 'type'>('layered');
   const [enterToSend, setEnterToSend] = useState(false);
   const [sttMode, setSttMode] = useState<'ai' | 'local'>('ai');
   const [aiProvider, setAiProvider] = useState('openai');
@@ -436,6 +439,7 @@ export function useVoiceConfig(enabled: boolean): VoiceConfigState {
     try {
       const cfg = await getVoiceConfig();
       setConfirmMode(cfg.confirmMode ?? 'auto');
+      setInputMethod(cfg.inputMethod ?? 'clipboard');
       setEnterToSend(cfg.enterToSend ?? true);
       setSttMode(cfg.sttMode ?? 'ai');
       setAiProvider(cfg.aiProvider ?? 'openai');
@@ -460,6 +464,7 @@ export function useVoiceConfig(enabled: boolean): VoiceConfigState {
 
   return {
     confirmMode, setConfirmMode,
+    inputMethod, setInputMethod,
     enterToSend, setEnterToSend,
     sttMode, setSttMode,
     aiProvider, setAiProvider,

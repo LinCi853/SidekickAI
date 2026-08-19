@@ -34,6 +34,9 @@ export const windowApi = {
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_RESIZE, bounds),
     toggleFullscreen: () =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN),
+    // 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中）
+    setCursor: (x: number, y: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CURSOR_SET, x, y),
     // 动态设置当前窗口的最小尺寸（UI 比例变化时重新约束）
     setMinimumSize: (width: number, height: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_SET_MIN_SIZE, width, height),

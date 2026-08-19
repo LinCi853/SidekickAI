@@ -8,30 +8,38 @@
 // 本文件仅负责上述两个 main.ts 内联的额外 handler。
 //
 // 在 app.whenReady 后由 main.ts 调用 registerNotesExtraIpc() 完成注册。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { BrowserWindow, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { windowState } from '../window-state.js'
 import { getAppSettings } from '../store/app-settings-store.js'
 import { promptStore } from '../store/prompt-store.js'
+import type { EffectScope } from '../modules/effect-scope.js'
 
-/** 注册笔记额外 IPC handler（注入到 AI / 存为提示词） */
-export function registerNotesExtraIpc(): void {
+/**
+ * 注册笔记额外 IPC handler（注入到 AI / 存为提示词）。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerNotesExtraIpc(scope?: EffectScope): void {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
   // 需求 11：笔记 → 当前 AI 输入框
-  // v0.5.2：笔记嵌入 StandaloneView，sender 即 进阶面板。
-  // 查找最近聚焦窗口（lastFocusedWin），把笔记文本直接注入其激活的 AI 输入框。
-  // 复用与语音注入相同的 VOICE_INJECT_AND_SEND 通道：渲染层 MainView/ChatView/AdvancedPanelView
-  // 均已实现该监听器，自动适配 webview 输入框 / textarea / 自定义对话输入框。
-  // 注入结果通过 NOTES_INJECT_RESULT 回传到调用方窗口（sender），供其显示 toast。
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.NOTES_SEND_TO_AI,
-    async (e, payload: { text: string; enterToSend?: boolean }) => {
+    async (e: unknown, payload: { text: string; enterToSend?: boolean }) => {
       const text = payload?.text ?? ''
       if (!text.trim()) {
         return { ok: false, error: '笔记内容为空' }
       }
       // 选择目标窗口：优先 lastFocusedWin（排除 sender 自己），回退到 mainWindow
-      const senderWin = BrowserWindow.fromWebContents(e.sender)
+      const senderWin = BrowserWindow.fromWebContents(e as any)
       let target = windowState.lastFocusedWin
       if (!target || target.isDestroyed() || !target.isVisible() || target === senderWin) {
         target = windowState.mainWindow
@@ -65,11 +73,9 @@ export function registerNotesExtraIpc(): void {
   )
 
   // 需求 11：笔记 → 存为提示词
-  // 将笔记内容作为新的 PromptTemplate 保存到提示词库。
-  // 标题取笔记正文首行（截断 30 字符），分类默认 '笔记'。
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.NOTES_SAVE_AS_PROMPT,
-    async (_e, payload: { content: string; title?: string }) => {
+    async (_e: unknown, payload: { content: string; title?: string }) => {
       const content = payload?.content ?? ''
       if (!content.trim()) {
         return { ok: false, error: '笔记内容为空' }

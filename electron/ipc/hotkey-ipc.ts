@@ -10,12 +10,25 @@
 //
 // hotkeyCallbacks（原 main.ts 全局变量）迁移到本文件内部，仅 HOTKEY_SET 与默认热键注册使用。
 // 在 app.whenReady 后由 main.ts 调用 registerHotkeyIpc(deps) 完成注册。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain, type BrowserWindow } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type HotkeyAction } from '../shared/types.js'
+import { isModuleEnabled } from '../modules/registry.js'
+import { syncVoiceHotkeyRegistration } from '../modules/wiring/voice.js'
+import {
+  setAdvancedPanelAvailability,
+  setAdvancedPanelCallback,
+  setBrowserAvailability,
+  syncAdvancedPanelHotkey,
+  syncBrowserProfileShortcuts,
+} from '../modules/wiring/hotkey-sync.js'
 import type { HotkeyManager } from '../hotkey/manager.js'
 import { resetMainWindowToDefault } from '../window-factory/main-window.js'
 import { getAppSettings } from '../store/app-settings-store.js'
+import * as focusManager from '../utils/focus-manager.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface HotkeyIpcDeps {
@@ -28,21 +41,34 @@ export interface HotkeyIpcDeps {
   startBackgroundVoice: () => Promise<void>
   /** 停止后台语音录音并识别（Alt+V keyup） */
   stopBackgroundVoice: () => Promise<void>
+  /** 切换语音录音状态（按下开始，再按停止） */
+  toggleVoiceRecording: () => Promise<void>
 }
 
 /** 连续 Alt+Space 触发计数（防误触恢复默认窗口位置）
  *  时间窗口随阈值线性放大（每次 500ms，最小 1500ms），阈值从 AppSettings 读取 */
 let altSpaceTriggerTimes: number[] = []
 
-/** 注册热键相关 IPC handler + 内置热键 */
-export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
+/**
+ * 注册热键相关 IPC handler + 内置热键。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): void {
   const {
     hotkeyManager,
     getMainWindow,
     toggleAdvancedPanelWindow,
     startBackgroundVoice,
     stopBackgroundVoice,
+    toggleVoiceRecording,
   } = deps
+
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   // ===== 内置热键回调 =====
   // toggleMainWindow：切换主窗口显隐；连续 3 次 Alt+Space 恢复默认窗口位置
@@ -68,50 +94,52 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
       }
 
       // 正常切换显隐
-      // 窗口不可见 → 显示并聚焦
-      // 窗口可见但未聚焦 → 仅聚焦到前台（不关闭，避免误操作）
-      // 窗口可见且已聚焦 → 隐藏
       const mainWindow = getMainWindow()
       if (!mainWindow) return
       if (!mainWindow.isVisible() || mainWindow.isMinimized()) {
-        if (mainWindow.isMinimized()) mainWindow.restore()
-        mainWindow.show()
-        mainWindow.focus()
-        // 通知渲染层聚焦输入框
-        mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        // 显示：同步 show + focus（立即生效）
+        focusManager.show(mainWindow)
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        }
       } else if (!mainWindow.isFocused()) {
-        // 窗口可见但不在前台：聚焦到前台而非关闭
         mainWindow.focus()
         mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
       } else {
-        mainWindow.hide()
+        // 隐藏：hide + 异步恢复外部窗口（不阻塞主进程）
+        focusManager.hide(mainWindow)
       }
     },
     toggleDetachedWindows: () => {
-      // Alt+Q 切换 进阶面板（单例，默认显示「自定义对话」页）
+      // Alt+Q 切换 进阶面板；无可用 tab 模块时已由 hotkey-sync 注销，此处兜底守卫
+      if (!isModuleEnabled('custom-chat') && !isModuleEnabled('whiteboard') && !isModuleEnabled('notes')) return
       toggleAdvancedPanelWindow()
     },
     // backgroundVoice 由 registerVoiceHotkey 独立处理（uiohook keydown/keyup），
     // 此处仅占位以满足 Record<HotkeyAction, () => void> 类型；HOTKEY_SET 拒绝自定义。
     backgroundVoice: () => {},
+    // toggleVoice：按一下开始录音，再按一下停止录音并识别
+    toggleVoice: () => {
+      void toggleVoiceRecording()
+    },
   }
 
   // ===== 热键 CRUD IPC =====
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_REGISTER, async (_e, accelerator: string) => {
+  handle(IPC_CHANNELS.HOTKEY_REGISTER, async (_e: unknown, accelerator: string) => {
     return hotkeyManager.register(accelerator, () => {
       getMainWindow()?.webContents.send(IPC_CHANNELS.HOTKEY_TRIGGERED, accelerator)
     })
   })
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_UNREGISTER, async (_e, accelerator: string) => {
+  handle(IPC_CHANNELS.HOTKEY_UNREGISTER, async (_e: unknown, accelerator: string) => {
     hotkeyManager.unregister(accelerator)
   })
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_IS_REGISTERED, async (_e, accelerator: string) => {
+  handle(IPC_CHANNELS.HOTKEY_IS_REGISTERED, async (_e: unknown, accelerator: string) => {
     return hotkeyManager.isRegistered(accelerator)
   })
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_GET_ALL, async () => {
+  handle(IPC_CHANNELS.HOTKEY_GET_ALL, async () => {
     return hotkeyManager.getAllHotkeys()
   })
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_SET, async (_e, action: HotkeyAction, accelerator: string) => {
+  handle(IPC_CHANNELS.HOTKEY_SET, async (_e: unknown, action: HotkeyAction, accelerator: string) => {
     // backgroundVoice 走 uiohook keydown/keyup 独立路径（不支持 globalShortcut）
     if (action === 'backgroundVoice') {
       // 注销旧语音热键
@@ -160,11 +188,17 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
   })
 
   // 启用/禁用某个内置热键（独立开关）
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.HOTKEY_SET_ENABLED,
-    async (_e, action: HotkeyAction, enabled: boolean) => {
+    async (_e: unknown, action: HotkeyAction, enabled: boolean) => {
       const prevEnabled = hotkeyManager.getEnabled(action)
       if (prevEnabled === enabled) return // 无变化
+
+      // 语音模块关闭时禁止启用语音热键（11.10 全路径封死）
+      if (action === 'backgroundVoice' && enabled && !isModuleEnabled('voice')) {
+        console.warn('[hotkey-ipc] 语音模块未启用，拒绝启用 backgroundVoice 热键')
+        return
+      }
 
       if (enabled) {
         // 从禁用切到启用：注册当前 accelerator
@@ -202,7 +236,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
 
   // 热键录制（uiohook 系统级键盘钩子捕获，解决 Alt+key 被系统拦截的问题）
   // 录制结果只发给发起录制的窗口（sender），支持使用指南等独立窗口
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_START_RECORDING, async (event) => {
+  handle(IPC_CHANNELS.HOTKEY_START_RECORDING, async (event: any) => {
     const sender = event.sender
     return hotkeyManager.startRecording(
       (result) => {
@@ -217,33 +251,27 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps): void {
       },
     )
   })
-  ipcMain.handle(IPC_CHANNELS.HOTKEY_STOP_RECORDING, async () => {
+  handle(IPC_CHANNELS.HOTKEY_STOP_RECORDING, async () => {
     hotkeyManager.stopRecording()
   })
+
+  // 模块 → 热键自动同步：注入可用性判断与回调
+  setAdvancedPanelAvailability(
+    () => isModuleEnabled('custom-chat') || isModuleEnabled('whiteboard') || isModuleEnabled('notes'),
+  )
+  setAdvancedPanelCallback(() => toggleAdvancedPanelWindow())
+  setBrowserAvailability(() => isModuleEnabled('browser'))
 
   // 注册 2 个默认内置热键（从持久化配置读取 accelerator）
   void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks)
 
-  // 启动时注册所有 Profile 的浏览器窗口脱离/回归快捷键（Profile.browserWindowShortcut）
-  void import('../store/app-settings-store.js').then(({ reregisterProfileShortcuts }) => {
-    void reregisterProfileShortcuts()
-  })
+  // 进阶面板无可用模块时自动注销 Alt+Q
+  syncAdvancedPanelHotkey()
 
-  // 注册 Alt+V 后台语音热键（hold-to-record，仅 uiohook keydown/keyup）
-  // 统一走主进程 SttEngine + 预览窗 + IPC 注入+发送 路径，
-  // 语音 UI 始终为独立预览窗（PreviewView），不再使用内嵌浮层。
-  // 仅当 backgroundVoice 启用时才注册；保存注销函数以便后续重注册或禁用时调用。
-  if (hotkeyManager.getEnabled('backgroundVoice')) {
-    hotkeyManager.voiceUnregisterFn = hotkeyManager.registerVoiceHotkey(
-      hotkeyManager.getHotkey('backgroundVoice'),
-      () => {
-        void startBackgroundVoice()
-      },
-      () => {
-        void stopBackgroundVoice()
-      },
-    )
-  } else {
-    console.log('[main] backgroundVoice 热键已禁用，跳过启动注册')
-  }
+  // 启动时注册所有 Profile 的浏览器窗口脱离/回归快捷键（浏览器模块关闭时自动跳过/注销）
+  void syncBrowserProfileShortcuts()
+
+  // 注册 Alt+V 后台语音热键：由 wiring/voice.syncVoiceHotkeyRegistration 统一处理
+  // （内部检查语音模块状态 + backgroundVoice 开关，幂等，避免双注册）
+  syncVoiceHotkeyRegistration()
 }

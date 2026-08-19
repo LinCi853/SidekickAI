@@ -61,39 +61,6 @@ export function setupDomSideEffects() {
   })
   updateWindowShapeAttributes()
 
-  // ===== 最小化动画（主→渲染：WIN_CONTROL_WINDOW_MINIMIZING）=====
-  // 主进程在真正 minimize 前先发送此事件，渲染层播放 200ms 淡出+向下收缩动画，
-  // 主进程等待 200ms 后再 minimize（窗口隐藏），避免内容突变带来的闪烁。
-  // 注入一次 <style>（不新建 CSS 文件），随后通过 html.is-minimizing 类触发动画。
-  ;(() => {
-    const styleId = 'sidekick-minimize-animation'
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style')
-      style.id = styleId
-      style.textContent = `
-@keyframes sidekick-minimize {
-  from { opacity: 1; transform: scale(1) translateY(0); }
-  to { opacity: 0; transform: scale(0.95) translateY(20px); }
-}
-html.is-minimizing {
-  animation: sidekick-minimize 200ms ease-in forwards;
-  transform-origin: bottom center;
-}`
-      document.head.appendChild(style)
-    }
-    let resetTimer: ReturnType<typeof setTimeout> | null = null
-    ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_WINDOW_MINIMIZING, () => {
-      document.documentElement.classList.add('is-minimizing')
-      if (resetTimer) clearTimeout(resetTimer)
-      // 动画 200ms，主进程在 200ms 时 minimize（窗口隐藏）。
-      // 在窗口隐藏后（~250ms）清除 class，避免下次显示时残留透明态。
-      resetTimer = setTimeout(() => {
-        document.documentElement.classList.remove('is-minimizing')
-        resetTimer = null
-      }, 250)
-    })
-  })()
-
   // ===== 使用统计：全局 data-name 点击日志监听器 =====
   // 监听主进程下发的窗口类型（main/chat/advanced-panel/history/prompt-library/...），
   // 写入 window.__ai_window_type__ 供点击日志的 windowType 字段使用。

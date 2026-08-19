@@ -6,6 +6,7 @@ export interface SettingsPanelProps {
 
 export interface VoiceSettings {
   confirmMode: 'auto' | 'manual' | 'clipboard';
+  inputMethod: 'layered' | 'clipboard' | 'type';
   enterToSend: boolean;
   sttMode: 'ai' | 'local';
   aiProvider: string;

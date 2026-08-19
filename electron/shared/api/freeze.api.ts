@@ -23,7 +23,16 @@ export interface TextLayerGrapheme {
   line: number
 }
 
-/** 一行视觉文本 run：包含真实字符边界与完整排版样式 */
+/** 冻结时发现的非根滚动区域；该区域滚动后无法用根视口偏移校准文本。 */
+export interface TextLayerScrollRegion {
+  x: number
+  y: number
+  w: number
+  h: number
+  viewportFixed: boolean
+}
+
+/** 一行视觉文本 run：包含真实字符边界和选择顺序。 */
 export interface TextLayerItem {
   text: string
   x: number
@@ -55,6 +64,9 @@ export interface TextLayer {
   viewportHeight: number
   visualScale: number
   devicePixelRatio: number
+  /** 提取时的 DOM 几何修订号；冻结前用于拒绝已经变化的文本层。 */
+  documentRevision?: number
+  nestedScrollRegions: TextLayerScrollRegion[]
   quality: 'glyph' | 'domsnapshot' | 'none'
   truncated: boolean
 }
@@ -64,6 +76,12 @@ export interface FreezeActionResult {
   state: FreezeState
   revision: number
   snapshot: FreezeSnapshot | null
+  textLayer: TextLayer | null
+}
+
+export interface FreezeStatusResult {
+  state: FreezeState
+  revision: number
   textLayer: TextLayer | null
 }
 
@@ -90,7 +108,7 @@ export interface FreezeAPI {
   /** 彻底分离调试器 */
   detach: (tabId: string) => Promise<boolean>
   /** 查询冻结状态 */
-  status: (tabId: string) => Promise<FreezeState>
+  status: (tabId: string) => Promise<FreezeStatusResult>
   /** 主→渲染：冻结状态变化推送 */
   onStateChanged: (callback: (payload: { tabId: string; state: FreezeState; revision: number }) => void) => () => void
   /** 渲染→主：冻结态滚轮转发（选择层滚轮 → guest compositor 滚动画面） */

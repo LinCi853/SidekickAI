@@ -4,8 +4,11 @@
 // （此时未冻结，executeJavaScript 可正常返回），再 Debugger.pause 冻结页面锁现场。
 //
 // 关键约束（PoC 验证）：冻结后 executeJavaScript 会 hang，故必须「先抓取再冻结」。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain, webContents, BrowserWindow, clipboard, app, type IpcMainInvokeEvent } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import {
   registerWebview,
@@ -19,13 +22,16 @@ import {
   getFreezeState,
   isFrozen,
   extractTextLayer,
+  isTextLayerCurrent,
   getFreezeSession,
   clearDestroyedFreezeSession,
+  detachWebContents,
   setFreezeStateBroadcaster,
 } from './freeze-manager.js'
 import type {
   FreezeActionResult,
   FreezeScrollResult,
+  FreezeStatusResult,
   FreezeState,
   TextLayer,
 } from '../shared/api/freeze.api.js'
@@ -109,6 +115,7 @@ async function scrapeSnapshot(wc: Electron.WebContents): Promise<FreezeSnapshot 
 }
 
 const stateRevisions = new Map<string, number>()
+const latestRegistrationIds = new Map<string, number>()
 
 function getStateRevision(tabId: string): number {
   return stateRevisions.get(tabId) ?? 0
@@ -132,7 +139,15 @@ function broadcastFreezeState(tabId: string, state: FreezeState): number {
 
 /** IPC 入口级操作锁，覆盖抓取、字符提取、pause/resume 的完整链路。 */
 const tabOperationTails = new Map<string, Promise<void>>()
-const tabScrollOperations = new Map<string, Promise<FreezeScrollResult | null>>()
+interface PendingScroll {
+  x: number
+  y: number
+  deltaX: number
+  deltaY: number
+  waiters: Array<(result: FreezeScrollResult | null) => void>
+  running: boolean
+}
+const pendingScrolls = new Map<string, PendingScroll>()
 
 function runSerializedTabOperation<T>(
   tabId: string,
@@ -156,14 +171,47 @@ function runTabOperation(
 
 function runScrollOperation(
   tabId: string,
-  operation: () => Promise<FreezeScrollResult | null>,
+  payload: { x: number; y: number; deltaX: number; deltaY: number },
+  operation: (scroll: { x: number; y: number; deltaX: number; deltaY: number }) => Promise<FreezeScrollResult | null>,
 ): Promise<FreezeScrollResult | null> {
-  const previous = tabScrollOperations.get(tabId) ?? Promise.resolve(null)
-  const pending = previous.catch(() => null).then(operation).finally(() => {
-    if (tabScrollOperations.get(tabId) === pending) tabScrollOperations.delete(tabId)
+  let pending = pendingScrolls.get(tabId)
+  if (!pending) {
+    pending = { ...payload, waiters: [], running: false }
+    pendingScrolls.set(tabId, pending)
+  } else {
+    pending.x = payload.x
+    pending.y = payload.y
+    pending.deltaX += payload.deltaX
+    pending.deltaY += payload.deltaY
+  }
+  const result = new Promise<FreezeScrollResult | null>((resolve) => {
+    pending!.waiters.push(resolve)
   })
-  tabScrollOperations.set(tabId, pending)
-  return pending
+  if (!pending.running) {
+    pending.running = true
+    void (async () => {
+      while (true) {
+        const current = pendingScrolls.get(tabId)
+        if (!current) return
+        const scroll = { x: current.x, y: current.y, deltaX: current.deltaX, deltaY: current.deltaY }
+        const waiters = current.waiters.splice(0)
+        current.deltaX = 0
+        current.deltaY = 0
+        let value: FreezeScrollResult | null = null
+        try {
+          value = await operation(scroll)
+        } catch {
+          value = null
+        }
+        waiters.forEach((resolve) => resolve(value))
+        if (!current.waiters.length && Math.abs(current.deltaX) < 0.01 && Math.abs(current.deltaY) < 0.01) {
+          pendingScrolls.delete(tabId)
+          return
+        }
+      }
+    })()
+  }
+  return result
 }
 
 async function persistSnapshot(
@@ -212,6 +260,10 @@ async function performFreeze(payload: {
     console.warn('[freeze-ipc] 冻结失败：tab webview 未找到', payload.tabId)
     return { frozen: false, state: 'idle', revision: getStateRevision(payload.tabId), snapshot: null, textLayer: null }
   }
+  if ((latestRegistrationIds.get(payload.tabId) ?? wc.id) !== wc.id) {
+    console.warn('[freeze-ipc] 冻结取消：已有更新的 webContents 等待注册', payload.tabId)
+    return { frozen: false, state: getFreezeState(payload.tabId), revision: getStateRevision(payload.tabId), snapshot: null, textLayer: null }
+  }
 
   if (isFrozen(payload.tabId)) {
     const session = getFreezeSession(payload.tabId)
@@ -228,10 +280,30 @@ async function performFreeze(payload: {
     console.log('[freeze-ipc] 开始冻结 tab', payload.tabId, 'webContentsId=', wc.id, 'url=', wc.getURL?.())
     const snapshot = await scrapeSnapshot(wc)
     console.log('[freeze-ipc] 抓取快照完成, pairs=', snapshot?.pairs.length ?? 0)
-    const textLayer = await extractTextLayer(wc)
+    let textLayer = await extractTextLayer(wc)
+    if (textLayer && !await isTextLayerCurrent(wc, textLayer)) {
+      console.warn('[freeze-ipc] 文本提取后页面仍在变化，重试一次', payload.tabId)
+      textLayer = await extractTextLayer(wc)
+      if (textLayer && !await isTextLayerCurrent(wc, textLayer)) {
+        console.warn('[freeze-ipc] 页面持续变化，本次冻结禁用文本选择', payload.tabId)
+        textLayer = null
+      }
+    }
     console.log('[freeze-ipc] 提取文本层完成, items=', textLayer?.items.length ?? 0)
 
-    const ok = await freezeTab(payload.tabId, textLayer)
+    if (getWebviewByTabId(payload.tabId)?.id !== wc.id
+      || (latestRegistrationIds.get(payload.tabId) ?? wc.id) !== wc.id) {
+      console.warn('[freeze-ipc] 文本提取期间 webContents 已更换，取消冻结', payload.tabId)
+      return { frozen: false, state: getFreezeState(payload.tabId), revision: getStateRevision(payload.tabId), snapshot: null, textLayer: null }
+    }
+    const ok = await freezeTab(payload.tabId, textLayer, wc.id)
+    let invalidated = false
+    if (ok && (latestRegistrationIds.get(payload.tabId) ?? wc.id) !== wc.id) {
+      console.warn('[freeze-ipc] pause 期间 webContents 已更换，立即清理旧冻结会话', payload.tabId)
+      const cleaned = await detachTab(payload.tabId)
+      if (cleaned) broadcastFreezeState(payload.tabId, 'idle')
+      invalidated = cleaned
+    }
     const state = getFreezeState(payload.tabId)
     console.log('[freeze-ipc] freezeTab 返回', ok, '当前状态', state)
     let revision = getStateRevision(payload.tabId)
@@ -245,8 +317,8 @@ async function performFreeze(payload: {
       frozen: state === 'frozen',
       state,
       revision,
-      snapshot: ok ? snapshot : null,
-      textLayer: ok ? textLayer : null,
+      snapshot: ok && !invalidated ? snapshot : null,
+      textLayer: ok && !invalidated ? textLayer : null,
     }
   } catch (err) {
     console.error('[freeze-ipc] 冻结流程失败:', err)
@@ -303,13 +375,33 @@ function attachHostAltPHotkey(win: BrowserWindow): void {
   })
 }
 
-export function registerFreezeIpc(): void {
+/**
+ * 注册冻结模块 IPC handler。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerFreezeIpc(scope?: EffectScope): void {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
   // freeze-manager 内部触发的状态变化（Alt+P 恢复 / 窗口失焦自动恢复）广播到渲染层
   setFreezeStateBroadcaster((tabId, state) => broadcastFreezeState(tabId, state))
-  setWebviewDestroyedHandler((record) => {
+  setWebviewDestroyedHandler(async (record, wc) => {
+    if (!wc || wc.isDestroyed()) {
+      if (clearDestroyedFreezeSession(record.tabId, record.webContentsId)) {
+        broadcastFreezeState(record.tabId, 'idle')
+      }
+      return true
+    }
+    const cleaned = await detachWebContents(record.tabId, record.webContentsId, wc)
+    if (!cleaned) return false
     if (clearDestroyedFreezeSession(record.tabId, record.webContentsId)) {
       broadcastFreezeState(record.tabId, 'idle')
     }
+    return true
   })
 
   // 宿主 Alt+P 拦截：焦点在宿主 UI 区域（选择层聚焦后）时快捷键仍可触发
@@ -317,9 +409,9 @@ export function registerFreezeIpc(): void {
   app.on('browser-window-created', (_e, w) => attachHostAltPHotkey(w))
 
   // 注册 webview 到冻结注册表（渲染层在 webview attach 后上报）
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_REGISTER_WEBVIEW,
-    (
+    async (
       _e: IpcMainInvokeEvent,
       payload: { tabId: string; windowId: string; profileId: string; webContentsId: number },
     ) => {
@@ -329,45 +421,63 @@ export function registerFreezeIpc(): void {
         console.warn('[freeze-ipc] 注册失败：webContents 不存在', payload.webContentsId)
         return false
       }
-      registerWebview(target, {
+      latestRegistrationIds.set(payload.tabId, payload.webContentsId)
+      const registered = await runSerializedTabOperation(payload.tabId, () => registerWebview(target, {
         tabId: payload.tabId,
         windowId: payload.windowId,
         profileId: payload.profileId,
-      })
-      return true
+      }))
+      if (!registered && latestRegistrationIds.get(payload.tabId) === payload.webContentsId) {
+        if (target.isDestroyed()) {
+          const currentId = getWebviewByTabId(payload.tabId)?.id
+          if (currentId === undefined) latestRegistrationIds.delete(payload.tabId)
+          else latestRegistrationIds.set(payload.tabId, currentId)
+        } else {
+          setTimeout(() => {
+            if (!target.isDestroyed() && latestRegistrationIds.get(payload.tabId) === payload.webContentsId) {
+              void runSerializedTabOperation(payload.tabId, () => registerWebview(target, {
+                tabId: payload.tabId,
+                windowId: payload.windowId,
+                profileId: payload.profileId,
+              }))
+            }
+          }, 250)
+        }
+      }
+      return registered
     },
   )
 
   // 冻结指定 tab：抓取对话快照 → 提取文本层 → pause 冻结 → 后台入库
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_TAB,
     async (
-      _e: IpcMainInvokeEvent,
+      _e: unknown,
       payload: { tabId: string; profileId: string },
     ): Promise<FreezeActionResult> => runTabOperation(payload.tabId, () => performFreeze(payload)),
   )
 
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_TOGGLE,
     async (
-      _e: IpcMainInvokeEvent,
+      _e: unknown,
       payload: { tabId: string; profileId: string },
     ): Promise<FreezeActionResult> => runTabOperation(payload.tabId, () => performToggle(payload)),
   )
 
   // 恢复指定 tab
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_RESUME,
-    async (_e: IpcMainInvokeEvent, tabId: string): Promise<boolean> => {
+    async (_e: unknown, tabId: string): Promise<boolean> => {
       const result = await runTabOperation(tabId, () => performResume(tabId))
       return result.state === 'attached'
     },
   )
 
   // 彻底分离调试器
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_DETACH,
-    (_e: IpcMainInvokeEvent, tabId: string): Promise<boolean> => runSerializedTabOperation(tabId, async () => {
+    (_e: unknown, tabId: string): Promise<boolean> => runSerializedTabOperation(tabId, async () => {
       const ok = await detachTab(tabId)
       if (ok) broadcastFreezeState(tabId, 'idle')
       return ok
@@ -375,31 +485,36 @@ export function registerFreezeIpc(): void {
   )
 
   // 查询冻结状态
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_STATUS,
-    (_e: IpcMainInvokeEvent, tabId: string): string => {
-      return getFreezeState(tabId)
+    (_e: unknown, tabId: string): FreezeStatusResult => {
+      const state = getFreezeState(tabId)
+      return {
+        state,
+        revision: getStateRevision(tabId),
+        textLayer: state === 'frozen' ? (getFreezeSession(tabId)?.textLayer ?? null) : null,
+      }
     },
   )
 
   // 冻结态滚动：渲染层选择层收到滚轮 → 主进程转发给 guest（compositor 滚动画面）
   // 冻结画面内容不动，仅视口移动；文本层偏移由渲染层按 deltaY 累计
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.FREEZE_SCROLL,
     (
-      _e: IpcMainInvokeEvent,
+      _e: unknown,
       payload: { tabId: string; x: number; y: number; deltaX: number; deltaY: number },
-    ): Promise<FreezeScrollResult | null> => runScrollOperation(payload.tabId, async () => {
+    ): Promise<FreezeScrollResult | null> => runScrollOperation(payload.tabId, payload, async (scroll) => {
       const wc = getWebviewByTabId(payload.tabId)
       if (!wc || wc.isDestroyed() || !isFrozen(payload.tabId)) return null
       try {
         await Promise.race([
           wc.debugger.sendCommand('Input.dispatchMouseEvent', {
             type: 'mouseWheel',
-            x: Math.max(0, payload.x),
-            y: Math.max(0, payload.y),
-            deltaX: payload.deltaX || 0,
-            deltaY: payload.deltaY || 0,
+            x: Math.max(0, scroll.x),
+            y: Math.max(0, scroll.y),
+            deltaX: scroll.deltaX || 0,
+            deltaY: scroll.deltaY || 0,
           }),
           new Promise<never>((_resolve, reject) => {
             setTimeout(() => reject(new Error('冻结态滚轮转发超时')), 500)
@@ -423,10 +538,20 @@ export function registerFreezeIpc(): void {
   )
 
   // 冻结态复制：渲染层选择层计算选中文本 → 主进程写入系统剪贴板（应用内置）
-  ipcMain.on(IPC_CHANNELS.FREEZE_COPY_TEXT, (_e: IpcMainInvokeEvent, text: string) => {
-    if (text && typeof text === 'string' && text.trim()) {
-      clipboard.writeText(text)
-      console.log('[freeze-ipc] 应用内置复制:', text.length, '字符')
-    }
-  })
+  // 注意：这里使用 ipcMain.on 而非 handle，因为不需要返回值
+  if (scope) {
+    scope.ipcOn(IPC_CHANNELS.FREEZE_COPY_TEXT, (_e: unknown, text: string) => {
+      if (text && typeof text === 'string' && text.trim()) {
+        clipboard.writeText(text)
+        console.log('[freeze-ipc] 应用内置复制:', text.length, '字符')
+      }
+    })
+  } else {
+    ipcMain.on(IPC_CHANNELS.FREEZE_COPY_TEXT, (_e: IpcMainInvokeEvent, text: string) => {
+      if (text && typeof text === 'string' && text.trim()) {
+        clipboard.writeText(text)
+        console.log('[freeze-ipc] 应用内置复制:', text.length, '字符')
+      }
+    })
+  }
 }

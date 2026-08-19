@@ -1,116 +1,101 @@
 /* =====================================================================
    pages/BrowserView/index.tsx —— 浏览器窗口主容器（v0.0.9 三层栏）
    三层栏结构：
-     第一栏 TabsPanel —— 标签页管理 + 窗口控制
-     第二栏 NavBar —— 导航 + 地址栏 + 工具入口
-     第三栏 BookmarksBar —— 全局书签栏（可显隐）
+      第一栏 TabsPanel —— 标签页管理 + 窗口控制
+      第二栏 NavBar —— 导航 + 地址栏 + 工具入口
+      第三栏 BookmarksBar —— 全局书签栏（可显隐）
    webview 容器：webview 池 + 设置/书签管理器标签页。
    关闭时自动将当前激活标签迁移回主窗口。
+
+   本文件为薄编排层：组合 useBrowserInit / useBrowserNavigation /
+   useBrowserWebview / useBrowserShortcuts 四个 hook，并渲染子组件。
    ===================================================================== */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useBrowserTabStore } from '../../store/useBrowserTabStore';
-import { useBookmarkStore } from '../../store/useBookmarkStore';
-import { useProfileStore } from '../../store/useProfileStore';
-import { useTabStore } from '../../store/useTabStore';
-import {
-  onToggleDevTools,
-  maximizeToggleWindow,
-  browserTabMigrateBack,
-  onWebviewHotkey,
-  consumeAccumulatedLinks,
-} from '../../lib/electron-api';
-import type { Profile } from '../../lib/electron-api';
-import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms';
-import TabsPanel from './TabBar/TabsPanel';
-import NavBar from './NavBar/NavBar';
-import BookmarksBar from './BookmarksBar/BookmarksBar';
-import BrowserWebviewTab from './BrowserWebviewTab';
-import BrowserSettingsTab from './BrowserSettingsTab';
-import BrowserStatusBar from './BrowserStatusBar';
-import BookmarkManager from './BookmarksBar/BookmarkManager';
-import NavHistoryPanel from '../HistoryDownloadView/NavHistoryPanel';
-import DownloadPanel from '../HistoryDownloadView/DownloadPanel';
-import { useBrowserKeyboard } from './useBrowserKeyboard';
-import WindowResizeHandles from '../../components/WindowResizeHandles';
-import { useFreezeStore } from '../../store/useFreezeStore';
-import FreezeOverlay from './FreezeOverlay';
+import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms.js';
+import TabsPanel from './TabBar/TabsPanel.js';
+import NavBar from './NavBar/NavBar.js';
+import BookmarksBar from './BookmarksBar/BookmarksBar.js';
+import BrowserWebviewTab from './BrowserWebviewTab.js';
+import BrowserSettingsTab from './BrowserSettingsTab.js';
+import ViewSourceTab from './ViewSourceTab.js';
+import PrintPreviewTab from './PrintPreviewTab.js';
+import BrowserStatusBar from './BrowserStatusBar.js';
+import BookmarkManager from './BookmarksBar/BookmarkManager.js';
+import NavHistoryPanel from '../HistoryDownloadView/NavHistoryPanel.js';
+import DownloadPanel from '../HistoryDownloadView/DownloadPanel.js';
+import ZoomIndicator from './ZoomIndicator.js';
+import WindowResizeHandles from '../../components/WindowResizeHandles.js';
+import FreezeOverlay from './FreezeOverlay.js';
+import { useModuleStore } from '../../store/useModuleStore.js';
+import { useBrowserInit } from './hooks/useBrowserInit.js';
+import { useBrowserNavigation } from './hooks/useBrowserNavigation.js';
+import { useBrowserWebview } from './hooks/useBrowserWebview.js';
+import { useBrowserShortcuts } from './hooks/useBrowserShortcuts.js';
 import './styles.css';
-
-/** 从 URL 查询参数获取值 */
-function getQueryParam(key: string): string | null {
-  if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get(key);
-}
 
 export default function BrowserView() {
   const {
     tabs,
     activeTabId,
     profileId,
-    initialized,
-    init,
     newTab,
     switchTab,
-    navigateTab,
-    updateTabNavState,
     bookmarkBarVisible,
     setBookmarkBarVisible,
-  } = useBrowserTabStore();
+    ready,
+    profile: activeProfile,
+    addressBarRef,
+    webviewContainerRef,
+  } = useBrowserInit();
 
-  const profiles = useProfileStore((s) => s.profiles);
-  const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const addressBarRef = useRef<HTMLInputElement | null>(null);
-  const webviewContainerRef = useRef<HTMLDivElement | null>(null);
-  const [navigateUrl, setNavigateUrl] = useState<string | null>(null);
+  const navigation = useBrowserNavigation({
+    activeTabId,
+    activeProfile,
+    tabs,
+    newTab,
+    switchTab,
+  });
 
-  // 初始化
-  useEffect(() => {
-    const windowId = getQueryParam('windowId') || '';
-    const pid = getQueryParam('profileId') || '';
-    if (!windowId || !pid) return;
+  const webview = useBrowserWebview({
+    webviewContainerRef,
+    addressBarRef,
+    activeTabId,
+    profileId,
+    newTab,
+    activeProfile,
+  });
 
-    void (async () => {
-      await useProfileStore.getState().loadProfiles();
-      await init(windowId, pid);
-      const p = useProfileStore.getState().profiles.find((pr) => pr.id === pid) ?? null;
-      setProfile(p);
-      setReady(true);
-      // E1：消费主窗口 AI 应用内累积的链接，转为浏览器窗口的标签页。
-      // consume 语义：取出并清空，避免重复消费。累积链接在主窗口拦截 new-window 时
-      // 由 helpers.ts 写入（仅主窗口模式，浏览器窗口模式不累积）。
-      try {
-        const links = await consumeAccumulatedLinks(pid);
-        if (links && links.length > 0) {
-          const store = useBrowserTabStore.getState();
-          for (const link of links) {
-            store.newTab(link.url, { source: 'external', kind: 'web' });
-            // newTab 不接受 title 参数，创建后立即更新标题为累积时的标题（通常为 URL）。
-            // webview 加载页面后 page-title-updated 事件会自动更新为真实标题。
-            const newTabId = useBrowserTabStore.getState().activeTabId;
-            if (newTabId && link.title) {
-              store.updateTabTitle(newTabId, link.title);
-            }
-          }
-          console.log(`[BrowserView] E1 消费 ${links.length} 条累积链接`);
-        }
-      } catch (e) {
-        console.warn('[BrowserView] E1 消费累积链接失败:', e);
-      }
-
-      // P1-3：确保窗口至少有一个非内部标签（空白首页标签）
-      const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads'];
-      const store = useBrowserTabStore.getState();
-      const hasNonInternal = store.tabs.some((t) => !internalSources.includes(t.source));
-      if (!hasNonInternal) {
-        store.newTab('', { source: 'initial', kind: 'home' });
-      }
-    })();
-  }, [init]);
+  useBrowserShortcuts({
+    addressBarRef,
+    bookmarkBarVisible,
+    setBookmarkBarVisible,
+    isFullscreen: webview.isFullscreen,
+    isCloudPc: webview.isCloudPc,
+    handleRefresh: webview.handleRefresh,
+    handleGoBack: webview.handleGoBack,
+    handleGoForward: webview.handleGoForward,
+    handleStopLoading: webview.handleStopLoading,
+    handleForceRefresh: webview.handleForceRefresh,
+    handleToggleDevTools: webview.handleToggleDevTools,
+    handleToggleFullscreen: webview.handleToggleFullscreen,
+    handleExitFullscreen: webview.handleExitFullscreen,
+    handleFocusCycle: webview.handleFocusCycle,
+    focusCycleRef: webview.focusCycleRef,
+    handleAddBookmark: webview.handleAddBookmark,
+    handleFocusSearch: webview.handleFocusSearch,
+    handleFindInPage: webview.handleFindInPage,
+    handlePrint: webview.handlePrint,
+    handleSavePageAs: webview.handleSavePageAs,
+    handleViewSource: webview.handleViewSource,
+    zoomInAction: webview.zoomInAction,
+    zoomOutAction: webview.zoomOutAction,
+    zoomResetAction: webview.zoomResetAction,
+    toggleCloudPc: webview.toggleCloudPc,
+    handleToggleSpatialNav: webview.handleToggleSpatialNav,
+    handleToggleFreeze: webview.handleToggleFreeze,
+  });
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
-  const activeProfile = profile;
 
   // 主题色
   const platformDef = activeProfile?.aiPlatformId
@@ -118,377 +103,12 @@ export default function BrowserView() {
     : null;
   const themeColor = activeProfile?.aiThemeColor || platformDef?.themeColor || '#c25a4a';
 
-  // E3：根据标签状态同步窗口标题（document.title 控制 BrowserWindow 标题栏 + 任务栏文本）
-  // - 存在 AI 应用标签（非内部设置/书签管理器）时显示 profile.name
-  // - 所有 AI 应用标签关闭后回到默认 'SidekickAI'
-  useEffect(() => {
-    const hasAppTab = tabs.some(
-      (t) => t.source !== 'settings' && t.source !== 'bookmark-manager' && t.source !== 'history' && t.source !== 'downloads',
-    );
-    if (hasAppTab && activeProfile) {
-      document.title = activeProfile.name;
-    } else {
-      document.title = 'SidekickAI';
-    }
-  }, [tabs, activeProfile]);
-
-  /* ===== 导航回调 ===== */
-
-  const handleGoBack = useCallback(() => {
-    const webview = webviewContainerRef.current?.querySelector(
-      `webview[data-tab-id="${activeTabId}"]`,
-    ) as (WebviewElement & { canGoBack: () => boolean; goBack: () => void }) | null;
-    if (webview?.canGoBack()) webview.goBack();
-  }, [activeTabId]);
-
-  const handleGoForward = useCallback(() => {
-    const webview = webviewContainerRef.current?.querySelector(
-      `webview[data-tab-id="${activeTabId}"]`,
-    ) as (WebviewElement & { canGoForward: () => boolean; goForward: () => void }) | null;
-    if (webview?.canGoForward()) webview.goForward();
-  }, [activeTabId]);
-
-  const handleRefresh = useCallback(() => {
-    const webview = webviewContainerRef.current?.querySelector(
-      `webview[data-tab-id="${activeTabId}"]`,
-    ) as (WebviewElement & { reload: () => void }) | null;
-    webview?.reload();
-  }, [activeTabId]);
-
-  const handleGoHome = useCallback(() => {
-    const homeUrl = activeProfile?.browserHomePage || activeProfile?.aiPlatformUrl;
-    if (homeUrl && activeTabId) {
-      setNavigateUrl(homeUrl);
-    }
-  }, [activeProfile?.browserHomePage, activeProfile?.aiPlatformUrl, activeTabId]);
-
-  const handleNavigate = useCallback((url: string) => {
-    if (url.includes('bing.com/search') && activeProfile) {
-      const query = new URL(url).searchParams.get('q') || '';
-      if (query) {
-        void import('../../lib/electron-api').then((api) =>
-          api.addSearchHistory({ profileId: activeProfile.id, query, url }),
-        );
-      }
-    }
-    setNavigateUrl(url);
-  }, [activeProfile]);
-
-  const handleNavigateComplete = useCallback(() => {
-    setNavigateUrl(null);
-  }, []);
-
-  const handleOpenSettings = useCallback(() => {
-    // 单实例：已有设置标签则切换，否则新建
-    const existing = tabs.find((t) => t.source === 'settings');
-    if (existing) {
-      switchTab(existing.id);
-    } else {
-      newTab('sidekickai://settings', { source: 'settings' });
-    }
-  }, [tabs, newTab, switchTab]);
-
-  const handleOpenBookmarkManager = useCallback(() => {
-    // 单实例：已有书签管理器标签则切换，否则新建
-    const existing = tabs.find((t) => t.source === 'bookmark-manager');
-    if (existing) {
-      switchTab(existing.id);
-    } else {
-      newTab('sidekickai://bookmarks', { source: 'bookmark-manager' });
-    }
-  }, [tabs, newTab, switchTab]);
-
-  const handleOpenHistory = useCallback(() => {
-    // 单实例：已有导航历史标签则切换，否则新建
-    const existing = tabs.find((t) => t.source === 'history');
-    if (existing) {
-      switchTab(existing.id);
-    } else {
-      newTab('sidekickai://history', { source: 'history' });
-    }
-  }, [tabs, newTab, switchTab]);
-
-  const handleOpenDownloads = useCallback(() => {
-    // 单实例：已有下载管理标签则切换，否则新建
-    const existing = tabs.find((t) => t.source === 'downloads');
-    if (existing) {
-      switchTab(existing.id);
-    } else {
-      newTab('sidekickai://downloads', { source: 'downloads' });
-    }
-  }, [tabs, newTab, switchTab]);
-
-  /* ===== F6 聚焦循环 ===== */
-  // 地址栏 → 页面内可输入区域 → 不聚焦（返回页面内容）之间循环
-  const handleFocusCycle = useCallback(() => {
-    const addressBar = addressBarRef.current;
-    // 1. 当前焦点在地址栏 → 聚焦页面内第一个可输入元素
-    if (addressBar && document.activeElement === addressBar) {
-      const webview = webviewContainerRef.current?.querySelector(
-        `webview[data-tab-id="${activeTabId}"]`,
-      ) as WebviewElement | null;
-      if (webview) {
-        webview.executeJavaScript(
-          `(function() {
-            var el = document.querySelector('textarea:not([disabled]):not([readonly])')
-                   || document.querySelector('input:not([disabled]):not([readonly])')
-                   || document.querySelector('div[contenteditable=true]');
-            if (el) { el.focus(); return true; }
-            return false;
-          })()`,
-        ).catch(() => {});
-      }
-      return;
-    }
-    // 2. 检查 webview 内是否有可输入元素聚焦
-    const webview = webviewContainerRef.current?.querySelector(
-      `webview[data-tab-id="${activeTabId}"]`,
-    ) as WebviewElement | null;
-    if (webview) {
-      webview.executeJavaScript(
-        `(function() {
-          var el = document.activeElement;
-          if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
-            el.blur();
-            return true;
-          }
-          return false;
-        })()`,
-      )
-        .then((inInput: unknown) => {
-          // 3. 焦点不在页面可输入元素 → 聚焦地址栏
-          if (!inInput) addressBar?.focus();
-        })
-        .catch(() => {
-          addressBar?.focus();
-        });
-    } else {
-      addressBar?.focus();
-    }
-  }, [activeTabId]);
-
-  // ref 保证 onWebviewHotkey 监听器能调用最新的 handleFocusCycle
-  const focusCycleRef = useRef(handleFocusCycle);
-  focusCycleRef.current = handleFocusCycle;
-
-  /* ===== Ctrl+D：添加当前页面到书签 ===== */
-  const handleAddBookmark = useCallback(() => {
-    if (!activeProfile) return;
-    const store = useBrowserTabStore.getState();
-    const tab = store.tabs.find((t) => t.id === store.activeTabId);
-    if (!tab || !tab.url) return;
-    const bookmarkStore = useBookmarkStore.getState();
-    if (!bookmarkStore.loaded) void bookmarkStore.load();
-    void bookmarkStore.add({
-      title: tab.title || tab.url,
-      url: tab.url,
-      favicon: tab.favicon,
-      profileId: activeProfile.id,
-      profileName: activeProfile.name,
-      aiPlatformId: activeProfile.aiPlatformId,
-      inBookmarkBar: true,
-    });
-  }, [activeProfile]);
-
-  /* ===== Ctrl+K / Ctrl+E：聚焦地址栏并进入搜索模式 ===== */
-  const handleFocusSearch = useCallback(() => {
-    const addressBar = addressBarRef.current;
-    if (addressBar) {
-      addressBar.focus();
-      addressBar.select();
-    }
-  }, []);
-
-  /* ===== Ctrl+F：页内查找（注入 find 脚本） ===== */
-  const handleFindInPage = useCallback(() => {
-    const webview = webviewContainerRef.current?.querySelector(
-      `webview[data-tab-id="${activeTabId}"]`,
-    ) as WebviewElement | null;
-    if (!webview) return;
-    webview.executeJavaScript(
-      `(function() {
-        var existing = document.getElementById('__sidekick_find_bar');
-        if (existing) { existing.remove(); return; }
-        var bar = document.createElement('div');
-        bar.id = '__sidekick_find_bar';
-        bar.style.cssText = 'position:fixed;top:8px;right:8px;z-index:2147483647;background:#fff;color:#333;border:1px solid #ccc;border-radius:4px;padding:6px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-family:sans-serif;font-size:13px;display:flex;align-items:center;gap:6px;';
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = '查找...';
-        input.style.cssText = 'border:1px solid #ddd;border-radius:2px;padding:3px 6px;width:180px;outline:none;font-size:13px;';
-        var info = document.createElement('span');
-        info.style.cssText = 'min-width:40px;color:#666;font-size:12px;';
-        var closeBtn = document.createElement('button');
-        closeBtn.textContent = '\\u2715';
-        closeBtn.style.cssText = 'border:none;background:none;cursor:pointer;font-size:14px;color:#999;padding:0 2px;';
-        closeBtn.onclick = function() { bar.remove(); };
-        function doFind(reverse) {
-          if (!input.value) { info.textContent = ''; return; }
-          var found = window.find(input.value, false, reverse, true, false, true, false);
-          info.textContent = found ? '' : '未找到';
-        }
-        input.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') { e.preventDefault(); doFind(e.shiftKey); }
-          if (e.key === 'Escape') { e.preventDefault(); bar.remove(); }
-        });
-        bar.appendChild(input);
-        bar.appendChild(info);
-        bar.appendChild(closeBtn);
-        document.body.appendChild(bar);
-        input.focus();
-      })()`,
-    ).catch(() => {});
-  }, [activeTabId]);
-
-  /* ===== Ctrl+P：打印当前页面 ===== */
-  const handlePrint = useCallback(() => {
-    const webview = webviewContainerRef.current?.querySelector(
-      `webview[data-tab-id="${activeTabId}"]`,
-    ) as WebviewElement | null;
-    webview?.print();
-  }, [activeTabId]);
-
-  /* ===== 快捷键 ===== */
-
-  useBrowserKeyboard({
-    onFocusAddressBar: () => addressBarRef.current?.focus(),
-    onRefresh: handleRefresh,
-    onForceRefresh: () => {
-      const webview = webviewContainerRef.current?.querySelector(
-        `webview[data-tab-id="${activeTabId}"]`,
-      ) as (WebviewElement & { reloadIgnoringCache: () => void }) | null;
-      webview?.reloadIgnoringCache();
-    },
-    onGoBack: handleGoBack,
-    onGoForward: handleGoForward,
-    onStopLoading: () => {
-      const webview = webviewContainerRef.current?.querySelector(
-        `webview[data-tab-id="${activeTabId}"]`,
-      ) as (WebviewElement & { stop: () => void }) | null;
-      webview?.stop();
-    },
-    onMaximize: () => { void maximizeToggleWindow(); },
-    onToggleDevTools: () => {
-      const webview = webviewContainerRef.current?.querySelector(
-        `webview[data-tab-id="${activeTabId}"]`,
-      ) as (WebviewElement & { isDevToolsOpened: () => boolean; openDevTools: () => void; closeDevTools: () => void }) | null;
-      if (webview) {
-        if (webview.isDevToolsOpened()) webview.closeDevTools();
-        else webview.openDevTools();
-      }
-    },
-    onToggleBookmarkBar: () => setBookmarkBarVisible(!bookmarkBarVisible),
-    onFocusCycle: handleFocusCycle,
-    onAddBookmark: handleAddBookmark,
-    onFocusSearch: handleFocusSearch,
-    onFindInPage: handleFindInPage,
-    onPrint: handlePrint,
-    onToggleFreeze: (requestedTabId) => {
-      const targetTabId = requestedTabId && useBrowserTabStore.getState().tabs.some((tab) => tab.id === requestedTabId)
-        ? requestedTabId
-        : activeTabId;
-      if (!targetTabId || !profileId) {
-        console.warn('[BrowserView] 冻结跳过：tabId 或 profileId 为空', { targetTabId, profileId });
-        return;
-      }
-      console.log('[BrowserView] Alt+P 请求主进程切换冻结状态, tabId', targetTabId);
-      void useFreezeStore.getState().doToggle(targetTabId, profileId);
-    },
-  });
-
-  /* ===== 主进程事件监听 ===== */
-
-  // 关闭窗口时，将所有网页标签迁移回主窗口（按 parentTabId 精确恢复）
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      const store = useBrowserTabStore.getState();
-      if (!store.profileId) return;
-      // E2：收集所有非内部标签的 finalUrls + parentTabId + originalOrder + source
-      // originalOrder：同 parentTabId 内的原始排序，主窗口据此按序插入到父标签右侧
-      // source：'settings' 迁移后通知主窗口切换至主页（不作为主窗口主页插入）
-      const finalUrls = store.tabs
-        .filter((t) => t.source !== 'settings' && t.source !== 'bookmark-manager' && t.source !== 'history' && t.source !== 'downloads')
-        .map((t, idx) => ({
-          parentTabId: t.parentTabId,
-          url: t.url || '',
-          title: t.title || '',
-          originalOrder: idx,
-          source: t.source,
-          // 兼容旧字段：tabId 用于旧版主窗口回退逻辑
-          tabId: t.parentTabId || t.id,
-        }));
-      // 兼容：同时传当前激活标签的 url/title（旧逻辑）
-      const activeTab = store.tabs.find((t) => t.id === store.activeTabId);
-      const isMigratable = activeTab && activeTab.source !== 'settings' && activeTab.source !== 'bookmark-manager' && activeTab.source !== 'history' && activeTab.source !== 'downloads';
-      const activeUrl = isMigratable
-        ? (activeTab.url || '')
-        : (finalUrls[0]?.url ?? '');
-      const activeTitle = isMigratable
-        ? (activeTab.title || '')
-        : (finalUrls[0]?.title ?? '');
-      browserTabMigrateBack({
-        profileId: store.profileId,
-        url: activeUrl,
-        title: activeTitle,
-        finalUrls,
-      });
-      // D3: 迁移完成后触发主窗口 AI 输入框聚焦
-      useTabStore.getState().triggerFocusAiInput();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
-
-  useEffect(() => {
-    const offDevTools = onToggleDevTools(() => {
-      const webview = webviewContainerRef.current?.querySelector(
-        `webview[data-tab-id="${activeTabId}"]`,
-      ) as (WebviewElement & { isDevToolsOpened: () => boolean; openDevTools: () => void; closeDevTools: () => void }) | null;
-      if (webview) {
-        if (webview.isDevToolsOpened()) webview.closeDevTools();
-        else webview.openDevTools();
-      }
-    });
-    return () => { offDevTools(); };
-  }, [activeTabId]);
-
-  // 冻结状态订阅 + 切换标签时同步冻结状态
-  useEffect(() => {
-    const off = useFreezeStore.getState().init();
-    return off;
-  }, []);
-  useEffect(() => {
-    if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
-  }, [activeTabId]);
-  // 窗口回到前台时兜底同步冻结状态（主进程 blur 自动恢复的广播可能丢失）
-  useEffect(() => {
-    const onFocus = () => {
-      if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
-    };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [activeTabId]);
-
-  // v0.0.9 B4：接收主进程 before-input-event 转发的 Ctrl+W（closeTab），
-  // 确保浏览器窗口任意位置（含 webview 焦点）都能关闭当前标签。
-  useEffect(() => {
-    const off = onWebviewHotkey((payload) => {
-      if (payload.action === 'closeTab') {
-        const store = useBrowserTabStore.getState();
-        if (store.activeTabId) store.closeTab(store.activeTabId);
-      } else if (payload.action === 'focusCycle') {
-        focusCycleRef.current();
-      }
-    });
-    return off;
-  }, []);
-
   /* ===== 加载态 ===== */
 
   if (!ready || !activeProfile) {
     return (
       <div className="browser-view app-shell" data-name="browser.loading">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#999' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#999' }} data-name="browser.loading-text">
           正在加载...
         </div>
       </div>
@@ -498,18 +118,84 @@ export default function BrowserView() {
   /* ===== 渲染 ===== */
 
   return (
-    <div className="browser-view app-shell" data-name="browser.container">
+    <div
+      className="browser-view app-shell"
+      data-fullscreen={webview.isFullscreen ? 'true' : undefined}
+      data-cloudpc={webview.isCloudPc ? 'true' : undefined}
+      data-name="browser.container"
+      onDragOver={navigation.handleDragOver}
+      onDrop={navigation.handleDrop}
+    >
+      {/* 沉浸式全屏悬浮退出条（鼠标移到顶部显示） */}
+      {webview.isFullscreen && (
+        <div className={`browser-fullscreen-bar${webview.fsBarVisible ? ' visible' : ''}`} data-name="browser.fullscreen-bar">
+          <span className="browser-fullscreen-bar-title" data-name="browser.fullscreen-bar-title">
+            {webview.isCloudPc ? '云电脑模式 · 快捷键已直通远端' : '沉浸式全屏'}
+          </span>
+          {webview.isCloudPc && (
+            <>
+              <div className="browser-cloud-pc-zoom" data-name="browser.cloud-pc-zoom">
+                <button type="button" className={webview.cloudPcZoomMode === 'auto' ? 'zoom-btn active' : 'zoom-btn'} onClick={webview.resetAutoZoom} data-name="browser.cloud-pc-zoom-auto">
+                  自动
+                </button>
+                {[1, 1.25, 1.5, 2].map((f, idx) => (
+                  <button
+                    key={f}
+                    type="button"
+                    className={webview.cloudPcZoomMode === 'manual' && Math.abs(webview.cloudPcZoomFactor - f) < 0.01 ? 'zoom-btn active' : 'zoom-btn'}
+                    onClick={() => webview.setManualZoom(f)}
+                    data-name={'browser.cloud-pc-zoom-factor-' + (idx + 1)}
+                  >
+                    {Math.round(f * 100)}%
+                  </button>
+                ))}
+                {webview.cloudPcRemoteRes && (
+                  <span className="zoom-info" data-name="browser.cloud-pc-zoom-info">远端 {webview.cloudPcRemoteRes.width}×{webview.cloudPcRemoteRes.height} · {Math.round(webview.cloudPcZoomFactor * 100)}%</span>
+                )}
+              </div>
+              <button type="button" onClick={webview.toggleCloudPc} data-name="browser.cloud-pc-exit">
+                退出云电脑模式
+              </button>
+            </>
+          )}
+          <button type="button" onClick={webview.handleExitFullscreen} data-name="browser.fullscreen-exit">
+            退出全屏 (F11 / Esc)
+          </button>
+        </div>
+      )}
+      {/* 页面缩放浮窗（右上角） */}
+      <ZoomIndicator onZoomIn={webview.zoomInAction} onZoomOut={webview.zoomOutAction} onZoomReset={webview.zoomResetAction} />
+      {/* 云电脑模式进入提示（4 秒后自动消失） */}
+      {webview.cloudPcNotice && (
+        <div className="browser-cloud-pc-notice" data-name="browser.cloud-pc-notice">
+          {webview.cloudPcNotice}
+        </div>
+      )}
+      {/* 云电脑/云游戏网站检测提醒 */}
+      {webview.cloudPcSuggestion && !webview.isCloudPc && (
+        <div className="browser-cloud-pc-suggest" data-name="browser.cloud-pc-suggest">
+          <span className="browser-cloud-pc-suggest-text" data-name="browser.cloud-pc-suggest-text">
+            检测到云电脑/云游戏网站「{webview.cloudPcSuggestion.siteName}」，建议开启云电脑模式（快捷键直通远端、自动匹配分辨率）
+          </span>
+          <button type="button" className="suggest-btn primary" onClick={webview.acceptCloudPcSuggestion} data-name="browser.cloud-pc-suggest-open">
+            开启
+          </button>
+          <button type="button" className="suggest-btn" onClick={webview.dismissCloudPcSuggestion} data-name="browser.cloud-pc-suggest-ignore">
+            忽略
+          </button>
+        </div>
+      )}
       {/* 三层栏垂直堆叠 */}
-      <div className="browser-bar-stack">
+      <div className="browser-bar-stack" data-name="browser.bar-stack">
         {/* 第一栏：标签页栏 */}
         <TabsPanel
           profile={activeProfile}
           themeColor={themeColor}
           tabs={tabs}
           activeTabId={activeTabId}
-          onOpenSettings={handleOpenSettings}
+          onOpenSettings={navigation.handleOpenSettings}
         />
-        <div className="browser-bar-divider" />
+        <div className="browser-bar-divider" data-name="browser.bar-divider-1" />
         {/* 第二栏：导航与功能栏 */}
         <NavBar
           profile={activeProfile}
@@ -517,21 +203,22 @@ export default function BrowserView() {
           activeTab={activeTab}
           canGoBack={activeTab?.canGoBack ?? false}
           canGoForward={activeTab?.canGoForward ?? false}
-          onGoBack={handleGoBack}
-          onGoForward={handleGoForward}
-          onRefresh={handleRefresh}
-          onGoHome={handleGoHome}
-          onNavigate={handleNavigate}
-          onOpenSettings={handleOpenSettings}
-          onOpenHistory={handleOpenHistory}
-          onOpenDownloads={handleOpenDownloads}
+          onGoBack={webview.handleGoBack}
+          onGoForward={webview.handleGoForward}
+          onRefresh={webview.handleRefresh}
+          onStopLoading={webview.handleStopLoading}
+          onGoHome={navigation.handleGoHome}
+          onNavigate={navigation.handleNavigate}
+          onOpenSettings={navigation.handleOpenSettings}
+          onOpenHistory={navigation.handleOpenHistory}
+          onOpenDownloads={navigation.handleOpenDownloads}
           addressBarRef={addressBarRef}
         />
         {/* 第三栏：书签栏（可显隐） */}
-        <div className="browser-bar-divider" />
+        <div className="browser-bar-divider" data-name="browser.bar-divider-2" />
         <BookmarksBar
           visible={bookmarkBarVisible}
-          onOpenBookmarkManager={handleOpenBookmarkManager}
+          onOpenBookmarkManager={navigation.handleOpenBookmarkManager}
         />
       </div>
 
@@ -614,6 +301,42 @@ export default function BrowserView() {
               </div>
             );
           }
+          // 查看网页源代码标签页
+          if (tab.source === 'view-source') {
+            return (
+              <div
+                key={tab.id}
+                data-name="browser.view-source-tab-container"
+                style={{
+                  display: tab.id === activeTabId ? 'flex' : 'none',
+                  position: 'absolute',
+                  inset: 0,
+                  overflow: 'hidden',
+                  background: 'var(--background, #1a1a1a)',
+                }}
+              >
+                <ViewSourceTab tab={tab} profile={activeProfile} />
+              </div>
+            );
+          }
+          // 打印预览标签页
+          if (tab.source === 'print-preview') {
+            return (
+              <div
+                key={tab.id}
+                data-name="browser.print-preview-tab-container"
+                style={{
+                  display: tab.id === activeTabId ? 'flex' : 'none',
+                  position: 'absolute',
+                  inset: 0,
+                  overflow: 'hidden',
+                  background: 'var(--background, #1a1a1a)',
+                }}
+              >
+                <PrintPreviewTab tab={tab} />
+              </div>
+            );
+          }
           // 普通网页标签
           return (
             <BrowserWebviewTab
@@ -621,8 +344,18 @@ export default function BrowserView() {
               tab={tab}
               profile={activeProfile}
               active={tab.id === activeTabId}
-              navigateUrl={tab.id === activeTabId ? navigateUrl : null}
-              onNavigateComplete={handleNavigateComplete}
+              navigateUrl={tab.id === activeTabId ? navigation.navigateUrl : null}
+              onNavigateComplete={navigation.handleNavigateComplete}
+              onGoBack={webview.handleGoBack}
+              onGoForward={webview.handleGoForward}
+              onReload={webview.handleRefresh}
+              canGoBack={tab.canGoBack ?? false}
+              canGoForward={tab.canGoForward ?? false}
+              onToggleCloudPc={webview.toggleCloudPc}
+              isCloudPc={webview.isCloudPc}
+              onZoomIn={webview.zoomInAction}
+              onZoomOut={webview.zoomOutAction}
+              onZoomReset={webview.zoomResetAction}
             />
           );
         })}
@@ -632,27 +365,9 @@ export default function BrowserView() {
       <BrowserStatusBar />
 
       {/* 冻结态覆盖层 + 控制条（防撤回保险） */}
-      <FreezeOverlay activeTabId={activeTabId} />
+      {useModuleStore.getState().isEnabled('freeze') && <FreezeOverlay activeTabId={activeTabId} />}
 
       <WindowResizeHandles />
     </div>
   );
-}
-
-interface WebviewElement {
-  canGoBack(): boolean;
-  canGoForward(): boolean;
-  goBack(): void;
-  goForward(): void;
-  reload(): void;
-  reloadIgnoringCache(): void;
-  stop(): void;
-  isDevToolsOpened(): boolean;
-  openDevTools(): void;
-  closeDevTools(): void;
-  getURL(): string;
-  getTitle(): string;
-  getWebContentsId(): number;
-  executeJavaScript(script: string): Promise<unknown>;
-  print(): void;
 }

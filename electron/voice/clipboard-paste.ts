@@ -12,8 +12,11 @@
 import { showNotification } from '../notify.js'
 import {
   simulatePaste,
+  typeText,
+  insertTextLayered,
   ERR_MAC_ACCESSIBILITY_DENIED,
 } from '../utils/platform-actions.js'
+import type { InsertTextResult } from '../utils/platform-actions.js'
 
 /** 剪贴板恢复定时器（后台粘贴后延迟恢复用户原剪贴板内容） */
 let clipboardRestoreTimer: NodeJS.Timeout | null = null
@@ -169,4 +172,48 @@ export function clearClipboardRestoreTimer(): void {
     clearTimeout(clipboardRestoreTimer)
     clipboardRestoreTimer = null
   }
+}
+
+/**
+ * 直接键入文本到当前前台外部应用（不修改剪贴板）。
+ * 使用平台原生键盘模拟逐字符输入，光标在哪个输入框就输入到哪里。
+ *
+ * 比 clipboard+Ctrl+V 模式更可靠：
+ *   - 不会覆盖用户剪贴板内容
+ *   - 不需要等待窗口失焦
+ *   - 在任何支持键盘输入的应用中都能工作
+ */
+export async function typeTextToExternalApp(text: string): Promise<void> {
+  try {
+    await typeText(text)
+    console.log('[voice] 直接键入模式：文本已输入到前台应用')
+  } catch (err) {
+    console.error('[voice] 直接键入失败:', err)
+    if ((err as Error & { code?: string }).code === ERR_MAC_ACCESSIBILITY_DENIED) {
+      return // macOS 权限缺失，已弹窗提示
+    }
+    showNotification('语音已识别', '自动输入失败，请手动粘贴')
+  }
+}
+
+/**
+ * 分层降级上屏（推荐方案）
+ * 尝试顺序：UI Automation → SendInput → 剪贴板
+ * 返回实际使用的上屏方式
+ */
+export async function insertTextToExternalApp(text: string): Promise<InsertTextResult> {
+  const result = await insertTextLayered(text, {
+    backup: backupClipboard,
+    write: (t) => {
+      const { clipboard } = require('electron') as typeof import('electron')
+      clipboard.writeText(t)
+    },
+    restore: (snapshot) => restoreClipboard(snapshot as ClipboardSnapshot),
+  })
+
+  console.log(`[voice] 分层上屏结果: method=${result.method}, success=${result.success}`)
+  if (!result.success) {
+    showNotification('语音已识别', '自动输入失败，请手动粘贴')
+  }
+  return result
 }

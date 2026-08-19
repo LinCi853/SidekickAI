@@ -13,7 +13,8 @@ import { useHotkeys } from '../hooks/useHotkeys';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import SettingsPanel from '../components/SettingsPanel';
 import ShortcutsModal from '../components/ShortcutsModal';
-import { IconButton, TitleBar } from '../components/ui';
+import { IconButton, TitleBar, PinToggleButton } from '../components/ui';
+import { GearIcon } from '../components/icons';
 import { useProfileStore } from '../store/useProfileStore';
 import { useTabStore } from '../store/useTabStore';
 import {
@@ -33,6 +34,7 @@ import { useIsNarrow } from '../hooks/useIsNarrow';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { listBlockRules } from '../lib/electron-api/block-rules';
 import { buildBlockerScript, matchDomain } from '../lib/webview-blocker';
+import { injectionManager } from '../lib/injection-manager';
 import './StandaloneView.css';
 
 export default function StandaloneView() {
@@ -112,28 +114,15 @@ export default function StandaloneView() {
         // 强制移动端 viewport，防止横向滚动/阴影；兜底拦截 window.open 与 _blank
         await injectViewportAndPopupGuard(webview);
 
-        // 注入页面组件屏蔽规则（与 WebviewTab 保持一致，确保脱离窗口也享受广告屏蔽）
-        // 全局开关 disableAllBlockRules 开启时跳过所有屏蔽规则注入
+        // 通过统一注入管理器注入可关闭功能（屏蔽规则、Cookie 处理、空间导航）
         try {
-          const settings = await getAppSettings();
-          if (!settings.disableAllBlockRules) {
-            const rules = await listBlockRules();
-            const url = webview.getURL();
-            const hostname = url ? new URL(url).hostname : '';
-            if (hostname) {
-              const matched = rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname));
-              console.log(
-                `[StandaloneView] 屏蔽规则注入: hostname=${hostname} total=${rules.length} matched=${matched.length}`,
-              );
-              if (matched.length > 0) {
-                await webview.executeJavaScript(buildBlockerScript(matched));
-              }
-            }
-          } else {
-            console.log('[StandaloneView] 屏蔽规则已全局关闭，跳过注入');
-          }
+          await injectionManager.injectAll(
+            `standalone-${activeProfile.id}`,
+            webview,
+            webview.getURL(),
+          );
         } catch (e) {
-          console.error('[StandaloneView] 屏蔽规则注入失败:', e);
+          console.error('[StandaloneView] 统一注入失败:', e);
         }
       } catch (e) {
         console.error('[StandaloneView] 注入失败:', e);
@@ -358,10 +347,7 @@ export default function StandaloneView() {
                   title="设置"
                   onClick={() => setIsSettingsOpen(true)}
                 >
-                  <svg className="icon-svg" data-name="standalone.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
+                  <GearIcon className="icon-svg" />
                 </IconButton>
                 <IconButton
                   type="button"
@@ -376,25 +362,16 @@ export default function StandaloneView() {
                     <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
                   </svg>
                 </IconButton>
-                <IconButton
-                  type="button"
-                  variant={alwaysOnTop ? 'active' : 'default'}
-                  className="sa-btn titlebar-icon-btn"
-                  data-name="standalone.top-bar.pin-icon-button"
-                  aria-label="置顶"
-                  title={alwaysOnTop ? '取消置顶' : '置顶'}
-                  onClick={async () => {
+                <PinToggleButton
+                  isPinned={alwaysOnTop}
+                  onToggle={async () => {
                     const next = !alwaysOnTop;
                     setAlwaysOnTop(next);
-                    try { await pinCurrentWindow(next); } catch (e) { setAlwaysOnTop(!next); }
+                    try { await pinCurrentWindow(next); } catch { setAlwaysOnTop(!next); }
                   }}
-                >
-                  <svg className="icon-svg" data-name="standalone.top-bar.pin-icon" viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="17" x2="12" y2="3" />
-                    <path d="M6.5 8.5L12 3l5.5 5.5" />
-                    <path d="M5 21h14" />
-                  </svg>
-                </IconButton>
+                  className="sa-btn titlebar-icon-btn"
+                  data-name="standalone.top-bar.pin-icon-button"
+                />
               </div>
             </>
           }

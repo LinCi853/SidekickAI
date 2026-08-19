@@ -33,8 +33,10 @@ export interface BrowserTabStoreState {
   initialized: boolean;
 
   init: (windowId: string, profileId: string) => Promise<void>;
-  newTab: (url?: string, opts?: { source?: BrowserTabState['source']; kind?: 'home' | 'web' }) => void;
-  closeTab: (tabId: string) => void;
+  newTab: (url?: string, opts?: { source?: BrowserTabState['source']; kind?: 'home' | 'web' }) => string;
+  /** 打开书签/链接：已存在同 URL 标签则切换聚焦，否则新建（书签点击的标准语义） */
+  openTabOrFocus: (url: string, opts?: { source?: BrowserTabState['source']; kind?: 'home' | 'web' }) => string;
+  closeTab: (tabId: string) => Promise<void>;
   switchTab: (tabId: string) => void;
   navigateTab: (tabId: string, url: string) => void;
   updateTabTitle: (tabId: string, title: string) => void;
@@ -138,57 +140,70 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
       activeTabId: id,
     }));
     get().persist();
+    return id;
   },
 
-  closeTab: (tabId: string) => {
-    const { tabs, activeTabId, profileId } = get();
-    const closingTab = tabs.find((t) => t.id === tabId);
-    if (!closingTab) return;
-    void useFreezeStore.getState().doDetach(tabId);
+  openTabOrFocus: (url, opts) => {
+    const internal = ['settings', 'bookmark-manager', 'history', 'downloads', 'view-source', 'print-preview'];
+    const existing = get().tabs.find((t) => t.url === url && !internal.includes(t.source));
+    if (existing) {
+      set({ activeTabId: existing.id });
+      get().persist();
+      return existing.id;
+    }
+    return get().newTab(url, opts);
+  },
 
-    const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads'];
-    const isInternal = internalSources.includes(closingTab.source);
-
-    // 推入最近关闭记录（仅网页标签，设置页等内部标签不记录）
-    if (closingTab.kind === 'web' && closingTab.url && !isInternal) {
+  closeTab: async (tabId: string) => {
+    const initial = get();
+    if (!initial.tabs.some((tab) => tab.id === tabId)) return;
+    const detached = await useFreezeStore.getState().doDetach(tabId);
+    if (!detached) {
+      console.warn('[useBrowserTabStore] 冻结调试器清理失败，取消关闭标签', tabId);
+      return;
+    }
+    const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads', 'view-source', 'print-preview'];
+    let closedTab: BrowserTabState | undefined;
+    let wasInternal = false;
+    set((current) => {
+      const target = current.tabs.find((tab) => tab.id === tabId);
+      if (!target) return current;
+      closedTab = target;
+      wasInternal = internalSources.includes(target.source);
+      const nonInternalTabs = current.tabs.filter((tab) => !internalSources.includes(tab.source));
+      if (!wasInternal && nonInternalTabs.length === 1 && nonInternalTabs[0].id === tabId) {
+        const profile = useProfileStore.getState().profiles.find((p) => p.id === current.profileId);
+        const blankTab: BrowserTabState = {
+          ...target,
+          source: 'initial',
+          url: profile?.browserHomePage || '',
+          title: profile?.name || '新标签',
+          kind: 'home',
+          isLoading: false,
+          loadingProgress: 0,
+          loadingStatus: undefined,
+          canGoBack: false,
+          canGoForward: false,
+          favicon: undefined,
+        };
+        return { tabs: current.tabs.map((tab) => (tab.id === tabId ? blankTab : tab)), activeTabId: tabId };
+      }
+      const newTabs = current.tabs.filter((tab) => tab.id !== tabId);
+      return {
+        tabs: newTabs,
+        activeTabId: current.activeTabId === tabId ? newTabs[newTabs.length - 1]?.id ?? null : current.activeTabId,
+      };
+    });
+    if (!closedTab) return;
+    if (closedTab.kind === 'web' && closedTab.url && !wasInternal) {
       useRecentClosedStore.getState().push({
-        id: closingTab.id,
-        title: closingTab.title || closingTab.url,
-        url: closingTab.url,
-        favicon: closingTab.favicon,
+        id: closedTab.id,
+        title: closedTab.title || closedTab.url,
+        url: closedTab.url,
+        favicon: closedTab.favicon,
         closedAt: Date.now(),
       });
     }
-
-    // P1-3：当关闭的是最后一个非内部标签时，不关闭窗口，替换为空白标签
-    const nonInternalTabs = tabs.filter((t) => !internalSources.includes(t.source));
-    if (!isInternal && nonInternalTabs.length === 1 && nonInternalTabs[0].id === tabId) {
-      const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId);
-      const blankTab: BrowserTabState = {
-        ...closingTab,
-        source: 'initial',
-        url: profile?.browserHomePage || '',
-        title: profile?.name || '新标签',
-        kind: 'home',
-        isLoading: false,
-        loadingProgress: 0,
-        loadingStatus: undefined,
-        canGoBack: false,
-        canGoForward: false,
-        favicon: undefined,
-      };
-      const newTabs = tabs.map((t) => (t.id === tabId ? blankTab : t));
-      set({ tabs: newTabs, activeTabId: tabId });
-      get().persist();
-      return;
-    }
-
-    const newTabs = tabs.filter((t) => t.id !== tabId);
-    let newActiveId = activeTabId;
-    if (activeTabId === tabId) {
-      newActiveId = newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null;
-    }
-    set({ tabs: newTabs, activeTabId: newActiveId });
     get().persist();
   },
 

@@ -59,6 +59,8 @@ export interface WindowControlAPI {
   resize(bounds: { x?: number; y?: number; width: number; height: number }): Promise<void>
   /** 切换全屏（保留接口，当前无热键绑定） */
   toggleFullscreen(): Promise<boolean>
+  /** 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中） */
+  setCursor(x: number, y: number): Promise<{ ok: boolean; error?: string }>
   /**
    * 动态设置当前窗口的最小尺寸（用于 UI 比例变化时重新约束窗口尺寸）。
    * 主进程通过 BrowserWindow.setMinimumSize 设置调用方所在窗口。

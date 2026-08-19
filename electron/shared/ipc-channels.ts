@@ -47,8 +47,6 @@ export const IPC_CHANNELS = {
   WIN_CONTROL_MAXIMIZE_TOGGLED: 'winControl:maximizeToggled',
   WIN_CONTROL_FULLSCREEN_TOGGLED: 'winControl:fullscreenToggled',
   WIN_CONTROL_PIN_TOGGLED: 'winControl:pinToggled',
-  // 主→渲染：窗口即将最小化（主进程延迟 200ms minimize，渲染层在此期间播放淡出+收缩动画）
-  WIN_CONTROL_WINDOW_MINIMIZING: 'winControl:windowMinimizing',
   // 窗口状态持久化
   WIN_STATE_GET: 'winState:get',
   WIN_STATE_SAVE: 'winState:save',
@@ -259,6 +257,8 @@ export const IPC_CHANNELS = {
   // 预览窗更新（主→预览窗渲染）
   PREVIEW_UPDATE: 'preview:update',
   PREVIEW_HIDE: 'preview:hide',
+  // 流式识别部分结果（主→预览窗渲染：实时推送已识别的部分文本）
+  PREVIEW_PARTIAL: 'preview:partial',
   // 渲染进程音频采集（主→预览窗渲染：开始/停止录音；渲染→主：回传 PCM 数据）
   VOICE_RECORD_START: 'voice:recordStart',
   VOICE_RECORD_STOP: 'voice:recordStop',
@@ -352,6 +352,30 @@ export const IPC_CHANNELS = {
   BROWSER_NAVIGATE: 'browser:navigate',
   // 在系统默认浏览器中打开 URL
   BROWSER_OPEN_EXTERNAL: 'browser:openExternal',
+  // 另存为：保存当前页面（渲染→主，webContentsId + suggestedName，主进程弹保存对话框后 savePage）
+  BROWSER_SAVE_PAGE_AS: 'browser:savePageAs',
+  // 另存为：下载 URL 到用户指定路径（渲染→主，webContentsId + url + suggestedFilename，will-download 弹保存对话框）
+  BROWSER_DOWNLOAD_AS: 'browser:downloadAs',
+  // 查看网页源代码：按 session partition 抓取原始 HTML（渲染→主，partition + url，返回源码文本）
+  BROWSER_VIEW_SOURCE: 'browser:viewSource',
+  // 打印预览：生成当前页面 PDF 临时文件（渲染→主，webContentsId + title，返回文件路径）
+  BROWSER_PRINT_PREVIEW: 'browser:printPreview',
+  // 打印预览页「另存为」：把临时 PDF 复制到用户指定路径
+  BROWSER_SAVE_PDF_AS: 'browser:savePdfAs',
+  // 删除打印预览临时文件（预览标签关闭时清理）
+  BROWSER_DELETE_TEMP_PDF: 'browser:deleteTempPdf',
+  // 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中）
+  CURSOR_SET: 'cursor:set',
+  // 云电脑模式（渲染→主：进入/退出；主进程挂起/恢复全局热键、同步全屏）
+  BROWSER_CLOUD_PC_SET: 'browser:cloudPc:set',
+  // 云电脑模式状态变化（主→渲染：含主进程兜底退出通知）
+  BROWSER_CLOUD_PC_CHANGED: 'browser:cloudPc:changed',
+  // 云电脑模式系统级按键路由（主→渲染：Win/Alt+Tab/Win+Tab/Win+D/Alt+F4，渲染层合成注入 guest）
+  BROWSER_CLOUD_PC_KEYS: 'browser:cloudPc:keys',
+  // 全局光标屏幕坐标（渲染→主；全屏悬浮退出条的光标探测用）
+  BROWSER_CURSOR_POS: 'browser:cursorPos',
+  // 网页截图：保存截图 PNG 到用户指定路径（渲染→主，dataURL + suggestedName）
+  BROWSER_SAVE_CAPTURE: 'browser:saveCapture',
   // 搜索历史
   BROWSER_SEARCH_HISTORY_ADD: 'browser:searchHistory:add',
   BROWSER_SEARCH_HISTORY_LIST: 'browser:searchHistory:list',
@@ -434,4 +458,15 @@ export const IPC_CHANNELS = {
   FREEZE_SCROLL: 'freeze:scroll',
   // 渲染→主：冻结态应用内置复制（选中文本 → 主进程写系统剪贴板）
   FREEZE_COPY_TEXT: 'freeze:copyText',
+  // ===== 模块管理（插件系统：插件市场 / 开发者选项） =====
+  // 渲染→主：列出全部模块信息（含状态）
+  MODULE_LIST: 'module:list',
+  // 渲染→主：启用/禁用模块（{ id, enabled }）
+  MODULE_SET_ENABLED: 'module:setEnabled',
+  // 渲染→主：清除模块数据（{ id }，不可逆）
+  MODULE_CLEAR_DATA: 'module:clearData',
+  // 主→渲染：模块状态变更广播（ModuleStateChangedPayload）
+  MODULE_STATE_CHANGED: 'module:stateChanged',
+  // 渲染→主：零残留诊断扫描（返回 ResidualScanResult）
+  MODULE_DIAGNOSTICS: 'module:diagnostics',
 } as const

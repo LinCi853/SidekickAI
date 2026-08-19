@@ -346,7 +346,43 @@
 .notes-markdown-preview h5,
 .notes-markdown-preview h6 {
   margin: var(--space-3) 0 var(--space-2);
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.notes-markdown-preview h1 {
+  font-size: 1.8em;
+}
+
+.notes-markdown-preview h2 {
+  font-size: 1.5em;
+}
+
+.notes-markdown-preview h3 {
+  font-size: 1.25em;
+}
+
+.notes-markdown-preview h4 {
+  font-size: 1.1em;
+}
+
+.notes-markdown-preview h5 {
+  font-size: 1em;
+}
+
+.notes-markdown-preview h6 {
+  font-size: 0.9em;
+  color: var(--muted-foreground);
+}
+
+.notes-markdown-preview strong,
+.notes-markdown-preview b {
+  font-weight: 700;
+}
+
+.notes-markdown-preview em,
+.notes-markdown-preview i {
+  font-style: italic;
 }
 
 .notes-markdown-preview ul,

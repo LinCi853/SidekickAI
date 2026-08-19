@@ -15,6 +15,7 @@ import { SegmentedControl } from '@/components/ui';
 import { useEscToCloseWindow } from '@/hooks/useEscToCloseWindow';
 import NavHistoryPanel from './NavHistoryPanel';
 import DownloadPanel from './DownloadPanel';
+import { HistoryIcon, DownloadIcon } from '@/components/icons';
 import './styles.css';
 
 type Tab = 'navHistory' | 'downloads';
@@ -57,14 +58,33 @@ export default function HistoryDownloadView() {
               name="hd-tab"
               className="hd-sidebar-segment"
               options={[
-                { value: 'navHistory', label: '导航历史' },
-                { value: 'downloads', label: '下载管理' },
+                {
+                  value: 'navHistory',
+                  label: (
+                    <span className="hd-sidebar-segment-label" data-name="hd.sidebar.segment-label-nav">
+                      <HistoryIcon className="hd-sidebar-segment-icon" />
+                      导航历史
+                    </span>
+                  ),
+                },
+                {
+                  value: 'downloads',
+                  label: (
+                    <span className="hd-sidebar-segment-label" data-name="hd.sidebar.segment-label-dl">
+                      <DownloadIcon className="hd-sidebar-segment-icon" />
+                      下载管理
+                    </span>
+                  ),
+                },
               ]}
             />
-            <div className="hd-sidebar-count" data-name="hd.sidebar.count">
-              {tab === 'navHistory'
-                ? `导航历史 ${navCount} 条`
-                : `下载记录 ${dlCount} 条`}
+            <div className="hd-sidebar-summary" data-name="hd.sidebar.summary">
+              <span className="hd-sidebar-summary-num" data-name="hd.sidebar.summary-num">
+                {tab === 'navHistory' ? navCount : dlCount}
+              </span>
+              <span className="hd-sidebar-summary-label" data-name="hd.sidebar.summary-label">
+                {tab === 'navHistory' ? '条导航历史' : '条下载记录'}
+              </span>
             </div>
           </div>
 

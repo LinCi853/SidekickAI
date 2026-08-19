@@ -23,7 +23,6 @@ export interface FlatGrapheme {
   h: number;
   line: number;
   direction: string;
-  fallback: boolean;
   breakBefore: boolean;
 }
 
@@ -44,6 +43,18 @@ export function getLayerScale(layer: TextLayer, layerPos: LayerPosition | null) 
   };
 }
 
+/** 文本层是否可选择：glyph 和 domsnapshot 质量都支持基本选择 */
+export function isTextLayerSelectable(layer: TextLayer): boolean {
+  return layer.quality === 'glyph' || layer.quality === 'domsnapshot';
+}
+
+/** 获取文本层质量级别，用于UI提示 */
+export function getTextLayerQuality(layer: TextLayer): 'high' | 'medium' | 'none' {
+  if (layer.quality === 'glyph') return 'high';
+  if (layer.quality === 'domsnapshot') return 'medium';
+  return 'none';
+}
+
 export function toGuestPoint(
   clientX: number,
   clientY: number,
@@ -62,13 +73,38 @@ export function toGuestPoint(
  * coordinates are only used to locate the nearest caret boundary.
  */
 export function flattenGraphemes(layer: TextLayer, wheelX: number, wheelY: number): FlatGrapheme[] {
+  if (!isTextLayerSelectable(layer)) return [];
   const flat: FlatGrapheme[] = [];
+  const isGlyphQuality = layer.quality === 'glyph';
+
   layer.items.forEach((item, itemIndex) => {
-    if (item.transformed || item.verticalWriting) return;
-    const graphemes = item.graphemes || [];
+    // Range client rects are already in post-transform viewport coordinates.
+    // Only vertical writing needs a different caret-axis algorithm.
+    if (item.verticalWriting) return;
     const offsetX = item.viewportFixed ? 0 : wheelX;
     const offsetY = item.viewportFixed ? 0 : wheelY;
-    if (!graphemes.length && item.text && item.w > 0 && item.h > 0) {
+
+    if (isGlyphQuality && item.graphemes && item.graphemes.length > 0) {
+      // Glyph质量：使用精确的grapheme数据
+      item.graphemes.forEach((grapheme, graphemeIndex) => {
+        if (!grapheme.text || grapheme.w <= 0 || grapheme.h <= 0) return;
+        flat.push({
+          order: flat.length,
+          itemIndex,
+          graphemeIndex,
+          text: grapheme.text,
+          x: grapheme.x - offsetX,
+          y: grapheme.y - offsetY,
+          w: grapheme.w,
+          h: grapheme.h,
+          line: grapheme.line,
+          direction: item.direction || 'ltr',
+          breakBefore: graphemeIndex === 0 && Boolean(item.breakBefore),
+        });
+      });
+    } else if (item.text && item.w > 0 && item.h > 0) {
+      // DOMSnapshot质量：将整个item文本作为一个可选择的文本块
+      // 坐标已由主进程正确计算（quad解析），直接使用
       flat.push({
         order: flat.length,
         itemIndex,
@@ -80,28 +116,9 @@ export function flattenGraphemes(layer: TextLayer, wheelX: number, wheelY: numbe
         h: item.h,
         line: item.line,
         direction: item.direction || 'ltr',
-        fallback: true,
         breakBefore: Boolean(item.breakBefore),
       });
-      return;
     }
-    graphemes.forEach((grapheme, graphemeIndex) => {
-      if (!grapheme.text || grapheme.w <= 0 || grapheme.h <= 0) return;
-      flat.push({
-        order: flat.length,
-        itemIndex,
-        graphemeIndex,
-        text: grapheme.text,
-        x: grapheme.x - offsetX,
-        y: grapheme.y - offsetY,
-        w: grapheme.w,
-        h: grapheme.h,
-        line: grapheme.line,
-        direction: item.direction || 'ltr',
-        fallback: false,
-        breakBefore: graphemeIndex === 0 && Boolean(item.breakBefore),
-      });
-    });
   });
   return flat;
 }

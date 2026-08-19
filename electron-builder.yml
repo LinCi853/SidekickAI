@@ -6,22 +6,39 @@ directories:
 files:
   - out/**/*
   - resources/icons/*
-  # 原生模块显式打包（避免被 electron-builder 自动剔除规则误删）
-  - node_modules/better-sqlite3/build/Release/better_sqlite3.node
-  - node_modules/uiohook-napi/prebuilds/**
-  # 删除 Chromium 协议汇总文件（10MB+，用户可在线查阅）
+  # 包含全部 node_modules（electron-builder 自动排除 devDependencies）
+  - node_modules/**/*
+  # ===== 排除不需要的依赖 =====
   - '!LICENSES.chromium.html'
+  # 大模块组件化（画板依赖 ≈140MB 由 extraResources 可选安装）
+  - '!node_modules/@excalidraw/**'
+  - '!node_modules/mermaid/**'
+  - '!node_modules/katex/**'
+  # electron-store 已迁入 SQLite settings.db
+  - '!node_modules/electron-store/**'
+  # 仅保留 Windows 平台原生模块预编译
+  - '!node_modules/uiohook-napi/prebuilds/darwin*/**'
+  - '!node_modules/uiohook-napi/prebuilds/linux*/**'
 # 原生 .node 必须解压到磁盘（无法从 asar 内加载 process.dlopen）
 # electron-builder 默认会 unpack *.node，显式声明确保跨平台稳定
 asarUnpack:
   - node_modules/better-sqlite3/build/Release/*.node
-  - node_modules/uiohook-napi/prebuilds/**/*.node
+  # 仅解包 Windows 平台的原生模块
+  - node_modules/uiohook-napi/prebuilds/win32-*/**/*.node
   - node_modules/uiohook-napi/build/Release/*.node
 # 打包后钩子：删除 Chromium 自带的 LICENSES.chromium.html 等大文件
 afterPack: scripts/after-pack.cjs
 extraResources:
   - from: build/License.txt
     to: License.txt
+  # 画板可选组件（大模块）：安装器组件页决定是否安装到磁盘
+  # 注意：to 相对 resources 目录（勿带 resources/ 前缀）
+  - from: node_modules/@excalidraw
+    to: plugins/whiteboard/deps/@excalidraw
+  - from: node_modules/mermaid
+    to: plugins/whiteboard/deps/mermaid
+  - from: node_modules/katex
+    to: plugins/whiteboard/deps/katex
 # Windows 代码签名：从环境变量读取，未配置则跳过签名
 # CSC_LINK：证书 .pfx 路径或 base64；CSC_KEY_PASSWORD：证书密码
 # 架构由命令行 --x64 / --arm64 参数控制（yml 不配置 arch 避免追加导致合并包）

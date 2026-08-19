@@ -15,19 +15,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
-import { Button, IconButton, TitleBar, Combobox } from '../components/ui';
+import { Button, IconButton, TitleBar, Combobox, PinToggleButton } from '../components/ui';
 import type { ComboboxOption } from '../components/ui';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
+import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
 import { useChatStore } from '../store/useChatStore';
 import {
   minimizeWindow,
-  maximizeToggleWindow,
   closeCurrentWindow,
-  pinCurrentWindow,
-  isWindowMaximized,
-  isWindowAlwaysOnTop,
-  onPinToggled,
-  onMaximizeToggled,
   getUsageStats,
   exportConversation,
   getChatConfig,
@@ -39,13 +34,12 @@ import {
 import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
 import { MessageBubble } from './MessageBubble';
 import { generateChatAccentVars } from '../lib/oxy-color-engine';
-import { AlertIcon } from '@/components/icons';
+import { AlertIcon, GearIcon } from '@/components/icons';
 import './ChatView.css';
 
 export default function ChatView({ windowId }: { windowId?: string }) {
   const [input, setInput] = useState('');
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
   const [usageStats, setUsageStats] = useState<{ totalTokens: number; todayTokens: number; todayCount: number } | null>(null);
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 600 : false,
@@ -241,11 +235,6 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     }
   };
 
-  const handleMaximize = async () => {
-    const next = await maximizeToggleWindow();
-    setIsMaximized(next);
-  };
-
   const handleSelectConversation = async (id: string) => {
     await selectConversation(id);
     if (isNarrow) setIsSidebarOpen(false);
@@ -370,28 +359,13 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                 title="设置"
                 onClick={() => void openAdvancedPanelWindow(currentProviderId ?? undefined)}
               >
-                <svg className="icon-svg" data-name="chat.top-bar.settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
+                <GearIcon className="icon-svg" />
               </IconButton>
-              <IconButton
-                type="button"
-                variant={isPinned ? 'active' : 'default'}
+              <PinToggleButton
+                isPinned={isPinned}
+                onToggle={handleTogglePin}
                 data-name="chat.top-bar.pin-icon-button"
-                aria-label={isPinned ? '取消置顶' : '置顶'}
-                title={isPinned ? '取消置顶' : '置顶'}
-                onClick={async () => {
-                  const next = !isPinned;
-                  setIsPinned(next);
-                  await pinCurrentWindow(next);
-                }}
-              >
-                <svg className="icon-svg" data-name="chat.top-bar.pin-icon" viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 17v5" />
-                  <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
-                </svg>
-              </IconButton>
+              />
             </>
           }
         />

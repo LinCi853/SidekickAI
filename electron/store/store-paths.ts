@@ -13,7 +13,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync, mkdirSync } from 'fs'
 import Database from 'better-sqlite3'
-import Store from 'electron-store'
+// electron-store 已移除（Phase 3：全部 JSON store 已迁入 SQLite settings.db）
 import { app } from 'electron'
 
 /** 等价于 CommonJS __dirname，用于 ESM 获取当前模块目录 */
@@ -187,24 +187,10 @@ export class MetaTable<V = string> {
 // Task 15: JSON store 基础设施
 // =============================================================================
 
-/**
- * 创建 electron-store 实例（统一 cwd: getStoreCwd() 重复）。
- *
- * @param opts.name 文件名（不含扩展名，如 'prompts' → prompts.json）
- * @param opts.defaults 默认值
- * @param opts.cwd 可选目录覆盖（默认使用 getStoreCwd()）
- */
-export function createJsonStore<T extends Record<string, any>>(opts: {
-  name: string
-  defaults: T
-  cwd?: string
-}): Store<T> {
-  return new Store<T>({
-    name: opts.name,
-    cwd: opts.cwd ?? getStoreCwd(),
-    defaults: opts.defaults,
-  })
-}
+// createJsonStore 已移除（Phase 3：全部 JSON store 已迁入 SQLite settings.db）
+
+// Phase 3：createSqliteJsonStore / clearSqliteStore 已迁移至 module-state-store.ts（此处仅保留引用）
+export { createSqliteJsonStore, clearSqliteStore } from './module-state-store.js'
 
 /**
  * 通用 CRUD 接口（基于 electron-store 的数组持久化）。
@@ -223,16 +209,24 @@ export interface CrudStore<T extends { id: string }> {
   update(id: string, patch: Partial<T>): void
 }
 
+/** store 通用接口（兼容 electron-store 与 createSqliteJsonStore 返回值） */
+export interface StoreLike {
+  get(key: string): any
+  set(key: string, value: any): void
+}
+// JsonStore<T> 兼容 StoreLike（get/set 签名兼容）：
+// createSqliteJsonStore 返回的 JsonStore<T> 的 get/set 接受 keyof T，
+// 但 TS 允许 keyof T 隐式转为 string，因此兼容 StoreLike。
+
 /**
- * 创建通用 CRUD 操作集（基于 electron-store 的某个 key 下 T[] 数组）。
+ * 创建通用 CRUD 操作集（基于 store 的某个 key 下 T[] 数组）。
  * 特殊方法（如 profile.duplicate / ai-provider.touchLastUsed）仍由原 store 类实现。
  *
- * @param opts.store electron-store 实例（key 下存储 T[] 数组）
+ * @param opts.store store 实例（兼容 electron-store 与 createSqliteJsonStore）
  * @param opts.key 数组在 store 中的字段名
  */
 export function createCrudStore<T extends { id: string }>(opts: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  store: Store<any>
+  store: StoreLike
   key: string
 }): CrudStore<T> {
   const { store, key } = opts
@@ -275,8 +269,7 @@ export function createCrudStore<T extends { id: string }>(opts: {
  * @returns true 表示填充了默认数据，false 表示已存在数据
  */
 export function ensureDefaults<T extends { id: string }>(opts: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  store: Store<any>
+  store: StoreLike
   key: string
   defaults: T[]
   migrate?: (existing: T[]) => void

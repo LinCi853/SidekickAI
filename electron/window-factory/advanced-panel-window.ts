@@ -35,6 +35,8 @@ import {
   ADVANCED_PANEL_MIN_HEIGHT,
 } from './window-size-helpers.js'
 import { getAppSettings } from '../store/app-settings-store.js'
+import { isModuleEnabled } from '../modules/registry.js'
+import * as focusManager from '../utils/focus-manager.js'
 
 /** 渲染层加载 URL 时附加的 query 参数（仅生产环境 loadFile 路径使用） */
 interface AdvancedPanelWindowOptions {
@@ -97,7 +99,7 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     frame: false,
     alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: '进阶面板',
+    title: '工百窗 - 进阶面板',
     webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
       webviewTag: false, // 进阶面板不使用 webview（API 直连 + 内置平台网格只发 IPC）
@@ -105,6 +107,7 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   }))
 
   windowState.advancedPanelWindow = win
+  focusManager.track(win)
 
   // 默认最大化：记录初始 normalBounds 供取消最大化时还原
   if (shouldMaximize) {
@@ -144,6 +147,11 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
  * 若窗口已存在则聚焦并切换到指定 tab/provider；否则创建。
  */
 export function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptions): void {
+  // 模块门控（11.10）：自定义对话/白板/笔记全关时进阶面板无可用内容，拒绝打开
+  if (!isModuleEnabled('custom-chat') && !isModuleEnabled('whiteboard') && !isModuleEnabled('notes')) {
+    console.warn('[advanced-panel-window] 自定义对话/白板/笔记模块均未启用，拒绝打开进阶面板')
+    return
+  }
   createAdvancedPanelWindow(options)
 }
 
@@ -178,17 +186,16 @@ export function focusAdvancedPanelWindow(): void {
  * win.close() 会触发 close/closed 事件，完成 bounds 持久化与 state 清理。
  */
 export function toggleAdvancedPanelWindow(): void {
+  // 模块门控：面板无可用 tab 时直接忽略（Alt+Q 已由 hotkey-sync 注销，此处兜底）
+  if (!isModuleEnabled('custom-chat') && !isModuleEnabled('whiteboard') && !isModuleEnabled('notes')) return
   const win = windowState.advancedPanelWindow
   if (win && !win.isDestroyed()) {
     if (win.isVisible()) {
       console.log('[advanced-panel-window] Alt+Q 关闭 进阶面板（下次重新打开路由到默认 tab）')
-      win.close()
+      focusManager.close(win)
     } else {
-      // 隐藏状态（极少出现，例如最小化到任务栏后被系统隐藏）：显示并聚焦
       console.log('[advanced-panel-window] Alt+Q 显示 进阶面板')
-      if (win.isMinimized()) win.restore()
-      win.show()
-      win.focus()
+      void focusManager.show(win)
     }
     return
   }

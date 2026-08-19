@@ -8,8 +8,9 @@ import { useEffect, useState, type MutableRefObject } from 'react';
 import type { BrowserTabState, Profile, BrowserDownloadRecord } from '../../../lib/electron-api';
 import { onDownloadUpdated } from '../../../lib/electron-api';
 import { IconButton } from '../../../components/ui';
-import { HistoryIcon, DownloadIcon } from '@/components/icons';
+import { HistoryIcon, DownloadIcon, GearIcon } from '@/components/icons';
 import AddressBar from './AddressBar';
+import GamepadIndicator from './GamepadIndicator';
 
 interface NavBarProps {
   profile: Profile;
@@ -20,6 +21,7 @@ interface NavBarProps {
   onGoBack: () => void;
   onGoForward: () => void;
   onRefresh: () => void;
+  onStopLoading: () => void;
   onGoHome: () => void;
   onNavigate: (url: string) => void;
   onOpenSettings: () => void;
@@ -37,6 +39,7 @@ export default function NavBar({
   onGoBack,
   onGoForward,
   onRefresh,
+  onStopLoading,
   onGoHome,
   onNavigate,
   onOpenSettings,
@@ -89,18 +92,32 @@ export default function NavBar({
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </IconButton>
-        <IconButton
-          aria-label="刷新"
-          onClick={onRefresh}
-          title="刷新 (F5)"
-          data-name="browser.refresh"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10" />
-            <polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-          </svg>
-        </IconButton>
+        {activeTab?.isLoading ? (
+          <IconButton
+            aria-label="停止加载"
+            onClick={onStopLoading}
+            title="停止加载 (Esc)"
+            data-name="browser.stop"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </IconButton>
+        ) : (
+          <IconButton
+            aria-label="刷新"
+            onClick={onRefresh}
+            title="刷新 (F5)"
+            data-name="browser.refresh"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </IconButton>
+        )}
         <IconButton
           aria-label="主页"
           onClick={onGoHome}
@@ -123,8 +140,9 @@ export default function NavBar({
         addressBarRef={addressBarRef}
       />
 
-      {/* 右侧：扩展占位 + 下载 + AI 头像 + 设置 */}
+      {/* 右侧：手柄指示器 + 扩展占位 + 下载 + AI 头像 + 设置 */}
       <div className="browser-bar-right">
+        <GamepadIndicator />
         {/* 扩展程序图标区（占位，待后续开发） */}
         <div className="browser-extension-slot" title="扩展程序（待开发）" data-name="browser.extension-slot">
           <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -132,6 +150,7 @@ export default function NavBar({
             <line x1="7" y1="7" x2="7.01" y2="7" />
           </svg>
         </div>
+
         {/* 历史记录入口（内嵌标签页） */}
         <IconButton
           aria-label="历史记录"
@@ -168,10 +187,7 @@ export default function NavBar({
           title="设置"
           data-name="browser.settings"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
+          <GearIcon />
         </IconButton>
       </div>
 

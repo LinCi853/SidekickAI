@@ -47,10 +47,8 @@ export default function AppearanceSection({
 
   const handleOxyToggle = async (next: boolean) => {
     if (next) {
-      // 开启 Oxy：控制器会自动处理主题、UI 比例、监听器
       setUiVersion('oxy');
     } else {
-      // 关闭 Oxy：恢复用户之前的手动 UI 比例
       const saved = readUserUiScale();
       setUiScale(saved);
       document.documentElement.setAttribute('data-ui-scale', saved);
@@ -83,7 +81,7 @@ export default function AppearanceSection({
         />
       </FormRow>
 
-      {/* 经典版专属选项：主题模式 + UI 比例（Oxy 开启时隐藏，由系统自动管理） */}
+      {/* 经典版专属选项：主题模式 + UI 比例（Oxy 开启时不显示） */}
       {!isOxy && (
         <>
           <FormRow label="主题">
@@ -108,7 +106,7 @@ export default function AppearanceSection({
         </>
       )}
 
-      {/* 标签栏自动收起（Oxy 模式下隐藏，由系统强制收起） */}
+      {/* 标签栏收起（Oxy 开启时不显示） */}
       {!isOxy && (
         <FormRow label="标签栏收起">
           <Toggle

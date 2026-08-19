@@ -6,12 +6,13 @@
 //   - 使用独立 session（persist:${profileId}-browser）
 //   - 加载 mode='browser' 渲染进程
 
-import { BrowserWindow, ipcMain, nativeImage, screen, session, type DownloadItem } from 'electron'
+import { BrowserWindow, ipcMain, nativeImage, screen, session, dialog, type DownloadItem } from 'electron'
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../window-state.js'
 import { getAppSettings } from '../store/app-settings-store.js'
+import { isModuleEnabled } from '../modules/registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { randomUUID } from 'crypto'
 import path from 'path'
@@ -28,6 +29,10 @@ import {
   safeLogWindowTrace,
   setupBoundsTracking,
 } from './helpers.js'
+import { isFrozen } from '../freeze/freeze-manager.js'
+import { getRecordByTabId } from '../freeze/webview-registry.js'
+import { consumeAskSavePath } from '../utils/ask-save-path.js'
+import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'
@@ -77,16 +82,39 @@ function registerBrowserDownloads(win: BrowserWindow, windowId: string, profileI
     ses.setPermissionRequestHandler((_webContents, permission, callback) => {
       // 默认放行常见权限；下载权限由 will-download + sitePermissions.blockDownload 控制
       // 通知权限可被 sitePermissions.blockNotification 拦截（由渲染层在 setPermissionRequestHandler 时按 tab 过滤）
-      const allowed = new Set(['media', 'geolocation', 'fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
+      // pointerLock / keyboardLock：云游戏与网页游戏必需的鼠标捕获/键盘捕获权限
+      const allowed = new Set(['media', 'geolocation', 'fullscreen', 'clipboard-read', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock', 'speaker-selection'])
       callback(allowed.has(permission))
     })
   }
 
   ses.on('will-download', (_e, item: DownloadItem) => {
-    const settings = getAppSettings()
-    const dir = settings.downloadDir || app.getPath('downloads')
-    const filename = item.getFilename() || 'download'
-    const savePath = path.join(dir, filename)
+    // 统一计算最终保存路径：
+    // - 「另存为」下载（右键链接/图片另存为）：弹保存对话框选择路径，取消则终止下载
+    // - 普通下载：静默保存到用户配置的下载目录
+    let filename: string
+    let savePath: string
+    const isAskSavePath = consumeAskSavePath()
+    if (isAskSavePath) {
+      const askFilename = (item.getFilename() || 'download').replace(/[\\/:*?"<>|]/g, '_')
+      // 使用注册下载处理时闭包的浏览器窗口作为对话框父窗口
+      const result = dialog.showSaveDialogSync(win, {
+        title: '另存为',
+        defaultPath: askFilename,
+        filters: [{ name: '所有文件', extensions: ['*'] }],
+      })
+      if (!result) {
+        item.cancel()
+        return
+      }
+      filename = item.getFilename() || 'download'
+      savePath = result
+    } else {
+      const settings = getAppSettings()
+      const dir = settings.downloadDir || app.getPath('downloads')
+      filename = item.getFilename() || 'download'
+      savePath = path.join(dir, filename)
+    }
     item.setSavePath(savePath)
 
     const downloadId = randomUUID()
@@ -180,6 +208,12 @@ function registerBrowserDownloads(win: BrowserWindow, windowId: string, profileI
   })
 }
 
+/** app 是否正在退出（云电脑模式 close 保护的放行条件） */
+let appQuitting = false
+try {
+  app.on('before-quit', () => { appQuitting = true })
+} catch { /* ignore */ }
+
 /**
  * 为浏览器窗口生成 Profile 专属图标（首字母 + 主题色）。
  * 使用 SVG data URL + nativeImage.createFromDataURL，避免依赖额外图像库。
@@ -204,6 +238,10 @@ function generateProfileIcon(name: string, color: string): Electron.NativeImage 
  * @param profileId 绑定的 Profile id
  */
 export function createBrowserWindow(windowId: string, profileId: string): BrowserWindow {
+  // 模块门控（11.10）：浏览器模块关闭时不创建浏览器窗口
+  if (!isModuleEnabled('browser')) {
+    throw new Error('[browser-window] 浏览器模块未启用，拒绝创建浏览器窗口')
+  }
   const saved = browserWindowStore.get(windowId)
   const profile = profileStore.get(profileId)
   const workArea = screen.getPrimaryDisplay().workArea
@@ -229,7 +267,7 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     resizable: true,
     alwaysOnTop: saved?.alwaysOnTop ?? false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: profile?.name || 'SidekickAI',
+    title: `工百窗 - ${profile?.name || '浏览器'}`,
     icon: profileIcon || undefined,
     webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
@@ -246,11 +284,43 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
   // 此处仅作用于主 webContents，不与 webview 拦截冲突。
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
+    // 云电脑模式：Ctrl+W 等全部放行给远端（退出兜底在 helpers.ts 的 guest 拦截中处理）
+    if (isCloudPc(win.webContents.id)) return
     const mods = input.modifiers || []
     const hasCtrl = mods.includes('control') || mods.includes('ctrl')
-    const hasShift = mods.includes('shift')
     const hasAlt = mods.includes('alt')
+    const hasShift = mods.includes('shift')
+
+    // F11：切换沉浸式全屏（宿主 UI 聚焦时主进程直接兜底，
+    // 不依赖渲染层 defs；webview 聚焦时由 helpers.ts 的 guest 拦截处理）
+    if (input.key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
+      event.preventDefault()
+      console.log('[browser-window] F11 → 宿主兜底切换沉浸式全屏')
+      try { win.setFullScreen(!win.isFullScreen()) } catch (err) {
+        console.error('[browser-window] 切换全屏失败:', err)
+      }
+      return
+    }
+
+    // Escape：全屏时退出（沉浸式全屏的标准退出方式，宿主兜底）
+    if (input.key === 'Escape' && !hasCtrl && !hasAlt && !hasShift) {
+      if (win.isFullScreen()) {
+        event.preventDefault()
+        console.log('[browser-window] Escape → 宿主兜底退出全屏')
+        try { win.setFullScreen(false) } catch { /* ignore */ }
+        return
+      }
+    }
     const hasMeta = mods.includes('meta') || mods.includes('command')
+    if (!hasCtrl && !hasShift && !hasAlt && !hasMeta && input.key === 'F12') {
+      const state = browserWindowStore.get(windowId)
+      const tabId = state?.activeTabId ?? null
+      if (tabId && getRecordByTabId(tabId) && isFrozen(tabId)) {
+        event.preventDefault()
+        console.log('[hotkey] F12 跳过：当前浏览器标签处于冻结态')
+        return
+      }
+    }
     // Ctrl+W：关闭当前标签（排除 Shift/Alt/Meta，避免误触）
     if (hasCtrl && !hasShift && !hasAlt && !hasMeta && input.key.toLowerCase() === 'w') {
       event.preventDefault()
@@ -304,7 +374,18 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
 
   // v0.0.9: 窗口关闭时保底触发 MIGRATE_BACK（beforeunload 可能不可靠）
   // 从 browserWindowStore 读取最终标签状态，发送给主窗口
+  // 云电脑模式：阻止窗口关闭（Alt+F4 已路由到远端；退出需先退出云电脑模式）。
+  // app 退出（before-quit）时放行，避免应用无法退出。
+  win.on('close', (event) => {
+    if (isCloudPc(win.webContents.id) && !appQuitting) {
+      event.preventDefault()
+      console.log('[cloud-pc] 窗口关闭被拦截（Alt+F4 已路由到云电脑远端）')
+    }
+  })
+
   win.on('closed', () => {
+    // 云电脑模式清理：窗口关闭时恢复挂起的全局热键（防止泄漏）
+    try { exitCloudPc(win.webContents.id) } catch { /* ignore */ }
     // 清理 profileId -> win 映射（仅当当前映射指向此 win 时才删除，避免误删新窗口引用）
     const mapped = windowState.browserWindowsByProfile.get(profileId)
     if (mapped === win) {
@@ -320,7 +401,7 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     const hasParentTab = savedState.tabs.some((t) => t.parentTabId)
     if (hasParentTab) {
       // 取当前激活的非内部标签 URL/title（内部页 settings/bookmark/history/downloads 跳过）
-      const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads']
+      const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads', 'view-source', 'print-preview']
       const activeTab = savedState.tabs.find((t) => t.id === savedState.activeTabId)
       const activeNonInternal = activeTab && !internalSources.includes(activeTab.source)
         ? activeTab
@@ -372,6 +453,11 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
  * @param profileId 目标 Profile id
  */
 export async function toggleBrowserWindow(profileId: string): Promise<void> {
+  // 模块门控（11.10）：浏览器模块关闭时快捷键已注销，此处兜底拒绝
+  if (!isModuleEnabled('browser')) {
+    console.warn('[browser-window] 浏览器模块未启用，拒绝脱离/回归')
+    return
+  }
   // 串行化锁：同 Profile 的快捷键若上一次尚未完成（含兜底等待渲染层创建标签），
   // 直接忽略本次，避免连续触发开出多个窗口。
   if (toggleInFlight.has(profileId)) return

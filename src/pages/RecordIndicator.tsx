@@ -11,12 +11,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  closeCurrentWindow,
   enumerateInputDevices,
-  forceStopRecording,
   getVoiceConfig,
   onPreviewUpdate,
   onPreviewHide,
+  onPreviewPartial,
   onVoiceRecordStart,
   onVoiceRecordStop,
   sendVoiceRecordData,
@@ -29,6 +28,8 @@ type RecordStatus = 'recording' | 'transcribing' | 'done' | 'sent';
 interface RecordState {
   text: string;
   status: RecordStatus;
+  /** 流式识别的部分结果（实时更新） */
+  partialText?: string;
 }
 
 /**
@@ -45,34 +46,22 @@ export default function RecordIndicator() {
 
   useEffect(() => {
     const offUpdate = onPreviewUpdate((payload) => {
-      setState({ text: payload.text, status: payload.status });
+      setState({ text: payload.text, status: payload.status, partialText: undefined });
     });
     const offHide = onPreviewHide(() => {
-      setState((s) => ({ text: s.text, status: 'done' }));
+      setState((s) => ({ text: s.text, status: 'done', partialText: undefined }));
+    });
+    const offPartial = onPreviewPartial((payload) => {
+      setState((s) => ({ ...s, partialText: payload.text }));
     });
     return () => {
       offUpdate();
       offHide();
+      offPartial();
     };
   }, []);
 
-  // ===== 客户端自愈：录音态超过 60s 自动结束 =====
-  useEffect(() => {
-    if (state.status !== 'recording') return;
-    const CLIENT_RECORDING_TIMEOUT_MS = 60_000;
-    const timer = setTimeout(() => {
-      console.warn('[RecordIndicator] 客户端录音超时（60s），强制结束并通知主进程');
-      setState({ text: '录音超时未结束，请重新尝试', status: 'done' });
-      try {
-        void forceStopRecording('preview-timeout');
-      } catch (e) {
-        /* ignore */
-      }
-    }, CLIENT_RECORDING_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [state.status]);
-
-  // ===== 渲染进程音频采集（替代主进程 ffmpeg）+ 实时音量分析 =====
+  // ===== 渲染进程音频采集 + 实时音量分析 =====
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -231,10 +220,6 @@ export default function RecordIndicator() {
     };
   }, []);
 
-  const handleClose = () => {
-    void closeCurrentWindow();
-  };
-
   const isRecording = state.status === 'recording';
   const isTranscribing = state.status === 'transcribing';
   const isDone = state.status === 'done' || state.status === 'sent';
@@ -249,106 +234,101 @@ export default function RecordIndicator() {
       className={`record-indicator status-${state.status}${isError ? ' error-state' : ''}`}
       data-name="record-indicator.container"
     >
-      {/* 整窗可拖拽区域 */}
-      <div className="record-drag" data-name="record-indicator.drag-region" />
+      {/* 药丸主体 */}
+      <div className="record-pill" data-name="record-indicator.pill">
 
-      {/* 关闭按钮：右上角，hover 显示 */}
-      <button
-        type="button"
-        className="record-close"
-        onClick={handleClose}
-        title="关闭"
-        aria-label="关闭"
-        data-name="record-indicator.close-button"
-      >
-        <svg className="icon-svg-sm" viewBox="0 0 10 10" fill="none" data-name="record-indicator.close-icon">
-          <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
-      </button>
-
-      {/* 左侧：状态图标 */}
-      <div className="record-icon" data-name="record-indicator.icon-container">
-        {isRecording && (
-          <div className="icon-recording" data-name="record-indicator.recording-icon">
-            <div className="rec-dot" data-name="record-indicator.rec-dot" />
-          </div>
-        )}
-        {isTranscribing && (
-          <div className="icon-spinner" aria-label="识别中" data-name="record-indicator.spinner-icon">
-            <svg className="icon-svg" viewBox="0 0 16 16" fill="none" data-name="record-indicator.spinner-icon-svg">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" opacity="0.25" />
-              <path
-                d="M14 8a6 6 0 0 0-6-6"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              >
-                <animateTransform
-                  attributeName="transform"
-                  type="rotate"
-                  from="0 8 8"
-                  to="360 8 8"
-                  dur="0.8s"
-                  repeatCount="indefinite"
-                />
-              </path>
-            </svg>
-          </div>
-        )}
-        {isDone && (
-          <div className="icon-done" data-name="record-indicator.done-icon">
-            {state.text && !state.text.includes('失败') && !state.text.includes('未识别') && !state.text.includes('超时') ? (
-              <svg className="icon-svg" viewBox="0 0 14 14" fill="none" data-name="record-indicator.done-check-icon">
-                <path d="M2 7L6 11L12 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        {/* 左侧：状态图标 */}
+        <div className="record-icon" data-name="record-indicator.icon-container">
+          {isRecording && (
+            <div className="icon-recording" data-name="record-indicator.recording-icon">
+              <div className="rec-dot" data-name="record-indicator.rec-dot" />
+            </div>
+          )}
+          {isTranscribing && (
+            <div className="icon-spinner" aria-label="识别中" data-name="record-indicator.spinner-icon">
+              <svg className="icon-svg" viewBox="0 0 16 16" fill="none" data-name="record-indicator.spinner-icon-svg">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" opacity="0.25" />
+                <path
+                  d="M14 8a6 6 0 0 0-6-6"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                >
+                  <animateTransform
+                    attributeName="transform"
+                    type="rotate"
+                    from="0 8 8"
+                    to="360 8 8"
+                    dur="0.8s"
+                    repeatCount="indefinite"
+                  />
+                </path>
               </svg>
-            ) : (
-              <svg className="icon-svg" viewBox="0 0 14 14" fill="none" data-name="record-indicator.done-error-icon">
-                <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+          {isDone && (
+            <div className="icon-done" data-name="record-indicator.done-icon">
+              {state.text && !state.text.includes('失败') && !state.text.includes('未识别') && !state.text.includes('超时') ? (
+                <svg className="icon-svg" viewBox="0 0 14 14" fill="none" data-name="record-indicator.done-check-icon">
+                  <path d="M2 7L6 11L12 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg className="icon-svg" viewBox="0 0 14 14" fill="none" data-name="record-indicator.done-error-icon">
+                  <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              )}
+            </div>
+          )}
+        </div>
 
-      {/* 中间：音量波形 / 状态文字 / 识别结果 */}
-      <div className="record-content" data-name="record-indicator.content">
-        {isRecording && (
-          <div className="wave-container" aria-hidden="true" data-name="record-indicator.wave-container">
-            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
-              // 每根条根据音量 + 位置偏移生成高度
-              const phase = (i % 3) * 0.15;
-              const height = Math.max(3, Math.min(20, volumeLevel * 24 + phase * 8 + 3));
-              return (
-                <span
-                  key={i}
-                  className="wave-bar"
-                  style={{
-                    height: `${height}px`,
-                    opacity: 0.4 + volumeLevel * 0.6,
-                  }}
-                  data-name={`record-indicator.wave-bar-${i + 1}`}
-                  data-index={i + 1}
-                  data-id={String(i + 1)}
-                />
-              );
-            })}
-          </div>
-        )}
-        {isTranscribing && <span className="record-text" data-name="record-indicator.transcribing-text">正在识别…</span>}
-        {isDone && (
-          <span
-            className="record-text record-text-result"
-            title={state.text}
-            data-name="record-indicator.result-text"
-          >
-            {state.text || '已完成'}
-          </span>
-        )}
-      </div>
+        {/* 中间：音量波形 / 状态文字 / 识别结果 */}
+        <div className="record-content" data-name="record-indicator.content">
+          {isRecording && !state.partialText && (
+            <div className="wave-container" aria-hidden="true" data-name="record-indicator.wave-container">
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
+                const phase = (i % 3) * 0.15;
+                const height = Math.max(3, Math.min(20, volumeLevel * 24 + phase * 8 + 3));
+                return (
+                  <span
+                    key={i}
+                    className="wave-bar"
+                    style={{
+                      height: `${height}px`,
+                      opacity: 0.4 + volumeLevel * 0.6,
+                    }}
+                    data-name={`record-indicator.wave-bar-${i + 1}`}
+                    data-index={i + 1}
+                    data-id={String(i + 1)}
+                  />
+                );
+              })}
+            </div>
+          )}
+          {isRecording && state.partialText && (
+            <span className="record-text" data-name="record-indicator.partial-text">
+              {state.partialText}
+            </span>
+          )}
+          {isTranscribing && (
+            <span className="record-text" data-name="record-indicator.transcribing-text">
+              {state.partialText || '正在识别…'}
+            </span>
+          )}
+          {isDone && (
+            <span
+              className="record-text record-text-result"
+              title={state.text}
+              data-name="record-indicator.result-text"
+            >
+              {state.text || '已完成'}
+            </span>
+          )}
+        </div>
 
-      {/* 右侧：录音时长/状态标签 */}
-      <div className="record-label" data-name="record-indicator.label">
-        {isRecording && <span className="label-rec" data-name="record-indicator.label-rec">REC</span>}
+        {/* 右侧：录音时长/状态标签 */}
+        <div className="record-label" data-name="record-indicator.label">
+          {isRecording && <span className="label-rec" data-name="record-indicator.label-rec">REC</span>}
+        </div>
       </div>
     </div>
   );

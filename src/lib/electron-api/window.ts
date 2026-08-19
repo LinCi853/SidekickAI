@@ -2,7 +2,7 @@
    lib/electron-api/window.ts —— 窗口管理 / 窗口控制 / 窗口状态 / 标签 / 设备预设 / AI平台 / 新标签事件
    ===================================================================== */
 
-import type { WindowStateData, DevicePreset, AIPlatform } from '../../../electron/shared/types';
+import type { WindowStateData, DevicePreset, AIPlatform, WebviewHotkeyAction } from '../../../electron/shared/types';
 import { requireElectron } from './core';
 
 /* =====================================================================
@@ -120,6 +120,12 @@ export async function setMinimumSize(width: number, height: number): Promise<voi
 export async function toggleFullscreenWindow(): Promise<boolean> {
   const api = requireElectron();
   return api.windowControl.toggleFullscreen();
+}
+
+/** 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中） */
+export async function setCursorPosition(x: number, y: number): Promise<{ ok: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.windowControl.setCursor(x, y);
 }
 
 /**
@@ -318,7 +324,7 @@ export async function addToProfilePopupWhitelist(profileId: string, origin: stri
  */
 export function onWebviewHotkey(
   callback: (payload: {
-    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFreeze' | 'toggleFullscreen' | 'focusCycle' | 'addBookmark' | 'openHistory' | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print';
+    action: WebviewHotkeyAction;
     data?: unknown;
   }) => void,
 ): () => void {

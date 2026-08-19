@@ -10,9 +10,12 @@
 //
 // better-sqlite3 同步 API，所有方法阻塞调用，适合单次写入与查询。
 // 所有 CRUD 在主进程执行，通过 IPC 暴露给渲染进程。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import Database from 'better-sqlite3'
 import { ipcMain } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { registerSafeIpcHandler, registerSyncIpcHandler } from '../shared/ipc-utils.js'
@@ -154,12 +157,22 @@ export function closeWhiteboardDb(): void {
   whiteboardDbHolder.close()
 }
 
-/** 注册白板 IPC handler（app.whenReady 后调用） */
-export function registerWhiteboardIPC(): void {
+/**
+ * 注册白板 IPC handler（app.whenReady 后调用）。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerWhiteboardIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
   const db = getWhiteboardDb()
 
-  ipcMain.handle(ipc.WHITEBOARD_LIST, () => {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(ipc.WHITEBOARD_LIST, () => {
     try {
       return db.listWhiteboards()
     } catch (err) {
@@ -167,7 +180,7 @@ export function registerWhiteboardIPC(): void {
       return []
     }
   })
-  ipcMain.handle(ipc.WHITEBOARD_CREATE, (_e, title?: string) => {
+  handle(ipc.WHITEBOARD_CREATE, (_e: unknown, title?: string) => {
     try {
       return db.createWhiteboard(title)
     } catch (err) {
@@ -182,6 +195,7 @@ export function registerWhiteboardIPC(): void {
       return { ok: true }
     },
     'whiteboard-db rename',
+    scope,
   )
   registerSafeIpcHandler(
     ipc.WHITEBOARD_DELETE,
@@ -190,6 +204,7 @@ export function registerWhiteboardIPC(): void {
       return { ok: true }
     },
     'whiteboard-db delete',
+    scope,
   )
   registerSafeIpcHandler(
     ipc.WHITEBOARD_REORDER,
@@ -198,8 +213,9 @@ export function registerWhiteboardIPC(): void {
       return { ok: true }
     },
     'whiteboard-db reorder',
+    scope,
   )
-  ipcMain.handle(ipc.WHITEBOARD_GET_ACTIVE, () => {
+  handle(ipc.WHITEBOARD_GET_ACTIVE, () => {
     try {
       return db.getActiveWhiteboardId()
     } catch (err) {
@@ -214,8 +230,9 @@ export function registerWhiteboardIPC(): void {
       return { ok: true }
     },
     'whiteboard-db setActive',
+    scope,
   )
-  ipcMain.handle(ipc.WHITEBOARD_GET_SNAPSHOT, (_e, id: string) => {
+  handle(ipc.WHITEBOARD_GET_SNAPSHOT, (_e: unknown, id: string) => {
     try {
       return db.loadSnapshot(id)
     } catch (err) {
@@ -230,6 +247,7 @@ export function registerWhiteboardIPC(): void {
       return { ok: true }
     },
     'whiteboard-db saveSnapshot',
+    scope,
   )
   // 同步保存（beforeunload 兜底）
   registerSyncIpcHandler(
@@ -238,5 +256,6 @@ export function registerWhiteboardIPC(): void {
       db.saveSnapshot(id, snapshot)
     },
     'whiteboard-db saveSnapshotSync',
+    scope,
   )
 }

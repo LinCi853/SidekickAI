@@ -47,12 +47,19 @@ export interface AudioDeviceInfo {
 /** 语音输入配置（引擎选择 + 后台发送行为等全局设置） */
 export interface VoiceConfig {
   /**
-   * 语音识别完成后的上屏方式（候选窗已移除，全部自动上屏以减少操作步骤）：
-   * - 'auto'（默认）：识别完成后自动注入/粘贴上屏（前台注入 webview，后台 Ctrl+V 粘贴）
-   * - 'manual'：同 'auto'，保留枚举仅为兼容旧配置（不再弹候选窗）
-   * - 'clipboard'：仅写入剪贴板 + 系统通知，不模拟按键（用户手动粘贴）
+   * 语音识别完成后的上屏方式：
+   * - 'auto'（默认）：识别完成后自动注入/粘贴上屏
+   * - 'manual'：同 'auto'，保留枚举仅为兼容旧配置
+   * - 'clipboard'：仅写入剪贴板，不模拟按键（用户手动粘贴）
    */
   confirmMode: 'auto' | 'manual' | 'clipboard'
+  /**
+   * 后台语音上屏模式（仅影响应用外的第三方应用）：
+   * - 'layered'（推荐）：分层降级 UI Automation → SendInput → 剪贴板
+   * - 'clipboard'：剪贴板 + Ctrl+V 粘贴
+   * - 'type'：逐字符键入
+   */
+  inputMethod: 'layered' | 'clipboard' | 'type'
   /** 前台注入后是否自动回车发送（后台粘贴场景不受此字段影响） */
   enterToSend: boolean
   /** 识别引擎模式：ai=自定义AI接入 / local=本地识别软件 */

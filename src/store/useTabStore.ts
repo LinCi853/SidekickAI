@@ -228,13 +228,20 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   },
 
   closeTab: async (tabId) => {
-    void useFreezeStore.getState().doDetach(tabId);
-    const { tabs, activeTabId } = get();
-    const newTabs = tabs.filter((t) => t.id !== tabId).map((t, i) => ({ ...t, order: i }));
-    const newActive = activeTabId === tabId
-      ? newTabs[0]?.id ?? null
-      : activeTabId;
-    set({ tabs: newTabs, activeTabId: newActive });
+    const detached = await useFreezeStore.getState().doDetach(tabId);
+    if (!detached) {
+      console.warn('[useTabStore] 冻结调试器清理失败，取消关闭标签', tabId);
+      return;
+    }
+    set((current) => {
+      const newTabs = current.tabs
+        .filter((tab) => tab.id !== tabId)
+        .map((tab, index) => ({ ...tab, order: index }));
+      return {
+        tabs: newTabs,
+        activeTabId: current.activeTabId === tabId ? newTabs[0]?.id ?? null : current.activeTabId,
+      };
+    });
     get().persist();
   },
 

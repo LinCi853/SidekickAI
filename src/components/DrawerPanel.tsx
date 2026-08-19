@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import Sun from 'lucide-react/dist/esm/icons/sun'
 import Moon from 'lucide-react/dist/esm/icons/moon'
 import { useThemeStore } from '../store/useThemeStore';
+import { useModuleStore } from '../store/useModuleStore';
+import { useUiVersionStore } from '../store/useUiVersionStore';
 import { openAdvancedPanelWindow, showOnboardingWindow } from '../lib/electron-api';
 import { IconButton } from './ui';
 import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
@@ -32,6 +34,12 @@ export default function DrawerPanel({
   const theme = useThemeStore((s) => s.theme);
   const resolved = useThemeStore((s) => s.resolved);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
+  // 模块门控：提示词库入口 / 进阶面板入口（chat+白板+笔记全关时隐藏）
+  const promptEnabled = useModuleStore((s) => s.isEnabled('prompt-library'));
+  const advancedPanelAvailable = useModuleStore(
+    (s) => s.isEnabled('custom-chat') || s.isEnabled('whiteboard') || s.isEnabled('notes'),
+  );
+  const isOxy = useUiVersionStore((s) => s.version) === 'oxy';
 
   // 关闭时设置 inert，防止 Tab 焦点泄漏到隐藏的抽屉面板
   const panelRef = useRef<HTMLDivElement>(null);
@@ -101,12 +109,12 @@ export default function DrawerPanel({
         handleItemClick('settings');
       } else if (key === 'p') {
         e.preventDefault();
-        handleItemClick('prompt');
+        if (promptEnabled) handleItemClick('prompt');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, handleItemClick]);
+  }, [open, handleItemClick, promptEnabled]);
 
   return (
     <>
@@ -177,7 +185,8 @@ export default function DrawerPanel({
         </button>
 
         <div className="drawer-list" data-name="component.drawer-panel.list">
-          {/* 进阶面板入口（Alt+Q） */}
+          {/* 进阶面板入口（Alt+Q）—— chat/白板/笔记全关时隐藏 */}
+          {advancedPanelAvailable && (
           <button
             type="button"
             className="drawer-item"
@@ -204,6 +213,7 @@ export default function DrawerPanel({
             <span data-name="component.drawer-panel.advanced-panel-label">进阶面板</span>
             <span className="drawer-item-shortcut" data-name="component.drawer-panel.advanced-panel-shortcut">Alt+Q</span>
           </button>
+          )}
 
           {/* 使用指南入口 */}
           <button
@@ -299,6 +309,7 @@ export default function DrawerPanel({
             <span data-name="component.drawer-panel.settings-label">设置</span>
             <span className="drawer-item-shortcut" data-name="component.drawer-panel.settings-shortcut">,</span>
           </button>
+          {promptEnabled && (
           <button
             type="button"
             className="drawer-item"
@@ -321,6 +332,8 @@ export default function DrawerPanel({
             <span data-name="component.drawer-panel.prompt-library-label">提示词库</span>
             <span className="drawer-item-shortcut" data-name="component.drawer-panel.prompt-library-shortcut">P</span>
           </button>
+          )}
+          {!isOxy && (
           <button
             type="button"
             className="drawer-item"
@@ -335,6 +348,7 @@ export default function DrawerPanel({
             <span data-name="component.drawer-panel.theme-label">切换主题</span>
             <span className="drawer-item-shortcut" data-name="component.drawer-panel.theme-shortcut">{theme === 'system' ? '跟随系统' : resolved === 'dark' ? '暗色' : '亮色'}</span>
           </button>
+          )}
         </div>
 
         <div className="drawer-footer" data-name="component.drawer-panel.footer">

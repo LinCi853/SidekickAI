@@ -16,6 +16,7 @@ import {
   setMinimumSize,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
+import { useModuleStore } from '../../store/useModuleStore';
 import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData';
 import { usePlatformUrlConfig } from '../../hooks/usePlatformUrlConfig';
 import './styles.css';
@@ -25,6 +26,8 @@ import AppearanceSection from './sections/AppearanceSection';
 import GeneralSection from './sections/GeneralSection';
 import HotkeySection from './sections/HotkeySection';
 import AboutSection from './sections/AboutSection';
+import ModuleManagementSection from './sections/ModuleManagementSection';
+import DeveloperOptionsSection from './sections/DeveloperOptionsSection';
 import TopBarSection from './sections/TopBarSection';
 import AiAppSection from './sections/AiAppSection';
 import ProviderSection from './sections/ProviderSection';
@@ -80,14 +83,14 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
     }
   };
 
-  /** 切换「关闭所有广告屏蔽规则」开关 */
+  /** 切换「启用广告屏蔽规则」开关 */
   const handleToggleDisableAllBlockRules = async () => {
     const next = !app.disableAllBlockRules;
     app.setDisableAllBlockRules(next);
     try {
       await updateAppSettings({ disableAllBlockRules: next });
     } catch (e) {
-      console.error('[SettingsPanel] 切换关闭所有广告屏蔽规则失败:', e);
+      console.error('[SettingsPanel] 切换广告屏蔽规则失败:', e);
       app.setDisableAllBlockRules(app.disableAllBlockRules);
     }
   };
@@ -135,6 +138,7 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
   // ===== 聚合 props 模式：onChange 仅更新本地 state（即时 UI 反馈），不触发持久化 =====
   const handleVoiceChange = useCallback((patch: Partial<VoiceSettings>) => {
     if (patch.confirmMode !== undefined) voice.setConfirmMode(patch.confirmMode);
+    if (patch.inputMethod !== undefined) voice.setInputMethod(patch.inputMethod);
     if (patch.enterToSend !== undefined) voice.setEnterToSend(patch.enterToSend);
     if (patch.sttMode !== undefined) voice.setSttMode(patch.sttMode);
     if (patch.aiProvider !== undefined) voice.setAiProvider(patch.aiProvider);
@@ -209,14 +213,14 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         }}
         hideForeignModels={app.hideForeignModels}
         onToggleHideForeignModels={handleToggleHideForeignModels}
-        disableAllBlockRules={app.disableAllBlockRules}
-        onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
       />
 
-      <ProviderSection
-        defaultCollapsed={false}
-        onEditingChange={setProviderEditing}
-      />
+      {useModuleStore.getState().isEnabled('custom-chat') && (
+        <ProviderSection
+          defaultCollapsed={false}
+          onEditingChange={setProviderEditing}
+        />
+      )}
 
       <PlatformUrlSection
         platforms={presetsState.platforms}
@@ -241,9 +245,11 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         handleSwitchToPlatformTab={platformUrlConfig.handleSwitchToPlatformTab}
       />
 
+      {(useModuleStore.getState().isEnabled('voice') || useModuleStore.getState().isEnabled('tts')) && (
       <VoiceSection
         voice={{
           confirmMode: voice.confirmMode,
+          inputMethod: voice.inputMethod,
           enterToSend: voice.enterToSend,
           sttMode: voice.sttMode,
           aiProvider: voice.aiProvider,
@@ -256,6 +262,7 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         }}
         onChange={handleVoiceChange}
       />
+      )}
 
       <PresetSection
         presets={presetsState.presets}
@@ -283,6 +290,13 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
           proxyFallbackMode: app.proxyFallbackMode,
         }}
         onProxyChange={handleProxyChange}
+      />
+
+      <ModuleManagementSection />
+
+      <DeveloperOptionsSection
+        disableAllBlockRules={app.disableAllBlockRules}
+        onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
       />
 
       <AboutSection />

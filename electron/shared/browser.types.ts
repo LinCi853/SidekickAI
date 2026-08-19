@@ -31,8 +31,8 @@ export interface BrowserTabState {
   canGoForward: boolean
   /** 在标签栏中的排序（从 0 开始） */
   order: number
-  /** 标签来源：initial=脱离时从导航历史恢复 / new=用户新建 / external=外部链接打开 / settings=内部设置页 / bookmark-manager=书签管理器 / history=导航历史内嵌页 / downloads=下载管理内嵌页 */
-  source: 'initial' | 'new' | 'external' | 'settings' | 'bookmark-manager' | 'history' | 'downloads'
+  /** 标签来源：initial=脱离时从导航历史恢复 / new=用户新建 / external=外部链接打开 / settings=内部设置页 / bookmark-manager=书签管理器 / history=导航历史内嵌页 / downloads=下载管理内嵌页 / view-source=查看网页源代码内嵌页 / print-preview=打印预览内嵌页 */
+  source: 'initial' | 'new' | 'external' | 'settings' | 'bookmark-manager' | 'history' | 'downloads' | 'view-source' | 'print-preview'
   /** 标签种类：home=AI应用首页 / web=派生网页。决定标签栏图标与默认行为 */
   kind: 'home' | 'web'
   /** 主窗口父标签 id（脱离时记录原 TabState.id，用于跨窗口归属查询） */

@@ -5,7 +5,13 @@
 // - 检测旧 notes.json → 逐条迁移为 Note（content_json 用 TipTap 纯文本段落 doc）→ 写入 notes.db → 旧文件改名 .bak
 // - 幂等：旧文件不存在则跳过。
 
-import Store from 'electron-store'
+// electron-store 可能未安装（Phase 3 已完成迁移），用 try/import 保护
+let Store: any
+try {
+  Store = require('electron-store').default ?? require('electron-store')
+} catch {
+  Store = null
+}
 import { existsSync, renameSync } from 'fs'
 import path from 'path'
 import { getStoreCwd, getModuleDirname } from './store-paths.js'
@@ -48,7 +54,7 @@ function migrateWhiteboard(): void {
   if (!legacyPath || !existsSync(legacyPath)) return
 
   try {
-    const legacyStore = new Store<LegacyWhiteboardShape>({
+    const legacyStore = new Store({
       name: 'whiteboard',
       cwd: cwd ?? undefined,
     })
@@ -87,7 +93,7 @@ function migrateNotes(): void {
   if (!legacyPath || !existsSync(legacyPath)) return
 
   try {
-    const legacyStore = new Store<LegacyNotesShape>({
+    const legacyStore = new Store({
       name: 'notes',
       cwd: cwd ?? undefined,
     })

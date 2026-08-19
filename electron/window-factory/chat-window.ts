@@ -15,6 +15,7 @@ import {
 } from './helpers.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import { calculateChatWindowMinWidth, getUiScaleFromSettings, CHAT_WINDOW_MIN_HEIGHT } from './window-size-helpers.js'
+import { isModuleEnabled } from '../modules/registry.js'
 
 /**
  * 创建自定义对话窗口（API 直连模式）
@@ -23,6 +24,11 @@ import { calculateChatWindowMinWidth, getUiScaleFromSettings, CHAT_WINDOW_MIN_HE
  * 不使用 webview，直接在渲染进程内调用 API 客户端。
  */
 export function createChatWindow(): BrowserWindow | null {
+  // 模块门控（11.10 全路径封死）：自定义对话模块关闭时不打开窗口
+  if (!isModuleEnabled('custom-chat')) {
+    console.warn('[chat-window] 自定义对话模块未启用，拒绝打开对话窗口')
+    return null
+  }
   // 已存在则聚焦
   const existing = BrowserWindow.getAllWindows().find((w) => {
     try {
@@ -56,6 +62,7 @@ export function createChatWindow(): BrowserWindow | null {
     frame: false,
     alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
+    title: '工百窗 - 对话',
     webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
       webviewTag: false,

@@ -6,8 +6,11 @@
 //   - AI_PLATFORM_LIST：列出所有预置 AI 平台（合并 Profile 的 region 覆盖）
 //
 // 在 app.whenReady 后由 main.ts 调用 registerSettingsIpc() 完成注册。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type AIPlatform } from '../shared/types.js'
 import type { Profile } from '../shared/profile.types.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
@@ -53,17 +56,27 @@ function synthesizeCustomPlatform(profile: Profile): AIPlatform {
   }
 }
 
-/** 注册预设与 AI 平台查询相关 IPC handler */
-export function registerSettingsIpc(): void {
+/**
+ * 注册预设与 AI 平台查询相关 IPC handler。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerSettingsIpc(scope?: EffectScope): void {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
   // ===== 预设 / AI 平台 IPC =====
-  ipcMain.handle(IPC_CHANNELS.PRESETS_LIST, async () => presetStore.list())
-  ipcMain.handle(IPC_CHANNELS.PRESETS_GET, async (_e, id: string) =>
+  handle(IPC_CHANNELS.PRESETS_LIST, async () => presetStore.list())
+  handle(IPC_CHANNELS.PRESETS_GET, async (_e: unknown, id: string) =>
     presetStore.get(id),
   )
   // AI 平台列表：合并 Profile 上的用户自定义覆盖（region / desktopPreset / mobilePreset / themeColor）
   // 同时为「未绑定预设」的自定义 AI 应用合成 AIPlatform 项追加到列表末尾，
   // 否则 AppSwitcher / BottomBar / AiAppSection 反向匹配平台时找不到对应项会过滤掉自定义应用。
-  ipcMain.handle(IPC_CHANNELS.AI_PLATFORM_LIST, async () => {
+  handle(IPC_CHANNELS.AI_PLATFORM_LIST, async () => {
     const profiles = profileStore.list()
     // 1) 预设平台：合并匹配 profile 的覆盖
     const presetResults = AI_PLATFORMS.map((p) => {
@@ -108,7 +121,7 @@ export function registerSettingsIpc(): void {
   })
 
   // 弹窗白名单：添加 origin 到全局 AppSettings.popupWhitelist
-  ipcMain.handle(IPC_CHANNELS.POPUP_ADD_WHITELIST, async (_e, origin: string) => {
+  handle(IPC_CHANNELS.POPUP_ADD_WHITELIST, async (_e: unknown, origin: string) => {
     const { getAppSettings, updateAppSettings } = await import('../store/app-settings-store.js')
     const cfg = getAppSettings()
     const list = cfg.popupWhitelist ?? []
@@ -118,7 +131,7 @@ export function registerSettingsIpc(): void {
   })
 
   // 弹窗白名单：添加 origin 到 Profile 专属 popupWhitelist
-  ipcMain.handle(IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST, async (_e, profileId: string, origin: string) => {
+  handle(IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST, async (_e: unknown, profileId: string, origin: string) => {
     const profile = profileStore.get(profileId)
     if (!profile) return
     const list = profile.popupWhitelist ?? []

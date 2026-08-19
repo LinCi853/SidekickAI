@@ -304,7 +304,7 @@ export default function DownloadPanel({ onCountChange }: DownloadPanelProps) {
         <span className="hd-toolbar-count" data-name="hd.dl.count">
           共 {records.length} 条
         </span>
-        <div className="hd-toolbar-spacer" />
+        <div className="hd-toolbar-spacer" data-name="hd.dl.toolbar-spacer" />
         <Button
           variant="danger"
           type="button"
@@ -343,8 +343,10 @@ export default function DownloadPanel({ onCountChange }: DownloadPanelProps) {
               data-index={idx + 1}
               data-id={r.id}
             >
-              <div className="hd-dl-item-head">
-                <DownloadIcon className="hd-dl-item-icon" />
+              <div className="hd-dl-item-head" data-name={`hd.dl.item-head-${idx + 1}`}>
+                <span className="hd-dl-item-icon-tile" aria-hidden="true" data-name={`hd.dl.item-icon-${idx + 1}`}>
+                  <DownloadIcon />
+                </span>
                 <span className="hd-dl-item-name" data-name={`hd.dl.item-name-${idx + 1}`} title={r.filename}>
                   {r.filename}
                 </span>

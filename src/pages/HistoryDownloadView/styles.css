@@ -1,7 +1,11 @@
 /* =====================================================================
    HistoryDownloadView/styles.css —— 历史记录与下载管理独立窗口样式
    前缀：hd-（history-download）
-   复用 design-tokens CSS 变量（--background / --foreground / --glass-* 等）
+   风格：Google Chrome「历史记录 / 下载内容」页面
+   - 左侧导航：分段胶囊 + 计数摘要
+   - 工具栏：胶囊搜索框 + 计数 + 操作按钮
+   - 导航历史：图标瓦片 + 标题/URL/时间，悬浮显示删除
+   - 下载：卡片条目 + 图标瓦片 + 状态徽章 + 进度条 + 悬浮操作
    ===================================================================== */
 
 /* ===== 根容器 ===== */
@@ -23,28 +27,76 @@
 /* ===== 左侧导航 ===== */
 .hd-sidebar {
   flex: none;
-  width: 180px;
+  width: 224px;
   display: flex;
   flex-direction: column;
-  padding: var(--space-3);
-  gap: var(--space-2);
-  border-right: 1px solid var(--glass-bd-2);
+  padding: var(--space-3) var(--space-2);
+  gap: var(--space-3);
+  border-right: 1px solid var(--border);
   background: var(--muted);
   min-height: 0;
 }
 
+/* 侧栏分段控件：纵向胶囊列表 */
 .hd-sidebar-segment {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
+}
+.hd-sidebar-segment .seg-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  padding: 0 var(--space-3);
+  height: 36px;
+  border-radius: var(--radius-full);
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  text-align: left;
+  box-shadow: none;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.hd-sidebar-segment .seg-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+.hd-sidebar-segment .seg-btn.is-active {
+  background: var(--accent-10);
+  color: var(--accent-bright);
+  font-weight: 600;
+  box-shadow: none;
+}
+.hd-sidebar-segment-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2-5);
+}
+.hd-sidebar-segment-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 
-.hd-sidebar-count {
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+/* 侧栏计数摘要 */
+.hd-sidebar-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1-5);
+  padding: 0 var(--space-2);
+}
+.hd-sidebar-summary-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1.2;
+}
+.hd-sidebar-summary-label {
+  font-size: 12.5px;
   color: var(--muted-foreground);
-  letter-spacing: 0.02em;
 }
 
 /* ===== 右侧内容区 ===== */
@@ -54,6 +106,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  background: var(--background);
 }
 
 /* ===== 顶部工具栏 ===== */
@@ -61,36 +114,39 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--glass-bd-2);
-  background: var(--glass-bg-2);
+  gap: var(--space-2-5);
+  padding: var(--space-2-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
 }
 
 .hd-toolbar-search {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 560px;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  background: var(--card);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-md);
-  transition: border-color var(--duration-fast) var(--ease-out);
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  background: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
 }
-
 .hd-toolbar-search:focus-within {
+  background: var(--card);
   border-color: var(--accent-50);
+  box-shadow: 0 0 0 3px var(--accent-10);
 }
-
 .hd-toolbar-search-icon {
   flex: none;
-  width: 14px;
-  height: 14px;
-  color: var(--muted-foreground);
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
 }
-
 .hd-toolbar-search-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -102,106 +158,134 @@
   font-size: var(--text-sm);
   line-height: 1.4;
 }
-
 .hd-toolbar-search-input::placeholder {
   color: var(--text-muted);
 }
-
 .hd-toolbar-count {
   flex: none;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 12.5px;
   color: var(--muted-foreground);
   white-space: nowrap;
 }
-
 .hd-toolbar-spacer {
   flex: 1 1 auto;
+}
+/* 工具栏按钮：全圆角 */
+.hd-toolbar .btn-danger {
+  height: 32px;
+  padding: 0 var(--space-3-5);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  box-shadow: none;
+}
+.hd-toolbar .btn-danger:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* ===== 列表区（滚动） ===== */
 .hd-list {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+/* Chrome 风格：条目限宽居中，避免铺满整个屏幕宽度 */
+.hd-list > .hd-group,
+.hd-list > .hd-dl-item,
+.hd-list > .hd-empty {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* ===== 时间分组标题 ===== */
+/* ===== 时间分组标题（Chrome 历史风格） ===== */
 .hd-group-header {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: var(--space-1) var(--space-2);
-  margin-bottom: var(--space-1);
+  padding: var(--space-2) 0;
   background: var(--background);
   font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--muted-foreground);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--glass-bd-2);
+  letter-spacing: 0.02em;
 }
-
 .hd-group + .hd-group {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
 }
 
-/* ===== 通用列表条目 ===== */
+/* ===== 导航历史条目 ===== */
 .hd-item {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  padding: var(--space-1-5) var(--space-2);
-  border-radius: var(--radius-sm);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
-
 .hd-item:hover {
   background: var(--glass-bg-2);
 }
-
 .hd-item + .hd-item {
-  margin-top: var(--space-0-5);
+  margin-top: 0;
 }
 
+/* 图标瓦片 */
+.hd-item-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.hd-item-icon-svg {
+  width: 16px;
+  height: 16px;
+}
+.hd-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .hd-item-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
 }
-
 .hd-item-title {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .hd-item-time {
   flex: none;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 12px;
   color: var(--muted-foreground);
   white-space: nowrap;
 }
-
 .hd-item-url {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 12px;
   color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .hd-item-actions {
   display: flex;
   align-items: center;
@@ -210,70 +294,60 @@
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-out);
 }
-
 .hd-item:hover .hd-item-actions {
   opacity: 1;
 }
-
-/* 小型图标按钮（删除/打开等） */
-.hd-icon-btn {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+/* 触屏设备无 hover，操作常驻可见 */
+@media (hover: none) {
+  .hd-item-actions,
+  .hd-dl-item-actions {
+    opacity: 1;
+  }
 }
 
-.hd-icon-btn:hover {
-  background: var(--glass-bg-2);
-  color: var(--foreground);
-}
-
-.hd-icon-btn.is-danger:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-
-.hd-icon-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* ===== 下载条目专用 ===== */
+/* ===== 下载条目 ===== */
 .hd-dl-item {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border: 1px solid var(--glass-bd-2);
-  border-radius: var(--radius-md);
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: var(--card);
-  transition: border-color var(--duration-fast) var(--ease-out);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
 }
-
 .hd-dl-item + .hd-dl-item {
-  margin-top: var(--space-2);
+  margin-top: var(--space-2-5);
 }
-
 .hd-dl-item:hover {
-  border-color: var(--accent-50);
+  border-color: var(--accent-25);
+  box-shadow: var(--shadow-md);
 }
-
 .hd-dl-item-head {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-2-5);
   min-width: 0;
 }
 
+/* 下载图标瓦片（主题色调） */
+.hd-dl-item-icon-tile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--accent-10);
+  color: var(--accent-bright);
+}
+.hd-dl-item-icon-tile svg {
+  width: 17px;
+  height: 17px;
+}
 .hd-dl-item-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -285,57 +359,54 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .hd-dl-item-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  gap: var(--space-1) var(--space-3);
+  font-size: 12px;
   color: var(--muted-foreground);
 }
-
 .hd-dl-item-url {
   flex: 1 1 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .hd-dl-item-size,
 .hd-dl-item-time {
   flex: none;
   white-space: nowrap;
 }
 
+/* 状态徽章：胶囊 */
 .hd-dl-item-state {
   flex: none;
   display: inline-flex;
   align-items: center;
-  padding: var(--space-0-25) var(--space-1);
-  border-radius: var(--radius-xs);
+  height: 22px;
+  padding: 0 var(--space-2-5);
+  border-radius: var(--radius-full);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
-
 .hd-dl-item-state.is-progress {
-  background: color-mix(in srgb, var(--accent-50) 18%, transparent);
+  background: color-mix(in srgb, var(--accent-bright) 14%, transparent);
   color: var(--accent-bright);
 }
-
 .hd-dl-item-state.is-completed {
-  background: color-mix(in srgb, var(--success) 18%, transparent);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
   color: var(--success);
 }
-
 .hd-dl-item-state.is-interrupted,
 .hd-dl-item-state.is-cancelled {
-  background: color-mix(in srgb, var(--destructive) 18%, transparent);
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
   color: var(--destructive);
 }
 
+/* 进度条：细胶囊 */
 .hd-dl-progress-track {
   width: 100%;
   height: 4px;
@@ -343,35 +414,36 @@
   background: var(--muted);
   overflow: hidden;
 }
-
 .hd-dl-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-dim, var(--accent)));
+  background: linear-gradient(90deg, var(--accent-bright), var(--accent-light));
   border-radius: var(--radius-full);
   transition: width var(--duration-normal) var(--ease-out);
 }
-
 .hd-dl-progress-meta {
   flex: none;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 12px;
   color: var(--muted-foreground);
   white-space: nowrap;
 }
-
 .hd-dl-item-actions {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   flex: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.hd-dl-item:hover .hd-dl-item-actions {
+  opacity: 1;
 }
 
 /* ===== 空状态 ===== */
 .hd-empty {
-  padding: var(--space-6) var(--space-4);
+  padding: var(--space-10) var(--space-4);
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
   color: var(--muted-foreground);
-  line-height: 1.6;
+  line-height: 1.7;
 }

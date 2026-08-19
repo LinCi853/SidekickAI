@@ -14,253 +14,46 @@
 //
 // 由于 uiohook 监听而非拦截，为避免与 globalShortcut 同时触发，
 // 所有回调统一经过 200ms 去重窗口，同一 accelerator 在此窗口内只触发一次。
+//
+// 代码组织（模块拆分）：
+//   - types.ts        类型定义
+//   - uiohook.ts      uiohook-napi 动态加载
+//   - accelerator.ts  accelerator 字符串解析
+//   - store.ts        热键持久化（electron-store）
+//   - cloud-pc-keys.ts 云电脑系统级按键分类
+//   - manager.ts      仅保留 HotkeyManager 类与单例
 
 import { globalShortcut } from 'electron'
-import Store from 'electron-store'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { createRequire } from 'module'
+import { dispatchBrowserHotkeyFallback } from '../utils/browser-hotkey-fallback.js'
 import { checkAccessibilityPermission } from '../utils/permission-manager.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-/**
- * uiohook-napi 动态加载（已移到 optionalDependencies）。
- *
- * 背景：uiohook-napi 在 macOS / Linux 上需要 Xcode CLT / build-essential 才能编译，
- * 编译失败时 npm install 不会中断（optionalDependencies 语义），但运行时静态 import
- * 会让整个 manager.ts 崩溃。改用 createRequire 动态 require，失败时降级到 mock，
- * HotkeyManager 仅依赖 Electron globalShortcut（系统级注册仍可用，低层钩子兜底失效）。
- */
-interface UiohookEvent {
-  type: number
-  keycode: number
-  altKey: boolean
-  ctrlKey: boolean
-  shiftKey: boolean
-  metaKey: boolean
-}
-
-interface UiohookModule {
-  UiohookKey: Record<string, number>
-  EventType: { EVENT_KEY_PRESSED: number; EVENT_KEY_RELEASED: number }
-  uIOhook: {
-    start(): void
-    stop(): void
-    on(event: string, cb: (e: UiohookEvent) => void): void
-  }
-}
-
-function loadUiohook(): UiohookModule | null {
-  try {
-    const require = createRequire(import.meta.url)
-    return require('uiohook-napi') as UiohookModule
-  } catch (err) {
-    console.warn(
-      '[HotkeyManager] uiohook-napi 加载失败，降级到仅 globalShortcut（低层钩子兜底不可用）:',
-      err,
-    )
-    return null
-  }
-}
-
-const uiohookMod = loadUiohook()
-const UiohookKey: Record<string, number> = uiohookMod?.UiohookKey ?? {}
-const EventType = uiohookMod?.EventType ?? { EVENT_KEY_PRESSED: 1, EVENT_KEY_RELEASED: 2 }
-const uIOhook = uiohookMod?.uIOhook ?? {
-  start() { /* no-op: uiohook 不可用 */ },
-  stop() { /* no-op */ },
-  on(_event: string, _cb: (e: UiohookEvent) => void) { /* no-op */ },
-}
-
-// 热键配置持久化存储（写入 hotkey.json）
-// cwd 统一走 store-paths，便携模式写入 exe 同级 data/ 目录
-import { getStoreCwd as getHotkeyStoreCwd } from '../store/store-paths.js'
 import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
-const HOTKEY_STORE_CWD = getHotkeyStoreCwd()
+import { UiohookKey, EventType, uIOhook } from './uiohook.js'
+import { parseAccelerator } from './accelerator.js'
+import { classifyCloudPcKey } from './cloud-pc-keys.js'
+import {
+  DEFAULT_HOTKEYS,
+  HOTKEY_LABELS,
+  TRIGGER_DEBOUNCE_MS,
+  hotkeyStore,
+  storeKey,
+  enabledStoreKey,
+} from './store.js'
+import type {
+  HotkeyAction,
+  HotkeyConfig,
+  HotkeyRecordingCallback,
+  HotkeyPartialCallback,
+  UiohookEvent,
+} from './types.js'
 
-/** 内置热键动作标识 */
-export type HotkeyAction =
-  | 'toggleMainWindow'
-  | 'toggleDetachedWindows'
-  | 'backgroundVoice'
-
-/** 热键录制回调（主进程 → 渲染层：录制完成后通知） */
-export type HotkeyRecordingCallback = (result: { accelerator: string; reason?: string }) => void
-
-/** 热键录制实时反馈回调（每次按键时通知，用于 UI 实时显示当前组合） */
-export type HotkeyPartialCallback = (partial: { modifiers: string[]; key: string | null }) => void
-
-/** 热键配置（用于 UI 展示与持久化） */
-export interface HotkeyConfig {
-  action: HotkeyAction
-  /** 显示名称 */
-  label: string
-  /** accelerator 字符串 */
-  accelerator: string
-  /** 是否启用（false 时热键不注册、不响应） */
-  enabled: boolean
+// 向后兼容 re-export：原 manager.ts 对外导出的类型与 hotkeyStore
+export type {
+  HotkeyAction,
+  HotkeyRecordingCallback,
+  HotkeyPartialCallback,
+  HotkeyConfig,
 }
-
-const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
-  toggleMainWindow: 'Alt+Space',
-  toggleDetachedWindows: 'Alt+Q',
-  backgroundVoice: 'Alt+V',
-}
-
-const HOTKEY_LABELS: Record<HotkeyAction, string> = {
-  toggleMainWindow: '切换主窗口显隐',
-  toggleDetachedWindows: '切换脱离窗口显隐',
-  backgroundVoice: '后台语音输入（按住）',
-}
-
-/** 同一热键连续触发的去重窗口（ms） */
-const TRIGGER_DEBOUNCE_MS = 200
-
-type HotkeyStoreSchema = {
-  'hotkey.toggleMainWindow': string
-  'hotkey.toggleDetachedWindows': string
-  'hotkey.backgroundVoice': string
-  'hotkey.enabled.toggleMainWindow': boolean
-  'hotkey.enabled.toggleDetachedWindows': boolean
-  'hotkey.enabled.backgroundVoice': boolean
-  /** 旧版 key（迁移后删除） */
-  'hotkey.toggle'?: string
-  /** 旧版 key（已下线，迁移时删除） */
-  'hotkey.toggleAlwaysOnTop'?: string
-}
-
-const hotkeyStore = new Store<HotkeyStoreSchema>({
-  name: 'hotkey',
-  cwd: HOTKEY_STORE_CWD,
-  defaults: {
-    'hotkey.toggleMainWindow': DEFAULT_HOTKEYS.toggleMainWindow,
-    'hotkey.toggleDetachedWindows': DEFAULT_HOTKEYS.toggleDetachedWindows,
-    'hotkey.backgroundVoice': DEFAULT_HOTKEYS.backgroundVoice,
-    'hotkey.enabled.toggleMainWindow': true,
-    'hotkey.enabled.toggleDetachedWindows': true,
-    // 后台语音默认关闭（测试功能，需用户主动启用）
-    'hotkey.enabled.backgroundVoice': false,
-  },
-})
-
-/** 旧版配置迁移：hotkey.toggle -> hotkey.toggleMainWindow */
-function migrateLegacyHotkey(): void {
-  const legacy = hotkeyStore.get('hotkey.toggle')
-  if (typeof legacy === 'string' && legacy) {
-    // 仅在新 key 仍为默认值时迁移（避免覆盖用户已设置的新值）
-    const current = hotkeyStore.get('hotkey.toggleMainWindow')
-    if (current === DEFAULT_HOTKEYS.toggleMainWindow) {
-      hotkeyStore.set('hotkey.toggleMainWindow', legacy)
-      console.log(
-        `[HotkeyManager] 迁移旧热键 hotkey.toggle -> hotkey.toggleMainWindow: ${legacy}`,
-      )
-    }
-    // 删除旧 key
-    hotkeyStore.delete('hotkey.toggle')
-  }
-  // 一次性迁移：删除已下线的 toggleAlwaysOnTop 残留键
-  if (hotkeyStore.has('hotkey.toggleAlwaysOnTop')) {
-    hotkeyStore.delete('hotkey.toggleAlwaysOnTop')
-    console.log('[HotkeyManager] 清理已下线热键 hotkey.toggleAlwaysOnTop')
-  }
-}
-
-// 启动时迁移一次
-migrateLegacyHotkey()
-
-const storeKey = (action: HotkeyAction): string => `hotkey.${action}`
-const enabledStoreKey = (action: HotkeyAction): string => `hotkey.enabled.${action}`
-
-/** accelerator 字符串 -> uiohook 按键代码（字母/数字/功能键） */
-function acceleratorToUiohookKey(part: string): number | null {
-  const upper = part.toUpperCase()
-
-  // 字母 A-Z
-  if (/^[A-Z]$/.test(upper)) {
-    return UiohookKey[upper as keyof typeof UiohookKey] as number
-  }
-
-  // 数字 0-9
-  if (/^\d$/.test(upper)) {
-    return UiohookKey[upper as '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9']
-  }
-
-  // 功能键 F1-F24
-  const fMatch = /^F(\d{1,2})$/.exec(upper)
-  if (fMatch) {
-    const key = `F${fMatch[1]}` as keyof typeof UiohookKey
-    if (key in UiohookKey) return UiohookKey[key] as number
-  }
-
-  // 特殊键
-  const map: Record<string, number> = {
-    SPACE: UiohookKey.Space,
-    SPACEBAR: UiohookKey.Space,
-    ENTER: UiohookKey.Enter,
-    RETURN: UiohookKey.Enter,
-    TAB: UiohookKey.Tab,
-    ESC: UiohookKey.Escape,
-    ESCAPE: UiohookKey.Escape,
-    BACKSPACE: UiohookKey.Backspace,
-    DELETE: UiohookKey.Delete,
-    INSERT: UiohookKey.Insert,
-    HOME: UiohookKey.Home,
-    END: UiohookKey.End,
-    PAGEUP: UiohookKey.PageUp,
-    PAGEDOWN: UiohookKey.PageDown,
-    UP: UiohookKey.ArrowUp,
-    DOWN: UiohookKey.ArrowDown,
-    LEFT: UiohookKey.ArrowLeft,
-    RIGHT: UiohookKey.ArrowRight,
-    PLUS: UiohookKey.Equal, // Electron 用 Plus 表示 "=" 加 Shift，uiohook 无 Plus，映射为 Equal
-    EQUAL: UiohookKey.Equal,
-    MINUS: UiohookKey.Minus,
-    COMMA: UiohookKey.Comma,
-    PERIOD: UiohookKey.Period,
-    SLASH: UiohookKey.Slash,
-    SEMICOLON: UiohookKey.Semicolon,
-    QUOTE: UiohookKey.Quote,
-    BACKTICK: UiohookKey.Backquote,
-    BRACKETLEFT: UiohookKey.BracketLeft,
-    BRACKETRIGHT: UiohookKey.BracketRight,
-    BACKSLASH: UiohookKey.Backslash,
-  }
-  return map[upper] ?? null
-}
-
-/** 解析 accelerator 字符串为匹配条件 */
-function parseAccelerator(acc: string): {
-  keycode: number | null
-  alt: boolean
-  ctrl: boolean
-  shift: boolean
-  meta: boolean
-} {
-  const parts = acc.split('+').map((p) => p.trim())
-  let alt = false
-  let ctrl = false
-  let shift = false
-  let meta = false
-  let keyPart = ''
-
-  for (const part of parts) {
-    const up = part.toUpperCase()
-    if (up === 'ALT' || up === 'OPTION') alt = true
-    else if (up === 'CTRL' || up === 'CONTROL') ctrl = true
-    else if (up === 'SHIFT') shift = true
-    else if (up === 'CMD' || up === 'COMMAND' || up === 'META' || up === 'SUPER') meta = true
-    else keyPart = part
-  }
-
-  return {
-    keycode: keyPart ? acceleratorToUiohookKey(keyPart) : null,
-    alt,
-    ctrl,
-    shift,
-    meta,
-  }
-}
+export { hotkeyStore }
 
 /**
  * 全局热键管理器
@@ -338,6 +131,8 @@ export class HotkeyManager {
   private _recordingBackup: Array<{ accelerator: string; callback: () => void }> = []
   /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时） */
   private _paused = false
+  /** 云电脑模式按键监听（Win / Alt+Tab / Win+Tab / Win+D / Alt+F4 等系统级按键路由） */
+  private cloudPcKeyListener: ((e: { key: string; down: boolean; alt: boolean; win: boolean }) => void) | null = null
   /** uiohook keycode → Electron accelerator 主键名的反向映射 */
   private _uiohookKeyToName = new Map<number, string>()
 
@@ -515,6 +310,24 @@ export class HotkeyManager {
       if (this._modKeyCodes.ctrl.has(e.keycode)) this.modCtrl = true
       if (this._modKeyCodes.shift.has(e.keycode)) this.modShift = true
       if (this._modKeyCodes.meta.has(e.keycode)) this.modMeta = true
+      // 云电脑模式按键路由：系统级按键（Win/Alt+Tab/Win+Tab/Win+D/Alt+F4/Esc）
+      // 必须在 _paused 检查之前处理（云电脑模式正是暂停状态）
+      if (this.cloudPcKeyListener) {
+        const routed = classifyCloudPcKey(e.keycode, e.altKey, this.modMeta, this.modCtrl)
+        if (routed) {
+          this.cloudPcKeyListener({ key: routed, down: true, alt: e.altKey, win: this.modMeta })
+        }
+      }
+
+      // 浏览器窗口快捷键 uiohook 兜底通道（Alt 组合在 guest 拦截中不可靠时的第二通道；
+      // 修饰键状态用 uiohook 自行追踪的 modAlt/modCtrl，不依赖 Electron modifiers）
+      dispatchBrowserHotkeyFallback({
+        keycode: e.keycode,
+        ctrl: this.modCtrl,
+        alt: this.modAlt,
+        shift: this.modShift,
+        meta: this.modMeta,
+      })
       // 录制模式：跳过常规热键匹配，仅由 handleRecordingKeydown 处理
       if (this._recordingCallback) {
         this.handleRecordingKeydown(e)
@@ -570,6 +383,13 @@ export class HotkeyManager {
     })
     uIOhook.on('keyup', (e) => {
       if (e.type !== EventType.EVENT_KEY_RELEASED) return
+      // 云电脑模式按键路由（keyup）
+      if (this.cloudPcKeyListener) {
+        const routed = classifyCloudPcKey(e.keycode, e.altKey, this.modMeta, this.modCtrl)
+        if (routed) {
+          this.cloudPcKeyListener({ key: routed, down: false, alt: e.altKey, win: this.modMeta })
+        }
+      }
       // 追踪修饰键释放状态（与 keydown 配对，解决 uiohook altKey 状态残留）
       if (this._modKeyCodes.alt.has(e.keycode)) this.modAlt = false
       if (this._modKeyCodes.ctrl.has(e.keycode)) this.modCtrl = false
@@ -1097,6 +917,16 @@ export class HotkeyManager {
       try { globalShortcut.register(acc, cb) } catch { /* ignore */ }
     }
     console.log('[HotkeyManager] 所有全局热键已恢复')
+  }
+
+  /**
+   * 设置云电脑模式按键监听（Win/Alt+Tab 等系统级按键路由到云电脑）。
+   * 传 null 清除。云电脑模式激活时由 cloud-pc.ts 调用。
+   */
+  setCloudPcKeyListener(
+    listener: ((e: { key: string; down: boolean; alt: boolean; win: boolean }) => void) | null,
+  ): void {
+    this.cloudPcKeyListener = listener
   }
 
   /**

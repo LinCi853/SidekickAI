@@ -25,6 +25,8 @@ target-check/
 # Runtime Data (app data / user profiles / cache)
 # ============================================================
 .app-data/
+.app-data-installed/
+.dsh-shots/
 
 # ============================================================
 # Logs

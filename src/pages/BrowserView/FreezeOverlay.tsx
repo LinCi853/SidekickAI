@@ -1,10 +1,10 @@
 /* =====================================================================
    pages/BrowserView/FreezeOverlay.tsx —— 冻结态覆盖层（字符级原生选择）
    冻结画面绝对定格（Debugger.pause，永不解除）；选中由应用组件实现：
-   - 文本层在冻结前保存真实 grapheme Range 矩形、行顺序和字体样式
+   - 文本层在冻结前保存真实 grapheme Range 矩形与行顺序
    - host 选择层与 guest visual viewport 建立显式 CSS px 映射
    - anchor/focus 按最近字符边界计算，支持正向、反向、跨行选择
-   - 每个选中 run 使用完整原文 + overflow 裁剪，避免从行首复制到中部
+   - 复制始终按 DOM/grapheme 顺序拼接，高亮按视觉 run 分段
    - 高亮只覆盖半透明背景，原字形始终来自冻结底图，杜绝跨 renderer 字体漂移
    ===================================================================== */
 
@@ -16,6 +16,8 @@ import {
   countGraphemes,
   flattenGraphemes,
   getLayerScale,
+  getTextLayerQuality,
+  isTextLayerSelectable,
   nearestAnchorBoundary,
   nearestBoundary,
   selectedText,
@@ -34,8 +36,17 @@ interface ActionBar {
   copied: boolean;
 }
 
+interface ScrollState {
+  x: number;
+  y: number;
+  valid: boolean;
+}
+
+const scrollByTab = new Map<string, ScrollState & { layer: TextLayer }>();
+
 export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
   const state = useFreezeStore((s) => (activeTabId ? s.states[activeTabId] : undefined));
+  const revision = useFreezeStore((s) => (activeTabId ? s.revisions[activeTabId] : undefined));
   const textLayer = useFreezeStore((s) => (activeTabId ? s.textLayers[activeTabId] : undefined));
   const [showFlash, setShowFlash] = useState(false);
   const [selectedRuns, setSelectedRuns] = useState<SelectedRun[]>([]);
@@ -43,14 +54,19 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
   const [actionBar, setActionBar] = useState<ActionBar | null>(null);
   const [layerPos, setLayerPos] = useState<LayerPosition | null>(null);
   const [mappingValid, setMappingValid] = useState(true);
-  const wheelRef = useRef({ x: 0, y: 0 });
+  const wheelRef = useRef<ScrollState>({ x: 0, y: 0, valid: true });
   const wheelRequestRef = useRef(0);
+  const pendingWheelRef = useRef({ x: 0, y: 0 });
+  const wheelInFlightRef = useRef<number | null>(null);
   const layerRef = useRef<TextLayer | undefined>(textLayer);
   const dragRef = useRef<{ anchor: number; focus: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
+  const sessionKey = activeTabId ? `${activeTabId}:${revision ?? 0}` : '';
+  const sessionKeyRef = useRef(sessionKey);
+  sessionKeyRef.current = sessionKey;
   layerRef.current = textLayer;
 
   useEffect(() => {
@@ -66,11 +82,15 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
     setSelectedRuns([]);
     setSelectedTextValue('');
     setActionBar(null);
-    wheelRef.current = { x: 0, y: 0 };
+    const saved = activeTabId ? scrollByTab.get(activeTabId) : undefined;
+    const currentSaved = saved?.layer === textLayer ? saved : undefined;
+    wheelRef.current = currentSaved ?? { x: 0, y: 0, valid: true };
     wheelRequestRef.current += 1;
-    setMappingValid(true);
+    pendingWheelRef.current = { x: 0, y: 0 };
+    wheelInFlightRef.current = null;
+    setMappingValid(currentSaved?.valid ?? true);
     dragRef.current = null;
-  }, [activeTabId, state]);
+  }, [activeTabId, revision, state, textLayer]);
 
   useEffect(() => () => {
     dragCleanupRef.current?.();
@@ -125,6 +145,13 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
     event.preventDefault();
     event.stopPropagation();
     viewportRef.current?.focus();
+    const quality = getTextLayerQuality(layerRef.current);
+    if (quality === 'none') {
+      setActionBar({ title: '当前页面无文本内容', copied: false });
+      clearActionTimer();
+      actionTimerRef.current = setTimeout(() => setActionBar(null), 2200);
+      return;
+    }
     if (!mappingValid) {
       setActionBar({ title: '当前文本位置不可用', copied: false });
       return;
@@ -193,53 +220,91 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
     event.preventDefault();
     event.stopPropagation();
     const layer = layerRef.current;
+    const scrollKey = sessionKey;
     const point = toGuestPoint(event.clientX, event.clientY, layerPos, layer);
+    const nestedRegion = layer.nestedScrollRegions.find((region) => (
+      point.x >= region.x
+      && point.x <= region.x + region.w
+      && point.y >= region.y
+      && point.y <= region.y + region.h
+    ));
+    if (nestedRegion) {
+      setActionBar({ title: '此区域冻结后不可滚动', copied: false });
+      clearActionTimer();
+      actionTimerRef.current = setTimeout(() => setActionBar(null), 2200);
+      return;
+    }
     const scale = getLayerScale(layer, layerPos);
     const dx = event.deltaX / scale.x;
     const dy = event.deltaY / scale.y;
     const before = wheelRef.current;
-    const requestId = ++wheelRequestRef.current;
     const optimistic = {
       x: before.x + dx,
       y: before.y + dy,
+      valid: false,
     };
     wheelRef.current = optimistic;
+    scrollByTab.set(activeTabId, { ...optimistic, layer });
+    pendingWheelRef.current.x += dx;
+    pendingWheelRef.current.y += dy;
     setMappingValid(false);
-    void scrollFrozenTab(activeTabId, point.x, point.y, dx, dy).then((result) => {
-      if (wheelRequestRef.current !== requestId) return;
-      if (!result) {
-        setMappingValid(false);
-        return;
+    const flushWheel = async () => {
+      const generation = wheelRequestRef.current;
+      const requestSessionKey = scrollKey;
+      if (wheelInFlightRef.current !== null || !activeTabId) return;
+      wheelInFlightRef.current = generation;
+      try {
+        while (Math.abs(pendingWheelRef.current.x) > 0.01 || Math.abs(pendingWheelRef.current.y) > 0.01) {
+          if (wheelRequestRef.current !== generation || sessionKeyRef.current !== requestSessionKey) break;
+          const pending = pendingWheelRef.current;
+          pendingWheelRef.current = { x: 0, y: 0 };
+          const result = await scrollFrozenTab(activeTabId, point.x, point.y, pending.x, pending.y);
+          if (wheelRequestRef.current !== generation
+            || sessionKeyRef.current !== requestSessionKey
+            || !layerRef.current) break;
+          const currentLayer = layerRef.current;
+          if (!result) {
+            wheelRef.current.valid = false;
+            scrollByTab.set(activeTabId, { ...wheelRef.current, layer: currentLayer });
+            setMappingValid(false);
+            break;
+          }
+          const maxX = Math.max(0, currentLayer.contentWidth - currentLayer.viewportWidth);
+          const maxY = Math.max(0, currentLayer.contentHeight - currentLayer.viewportHeight);
+          const expectedX = Math.min(maxX, Math.max(0, currentLayer.scrollOffsetX + wheelRef.current.x));
+          const expectedY = Math.min(maxY, Math.max(0, currentLayer.scrollOffsetY + wheelRef.current.y));
+          const rootMoved = Math.abs(result.scrollOffsetX - currentLayer.scrollOffsetX) > 0.5
+            || Math.abs(result.scrollOffsetY - currentLayer.scrollOffsetY) > 0.5;
+          if (rootMoved && currentLayer.items.some((item) => item.sticky)) {
+            wheelRef.current.valid = false;
+            scrollByTab.set(activeTabId, { ...wheelRef.current, layer: currentLayer });
+            setMappingValid(false);
+            break;
+          }
+          if (Math.abs(result.scrollOffsetX - expectedX) > 2 || Math.abs(result.scrollOffsetY - expectedY) > 2) {
+            wheelRef.current.valid = false;
+            scrollByTab.set(activeTabId, { ...wheelRef.current, layer: currentLayer });
+            setMappingValid(false);
+            break;
+          }
+          wheelRef.current = {
+            x: result.scrollOffsetX - currentLayer.scrollOffsetX,
+            y: result.scrollOffsetY - currentLayer.scrollOffsetY,
+            valid: true,
+          };
+          scrollByTab.set(activeTabId, { ...wheelRef.current, layer: currentLayer });
+          setMappingValid(true);
+        }
+      } finally {
+        if (wheelInFlightRef.current === generation) wheelInFlightRef.current = null;
       }
-      const maxX = Math.max(0, layer.contentWidth - layer.viewportWidth);
-      const maxY = Math.max(0, layer.contentHeight - layer.viewportHeight);
-      const expectedX = Math.min(maxX, Math.max(0, layer.scrollOffsetX + optimistic.x));
-      const expectedY = Math.min(maxY, Math.max(0, layer.scrollOffsetY + optimistic.y));
-      const previousX = layer.scrollOffsetX + before.x;
-      const previousY = layer.scrollOffsetY + before.y;
-      const requestedRootMovement = Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1;
-      const rootUnchanged = Math.abs(result.scrollOffsetX - previousX) <= 0.5
-        && Math.abs(result.scrollOffsetY - previousY) <= 0.5;
-      if (requestedRootMovement && rootUnchanged) {
-        setMappingValid(false);
-        return;
+      if (wheelRequestRef.current === generation
+        && sessionKeyRef.current === requestSessionKey
+        && (Math.abs(pendingWheelRef.current.x) > 0.01 || Math.abs(pendingWheelRef.current.y) > 0.01)) {
+        void flushWheel();
       }
-      const rootMoved = Math.abs(result.scrollOffsetX - layer.scrollOffsetX) > 0.5
-        || Math.abs(result.scrollOffsetY - layer.scrollOffsetY) > 0.5;
-      if (rootMoved && layer.items.some((item) => item.sticky)) {
-        setMappingValid(false);
-        return;
-      }
-      if (Math.abs(result.scrollOffsetX - expectedX) > 2 || Math.abs(result.scrollOffsetY - expectedY) > 2) {
-        setMappingValid(false);
-        return;
-      }
-      wheelRef.current = {
-        x: result.scrollOffsetX - layer.scrollOffsetX,
-        y: result.scrollOffsetY - layer.scrollOffsetY,
-      };
-      setMappingValid(true);
-    });
+    };
+    void flushWheel();
     setSelectedRuns([]);
     setSelectedTextValue('');
     setActionBar(null);
@@ -266,7 +331,7 @@ export default function FreezeOverlay({ activeTabId }: FreezeOverlayProps) {
               className="freeze-selection-layer"
               data-name="browser.freeze-selection"
               tabIndex={0}
-              style={{ position: 'fixed', left: layerPos.left, top: layerPos.top, width: layerPos.width, height: layerPos.height, zIndex: 9999, cursor: 'text', touchAction: 'none', userSelect: 'none', outline: 'none' }}
+                style={{ position: 'fixed', left: layerPos.left, top: layerPos.top, width: layerPos.width, height: layerPos.height, zIndex: 9999, cursor: getTextLayerQuality(layer) !== 'none' ? 'text' : 'default', touchAction: 'none', userSelect: 'none', outline: 'none' }}
               onMouseDown={onMouseDown}
               onWheel={onWheel}
             >

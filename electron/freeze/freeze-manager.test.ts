@@ -15,6 +15,10 @@ function createWebContents() {
   const debuggerApi = {
     attached: false,
     failResumeOnce: false,
+    failChildPauseSession: null as string | null,
+    pauseChildGate: null as Promise<void> | null,
+    pauseChildGates: new Map<string, Promise<void>>(),
+    pauseRootGate: null as Promise<void> | null,
     commands: [] as Array<{ command: string; sessionId?: string }>,
     on(event: string, handler: (...args: unknown[]) => void) {
       const handlers = listeners.get(event) || new Set();
@@ -41,6 +45,19 @@ function createWebContents() {
       if (command === 'Debugger.resume' && this.failResumeOnce) {
         this.failResumeOnce = false;
         throw new Error('resume failed');
+      }
+      if (command === 'Debugger.pause' && sessionId && this.pauseChildGate) {
+        await this.pauseChildGate;
+      }
+      if (command === 'Debugger.pause' && sessionId && this.pauseChildGates.has(sessionId)) {
+        await this.pauseChildGates.get(sessionId);
+      }
+      if (command === 'Debugger.pause' && !sessionId && this.pauseRootGate) {
+        await this.pauseRootGate;
+      }
+      if (command === 'Debugger.pause' && sessionId === this.failChildPauseSession) {
+        this.failChildPauseSession = null;
+        throw new Error('child pause failed');
       }
       return {};
     },
@@ -138,6 +155,143 @@ describe('freeze manager transitions', () => {
     });
   });
 
+  it('waits for a child attached during freeze before resolving', async () => {
+    const manager = await import('./freeze-manager.js');
+    let releaseChild: (() => void) | undefined;
+    registry.current!.debugger.pauseChildGate = new Promise<void>((resolve) => {
+      releaseChild = resolve;
+    });
+    const freeze = manager.freezeTab('tab-1');
+    await vi.waitFor(() => expect(registry.current!.debugger.isAttached()).toBe(true));
+    registry.current!.debugger.emit(
+      'message',
+      {},
+      'Target.attachedToTarget',
+      { sessionId: 'late-worker' },
+      undefined,
+    );
+    let settled = false;
+    void freeze.finally(() => { settled = true; });
+    await vi.waitFor(() => expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: 'late-worker',
+    }));
+    expect(settled).toBe(false);
+    releaseChild!();
+    expect(await freeze).toBe(true);
+  });
+
+  it('rolls back child targets when a child pause fails', async () => {
+    const manager = await import('./freeze-manager.js');
+    let releaseRoot: (() => void) | undefined;
+    registry.current!.debugger.pauseRootGate = new Promise<void>((resolve) => {
+      releaseRoot = resolve;
+    });
+    registry.current!.debugger.failChildPauseSession = 'worker-2';
+    const freeze = manager.freezeTab('tab-1');
+    await vi.waitFor(() => expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: undefined,
+    }));
+    registry.current!.debugger.emit(
+      'message',
+      {},
+      'Target.attachedToTarget',
+      { sessionId: 'worker-1' },
+      undefined,
+    );
+    registry.current!.debugger.emit(
+      'message',
+      {},
+      'Target.attachedToTarget',
+      { sessionId: 'worker-2' },
+      undefined,
+    );
+    releaseRoot!();
+    expect(await freeze).toBe(false);
+    expect(manager.getFreezeState('tab-1')).toBe('idle');
+    expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.resume',
+      sessionId: 'worker-1',
+    });
+  });
+
+  it('releases startup-waiting children on resume without sending Debugger.pause', async () => {
+    const manager = await import('./freeze-manager.js');
+    let releaseRoot: (() => void) | undefined;
+    registry.current!.debugger.pauseRootGate = new Promise<void>((resolve) => {
+      releaseRoot = resolve;
+    });
+    const freeze = manager.freezeTab('tab-1');
+    await vi.waitFor(() => expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: undefined,
+    }));
+    registry.current!.debugger.emit(
+      'message',
+      {},
+      'Target.attachedToTarget',
+      { sessionId: 'startup-worker', waitingForDebugger: true },
+      undefined,
+    );
+    releaseRoot!();
+    expect(await freeze).toBe(true);
+    expect(registry.current!.debugger.commands).not.toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: 'startup-worker',
+    });
+    expect(await manager.resumeTab('tab-1')).toBe(true);
+    expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Runtime.runIfWaitingForDebugger',
+      sessionId: 'startup-worker',
+    });
+  });
+
+  it('waits for slow siblings before rolling back a child pause failure', async () => {
+    const manager = await import('./freeze-manager.js');
+    let releaseRoot: (() => void) | undefined;
+    let releaseSlowChild: (() => void) | undefined;
+    registry.current!.debugger.pauseRootGate = new Promise<void>((resolve) => {
+      releaseRoot = resolve;
+    });
+    registry.current!.debugger.pauseChildGates.set('slow-worker', new Promise<void>((resolve) => {
+      releaseSlowChild = resolve;
+    }));
+    registry.current!.debugger.failChildPauseSession = 'failed-worker';
+    const freeze = manager.freezeTab('tab-1');
+    await vi.waitFor(() => expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: undefined,
+    }));
+    registry.current!.debugger.emit('message', {}, 'Target.attachedToTarget', { sessionId: 'slow-worker' }, undefined);
+    registry.current!.debugger.emit('message', {}, 'Target.attachedToTarget', { sessionId: 'failed-worker' }, undefined);
+    releaseRoot!();
+    let settled = false;
+    void freeze.finally(() => { settled = true; });
+    await vi.waitFor(() => expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: 'slow-worker',
+    }));
+    expect(settled).toBe(false);
+    releaseSlowChild!();
+    await vi.waitFor(() => expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.pause',
+      sessionId: 'failed-worker',
+    }));
+    expect(await freeze).toBe(false);
+    expect(registry.current!.debugger.commands).toContainEqual({
+      command: 'Debugger.resume',
+      sessionId: 'slow-worker',
+    });
+  });
+
+  it('rejects text extracted from an older webContents generation', async () => {
+    const manager = await import('./freeze-manager.js');
+    expect(await manager.freezeTab('tab-1', null, 999)).toBe(false);
+    expect(registry.current!.debugger.isAttached()).toBe(false);
+    expect(manager.getFreezeState('tab-1')).toBe('idle');
+  });
+
   it('keeps a frozen session when resume and detach both fail', async () => {
     const manager = await import('./freeze-manager.js');
     expect(await manager.freezeTab('tab-1')).toBe(true);
@@ -155,5 +309,11 @@ describe('freeze manager transitions', () => {
     registry.current!.debugger.attached = false;
     registry.current!.debugger.emit('detach', {}, 'target closed');
     expect(manager.getFreezeState('tab-1')).toBe('idle');
+  });
+
+  it('keeps the injected glyph extraction script parseable', async () => {
+    const manager = await import('./freeze-manager.js');
+    expect(() => new Function(manager.GLYPH_EXTRACT_SCRIPT)).not.toThrow();
+    expect(manager.GLYPH_EXTRACT_SCRIPT).toContain('\\r|\\n');
   });
 });

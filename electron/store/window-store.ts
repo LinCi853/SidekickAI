@@ -14,14 +14,15 @@
 //   }
 
 import type { WindowStateData } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 
 type WindowStateStore = {
   states: Record<string, WindowStateData>
 }
 
-const store = createJsonStore<WindowStateStore>({
-  name: 'window-states',
+const store = createSqliteJsonStore<WindowStateStore>({
+  tableName: 'window_states',
+  legacyName: 'window-states',
   defaults: { states: {} },
 })
 
@@ -114,7 +115,7 @@ export class WindowStore {
 
   /** 列出所有 chat 模式脱离窗口状态（mode='chat'） */
   listChatWindows(): WindowStateData[] {
-    const states = store.get('states')
+    const states = store.get('states') as Record<string, WindowStateData>
     return Object.values(states).filter(
       (s) => s.windowId !== MAIN_WINDOW_ID && s.mode === 'chat',
     )

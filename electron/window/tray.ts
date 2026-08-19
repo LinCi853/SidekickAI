@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { windowState } from '../window-state.js'
 import { createMainWindow } from '../window-factory.js'
+import * as focusManager from '../utils/focus-manager.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -63,10 +64,10 @@ export function createTray(): void {
             createMainWindow()
             return
           }
-          if (win.isMinimized()) win.restore()
-          if (!win.isVisible()) win.show()
-          win.focus()
-          win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+          focusManager.show(win)
+          if (!win.isDestroyed()) {
+            win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+          }
         },
       },
       {
@@ -81,6 +82,7 @@ export function createTray(): void {
           const y = Math.round(workArea.y + 20)
           if (win.isMaximized()) win.unmaximize()
           if (win.isMinimized()) win.restore()
+          win.setSkipTaskbar(false)
           if (!win.isVisible()) win.show()
           win.setBounds({ x, y, width: defaultWidth, height: defaultHeight })
           win.focus()
@@ -105,12 +107,12 @@ export function createTray(): void {
         return
       }
       if (win.isVisible()) {
-        win.hide()
+        focusManager.hide(win)
       } else {
-        if (win.isMinimized()) win.restore()
-        win.show()
-        win.focus()
-        win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        focusManager.show(win)
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        }
       }
     })
 

@@ -7,25 +7,16 @@
    全部完成后才渲染实际视图，保证状态就绪。
    ===================================================================== */
 
-import { Component, useEffect, useState, type ReactNode } from 'react';
+import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+// 首屏关键组件：同步导入，避免 CSS 异步加载导致布局紊乱
 import MainView from './pages/MainView';
 import StandaloneView from './pages/StandaloneView';
-import ChatView from './pages/ChatView';
-import RecordIndicator from './pages/RecordIndicator';
-import HistoryView from './pages/HistoryView';
-import PromptLibraryView from './pages/PromptLibraryView';
-import AiAppEditor from './pages/AiAppEditor';
-import AdvancedPanelView from './pages/AdvancedPanelView';
-import DataExportWindow from './pages/DataExportWindow';
-import OnboardingView from './pages/OnboardingView';
-import SettingsView from './pages/SettingsView';
-import BrowserView from './pages/BrowserView';
-import HistoryDownloadView from './pages/HistoryDownloadView';
 import Button from './components/ui/Button';
 import { useProfileStore } from './store/useProfileStore';
 import { useTabStore } from './store/useTabStore';
 import { useWindowStore } from './store/useWindowStore';
 import { usePromptStore } from './store/usePromptStore';
+import { useModuleStore } from './store/useModuleStore';
 import { getAppSettings, onUiScaleChanged, onAppSettingsChanged, onUiVersionChanged, onThemeColorChanged, setMinimumSize } from './lib/electron-api';
 import {
   calculateMainWindowMinWidth,
@@ -45,6 +36,22 @@ import {
 import { useUiVersionStore } from './store/useUiVersionStore';
 import { useThemeStore } from './store/useThemeStore';
 import { getOxyLayout, activateOxy, deactivateOxy, applyAppTheme } from './lib/oxy-design-system';
+
+/* =====================================================================
+   React.lazy 页面组件 —— 辅助窗口按需加载（非首屏，可 lazy）
+   首屏关键路径（MainView / StandaloneView）保持同步导入
+   ===================================================================== */
+const ChatView = lazy(() => import('./pages/ChatView'));
+const RecordIndicator = lazy(() => import('./pages/RecordIndicator'));
+const HistoryView = lazy(() => import('./pages/HistoryView'));
+const PromptLibraryView = lazy(() => import('./pages/PromptLibraryView'));
+const AiAppEditor = lazy(() => import('./pages/AiAppEditor'));
+const AdvancedPanelView = lazy(() => import('./pages/AdvancedPanelView'));
+const DataExportWindow = lazy(() => import('./pages/DataExportWindow'));
+const OnboardingView = lazy(() => import('./pages/OnboardingView'));
+const SettingsView = lazy(() => import('./pages/SettingsView'));
+const BrowserView = lazy(() => import('./pages/BrowserView'));
+const HistoryDownloadView = lazy(() => import('./pages/HistoryDownloadView'));
 
 /* =====================================================================
    ErrorBoundary —— 捕获子组件渲染错误，防止单个 webview 报错导致整个应用白屏
@@ -193,20 +200,29 @@ export default function App() {
   // 设置窗口需要加载 ProfileStore（AI 应用卡片依赖），但不需 TabStore
   useEffect(() => {
     if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings || isBrowser || isHistoryDownload) {
-      setReady(true);
-      // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
-      void getAppSettings().then((cfg) => {
-        const isOxy = useUiVersionStore.getState().version === 'oxy';
-        if (!isOxy) {
-          document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
-        }
-      }).catch(() => {});
-      // 设置窗口需要加载 Profile 列表（AI 应用卡片依赖 useProfileStore）
-      if (isSettings) {
-        void useProfileStore.getState().loadProfiles().catch((e) => {
-          console.error('[App] 设置窗口加载 Profile 列表失败:', e);
+      // 模块状态先行加载（路由门控与进阶面板 tab 依赖），就绪后才 ready，保证首帧即有状态
+      void useModuleStore
+        .getState()
+        .init()
+        .catch((e) => {
+          console.error('[App] 模块状态加载失败:', e);
+        })
+        .finally(() => {
+          setReady(true);
+          // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
+          void getAppSettings().then((cfg) => {
+            const isOxy = useUiVersionStore.getState().version === 'oxy';
+            if (!isOxy) {
+              document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+            }
+          }).catch(() => {});
+          // 设置窗口需要加载 Profile 列表（AI 应用卡片依赖 useProfileStore）
+          if (isSettings) {
+            void useProfileStore.getState().loadProfiles().catch((e) => {
+              console.error('[App] 设置窗口加载 Profile 列表失败:', e);
+            });
+          }
         });
-      }
       return;
     }
     let cancelled = false;
@@ -234,6 +250,21 @@ export default function App() {
         console.log('[App] 3. Profile 列表加载完成，数量:', profileCount);
       } catch (e) {
         console.error('[App] 3. 加载 Profile 列表失败:', e);
+      }
+
+      // 4.5 加载模块状态（入口显隐依赖）
+      try {
+        await useModuleStore.getState().init();
+      } catch (e) {
+        console.error('[App] 模块状态加载失败:', e);
+      }
+
+      // 4.6 初始化统一注入管理器（注册所有功能的注入点）
+      try {
+        const { registerDefaultInjectionPoints } = await import('./lib/injection-manager');
+        await registerDefaultInjectionPoints();
+      } catch (e) {
+        console.error('[App] 注入管理器初始化失败:', e);
       }
 
       // 4. 加载提示词模板（明输入明注入）
@@ -268,6 +299,16 @@ export default function App() {
       cancelled = true;
     };
   }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings, isBrowser, isHistoryDownload]);
+
+  // 录音指示器窗口：添加透明背景类
+  useEffect(() => {
+    if (isRecordIndicator) {
+      document.documentElement.classList.add('record-indicator-window');
+    }
+    return () => {
+      document.documentElement.classList.remove('record-indicator-window');
+    };
+  }, [isRecordIndicator]);
 
   // 监听 UI 比例变化广播：更新 data-ui-scale 属性 + 重新计算当前窗口最小尺寸。
   // 主进程在 uiScale 变更后向所有窗口推送；各窗口根据自身类型选用对应公式。
@@ -413,14 +454,24 @@ export default function App() {
   }, []);
 
   // 监听 Oxy 主题色变更广播：主窗口切换 AI 应用后，其他窗口同步主题色
-  // 浏览器窗口跳过（有自己的主题色）
+  // 仅在 Oxy 模式下生效；经典模式不跟随主题色
   useEffect(() => {
     if (isBrowser) return;
+    const isOxy = useUiVersionStore.getState().version === 'oxy';
+    if (!isOxy) return;
     const off = onThemeColorChanged((hex) => {
       applyAppTheme(hex);
     });
     return off;
   }, [isBrowser]);
+
+  // 模块门控：对应模块关闭时，独立窗口路由渲染占位视图（11.10 全路径封死）。
+  // 注意：hook 必须在 if (!ready) 提前返回之前调用，保证每次渲染 hooks 数量一致。
+  // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
+  const enabledModuleIds = useModuleStore((s) =>
+    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  );
+  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
 
   if (!ready) {
     return <LoadingScreen />;
@@ -432,16 +483,30 @@ export default function App() {
   //   notes → NotesView, whiteboard → WhiteboardView,
   //   chat → ChatView, 主窗口 → MainView, 脱离窗口 → StandaloneView
   // 所有视图用 ErrorBoundary 包裹，防止单个 webview 报错导致整个应用白屏
-  if (isRecordIndicator) return <AppErrorBoundary><RecordIndicator /></AppErrorBoundary>;
-  if (isHistory) return <AppErrorBoundary><HistoryView /></AppErrorBoundary>;
-  if (isPrompts) return <AppErrorBoundary><PromptLibraryView /></AppErrorBoundary>;
-  if (isAiAppEditor) return <AppErrorBoundary><AiAppEditor /></AppErrorBoundary>;
-  if (isAdvancedPanel) return <AppErrorBoundary><AdvancedPanelView /></AppErrorBoundary>;
-  if (isDataExport) return <AppErrorBoundary><DataExportWindow /></AppErrorBoundary>;
-  if (isSettings) return <AppErrorBoundary><SettingsView /></AppErrorBoundary>;
-  if (isOnboarding) return <AppErrorBoundary><OnboardingView /></AppErrorBoundary>;
-  if (isChat) return <AppErrorBoundary><ChatView windowId={mode === 'chat' ? windowId : undefined} /></AppErrorBoundary>;
-  if (isBrowser) return <AppErrorBoundary><BrowserView /></AppErrorBoundary>;
-  if (isHistoryDownload) return <AppErrorBoundary><HistoryDownloadView /></AppErrorBoundary>;
+  // 模块门控兜底：主进程已拒绝打开对应窗口；此处渲染静默空视图（不展示任何提示文案）
+  if (isChat && !moduleEnabled('custom-chat')) {
+    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+  }
+  if (isPrompts && !moduleEnabled('prompt-library')) {
+    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+  }
+  if (isBrowser && !moduleEnabled('browser')) {
+    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+  }
+  if (isHistoryDownload && !moduleEnabled('browser')) {
+    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+  }
+
+  if (isRecordIndicator) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><RecordIndicator /></Suspense></AppErrorBoundary>;
+  if (isHistory) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><HistoryView /></Suspense></AppErrorBoundary>;
+  if (isPrompts) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><PromptLibraryView /></Suspense></AppErrorBoundary>;
+  if (isAiAppEditor) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAppEditor /></Suspense></AppErrorBoundary>;
+  if (isAdvancedPanel) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AdvancedPanelView /></Suspense></AppErrorBoundary>;
+  if (isDataExport) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><DataExportWindow /></Suspense></AppErrorBoundary>;
+  if (isSettings) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><SettingsView /></Suspense></AppErrorBoundary>;
+  if (isOnboarding) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><OnboardingView /></Suspense></AppErrorBoundary>;
+  if (isChat) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><ChatView windowId={mode === 'chat' ? windowId : undefined} /></Suspense></AppErrorBoundary>;
+  if (isBrowser) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><BrowserView /></Suspense></AppErrorBoundary>;
+  if (isHistoryDownload) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><HistoryDownloadView /></Suspense></AppErrorBoundary>;
   return <AppErrorBoundary>{isMain ? <MainView /> : <StandaloneView />}</AppErrorBoundary>;
 }

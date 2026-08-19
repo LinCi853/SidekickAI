@@ -16,8 +16,8 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import { windowState } from '../window-state.js'
 import { getPreloadPath, loadRenderer } from '../window-factory/helpers.js'
 
-/** 后台语音预览窗自动隐藏延迟（毫秒） */
-const PREVIEW_HIDE_DELAY_MS = 3000
+/** 后台语音预览窗自动隐藏延迟（毫秒）— 识别完成后多留一段时间 */
+const PREVIEW_HIDE_DELAY_MS = 5000
 
 /** 预览窗自动隐藏定时器 */
 let previewHideTimer: NodeJS.Timeout | null = null
@@ -37,17 +37,20 @@ let appHasFocusedWindow = false
 /**
  * 初始化前台状态追踪。
  * 在 app.whenReady() 后调用一次即可。
+ * 排除预览窗（previewWindow），避免录音指示器抢焦点导致误判。
  */
 export function initAppFocusTracker(): void {
-  // 初始状态：检查当前是否有窗口已 focus
+  // 初始状态：检查当前是否有窗口已 focus（排除预览窗）
   for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed() && w.isFocused()) {
+    if (!w.isDestroyed() && w.isFocused() && w !== windowState.previewWindow) {
       appHasFocusedWindow = true
       break
     }
   }
   // 监听所有窗口的 focus/blur 事件
-  app.on('browser-window-focus', () => {
+  app.on('browser-window-focus', (_event, win) => {
+    // 排除预览窗：预览窗聚焦不代表用户在使用本应用
+    if (win === windowState.previewWindow) return
     appHasFocusedWindow = true
   })
   app.on('browser-window-blur', () => {
@@ -55,7 +58,7 @@ export function initAppFocusTracker(): void {
     setImmediate(() => {
       let anyFocused = false
       for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed() && w.isFocused()) {
+        if (!w.isDestroyed() && w.isFocused() && w !== windowState.previewWindow) {
           anyFocused = true
           break
         }
@@ -87,12 +90,12 @@ function createRecordIndicatorWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
   const isLinux = process.platform === 'linux'
   const win = new BrowserWindow({
-    width: 360,
-    height: 56,
-    minWidth: 240,
-    minHeight: 48,
-    maxWidth: 720,
-    maxHeight: 120,
+    width: 440,
+    height: 88,
+    minWidth: 300,
+    minHeight: 64,
+    maxWidth: 800,
+    maxHeight: 140,
     show: false,
     frame: false,
     resizable: true,
@@ -160,17 +163,18 @@ export function showPreview(payload: {
 
   if (isNew) {
     // 新创建窗口：等 dom-ready 后再发，确保渲染层监听器已注册
-    // 关键：必须先注册监听器再检查 isLoading()，否则 dom-ready 可能已经触发过
     const onReady = () => {
       if (win.isDestroyed()) return
       positionPreviewAtBottomCenter(win)
       sendUpdate()
+      // showInactive：显示窗口但不抢焦点（关键！否则外部应用失焦导致 Ctrl+V 失败）
       if (!win.isVisible()) {
-        win.show()
+        win.showInactive()
       }
+      win.setAlwaysOnTop(true, 'screen-saver')
+      win.moveTop()
     }
     if (!win.webContents.isLoading()) {
-      // dom-ready 已触发过：直接发（监听器会丢失事件）
       onReady()
     } else {
       win.webContents.once('dom-ready', onReady)
@@ -178,9 +182,25 @@ export function showPreview(payload: {
   } else {
     positionPreviewAtBottomCenter(win)
     sendUpdate()
+    // showInactive：显示窗口但不抢焦点
     if (!win.isVisible()) {
-      win.show()
+      win.showInactive()
     }
+    win.setAlwaysOnTop(true, 'screen-saver')
+    win.moveTop()
+  }
+}
+
+/**
+ * 推送流式识别的部分结果到预览窗。
+ * 在识别过程中可多次调用，实时更新已识别的文本。
+ */
+export function showPartialText(text: string): void {
+  if (!windowState.previewWindow || windowState.previewWindow.isDestroyed()) return
+  try {
+    windowState.previewWindow.webContents.send(IPC_CHANNELS.PREVIEW_PARTIAL, { text })
+  } catch (err) {
+    console.warn('[main] PREVIEW_PARTIAL 发送失败:', err)
   }
 }
 

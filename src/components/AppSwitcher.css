@@ -54,8 +54,8 @@
   position: fixed;
   /* top/left 由 JS 根据按钮视口位置动态设置，避免被父级 overflow/stacking-context 裁剪 */
   margin-top: var(--space-1);
-  width: calc(var(--titlebar-icon) * 7.8);
-  max-height: var(--dropdown-max-h);
+  width: calc(var(--titlebar-icon) * 7);
+  max-height: 70vh;
   overflow-y: auto;
   background: var(--muted);
   border: 1px solid var(--glass-bd);
@@ -67,24 +67,44 @@
   flex-direction: column;
   gap: var(--space-1);
 }
+.app-switcher-dropdown.cols-3 {
+  width: calc(var(--titlebar-icon) * 9);
+}
+.app-switcher-dropdown.cols-4 {
+  width: calc(var(--titlebar-icon) * 11);
+}
+.app-switcher-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-1-5);
+}
+.app-switcher-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.app-switcher-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
 .app-switcher-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1-5) var(--space-2);
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-1-5) var(--space-1);
   min-height: 0;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   width: 100%;
-  line-height: 1.4;
-  transition: background var(--duration-fast);
+  line-height: 1.3;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
   position: relative;
 }
 .app-switcher-item:hover {
-  background: var(--accent-10);
+  background: var(--background);
+  border-color: var(--ring);
 }
 /* 拖拽中：半透明（与 inline style 协同，css 兜底） */
 .app-switcher-item.dragging {
@@ -95,20 +115,10 @@
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
 }
-/* 已打开高亮：与底栏 .open 规则等价（左侧主题色竖条 + 加粗名称） */
+/* 已打开高亮：与底栏 .open 规则等价（边框主题色 + 阴影） */
 .app-switcher-item.open {
-  position: relative;
-  background: var(--accent-10);
-}
-.app-switcher-item.open::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: var(--space-1-5);
-  bottom: var(--space-1-5);
-  width: var(--space-0-5);
-  border-radius: var(--radius-2xs);
-  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 .app-switcher-item.open .app-switcher-item-name {
   color: var(--foreground);
@@ -116,7 +126,7 @@
 }
 /* 当前激活（再点即关闭）：图标描边强化提示 */
 .app-switcher-item.active .app-switcher-item-icon {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--primary);
 }
 .app-switcher-item-icon {
   width: var(--icon-svg);
@@ -133,11 +143,13 @@
 }
 .app-switcher-item-name {
   font-family: var(--font-sans);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
 }
 .app-switcher-divider {
   height: 1px;
@@ -167,29 +179,31 @@
 .app-switcher-item.chat .app-switcher-item-name {
   color: var(--foreground);
 }
-/* 自定义供应商：虚线左边框区分 */
+/* 自定义供应商：虚线边框区分 */
 .app-switcher-item.chat {
-  border-left: 1px dashed var(--accent-50);
+  border-style: dashed;
+  border-color: var(--primary);
 }
 .app-switcher-item.manage {
   color: var(--muted-foreground);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   justify-content: center;
-  padding: var(--space-1-5) var(--space-2);
+  padding: var(--space-1-5) var(--space-1);
   min-height: 0;
-  line-height: 1.4;
+  line-height: 1.3;
+  grid-column: 1 / -1;
 }
 .app-switcher-item.manage:hover {
   color: var(--accent-bright);
 }
 .app-switcher-empty {
-  padding: var(--space-3) var(--space-2) var(--space-2);
+  padding: var(--space-2) var(--space-1);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   color: var(--text-muted);
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.2;
   display: flex;
   flex-direction: column;
   align-items: center;

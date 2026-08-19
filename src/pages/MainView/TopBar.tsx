@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { AIPlatform, Profile, TopBarButtonGroup } from '../../lib/electron-api';
 import AppSwitcher from '../../components/AppSwitcher';
-import { IconButton } from '../../components/ui';
+import { IconButton, PinToggleButton } from '../../components/ui';
 import {
   minimizeWindow,
   closeCurrentWindow,
@@ -333,21 +333,12 @@ export default function TopBar({ data, actions }: TopBarProps) {
           )}
         </IconButton>
 
-        <IconButton
-          type="button"
-          variant={alwaysOnTop ? 'active' : 'default'}
-          aria-label="置顶"
-          title={alwaysOnTop ? '取消置顶' : '置顶'}
-          onClick={handleTogglePin}
+        <PinToggleButton
+          isPinned={alwaysOnTop}
+          onToggle={handleTogglePin}
           hidden={!visibleButtons.includes('pinToggle')}
           data-name="main.top-bar.pin-icon-button"
-        >
-          <svg viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="main.top-bar.pin-icon">
-            <line x1="12" y1="17" x2="12" y2="3" />
-            <path d="M6.5 8.5L12 3l5.5 5.5" />
-            <path d="M5 21h14" />
-          </svg>
-        </IconButton>
+        />
 
         <div className="top-bar-separator" data-name="main.top-bar.separator-divider" />
 

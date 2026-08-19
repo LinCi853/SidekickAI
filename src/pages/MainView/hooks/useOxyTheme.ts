@@ -33,12 +33,11 @@ export function useOxyTheme(
       ? platforms.find((p) => p.id === profile.aiPlatformId || p.url === profile.aiPlatformUrl)
       : null;
     const { themeColor } = getPlatformColors(profile, platform, tab.profileId);
-    // Oxy 模式下应用主题色到当前窗口
+    // Oxy 模式下应用主题色到当前窗口并广播
     if (isOxy) {
       applyAppTheme(themeColor);
+      broadcastThemeColorChanged(themeColor);
     }
-    // 广播到其他窗口（进阶面板、设置、对话等同步主题色）
-    broadcastThemeColorChanged(themeColor);
   }, [isOxy, activeTabId, tabs, profiles, platforms]);
 
   return { isOxy };

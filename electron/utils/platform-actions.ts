@@ -126,3 +126,342 @@ export async function simulatePaste(): Promise<void> {
 export const platformActions = {
   simulatePaste,
 }
+
+/**
+ * 逐字符键入文本到当前前台应用（不修改剪贴板）。
+ * 使用平台原生方式模拟键盘输入：
+ *   - Windows: PowerShell SendKeys（逐字符发送）
+ *   - macOS:   osascript keystroke（逐字符）
+ *   - Linux:   xdotool type
+ *
+ * 适用于需要直接输入到第三方应用光标位置的场景。
+ * 比剪贴板+Ctrl+V更可靠，不会覆盖用户剪贴板内容。
+ */
+export async function typeText(text: string): Promise<void> {
+  const platform = process.platform
+
+  if (platform === 'win32') {
+    // Windows: 使用 PowerShell SendKeys 逐段发送（转义特殊字符）
+    // SendKeys 特殊字符：+^%~(){}[]
+    const escaped = text
+      .replace(/([+^%~(){}[\]])/g, '{$1}')
+      .replace(/\n/g, '~')
+      .replace(/\r/g, '')
+    const psScript = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${escaped.replace(/'/g, "''")}')`
+    try {
+      await execAsync(`powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`)
+      console.log('[platform-actions] Windows SendKeys type 成功')
+    } catch (e) {
+      console.error('[platform-actions] Windows SendKeys type 失败:', e)
+      throw e
+    }
+    return
+  }
+
+  if (platform === 'darwin') {
+    if (!checkAccessibilityPermission()) {
+      await promptAccessibilityPermission()
+      if (!checkAccessibilityPermission()) {
+        const err = new Error('macOS 辅助功能权限未授权，无法键入文本') as Error & { code?: string }
+        err.code = ERR_MAC_ACCESSIBILITY_DENIED
+        throw err
+      }
+    }
+    // macOS: osascript keystroke，转义双引号和反斜杠
+    const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    const script = `tell application "System Events" to keystroke "${escaped}"`
+    try {
+      await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`)
+      console.log('[platform-actions] macOS osascript type 成功')
+    } catch (e) {
+      console.error('[platform-actions] macOS osascript type 失败:', e)
+      throw e
+    }
+    return
+  }
+
+  // Linux: xdotool type
+  try {
+    const escaped = text.replace(/'/g, "'\\''")
+    await execAsync(`xdotool type --clearmodifiers '${escaped}'`)
+    console.log('[platform-actions] Linux xdotool type 成功')
+    return
+  } catch (e) {
+    console.warn('[platform-actions] xdotool type 失败:', e)
+  }
+
+  throw new Error('Linux 文本键入失败：xdotool 不可用')
+}
+
+/**
+ * 获取当前前台窗口的原生句柄（HWND on Windows）。
+ * 用于在显示主窗口前记住之前聚焦的外部应用，隐藏主窗口后恢复。
+ *
+ * - Windows: 使用 user32.dll GetForegroundWindow
+ * - macOS/Linux: 暂不支持，返回 null
+ */
+export function getForegroundWindowHandle(): number | null {
+  if (process.platform !== 'win32') return null
+  try {
+    // 使用 koffi 调用 Windows API（koffi 是 Electron 内可用的 FFI 库）
+    // 如果 koffi 不可用，降级使用 PowerShell
+    const { execSync } = require('child_process')
+    const result = execSync(
+      'powershell -NoProfile -Command "Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\\"user32.dll\\\")] public static extern IntPtr GetForegroundWindow(); }\'; [Win32]::GetForegroundWindow().ToInt64()"',
+      { encoding: 'utf-8', timeout: 2000 }
+    ).trim()
+    const handle = parseInt(result, 10)
+    return isNaN(handle) ? null : handle
+  } catch (e) {
+    console.warn('[platform-actions] 获取前台窗口句柄失败:', e)
+    return null
+  }
+}
+
+/**
+ * 将指定句柄的窗口设置为前台（HWND on Windows）。
+ * 用于隐藏主窗口后恢复之前聚焦的外部应用。
+ *
+ * - Windows: 使用 user32.dll SetForegroundWindow + ShowWindow
+ * - macOS/Linux: 暂不支持
+ */
+export function setForegroundWindowByHandle(handle: number): boolean {
+  if (process.platform !== 'win32') return false
+  try {
+    const { execSync } = require('child_process')
+    const script = `
+Add-Type -TypeDefinition '
+using System;
+using System.Runtime.InteropServices;
+public class Win32 {
+  [DllImport("user32.dll")]
+  public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")]
+  public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")]
+  public static extern bool IsIconic(IntPtr hWnd);
+}
+'
+$hwnd = [IntPtr]::new(${handle})
+if ([Win32]::IsIconic($hwnd)) {
+  [Win32]::ShowWindow($hwnd, 9) # SW_RESTORE
+}
+[Win32]::SetForegroundWindow($hwnd)
+`
+    execSync(`powershell -NoProfile -Command "${script.replace(/"/g, '\\"')}"`, { timeout: 2000 })
+    console.log('[platform-actions] 恢复前台窗口成功:', handle)
+    return true
+  } catch (e) {
+    console.warn('[platform-actions] 恢复前台窗口失败:', e)
+    return false
+  }
+}
+
+/**
+ * 上屏结果类型
+ */
+export interface InsertTextResult {
+  success: boolean
+  method: 'uia' | 'sendinput' | 'clipboard' | 'none'
+  error?: string
+}
+
+/**
+ * 分层降级文本上屏（首选方案）
+ * 尝试顺序：UI Automation → SendInput → 剪贴板
+ *
+ * @param text 要插入的文本
+ * @param clipboardBackup 剪贴板备份/恢复函数（由调用方提供，避免循环依赖）
+ */
+export async function insertTextLayered(
+  text: string,
+  clipboardBackup?: {
+    backup: () => unknown
+    write: (text: string) => void
+    restore: (snapshot: unknown) => void
+  }
+): Promise<InsertTextResult> {
+  if (process.platform !== 'win32') {
+    // 非 Windows：降级到剪贴板
+    return insertTextViaClipboard(text, clipboardBackup)
+  }
+
+  // 第一层：UI Automation
+  try {
+    const uiaResult = await insertTextViaUIA(text)
+    if (uiaResult.success) {
+      console.log('[platform-actions] UI Automation 上屏成功')
+      return uiaResult
+    }
+    console.log('[platform-actions] UI Automation 不可用，降级到 SendInput')
+  } catch (e) {
+    console.warn('[platform-actions] UI Automation 失败:', e)
+  }
+
+  // 第二层：SendInput
+  try {
+    const siResult = await insertTextViaSendInput(text)
+    if (siResult.success) {
+      console.log('[platform-actions] SendInput 上屏成功')
+      return siResult
+    }
+    console.log('[platform-actions] SendInput 失败，降级到剪贴板')
+  } catch (e) {
+    console.warn('[platform-actions] SendInput 失败:', e)
+  }
+
+  // 第三层：剪贴板
+  return insertTextViaClipboard(text, clipboardBackup)
+}
+
+/**
+ * UI Automation 方式插入文本
+ * 通过 COM 接口直接操作焦点控件的文本
+ */
+async function insertTextViaUIA(text: string): Promise<InsertTextResult> {
+  const psScript = `
+try {
+  $uia = [System.Windows.Automation.AutomationElement]::FocusedElement
+  if ($uia -eq $null) { throw "No focused element" }
+
+  $pattern = $uia.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+  if ($pattern -eq $null) { throw "No ValuePattern" }
+
+  $pattern.SetValue($text)
+  Write-Output "OK"
+} catch {
+  Write-Output "FAIL: $_"
+}
+`
+  try {
+    const { execAsync } = await import('child_process').then(m => ({ execAsync: require('util').promisify(m.exec) }))
+    const result = await execAsync(
+      `powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`,
+      { timeout: 3000 }
+    )
+    if (result.stdout.trim() === 'OK') {
+      return { success: true, method: 'uia' }
+    }
+    return { success: false, method: 'uia', error: result.stdout.trim() }
+  } catch (e) {
+    return { success: false, method: 'uia', error: String(e) }
+  }
+}
+
+/**
+ * SendInput 方式插入文本（Unicode 模式）
+ * 逐字符发送 Unicode 键码，比 SendKeys 更可靠
+ */
+async function insertTextViaSendInput(text: string): Promise<InsertTextResult> {
+  // 将文本转为 Unicode 码点数组，用 PowerShell SendInput 发送
+  const codePoints = Array.from(text).map(c => c.codePointAt(0))
+  const psScript = `
+Add-Type -TypeDefinition '
+using System;
+using System.Runtime.InteropServices;
+
+public class InputSender {
+  [DllImport("user32.dll", SetLastError = true)]
+  public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct INPUT {
+    public uint type;
+    public INPUTUNION U;
+  }
+
+  [StructLayout(LayoutKind.Explicit)]
+  public struct INPUTUNION {
+    [FieldOffset(0)] public KEYBDINPUT ki;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct KEYBDINPUT {
+    public ushort wVk;
+    public ushort wScan;
+    public uint dwFlags;
+    public uint time;
+    public IntPtr dwExtraInfo;
+  }
+
+  public const uint INPUT_KEYBOARD = 1;
+  public const uint KEYEVENTF_KEYUP = 0x0002;
+  public const uint KEYEVENTF_UNICODE = 0x0004;
+
+  public static void TypeText(string text) {
+    foreach (char c in text) {
+      INPUT down = new INPUT();
+      down.type = INPUT_KEYBOARD;
+      down.U.ki.wScan = c;
+      down.U.ki.dwFlags = KEYEVENTF_UNICODE;
+
+      INPUT up = new INPUT();
+      up.type = INPUT_KEYBOARD;
+      up.U.ki.wScan = c;
+      up.U.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+
+      INPUT[] inputs = new INPUT[] { down, up };
+      SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
+    }
+  }
+}
+'
+
+[InputSender]::TypeText($text)
+Write-Output "OK"
+`
+  try {
+    const { execAsync } = await import('child_process').then(m => ({ execAsync: require('util').promisify(m.exec) }))
+    const escaped = text.replace(/'/g, "''")
+    const result = await execAsync(
+      `powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"').replace('$text', `'${escaped}'`)}"`,
+      { timeout: 5000 }
+    )
+    if (result.stdout.trim() === 'OK') {
+      return { success: true, method: 'sendinput' }
+    }
+    return { success: false, method: 'sendinput', error: result.stdout.trim() }
+  } catch (e) {
+    return { success: false, method: 'sendinput', error: String(e) }
+  }
+}
+
+/**
+ * 剪贴板方式插入文本（兜底方案）
+ */
+function insertTextViaClipboard(
+  text: string,
+  clipboardBackup?: {
+    backup: () => unknown
+    write: (text: string) => void
+    restore: (snapshot: unknown) => void
+  }
+): InsertTextResult {
+  if (!clipboardBackup) {
+    return { success: false, method: 'clipboard', error: 'No clipboard backup provided' }
+  }
+
+  try {
+    const snapshot = clipboardBackup.backup()
+    clipboardBackup.write(text)
+
+    // 延迟后模拟 Ctrl+V
+    setTimeout(() => {
+      simulatePaste().catch(e => {
+        console.error('[platform-actions] 剪贴板模式 Ctrl+V 失败:', e)
+      })
+      // 再延迟恢复剪贴板
+      setTimeout(() => {
+        try {
+          clipboardBackup.restore(snapshot)
+        } catch (e) {
+          console.error('[platform-actions] 恢复剪贴板失败:', e)
+        }
+      }, 500)
+    }, 150)
+
+    return { success: true, method: 'clipboard' }
+  } catch (e) {
+    return { success: false, method: 'clipboard', error: String(e) }
+  }
+}

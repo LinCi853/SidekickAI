@@ -9,8 +9,11 @@
 //   - 窗口状态持久化（WIN_STATE_GET/SAVE/LIST_DETACHED/REMOVE）
 //
 // 在 app.whenReady 后由 main.ts 调用 registerWindowControlIpc(deps) 完成注册。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { createMaximizeManager } from '../window-factory/window-maximize-manager.js'
@@ -38,8 +41,12 @@ export interface WindowControlIpcDeps {
   getDetachedWindow: (windowId: string) => BrowserWindow | undefined
 }
 
-/** 注册窗口控制相关 IPC handler */
-export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
+/**
+ * 注册窗口控制相关 IPC handler。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: EffectScope): void {
   const {
     windowManager,
     fingerprintEngine,
@@ -50,13 +57,19 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
     getDetachedWindow,
   } = deps
 
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
   // ===== 创建自定义对话窗口 IPC（旧单例） =====
-  ipcMain.handle(IPC_CHANNELS.CHAT_OPEN_WINDOW, () => {
+  handle(IPC_CHANNELS.CHAT_OPEN_WINDOW, () => {
     createChatWindow()
   })
 
   // ===== 历史搜索独立窗口 IPC（单例，列举所有本地保存数据） =====
-  ipcMain.handle(IPC_CHANNELS.CHAT_OPEN_HISTORY_WINDOW, () => {
+  handle(IPC_CHANNELS.CHAT_OPEN_HISTORY_WINDOW, () => {
     showHistoryWindow()
   })
 
@@ -65,12 +78,12 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
   // 不再创建/显示旧的 per-provider chat 脱离窗口（mode='chat'）。
   // 各 handler 降级为 no-op / 空返回，避免旧渲染层调用时崩溃。
   // 列出 chat 脱离窗口：始终返回空数组（不再有活跃的 chat 脱离窗口）
-  ipcMain.handle(IPC_CHANNELS.CHAT_LIST_DETACHED, () => {
+  handle(IPC_CHANNELS.CHAT_LIST_DETACHED, () => {
     return []
   })
   // 创建 chat 脱离窗口：已停用，返回空字符串（不再创建）
-  ipcMain.handle(IPC_CHANNELS.CHAT_CREATE_DETACHED, () => {
-    console.warn('[window-control-ipc] CHAT_CREATE_DETACHED 已停用（4.7 重构），请使用 进阶面板')
+  handle(IPC_CHANNELS.CHAT_CREATE_DETACHED, () => {
+    console.warn('[window-control-ipc] ⚠️ 降级实现: CHAT_CREATE_DETACHED 已停用（4.7 重构），请使用 进阶面板')
     return ''
   })
   // 更新 chat 脱离窗口配置：no-op
@@ -137,17 +150,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_MINIMIZE, (e) => {
     const win = getSenderWindow(e)
     if (!win || win.isDestroyed()) return
-    // 通知渲染层播放最小化动画（淡出 + 向下收缩），主进程延迟 200ms 再真正最小化，
-    // 使 CSS 动画与系统最小化衔接，避免内容突变带来的闪烁。
-    try {
-      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_WINDOW_MINIMIZING)
-    } catch (err) {
-      console.error('[minimize] 发送 WINDOW_MINIMIZING 失败:', err)
-    }
-    setTimeout(() => {
-      if (win.isDestroyed()) return
-      win.minimize()
-    }, 200)
+    win.minimize()
   })
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLE, (e) => {
     const win = getSenderWindow(e)
@@ -165,6 +168,8 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps): void {
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_SET_ALWAYS_ON_TOP, (e, onTop: boolean) => {
     const win = getSenderWindow(e)
     if (!win) return false
+    // 标记用户主动操作时间戳，防止 reapplyAlwaysOnTop 竞态覆盖
+    try { (win as any).__markUserPinAction?.() } catch { /* ignore */ }
     return setAlwaysOnTopForWindow(win, findWindowIdByWin(win), onTop)
   })
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_IS_MAXIMIZED, (e) => {
@@ -308,11 +313,18 @@ export function setAlwaysOnTopForWindow(
     console.log('[setAlwaysOnTop] 跳过：窗口处于最大化/全屏状态，与置顶冲突')
     return false
   }
+  // 如果是用户主动操作（通过 __markUserPinAction 标记），记录时间戳
+  try { (win as any).__markUserPinAction?.() } catch { /* ignore */ }
   win.setAlwaysOnTop(onTop, 'screen-saver')
+  const actual = win.isAlwaysOnTop()
   if (windowId) {
     const state = windowStore.getOrDefault(windowId)
-    state.alwaysOnTop = onTop
+    state.alwaysOnTop = actual
     windowStore.save(windowId, state)
   }
-  return win.isAlwaysOnTop()
+  // 每次变更都广播，确保渲染层同步（修复置顶后失焦被覆盖的竞态）
+  if (!win.isDestroyed()) {
+    try { win.webContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, actual) } catch { /* ignore */ }
+  }
+  return actual
 }

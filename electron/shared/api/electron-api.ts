@@ -3,11 +3,20 @@
 import type { ProfileAPI, WindowAPI, WindowControlAPI, WindowStateAPI, TabAPI, PresetsAPI } from './profile-window.api.js'
 import type { ChatAPI, AIProviderAPI, AIPlatformAPI, PromptAPI, InjectionHistoryAPI } from './chat.api.js'
 import type { SttAPI, VoiceConfigAPI } from './voice.api.js'
-import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings } from './settings.api.js'
+import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings, WebviewHotkeyAction } from './settings.api.js'
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
 import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
 import type { FreezeAPI } from './freeze.api.js'
+import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
 import type { PromptTemplate } from '../chat.types.js'
+
+/** 模块管理 API（插件市场 / 开发者选项） */
+export interface ModulesAPI {
+  list(): Promise<ModuleInfo[]>
+  setEnabled(id: string, enabled: boolean): Promise<{ ok: boolean; error?: string }>
+  clearData(id: string): Promise<{ ok: boolean; error?: string }>
+  onStateChanged(callback: (payload: ModuleStateChangedPayload) => void): () => void
+}
 
 /** 通过 contextBridge 暴露到渲染进程的完整 API */
 export interface ElectronAPI {
@@ -66,12 +75,14 @@ export interface ElectronAPI {
   ) => () => void
   /** 主→预览窗渲染：隐藏 */
   onPreviewHide: (cb: () => void) => () => void
+  /** 主→预览窗渲染：流式识别部分结果（实时推送已识别的部分文本） */
+  onPreviewPartial: (cb: (payload: { text: string }) => void) => () => void
   /** 主→预览窗渲染：开始录音（getUserMedia） */
   onVoiceRecordStart: (cb: () => void) => () => void
   /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
   onWebviewHotkey: (
     callback: (payload: {
-      action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFreeze'
+      action: WebviewHotkeyAction
       data?: unknown
     }) => void,
   ) => () => void
@@ -130,4 +141,6 @@ export interface ElectronAPI {
   navHistory: NavHistoryAPI
   /** 页面冻结（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） */
   freeze: FreezeAPI
+  /** 模块管理（插件市场 / 开发者选项） */
+  modules: ModulesAPI
 }

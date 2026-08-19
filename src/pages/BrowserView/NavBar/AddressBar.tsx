@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { BrowserTabState, Profile, SearchHistoryEntry } from '../../../lib/electron-api';
 import { listSearchHistory, openExternal, getAppSettings, onAppSettingsChanged } from '../../../lib/electron-api';
+import Popover, { PopoverItem, PopoverDivider } from '../../../components/ui/Popover';
 import { LockIcon, AlertIcon, SearchIcon } from '@/components/icons';
 import SitePermissionButton from './SitePermissionButton';
 import StarButton from './StarButton';
@@ -20,7 +21,11 @@ interface AddressBarProps {
 
 function isUrl(input: string): boolean {
   const trimmed = input.trim();
-  if (/^https?:\/\//i.test(trimmed)) return true;
+  // 明确协议（http/https/file/ftp/sidekickai 等应用内协议）
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return true;
+  // file:/// 本地路径
+  if (/^file:\/{1,3}/i.test(trimmed)) return true;
+  // 域名形式
   if (/^[\w-]+(\.[\w-]+)+\/?/.test(trimmed)) return true;
   return false;
 }
@@ -40,7 +45,10 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
   const [searchUrlTemplate, setSearchUrlTemplate] = useState<string>('https://www.bing.com/search?q={query}');
 
   useEffect(() => {
+    // 编辑中不同步外部 URL 变化（页面自身导航等），避免打断用户输入
+    if (isEditing) return;
     setUrlDraft(tab?.url || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab?.url]);
 
   // G1：加载默认搜索引擎配置，并订阅跨窗口设置变更
@@ -79,7 +87,22 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
         e.preventDefault();
         const input = urlDraft.trim();
         if (!input) return;
-        const url = isUrl(input) ? (input.startsWith('http') ? input : `https://${input}`) : toSearchUrl(input, searchUrlTemplate);
+        let url: string;
+        if (isUrl(input)) {
+          if (/^https?:/i.test(input)) url = input;
+          else if (/^(file|sidekickai):/i.test(input)) url = input;
+          else if (/^ftp:/i.test(input)) {
+            // Chromium 不支持 FTP：交给系统默认应用处理
+            void openExternal(input);
+            setIsEditing(false);
+            setShowSuggestions(false);
+            return;
+          } else {
+            url = input.startsWith('http') ? input : `https://${input}`;
+          }
+        } else {
+          url = toSearchUrl(input, searchUrlTemplate);
+        }
         onNavigate(url);
         setIsEditing(false);
         setShowSuggestions(false);
@@ -96,6 +119,64 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
     [urlDraft, tab?.url, onNavigate, searchUrlTemplate],
   );
 
+  // ===== 地址栏右键编辑菜单（现代浏览器标准） =====
+  const [editMenu, setEditMenu] = useState<{ x: number; y: number } | null>(null);
+  // 打开菜单时记录选区，菜单项执行前恢复（点击菜单项会使输入框失焦）
+  const [editSelection, setEditSelection] = useState<{ start: number; end: number } | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const input = e.currentTarget;
+    setEditSelection({ start: input.selectionStart ?? 0, end: input.selectionEnd ?? 0 });
+    setEditMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const closeEditMenu = useCallback(() => setEditMenu(null), []);
+
+  // 执行地址栏编辑命令（先恢复焦点与选区，再执行）
+  const runEditCommand = useCallback((cmd: () => boolean | void) => {
+    const input = addressBarRef.current;
+    if (input) {
+      input.focus();
+      if (editSelection && input.setSelectionRange) {
+        try { input.setSelectionRange(editSelection.start, editSelection.end); } catch { /* ignore */ }
+      }
+      cmd();
+    }
+    setEditMenu(null);
+  }, [editSelection]);
+
+  const execEdit = useCallback((cmd: string) => {
+    runEditCommand(() => { document.execCommand(cmd); });
+  }, [runEditCommand]);
+
+  const pasteFromClipboard = useCallback(() => {
+    runEditCommand(() => {
+      // 异步读取剪贴板，通过 insertText 触发 React onChange 更新地址栏
+      void navigator.clipboard.readText().then((text) => {
+        const input = addressBarRef.current;
+        if (input && text) {
+          input.focus();
+          document.execCommand('insertText', false, text);
+        }
+      }).catch(() => { /* 剪贴板不可读时忽略 */ });
+    });
+  }, [runEditCommand]);
+
+  // 粘贴并转到：读取剪贴板 URL/搜索词并立即导航（Chrome 地址栏标准功能）
+  const pasteAndGo = useCallback(() => {
+    void navigator.clipboard.readText().then((text) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const target = isUrl(trimmed) ? (trimmed.startsWith('http') ? trimmed : `https://${trimmed}`) : toSearchUrl(trimmed, searchUrlTemplate);
+      onNavigate(target);
+      setIsEditing(false);
+      setShowSuggestions(false);
+    }).catch(() => { /* ignore */ });
+    setEditMenu(null);
+  }, [onNavigate, searchUrlTemplate]);
+
+  const hasSelection = !!(editSelection && editSelection.start !== editSelection.end);
   const isSecure = tab?.url?.startsWith('https://');
 
   return (
@@ -115,8 +196,31 @@ export default function AddressBar({ tab, profile, themeColor, onNavigate, addre
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
+        onContextMenu={handleContextMenu}
         data-name="browser.address-input"
       />
+      {/* 地址栏右键编辑菜单 */}
+      {editMenu && (
+        <Popover
+          isOpen={true}
+          onClose={closeEditMenu}
+          position={editMenu}
+          variant="context-menu"
+          config={{ closeOnOutsideClick: true, closeOnEsc: true }}
+          dataName="browser.address-context-menu"
+        >
+          <PopoverItem onClick={() => execEdit('undo')} label="撤销" shortcut="Ctrl+Z" dataName="browser.address-ctx-undo" />
+          <PopoverItem onClick={() => execEdit('redo')} label="重做" shortcut="Ctrl+Y" dataName="browser.address-ctx-redo" />
+          <PopoverDivider />
+          <PopoverItem onClick={() => execEdit('cut')} label="剪切" shortcut="Ctrl+X" disabled={!hasSelection} dataName="browser.address-ctx-cut" />
+          <PopoverItem onClick={() => execEdit('copy')} label="复制" shortcut="Ctrl+C" disabled={!hasSelection} dataName="browser.address-ctx-copy" />
+          <PopoverItem onClick={pasteFromClipboard} label="粘贴" shortcut="Ctrl+V" dataName="browser.address-ctx-paste" />
+          <PopoverItem onClick={pasteFromClipboard} label="粘贴为纯文本" shortcut="Ctrl+Shift+V" dataName="browser.address-ctx-paste-plain" />
+          <PopoverItem onClick={pasteAndGo} label="粘贴并转到" dataName="browser.address-ctx-paste-go" />
+          <PopoverDivider />
+          <PopoverItem onClick={() => execEdit('selectAll')} label="全选" shortcut="Ctrl+A" dataName="browser.address-ctx-select-all" />
+        </Popover>
+      )}
       {tab?.url && (
         <StarButton
           url={tab.url}

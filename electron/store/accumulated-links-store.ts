@@ -112,6 +112,14 @@ class AccumulatedLinksStore {
       this.memory.delete(profileId)
     }
   }
+
+  /** 关闭持久化 SQLite 连接（clearAllData 前释放文件锁） */
+  close(): void {
+    if (this.db) {
+      try { this.db.close() } catch { /* ignore */ }
+      this.db = null
+    }
+  }
 }
 
 /** 单例导出 */

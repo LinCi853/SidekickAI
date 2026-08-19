@@ -4,14 +4,15 @@
 // 文件名：browser-windows.json
 
 import type { BrowserWindowState } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 
 type BrowserWindowStateStore = {
   states: Record<string, BrowserWindowState>
 }
 
-const store = createJsonStore<BrowserWindowStateStore>({
-  name: 'browser-windows',
+const store = createSqliteJsonStore<BrowserWindowStateStore>({
+  tableName: 'browser_windows',
+  legacyName: 'browser-windows',
   defaults: { states: {} },
 })
 

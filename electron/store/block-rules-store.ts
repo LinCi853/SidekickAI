@@ -1,6 +1,6 @@
 // block-rules-store.ts — 页面组件屏蔽规则持久化存储 + IPC 注册
 //
-// 使用 electron-store 将屏蔽规则持久化到磁盘（block-rules.json）。
+// 持久化到 SQLite settings.db（rules 表，createSqliteJsonStore）。
 // 首次启动自动填充预置规则（按平台域名匹配常见屏蔽目标）。
 // 与 prompt-store.ts 模式一致。
 
@@ -8,12 +8,14 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { BlockRule } from '../shared/block-rules.types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore, createCrudStore } from './store-paths.js'
+import { createCrudStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 import { DEFAULT_BLOCK_RULES } from './block-rules-default.js'
 
 // 持久化存储实例（写入 block-rules.json）
-const store = createJsonStore<{ rules: BlockRule[]; version: number }>({
-  name: 'block-rules',
+const store = createSqliteJsonStore<{ rules: BlockRule[]; version: number }>({
+  tableName: 'block_rules',
+  legacyName: 'block-rules',
   defaults: { rules: [], version: 1 },
 })
 
@@ -29,7 +31,7 @@ export class BlockRulesStore {
 
   /** 读取全部规则 */
   list(): BlockRule[] {
-    return this.crud.list()
+    return this.crud.list() as BlockRule[]
   }
 
   /** 新增或更新规则（upsert 语义） */
@@ -87,7 +89,7 @@ export function registerBlockRulesIPC(): void {
  * 已存在的内置规则按 id 更新内容（确保选择器等修正能同步到旧安装）。
  */
 export function ensureDefaultBlockRules(): void {
-  const existing = store.get('rules')
+  const existing = store.get('rules') as BlockRule[]
   if (existing.length === 0) {
     // 首次启动：填充全部预置规则
     for (const rule of DEFAULT_BLOCK_RULES) {
@@ -121,7 +123,7 @@ export function ensureDefaultBlockRules(): void {
 
   // ===== 一次性迁移：强制关闭智谱清言下载屏蔽规则（选择器过于宽泛影响登录） =====
   // 迁移条件为「规则存在且 enabled」，迁移后 enabled=false，下次启动自动跳过，无需额外标记位
-  const currentRules = store.get('rules')
+  const currentRules = store.get('rules') as BlockRule[]
   const needMigrate = currentRules.some(
     (r) => (r.id === 'builtin-chatglm-download' || r.id === 'builtin-chatglm-download-js') && r.enabled,
   )
@@ -146,7 +148,7 @@ export function ensureDefaultBlockRules(): void {
  * @returns 匹配的启用规则列表
  */
 export function getMatchingRules(hostname: string): BlockRule[] {
-  const rules = store.get('rules')
+  const rules = store.get('rules') as BlockRule[]
   return rules.filter((r) => r.enabled && matchDomain(r.domainPattern, hostname))
 }
 

@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
-import { Button, SegmentedControl } from '../components/ui';
+import { Button, SegmentedControl, EmptyState } from '../components/ui';
 import Popover from '../components/ui/Popover';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import {
@@ -39,6 +39,7 @@ import {
 import type { Conversation, ChatMessage, LoginTrace, WindowTrace } from '../lib/electron-api';
 import { formatTime } from '../lib/datetime';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import { SearchIcon } from '../components/icons';
 import './HistoryView.css';
 
 /** 来源类型中文标签 */
@@ -360,6 +361,7 @@ export default function HistoryView() {
             <>
               <span className="history-top-title" data-name="history.top-bar.title">历史搜索</span>
               <div className="history-search-wrap" data-name="history.top-bar.search-wrap">
+                <SearchIcon className="history-search-icon" />
                 <input
                   type="text"
                   className="history-search-input"
@@ -449,10 +451,10 @@ export default function HistoryView() {
                     </Button>
                   </div>
                   {isLoadingList && conversations.length === 0 && (
-                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.list-loading">加载中…</div>
+                    <EmptyState message="加载中…" loading size="large" className="history-list-empty" data-name="history.sidebar.list-loading" />
                   )}
                   {!isLoadingList && conversations.length === 0 && (
-                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.list-empty">暂无对话数据<br />浏览 AI 平台或使用自定义窗口后，对话将自动保存到本地</div>
+                    <EmptyState message={<>暂无对话数据<br />浏览 AI 平台或使用自定义窗口后，对话将自动保存到本地</>} size="large" className="history-list-empty" data-name="history.sidebar.list-empty" />
                   )}
                   {conversations.map((c, idx) => (
                     <div
@@ -489,7 +491,7 @@ export default function HistoryView() {
                     </Button>
                   </div>
                   {loginTraces.length === 0 && (
-                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.logins-empty">暂无登录痕迹</div>
+                    <EmptyState message="暂无登录痕迹" size="large" className="history-list-empty" data-name="history.sidebar.logins-empty" />
                   )}
                   {loginTraces.map((t, idx) => (
                     <div key={t.id} className="glass-card trace-item" data-name={`history.sidebar.login-trace-item-${idx + 1}`} data-index={idx + 1} data-id={t.id}>
@@ -517,7 +519,7 @@ export default function HistoryView() {
                     </Button>
                   </div>
                   {windowTraces.length === 0 && (
-                    <div className="history-list-empty app-empty-state large" data-name="history.sidebar.windows-empty">暂无窗口操作痕迹</div>
+                    <EmptyState message="暂无窗口操作痕迹" size="large" className="history-list-empty" data-name="history.sidebar.windows-empty" />
                   )}
                   {windowTraces.map((t, idx) => (
                     <div key={t.id} className="glass-card trace-item" data-name={`history.sidebar.window-trace-item-${idx + 1}`} data-index={idx + 1} data-id={t.id}>
@@ -541,9 +543,9 @@ export default function HistoryView() {
                   <span className="history-detail-title" data-name="history.detail.search-title">搜索结果 ({searchResults.length})</span>
                 </div>
                 <div className="history-search-results" data-name="history.detail.search-results">
-                  {searching && <div className="history-list-empty app-empty-state large" data-name="history.detail.searching-indicator">搜索中…</div>}
+                  {searching && <EmptyState message="搜索中…" loading size="large" className="history-list-empty" data-name="history.detail.searching-indicator" />}
                   {!searching && searchResults.length === 0 && (
-                    <div className="history-list-empty app-empty-state large" data-name="history.detail.search-no-results">未找到匹配内容</div>
+                    <EmptyState message="未找到匹配内容" size="large" className="history-list-empty" data-name="history.detail.search-no-results" />
                   )}
                   {searchResults.map((m, idx) => (
                     <div
@@ -613,8 +615,8 @@ export default function HistoryView() {
                             color: 'var(--accent-bright)',
                             background: 'var(--accent-10)',
                             border: '1px solid var(--accent-25)',
-                            borderRadius: 'var(--radius-xs)',
-                            padding: 'var(--space-0-5) var(--space-1-5)',
+                            borderRadius: 'var(--radius-full)',
+                            padding: 'var(--space-0-5) var(--space-2-5)',
                             whiteSpace: 'nowrap',
                             letterSpacing: '0.02em',
                           }}
@@ -639,7 +641,7 @@ export default function HistoryView() {
                 </div>
                 <div className="history-messages" data-name="history.detail.messages">
                   {messages.length === 0 && (
-                    <div className="history-list-empty app-empty-state large" data-name="history.detail.messages-empty">该对话暂无消息</div>
+                    <EmptyState message="该对话暂无消息" size="large" className="history-list-empty" data-name="history.detail.messages-empty" />
                   )}
                   {mergedMessages.map(({ msg: m, dupCount }, idx) => (
                     <div key={m.id} className={`history-msg ${m.role}`} data-name={`history.detail.msg-item-${idx + 1}`} data-index={idx + 1} data-id={m.id}>
@@ -690,9 +692,12 @@ export default function HistoryView() {
               </>
             ) : (
               <div className="history-messages" data-name="history.detail.empty-messages">
-                <div className="history-list-empty app-empty-state large" data-name="history.detail.empty-placeholder">
-                  {tab === 'conversations' ? '选择左侧对话查看详情' : tab === 'logins' ? '登录痕迹记录各 AI 平台的登录时间与 URL' : '窗口操作痕迹记录窗口的创建/关闭/最大化等行为'}
-                </div>
+                <EmptyState
+                  message={tab === 'conversations' ? '选择左侧对话查看详情' : tab === 'logins' ? '登录痕迹记录各 AI 平台的登录时间与 URL' : '窗口操作痕迹记录窗口的创建/关闭/最大化等行为'}
+                  size="large"
+                  className="history-list-empty"
+                  data-name="history.detail.empty-placeholder"
+                />
               </div>
             )}
           </div>

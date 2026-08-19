@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useBookmarkStore } from '../../../store/useBookmarkStore';
+import { useBrowserTabStore } from '../../../store/useBrowserTabStore';
 import { IconButton } from '../../../components/ui';
 import { BookmarkEditDialog } from './BookmarkContextMenu';
 
@@ -13,6 +14,8 @@ interface BookmarkManagerProps {
 }
 
 export default function BookmarkManager({ onOpenInNewTab }: BookmarkManagerProps) {
+  // 书签主打开：已存在同 URL 标签则切换聚焦（标准书签语义）；「在新标签打开」图标保持新建
+  const openTabOrFocus = useBrowserTabStore((s) => s.openTabOrFocus);
   const bookmarks = useBookmarkStore((s) => s.bookmarks);
   const load = useBookmarkStore((s) => s.load);
   const remove = useBookmarkStore((s) => s.remove);
@@ -80,7 +83,7 @@ export default function BookmarkManager({ onOpenInNewTab }: BookmarkManagerProps
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      onOpenInNewTab(b.url);
+                      openTabOrFocus(b.url, { kind: 'web' });
                     }}
                     style={{ color: 'var(--accent-bright)', textDecoration: 'none' }}
                   >

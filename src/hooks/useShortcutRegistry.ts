@@ -19,15 +19,26 @@ export interface UseShortcutOptions {
   capture?: boolean
   /** 目标元素（默认 window） */
   target?: HTMLElement | Window | null
+  /** 忽略键盘长按自动重复事件（默认 false；浏览器等快捷键场景应设为 true） */
+  ignoreRepeat?: boolean
 }
 
 export interface ShortcutEntry {
   /** 加速器字符串，如 'Ctrl+T'、'F11'、'Alt+Shift+D' */
   accelerator: string
-  /** 命中回调 */
-  handler: ShortcutHandler
+  /** 立即命中回调（keydown 匹配即触发） */
+  handler?: ShortcutHandler
   /** 单项启用开关（默认 true；为 false 时跳过该项） */
   enabled?: boolean
+  /**
+   * 长按模式：按住达到 holdMs 毫秒后触发 handler（一次）；
+   * 提前松开则取消。用于「长按 Tab 调底栏」等设计。
+   */
+  holdMs?: number
+  /** 按住开始回调（keydown 命中即触发，可 preventDefault；用于按住录音等） */
+  onHoldStart?: (event: KeyboardEvent) => void
+  /** 按住结束回调（对应 keyup 触发；用于松开结束录音等） */
+  onHoldEnd?: () => void
 }
 
 /** 修饰键名 → 是否为修饰键 */
@@ -140,21 +151,68 @@ export function useShortcutRegistry(
   shortcuts: ShortcutEntry[],
   options: UseShortcutOptions = {},
 ): void {
-  const { enabled = true, capture = false, target } = options
+  const { enabled = true, capture = false, target, ignoreRepeat = false } = options
 
   // 用 ref 持有最新的 shortcuts 列表，避免每次渲染都重新绑定监听
   const shortcutsRef = useRef(shortcuts)
   shortcutsRef.current = shortcuts
 
+  // 按住的 accelerator 集合（hold 模式跟踪：keyup 时触发 onHoldEnd / 取消计时）
+  const heldAccelerators = useRef(new Set<string>())
+  // hold 定时器：accelerator → timer
+  const holdTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  // 最新 shortcuts 的 action 映射（keyup 处理用）
+  const holdMetaRef = useRef(new Map<string, { accelerator: string; onHoldEnd?: () => void }>())
+
   // 稳定的 keydown 处理函数（依赖数组为空，引用永久稳定）
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // 长按自动重复：可选忽略（避免按住快捷键持续触发）
+    if (ignoreRepeat && event.repeat) return
     const list = shortcutsRef.current
     for (const entry of list) {
-      // 单项 enabled 优先，未定义视为启用
       if (entry.enabled === false) continue
-      if (matchAccelerator(event, entry.accelerator)) {
-        entry.handler(event)
-        // 命中后不再继续匹配其他项（避免一次按键触发多个 handler）
+      if (!matchAccelerator(event, entry.accelerator)) continue
+
+      // hold 模式：按住开始 + 计时触发；普通模式：立即触发
+      if (entry.holdMs != null || entry.onHoldStart || entry.onHoldEnd) {
+        if (!event.repeat) {
+          heldAccelerators.current.add(entry.accelerator)
+          holdMetaRef.current.set(entry.accelerator, { accelerator: entry.accelerator, onHoldEnd: entry.onHoldEnd })
+          if (entry.onHoldStart) entry.onHoldStart(event)
+        }
+        if (entry.holdMs != null && !holdTimers.current.has(entry.accelerator)) {
+          holdTimers.current.set(entry.accelerator, setTimeout(() => {
+            holdTimers.current.delete(entry.accelerator)
+            // 长按达标：触发 handler（一次）
+            entry.handler?.(event)
+          }, entry.holdMs))
+        }
+        return
+      }
+
+      entry.handler?.(event)
+      return
+    }
+  }, [ignoreRepeat])
+
+  // keyup：hold 模式松开处理（按主键匹配，因修饰键可能先松开）
+  const handleKeyUp = useCallback((event: KeyboardEvent) => {
+    const held = heldAccelerators.current
+    if (held.size === 0) return
+    const normKey = event.key.toLowerCase()
+    for (const accelerator of Array.from(held)) {
+      const parsed = parseAccelerator(accelerator)
+      if (parsed.key && parsed.key === normKey) {
+        const meta = holdMetaRef.current.get(accelerator)
+        // 取消未达标的长按计时
+        const timer = holdTimers.current.get(accelerator)
+        if (timer) {
+          clearTimeout(timer)
+          holdTimers.current.delete(accelerator)
+        }
+        held.delete(accelerator)
+        holdMetaRef.current.delete(accelerator)
+        meta?.onHoldEnd?.()
         return
       }
     }
@@ -164,8 +222,15 @@ export function useShortcutRegistry(
     if (!enabled) return
     const node: EventTarget = target ?? window
     node.addEventListener('keydown', handleKeyDown as EventListener, capture)
+    node.addEventListener('keyup', handleKeyUp as EventListener, capture)
     return () => {
       node.removeEventListener('keydown', handleKeyDown as EventListener, capture)
+      node.removeEventListener('keyup', handleKeyUp as EventListener, capture)
+      // 清理 hold 状态与计时器
+      for (const timer of holdTimers.current.values()) clearTimeout(timer)
+      holdTimers.current.clear()
+      heldAccelerators.current.clear()
+      holdMetaRef.current.clear()
     }
-  }, [enabled, capture, target, handleKeyDown])
+  }, [enabled, capture, target, handleKeyDown, handleKeyUp])
 }

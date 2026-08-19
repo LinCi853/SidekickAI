@@ -438,6 +438,18 @@ export class ChatStore {
     return this.usageTraces.listClickLogs(limit)
   }
 
+  /**
+   * 清除自定义对话模块的数据：仅删除 source_type='custom' 的会话，
+   * 消息由外键 ON DELETE CASCADE 级联删除。chat.db 与历史搜索/使用统计共享，
+   * 禁止整库删除（依赖规则 3.3）。
+   */
+  clearCustomChatData(): number {
+    const result = this.db
+      .prepare(`DELETE FROM conversations WHERE source_type = 'custom'`)
+      .run()
+    return result.changes
+  }
+
   // ===========================================================================
   // 关闭
   // ===========================================================================

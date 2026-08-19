@@ -1,6 +1,6 @@
 // preset-store.ts — 设备预设持久化存储 + IPC 注册
 //
-// 使用 electron-store 将设备预设持久化到磁盘（presets.json）。
+// 持久化到 SQLite settings.db（presets 表，createSqliteJsonStore）。
 // 首次启动自动填充预置预设（5 个内置设备配置）。
 // 与 block-rules-store.ts 模式一致。
 
@@ -8,12 +8,14 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { DevicePreset } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore, createCrudStore } from './store-paths.js'
+import { createCrudStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 import { DEFAULT_PRESETS, PRESETS_DEFAULT_VERSION } from './presets-default.js'
 
 // 持久化存储实例（写入 presets.json）
-const store = createJsonStore<{ presets: DevicePreset[]; version: number }>({
-  name: 'presets',
+const store = createSqliteJsonStore<{ presets: DevicePreset[]; version: number }>({
+  tableName: 'device_presets',
+  legacyName: 'presets',
   defaults: { presets: [], version: PRESETS_DEFAULT_VERSION },
 })
 
@@ -101,7 +103,7 @@ export function registerPresetsIPC(): void {
  * 版本升级时新增的内置预设自动补充（按 id 匹配，已存在则跳过）。
  */
 export function ensureDefaultPresets(): void {
-  const existing = store.get('presets')
+  const existing = store.get('presets') as DevicePreset[]
   if (existing.length === 0) {
     // 首次启动：填充全部预置预设
     for (const preset of DEFAULT_PRESETS) {

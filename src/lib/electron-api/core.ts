@@ -55,6 +55,8 @@ import type {
   NavHistoryEntry,
   BlockRule,
   ProfileProxyConfig,
+  ModuleInfo,
+  ModuleStateChangedPayload,
 } from '../../../electron/shared/types';
 
 // ALL_TOP_BAR_BUTTON_GROUPS 是 const 值，必须用普通 import（非 import type）才能 re-export
@@ -111,6 +113,8 @@ export type {
   NavHistoryEntry,
   BlockRule,
   ProfileProxyConfig,
+  ModuleInfo,
+  ModuleStateChangedPayload,
 };
 
 /** 全部顶栏按钮组（默认全选，供设置/引导页默认值使用） */

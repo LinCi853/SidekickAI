@@ -5,8 +5,7 @@
 // 解决 safeStorage 绑定 OS 用户导致跨设备无法解密的问题。
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'crypto'
-import Store from 'electron-store'
-import { getStoreCwd } from '../store/store-paths.js'
+import { createSqliteJsonStore } from '../store/module-state-store.js'
 
 /** 应用密钥文件结构 */
 interface AppKeyFile {
@@ -17,9 +16,9 @@ interface AppKeyFile {
 }
 
 /** 密钥文件存储实例（写入 app-key.json） */
-const keyStore = new Store<AppKeyFile>({
-  name: 'app-key',
-  cwd: getStoreCwd(),
+const keyStore = createSqliteJsonStore<AppKeyFile>({
+  tableName: 'app_key',
+  legacyName: 'app-key',
   defaults: {
     version: 1,
     key: '',
@@ -50,11 +49,9 @@ function getAppKey(): Buffer {
   }
   // 生成新密钥
   const newKey = randomBytes(KEY_LENGTH)
-  keyStore.set({
-    version: 1,
-    key: newKey.toString('base64'),
-    createdAt: Date.now(),
-  })
+  keyStore.set('version', 1)
+  keyStore.set('key', newKey.toString('base64'))
+  keyStore.set('createdAt', Date.now())
   return newKey
 }
 

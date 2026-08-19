@@ -3,6 +3,7 @@
    ===================================================================== */
 
 import { requireElectron } from './core';
+import { useModuleStore } from '../../store/useModuleStore';
 
 import type {
   FreezeAPI,
@@ -10,12 +11,14 @@ import type {
   FreezeState,
   FreezeActionResult,
   FreezeScrollResult,
+  FreezeStatusResult,
   TextLayer,
   TextLayerGrapheme,
   TextLayerItem,
+  TextLayerScrollRegion,
 } from '../../../electron/shared/api/freeze.api';
 
-export type { FreezeAPI, FreezeSnapshot, FreezeState, FreezeActionResult, FreezeScrollResult, TextLayer, TextLayerGrapheme, TextLayerItem };
+export type { FreezeAPI, FreezeSnapshot, FreezeState, FreezeActionResult, FreezeScrollResult, FreezeStatusResult, TextLayer, TextLayerGrapheme, TextLayerItem, TextLayerScrollRegion };
 
 /** 注册 webview 到冻结注册表（webview attach 后调用） */
 export function registerFreezeWebview(payload: {
@@ -24,6 +27,9 @@ export function registerFreezeWebview(payload: {
   profileId: string;
   webContentsId: number;
 }): Promise<boolean> {
+  // 页面冻结为独立模块：模块关闭时不注册 webview，
+  // 避免向未注册的 freeze:registerWebview 通道发请求（11.10 无残留）。
+  if (!useModuleStore.getState().isEnabled('freeze')) return Promise.resolve(false);
   const api = requireElectron();
   return api.freeze.registerWebview(payload);
 }
@@ -56,7 +62,7 @@ export async function detachFreeze(tabId: string): Promise<boolean> {
 }
 
 /** 查询冻结状态 */
-export async function getFreezeStatus(tabId: string): Promise<FreezeState> {
+export async function getFreezeStatus(tabId: string): Promise<FreezeStatusResult> {
   const api = requireElectron();
   return api.freeze.status(tabId);
 }

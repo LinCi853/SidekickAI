@@ -45,7 +45,7 @@ import {
   updateAppSettings,
 } from '../lib/electron-api';
 import type { WhiteboardMeta, WhiteboardState, WhiteboardPushImagePayload } from '../lib/electron-api';
-import { IconButton } from '../components/ui';
+import { IconButton, EmptyState } from '../components/ui';
 import SidebarShell from '../components/SidebarShell';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
@@ -274,7 +274,7 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
       }
     >
       <div className="sidebar-shell-list" data-name="advanced-panel.wb-sidebar-list">
-        {whiteboards.length === 0 && <div className="wb-sidebar-empty app-empty-state" data-name="advanced-panel.wb-sidebar-empty">暂无白板</div>}
+        {whiteboards.length === 0 && <EmptyState message="暂无白板" className="wb-sidebar-empty" data-name="advanced-panel.wb-sidebar-empty" />}
         {whiteboards.map((wb, idx) => (
           <div
             key={wb.id}
@@ -600,7 +600,7 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
   if (loading) {
     return (
       <div className="whiteboard-view app-view-root" data-name="advanced-panel.whiteboard-view-loading">
-        <div className="whiteboard-empty app-empty-state" data-name="advanced-panel.whiteboard-loading-text">加载中…</div>
+        <EmptyState message="加载中…" loading className="whiteboard-empty" data-name="advanced-panel.whiteboard-loading-text" />
       </div>
     );
   }
@@ -631,14 +631,18 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
           />
         ) : (
           <div className="wb-canvas-empty" data-name="advanced-panel.wb-canvas-empty">
-            <div className="wb-canvas-empty-text app-empty-state" data-name="advanced-panel.wb-canvas-empty-text">
-              {sidebarVisible ? '点击左侧 "+" 新建白板' : '正在初始化白板…'}
-              {onClose && (
-                <button className="btn-outline wb-canvas-empty-btn" onClick={onClose} data-name="advanced-panel.wb-canvas-empty-back-button">
-                  返回
-                </button>
-              )}
-            </div>
+            <EmptyState
+              message={<>
+                {sidebarVisible ? '点击左侧 "+" 新建白板' : '正在初始化白板…'}
+                {onClose && (
+                  <button className="btn-outline wb-canvas-empty-btn" onClick={onClose} data-name="advanced-panel.wb-canvas-empty-back-button">
+                    返回
+                  </button>
+                )}
+              </>}
+              className="wb-canvas-empty-text"
+              data-name="advanced-panel.wb-canvas-empty-text"
+            />
           </div>
         )}
       </div>

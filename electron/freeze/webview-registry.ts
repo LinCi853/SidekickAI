@@ -5,10 +5,13 @@
 //
 // 设计：主进程原本无 tabId ↔ webContentsId 映射（弹窗转发靠渲染层上报 webContentsId）。
 // 冻结功能需要按 tabId 精确定位 guest webContents，故新建此注册表。
+//
+// Phase 5：同步注册到 TargetRegistry，实现统一目标追踪。
 
 import { webContents, type WebContents } from 'electron'
+import { targetRegistry } from '../modules/target-registry.js'
 
-type DestroyHandler = (record: WebviewRecord) => void
+type DestroyHandler = (record: WebviewRecord, wc: WebContents | null) => boolean | Promise<boolean>
 let destroyHandler: DestroyHandler | null = null
 
 /** 注册 guest 销毁通知，供冻结管理器清理绑定到旧 webContents 的会话。 */
@@ -41,19 +44,23 @@ const destroyedHandlers = new Map<number, () => void>()
  * 在 did-attach-webview 回调中调用：渲染层需先通过 IPC 上报 { tabId, windowId, profileId }，
  * 或主进程在 attach 时已知这些信息。
  */
-export function registerWebview(
+export async function registerWebview(
   wc: WebContents,
   info: { tabId: string; windowId: string; profileId: string },
-): void {
+): Promise<boolean> {
+  if (wc.isDestroyed()) return false
   const previousId = byTabId.get(info.tabId)
   if (previousId !== undefined && previousId !== wc.id) {
     const previous = byWebContentsId.get(previousId)
     const previousWc = webContents.fromId(previousId)
     const previousHandler = destroyedHandlers.get(previousId)
+    if (previous && destroyHandler && !await destroyHandler(previous, previousWc ?? null)) return false
+    if (wc.isDestroyed()) return false
     if (previousWc && previousHandler) previousWc.removeListener('destroyed', previousHandler)
     destroyedHandlers.delete(previousId)
     byWebContentsId.delete(previousId)
-    if (previous) destroyHandler?.(previous)
+    // 同步注销旧目标
+    targetRegistry.unregister(`webview-${previousId}`)
   }
   const record: WebviewRecord = {
     webContentsId: wc.id,
@@ -65,17 +72,31 @@ export function registerWebview(
   byWebContentsId.set(wc.id, record)
   byTabId.set(info.tabId, wc.id)
 
+  // 同步注册到 TargetRegistry
+  // 注意：webview 是共享资源，不属于任何单一模块，ownerModule 设为空
+  targetRegistry.register({
+    targetId: `webview-${wc.id}`,
+    type: 'webview',
+    nativeId: String(wc.id),
+    profileId: info.profileId,
+    windowId: info.windowId,
+    webContentsId: wc.id,
+  })
+
   if (!destroyedHandlers.has(wc.id)) {
     const onDestroyed = () => {
       const rec = byWebContentsId.get(wc.id)
       byWebContentsId.delete(wc.id)
       destroyedHandlers.delete(wc.id)
       if (rec && byTabId.get(rec.tabId) === wc.id) byTabId.delete(rec.tabId)
-      if (rec) destroyHandler?.(rec)
+      // 同步注销 TargetRegistry
+      targetRegistry.unregister(`webview-${wc.id}`)
+      if (rec) void destroyHandler?.(rec, wc)
     }
     destroyedHandlers.set(wc.id, onDestroyed)
     wc.once('destroyed', onDestroyed)
   }
+  return true
 }
 
 /** 按 tabId 查找 guest webContents 实例（可能已销毁，返回 null） */
@@ -108,7 +129,9 @@ export function unregisterWebview(webContentsId: number): void {
   destroyedHandlers.delete(webContentsId)
   byWebContentsId.delete(webContentsId)
   if (rec && byTabId.get(rec.tabId) === webContentsId) byTabId.delete(rec.tabId)
-  if (rec) destroyHandler?.(rec)
+  // 同步注销 TargetRegistry
+  targetRegistry.unregister(`webview-${webContentsId}`)
+  if (rec) void destroyHandler?.(rec, wc ?? null)
 }
 
 /** 调试用：列出全部已注册 webview */

@@ -56,7 +56,7 @@ export function showOnboardingWindow(): void {
     // 禁用全屏，防止触发 Chromium 原生全屏（引导窗口不监听全屏热键）
     fullscreenable: false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: '使用指南',
+    title: '工百窗 - 使用指南',
     webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
       webviewTag: false,

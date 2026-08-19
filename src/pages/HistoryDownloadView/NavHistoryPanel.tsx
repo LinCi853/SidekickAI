@@ -1,14 +1,17 @@
 /* =====================================================================
    pages/HistoryDownloadView/NavHistoryPanel.tsx —— 导航历史面板
-   顶部：实时搜索框 + 「清空所有」按钮
-   列表：按时间分组（今天 / 昨天 / 本周 / 更早），每条显示 标题 + URL + 时间 + 删除
+   顶部：实时搜索框（胶囊）+ 条数 + 「清空所有」按钮
+   列表：按时间分组（今天 / 昨天 / 本周 / 更早），每条显示 图标瓦片 +
+         标题 + URL + 时间 + 悬浮删除
    点击条目：openExternal 打开
    API：navHistory.list / navHistory.search / navHistory.delete / navHistory.clearAll
+   UI：共享组件（Button / IconButton / ConfirmDialog）+ useToast，替代原生 confirm/alert
    ===================================================================== */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, IconButton } from '@/components/ui';
-import { SearchIcon, TrashIcon } from '@/components/icons';
+import { Button, IconButton, ConfirmDialog } from '@/components/ui';
+import { SearchIcon, TrashIcon, GlobeIcon } from '@/components/icons';
+import { useToast } from '@/hooks/useToast';
 import {
   listNavHistory,
   searchNavHistory,
@@ -54,6 +57,8 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast, showToast } = useToast(2500);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   const refresh = useCallback(async (kw: string) => {
     setLoading(true);
@@ -105,23 +110,25 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
         onCountChange?.(next.length);
         return next;
       });
+      showToast('已删除');
     } catch (err) {
       console.error('[NavHistoryPanel] 删除失败:', err);
-      alert('删除失败');
+      showToast('删除失败');
     }
-  }, [onCountChange]);
+  }, [onCountChange, showToast]);
 
   const handleClearAll = useCallback(async () => {
-    if (!confirm('确定要清空全部导航历史吗？此操作不可恢复！')) return;
+    setConfirmClearOpen(false);
     try {
       await clearAllNavHistory();
       setEntries([]);
       onCountChange?.(0);
+      showToast('已清空导航历史');
     } catch (err) {
       console.error('[NavHistoryPanel] 清空失败:', err);
-      alert('清空失败');
+      showToast('清空失败');
     }
-  }, [onCountChange]);
+  }, [onCountChange, showToast]);
 
   // 按时间分组
   const grouped = useMemo(() => {
@@ -157,13 +164,13 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
         <span className="hd-toolbar-count" data-name="hd.nav.count">
           共 {entries.length} 条
         </span>
-        <div className="hd-toolbar-spacer" />
+        <div className="hd-toolbar-spacer" data-name="hd.nav.toolbar-spacer" />
         <Button
           variant="danger"
           type="button"
           data-name="hd.nav.clear-all-button"
           disabled={entries.length === 0}
-          onClick={() => void handleClearAll()}
+          onClick={() => setConfirmClearOpen(true)}
         >
           清空所有
         </Button>
@@ -182,48 +189,69 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
           <div className="hd-empty" data-name="hd.nav.error">{error}</div>
         )}
         {grouped.map((group) => (
-          <div key={group.key} className="hd-group" data-name={`hd.nav.group-${group.key}`}>
-            <div className="hd-group-header" data-name={`hd.nav.group-header-${group.key}`}>
+          <div key={group.key} className="hd-group" data-name={'hd.nav.group-' + group.key}>
+            <div className="hd-group-header" data-name={'hd.nav.group-header-' + group.key}>
               {GROUP_LABEL[group.key]} · {group.items.length}
             </div>
             {group.items.map((entry, idx) => (
               <div
                 key={entry.id}
                 className="hd-item"
-                data-name={`hd.nav.item-${idx + 1}`}
+                data-name={'hd.nav.item-' + (idx + 1)}
                 data-index={idx + 1}
                 data-id={entry.id}
                 title={entry.url}
                 onClick={() => void handleOpen(entry.url)}
               >
-                <div className="hd-item-head">
-                  <span className="hd-item-title" data-name={`hd.nav.item-title-${idx + 1}`}>
-                    {entry.title || entry.url}
-                  </span>
-                  <span className="hd-item-time" data-name={`hd.nav.item-time-${idx + 1}`}>
-                    {formatTime(entry.timestamp, 'datetime')}
-                  </span>
-                  <div className="hd-item-actions">
-                    <IconButton
-                      type="button"
-                      variant="close"
-                      aria-label="删除"
-                      title="删除"
-                      data-name={`hd.nav.item-delete-${idx + 1}`}
-                      onClick={(e) => void handleDelete(entry.id, e)}
-                    >
-                      <TrashIcon />
-                    </IconButton>
+                <span className="hd-item-icon" aria-hidden="true" data-name={'hd.nav.item-icon-' + (idx + 1)}>
+                  <GlobeIcon className="hd-item-icon-svg" />
+                </span>
+                <div className="hd-item-main" data-name={'hd.nav.item-main-' + (idx + 1)}>
+                  <div className="hd-item-head" data-name={'hd.nav.item-head-' + (idx + 1)}>
+                    <span className="hd-item-title" data-name={'hd.nav.item-title-' + (idx + 1)}>
+                      {entry.title || entry.url}
+                    </span>
+                    <span className="hd-item-time" data-name={'hd.nav.item-time-' + (idx + 1)}>
+                      {formatTime(entry.timestamp, 'datetime')}
+                    </span>
+                  </div>
+                  <div className="hd-item-url" data-name={'hd.nav.item-url-' + (idx + 1)}>
+                    {entry.url}
                   </div>
                 </div>
-                <div className="hd-item-url" data-name={`hd.nav.item-url-${idx + 1}`}>
-                  {entry.url}
+                <div className="hd-item-actions" data-name={'hd.nav.item-actions-' + (idx + 1)}>
+                  <IconButton
+                    type="button"
+                    variant="close"
+                    aria-label="删除"
+                    title="删除"
+                    data-name={'hd.nav.item-delete-' + (idx + 1)}
+                    onClick={(e) => void handleDelete(entry.id, e)}
+                  >
+                    <TrashIcon />
+                  </IconButton>
                 </div>
               </div>
             ))}
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={confirmClearOpen}
+        title="清空导航历史"
+        message="确定要清空全部导航历史吗？此操作不可恢复！"
+        confirmLabel="清空"
+        variant="danger"
+        onConfirm={() => void handleClearAll()}
+        onCancel={() => setConfirmClearOpen(false)}
+      />
+
+      {toast && (
+        <div className="app-toast" role="status" aria-live="polite" data-name="hd.nav.toast">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

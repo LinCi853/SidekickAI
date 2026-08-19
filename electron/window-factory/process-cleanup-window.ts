@@ -202,7 +202,7 @@ export function showProcessCleanupWindow(processes: ProcessInfo[]): Promise<'cle
         fullscreenable: false,
         minimizable: false,
         backgroundColor: WINDOW_BACKGROUND_COLOR,
-        title: '残留进程清理',
+        title: '工百窗 - 残留进程清理',
         alwaysOnTop: true,
         webPreferences: {
           ...createDefaultWebPreferences({

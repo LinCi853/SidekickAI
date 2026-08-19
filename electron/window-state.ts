@@ -43,6 +43,7 @@ export const windowState = {
   previewWindow: null as BrowserWindow | null,
   // 最近聚焦的应用内窗口（置顶热键作用对象，回退到 mainWindow）
   lastFocusedWin: null as BrowserWindow | null,
+
   // 防抖保存 bounds 的定时器
   boundsSaveTimers: new Map<string, NodeJS.Timeout>(),
   // 窗口管理器（whenReady 后赋值，窗口创建函数读取）

@@ -7,6 +7,7 @@ import {
   onHotkeyRecordingPartial,
 } from '../../../lib/electron-api';
 import Button from '../../ui/Button';
+import { useModuleStore } from '../../../store/useModuleStore';
 import HotkeyRecorder from '../../ui/HotkeyRecorder';
 import { SectionTitle } from '../../ui';
 
@@ -37,6 +38,20 @@ export default function HotkeySection({
   onToggleEnabled,
   onOpenShortcuts,
 }: HotkeySectionProps) {
+  // 模块联动：语音模块关闭时隐藏语音热键；进阶面板无可用模块时隐藏 Alt+Q
+  // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
+  const enabledModuleIds = useModuleStore((s) =>
+    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  );
+  const advancedPanelAvailable =
+    enabledModuleIds.includes('custom-chat') ||
+    enabledModuleIds.includes('whiteboard') ||
+    enabledModuleIds.includes('notes');
+  const visibleHotkeys = hotkeys.filter((h) => {
+    if (h.action === 'backgroundVoice' || h.action === 'toggleVoice') return enabledModuleIds.includes('voice');
+    if (h.action === 'toggleDetachedWindows') return advancedPanelAvailable;
+    return true;
+  });
   return (
     <section data-name="settings.hotkey.section">
       <SectionTitle
@@ -59,7 +74,7 @@ export default function HotkeySection({
         全局热键
       </SectionTitle>
       <div className="hotkey-list" data-name="settings.hotkey.hotkey-list">
-        {hotkeys.map((h, idx) => {
+        {visibleHotkeys.map((h, idx) => {
           const draft = drafts[h.action] ?? '';
           const fb = feedback[h.action];
           const dirty = draft.trim() !== h.accelerator;

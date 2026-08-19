@@ -73,9 +73,10 @@ function injectCssVars(vars: Record<string, string>): void {
   }
 }
 
-/** 移除 :root 上由 Oxy 注入的 CSS 变量 */
+/** 移除 :root 上由 Oxy 注入的 CSS 变量（包括 applyAppTheme 注入的全部变量） */
 function removeOxyCssVars(): void {
   const root = document.documentElement;
+  // 布局变量
   const layoutKeys = [
     '--titlebar-h', '--tabs-h', '--titlebar-icon', '--icon-svg', '--icon-svg-sm',
     '--toggle-w', '--toggle-h', '--btn-h', '--toggle-pad', '--toggle-knob',
@@ -83,20 +84,32 @@ function removeOxyCssVars(): void {
     '--panel-min-w', '--panel-max-w', '--page-margin-max', '--sidebar-max-w',
     '--window-min-w', '--window-min-h',
   ];
-  const colorKeys = [
+  // 品牌色阶（generateFullTheme 注入）
+  const brandKeys = [
     '--brand-50', '--brand-100', '--brand-200', '--brand-300', '--brand-400',
     '--brand-500', '--brand-600', '--brand-700', '--brand-800', '--brand-900',
-    '--primary', '--primary-foreground', '--ring',
-    '--success', '--warning', '--destructive',
-    '--accent-bright', '--accent-bright-foreground', '--accent-light', '--accent-light-foreground', '--accent-dim',
-    '--accent-90', '--accent-75', '--accent-50', '--accent-25', '--accent-10', '--accent-05',
-    '--accent',
   ];
+  // 语义色（generateSemanticColors 注入）
+  const semanticKeys = [
+    '--primary', '--primary-foreground', '--ring',
+    '--success', '--warning', '--warning-foreground',
+    '--destructive', '--destructive-foreground',
+    '--accent-bright', '--accent-bright-foreground',
+    '--accent-light', '--accent-light-foreground',
+    '--accent-dim',
+  ];
+  // Alpha 梯度（generateAlphaColors 注入）
+  const alphaKeys = [
+    '--accent-90', '--accent-75', '--accent-50', '--accent-25', '--accent-10', '--accent-05',
+  ];
+  // 派生交互色
+  const derivedKeys = ['--accent'];
+  // 间距 / 字号 / 圆角
   const spaceKeys = ['0-25','0-5','0-75','1','1-25','1-5','1-75','2','2-25','2-5','2-75','3','3-5','4','4-5','5','5-5','6','8','10','12','16','20'];
   const textKeys = ['xs','sm','base','md','lg','xl','2xl','3xl','4xl','5xl'];
   const radiusKeys = ['2xs','xs','sm','md','lg','xl','2xl','full'];
 
-  for (const key of [...layoutKeys, ...colorKeys]) {
+  for (const key of [...layoutKeys, ...brandKeys, ...semanticKeys, ...alphaKeys, ...derivedKeys]) {
     root.style.removeProperty(key);
   }
   for (const s of spaceKeys) root.style.removeProperty(`--space-${s}`);

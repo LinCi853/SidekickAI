@@ -8,9 +8,12 @@
 //   - dev：项目内 .app-data/notes.db
 //   - 便携：exe 同级 data/notes.db
 //   - 安装：userData/notes.db
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import Database from 'better-sqlite3'
 import { ipcMain } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { registerSafeIpcHandler, registerSyncIpcHandler } from '../shared/ipc-utils.js'
@@ -223,12 +226,22 @@ export function closeNotesDb(): void {
   notesDbHolder.close()
 }
 
-/** 注册笔记 IPC handler（app.whenReady 后调用） */
-export function registerNotesIPC(): void {
+/**
+ * 注册笔记 IPC handler（app.whenReady 后调用）。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerNotesIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
   const db = getNotesDb()
 
-  ipcMain.handle(ipc.NOTES_LIST, (_e, filter?: NoteListFilter) => {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(ipc.NOTES_LIST, (_e: unknown, filter?: NoteListFilter) => {
     try {
       return db.listNotes(filter)
     } catch (err) {
@@ -236,7 +249,7 @@ export function registerNotesIPC(): void {
       return []
     }
   })
-  ipcMain.handle(ipc.NOTES_SEARCH, (_e, keyword: string) => {
+  handle(ipc.NOTES_SEARCH, (_e: unknown, keyword: string) => {
     try {
       return db.listNotes({ keyword })
     } catch (err) {
@@ -244,7 +257,7 @@ export function registerNotesIPC(): void {
       return []
     }
   })
-  ipcMain.handle(ipc.NOTES_SAVE, (_e, input: NoteSaveInput) => {
+  handle(ipc.NOTES_SAVE, (_e: unknown, input: NoteSaveInput) => {
     try {
       return db.saveNote(input)
     } catch (err) {
@@ -259,8 +272,9 @@ export function registerNotesIPC(): void {
       return { ok: true }
     },
     'notes-db deleteNote',
+    scope,
   )
-  ipcMain.handle(ipc.NOTES_GET_ACTIVE, () => {
+  handle(ipc.NOTES_GET_ACTIVE, () => {
     try {
       const id = db.getActiveNoteId()
       return id ? db.getNote(id) : null
@@ -276,6 +290,7 @@ export function registerNotesIPC(): void {
       return { ok: true }
     },
     'notes-db setActive',
+    scope,
   )
   registerSafeIpcHandler(
     ipc.NOTES_SET_PINNED,
@@ -284,6 +299,7 @@ export function registerNotesIPC(): void {
       return { ok: true }
     },
     'notes-db setPinned',
+    scope,
   )
   registerSafeIpcHandler(
     ipc.NOTES_SET_TAGS,
@@ -292,8 +308,9 @@ export function registerNotesIPC(): void {
       return { ok: true }
     },
     'notes-db setTags',
+    scope,
   )
-  ipcMain.handle(ipc.NOTES_LIST_TAGS, () => {
+  handle(ipc.NOTES_LIST_TAGS, () => {
     try {
       return db.listAllTags()
     } catch (err) {
@@ -308,5 +325,6 @@ export function registerNotesIPC(): void {
       db.saveNote(input)
     },
     'notes-db saveSync',
+    scope,
   )
 }

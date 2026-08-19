@@ -1,7 +1,7 @@
 // electron/store/backup-restore.ts — 跨设备数据迁移：导出/导入完整数据
 //
 // 将应用全部持久化数据打包为 zip 文件，包含：
-// - 配置文件：app-settings.json / profiles.json / ai-providers.json 等
+// - 配置文件：settings.db（Phase 3 迁移后，所有 JSON 设置的单一数据源）
 // - 加密密钥：app-key.json（随数据迁移，保证 AES 加密数据可跨设备解密）
 // - 对话数据库：chat.db / chat.db-wal / chat.db-shm
 // - Session 数据：Partitions/ 目录（cookies/localStorage/IndexedDB，保证登录态迁移）
@@ -15,11 +15,18 @@ import { closeChatStore } from './chat-store.js';
 import { closeWhiteboardDb } from './whiteboard-db.js';
 import { closeNotesDb } from './notes-db.js';
 import { closeBookmarkStore } from './bookmark-store.js';
+import { closeModuleStateDb } from './module-state-store.js';
 import { profileStore } from './profile-store.js';
 import { getStoreCwd, isPortableMode } from './store-paths.js';
 
 /** 必须迁移的文件列表（相对数据目录） */
 const BACKUP_FILES = [
+  // ===== Phase 3：settings.db 是所有 JSON 设置的单一数据源 =====
+  // 旧 JSON 文件（app-settings.json 等）迁移后变为 .bak，保留兼容旧版本
+  'settings.db',
+  'settings.db-wal',
+  'settings.db-shm',
+  // 旧 JSON 文件（迁移前存在，迁移后为 .bak，备份时一并包含）
   'app-settings.json',
   'window-states.json',
   'ai-providers.json',
@@ -29,6 +36,7 @@ const BACKUP_FILES = [
   'prompts.json',
   'presets.json',
   'block-rules.json',
+  // ===== SQLite 数据库（各模块数据） =====
   'chat.db',
   'chat.db-wal',
   'chat.db-shm',
@@ -47,7 +55,15 @@ const BACKUP_FILES = [
   'bookmarks.db',
   'bookmarks.db-wal',
   'bookmarks.db-shm',
-  'app-key.json',
+  'nav-history.db',
+  'nav-history.db-wal',
+  'nav-history.db-shm',
+  'accumulated-links.db',
+  'accumulated-links.db-wal',
+  'accumulated-links.db-shm',
+  // ===== electron-store JSON（未迁入 settings.db 的模块数据） =====
+  'injection-history.json',
+  // ===== 加密密钥（已迁入 settings.db/app_key 表，随 settings.db 备份） =====
 ];
 
 /** 基础数据中包含的资产目录（图片等，随 basicData 一起备份） */
@@ -187,6 +203,7 @@ export interface ExportSizeEstimate {
   cookies: number;       // Cookies + Local Storage
   indexedDB: number;     // IndexedDB 目录
   cache: number;          // Service Worker / Cache 等目录
+  voiceAssets: number;    // 语音资产（录音文件等）
   /** 选中项的总体积（由调用方根据选中项计算） */
   total: number;
 }
@@ -256,6 +273,7 @@ export function estimateExportSizes(): ExportSizeEstimate {
     cookies: cookiesSize,
     indexedDB: indexedDBSize,
     cache: cacheSize,
+    voiceAssets: 0, // 语音资产体积暂不单独统计，归入 basicData
     total: 0, // 由调用方根据选中项计算
   };
 }
@@ -440,12 +458,13 @@ export async function exportAllData(
     const dataDir = getDataDir();
     console.log('[backup-restore] 开始导出数据:', dataDir, '选项:', options);
 
-    // 1. 关闭 chat.db / whiteboard.db / notes.db 连接，确保 WAL 写回主 db
+    // 1. 关闭所有 SQLite 连接，确保 WAL 写回主 db
     try {
       closeChatStore();
       closeWhiteboardDb();
       closeNotesDb();
       closeBookmarkStore();
+      closeModuleStateDb();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }
@@ -586,19 +605,27 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
     const entryNames = new Set(entries.map((e) => e.entryName));
-    if (!entryNames.has('app-key.json') || !entryNames.has('profiles.json')) {
+    // 验证：必须有 app-key.json + 数据源（settings.db 或旧版 profiles.json）
+    if (!entryNames.has('app-key.json')) {
       return {
         success: false,
-        error: '备份文件不完整：缺少 app-key.json 或 profiles.json',
+        error: '备份文件不完整：缺少 app-key.json',
+      };
+    }
+    if (!entryNames.has('settings.db') && !entryNames.has('profiles.json')) {
+      return {
+        success: false,
+        error: '备份文件不完整：缺少 settings.db 或 profiles.json',
       };
     }
 
-    // 2. 关闭 chat.db / whiteboard.db / notes.db 连接
+    // 2. 关闭所有 SQLite 连接
     try {
       closeChatStore();
       closeWhiteboardDb();
       closeNotesDb();
       closeBookmarkStore();
+      closeModuleStateDb();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }

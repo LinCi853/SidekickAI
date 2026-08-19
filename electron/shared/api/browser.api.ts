@@ -36,6 +36,33 @@ export interface BrowserAPI {
   saveState(windowId: string, state: BrowserWindowState): Promise<void>
   /** 在系统默认浏览器中打开 URL */
   openExternal(url: string): Promise<void>
+  /**
+   * 另存为：保存指定 webview（guest webContents）的当前页面到用户指定路径。
+   * 主进程弹出保存对话框后以 HTMLComplete 格式保存。
+   */
+  savePageAs(webContentsId: number, suggestedName?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
+  /**
+   * 另存为：下载指定 URL（链接/图片等）到用户指定路径。
+   * partition 为 webview 的 session 分区（persist:profileId），主进程在 will-download 中弹出保存对话框。
+   */
+  downloadAs(partition: string, url: string, suggestedFilename?: string): Promise<{ ok: boolean; error?: string }>
+  /** 查看网页源代码：按 session partition 抓取原始 HTML 文本（携带登录态 Cookie） */
+  viewSource(partition: string, url: string): Promise<{ ok: boolean; html?: string; contentType?: string; error?: string }>
+  /** 打印预览：生成当前页面的 PDF 临时文件并返回文件路径 */
+  printPreview(webContentsId: number, title?: string): Promise<{ ok: boolean; filePath?: string; title?: string; error?: string }>
+  /** 打印预览页「另存为」：把临时 PDF 复制到用户指定路径 */
+  savePdfAs(sourcePath: string, suggestedName?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
+  /** 删除打印预览临时文件 */
+  deleteTempPdf(filePath: string): Promise<{ ok: boolean }>
+  /** 网页截图：保存截图 PNG（dataURL）到用户指定路径 */
+  saveCapture(dataUrl: string, suggestedName?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
+  /** 云电脑模式：进入/退出（主进程挂起/恢复全局热键、同步全屏） */
+  setCloudPcMode(enter: boolean): Promise<{ ok: boolean }>
+  getCursorPos(): Promise<{ ok: boolean; x: number; y: number }>
+  /** 主→渲染：云电脑模式状态变化（含主进程兜底退出通知）。返回取消监听函数。 */
+  onCloudPcChanged(callback: (active: boolean) => void): () => void
+  /** 主→渲染：云电脑模式系统级按键路由（Win/Alt+Tab 等，渲染层合成注入 guest）。返回取消监听函数。 */
+  onCloudPcKeys(callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void): () => void
   /** 记录一条搜索历史 */
   addSearchHistory(entry: { profileId: string; query: string; url: string }): Promise<void>
   /** 查询搜索历史（按 profileId，可选关键词过滤，按时间倒序） */
@@ -123,6 +150,7 @@ export type HotkeyAction =
   | 'toggleMainWindow'
   | 'toggleDetachedWindows'
   | 'backgroundVoice'
+  | 'toggleVoice'
 
 /** 热键配置（UI 展示与持久化） */
 export interface HotkeyConfig {

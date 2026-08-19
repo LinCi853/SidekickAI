@@ -20,7 +20,7 @@ export function showHistoryDownloadWindow(): void {
     height: 640,
     minWidth: 560,
     minHeight: 420,
-    title: '历史记录与下载管理',
+    title: '工百窗 - 历史记录与下载管理',
     windowId: HISTORY_DOWNLOAD_WINDOW_ID,
     mode: 'history-download',
     getExisting: () => windowState.historyDownloadWindow,

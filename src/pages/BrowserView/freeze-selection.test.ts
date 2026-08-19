@@ -5,6 +5,7 @@ import {
   countGraphemes,
   flattenGraphemes,
   getLayerScale,
+  isTextLayerSelectable,
   nearestAnchorBoundary,
   nearestBoundary,
   selectedText,
@@ -60,6 +61,8 @@ function layer(items: TextLayerItem[]): TextLayer {
     viewportHeight: 400,
     visualScale: 1,
     devicePixelRatio: 1,
+    documentRevision: 0,
+    nestedScrollRegions: [],
     quality: 'glyph',
     truncated: false,
   };
@@ -113,22 +116,63 @@ describe('freeze selection mapping', () => {
     expect(selectedText(selectGraphemes(flat, 0, 3))).toBe('אבג');
   });
 
-  it('allows coarse whole-run selection for DOMSnapshot fallback', () => {
+  it('exposes DOMSnapshot boxes to selection as whole items', () => {
     const fallback = item('fallback', 20);
     delete fallback.graphemes;
-    const flat = flattenGraphemes(layer([fallback]), 5, 10);
-    expect(flat).toHaveLength(1);
-    expect(flat[0]).toMatchObject({ text: 'fallback', x: -5, y: 10, fallback: true });
-    expect(selectedText(selectGraphemes(flat, 0, 1))).toBe('fallback');
+    const textLayer = layer([fallback]);
+    textLayer.quality = 'domsnapshot';
+    const flat = flattenGraphemes(textLayer, 5, 10);
+    // DOMSnapshot质量返回item级别选择（整个文本块作为一个单元）
+    expect(flat.length).toBe(1);
+    expect(flat[0].text).toBe('fallback');
+    expect(flat[0].x).toBe(-5); // 0 - 5 offset
+    expect(flat[0].w).toBe(fallback.w);
   });
 
-  it('does not invent line breaks between adjacent fallback boxes', () => {
+  it('uses shared visual-line ids for DOMSnapshot caret hit testing', () => {
+    const first = item('first', 20, { x: 0, line: 4 });
+    const second = item('second', 20, { x: 70, line: 4 });
+    delete first.graphemes;
+    delete second.graphemes;
+    const textLayer = layer([first, second]);
+    textLayer.quality = 'domsnapshot';
+    const flat = flattenGraphemes(textLayer, 0, 0);
+    expect(nearestBoundary(flat, { x: 90, y: 25 })).toBe(1);
+    expect(selectedText(selectGraphemes(flat, 0, 2))).toBe('firstsecond');
+  });
+
+  it('preserves fallback line breaks without splitting inline boxes', () => {
+    const first = item('inline ', 20, { line: 1 });
+    const second = item('fragment', 20, { x: 70, line: 1 });
+    const next = item('next', 50, { line: 2, breakBefore: true });
+    delete first.graphemes;
+    delete second.graphemes;
+    delete next.graphemes;
+    const textLayer = layer([first, second, next]);
+    textLayer.quality = 'domsnapshot';
+    expect(selectedText(flattenGraphemes(textLayer, 0, 0))).toBe('inline fragment\nnext');
+  });
+
+  it('enables selection for glyph and domsnapshot quality', () => {
+    const fallback = layer([item('fallback', 20)]);
+    fallback.quality = 'domsnapshot';
+    expect(isTextLayerSelectable(fallback)).toBe(true);
+    fallback.quality = 'none';
+    expect(isTextLayerSelectable(fallback)).toBe(false);
+    fallback.quality = 'glyph';
+    expect(isTextLayerSelectable(fallback)).toBe(true);
+  });
+
+  it('handles glyph runs without character boundaries as whole items', () => {
     const first = item('inline ', 20);
     const second = item('fragment', 20, { x: 70 });
     delete first.graphemes;
     delete second.graphemes;
     const flat = flattenGraphemes(layer([first, second]), 0, 0);
-    expect(selectedText(flat)).toBe('inline fragment');
+    // 没有graphemes时，每个item作为一个整体选择单元
+    expect(flat.length).toBe(2);
+    expect(flat[0].text).toBe('inline ');
+    expect(flat[1].text).toBe('fragment');
   });
 
   it('keeps viewport-fixed text stationary during root scrolling', () => {
@@ -146,11 +190,20 @@ describe('freeze selection mapping', () => {
     expect(nearestAnchorBoundary(flat, { x: 15, y: 15 })).not.toBeNull();
   });
 
-  it('omits transformed and vertical-writing runs instead of mis-mapping them', () => {
-    const transformed = item('rotated', 10);
+  it('keeps transformed Range geometry while skipping vertical writing', () => {
+    const transformed = item('translated', 10);
     const vertical = item('vertical', 30);
     transformed.transformed = true;
     vertical.verticalWriting = true;
-    expect(flattenGraphemes(layer([transformed, vertical]), 0, 0)).toEqual([]);
+    const textLayer = layer([transformed, vertical]);
+    const flat = flattenGraphemes(textLayer, 0, 0);
+    expect(flat.map((grapheme) => grapheme.text).join('')).toBe('translated');
+    expect(buildSelectedRuns(textLayer, flat)).toEqual([{
+      itemIndex: 0,
+      startX: 0,
+      endX: 100,
+      y: 10,
+      h: 20,
+    }]);
   });
 });

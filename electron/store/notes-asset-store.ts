@@ -38,7 +38,12 @@ export function saveNotesImageAsset(dataUrl: string): string {
  * 必须在 app.whenReady() 后调用（protocol.handle 要求）。
  * registerSchemesAsPrivileged 已在 main.ts 顶层调用。
  */
+// 幂等保护：protocol.handle 重复注册会抛错（模块 init 重入/热重载防御）
+let notesProtocolRegistered = false
+
 export function registerNotesAssetProtocol(): void {
+  if (notesProtocolRegistered) return
+  notesProtocolRegistered = true
   console.log('[notes-asset] 注册自定义协议:', NOTES_ASSET_SCHEME)
   protocol.handle(NOTES_ASSET_SCHEME, (request) => {
     try {

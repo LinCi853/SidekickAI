@@ -43,7 +43,12 @@ export function saveImageAsset(dataUrl: string): string {
  * 必须在 app.whenReady() 后调用（protocol.handle 要求）。
  * registerSchemesAsPrivileged 已在 main.ts 顶层调用。
  */
+// 幂等保护：protocol.handle 重复注册会抛错（模块 init 重入/热重载防御）
+let whiteboardProtocolRegistered = false
+
 export function registerWhiteboardAssetProtocol(): void {
+  if (whiteboardProtocolRegistered) return
+  whiteboardProtocolRegistered = true
   console.log('[whiteboard-asset] 注册自定义协议:', WHITEBOARD_ASSET_SCHEME)
   protocol.handle(WHITEBOARD_ASSET_SCHEME, (request) => {
     try {

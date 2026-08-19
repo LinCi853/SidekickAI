@@ -8,14 +8,16 @@ files:
   - resources/icons/*
   # 原生模块显式打包（避免被 electron-builder 自动剔除规则误删）
   - node_modules/better-sqlite3/build/Release/better_sqlite3.node
-  - node_modules/uiohook-napi/prebuilds/**
+  # 仅打包 Windows 预编译（剔除 darwin / linux 平台 .node，节省 ~2 MB）
+  - node_modules/uiohook-napi/prebuilds/win32-*/**
   # 删除 Chromium 协议汇总文件（10MB+，用户可在线查阅）
   - '!LICENSES.chromium.html'
 # 原生 .node 必须解压到磁盘（无法从 asar 内加载 process.dlopen）
 # electron-builder 默认会 unpack *.node，显式声明确保跨平台稳定
 asarUnpack:
   - node_modules/better-sqlite3/build/Release/*.node
-  - node_modules/uiohook-napi/prebuilds/**/*.node
+  # 仅解包 Windows 平台的原生模块
+  - node_modules/uiohook-napi/prebuilds/win32-*/**/*.node
   - node_modules/uiohook-napi/build/Release/*.node
 # 打包后钩子：删除 Chromium 自带的 LICENSES.chromium.html 等大文件
 afterPack: scripts/after-pack.cjs

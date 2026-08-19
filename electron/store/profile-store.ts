@@ -1,6 +1,6 @@
 // electron/store/profile-store.ts — Profile 持久化存储 + IPC 注册
 //
-// 使用 electron-store 将 Profile 列表持久化到磁盘（profiles.json）。
+// 持久化到 SQLite settings.db（profiles 表，createSqliteJsonStore）。
 // 每个 Profile 是一个完整的「虚拟浏览器身份」，包含 UA / 指纹 / 窗口配置。
 // 通过 ipcMain.handle 暴露 CRUD 接口给渲染进程。
 
@@ -12,7 +12,7 @@ import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { generateUniqueName } from '../shared/naming.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { getPreset } from './preset-store.js'
-import { createJsonStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 
 // Windows Chrome 125 默认 UA（与 presets/devices.ts 中 win-chrome-125 预设一致）
 const WINDOWS_CHROME_125_UA =
@@ -21,8 +21,9 @@ const WINDOWS_CHROME_125_UA =
 // 持久化存储实例（写入 profiles.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径（AppData\Roaming\<appName>）
-const store = createJsonStore<{ profiles: Profile[]; version: number }>({
-  name: 'profiles',
+const store = createSqliteJsonStore<{ profiles: Profile[]; version: number }>({
+  tableName: 'profiles',
+  legacyName: 'profiles',
   defaults: { profiles: [], version: 1 },
 })
 
@@ -74,7 +75,7 @@ export class ProfileStore {
 
   /** 按 id 查找单个 Profile */
   get(id: string): Profile | null {
-    return store.get('profiles').find((p) => p.id === id) ?? null
+    return (store.get('profiles') as Profile[]).find((p) => p.id === id) ?? null
   }
 
   /**
@@ -110,7 +111,7 @@ export class ProfileStore {
    * id / createdAt 不可变。嵌套对象深合并。
    */
   update(id: string, patch: Partial<Profile>): Profile {
-    const profiles = store.get('profiles')
+    const profiles = store.get('profiles') as Profile[]
     const idx = profiles.findIndex((p) => p.id === id)
     if (idx === -1) {
       throw new Error(`Profile 不存在: ${id}`)
@@ -138,7 +139,7 @@ export class ProfileStore {
 
   /** 删除 Profile */
   delete(id: string): void {
-    const profiles = store.get('profiles')
+    const profiles = store.get('profiles') as Profile[]
     // v0.0.9: 禁止删除保底内置应用
     const target = profiles.find((p) => p.id === id)
     if (target?.isBuiltIn) {
@@ -162,7 +163,7 @@ export class ProfileStore {
       throw new Error(`Profile 不存在: ${id}`)
     }
 
-    const profiles = store.get('profiles')
+    const profiles = store.get('profiles') as Profile[]
     const existingNames = profiles.map((p) => p.name)
     const now = Date.now()
     const copy: Profile = {
@@ -196,7 +197,7 @@ export class ProfileStore {
     if (!iphonePreset) {
       throw new Error('找不到 iphone-15-pro-safari 预设')
     }
-    const profiles = store.get('profiles')
+    const profiles = store.get('profiles') as Profile[]
     const existingNames = profiles.map((p) => p.name)
     const name = customName ?? generateUniqueName(platform.name, existingNames)
     return this.create({

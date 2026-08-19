@@ -45,7 +45,7 @@ export const UI_SCALE_CONFIG: Record<UiScale, {
 }
 
 /** 顶栏可自定义按钮组（与 api.types.ts TopBarButtonGroup 同步） */
-type TopBarButtonGroup = 'uaToggle' | 'navBack' | 'navForward' | 'navHome' | 'themeToggle' | 'pinToggle'
+export type TopBarButtonGroup = 'uaToggle' | 'navBack' | 'navForward' | 'navHome' | 'themeToggle' | 'pinToggle'
 
 /**
  * 拖拽区最小宽度下限。

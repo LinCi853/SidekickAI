@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PromptLibrary from '../../components/PromptLibrary';
+import { GearIcon } from '../../components/icons';
 import type { AIPlatform, CustomAIProvider, Profile, PromptTemplate } from '../../lib/electron-api';
 import {
   triggerVoiceStart,
@@ -8,6 +9,7 @@ import {
   openAdvancedPanelWindow,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
+import { useModuleStore } from '../../store/useModuleStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { findAiAppProfiles } from '../../lib/shared-utils';
 import { useAiAppDrag } from '../../hooks/useAiAppDrag';
@@ -57,6 +59,10 @@ export default function BottomBar({
   appClickBehavior,
   activeProfileId,
 }: BottomBarProps) {
+  // 模块门控：语音模块关闭时隐藏语音按钮（11.10 跨位置无注入）
+  const voiceEnabled = useModuleStore((s) => s.isEnabled('voice'));
+  const promptLibraryEnabled = useModuleStore((s) => s.isEnabled('prompt-library'));
+
   const {
     onAppClick,
     onInjectPrompt,
@@ -333,7 +339,7 @@ export default function BottomBar({
             </div>
 
             {/* 提示词模板库 */}
-            <PromptLibrary onInject={onInjectPrompt} />
+            {promptLibraryEnabled && <PromptLibrary onInject={onInjectPrompt} />}
 
             {/* 操作按钮 */}
             <div className="bottom-expanded-actions" data-name="main.bottom-bar.actions-group">
@@ -343,10 +349,7 @@ export default function BottomBar({
                 onClick={onOpenSettings}
                 data-name="main.bottom-bar.settings-button"
               >
-                <svg className="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="main.bottom-bar.settings-icon">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
+                <GearIcon className="icon-svg-sm" />
                 设置
               </button>
               <button
@@ -361,6 +364,7 @@ export default function BottomBar({
                 </svg>
                 快捷键
               </button>
+              {voiceEnabled && (
               <button
                 type="button"
                 className="expanded-btn"
@@ -379,6 +383,7 @@ export default function BottomBar({
                 </svg>
                 语音
               </button>
+              )}
               <button
                 type="button"
                 className="expanded-btn"

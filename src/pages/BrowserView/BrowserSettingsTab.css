@@ -1,0 +1,366 @@
+/* =====================================================================
+   pages/BrowserView/BrowserSettingsTab.css —— 浏览器设置标签页样式
+   风格：Google chrome://settings / Material Design 3
+   - 居中内容列（max 680px），页面大标题
+   - 设置分组 = 白底卡片（细边框 + 大圆角 + 轻阴影）
+   - 卡片内标题行 + 行式条目（分隔线 + hover）
+   - 胶囊按钮 / 圆角输入与下拉 / 状态胶囊
+   作用域：所有规则限定在 .browser-settings-page 内
+   ===================================================================== */
+
+.browser-settings-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  color: var(--foreground);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  background: var(--background);
+}
+
+/* 加载态 */
+.browser-settings-loading-text {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+}
+
+/* 滚动内容区：居中内容列 */
+.browser-settings-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3-5);
+}
+.browser-settings-scroll > * {
+  width: 100%;
+  max-width: 680px;
+  /* 关键：禁止 flex 压缩，否则卡片被压扁截断且容器无法滚动 */
+  flex: none;
+}
+
+/* 页面标题 */
+.browser-settings-title {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: 0.01em;
+}
+
+/* ===== 卡片分组 ===== */
+.browser-settings-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* 卡片内标题行 */
+.browser-settings-page .section-title-row {
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-2-5);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.browser-settings-page .section-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+.browser-settings-page .section-title-hint {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  line-height: 1.55;
+}
+
+/* ===== 行式条目 ===== */
+.browser-settings-page .form-row {
+  margin: 0;
+  padding: var(--space-2-75) var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  gap: var(--space-3-5);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.browser-settings-page .form-row:hover {
+  background: color-mix(in srgb, var(--foreground) 2.5%, transparent);
+}
+.browser-settings-page .form-row:last-child {
+  border-bottom: 0;
+}
+/* Google 风格：标签纵向堆叠（名称在上、说明在下、可换行），释放横向空间给控件 */
+.browser-settings-page .form-row-label {
+  flex: 0 1 auto;
+  max-width: 46%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  white-space: normal;
+}
+.browser-settings-page .form-row-name {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.browser-settings-page .form-row-hint {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 分段控件（若在浏览器设置中出现） */
+.browser-settings-page .seg-btn {
+  padding: var(--space-1) var(--space-2-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  box-shadow: none;
+}
+.browser-settings-page .seg-btn.is-active {
+  background: var(--accent-10);
+  border-color: var(--accent-25);
+  color: var(--accent-bright);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+/* ===== 输入框 / 下拉框 ===== */
+.browser-settings-page input.input-underline,
+.browser-settings-page select.input-underline,
+.browser-settings-page .hotkey-recorder-wrapper input {
+  height: 34px;
+  padding: 0 var(--space-2-5);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+.browser-settings-page input.input-underline:focus,
+.browser-settings-page select.input-underline:focus,
+.browser-settings-page .hotkey-recorder-wrapper input:focus {
+  border-color: var(--accent-50);
+  box-shadow: 0 0 0 3px var(--accent-10);
+}
+.browser-settings-page select.input-underline {
+  cursor: pointer;
+  min-width: 150px;
+}
+.browser-settings-page select.input-underline option {
+  background: var(--card);
+  color: var(--foreground);
+}
+.browser-settings-page .hotkey-recorder-wrapper input.is-recording {
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 0 3px var(--accent-10);
+}
+
+/* ===== 按钮：全圆角扁平 ===== */
+.browser-settings-page .btn-outline {
+  height: 32px;
+  padding: 0 var(--space-3-5);
+  border-color: var(--border);
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.browser-settings-page .btn-outline:hover:not(:disabled) {
+  background: var(--accent-05);
+  border-color: var(--accent-50);
+  color: var(--accent-bright);
+}
+
+/* ===== 云电脑模式开关（tonal 胶囊） ===== */
+.browser-settings-cloud-pc-btn {
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent-25);
+  border-radius: var(--radius-full);
+  background: var(--accent-10);
+  color: var(--accent-bright);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.browser-settings-cloud-pc-btn:hover {
+  background: color-mix(in srgb, var(--accent-bright) 18%, transparent);
+  border-color: var(--accent-50);
+}
+.browser-settings-cloud-pc-btn.is-on {
+  border-color: color-mix(in srgb, var(--destructive) 35%, transparent);
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+.browser-settings-cloud-pc-btn.is-on:hover {
+  background: color-mix(in srgb, var(--destructive) 20%, transparent);
+  border-color: color-mix(in srgb, var(--destructive) 50%, transparent);
+}
+
+/* ===== 辅助说明文本 ===== */
+.browser-settings-hint {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  word-break: break-all;
+}
+.browser-settings-hint-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+.browser-settings-empty-hint {
+  padding-top: var(--space-2);
+  font-style: italic;
+}
+
+/* ===== 下载目录值 ===== */
+.browser-settings-dir {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 var(--space-2-5);
+  background: var(--muted);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+/* ===== 屏蔽规则列表 ===== */
+.browser-settings-rules {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.browser-settings-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2-5) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
+}
+.browser-settings-rule:last-child {
+  border-bottom: 0;
+}
+.browser-settings-rule-domain {
+  flex: none;
+  padding: 2px var(--space-2-5);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--foreground);
+}
+.browser-settings-rule-selector {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.browser-settings-page .rule-status {
+  flex: none;
+  margin-left: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px var(--space-2-5);
+  border-radius: var(--radius-full);
+}
+.browser-settings-page .rule-status.enabled {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+}
+.browser-settings-page .rule-status.disabled {
+  background: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+  color: var(--muted-foreground);
+}
+
+/* ===== 区域值 ===== */
+.browser-settings-region-value {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+/* ===== 代理 section（内嵌 ProxySection） ===== */
+.browser-settings-page .proxy-status-row {
+  margin: var(--space-3) var(--space-4) var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--muted);
+}
+.browser-settings-page .proxy-custom-block {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border-top: 1px solid var(--border);
+}
+.browser-settings-page .proxy-field-label {
+  font-family: var(--font-sans);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12.5px;
+}
+
+/* ===== 底部提示区 ===== */
+.browser-settings-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2-5) var(--space-6);
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+}
+.browser-settings-footer-text {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}

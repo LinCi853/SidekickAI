@@ -25,10 +25,6 @@ import {
   migrateAIPlatformIds,
 } from './store/profile-store.js'
 import {
-  registerPromptIPC,
-  ensureDefaultPrompts,
-} from './store/prompt-store.js'
-import {
   registerBlockRulesIPC,
   ensureDefaultBlockRules,
 } from './store/block-rules-store.js'
@@ -36,17 +32,13 @@ import {
   registerPresetsIPC,
   ensureDefaultPresets,
 } from './store/preset-store.js'
-import { registerAIProviderIPC, ensureDefaultProviders } from './store/ai-provider-store.js'
-import { registerNotesIPC } from './store/notes-db.js'
-import { registerWhiteboardIPC } from './store/whiteboard-db.js'
-import { registerWhiteboardAssetIPC } from './store/whiteboard-asset-store.js'
-import { registerNotesAssetIPC } from './store/notes-asset-store.js'
-import { migrateWhiteboardNotes } from './store/migrate-whiteboard-notes.js'
-import { registerVoiceConfigIPC } from './store/voice-store.js'
+import { registerPdfProtocol } from './utils/pdf-protocol.js'
+import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js'
+import { setBrowserHotkeyFallback, tryForward, VK_F11, VK_C, VK_P } from './utils/browser-hotkey-fallback.js'
 import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting } from './store/app-settings-store.js'
 import { registerProxyAuthHandler } from './store/proxy-helper.js'
 import { initChatStore, getChatStore } from './store/chat-store.js'
-import { registerAIChatIPC } from './ai/handler.js'
+import { registerBaseChatIpc, registerUsageTraceIpc } from './ai/handler.js'
 import { WindowManager } from './window/manager.js'
 import { FingerprintEngine } from './fingerprint/engine.js'
 import { HotkeyManager } from './hotkey/manager.js'
@@ -54,18 +46,9 @@ import { SttEngine } from './stt/engine.js'
 import { IPC_CHANNELS } from './shared/types.js'
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js'
 import { registerTabIpc } from './ipc/tab-ipc.js'
-import { registerBrowserIpc } from './ipc/browser-ipc.js'
-import { registerBrowserTabAudioIpc } from './ipc/browser-tab-audio-ipc.js'
 import { registerAccumulatedLinksIpc } from './ipc/accumulated-links-ipc.js'
-import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js'
-import { registerFreezeIpc } from './freeze/freeze-ipc.js'
-import { searchHistoryStore } from './store/search-history-store.js'
-import { browserDownloadStore } from './store/browser-download-store.js'
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js'
-import { registerVoiceIpc } from './ipc/voice-ipc.js'
-import { registerPromptIpc } from './ipc/prompt-ipc.js'
 import { registerSettingsIpc } from './ipc/settings-ipc.js'
-import { registerNotesExtraIpc } from './ipc/notes-ipc.js'
 import { registerOnboardingIpc } from './ipc/onboarding-ipc.js'
 import { promptAccessibilityPermission } from './utils/permission-manager.js'
 import { registerPlatformInfoIPC } from './utils/platform-info.js'
@@ -92,11 +75,24 @@ import { isPortableMode } from './store/store-paths.js'
 import { detectResidualProcesses, killProcesses } from './utils/process-guard.js'
 import { initAppFocusTracker } from './voice/preview-window.js'
 import {
-  startBackgroundVoice as startBackgroundVoiceImpl,
-  stopBackgroundVoice as stopBackgroundVoiceImpl,
-} from './voice/background-voice.js'
+  peekSttEngine,
+  startBackgroundVoiceGated,
+  stopBackgroundVoiceGated,
+  toggleVoiceRecordingGated,
+} from './modules/wiring/voice.js'
 import { createTray, hasTray } from './window/tray.js'
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js'
+import { BUILTIN_MODULES } from './modules/manifests.js'
+import { initEnabledModules, registerModule, isModuleEnabled } from './modules/registry.js'
+import { registerModuleIpc } from './ipc/module-ipc.js'
+import { closeModuleStateDb } from './store/module-state-store.js'
+import { capabilityRegistry } from './modules/capability-registry.js'
+import { injectionBroker } from './modules/injection-broker.js'
+import { allAdapters } from './modules/adapters/index.js'
+import { extractCapabilities } from './modules/capability.js'
+import { registerVoiceConfigIPC } from './store/voice-store.js'
+import { registerAIProviderIPC } from './store/ai-provider-store.js'
+import { registerPromptIPC } from './store/prompt-store.js'
 
 /** 主窗口默认宽度（窗口复位时使用） */
 const DEFAULT_MAIN_WINDOW_WIDTH = 420
@@ -116,6 +112,11 @@ process.on('uncaughtException', (err) => {
 app.commandLine.appendSwitch('disable-crashpad')
 // AMD 显卡兼容：禁用 GPU 沙箱，避免 GPU process 因非法指令崩溃（exit_code=-1073741795）
 app.commandLine.appendSwitch('disable-gpu-sandbox')
+// 云游戏/网页游戏手柄支持：关闭 Chromium 的 RestrictGamepadAccess 限制。
+// 默认情况下 navigator.getGamepads() 与 gamepadconnected 事件要求页面先获得
+// 用户激活（user activation），否则返回空数组、事件不派发——表现为「手柄无法识别」。
+// 关闭后手柄连接即可被页面立即感知（Gamepad API 无需额外原生模块）。
+app.commandLine.appendSwitch('disable-features', 'RestrictGamepadAccess')
 // Linux 多屏 DPI 缩放兜底：force-device-scale-factor=1 防止跨屏拖动后 webContents
 // 缩放错乱。优先方案是 display-metrics-changed 监听（见 app.whenReady）动态重设
 // zoomFactor，此 switch 仅作为无法动态修正时的兜底。
@@ -161,6 +162,8 @@ function redirectUserData(): void {
       mkdirSync(userDataPath, { recursive: true })
       app.setPath('userData', userDataPath)
       console.log('[main] Portable mode: userData redirected to', app.getPath('userData'))
+    } else {
+      console.log('[main] Production install mode: userData =', app.getPath('userData'))
     }
   } catch (err) {
     console.error('[main] Portable mode detection failed:', err)
@@ -173,13 +176,13 @@ redirectUserData()
 protocol.registerSchemesAsPrivileged([
   { scheme: 'whiteboard-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
   { scheme: 'notes-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: 'sidekick-pdf', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ])
 
 // 全局管理器实例（fingerprintEngine/hotkeyManager/sttEngine 仅本文件使用；
 // windowManager 已迁入 windowState，因 window-factory.ts 的窗口创建函数需读取）
 let fingerprintEngine: FingerprintEngine
 let hotkeyManager: HotkeyManager
-let sttEngine: SttEngine
 
 /**
  * 应用就绪：初始化所有管理器并注册 IPC
@@ -230,7 +233,54 @@ app.whenReady().then(async () => {
   const windowManager = new WindowManager(fingerprintEngine)
   windowState.windowManager = windowManager
   hotkeyManager = new HotkeyManager()
-  sttEngine = new SttEngine()
+  setCloudPcHotkeyManager(hotkeyManager)
+
+  // ===== 浏览器窗口快捷键 uiohook 兜底通道 =====
+  // guest before-input-event 对 Alt 组合（Ctrl+Alt+C / Alt+P）与全屏状态的拦截
+  // 在部分环境不可靠；uiohook 为系统级键盘钩子，作为第二通道。
+  // 双通道通过 tryForward 去重（同一 action 250ms 内仅一条生效）。
+  setBrowserHotkeyFallback((e) => {
+    // 仅处理前台聚焦的浏览器窗口
+    let browserWin: Electron.BrowserWindow | null = null
+    for (const win of windowState.browserWindowsByProfile.values()) {
+      if (win && !win.isDestroyed() && win.isFocused()) {
+        browserWin = win
+        break
+      }
+    }
+    if (!browserWin) return
+    const win = browserWin
+
+    // Ctrl+Alt+C：进入/退出云电脑模式（云电脑模式下也是退出手段，始终生效）
+    if (e.keycode === VK_C && e.ctrl && e.alt && !e.shift && !e.meta) {
+      if (tryForward('toggleCloudPc')) {
+        console.log('[hotkey-fallback] Ctrl+Alt+C → 切换云电脑模式 (uiohook)')
+        win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleCloudPc' })
+      }
+      return
+    }
+
+    // 云电脑模式：其余浏览器快捷键放行给远端（不拦截）
+    if (isCloudPc(win.webContents.id)) return
+
+    // F11：切换沉浸式全屏（主进程直接执行，不依赖渲染层/guest 拦截）
+    if (e.keycode === VK_F11 && !e.ctrl && !e.alt && !e.shift && !e.meta) {
+      if (tryForward('toggleFullscreen')) {
+        console.log('[hotkey-fallback] F11 → 切换沉浸式全屏 (uiohook)')
+        try { win.setFullScreen(!win.isFullScreen()) } catch { /* ignore */ }
+      }
+      return
+    }
+
+    // Alt+P：冻结/恢复当前页面
+    if (e.keycode === VK_P && e.alt && !e.ctrl && !e.shift && !e.meta) {
+      if (tryForward('toggleFreeze')) {
+        console.log('[hotkey-fallback] Alt+P → 冻结切换 (uiohook)')
+        win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' })
+      }
+      return
+    }
+  })
 
   // 使用指南窗口打开时暂停所有全局热键，关闭时恢复
   // 防止 Alt+Space 等快捷键在使用指南中干扰用户操作和热键录制
@@ -266,12 +316,41 @@ app.whenReady().then(async () => {
     console.error('[main] initChatStore 失败，对话持久化功能将不可用:', err)
   }
 
+  // ===== 模块管理（插件系统）：注册 manifest → 状态入库 → 按状态执行 init =====
+  // 规范：docs/功能插件系统与安装管控方案.md 第 11 章；状态存 SQLite settings.db（决策 0.4）。
+  // 启动即隔离：禁用模块的 init 不会执行，重启后依然（11.10 硬保证）。
+  BUILTIN_MODULES.forEach((m) => registerModule(m))
+  registerModuleIpc()
+
+  // ===== 统一注入管线初始化 =====
+  // 注册所有 TargetAdapter 到 InjectionBroker
+  injectionBroker.registerAdapters(allAdapters)
+  // 从 manifest 中提取能力声明并注册到 CapabilityRegistry
+  const capabilities = extractCapabilities(BUILTIN_MODULES)
+  if (capabilities.length > 0) {
+    capabilityRegistry.registerMany(capabilities)
+    console.log(`[main] 已注册 ${capabilities.length} 个能力声明`)
+  }
+
+  await initEnabledModules()
+
+  // ===== 核心 IPC 注册（模块未启用时才注册，避免重复） =====
+  // 语音配置 IPC：设置页需要读取语音配置，即使语音模块未启用
+  if (!isModuleEnabled('voice')) {
+    registerVoiceConfigIPC()
+  }
+  // AI Provider IPC：底栏需要显示 AI Provider 列表，即使自定义对话模块未启用
+  if (!isModuleEnabled('custom-chat')) {
+    registerAIProviderIPC()
+  }
+  // 提示词库 IPC：设置页和底栏需要读取提示词列表，即使提示词库模块未启用
+  if (!isModuleEnabled('prompt-library')) {
+    registerPromptIPC()
+  }
+
   // 首次启动创建默认 AI 平台 Profile，并迁移旧数据补齐 aiPlatformId
   ensureDefaultProfiles()
   migrateAIPlatformIds()
-
-  // 首次启动填充预置提示词模板
-  ensureDefaultPrompts()
 
   // 注册页面组件屏蔽规则 IPC + 首次启动填充预置规则
   registerBlockRulesIPC()
@@ -289,10 +368,6 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.SETTINGS_WINDOW_OPEN, () => {
     showSettingsWindow()
   })
-  // 打开历史记录与下载管理独立窗口（单例，导航历史 + 下载管理）
-  ipcMain.handle(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN, () => {
-    showHistoryDownloadWindow()
-  })
   // 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   // 可选 providerId：若提供则切换到对应供应商的对话页
   ipcMain.handle(IPC_CHANNELS.ADVANCED_PANEL_OPEN, (_e, providerId?: string) => {
@@ -303,9 +378,6 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.ADVANCED_PANEL_TOGGLE, () => {
     toggleAdvancedPanelWindow()
   })
-
-  // 笔记额外 IPC：NOTES_SEND_TO_AI（注入到 AI 输入框）+ NOTES_SAVE_AS_PROMPT（存为提示词）
-  registerNotesExtraIpc()
 
   // 注册设备预设 CRUD IPC + 首次启动填充预置设备预设
   registerPresetsIPC()
@@ -425,6 +497,7 @@ app.whenReady().then(async () => {
       return
     }
     if (win.isMinimized()) win.restore()
+    win.setSkipTaskbar(false)
     if (!win.isVisible()) win.show()
     win.focus()
     // 通知渲染层聚焦输入框
@@ -437,60 +510,13 @@ app.whenReady().then(async () => {
   // ===== 注册 Profile CRUD IPC =====
   registerProfileIPC()
 
-  // ===== 注册提示词模板 CRUD IPC =====
-  registerPromptIPC()
+  // ===== 对话/痕迹基础 IPC（历史搜索 FTS5、登录/窗口痕迹、最近对话、用量统计） =====
+  registerBaseChatIpc()
 
-  // ===== 注册自定义 AI 提供商 CRUD + 对话持久化 IPC =====
-  registerAIProviderIPC()
-  ensureDefaultProviders()
-  registerAIChatIPC()
+  // ===== 使用统计与操作日志 IPC（基础功能，独立于自定义对话模块） =====
+  registerUsageTraceIpc()
 
-  // ===== 一次性数据迁移：electron-store JSON → SQLite（幂等） =====
-  migrateWhiteboardNotes()
-
-  // ===== 灵感笔记 IPC（v2：SQLite + FTS5） =====
-  registerNotesIPC()
-
-  // ===== 笔记图片资产 IPC（notes-asset:// 协议 + 图片保存） =====
-  registerNotesAssetIPC()
-
-  // ===== 白板 IPC（v3：SQLite + Excalidraw + 多白板） =====
-  registerWhiteboardIPC()
-  registerWhiteboardAssetIPC()
-
-  // ===== 需求 12：截图到白板 —— 推送图片到进阶面板白板 =====
-  // 渲染层（MainView）调用 pushImageToWhiteboard({assetUrl, sourceUrl, platform})，
-  // 主进程负责：打开/聚焦进阶面板 → 切到 whiteboard tab → 延迟转发载荷给白板渲染层。
-  ipcMain.handle(
-    IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE_REQUEST,
-    (_e, payload: { assetUrl: string; sourceUrl?: string; platform?: string }) => {
-      // 确保进阶面板窗口可见并切到白板 tab
-      openAdvancedPanelWindow({ initialTab: 'whiteboard' })
-      const win = windowState.advancedPanelWindow
-      if (!win || win.isDestroyed()) return { ok: false }
-
-      const sendPush = () => {
-        if (win.isDestroyed()) return
-        // 通知 AdvancedPanelView 切到白板 tab（窗口已存在时复用单例）
-        win.webContents.send(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, { tab: 'whiteboard' })
-        // 延迟 200ms 发送图片载荷，等 tab 切换 + Excalidraw 挂载完成
-        setTimeout(() => {
-          if (!win.isDestroyed()) {
-            win.webContents.send(IPC_CHANNELS.WHITEBOARD_PUSH_IMAGE, payload)
-          }
-        }, 200)
-      }
-      if (win.webContents.isLoading()) {
-        win.webContents.once('did-finish-load', sendPush)
-      } else {
-        sendPush()
-      }
-      return { ok: true }
-    },
-  )
-
-  // ===== 注册语音配置 IPC（enterToSend 等） =====
-  registerVoiceConfigIPC()
+  registerPdfProtocol()
   registerAppSettingsIPC()
 
   // ===== 挂载下载监听到 defaultSession + 所有 profile partitions =====
@@ -523,31 +549,8 @@ app.whenReady().then(async () => {
     createBrowserWindow,
   })
 
-  // ===== 注册浏览器窗口 IPC（多标签浏览器：状态/标签/导航历史/搜索/下载/书签/跨窗口查询） =====
-  registerBrowserIpc({
-    createBrowserWindow,
-    getSearchHistoryStore: () => searchHistoryStore,
-    getDownloadStore: () => browserDownloadStore,
-  })
-
-  // ===== 注册浏览器标签音频 IPC（v0.0.9 预留，当前无 handler） =====
-  registerBrowserTabAudioIpc({})
-
-  // ===== 注册累积链接 IPC（E1：AI 应用内新窗口链接累积） =====
+  // ===== 注册累积链接 IPC（E1：AI 应用内新窗口链接累积，基础功能） =====
   registerAccumulatedLinksIpc()
-
-  // ===== 注册导航历史持久化 CRUD IPC（list/search/delete/clearAll） =====
-  registerNavHistoryIpc()
-
-  // ===== 注册页面冻结 IPC（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） =====
-  registerFreezeIpc()
-
-  // ===== 注册提示词库窗口 IPC（PROMPT_OPEN_WINDOW + 注入请求/结果转发） =====
-  registerPromptIpc({
-    showPromptWindow,
-    getMainWindow: () => windowState.mainWindow,
-    getPromptWindow: () => windowState.promptWindow,
-  })
 
   // ===== 注册预设与 AI 平台查询 IPC =====
   registerSettingsIpc()
@@ -555,22 +558,15 @@ app.whenReady().then(async () => {
   // ===== 注册平台能力查询 IPC（设置页显示权限状态） =====
   registerPlatformInfoIPC()
 
-  // ===== 注册语音识别（STT）IPC =====
-  // background-voice.ts 的 startBackgroundVoice/stopBackgroundVoice 接收 sttEngine 参数，
-  // 此处用箭头包装为无参函数以匹配 registerVoiceIpc 期望的签名。
-  registerVoiceIpc({
-    sttEngine,
-    startBackgroundVoice: () => startBackgroundVoiceImpl(sttEngine),
-    stopBackgroundVoice: () => stopBackgroundVoiceImpl(sttEngine),
-  })
-
   // ===== 注册热键 IPC + 内置热键回调 + 语音热键 =====
+  // 语音回调经 wiring/voice 门控：语音模块未启用时全部 no-op（Alt+V 无法触发任何行为）
   registerHotkeyIpc({
     hotkeyManager,
     getMainWindow: () => windowState.mainWindow,
     toggleAdvancedPanelWindow,
-    startBackgroundVoice: () => startBackgroundVoiceImpl(sttEngine),
-    stopBackgroundVoice: () => stopBackgroundVoiceImpl(sttEngine),
+    startBackgroundVoice: startBackgroundVoiceGated,
+    stopBackgroundVoice: stopBackgroundVoiceGated,
+    toggleVoiceRecording: toggleVoiceRecordingGated,
   })
 
   // ===== 启动后延迟检测 uiohook 健康度 =====
@@ -596,5 +592,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  cleanupOnQuit({ hotkeyManager, sttEngine })
+  closeModuleStateDb()
+  cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() })
 })

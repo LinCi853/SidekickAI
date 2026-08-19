@@ -99,7 +99,7 @@ export async function selectImportFile(): Promise<string | null> {
   return api.appSettings.selectImportFile();
 }
 
-/** 导出数据到指定路径（细粒度控制：基础数据 / 登录凭据 / 应用数据 / 离线缓存） */
+/** 导出数据到指定路径（细粒度控制：基础数据 / 登录凭据 / 应用数据 / 离线缓存 / 语音资产） */
 export async function exportData(
   targetPath: string,
   options: {
@@ -107,6 +107,7 @@ export async function exportData(
     cookies: boolean;
     indexedDB: boolean;
     cache: boolean;
+    voiceAssets: boolean;
   },
 ): Promise<{ success: boolean; filePath?: string; error?: string }> {
   const api = requireElectron();
@@ -125,6 +126,7 @@ export async function estimateExportSizes(): Promise<{
   cookies: number;
   indexedDB: number;
   cache: number;
+  voiceAssets: number;
 }> {
   const api = requireElectron();
   return api.appSettings.estimateExportSizes();
@@ -197,6 +199,15 @@ export function onPreviewUpdate(
 export function onPreviewHide(callback: () => void): () => void {
   const api = requireElectron();
   return api.onPreviewHide(callback);
+}
+
+/**
+ * 监听流式识别部分结果（主进程→预览窗渲染：实时推送已识别的部分文本）。
+ * @returns 取消监听函数
+ */
+export function onPreviewPartial(callback: (payload: { text: string }) => void): () => void {
+  const api = requireElectron();
+  return api.onPreviewPartial(callback);
 }
 
 /* =====================================================================

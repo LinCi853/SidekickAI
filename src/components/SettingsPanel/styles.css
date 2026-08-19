@@ -691,6 +691,29 @@
   border-bottom: 0;
   padding-bottom: 0;
 }
+/* 紧凑行：麦克风选择 */
+.voice-compact-row {
+  margin-top: var(--space-1);
+}
+.voice-compact-row .form-row {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+/* 服务商+语言并排 */
+.voice-provider-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.voice-provider-row .form-row {
+  flex: 1;
+  min-width: 0;
+}
+/* 分隔线 */
+.voice-section-divider {
+  height: 1px;
+  background: var(--glass-bd-2);
+  margin: var(--space-2) 0;
+}
 .voice-field-hint {
   font-family: var(--font-mono);
   font-size: var(--text-xs);

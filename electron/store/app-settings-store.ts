@@ -1,6 +1,7 @@
 // electron/store/app-settings-store.ts — 应用全局设置持久化存储 + IPC 注册
 //
-// 使用 electron-store 将应用设置持久化到磁盘（app-settings.json）。
+// 决策 0.4（既有需求）：设置尽量入库。应用设置现持久化到 SQLite settings.db 的
+// app_settings 表（首次启动自动把旧 app-settings.json 迁入，旧文件改名 .bak）。
 // 当前字段：
 //   - hideForeignModels: boolean  是否隐藏国外模型/平台（默认 true，安装后仅显示国内可用服务）
 //   - tabBarCollapsed: boolean    顶部标签栏是否默认收起（hover 展开），默认 true
@@ -14,8 +15,47 @@ import path from 'path'
 import fs from 'fs'
 import { IPC_CHANNELS, ALL_TOP_BAR_BUTTON_GROUPS, type TopBarButtonGroup } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
-import { createJsonStore, isPortableMode } from './store-paths.js'
+import { isPortableMode, getStoreCwd } from './store-paths.js'
+import { getAppSettingsTable, migrateAppSettingsJson } from './module-state-store.js'
 import { getHotkeyManagerInstance } from '../hotkey/manager.js'
+
+// ===== SQLite 持久化（settings.db / app_settings 表） =====
+
+/** 内存缓存（进程内读写即时生效，writeSettingsRaw 同步落库） */
+let settingsCache: AppSettings | null = null
+
+/** 读原始设置（含默认值兜底与一次性旧 JSON 迁移） */
+function readSettingsRaw(): AppSettings {
+  migrateAppSettingsJson()
+  if (!settingsCache) {
+    const raw = getAppSettingsTable().get('appSettings')
+    if (raw) {
+      try {
+        settingsCache = JSON.parse(raw) as AppSettings
+        console.log('[app-settings] 从 settings.db 加载设置, onboardingCompleted=', settingsCache.onboardingCompleted)
+      } catch (err) {
+        console.error('[app-settings] 解析 settings.db 失败，回退默认值:', err)
+        settingsCache = { ...DEFAULT_SETTINGS }
+      }
+    } else {
+      settingsCache = { ...DEFAULT_SETTINGS }
+      console.log('[app-settings] 首次启动，使用默认设置, onboardingCompleted=', settingsCache.onboardingCompleted)
+      getAppSettingsTable().set('appSettings', JSON.stringify(settingsCache))
+    }
+  }
+  return settingsCache
+}
+
+/** 写回原始设置（缓存 + 落库） */
+function writeSettingsRaw(next: AppSettings): void {
+  settingsCache = next
+  getAppSettingsTable().set('appSettings', JSON.stringify(next))
+}
+
+/** 测试用：重置内存缓存（不落库） */
+export function resetSettingsCacheForTest(): void {
+  settingsCache = null
+}
 
 // 持久化存储实例（写入 app-settings.json）
 export interface AppSettings {
@@ -116,10 +156,7 @@ export interface AppSettings {
   }
 }
 
-const store = createJsonStore<{ settings: AppSettings; version: number }>({
-  name: 'app-settings',
-  defaults: {
-    settings: {
+const DEFAULT_SETTINGS: AppSettings = {
       hideForeignModels: true,
       tabBarCollapsed: true,
       proxyMode: 'system',
@@ -186,14 +223,11 @@ const store = createJsonStore<{ settings: AppSettings; version: number }>({
       browserTabPersistence: 'memory',
       // G1：默认搜索引擎（Bing），地址栏非 URL 输入时使用
       defaultSearchEngine: { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' },
-    },
-    version: 1,
-  },
-})
+}
 
 /** 读取应用设置 */
 export function getAppSettings(): AppSettings {
-  const s = { ...store.get('settings') }
+  const s = { ...readSettingsRaw() }
   // 迁移旧的 'navigation' 组到拆分后的 'navBack'/'navForward'/'navHome'
   const raw = (s.topBarVisibleButtons ?? []) as string[]
   const migrated: string[] = []
@@ -270,11 +304,11 @@ export function getAppSettings(): AppSettings {
  * 退出时自动回收，不影响数据文件清理的可靠性。
  */
 export async function clearAllData(): Promise<void> {
-  const dataDir = isPortableMode()
-    ? path.join(path.dirname(app.getPath('exe')), 'data')
-    : app.getPath('userData')
+  const dataDir = getStoreCwd() ?? app.getPath('userData')
 
   console.log('[app-settings] 开始清理所有用户数据:', dataDir)
+  console.log('[app-settings] 重置内存缓存 settingsCache=null')
+  settingsCache = null
 
   // 1. 设置 isQuitting 标记，绕过主窗口 closeBehavior='minimize' 拦截
   try {
@@ -289,12 +323,20 @@ export async function clearAllData(): Promise<void> {
     console.warn('[app-settings] 中止 AI 流失败:', err)
   }
 
-  // 3. 关闭 SQLite 连接（释放 WAL 旁路文件锁，避免 fs.rmSync 失败）
-  try {
-    const { closeChatStore } = await import('./chat-store.js')
-    closeChatStore()
-  } catch (err) {
-    console.warn('[app-settings] 关闭 SQLite 失败:', err)
+  // 3. 关闭所有 SQLite 连接（释放 WAL 旁路文件锁，避免 fs.rmSync 失败）
+  const sqliteClosures = [
+    () => import('./chat-store.js').then(m => m.closeChatStore()).catch(() => {}),
+    () => import('./module-state-store.js').then(m => m.closeModuleStateDb()).catch(() => {}),
+    () => import('./notes-db.js').then(m => m.closeNotesDb()).catch(() => {}),
+    () => import('./whiteboard-db.js').then(m => m.closeWhiteboardDb()).catch(() => {}),
+    () => import('./nav-history-store.js').then(m => m.closeNavHistoryStore()).catch(() => {}),
+    () => import('./bookmark-store.js').then(m => m.closeBookmarkStore()).catch(() => {}),
+    () => import('./search-history-store.js').then(m => m.closeSearchHistoryStore()).catch(() => {}),
+    () => import('./browser-download-store.js').then(m => m.closeBrowserDownloadStore()).catch(() => {}),
+    () => import('./accumulated-links-store.js').then(m => m.accumulatedLinksStore.close()).catch(() => {}),
+  ]
+  for (const close of sqliteClosures) {
+    try { await close() } catch { /* ignore */ }
   }
 
   // 4. 收集并清理所有 session（defaultSession + persist:<profileId> partitions）
@@ -356,6 +398,21 @@ export async function clearAllData(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 200))
 
   // 6. 递归删除数据目录（设置、窗口状态、AI供应商、对话历史等全部持久化数据）
+  // 先直接尝试删除 settings.db（最关键：阻止重启后读到旧 onboardingCompleted）
+  const settingsDbPath = path.join(dataDir, 'settings.db')
+  const settingsDbWal = path.join(dataDir, 'settings.db-wal')
+  const settingsDbShm = path.join(dataDir, 'settings.db-shm')
+  for (const f of [settingsDbPath, settingsDbWal, settingsDbShm]) {
+    try {
+      if (fs.existsSync(f)) {
+        fs.unlinkSync(f)
+        console.log('[app-settings] 已删除关键文件:', f)
+      }
+    } catch (err) {
+      console.error('[app-settings] 删除关键文件失败:', f, err)
+    }
+  }
+
   try {
     fs.rmSync(dataDir, { recursive: true, force: true })
     console.log('[app-settings] 已清除所有用户数据:', dataDir)
@@ -364,22 +421,36 @@ export async function clearAllData(): Promise<void> {
     // Windows 上 GPUCache/Crashpad/SingletonLock/Partitions 等可能因句柄未完全释放而失败
     // 逐个尝试删除关键子目录和文件，最大程度清理
     const subPaths = [
+      // Electron / Chromium 缓存与临时文件
       'GPUCache',
       'Crashpad',
+      'DawnGraphiteCache',
+      'DawnWebGPUCache',
       'Session Storage',
       'Local Storage',
       'IndexedDB',
+      'databases',
       'Service Worker',
       'Cache',
       'Code Cache',
       'Cookies',
       'Cookies-journal',
       'Network',
+      'SharedStorage',
+      'Shared Dictionary',
+      'WebStorage',
+      'Preferences',
+      'Local State',
       'Partitions',
       'bin',
       'SingletonLock',
       'SingletonCookie',
       'SingletonSocket',
+      // settings.db（单一数据源，含 app_settings / profiles / window_states 等 KV 表）
+      'settings.db',
+      'settings.db-wal',
+      'settings.db-shm',
+      // 旧 JSON 文件（迁移前存在，迁移后为 .bak）
       'app-settings.json',
       'window-states.json',
       'ai-providers.json',
@@ -389,13 +460,43 @@ export async function clearAllData(): Promise<void> {
       'prompts.json',
       'presets.json',
       'block-rules.json',
+      'injection-history.json',
+      'browser-downloads.json',
+      'conversation-store.json',
+      'accumulated-links.json',
+      // 各模块独立 SQLite 数据库
       'chat.db',
       'chat.db-wal',
       'chat.db-shm',
+      'notes.db',
+      'notes.db-wal',
+      'notes.db-shm',
+      'whiteboard.db',
+      'whiteboard.db-wal',
+      'whiteboard.db-shm',
+      'nav-history.db',
+      'nav-history.db-wal',
+      'nav-history.db-shm',
+      'bookmarks.db',
+      'bookmarks.db-wal',
+      'bookmarks.db-shm',
+      'search-history.db',
+      'search-history.db-wal',
+      'search-history.db-shm',
+      'browser-downloads.db',
+      'browser-downloads.db-wal',
+      'browser-downloads.db-shm',
+      'accumulated-links.db',
+      'accumulated-links.db-wal',
+      'accumulated-links.db-shm',
+      // 资产目录（图片等）
+      'whiteboard-assets',
+      'notes-assets',
     ]
     for (const sub of subPaths) {
       try {
         fs.rmSync(path.join(dataDir, sub), { recursive: true, force: true })
+        console.log('[app-settings] 逐个删除:', sub)
       } catch { /* ignore */ }
     }
     // 再次尝试删除整个目录
@@ -414,19 +515,19 @@ export async function clearAllData(): Promise<void> {
 
 /** 更新应用设置（合并 patch） */
 export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
-  const current = store.get('settings')
+  const current = readSettingsRaw()
   const next: AppSettings = { ...current, ...patch }
   // 关闭 autoLaunch 时自动重置 silentStart=false（保持字段语义一致，避免 autoLaunch=false 但 silentStart=true 的非法态）
   if (patch.autoLaunch === false) {
     next.silentStart = false
   }
-  store.set('settings', next)
+  writeSettingsRaw(next)
   // autoLaunch 或 silentStart 变化时立即同步系统注册项（避免必须重启应用才生效）
   if (patch.autoLaunch !== undefined || patch.silentStart !== undefined) {
     const ok = applyAutoLaunchSetting(next.autoLaunch, next.silentStart)
     if (!ok) {
       // 系统注册失败：回滚 store 字段并抛错，让渲染层 catch 后回滚本地 UI 状态
-      store.set('settings', current)
+      writeSettingsRaw(current)
       throw new Error('应用开机自启动设置失败（系统层拒绝）')
     }
   }

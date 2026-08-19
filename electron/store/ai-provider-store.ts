@@ -1,18 +1,21 @@
 // electron/store/ai-provider-store.ts — 自定义 AI 提供商持久化存储
 //
-// 使用 electron-store 持久化 Provider 列表到 ai-providers.json。
+// 持久化到 SQLite settings.db（providers 表，createSqliteJsonStore）。
 // API Key 通过应用内 AES-256-GCM 加密后存储（仅加密的 cipher 字符串落盘），
 // 读取时解密为明文返回给主进程使用；list 返回给渲染进程时 apiKey 仍为明文
 // （渲染进程只用于展示星号，不会回传给第三方）。
 //
 // 加密密钥存储在 app-key.json，随数据一起跨设备迁移，不依赖 OS 用户凭据。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain, safeStorage, dialog } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { randomUUID } from 'crypto'
 import { writeFileSync, readFileSync } from 'fs'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 import {
   isSafeStorageAvailable,
   xorDecrypt,
@@ -38,8 +41,9 @@ export function deriveAudioEndpoint(apiEndpoint: string, path: 'speech' | 'trans
 }
 
 // 持久化存储实例（写入 ai-providers.json）
-const store = createJsonStore<{ providers: PersistedProvider[]; version: number }>({
-  name: 'ai-providers',
+const store = createSqliteJsonStore<{ providers: PersistedProvider[]; version: number }>({
+  tableName: 'ai_providers',
+  legacyName: 'ai-providers',
   defaults: { providers: [], version: 1 },
 })
 
@@ -132,12 +136,12 @@ function toPersisted(input: CustomAIProviderInput, id: string, now: number): Per
 export class AIProviderStore {
   /** 列出全部 Provider（解密 apiKey） */
   list(): CustomAIProvider[] {
-    return store.get('providers').map(toProvider)
+    return (store.get('providers') as PersistedProvider[]).map(toProvider)
   }
 
   /** 按 id 查找单个 Provider */
   get(id: string): CustomAIProvider | null {
-    const p = store.get('providers').find((x) => x.id === id)
+    const p = (store.get('providers') as PersistedProvider[]).find((x) => x.id === id)
     return p ? toProvider(p) : null
   }
 
@@ -146,7 +150,7 @@ export class AIProviderStore {
     const now = Date.now()
     const id = randomUUID()
     const persisted = toPersisted(input, id, now)
-    const providers = store.get('providers')
+    const providers = store.get('providers') as PersistedProvider[] as PersistedProvider[]
     providers.push(persisted)
     store.set('providers', providers)
     return toProvider(persisted)
@@ -154,7 +158,7 @@ export class AIProviderStore {
 
   /** 更新 Provider（合并 patch） */
   update(id: string, patch: Partial<CustomAIProviderInput>): CustomAIProvider {
-    const providers = store.get('providers')
+    const providers = store.get('providers') as PersistedProvider[] as PersistedProvider[]
     const idx = providers.findIndex((x) => x.id === id)
     if (idx === -1) {
       throw new Error(`AI Provider 不存在: ${id}`)
@@ -187,7 +191,7 @@ export class AIProviderStore {
 
   /** 删除 Provider */
   delete(id: string): void {
-    const providers = store.get('providers')
+    const providers = store.get('providers') as PersistedProvider[] as PersistedProvider[]
     store.set(
       'providers',
       providers.filter((x) => x.id !== id),
@@ -200,7 +204,7 @@ export class AIProviderStore {
    * 供 AppSwitcher 按 lastUsedAt 降序排列。
    */
   touchLastUsed(id: string): void {
-    const providers = store.get('providers')
+    const providers = store.get('providers') as PersistedProvider[] as PersistedProvider[]
     const idx = providers.findIndex((x) => x.id === id)
     if (idx === -1) return
     providers[idx] = { ...providers[idx], lastUsedAt: Date.now() }
@@ -215,7 +219,7 @@ export class AIProviderStore {
    * @returns 加密字符串（pw: 前缀）
    */
   exportEncrypted(password: string, selectedIds?: string[]): string {
-    const all = store.get('providers')
+    const all = store.get('providers') as PersistedProvider[]
     const targets = selectedIds && selectedIds.length > 0
       ? all.filter((p) => selectedIds.includes(p.id))
       : all
@@ -282,7 +286,7 @@ export class AIProviderStore {
         return { ok: false, error: '导入文件格式异常：缺少 providers 数组' }
       }
 
-      const existing = store.get('providers')
+      const existing = store.get('providers') as PersistedProvider[]
       for (const imp of parsed.providers) {
         if (!imp.id || !imp.name || !imp.apiEndpoint) continue
         const idx = existing.findIndex((x) => x.id === imp.id)
@@ -358,7 +362,7 @@ export class AIProviderStore {
       if (!parsed.providers || !Array.isArray(parsed.providers)) {
         return { ok: false, error: '导入文件格式异常：缺少 providers 数组' }
       }
-      const existing = store.get('providers')
+      const existing = store.get('providers') as PersistedProvider[]
       const existingIds = new Set(existing.map((p) => p.id))
       const providers = parsed.providers
         .filter((p) => p.id && p.name && p.apiEndpoint)
@@ -392,7 +396,7 @@ export const aiProviderStore = new AIProviderStore()
  * - AES 密文：已是新格式，无需处理
  */
 export function ensureDefaultProviders(): void {
-  const providers = store.get('providers')
+  const providers = store.get('providers') as PersistedProvider[] as PersistedProvider[]
   if (providers.length === 0) return
   let mutated = false
   for (let i = 0; i < providers.length; i++) {
@@ -417,41 +421,50 @@ export function ensureDefaultProviders(): void {
 }
 
 /**
- * 注册 AI Provider CRUD IPC 处理器
+ * 注册 AI Provider CRUD IPC 处理器。
  * 必须在 app.whenReady() 后调用（safeStorage 依赖）。
  * 注意：AI_PROVIDER_TEST / AI_PROVIDER_LIST_MODELS 在 ai/handler.ts 中注册（需要调用 API 客户端）。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
  */
-export function registerAIProviderIPC(): void {
+export function registerAIProviderIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
-  ipcMain.handle(ipc.AI_PROVIDER_LIST, () => aiProviderStore.list())
-  ipcMain.handle(ipc.AI_PROVIDER_CREATE, (_e, input: CustomAIProviderInput) =>
+
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(ipc.AI_PROVIDER_LIST, () => aiProviderStore.list())
+  handle(ipc.AI_PROVIDER_CREATE, (_e: unknown, input: CustomAIProviderInput) =>
     aiProviderStore.create(input),
   )
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_UPDATE,
-    (_e, id: string, patch: Partial<CustomAIProviderInput>) =>
+    (_e: unknown, id: string, patch: Partial<CustomAIProviderInput>) =>
       aiProviderStore.update(id, patch),
   )
-  ipcMain.handle(ipc.AI_PROVIDER_DELETE, (_e, id: string) => aiProviderStore.delete(id))
+  handle(ipc.AI_PROVIDER_DELETE, (_e: unknown, id: string) => aiProviderStore.delete(id))
   // 需求 9：加密导出 / 导入（v0.5.2 regress-3：支持 selectedIds 选择性导出）
-  ipcMain.handle(ipc.AI_PROVIDER_EXPORT_ENCRYPTED, (_e, password: string, selectedIds?: string[]) =>
+  handle(ipc.AI_PROVIDER_EXPORT_ENCRYPTED, (_e: unknown, password: string, selectedIds?: string[]) =>
     aiProviderStore.exportEncrypted(password, selectedIds),
   )
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_IMPORT_ENCRYPTED,
-    (_e, encrypted: string, password: string) =>
+    (_e: unknown, encrypted: string, password: string) =>
       aiProviderStore.importEncrypted(encrypted, password),
   )
   // v0.5.2 B-4：预览导入（dry-run，不持久化）
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_PREVIEW_IMPORT,
-    (_e, encrypted: string, password: string) =>
+    (_e: unknown, encrypted: string, password: string) =>
       aiProviderStore.previewImport(encrypted, password),
   )
   // v0.5.2 B-4：写入加密导出文件到指定路径（渲染层提供路径 + 内容）
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_WRITE_EXPORT_FILE,
-    (_e, filePath: string, content: string) => {
+    (_e: unknown, filePath: string, content: string) => {
       try {
         writeFileSync(filePath, content, 'utf8')
         return { ok: true }
@@ -461,9 +474,9 @@ export function registerAIProviderIPC(): void {
     },
   )
   // v0.5.2 B-4：读取导入文件内容（渲染层提供路径）
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_READ_IMPORT_FILE,
-    (_e, filePath: string) => {
+    (_e: unknown, filePath: string) => {
       try {
         const content = readFileSync(filePath, 'utf8')
         return { ok: true, content }
@@ -473,7 +486,7 @@ export function registerAIProviderIPC(): void {
     },
   )
   // v0.5.2 B-4：AI Provider 加密导出文件保存对话框
-  ipcMain.handle(ipc.AI_PROVIDER_SELECT_EXPORT_PATH, async () => {
+  handle(ipc.AI_PROVIDER_SELECT_EXPORT_PATH, async () => {
     const result = await dialog.showSaveDialog({
       filters: [{ name: 'Sidekick AI Providers', extensions: ['sapp'] }],
       defaultPath: `ai-providers-${new Date().toISOString().slice(0, 10)}.sapp`,
@@ -481,7 +494,7 @@ export function registerAIProviderIPC(): void {
     return result.canceled ? null : result.filePath
   })
   // v0.5.2 B-4：AI Provider 加密导入文件打开对话框
-  ipcMain.handle(ipc.AI_PROVIDER_SELECT_IMPORT_FILE, async () => {
+  handle(ipc.AI_PROVIDER_SELECT_IMPORT_FILE, async () => {
     const result = await dialog.showOpenDialog({
       filters: [{ name: 'Sidekick AI Providers', extensions: ['sapp'] }, { name: 'All Files', extensions: ['*'] }],
       properties: ['openFile'],

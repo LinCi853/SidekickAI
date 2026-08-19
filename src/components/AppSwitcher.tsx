@@ -15,6 +15,7 @@ import {
 } from '../lib/electron-api';
 import { onWindowHidden } from '../lib/electron-api/window';
 import { useProfileStore } from '../store/useProfileStore';
+import { useModuleStore } from '../store/useModuleStore';
 import { useTabStore } from '../store/useTabStore';
 import { findAiAppProfiles } from '../lib/shared-utils';
 import { useAiAppDrag } from '../hooks/useAiAppDrag';
@@ -49,13 +50,17 @@ export default function AppSwitcher({
   const [isOpen, setIsOpen] = useState(false);
   const [aiProviders, setAiProviders] = useState<CustomAIProvider[]>([]);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [gridCols, setGridCols] = useState(2);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // close 模式下点击当前激活应用的「二次确认」状态（与 BottomBar 逻辑一致）
   const [pendingCloseProfileId, setPendingCloseProfileId] = useState<string | null>(null);
   const pendingCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const profiles = useProfileStore((s) => s.profiles);
+  // 模块门控：自定义对话模块关闭时不加载自定义供应商（IPC 未注册，避免残留调用）
+  const customChatEnabled = useModuleStore((s) => s.isEnabled('custom-chat'));
   const addTab = useTabStore((s) => s.addTab);
   // 读取当前标签与激活态：用于「已打开高亮」与「再点当前应用关闭」的等价规则
   const tabs = useTabStore((s) => s.tabs);
@@ -82,7 +87,7 @@ export default function AppSwitcher({
 
   // 下拉打开时刷新自定义 AI Provider 列表
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !customChatEnabled) return;
     listAIProviders()
       .then(setAiProviders)
       .catch((e) => console.error('加载自定义 AI Provider 列表失败:', e));
@@ -90,6 +95,7 @@ export default function AppSwitcher({
 
   // 启动时也加载一次（防止外部直接修改 aiProviders 后下拉未打开时显示陈旧数据）
   useEffect(() => {
+    if (!customChatEnabled) return;
     listAIProviders()
       .then(setAiProviders)
       .catch((e) => console.error('[app-switcher] 加载 AI Providers 失败:', e));
@@ -171,6 +177,38 @@ export default function AppSwitcher({
   const sortedProviders = useMemo(() => {
     return [...aiProviders].sort((a, b) => (b.lastUsedAt ?? -1) - (a.lastUsedAt ?? -1));
   }, [aiProviders]);
+
+  // 动态调整列数：内容高度超过窗口 70% 时自动增加列数（2→3→4）
+  useEffect(() => {
+    if (!isOpen) {
+      setGridCols(2);
+      return;
+    }
+    const adjustColumns = () => {
+      const el = dropdownRef.current;
+      if (!el) return;
+      const maxHeight = window.innerHeight * 0.7;
+      // 先尝试 2 列
+      setGridCols(2);
+      requestAnimationFrame(() => {
+        if (!dropdownRef.current) return;
+        const scrollH = dropdownRef.current.scrollHeight;
+        if (scrollH <= maxHeight) return;
+        // 2 列不够，尝试 3 列
+        setGridCols(3);
+        requestAnimationFrame(() => {
+          if (!dropdownRef.current) return;
+          const scrollH3 = dropdownRef.current.scrollHeight;
+          if (scrollH3 <= maxHeight) return;
+          // 3 列不够，尝试 4 列
+          setGridCols(4);
+        });
+      });
+    };
+    adjustColumns();
+    window.addEventListener('resize', adjustColumns);
+    return () => window.removeEventListener('resize', adjustColumns);
+  }, [isOpen, sortedProviders.length, aiAppProfiles.length]);
 
   // 点击应用：统一走 onAppClick 回调（与底栏完全等价的打开/关闭规则，含 appClickBehavior）
   //  - close 模式 + 点击当前激活应用：第一次点击进入 pending（显示关闭提示），
@@ -256,7 +294,8 @@ export default function AppSwitcher({
       </div>
       {isOpen && createPortal(
         <div
-          className="app-switcher-dropdown"
+          ref={dropdownRef}
+          className={`app-switcher-dropdown cols-${gridCols}`}
           role="menu"
           data-name="component.app-switcher.dropdown"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
@@ -276,7 +315,7 @@ export default function AppSwitcher({
               暂无 AI 应用
             </div>
           ) : (
-            <>
+            <div className={`app-switcher-grid cols-${gridCols}`} data-name="component.app-switcher.grid">
               {/* 自定义 AI 供应商（按最近使用排序） */}
               {sortedProviders.map((p, idx) => {
                 const isMimo = p.apiEndpoint.includes('mimo') || p.model.includes('mimo');
@@ -396,7 +435,7 @@ export default function AppSwitcher({
                   </button>
                 );
               })}
-            </>
+            </div>
           )}
         </div>,
         document.body

@@ -170,6 +170,7 @@ export interface AppSettingsAPI {
       cookies: boolean;
       indexedDB: boolean;
       cache: boolean;
+      voiceAssets: boolean;
     },
   ): Promise<{ success: boolean; filePath?: string; error?: string }>
   /** 从 zip 文件导入所有数据（导入后应用自动重启） */
@@ -184,6 +185,7 @@ export interface AppSettingsAPI {
     cookies: number;
     indexedDB: number;
     cache: number;
+    voiceAssets: number;
   }>
   /** 打开数据导出独立窗口（细粒度选择 + 体积提示，单例） */
   openExportWindow(): Promise<void>
@@ -245,10 +247,19 @@ export type BroadcastUiVersionChangedFn = (payload: { uiVersion: 'classic' | 'ox
 /** 主→渲染：UI 版本/主题变更广播 */
 export type OnUiVersionChangedCallback = (callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void) => () => void
 
+/** webview 快捷键 action 联合类型（主进程 webview-hotkeys.ts 实际发送的完整集合） */
+export type WebviewHotkeyAction =
+  | 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme'
+  | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab'
+  | 'detachCurrent' | 'toggleFreeze' | 'focusCycle' | 'addBookmark' | 'openHistory'
+  | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print'
+  | 'toggleCloudPc' | 'focusAddressBar' | 'toggleBookmarkBar' | 'reopenClosed'
+  | 'savePageAs' | 'viewSource' | 'zoomOut' | 'zoomReset' | 'zoomIn'
+
 /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
 export type OnWebviewHotkeyCallback = (
   callback: (payload: {
-    action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab' | 'detachCurrent' | 'toggleFullscreen' | 'focusCycle' | 'addBookmark' | 'openHistory' | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print'
+    action: WebviewHotkeyAction
     data?: unknown
   }) => void,
 ) => () => void

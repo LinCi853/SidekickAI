@@ -17,6 +17,7 @@ import {
   saveBlockRule,
   updateBlockRule,
   deleteBlockRule,
+  getAppSettings,
 } from '../lib/electron-api';
 import type {
   AIPlatform,
@@ -112,9 +113,16 @@ export default function AiAppEditorModal({
   const [ruleDraft, setRuleDraft] = useState<Omit<BlockRule, 'id' | 'builtin'>>(EMPTY_RULE_DRAFT);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  // 全局屏蔽规则开关
+  const [disableAllBlockRules, setDisableAllBlockRules] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const { toast, showToast } = useToast();
+
+  // 初始化：全局屏蔽规则开关
+  useEffect(() => {
+    void getAppSettings().then((cfg) => setDisableAllBlockRules(cfg.disableAllBlockRules ?? false)).catch(() => {});
+  }, []);
 
   // 加载所有数据
   const loadAll = useCallback(async () => {
@@ -534,7 +542,8 @@ export default function AiAppEditorModal({
             />
           </FieldGroup>
 
-          {/* 屏蔽规则 */}
+          {/* 屏蔽规则：全局关闭时隐藏 */}
+          {!disableAllBlockRules && (
           <FieldGroup
             label={`屏蔽规则（按 ${platform ? hostnameFromUrl(platform.url) || '*' : '*'} 匹配）`}
           >
@@ -660,6 +669,7 @@ export default function AiAppEditorModal({
               )}
             </div>
           </FieldGroup>
+          )}
 
           {/* 弹窗白名单 */}
           <FieldGroup

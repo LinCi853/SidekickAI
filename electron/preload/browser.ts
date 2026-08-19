@@ -10,6 +10,36 @@ export const browserApi = {
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SAVE_STATE, windowId, state),
     openExternal: (url: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_OPEN_EXTERNAL, url),
+    savePageAs: (webContentsId: number, suggestedName?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SAVE_PAGE_AS, webContentsId, suggestedName),
+    downloadAs: (partition: string, url: string, suggestedFilename?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOAD_AS, partition, url, suggestedFilename),
+    viewSource: (partition: string, url: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_VIEW_SOURCE, partition, url),
+    printPreview: (webContentsId: number, title?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_PRINT_PREVIEW, webContentsId, title),
+    savePdfAs: (sourcePath: string, suggestedName?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SAVE_PDF_AS, sourcePath, suggestedName),
+    deleteTempPdf: (filePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DELETE_TEMP_PDF, filePath),
+    saveCapture: (dataUrl: string, suggestedName?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SAVE_CAPTURE, dataUrl, suggestedName),
+    // ===== 云电脑模式 =====
+    setCloudPcMode: (enter: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_CLOUD_PC_SET, enter),
+    // 全局光标屏幕坐标（全屏悬浮退出条的光标探测）
+    getCursorPos: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_CURSOR_POS),
+    onCloudPcChanged: (callback: (active: boolean) => void) => {
+      const handler = (_e: unknown, active: boolean) => callback(active)
+      ipcRenderer.on(IPC_CHANNELS.BROWSER_CLOUD_PC_CHANGED, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_CLOUD_PC_CHANGED, handler)
+    },
+    onCloudPcKeys: (callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void) => {
+      const handler = (_e: unknown, payload: { key: string; down: boolean; alt: boolean; win: boolean }) => callback(payload)
+      ipcRenderer.on(IPC_CHANNELS.BROWSER_CLOUD_PC_KEYS, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_CLOUD_PC_KEYS, handler)
+    },
     addSearchHistory: (entry: { profileId: string; query: string; url: string }) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SEARCH_HISTORY_ADD, entry),
     listSearchHistory: (profileId: string, keyword?: string, limit?: number) =>

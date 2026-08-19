@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import { useChatStore } from '../store/useChatStore';
+import { useModuleStore } from '../store/useModuleStore';
 import {
   minimizeWindow,
   closeCurrentWindow,
@@ -37,6 +38,7 @@ import type {
 } from '../lib/electron-api';
 import Badge from '../components/ui/Badge';
 import { Button, IconButton, SegmentedControl, TitleBar, Combobox } from '../components/ui';
+import { GearIcon } from '../components/icons';
 import type { ComboboxOption } from '../components/ui';
 import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel';
 import SidebarShell from '../components/SidebarShell';
@@ -67,6 +69,23 @@ function readInitialProviderId(): string | null {
 
 export default function AdvancedPanelView() {
   const [activeTab, setActiveTab] = useState<TabKey>(readInitialTab);
+  // 模块门控：自定义对话 / 白板 / 笔记模块关闭时隐藏对应 tab
+  // 注意：不能用 (s) => s.isEnabled 作为 selector（函数引用恒定，zustand 不会触发重渲染）；
+  // 改为订阅 modules 数组派生 enabled 集合，模块状态变化时组件必然重渲染。
+  const enabledModuleIds = useModuleStore((s) =>
+    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  );
+  const modulesInitialized = useModuleStore((s) => s.initialized);
+  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
+  const availableTabs = useMemo<TabKey[]>(() => {
+    // 模块状态未加载完成时回退到静态三 tab，避免顶栏短暂/持续空白（加载完成后再过滤）
+    if (!modulesInitialized) return ['chat', 'whiteboard', 'notes'];
+    const list: TabKey[] = [];
+    if (enabledModuleIds.includes('custom-chat')) list.push('chat');
+    if (enabledModuleIds.includes('whiteboard')) list.push('whiteboard');
+    if (enabledModuleIds.includes('notes')) list.push('notes');
+    return list;
+  }, [enabledModuleIds, modulesInitialized]);
   const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } = useWindowMaximizedAndPinned();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initialProviderId = useMemo(() => readInitialProviderId(), []);
@@ -92,7 +111,8 @@ export default function AdvancedPanelView() {
 
   // Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab、Ctrl+Shift+Tab 切换进阶面板标签
   // 输入框内也生效（可通过设置关闭，立即生效）
-  const tabOrder: TabKey[] = ['chat', 'whiteboard', 'notes'];
+  // 注意：切换范围只含已启用模块的 tab（availableTabs），避免切到已关闭模块导致空白
+  const tabOrder: TabKey[] = availableTabs;
   const tabSwitchRef = useRef(true);
   useEffect(() => {
     void getAppSettings().then((cfg) => { tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false; }).catch(() => {});
@@ -105,8 +125,8 @@ export default function AdvancedPanelView() {
     const handler = (e: KeyboardEvent) => {
       if (!tabSwitchRef.current) return;
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        const tabMap: Record<string, TabKey> = { '1': 'chat', '2': 'whiteboard', '3': 'notes' };
-        const next = tabMap[e.key];
+        const idx = Number(e.key) - 1;
+        const next = availableTabs[idx];
         if (next) { e.preventDefault(); setActiveTab(next); }
         return;
       }
@@ -123,13 +143,13 @@ export default function AdvancedPanelView() {
       }
 
       if (e.shiftKey) return;
-      const tabMap: Record<string, TabKey> = { '1': 'chat', '2': 'whiteboard', '3': 'notes' };
-      const next = tabMap[e.key];
+      const idx = Number(e.key) - 1;
+      const next = availableTabs[idx];
       if (next) { e.preventDefault(); setActiveTab(next); }
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [activeTab]);
+  }, [activeTab, availableTabs]);
 
   // 初始化时若 URL 指定了 provider，切换 chat tab 并选中该 provider
   useEffect(() => {
@@ -142,6 +162,13 @@ export default function AdvancedPanelView() {
   // activeTab 的 ref，供订阅回调同步读取（避免闭包陈旧）
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+
+  // 模块联动：当前 tab 被关闭时自动切到第一个可用 tab（避免内容区空白）
+  useEffect(() => {
+    if (modulesInitialized && availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0]);
+    }
+  }, [availableTabs, activeTab, modulesInitialized]);
 
   // ESC / Ctrl+W 关窗：进阶面板无标题编辑态，onEsc 直接关闭窗口
   useEscToCloseWindow();
@@ -163,11 +190,10 @@ export default function AdvancedPanelView() {
             onChange={setActiveTab}
             name="advanced-panel-tab"
             className="advanced-panel-segmented"
-            options={[
-              { value: 'chat', label: '自定义对话' },
-              { value: 'whiteboard', label: '白板' },
-              { value: 'notes', label: '灵感笔记' },
-            ]}
+            options={availableTabs.map((t) => ({
+              value: t,
+              label: t === 'chat' ? '自定义对话' : t === 'whiteboard' ? '白板' : '灵感笔记',
+            }))}
           />
         }
         actions={
@@ -179,10 +205,7 @@ export default function AdvancedPanelView() {
               aria-label="设置"
               data-name="advanced-panel.topbar-settings-button"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '60%', height: '60%' }} data-name="advanced-panel.topbar-settings-icon">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
+              <GearIcon className="icon-svg" />
             </IconButton>
             <IconButton
               type="button"
@@ -205,15 +228,20 @@ export default function AdvancedPanelView() {
         }
       />
       <div className="advanced-panel-provider-body" data-name="advanced-panel.body">
-        {activeTab === 'chat' && <ChatTab onOpenSettings={() => setSettingsOpen(true)} />}
-        {activeTab === 'whiteboard' && (
+        {activeTab === 'chat' && moduleEnabled('custom-chat') && (
+          <ChatTab onOpenSettings={() => setSettingsOpen(true)} />
+        )}
+        {activeTab === 'whiteboard' && moduleEnabled('whiteboard') && (
           <WhiteboardView
-            onClose={() => setActiveTab('chat')}
+            onClose={() => setActiveTab(availableTabs[0] ?? 'chat')}
             sidebarVisible={whiteboardSidebarVisible}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
-        {activeTab === 'notes' && <NotesView onOpenSettings={() => setSettingsOpen(true)} />}
+        {activeTab === 'notes' && moduleEnabled('notes') && (
+          <NotesView onOpenSettings={() => setSettingsOpen(true)} />
+        )}
+        {availableTabs.length === 0 && <div style={{ height: '100%' }} data-name="advanced-panel.empty" />}
       </div>
       <AdvancedPanelSettingsPanel
         open={settingsOpen}

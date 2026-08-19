@@ -1,6 +1,6 @@
 // electron/store/voice-store.ts — 语音输入配置持久化存储 + IPC 注册
 //
-// 使用 electron-store 将语音配置持久化到磁盘（voice-config.json）。
+// 持久化到 SQLite settings.db（voice_config 表，createSqliteJsonStore）。
 // 字段：
 //   - enterToSend: boolean  后台语音快速输入后是否自动回车发送（默认 false）
 //   - sttMode: 识别引擎模式 ai/local（默认 ai）
@@ -8,25 +8,32 @@
 //   - localExePath/localArgs: 自定义本地识别软件
 //
 // 主窗口与自定义对话窗口共用同一份配置（全局设置）。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type AudioDeviceInfo } from '../shared/types.js'
-import { createJsonStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 
 // 持久化存储实例（写入 voice-config.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径
 export interface VoiceConfig {
   /**
-   * 语音识别完成后的上屏方式（已移除候选窗，全部自动上屏以减少操作步骤）：
+   * 语音识别完成后的上屏方式：
    * - 'auto'（默认）：识别完成后自动注入/粘贴上屏（前台注入 webview，后台 Ctrl+V 粘贴）
-   * - 'manual'：同 'auto'，保留枚举仅为兼容旧配置（不再弹候选窗）
-   * - 'clipboard'：仅写入剪贴板 + 系统通知，不模拟按键（用户手动粘贴，适用于不想自动上屏的场景）
-   *
-   * 兼容旧配置：若老用户配置中无此字段但有 enterToSend 字段，
-   * getVoiceConfig() 会按 enterToSend 自动迁移（true→auto, false→manual，二者行为现已一致）。
+   * - 'manual'：同 'auto'，保留枚举仅为兼容旧配置
+   * - 'clipboard'：仅写入剪贴板，不模拟按键（用户手动粘贴）
    */
   confirmMode: 'auto' | 'manual' | 'clipboard'
+  /**
+   * 后台语音上屏模式（仅影响应用外的第三方应用）：
+   * - 'layered'（推荐）：分层降级 UI Automation → SendInput → 剪贴板
+   * - 'clipboard'：剪贴板 + Ctrl+V 粘贴（会临时覆盖剪贴板，但兼容性好）
+   * - 'type'：逐字符键入（不修改剪贴板，更可靠，但对某些应用可能有兼容性问题）
+   */
+  inputMethod: 'layered' | 'clipboard' | 'type'
   /** 前台注入后是否自动回车发送（后台粘贴场景不受此字段影响，粘贴即结束） */
   enterToSend: boolean
   /** 识别引擎模式 */
@@ -68,27 +75,23 @@ export interface VoiceConfig {
 }
 
 const DEFAULT_VOICE_CONFIG: VoiceConfig = {
-  // 默认：自动上屏（前台注入 + 后台粘贴），无需用户二次确认
   confirmMode: 'auto',
-  // 默认：前台注入后不自动回车发送（用户可在设置中开启）
+  inputMethod: 'layered',
   enterToSend: false,
-  // 默认使用自定义 AI 接入（需用户自行配置服务商）
   sttMode: 'ai',
   aiProvider: '',
-  // 默认中文（绝大多数使用场景是中文输入）
   language: 'zh',
   localExePath: '',
   localArgs: '',
-  // 默认空 = 系统默认麦克风；用户可在设置中切换
   inputDeviceId: '',
   inputDeviceList: [],
-  // v0.5.2 regress-2：TTS 默认关闭，需用户在设置中显式开启
   ttsMode: 'disable',
   ttsProvider: '',
 }
 
-const store = createJsonStore<{ config: VoiceConfig; version: number }>({
-  name: 'voice-config',
+const store = createSqliteJsonStore<{ config: VoiceConfig; version: number }>({
+  tableName: 'voice_config',
+  legacyName: 'voice-config',
   defaults: {
     config: DEFAULT_VOICE_CONFIG,
     version: 2,
@@ -123,10 +126,20 @@ export function updateVoiceConfig(patch: Partial<VoiceConfig>): VoiceConfig {
   return next
 }
 
-/** 注册语音配置 IPC 处理器 */
-export function registerVoiceConfigIPC(): void {
-  ipcMain.handle(IPC_CHANNELS.VOICE_GET_CONFIG, () => getVoiceConfig())
-  ipcMain.handle(IPC_CHANNELS.VOICE_SET_CONFIG, (_e, patch: Partial<VoiceConfig>) =>
+/**
+ * 注册语音配置 IPC 处理器。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerVoiceConfigIPC(scope?: EffectScope): void {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(IPC_CHANNELS.VOICE_GET_CONFIG, () => getVoiceConfig())
+  handle(IPC_CHANNELS.VOICE_SET_CONFIG, (_e: unknown, patch: Partial<VoiceConfig>) =>
     updateVoiceConfig(patch),
   )
 }

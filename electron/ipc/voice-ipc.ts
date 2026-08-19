@@ -10,6 +10,8 @@
 // 紧密耦合，保留在 main.ts 中；其热键注册由 hotkey-ipc.ts 通过 deps 注入调用。
 //
 // 在 app.whenReady 后由 main.ts 调用 registerVoiceIpc(deps) 完成注册。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
@@ -17,6 +19,7 @@ import { updateVoiceConfig } from '../store/voice-store.js'
 import { aiProviderStore, deriveAudioEndpoint } from '../store/ai-provider-store.js'
 import type { SttEngine } from '../stt/engine.js'
 import type { AudioDeviceInfo } from '../shared/api.types.js'
+import type { EffectScope } from '../modules/effect-scope.js'
 
 /**
  * 校验 enumerateDevices 返回的设备对象，过滤掉非法项
@@ -40,14 +43,24 @@ export interface VoiceIpcDeps {
   stopBackgroundVoice: () => Promise<void>
 }
 
-/** 注册语音识别相关 IPC handler */
-export function registerVoiceIpc(deps: VoiceIpcDeps): void {
+/**
+ * 注册语音识别相关 IPC handler。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerVoiceIpc(deps: VoiceIpcDeps, scope?: EffectScope): void {
   const { sttEngine, startBackgroundVoice, stopBackgroundVoice } = deps
 
-  ipcMain.handle(IPC_CHANNELS.STT_START, async () => {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(IPC_CHANNELS.STT_START, async () => {
     await sttEngine.start()
   })
-  ipcMain.handle(IPC_CHANNELS.STT_STOP, async () => {
+  handle(IPC_CHANNELS.STT_STOP, async () => {
     return await sttEngine.stop()
   })
 
@@ -55,9 +68,9 @@ export function registerVoiceIpc(deps: VoiceIpcDeps): void {
    * 测试当前 AI 接入配置连通性（用于设置页"测试连接"按钮）。
    * 发送 0.2s 静音 WAV，验证能拿到非空识别文本。
    */
-  ipcMain.handle(
+  handle(
     IPC_CHANNELS.VOICE_TEST_AI,
-    async (_e, input: { providerId: string }) => {
+    async (_e: unknown, input: { providerId: string }) => {
       try {
         return await sttEngine.testAiProvider(input.providerId)
       } catch (e) {
@@ -66,63 +79,11 @@ export function registerVoiceIpc(deps: VoiceIpcDeps): void {
     },
   )
 
-  /**
-   * v0.5.2 regress-2：测试 TTS 配置连通性。
-   * 向 OpenAI 兼容 /audio/speech 端点发送短文本合成请求，
-   * 成功则返回 base64 编码的 audio/mpeg dataURL，渲染层可播放预览。
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.VOICE_TEST_TTS,
-    async (_e, input: { providerId: string }) => {
-      try {
-        const provider = aiProviderStore.get(input.providerId)
-        if (!provider) {
-          return { ok: false, message: '供应商不存在' }
-        }
-        if (!provider.apiEndpoint || !provider.apiKey || !provider.ttsModel) {
-          return { ok: false, message: '供应商未配置 TTS 模型或端点/API Key' }
-        }
-        const endpoint = deriveAudioEndpoint(provider.apiEndpoint, 'speech')
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${provider.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: provider.ttsModel,
-            input: '测试合成',
-          }),
-        })
-        if (!res.ok) {
-          const text = await res.text().catch(() => '')
-          return {
-            ok: false,
-            message: `HTTP ${res.status}: ${text.slice(0, 200)}`,
-          }
-        }
-        const buf = await res.arrayBuffer()
-        if (buf.byteLength === 0) {
-          return { ok: false, message: '端点返回空响应，可能不支持 TTS 格式' }
-        }
-        const contentType = res.headers.get('Content-Type') || 'audio/mpeg'
-        const mime = contentType.split(';')[0].trim()
-        const audioDataUrl = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`
-        return { ok: true, message: '合成成功', audioDataUrl }
-      } catch (e) {
-        return {
-          ok: false,
-          message: e instanceof Error ? e.message : String(e),
-        }
-      }
-    },
-  )
-
   // 底栏语音按钮触发：走后台语音路径，显示独立预览窗
-  ipcMain.handle(IPC_CHANNELS.VOICE_TRIGGER_START, async () => {
+  handle(IPC_CHANNELS.VOICE_TRIGGER_START, async () => {
     await startBackgroundVoice()
   })
-  ipcMain.handle(IPC_CHANNELS.VOICE_TRIGGER_STOP, async () => {
+  handle(IPC_CHANNELS.VOICE_TRIGGER_STOP, async () => {
     await stopBackgroundVoice()
   })
 
@@ -130,7 +91,7 @@ export function registerVoiceIpc(deps: VoiceIpcDeps): void {
    * 渲染层（RecordIndicator 客户端）请求强制停止当前录音。
    * 用于主进程 keyup 丢失 / IPC 卡住 等异常情况下的兜底恢复。
    */
-  ipcMain.handle(IPC_CHANNELS.VOICE_FORCE_STOP, async (_e, reason: string) => {
+  handle(IPC_CHANNELS.VOICE_FORCE_STOP, async (_e: unknown, reason: string) => {
     console.warn(`[voice-ipc] 收到 forceStop 请求，原因: ${reason || '(未指定)'}`)
     try {
       await stopBackgroundVoice()
@@ -145,7 +106,7 @@ export function registerVoiceIpc(deps: VoiceIpcDeps): void {
    * 渲染层上报麦克风设备列表（enumerateDevices 结果）。
    * 主进程保存到 voice-config.inputDeviceList，供设置页 UI 展示。
    */
-  ipcMain.handle(IPC_CHANNELS.VOICE_INPUT_DEVICES_UPDATE, async (_e, list: unknown[]) => {
+  handle(IPC_CHANNELS.VOICE_INPUT_DEVICES_UPDATE, async (_e: unknown, list: unknown[]) => {
     try {
       const safeList = Array.isArray(list) ? list.filter(isValidAudioDevice) : []
       await updateVoiceConfig({ inputDeviceList: safeList })
@@ -160,7 +121,66 @@ export function registerVoiceIpc(deps: VoiceIpcDeps): void {
   /**
    * 主进程请求渲染层重新枚举设备。
    */
-  ipcMain.handle(IPC_CHANNELS.VOICE_INPUT_DEVICES_REFRESH, async () => {
+  handle(IPC_CHANNELS.VOICE_INPUT_DEVICES_REFRESH, async () => {
     return { ok: true }
+  })
+}
+
+/**
+ * 注册 TTS 测试连通性 IPC（TTS 模块专属，独立于语音输入模块）。
+ * v0.5.2 regress-2：向 OpenAI 兼容 /audio/speech 端点发送短文本合成请求，
+ * 成功则返回 base64 编码的 audio/mpeg dataURL，渲染层可播放预览。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerTtsTestIpc(scope?: EffectScope): void {
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(IPC_CHANNELS.VOICE_TEST_TTS, async (_e: unknown, input: { providerId: string }) => {
+    try {
+      const provider = aiProviderStore.get(input.providerId)
+      if (!provider) {
+        return { ok: false, message: '供应商不存在' }
+      }
+      if (!provider.apiEndpoint || !provider.apiKey || !provider.ttsModel) {
+        return { ok: false, message: '供应商未配置 TTS 模型或端点/API Key' }
+      }
+      const endpoint = deriveAudioEndpoint(provider.apiEndpoint, 'speech')
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${provider.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: provider.ttsModel,
+          input: '测试合成',
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        return {
+          ok: false,
+          message: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        }
+      }
+      const buf = await res.arrayBuffer()
+      if (buf.byteLength === 0) {
+        return { ok: false, message: '端点返回空响应，可能不支持 TTS 格式' }
+      }
+      const contentType = res.headers.get('Content-Type') || 'audio/mpeg'
+      const mime = contentType.split(';')[0].trim()
+      const audioDataUrl = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`
+      return { ok: true, message: '合成成功', audioDataUrl }
+    } catch (e) {
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : String(e),
+      }
+    }
   })
 }

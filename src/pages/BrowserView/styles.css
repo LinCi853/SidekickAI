@@ -1179,3 +1179,545 @@
   color: #fff;
 }
 
+
+/* ===== 查看网页源代码标签页 ===== */
+.view-source-tab {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+.view-source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  flex-shrink: 0;
+}
+.view-source-url {
+  font-size: 13px;
+  color: var(--text-secondary, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.view-source-copy,
+.print-preview-btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: var(--surface, #26262b);
+  color: var(--text, #eee);
+  cursor: pointer;
+}
+.view-source-copy:hover,
+.print-preview-btn:hover {
+  background: var(--surface-hover, #303036);
+}
+.view-source-copy:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.view-source-loading,
+.view-source-error,
+.print-preview-error {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--text-secondary, #999);
+}
+.view-source-error {
+  color: #e57373;
+}
+.view-source-error-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #999);
+}
+.view-source-code {
+  flex: 1;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #d4d4d4;
+  background: #1e1e1e;
+  user-select: text;
+}
+
+/* ===== 打印预览标签页 ===== */
+.print-preview-tab {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+.print-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  flex-shrink: 0;
+}
+.print-preview-title {
+  font-size: 13px;
+  color: var(--text-secondary, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.print-preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.print-preview-frame {
+  background: #2a2a30;
+}
+
+/* ===== 沉浸式全屏（F11） ===== */
+/* 全屏时隐藏三层栏与状态栏，webview 占满窗口 */
+.browser-view[data-fullscreen="true"] .browser-bar-stack,
+.browser-view[data-fullscreen="true"] .browser-status-bar,
+.browser-view[data-fullscreen="true"] .browser-bar-divider {
+  display: none !important;
+}
+.browser-view[data-fullscreen="true"] .browser-webview-container {
+  inset: 0 !important;
+}
+/* 悬浮退出条：鼠标移到窗口顶部显示，自动隐藏 */
+.browser-fullscreen-bar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 16px;
+  border-radius: 0 0 10px 10px;
+  background: rgba(24, 24, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  color: #eee;
+  font-size: 12px;
+  z-index: 9999;
+  transition: transform 0.18s ease;
+  pointer-events: auto;
+}
+.browser-fullscreen-bar.visible {
+  transform: translateX(-50%) translateY(0);
+}
+.browser-fullscreen-bar-title {
+  color: #999;
+  white-space: nowrap;
+}
+.browser-fullscreen-bar button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #eee;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.browser-fullscreen-bar button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ===== 手柄指示器与面板 ===== */
+.gamepad-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.gamepad-indicator-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+}
+.gamepad-indicator-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+.gamepad-indicator-btn.active {
+  color: #4ade80;
+}
+.gamepad-indicator-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #4ade80;
+  color: #0b0b0d;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+.gamepad-panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.gamepad-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #eee);
+}
+.gamepad-panel-empty {
+  font-size: 12px;
+  color: var(--text-secondary, #999);
+  line-height: 1.7;
+}
+.gamepad-panel-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.gamepad-panel-pad-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gamepad-panel-pad-index {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4ade80;
+}
+.gamepad-panel-pad-id {
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gamepad-panel-buttons {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+.gamepad-panel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 9px;
+}
+.gamepad-panel-btn.pressed {
+  background: #4ade80;
+  color: #0b0b0d;
+  font-weight: 700;
+}
+.gamepad-panel-axes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gamepad-panel-axis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gamepad-panel-axis-label {
+  width: 52px;
+  font-size: 10px;
+  color: var(--text-secondary, #999);
+}
+.gamepad-panel-axis-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.gamepad-panel-axis-fill {
+  height: 100%;
+  background: #4ade80;
+  border-radius: 3px;
+}
+.gamepad-panel-axis-center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.35);
+}
+.gamepad-panel-axis-value {
+  width: 36px;
+  font-size: 10px;
+  color: var(--text-secondary, #999);
+  text-align: right;
+}
+.gamepad-panel-dpad {
+  display: flex;
+  gap: 4px;
+}
+.gamepad-panel-dpad span {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+}
+.gamepad-panel-dpad span.pressed {
+  background: #4ade80;
+  color: #0b0b0d;
+}
+
+/* ===== 云电脑模式 ===== */
+/* 双保险：云电脑模式下隐藏浏览器 UI（主进程已强制全屏，此处兜底） */
+.browser-view[data-cloudpc="true"] .browser-bar-stack,
+.browser-view[data-cloudpc="true"] .browser-status-bar {
+  display: none !important;
+}
+.browser-view[data-cloudpc="true"] .browser-webview-container {
+  inset: 0 !important;
+}
+.browser-cloud-pc-notice {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(30, 64, 38, 0.95);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  color: #d6ffdf;
+  font-size: 13px;
+  z-index: 10000;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: cloud-pc-notice-in 0.25s ease;
+}
+@keyframes cloud-pc-notice-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ===== 云电脑缩放控件（悬浮条内） ===== */
+.browser-cloud-pc-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.browser-cloud-pc-zoom .zoom-btn {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.browser-cloud-pc-zoom .zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.browser-cloud-pc-zoom .zoom-btn.active {
+  background: #4ade80;
+  color: #0b0b0d;
+  font-weight: 700;
+}
+.browser-cloud-pc-zoom .zoom-info {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #999;
+  white-space: nowrap;
+}
+
+/* ===== 云电脑网站检测提醒 ===== */
+.browser-cloud-pc-suggest {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(28, 32, 38, 0.97);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: #eee;
+  font-size: 13px;
+  z-index: 10000;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  max-width: min(680px, calc(100vw - 48px));
+}
+.browser-cloud-pc-suggest-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggest-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ddd;
+  font-size: 12px;
+  cursor: pointer;
+}
+.suggest-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.suggest-btn.primary {
+  background: #4ade80;
+  border-color: #4ade80;
+  color: #0b0b0d;
+  font-weight: 700;
+}
+.suggest-btn.primary:hover {
+  background: #5eea92;
+}
+
+/* ===== 设置页云电脑模式开关 ===== */
+.browser-settings-cloud-pc-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.browser-settings-cloud-pc-btn:hover {
+  background: rgba(74, 222, 128, 0.22);
+}
+
+/* ===== 页面缩放浮窗（右上角） ===== */
+.browser-zoom-indicator {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(24, 24, 28, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #eee;
+  z-index: 10000;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  animation: zoom-indicator-in 0.18s ease;
+}
+@keyframes zoom-indicator-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.browser-zoom-percent {
+  min-width: 44px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+.browser-zoom-btn {
+  min-width: 30px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ddd;
+  font-size: 12px;
+  cursor: pointer;
+}
+.browser-zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ===== 源码查看器升级（URL 切换 / 资源 chips / 关闭） ===== */
+.view-source-url-input {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.14));
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text, #eee);
+  font-size: 12px;
+  outline: none;
+}
+.view-source-url-input:focus {
+  border-color: #4ade80;
+}
+.view-source-resources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
+  max-height: 132px;
+  overflow-y: auto;
+}
+.view-source-resources-empty {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  font-style: italic;
+}
+.view-source-resources-label {
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+}
+.view-source-resource-chip {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #9ecbff;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.view-source-resource-chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.view-source-resources-more {
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+}

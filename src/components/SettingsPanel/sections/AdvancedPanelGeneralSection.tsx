@@ -5,12 +5,20 @@
    ===================================================================== */
 
 import { updateAppSettings } from '../../../lib/electron-api';
+import { useModuleStore } from '../../../store/useModuleStore';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
 import { SectionTitle, FormRow } from '../../ui';
 
 type AdvancedPanelTab = 'chat' | 'whiteboard' | 'notes';
+
+/** tab 值 → 模块 id 映射（'chat' 对应 custom-chat 模块，过滤时必须用模块 id） */
+const TAB_TO_MODULE: Record<AdvancedPanelTab, string> = {
+  chat: 'custom-chat',
+  whiteboard: 'whiteboard',
+  notes: 'notes',
+};
 
 const TAB_OPTIONS: Array<{ value: AdvancedPanelTab; label: string }> = [
   { value: 'chat', label: '自定义对话' },
@@ -20,6 +28,17 @@ const TAB_OPTIONS: Array<{ value: AdvancedPanelTab; label: string }> = [
 
 export default function AdvancedPanelGeneralSection() {
   const { draft, setDraft } = useSettingsDraft();
+  // 模块联动：「默认打开」始终显示完整三个选项，已关闭模块的选项置灰不可选；
+  // 可选项仅剩一项时隐藏整行；模块状态未加载完成时回退显示全部（防闪失）。
+  // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
+  const enabledModuleIds = useModuleStore((s) =>
+    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  );
+  const modulesInitialized = useModuleStore((s) => s.initialized);
+  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
+  const availableTabs = modulesInitialized
+    ? TAB_OPTIONS.filter((o) => enabledModuleIds.includes(TAB_TO_MODULE[o.value]))
+    : TAB_OPTIONS;
 
   const defaultTab: AdvancedPanelTab = draft?.defaultAdvancedPanelTab ?? 'chat';
   const whiteboardSidebarVisible = draft?.whiteboardSidebarVisible ?? false;
@@ -73,15 +92,20 @@ export default function AdvancedPanelGeneralSection() {
   return (
     <section data-name="settings.advanced-panel-general.section">
       <SectionTitle>通用</SectionTitle>
-      <FormRow label="默认打开">
-        <SegmentedControl
-          value={defaultTab}
-          options={TAB_OPTIONS}
-          onChange={(v) => void handleChangeTab(v)}
-          name="默认打开"
-          className="seg-control-row"
-        />
-      </FormRow>
+      {/* 默认打开：只显示已启用模块的选项（关闭的选项直接隐藏，不置灰）；
+          可选项仅剩一项或没有时整行隐藏 */}
+      {availableTabs.length > 1 && (
+        <FormRow label="默认打开">
+          <SegmentedControl
+            value={availableTabs.some((o) => o.value === defaultTab) ? defaultTab : availableTabs[0].value}
+            options={availableTabs}
+            onChange={(v) => void handleChangeTab(v)}
+            name="默认打开"
+            className="seg-control-row"
+          />
+        </FormRow>
+      )}
+      {moduleEnabled('whiteboard') && (
       <FormRow
         label="白板侧边栏"
       >
@@ -91,6 +115,8 @@ export default function AdvancedPanelGeneralSection() {
           aria-label="白板侧边栏"
         />
       </FormRow>
+      )}
+      {moduleEnabled('notes') && (
       <FormRow
         label="笔记恢复光标位置"
         hint="关闭后每次打开笔记都定位到末尾"
@@ -101,6 +127,7 @@ export default function AdvancedPanelGeneralSection() {
           aria-label="笔记恢复光标位置"
         />
       </FormRow>
+      )}
       <FormRow
         label="标签切换快捷键"
         hint="Ctrl/Alt+1/2/3、Ctrl+Tab 切换对话/白板/笔记"

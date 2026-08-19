@@ -1,3 +1,40 @@
+## v0.1.0 — 2026-08-14
+
+> 本版本重点：冻结状态下可见 HTML 文本的精确选择与复制。
+
+### 关键修复
+
+- **恢复 DeepSeek 等 SPA 的 glyph 文本层提取**
+  - `GLYPH_EXTRACT_SCRIPT` 改用 `String.raw`，避免正则转义在脚本生成时失效。
+  - 不再把 `user-select`、`pointer-events`、视觉 mask 或事件捕获覆盖层误判为文本不可见。
+  - 根 `html/body` 的 `overflow:hidden` 使用 visual viewport 裁剪；避免零高 body 将固定定位 SPA 正文全部过滤。
+  - 保留 transform 元数据，但基于 `Range.getClientRects()` 的坐标已经包含 CSS transform，正文不再因此被排除。
+
+- **降低 DOMSnapshot 降级路径的错位风险**
+  - 同时支持四值 rectangle 与八值 quad 边界格式。
+  - 复用 glyph 提取到的视口、缩放、滚动与嵌套滚动元数据。
+  - 按视觉行聚类 text boxes，避免每个 text box 被错误当成独立行。
+  - 降级路径保持可复制，但精度为 text-box 级；字符级精确选择由 glyph 路径提供。
+
+- **统一文本层可用性处理**
+  - glyph 与 DOMSnapshot 文本层均可进入选择与复制路径。
+  - `getTextLayerQuality()` 为 UI 提供 high / medium / none 状态。
+  - 当没有任何可用文本层时才显示“当前页面无文本内容”。
+
+### 测试验证
+
+- **聚焦单测**：26/26 通过。
+- **类型检查**：通过。
+- **Electron POC**：28 项断言通过，覆盖 worker 暂停、嵌套滚动、可见性过滤、零高 body 与生产 glyph 脚本。
+- **真实 DeepSeek IPC**：冻结返回 `quality: glyph`、39 个文本块、365 个 grapheme 边界。
+- **代码质量**：`git diff --check` 通过。
+
+### 文档更新
+
+- 更新 `docs/test/v0.1.0-test-checklist.json`，区分 glyph 字符级选择与 DOMSnapshot text-box 级降级选择，并新增 DeepSeek SPA 回归项。
+
+---
+
 # 更新日志
 
 ---

@@ -1,0 +1,106 @@
+/* ModuleManagementSection —— 模块管理设置区 */
+.module-column-title {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.module-column-hint {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.module-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+}
+.module-card.is-missing {
+  opacity: 0.75;
+}
+.module-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.module-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+.module-card-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+.module-card-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+}
+.module-test-badge {
+  padding: 1px var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--warning-badge-fg, #5c4400);
+  background: var(--warning-badge-bg, #f8e3a0);
+  border-radius: var(--radius-sm);
+}
+.module-missing-badge {
+  padding: 1px var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-sm);
+}
+.module-card-desc {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.module-card-meta {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.module-card-missing-hint {
+  color: var(--destructive);
+}
+.module-clear-btn {
+  padding: var(--space-0-5) var(--space-2);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--destructive);
+  background: transparent;
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.module-clear-btn:hover:not(:disabled) {
+  background: var(--danger-bg-soft, rgba(239, 68, 68, 0.1));
+}
+.module-clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.module-market-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.module-feedback {
+  margin: var(--space-2) 0;
+  font-size: var(--text-xs);
+  color: var(--foreground);
+}
+.module-feedback.is-error {
+  color: var(--destructive);
+}

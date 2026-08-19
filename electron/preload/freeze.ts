@@ -10,6 +10,7 @@ import type {
   FreezeActionResult,
   FreezeScrollResult,
   FreezeState,
+  FreezeStatusResult,
 } from '../shared/api/freeze.api.js'
 
 export const freezeApi = {
@@ -33,7 +34,7 @@ export const freezeApi = {
     detach: (tabId: string) => ipcRenderer.invoke(IPC_CHANNELS.FREEZE_DETACH, tabId),
     /** 查询冻结状态 */
     status: (tabId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.FREEZE_STATUS, tabId) as Promise<FreezeState>,
+      ipcRenderer.invoke(IPC_CHANNELS.FREEZE_STATUS, tabId) as Promise<FreezeStatusResult>,
     /** 主→渲染：冻结状态变化推送 */
     onStateChanged: (
       callback: (payload: { tabId: string; state: FreezeState; revision: number }) => void,

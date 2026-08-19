@@ -16,9 +16,9 @@ import {
   onDownloadUpdated,
 } from '../../lib/electron-api';
 import { useBrowserTabStore } from '../../store/useBrowserTabStore';
-import { IconButton } from '../../components/ui';
+import { IconButton, PinToggleButton } from '../../components/ui';
 import WindowControls from '../../components/ui/WindowControls';
-import { LockIcon, AlertIcon, SearchIcon } from '@/components/icons';
+import { LockIcon, AlertIcon, SearchIcon, GearIcon } from '@/components/icons';
 
 /* =====================================================================
    工具函数
@@ -169,7 +169,7 @@ export default function BrowserNavBar({
   const handleTabClick = useCallback((tabId: string) => switchTab(tabId), [switchTab]);
   const handleTabClose = useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    closeTab(tabId);
+    void closeTab(tabId);
   }, [closeTab]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
@@ -192,11 +192,11 @@ export default function BrowserNavBar({
     const store = useBrowserTabStore.getState();
     switch (action) {
       case 'closeOthers':
-        store.tabs.filter((t) => t.id !== tabId).forEach((t) => store.closeTab(t.id));
+        store.tabs.filter((t) => t.id !== tabId).forEach((t) => void store.closeTab(t.id));
         break;
       case 'closeRight': {
         const idx = store.tabs.findIndex((t) => t.id === tabId);
-        store.tabs.slice(idx + 1).forEach((t) => store.closeTab(t.id));
+        store.tabs.slice(idx + 1).forEach((t) => void store.closeTab(t.id));
         break;
       }
       case 'reload':
@@ -283,21 +283,12 @@ export default function BrowserNavBar({
 
         {/* 右侧：功能按钮 + 窗口控制 */}
         <div className="browser-nav-top-actions">
-          <IconButton
-            type="button"
-            variant={alwaysOnTop ? 'active' : 'default'}
+          <PinToggleButton
+            isPinned={alwaysOnTop}
+            onToggle={() => void handlePin()}
             className="titlebar-icon-btn"
-            aria-label="置顶"
-            onClick={() => void handlePin()}
-            title={alwaysOnTop ? '取消置顶' : '置顶'}
             data-name="browser.nav-bar.pin"
-          >
-            <svg className="icon-svg" viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="17" x2="12" y2="3" />
-              <path d="M6.5 8.5L12 3l5.5 5.5" />
-              <path d="M5 21h14" />
-            </svg>
-          </IconButton>
+          />
           <IconButton
             type="button"
             className="titlebar-icon-btn"
@@ -306,10 +297,7 @@ export default function BrowserNavBar({
             title="设置"
             data-name="browser.nav-bar.settings"
           >
-            <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <GearIcon className="icon-svg" />
           </IconButton>
           {/* 下载指示器 */}
           <div style={{ position: 'relative' }}>
@@ -480,7 +468,7 @@ export default function BrowserNavBar({
             <div className="browser-tab-context-divider" />
             <button type="button" onClick={() => handleContextAction('closeOthers', contextMenu.tabId)}>关闭其他标签</button>
             <button type="button" onClick={() => handleContextAction('closeRight', contextMenu.tabId)}>关闭右侧标签</button>
-            <button type="button" className="danger" onClick={() => { closeTab(contextMenu.tabId); setContextMenu(null); }}>关闭标签</button>
+            <button type="button" className="danger" onClick={() => { void closeTab(contextMenu.tabId); setContextMenu(null); }}>关闭标签</button>
           </div>
         </>
       )}

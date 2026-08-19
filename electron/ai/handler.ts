@@ -11,8 +11,11 @@
 //
 // 流式推送通过 senderWebContents.send 推到发起方窗口的渲染进程，
 // 避免跨窗口串流。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain, dialog, BrowserWindow, type WebContents } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { writeFile, readFile } from 'fs/promises'
 import { aiProviderStore } from '../store/ai-provider-store.js'
 import { getChatStore } from '../store/chat-store.js'
@@ -40,18 +43,26 @@ type SaveMessageInput = Omit<ChatMessage, 'id' | 'createdAt'> &
 const activeStreams = new Map<string, AbortController>()
 
 /**
- * 注册所有 AI Provider / Chat 相关 IPC handler
+ * 注册所有 AI Provider / Chat 相关 IPC handler。
  *
  * 必须在 app.whenReady() 且 chatStore 初始化后调用。
  * AI Provider CRUD（list/create/update/delete）在 ai-provider-store.ts 中注册。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
  */
-export function registerAIChatIPC(): void {
+export function registerAIChatIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
 
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
   // ===== AI Provider 测试连通性 =====
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_TEST,
-    async (_e, input: CustomAIProviderInput) => {
+    async (_e: unknown, input: CustomAIProviderInput) => {
       // 构造临时 Provider 对象（不需要 id/时间戳）
       const provider = {
         id: 'test',
@@ -64,65 +75,17 @@ export function registerAIChatIPC(): void {
   )
 
   // 需求 9：列出 Provider 可用模型（自动搜索）
-  ipcMain.handle(
+  handle(
     ipc.AI_PROVIDER_LIST_MODELS,
-    async (_e, input: CustomAIProviderInput) => {
+    async (_e: unknown, input: CustomAIProviderInput) => {
       return listModels(input)
     },
   )
 
-  // ===== 会话 CRUD =====
-  ipcMain.handle(ipc.CHAT_LIST_CONVERSATIONS, (_e, sourceId?: string) => {
-    return getChatStore().listConversations(sourceId)
-  })
-
-  ipcMain.handle(
-    ipc.CHAT_CREATE_CONVERSATION,
-    (_e, sourceId: string, sourceType: ConversationSourceType, title: string, url?: string) => {
-      return getChatStore().createConversation(sourceId, sourceType, title, url)
-    },
-  )
-
-  ipcMain.handle(ipc.CHAT_GET_LAST_CONV_URL, (_e, sourceId: string) => {
-    return getChatStore().getLastConversationUrl(sourceId)
-  })
-
-  ipcMain.handle(ipc.CHAT_DELETE_CONVERSATION, (_e, id: string) => {
-    getChatStore().deleteConversation(id)
-  })
-
-  // ===== 消息 CRUD =====
-  ipcMain.handle(ipc.CHAT_LIST_MESSAGES, (_e, conversationId: string) => {
-    return getChatStore().listMessages(conversationId)
-  })
-
-  ipcMain.handle(ipc.CHAT_SAVE_MESSAGE, (_e, msg: SaveMessageInput) => {
-    return getChatStore().saveMessage(msg)
-  })
-
-  // 需求 5：智能合并保存（Jaccard 相似度 ≥ 0.85 时更新而非新增）
-  ipcMain.handle(ipc.CHAT_SAVE_MESSAGE_WITH_MERGE, (_e, msg: SaveMessageInput) => {
-    return getChatStore().saveMessageWithMerge(msg)
-  })
-
-  // webview 抓取入库后，渲染层通知主进程广播给所有窗口
-  // HistoryView 订阅 CHAT_CONVERSATION_PERSISTED 以实时刷新侧边栏
-  ipcMain.handle(ipc.CHAT_NOTIFY_PERSISTED, (_e, sourceId: string) => {
-    for (const w of BrowserWindow.getAllWindows()) {
-      // 避免回发给发起方窗口（WebviewTab 自己不需要刷新）
-      if (w.webContents === _e.sender) continue
-      w.webContents.send(ipc.CHAT_CONVERSATION_PERSISTED, { sourceId })
-    }
-  })
-
-  ipcMain.handle(ipc.CHAT_SEARCH, (_e, query: string) => {
-    return getChatStore().search(query)
-  })
-
-  // ===== 发送消息（核心：流式 API + SQLite 入库）=====
-  ipcMain.handle(
+  // ===== 发送消息（核心：流式 API + SQLite 入库；会话 CRUD 在 registerBaseChatIpc）=====
+  handle(
     ipc.CHAT_SEND,
-    async (e, payload: ChatSendPayload) => {
+    async (e: any, payload: ChatSendPayload) => {
       const sender = e.sender
       const chatStore = getChatStore()
       const provider = aiProviderStore.get(payload.providerId)
@@ -185,97 +148,13 @@ export function registerAIChatIPC(): void {
   )
 
   // ===== 取消流式请求 =====
-  ipcMain.handle(ipc.CHAT_CANCEL, (_e, conversationId: string) => {
+  handle(ipc.CHAT_CANCEL, (_e: unknown, conversationId: string) => {
     const controller = activeStreams.get(conversationId)
     if (controller) {
       controller.abort()
       activeStreams.delete(conversationId)
     }
   })
-
-  // ===== token 用量统计 =====
-  ipcMain.handle(ipc.CHAT_GET_USAGE_STATS, (_e, sourceId?: string) => {
-    return getChatStore().getUsageStats(sourceId)
-  })
-
-  // ===== 对话导出（MD/JSON）=====
-  ipcMain.handle(
-    ipc.CHAT_EXPORT_CONVERSATION,
-    async (e, conversationId: string, format: 'md' | 'json') => {
-      const content = getChatStore().exportConversation(conversationId, format)
-      const win = BrowserWindow.fromWebContents(e.sender) || undefined
-      const defaultName = `conversation-${conversationId.slice(0, 8)}.${format}`
-      const ext = format === 'md' ? 'Markdown' : 'JSON'
-      const { canceled, filePath } = await dialog.showSaveDialog(win!, {
-        title: `导出对话为 ${ext}`,
-        defaultPath: defaultName,
-        filters: [
-          { name: ext, extensions: [format] },
-          { name: '所有文件', extensions: ['*'] },
-        ],
-      })
-      if (canceled || !filePath) {
-        return { ok: false, canceled: true }
-      }
-      await writeFile(filePath, content, 'utf-8')
-      showNotification('导出成功', `已保存到 ${filePath}`)
-      return { ok: true, filePath }
-    },
-  )
-
-  // ===== 对话导入 =====
-  ipcMain.handle(
-    ipc.CHAT_IMPORT_CONVERSATION,
-    async (e, format: 'json' | 'deepseek' | 'md', sourceId: string) => {
-      const win = BrowserWindow.fromWebContents(e.sender) || undefined
-      const filters = [
-        { name: '所有支持的格式', extensions: ['json', 'md', 'markdown'] },
-        { name: 'JSON', extensions: ['json'] },
-        { name: 'Markdown', extensions: ['md', 'markdown'] },
-        { name: '所有文件', extensions: ['*'] },
-      ]
-      const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
-        title: '导入对话',
-        filters,
-        properties: ['openFile'],
-      })
-      if (canceled || !filePaths || filePaths.length === 0) {
-        return { ok: false, canceled: true }
-      }
-      const filePath = filePaths[0]
-      const content = await readFile(filePath, 'utf-8')
-      const conv = getChatStore().importConversation(format, content, sourceId)
-      showNotification('导入成功', `已导入对话：${conv.title}`)
-      return { ok: true, conversation: conv }
-    },
-  )
-
-  // ===== 清空所有对话 =====
-  ipcMain.handle(
-    ipc.CHAT_CLEAR_CONVERSATIONS,
-    (_e, sourceId?: string) => {
-      const count = getChatStore().clearAllConversations(sourceId)
-      return { ok: true, count }
-    },
-  )
-
-  // ===== 清空登录痕迹 =====
-  ipcMain.handle(
-    ipc.CHAT_CLEAR_LOGIN_TRACES,
-    (_e, profileId?: string) => {
-      const count = getChatStore().clearLoginTraces(profileId)
-      return { ok: true, count }
-    },
-  )
-
-  // ===== 清空窗口操作痕迹 =====
-  ipcMain.handle(
-    ipc.CHAT_CLEAR_WINDOW_TRACES,
-    (_e, windowId?: string) => {
-      const count = getChatStore().clearWindowTraces(windowId)
-      return { ok: true, count }
-    },
-  )
 
   // ===== 更新消息 =====
   ipcMain.handle(
@@ -295,109 +174,6 @@ export function registerAIChatIPC(): void {
     },
   )
 
-  // ===== 更新会话标题 =====
-  ipcMain.handle(
-    ipc.CHAT_UPDATE_CONVERSATION,
-    (_e, id: string, updates: { title?: string }) => {
-      getChatStore().touchConversation(id, updates.title)
-      return { ok: true }
-    },
-  )
-
-  // ===== 痕迹记录 =====
-  ipcMain.handle(
-    ipc.CHAT_LOG_WINDOW_TRACE,
-    (_e, windowId: string, action: WindowTraceAction, detail?: unknown) => {
-      getChatStore().logWindowTrace(windowId, action, detail)
-    },
-  )
-
-  ipcMain.handle(
-    ipc.CHAT_LOG_LOGIN_TRACE,
-    (_e, trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>) => {
-      getChatStore().logLoginTrace(trace)
-    },
-  )
-
-  ipcMain.handle(ipc.CHAT_LIST_WINDOW_TRACES, (_e, windowId?: string, limit?: number) => {
-    return getChatStore().listWindowTraces(windowId, limit)
-  })
-
-  ipcMain.handle(ipc.CHAT_LIST_LOGIN_TRACES, (_e, profileId?: string) => {
-    return getChatStore().listLoginTraces(profileId)
-  })
-
-  // ===== 使用统计与操作日志 =====
-  // 点击日志：受 usageTrackingEnabled 守卫，关闭时静默丢弃
-  ipcMain.handle(ipc.USAGE_TRACE_LOG_CLICK, (_e, elementName: string, windowType: string | null, detail?: unknown) => {
-    try {
-      if (!getAppSettings().usageTrackingEnabled) return { ok: false, skipped: true }
-      getChatStore().logClick(elementName, windowType, detail)
-      return { ok: true }
-    } catch (err) {
-      console.warn('[ai-handler] logClick 失败:', err)
-      return { ok: false, error: String(err) }
-    }
-  })
-
-  ipcMain.handle(ipc.USAGE_TRACE_GET_STATS, (_e, rangeDays?: number) => {
-    try {
-      return { ok: true, stats: getChatStore().getFrequencyStats(rangeDays) }
-    } catch (err) {
-      console.warn('[ai-handler] getFrequencyStats 失败:', err)
-      return { ok: false, error: String(err) }
-    }
-  })
-
-  ipcMain.handle(ipc.USAGE_TRACE_CLEAR, () => {
-    try {
-      const count = getChatStore().clearUsageTraces()
-      return { ok: true, count }
-    } catch (err) {
-      console.warn('[ai-handler] clearUsageTraces 失败:', err)
-      return { ok: false, error: String(err) }
-    }
-  })
-
-  ipcMain.handle(ipc.USAGE_TRACE_LIST_APP_STARTS, (_e, limit?: number) => {
-    try {
-      return { ok: true, list: getChatStore().listAppStarts(limit) }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
-  })
-
-  ipcMain.handle(ipc.USAGE_TRACE_LIST_CLICK_LOGS, (_e, limit?: number) => {
-    try {
-      return { ok: true, list: getChatStore().listClickLogs(limit) }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
-  })
-
-  // 7.1: 启动时清理无效会话（缺失 provider/source 的脏数据）
-  try {
-    const result = getChatStore().cleanupInvalidConversations()
-    if (result.deletedCount > 0) {
-      console.log(`[ai-handler] 启动清理：删除 ${result.deletedCount} 条无效会话`)
-    }
-  } catch (e) {
-    console.error('[ai-handler] 清理无效会话失败:', e)
-  }
-
-  // ===== 需求 2：注入历史（预览 + Jaccard 去重） =====
-  ipcMain.handle(ipc.INJECTION_LOG, (_e, record) => {
-    return injectionHistoryStore.log(record)
-  })
-  ipcMain.handle(ipc.INJECTION_LIST_RECENT, (_e, limit?: number) => {
-    return injectionHistoryStore.listRecent(limit)
-  })
-  ipcMain.handle(ipc.INJECTION_FIND_SIMILAR, (_e, text: string, limit?: number, threshold?: number) => {
-    return injectionHistoryStore.findSimilar(text, limit, threshold)
-  })
-  ipcMain.handle(ipc.INJECTION_CLEAR, () => {
-    return injectionHistoryStore.clear()
-  })
 }
 
 /**
@@ -504,6 +280,221 @@ async function runStream(
     console.error('[ai-handler] runStream 异常:', msg)
     sendEnd(false, msg)
   }
+}
+
+/**
+ * 注册对话/痕迹基础 IPC（基础功能：历史搜索 FTS5、登录/窗口痕迹、最近对话 URL、用量统计）。
+ * 与自定义对话模块解耦：自定义对话关闭后这些读路径与记录仍可用（依赖规则 3.3）。
+ */
+export function registerBaseChatIpc(): void {
+  const ipc = IPC_CHANNELS
+  ipcMain.handle(ipc.CHAT_LIST_CONVERSATIONS, (_e, sourceId?: string) => {
+    return getChatStore().listConversations(sourceId)
+  })
+  ipcMain.handle(ipc.CHAT_GET_LAST_CONV_URL, (_e, sourceId: string) => {
+    return getChatStore().getLastConversationUrl(sourceId)
+  })
+  ipcMain.handle(ipc.CHAT_LIST_MESSAGES, (_e, conversationId: string) => {
+    return getChatStore().listMessages(conversationId)
+  })
+  // webview 抓取入库后广播给所有窗口（HistoryView 实时刷新侧边栏）
+  ipcMain.handle(ipc.CHAT_NOTIFY_PERSISTED, (_e, sourceId: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w.webContents === _e.sender) continue
+      w.webContents.send(ipc.CHAT_CONVERSATION_PERSISTED, { sourceId })
+    }
+  })
+  ipcMain.handle(ipc.CHAT_SEARCH, (_e, query: string) => {
+    return getChatStore().search(query)
+  })
+  ipcMain.handle(ipc.CHAT_GET_USAGE_STATS, (_e, sourceId?: string) => {
+    return getChatStore().getUsageStats(sourceId)
+  })
+  ipcMain.handle(ipc.CHAT_CLEAR_LOGIN_TRACES, (_e, profileId?: string) => {
+    return { ok: true, count: getChatStore().clearLoginTraces(profileId) }
+  })
+  ipcMain.handle(ipc.CHAT_CLEAR_WINDOW_TRACES, (_e, windowId?: string) => {
+    return { ok: true, count: getChatStore().clearWindowTraces(windowId) }
+  })
+  ipcMain.handle(
+    ipc.CHAT_LOG_WINDOW_TRACE,
+    (_e, windowId: string, action: WindowTraceAction, detail?: unknown) => {
+      getChatStore().logWindowTrace(windowId, action, detail)
+    },
+  )
+  ipcMain.handle(
+    ipc.CHAT_LOG_LOGIN_TRACE,
+    (_e, trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>) => {
+      getChatStore().logLoginTrace(trace)
+    },
+  )
+  ipcMain.handle(ipc.CHAT_LIST_WINDOW_TRACES, (_e, windowId?: string, limit?: number) => {
+    return getChatStore().listWindowTraces(windowId, limit)
+  })
+  ipcMain.handle(ipc.CHAT_LIST_LOGIN_TRACES, (_e, profileId?: string) => {
+    return getChatStore().listLoginTraces(profileId)
+  })
+  // ===== 会话/消息写路径（基础功能：WebviewTab 抓取入库、历史视图 CRUD 共用） =====
+  ipcMain.handle(
+    ipc.CHAT_CREATE_CONVERSATION,
+    (_e, sourceId: string, sourceType: ConversationSourceType, title: string, url?: string) => {
+      return getChatStore().createConversation(sourceId, sourceType, title, url)
+    },
+  )
+  ipcMain.handle(ipc.CHAT_DELETE_CONVERSATION, (_e, id: string) => {
+    getChatStore().deleteConversation(id)
+  })
+  ipcMain.handle(ipc.CHAT_SAVE_MESSAGE, (_e, msg: SaveMessageInput) => {
+    return getChatStore().saveMessage(msg)
+  })
+  ipcMain.handle(ipc.CHAT_SAVE_MESSAGE_WITH_MERGE, (_e, msg: SaveMessageInput) => {
+    return getChatStore().saveMessageWithMerge(msg)
+  })
+  ipcMain.handle(
+    ipc.CHAT_UPDATE_CONVERSATION,
+    (_e, id: string, updates: { title?: string }) => {
+      getChatStore().touchConversation(id, updates.title)
+      return { ok: true }
+    },
+  )
+  ipcMain.handle(
+    ipc.CHAT_EXPORT_CONVERSATION,
+    async (e, conversationId: string, format: 'md' | 'json') => {
+      const content = getChatStore().exportConversation(conversationId, format)
+      const win = BrowserWindow.fromWebContents(e.sender) || undefined
+      const defaultName = `conversation-${conversationId.slice(0, 8)}.${format}`
+      const ext = format === 'md' ? 'Markdown' : 'JSON'
+      const { canceled, filePath } = await dialog.showSaveDialog(win!, {
+        title: `导出对话为 ${ext}`,
+        defaultPath: defaultName,
+        filters: [
+          { name: ext, extensions: [format] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      })
+      if (canceled || !filePath) {
+        return { ok: false, canceled: true }
+      }
+      await writeFile(filePath, content, 'utf-8')
+      showNotification('导出成功', `已保存到 ${filePath}`)
+      return { ok: true, filePath }
+    },
+  )
+  ipcMain.handle(
+    ipc.CHAT_IMPORT_CONVERSATION,
+    async (e, format: 'json' | 'deepseek' | 'md', sourceId: string) => {
+      const win = BrowserWindow.fromWebContents(e.sender) || undefined
+      const filters = [
+        { name: '所有支持的格式', extensions: ['json', 'md', 'markdown'] },
+        { name: 'JSON', extensions: ['json'] },
+        { name: 'Markdown', extensions: ['md', 'markdown'] },
+        { name: '所有文件', extensions: ['*'] },
+      ]
+      const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
+        title: '导入对话',
+        filters,
+        properties: ['openFile'],
+      })
+      if (canceled || !filePaths || filePaths.length === 0) {
+        return { ok: false, canceled: true }
+      }
+      const filePath = filePaths[0]
+      const content = await readFile(filePath, 'utf-8')
+      const conv = getChatStore().importConversation(format, content, sourceId)
+      showNotification('导入成功', `已导入对话：${conv.title}`)
+      return { ok: true, conversation: conv }
+    },
+  )
+  ipcMain.handle(ipc.CHAT_CLEAR_CONVERSATIONS, (_e, sourceId?: string) => {
+    return { ok: true, count: getChatStore().clearAllConversations(sourceId) }
+  })
+}
+
+/**
+ * 注册使用统计与操作日志 IPC（基础功能：独立于自定义对话模块，
+ * 自定义对话关闭后使用统计仍可用）。
+ */
+export function registerUsageTraceIpc(): void {
+  const ipc = IPC_CHANNELS
+  // 点击日志：受 usageTrackingEnabled 守卫，关闭时静默丢弃
+  ipcMain.handle(ipc.USAGE_TRACE_LOG_CLICK, (_e, elementName: string, windowType: string | null, detail?: unknown) => {
+    try {
+      if (!getAppSettings().usageTrackingEnabled) return { ok: false, skipped: true }
+      getChatStore().logClick(elementName, windowType, detail)
+      return { ok: true }
+    } catch (err) {
+      console.warn('[ai-handler] logClick 失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
+  ipcMain.handle(ipc.USAGE_TRACE_GET_STATS, (_e, rangeDays?: number) => {
+    try {
+      return { ok: true, stats: getChatStore().getFrequencyStats(rangeDays) }
+    } catch (err) {
+      console.warn('[ai-handler] getFrequencyStats 失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
+  ipcMain.handle(ipc.USAGE_TRACE_CLEAR, () => {
+    try {
+      const count = getChatStore().clearUsageTraces()
+      return { ok: true, count }
+    } catch (err) {
+      console.warn('[ai-handler] clearUsageTraces 失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
+  ipcMain.handle(ipc.USAGE_TRACE_LIST_APP_STARTS, (_e, limit?: number) => {
+    try {
+      return { ok: true, list: getChatStore().listAppStarts(limit) }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
+  ipcMain.handle(ipc.USAGE_TRACE_LIST_CLICK_LOGS, (_e, limit?: number) => {
+    try {
+      return { ok: true, list: getChatStore().listClickLogs(limit) }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
+  // 7.1: 启动时清理无效会话（缺失 provider/source 的脏数据）
+  try {
+    const result = getChatStore().cleanupInvalidConversations()
+    if (result.deletedCount > 0) {
+      console.log(`[ai-handler] 启动清理：删除 ${result.deletedCount} 条无效会话`)
+    }
+  } catch (e) {
+    console.error('[ai-handler] 清理无效会话失败:', e)
+  }
+}
+
+/**
+ * 注册注入历史 IPC（提示词库模块：预览 + Jaccard 去重）。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerInjectionIpc(scope?: EffectScope): void {
+  const ipc = IPC_CHANNELS
+
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(ipc.INJECTION_LOG, (_e: unknown, record: any) => {
+    return injectionHistoryStore.log(record)
+  })
+  handle(ipc.INJECTION_LIST_RECENT, (_e: unknown, limit?: number) => {
+    return injectionHistoryStore.listRecent(limit)
+  })
+  handle(ipc.INJECTION_FIND_SIMILAR, (_e: unknown, text: string, limit?: number, threshold?: number) => {
+    return injectionHistoryStore.findSimilar(text, limit, threshold)
+  })
+  handle(ipc.INJECTION_CLEAR, () => {
+    return injectionHistoryStore.clear()
+  })
 }
 
 /** 清理所有进行中的流式请求（app before-quit 时调用） */

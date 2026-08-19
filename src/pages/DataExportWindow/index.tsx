@@ -11,17 +11,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
-import { IconButton } from '../../components/ui';
+import { IconButton, PinToggleButton } from '../../components/ui';
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
+import { useWindowMaximizedAndPinned } from '../../hooks/useWindowMaximizedAndPinned';
 import {
   minimizeWindow,
-  maximizeToggleWindow,
   closeCurrentWindow,
-  pinCurrentWindow,
-  isWindowMaximized,
-  isWindowAlwaysOnTop,
-  onMaximizeToggled,
-  onPinToggled,
   estimateExportSizes,
   selectExportPath,
   exportData,
@@ -45,13 +40,14 @@ interface ExportOptions {
   cookies: boolean;
   indexedDB: boolean;
   cache: boolean;
+  voiceAssets: boolean;
 }
 
 /** 三档快速预设 */
 const PRESETS: Record<string, ExportOptions> = {
-  minimal: { basicData: true, cookies: true, indexedDB: false, cache: false },
-  recommended: { basicData: true, cookies: true, indexedDB: true, cache: false },
-  full: { basicData: true, cookies: true, indexedDB: true, cache: true },
+  minimal: { basicData: true, cookies: true, indexedDB: false, cache: false, voiceAssets: false },
+  recommended: { basicData: true, cookies: true, indexedDB: true, cache: false, voiceAssets: false },
+  full: { basicData: true, cookies: true, indexedDB: true, cache: true, voiceAssets: true },
 };
 
 const PRESET_LABELS: Record<string, string> = {
@@ -96,13 +92,13 @@ const OPTION_ITEMS: OptionItem[] = [
 type Status = { type: 'success' | 'error'; message: string } | null;
 
 export default function DataExportWindow() {
-  const [maximized, setMaximized] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
   const [sizes, setSizes] = useState<{
     basicData: number;
     cookies: number;
     indexedDB: number;
     cache: number;
+    voiceAssets: number;
   } | null>(null);
 
   // 默认选项 = PRESETS.minimal
@@ -114,19 +110,6 @@ export default function DataExportWindow() {
   const [importFilePath, setImportFilePath] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<Status>(null);
-
-  // 初始化：最大化 + 置顶状态
-  useEffect(() => {
-    void isWindowMaximized().then(setMaximized).catch(() => {});
-    void isWindowAlwaysOnTop().then(setIsPinned).catch(() => {});
-  }, []);
-
-  // 监听最大化/置顶状态变更
-  useEffect(() => {
-    const offPin = onPinToggled((onTop) => setIsPinned(onTop));
-    const offMax = onMaximizeToggled((max) => setMaximized(max));
-    return () => { offPin(); offMax(); };
-  }, []);
 
   // ESC / Ctrl+W 关窗：复用统一 hook（覆盖 INPUT/TEXTAREA/SELECT/contentEditable 跳过逻辑）
   useEscToCloseWindow();
@@ -183,19 +166,6 @@ export default function DataExportWindow() {
     if (exporting) return;
     setOptions({ ...PRESETS[presetKey] });
     setExportStatus(null);
-  };
-
-  // 最大化切换
-  const handleMaximize = async () => {
-    const next = await maximizeToggleWindow();
-    setMaximized(next);
-  };
-
-  // 置顶切换
-  const handlePin = async () => {
-    const next = !isPinned;
-    setIsPinned(next);
-    await pinCurrentWindow(next);
   };
 
   // 导出
@@ -268,19 +238,11 @@ export default function DataExportWindow() {
             <span className="data-export-top-title" data-name="data-export.topbar-title">数据迁移</span>
           </div>
           <div className="data-export-top-actions" data-name="data-export.topbar-actions">
-            <IconButton
-              type="button"
-              variant={isPinned ? 'active' : 'default'}
-              aria-label={isPinned ? '取消置顶' : '置顶'}
-              title={isPinned ? '取消置顶' : '置顶'}
+            <PinToggleButton
+              isPinned={isPinned}
+              onToggle={handleTogglePin}
               data-name="data-export.topbar-pin-button"
-              onClick={() => void handlePin()}
-            >
-              <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="data-export.topbar-pin-icon">
-                <path d="M12 17v5" />
-                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
-              </svg>
-            </IconButton>
+            />
             <IconButton
               type="button"
               aria-label="最小化"
@@ -294,12 +256,12 @@ export default function DataExportWindow() {
             </IconButton>
             <IconButton
               type="button"
-              aria-label={maximized ? '还原' : '最大化'}
-              title={maximized ? '还原' : '最大化'}
+              aria-label={isMaximized ? '还原' : '最大化'}
+              title={isMaximized ? '还原' : '最大化'}
               data-name="data-export.topbar-maximize-button"
               onClick={() => void handleMaximize()}
             >
-              {maximized ? (
+              {isMaximized ? (
                 <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="data-export.topbar-restore-icon">
                   <path d="M8 3v3a2 2 0 0 1-2 2H3" />
                   <path d="M21 8h-3a2 2 0 0 1-2-2V3" />

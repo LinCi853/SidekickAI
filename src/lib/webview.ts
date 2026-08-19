@@ -22,8 +22,70 @@ export interface WebviewElement extends HTMLWebViewElement {
   getWebContentsId(): number;
   /** 截图当前页面（需求 12：截图到白板）。返回 NativeImage，调用 toDataURL() 转 base64，getSize() 获取原始尺寸 */
   capturePage(): Promise<{ toDataURL(): string; toPNG(): Buffer; getSize(): { width: number; height: number } }>;
+  /** 打开 DevTools（检查） */
+  openDevTools(): void;
+  /** 关闭 DevTools */
+  closeDevTools(): void;
+  /** DevTools 是否已打开 */
+  isDevToolsOpened(): boolean;
+  /** 打印当前页面（弹出系统打印对话框） */
+  print(options?: unknown): void;
+  /** 将当前页面打印为 PDF（打印预览用） */
+  printToPDF(options?: { printBackground?: boolean; preferCSSPageSize?: boolean }): Promise<Uint8Array>;
+  /** 在页面中执行原生粘贴命令（剪贴板内容粘贴到焦点元素） */
+  paste(): void;
+  /** 在页面中执行粘贴并匹配样式命令（粘贴为纯文本） */
+  pasteAndMatchStyle(): void;
+  /** 开始检查指定位置的元素（打开 DevTools 并定位到该元素，坐标为 guest 页面坐标） */
+  inspectElement(x: number, y: number): void;
+  /** 当前页面缩放因子（guest 坐标换算窗口坐标时使用） */
+  getZoomFactor(): number;
+  /** 设置页面缩放因子 */
+  setZoomFactor(factor: number): void;
+  /** 获取页面缩放级别（log2 尺度） */
+  getZoomLevel(): number;
+  /** 设置页面缩放级别（log2 尺度，0=100%，0.5=141% 等） */
+  setZoomLevel(level: number): void;
   addEventListener(event: string, callback: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void;
   removeEventListener(event: string, callback: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void;
+}
+
+/**
+ * webview 的 context-menu 事件标准参数（对应 Electron ContextMenuParams）。
+ * 现代浏览器标准字段：右键位置、目标元素类型（链接/图片/输入框/选中文本）、编辑能力标志。
+ */
+export interface WebviewContextMenuParams {
+  /** 右键位置（guest 页面 viewport CSS 坐标） */
+  x: number;
+  /** 右键位置（guest 页面 viewport CSS 坐标） */
+  y: number;
+  /** 右键所在链接的 URL（无链接时为空字符串） */
+  linkURL: string;
+  /** 右键所在页面的 URL（查看网页源码用） */
+  pageURL: string;
+  /** 右键所在图片/媒体元素的源 URL */
+  srcURL: string;
+  /** 右键所在元素类型：none | image | audio | video | canvas | file | plugin */
+  mediaType: 'none' | 'image' | 'audio' | 'video' | 'canvas' | 'file' | 'plugin';
+  /** 是否在可编辑区域（输入框/文本域/富文本）内 */
+  isEditable: boolean;
+  /** 当前页面选中的文本 */
+  selectionText: string;
+  /** 保存链接时建议的文件名 */
+  suggestedFilename: string;
+  /** 拼写错误的单词（启用拼写检查时） */
+  misspelledWord: string;
+  /** 编辑能力标志（决定撤销/重做/剪切/复制/粘贴/全选是否可用） */
+  editFlags: {
+    canUndo: boolean;
+    canRedo: boolean;
+    canCut: boolean;
+    canCopy: boolean;
+    canPaste: boolean;
+    canDelete: boolean;
+    canSelectAll: boolean;
+    canEditRichly: boolean;
+  };
 }
 
 /**

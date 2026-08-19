@@ -20,7 +20,7 @@ import {
 import type { PromptTemplate } from '../lib/electron-api';
 import { useToast } from '../hooks/useToast';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { Button, IconButton } from '../components/ui';
+import { Button, IconButton, EmptyState } from '../components/ui';
 import PromptEditorForm from '../components/PromptEditorForm';
 import './PromptLibraryView.css';
 
@@ -198,7 +198,7 @@ export default function PromptLibraryView() {
           </div>
 
           {prompts.length === 0 && (
-            <div className="prompt-view-empty app-empty-state large" data-name="prompts.empty-state">暂无提示词模板<br />点击「新增提示词」添加</div>
+            <EmptyState message={<>暂无提示词模板<br />点击「新增提示词」添加</>} size="large" className="prompt-view-empty" data-name="prompts.empty-state" />
           )}
 
           {groupKeys.map((key, gIdx) => (

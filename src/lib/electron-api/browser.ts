@@ -47,6 +47,101 @@ export async function openExternal(url: string): Promise<void> {
   return api.browser.openExternal(url);
 }
 
+/** 另存为：保存指定 webview 的当前页面（HTMLComplete）到用户指定路径 */
+export async function savePageAs(
+  webContentsId: number,
+  suggestedName?: string,
+): Promise<{ ok: boolean; canceled?: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.browser.savePageAs(webContentsId, suggestedName);
+}
+
+/** 另存为：下载指定 URL（链接/图片）到用户指定路径（主进程弹保存对话框） */
+export async function downloadAs(
+  partition: string,
+  url: string,
+  suggestedFilename?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.browser.downloadAs(partition, url, suggestedFilename);
+}
+
+/** 查看网页源代码：按 session partition 抓取原始 HTML 文本（携带登录态 Cookie） */
+export async function viewSource(
+  partition: string,
+  url: string,
+): Promise<{ ok: boolean; html?: string; contentType?: string; error?: string }> {
+  const api = requireElectron();
+  return api.browser.viewSource(partition, url);
+}
+
+/** 打印预览：生成当前页面的 PDF 临时文件并返回文件路径 */
+export async function printPreview(
+  webContentsId: number,
+  title?: string,
+): Promise<{ ok: boolean; filePath?: string; title?: string; error?: string }> {
+  const api = requireElectron();
+  return api.browser.printPreview(webContentsId, title);
+}
+
+/** 打印预览页「另存为」：把临时 PDF 复制到用户指定路径 */
+export async function savePdfAs(
+  sourcePath: string,
+  suggestedName?: string,
+): Promise<{ ok: boolean; canceled?: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.browser.savePdfAs(sourcePath, suggestedName);
+}
+
+/** 删除打印预览临时文件 */
+export async function deleteTempPdf(filePath: string): Promise<{ ok: boolean }> {
+  const api = requireElectron();
+  return api.browser.deleteTempPdf(filePath);
+}
+
+/** 网页截图：保存截图 PNG（dataURL）到用户指定路径 */
+export async function saveCapture(
+  dataUrl: string,
+  suggestedName?: string,
+): Promise<{ ok: boolean; canceled?: boolean; error?: string }> {
+  const api = requireElectron();
+  return api.browser.saveCapture(dataUrl, suggestedName);
+}
+
+/** 云电脑模式：进入/退出（主进程挂起/恢复全局热键、同步全屏） */
+export async function setCloudPcMode(enter: boolean): Promise<{ ok: boolean; error?: string }> {
+  const api = requireElectron();
+  if (typeof api.browser.setCloudPcMode !== 'function') {
+    // 旧版 preload 未更新（应用未重启 / 未重新构建）
+    return { ok: false, error: '主进程接口未更新，请完全退出并重启应用' };
+  }
+  return api.browser.setCloudPcMode(enter);
+}
+
+/** 全局光标屏幕坐标（全屏悬浮退出条的光标探测用） */
+export function getCursorPos(): Promise<{ ok: boolean; x: number; y: number }> {
+  const api = requireElectron();
+  if (typeof api.browser.getCursorPos !== 'function') {
+    // 旧版 preload 未更新（应用未重启 / 未重新构建）
+    return Promise.resolve({ ok: false, x: 0, y: 0 });
+  }
+  return api.browser.getCursorPos();
+}
+
+/** 主→渲染：云电脑模式状态变化（含主进程兜底退出通知）。返回取消监听函数。 */
+export function onCloudPcChanged(callback: (active: boolean) => void): () => void {
+  const api = requireElectron();
+  return api.browser.onCloudPcChanged(callback);
+}
+
+/** 主→渲染：云电脑模式系统级按键路由（Win/Alt+Tab 等，渲染层合成注入 guest）。返回取消监听函数。 */
+export function onCloudPcKeys(
+  callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void,
+): () => void {
+  const api = requireElectron();
+  return api.browser.onCloudPcKeys(callback);
+}
+
 /** 记录一条搜索历史 */
 export async function addSearchHistory(entry: { profileId: string; query: string; url: string }): Promise<void> {
   const api = requireElectron();

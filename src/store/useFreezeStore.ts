@@ -4,6 +4,7 @@
    ===================================================================== */
 
 import { create, type StoreApi } from 'zustand';
+import { useModuleStore } from './useModuleStore';
 import {
   freezeTab,
   toggleFreeze,
@@ -33,9 +34,14 @@ interface FreezeStore {
   /** 按主进程真实状态冻结或恢复 */
   doToggle: (tabId: string, profileId: string) => Promise<void>;
   /** 彻底分离 */
-  doDetach: (tabId: string) => Promise<void>;
+  doDetach: (tabId: string) => Promise<boolean>;
   /** 同步单个 tab 状态（切换标签时查询） */
   syncStatus: (tabId: string) => Promise<void>;
+}
+
+/** 页面冻结为独立模块（开发者选项）：模块关闭时全部冻结操作静默 no-op */
+function freezeActive(): boolean {
+  return useModuleStore.getState().isEnabled('freeze');
 }
 
 export const useFreezeStore = create<FreezeStore>((set, get) => ({
@@ -65,26 +71,30 @@ export const useFreezeStore = create<FreezeStore>((set, get) => ({
   },
 
   doFreeze: async (tabId, profileId) => {
+    if (!freezeActive()) return;
     const result = await freezeTab({ tabId, profileId });
     applyResult(set, get, tabId, result);
   },
 
   doResume: async (tabId) => {
+    if (!freezeActive()) return;
     const revision = get().revisions[tabId];
     const ok = await resumeFreeze(tabId);
     if (ok && get().revisions[tabId] === revision) clearFrozenData(set, tabId, 'attached');
   },
 
   doToggle: async (tabId, profileId) => {
+    if (!freezeActive()) return;
     const result = await toggleFreeze({ tabId, profileId });
     applyResult(set, get, tabId, result);
   },
 
   doDetach: async (tabId) => {
+    if (!freezeActive()) return false;
     const ok = await detachFreeze(tabId);
     if (!ok) {
       await get().syncStatus(tabId);
-      return;
+      return false;
     }
     set((s) => {
       const states = { ...s.states };
@@ -97,15 +107,30 @@ export const useFreezeStore = create<FreezeStore>((set, get) => ({
       delete revisions[tabId];
       return { states, snapshots: snaps, textLayers: layers, revisions };
     });
+    return true;
   },
 
   syncStatus: async (tabId) => {
+    if (!freezeActive()) return;
     const before = get().states[tabId];
     const revision = get().revisions[tabId];
     const status = await getFreezeStatus(tabId);
     if (get().states[tabId] !== before || get().revisions[tabId] !== revision) return;
+    if (status.revision < (get().revisions[tabId] ?? 0)) return;
+    if (status.state !== 'frozen') {
+      clearFrozenData(set, tabId, status.state, status.revision);
+      return;
+    }
+    const existingLayer = get().revisions[tabId] === status.revision
+      ? get().textLayers[tabId]
+      : undefined;
     set((s) => ({
-      states: { ...s.states, [tabId]: status },
+      states: { ...s.states, [tabId]: status.state },
+      revisions: { ...s.revisions, [tabId]: status.revision },
+      textLayers: {
+        ...s.textLayers,
+        [tabId]: existingLayer ?? status.textLayer ?? EMPTY_TEXT_LAYER,
+      },
     }));
   },
 }));
@@ -124,6 +149,8 @@ const EMPTY_TEXT_LAYER: TextLayer = {
   viewportHeight: 0,
   visualScale: 1,
   devicePixelRatio: 1,
+  documentRevision: 0,
+  nestedScrollRegions: [],
   quality: 'none',
   truncated: false,
 };
@@ -161,7 +188,6 @@ function applyResult(
     clearFrozenData(set, tabId, result.state, result.revision);
     return;
   }
-  const existing = get();
   set((s: FreezeStore) => ({
     states: { ...s.states, [tabId]: 'frozen' },
     revisions: { ...s.revisions, [tabId]: result.revision },
@@ -173,11 +199,11 @@ function applyResult(
             title: result.snapshot.title,
             url: result.snapshot.url,
           }
-        : existing.snapshots[tabId] ?? null,
+          : null,
     },
     textLayers: {
       ...s.textLayers,
-      [tabId]: result.textLayer ?? existing.textLayers[tabId] ?? EMPTY_TEXT_LAYER,
+      [tabId]: result.textLayer ?? EMPTY_TEXT_LAYER,
     },
   }));
 }

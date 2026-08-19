@@ -1,21 +1,26 @@
 // electron/store/prompt-store.ts — 提示词模板持久化存储 + IPC 注册
 //
-// 使用 electron-store 将提示词模板持久化到磁盘（prompts.json）。
+// 持久化到 SQLite settings.db（prompts 表，createSqliteJsonStore）。
 // 提供模板的 CRUD 接口，供「明输入明注入」功能使用。
 // 首次启动自动填充若干通用预置模板，便于用户即刻体验。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain, dialog, BrowserWindow } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import type { PromptTemplate } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createJsonStore, createCrudStore } from './store-paths.js'
+import { createCrudStore } from './store-paths.js'
+import { createSqliteJsonStore } from './module-state-store.js'
 
 // 持久化存储实例（写入 prompts.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径
-const store = createJsonStore<{ prompts: PromptTemplate[]; version: number }>({
-  name: 'prompts',
+const store = createSqliteJsonStore<{ prompts: PromptTemplate[]; version: number }>({
+  tableName: 'prompts',
+  legacyName: 'prompts',
   defaults: { prompts: [], version: 1 },
 })
 
@@ -88,19 +93,27 @@ export class PromptStore {
 export const promptStore = new PromptStore()
 
 /**
- * 注册提示词模板 CRUD IPC 处理器
- * 在 app.whenReady() 后调用。
+ * 注册提示词模板 CRUD IPC 处理器。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
  */
-export function registerPromptIPC(): void {
+export function registerPromptIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
-  ipcMain.handle(ipc.PROMPT_LIST, () => promptStore.list())
-  ipcMain.handle(ipc.PROMPT_SAVE, (_e, template: PromptTemplate) =>
+
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(ipc.PROMPT_LIST, () => promptStore.list())
+  handle(ipc.PROMPT_SAVE, (_e: unknown, template: PromptTemplate) =>
     promptStore.save(template),
   )
-  ipcMain.handle(ipc.PROMPT_DELETE, (_e, id: string) => promptStore.delete(id))
+  handle(ipc.PROMPT_DELETE, (_e: unknown, id: string) => promptStore.delete(id))
 
   // 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件）
-  ipcMain.handle(ipc.PROMPT_EXPORT, async (e) => {
+  handle(ipc.PROMPT_EXPORT, async (e: any) => {
     try {
       const win = BrowserWindow.fromWebContents(e.sender)
       const { canceled, filePath } = await dialog.showSaveDialog(win!, {
@@ -120,7 +133,7 @@ export function registerPromptIPC(): void {
   })
 
   // 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库）
-  ipcMain.handle(ipc.PROMPT_IMPORT, async (e) => {
+  handle(ipc.PROMPT_IMPORT, async (e: any) => {
     try {
       const win = BrowserWindow.fromWebContents(e.sender)
       const { canceled, filePaths } = await dialog.showOpenDialog(win!, {

@@ -1,7 +1,7 @@
 /* =====================================================================
    SettingsView —— 独立设置窗口
-   左导航（6类分组）+ 右内容区，替代原侧滑面板。
-   复用 SettingsPanel/sections 下所有 section 组件。
+    左导航（6类分组）+ 右内容区，替代原侧滑面板。
+    复用 SettingsPanel/sections 下所有 section 组件。
    ===================================================================== */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
@@ -12,6 +12,7 @@ import {
   setMinimumSize,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
+import { useModuleStore } from '../../store/useModuleStore';
 import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData';
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import StandaloneWindowHeader from '../../components/StandaloneWindowHeader';
@@ -32,12 +33,14 @@ import PresetSection from '../../components/SettingsPanel/sections/PresetSection
 import CookieSection from '../../components/SettingsPanel/sections/CookieSection';
 import StorageSection from '../../components/SettingsPanel/sections/StorageSection';
 import AboutSection from '../../components/SettingsPanel/sections/AboutSection';
+import ModuleManagementSection from '../../components/SettingsPanel/sections/ModuleManagementSection';
+import DeveloperOptionsSection from '../../components/SettingsPanel/sections/DeveloperOptionsSection';
 import AiAppEditorModal from '../../components/AiAppEditorModal';
 import '../../components/SettingsPanel/styles.css';
 import '../../components/ui/TitleBar.css';
 import './index.css';
 
-type CategoryId = 'appearance' | 'ai' | 'voice' | 'network' | 'advanced' | 'about';
+type CategoryId = 'appearance' | 'ai' | 'voice' | 'network' | 'advanced' | 'modules' | 'developer' | 'about';
 
 const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
   { id: 'appearance', label: '外观与交互', icon: '◐' },
@@ -45,6 +48,8 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
   { id: 'voice', label: '语音', icon: '♪' },
   { id: 'network', label: '网络与隐私', icon: '▣' },
   { id: 'advanced', label: '高级', icon: '⚙' },
+  { id: 'modules', label: '模块管理', icon: '▦' },
+  { id: 'developer', label: '开发者选项', icon: '⚗' },
   { id: 'about', label: '关于', icon: 'ℹ' },
 ];
 
@@ -138,7 +143,7 @@ export default function SettingsView() {
     try {
       await updateAppSettings({ disableAllBlockRules: next });
     } catch (e) {
-      console.error('[SettingsView] 切换关闭所有广告屏蔽规则失败:', e);
+      console.error('[SettingsView] 切换广告屏蔽规则失败:', e);
       app.setDisableAllBlockRules(app.disableAllBlockRules);
     }
   };
@@ -183,6 +188,7 @@ export default function SettingsView() {
 
   const handleVoiceChange = useCallback((patch: Partial<VoiceSettings>) => {
     if (patch.confirmMode !== undefined) voice.setConfirmMode(patch.confirmMode);
+    if (patch.inputMethod !== undefined) voice.setInputMethod(patch.inputMethod);
     if (patch.enterToSend !== undefined) voice.setEnterToSend(patch.enterToSend);
     if (patch.sttMode !== undefined) voice.setSttMode(patch.sttMode);
     if (patch.aiProvider !== undefined) voice.setAiProvider(patch.aiProvider);
@@ -221,7 +227,13 @@ export default function SettingsView() {
         <div className="settings-window-body">
           {/* 左导航 */}
           <nav className="settings-nav" data-name="settings.nav">
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.filter((cat) => {
+              // 模块联动：语音输入与 TTS 全关时隐藏「语音」分类
+              if (cat.id === 'voice') {
+                return useModuleStore.getState().isEnabled('voice') || useModuleStore.getState().isEnabled('tts');
+              }
+              return true;
+            }).map((cat) => (
               <button
                 key={cat.id}
                 className={`settings-nav-item${activeCategory === cat.id ? ' active' : ''}`}
@@ -369,18 +381,21 @@ export default function SettingsView() {
                 />
               </FormRow>
             </section>
-            <ProviderSection
-              defaultCollapsed={false}
-              collapsibleTitle={false}
-              onEditingChange={setProviderEditing}
-            />
+            {useModuleStore.getState().isEnabled('custom-chat') && (
+              <ProviderSection
+                defaultCollapsed={false}
+                collapsibleTitle={false}
+                onEditingChange={setProviderEditing}
+              />
+            )}
           </>
         )}
 
-        {activeCategory === 'voice' && (
+        {activeCategory === 'voice' && (useModuleStore.getState().isEnabled('voice') || useModuleStore.getState().isEnabled('tts')) && (
           <VoiceSection
             voice={{
               confirmMode: voice.confirmMode,
+              inputMethod: voice.inputMethod,
               enterToSend: voice.enterToSend,
               sttMode: voice.sttMode,
               aiProvider: voice.aiProvider,
@@ -427,21 +442,24 @@ export default function SettingsView() {
                   data-name="settings.advanced.hide-foreign-models-toggle"
                 />
               </FormRow>
-              <FormRow label="关闭所有广告屏蔽规则">
-                <Toggle
-                  checked={app.disableAllBlockRules}
-                  onChange={handleToggleDisableAllBlockRules}
-                  aria-label="关闭所有广告屏蔽规则"
-                  data-name="settings.advanced.disable-all-block-rules-toggle"
-                />
-              </FormRow>
             </section>
             {/* 下载与缓存清理 */}
             <StorageSection />
           </>
         )}
 
-        {activeCategory === 'about' && (
+        {activeCategory === 'modules' && (
+  <ModuleManagementSection />
+)}
+
+{activeCategory === 'developer' && (
+  <DeveloperOptionsSection
+    disableAllBlockRules={app.disableAllBlockRules}
+    onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
+  />
+)}
+
+{activeCategory === 'about' && (
           <AboutSection />
         )}
           </main>

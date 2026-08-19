@@ -15,8 +15,9 @@ import {
 } from '../../../lib/electron-api';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore';
 import { useFreezeStore } from '../../../store/useFreezeStore';
+import { useModuleStore } from '../../../store/useModuleStore';
 import { useWindowMaximizedAndPinned } from '../../../hooks/useWindowMaximizedAndPinned';
-import { IconButton } from '../../../components/ui';
+import { IconButton, PinToggleButton } from '../../../components/ui';
 import { MinimizeIcon, MaximizeIcon, RestoreIcon, CloseIcon } from '@/components/icons';
 import { BrowserTabItem } from './BrowserTabItem';
 import BrowserTabContextMenu from './BrowserTabContextMenu';
@@ -103,7 +104,7 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
   const handleTabClick = useCallback((tabId: string) => switchTab(tabId), [switchTab]);
   const handleTabClose = useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    closeTab(tabId);
+    void closeTab(tabId);
   }, [closeTab]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
@@ -154,11 +155,11 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
         break;
       }
       case 'closeOthers':
-        tabs.filter((t) => t.id !== tabId).forEach((t) => closeTab(t.id));
+        tabs.filter((t) => t.id !== tabId).forEach((t) => void closeTab(t.id));
         break;
       case 'closeRight': {
         const idx = tabs.findIndex((t) => t.id === tabId);
-        tabs.slice(idx + 1).forEach((t) => closeTab(t.id));
+        tabs.slice(idx + 1).forEach((t) => void closeTab(t.id));
         break;
       }
     }
@@ -227,20 +228,13 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
 
       {/* 右侧：置顶 + 窗口控制 */}
       <div className="browser-bar-actions">
-        <IconButton
-          variant={alwaysOnTop ? 'active' : 'default'}
-          aria-label="置顶"
-          onClick={() => void handlePin()}
+        <PinToggleButton
+          isPinned={alwaysOnTop}
+          onToggle={() => void handlePin()}
           disabled={pinDisabled}
           title={pinDisabled ? '全屏/最大化模式下不可置顶' : alwaysOnTop ? '取消置顶' : '置顶'}
           data-name="browser.pin"
-        >
-          <svg viewBox="0 0 24 24" fill={alwaysOnTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="17" x2="12" y2="3" />
-            <path d="M6.5 8.5L12 3l5.5 5.5" />
-            <path d="M5 21h14" />
-          </svg>
-        </IconButton>
+        />
         <IconButton
           aria-label="最小化"
           variant="default"
@@ -283,9 +277,9 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
           onDuplicate={() => handleContextAction('duplicate')}
           onTogglePin={() => handleContextAction('togglePin')}
           onToggleMute={() => handleContextAction('toggleMute')}
-          onToggleFreeze={() => handleContextAction('toggleFreeze')}
+          onToggleFreeze={useModuleStore.getState().isEnabled('freeze') ? () => handleContextAction('toggleFreeze') : undefined}
           isFrozen={useFreezeStore.getState().states[contextMenu.tabId] === 'frozen'}
-          onCloseTab={() => { closeTab(contextMenu.tabId); }}
+          onCloseTab={() => { void closeTab(contextMenu.tabId); }}
           onCloseOthers={() => handleContextAction('closeOthers')}
           onCloseRight={() => handleContextAction('closeRight')}
         />

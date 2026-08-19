@@ -17,6 +17,7 @@ import { notesApi } from './preload/notes.js'
 import { whiteboardApi } from './preload/whiteboard.js'
 import { freezeApi } from './preload/freeze.js'
 import { bootstrapApi, setupDomSideEffects } from './preload/bootstrap.js'
+import { modulesApi } from './preload/modules.js'
 
 const api: ElectronAPI = {
   ...profileApi,
@@ -31,6 +32,7 @@ const api: ElectronAPI = {
   ...whiteboardApi,
   ...freezeApi,
   ...bootstrapApi,
+  ...modulesApi,
 }
 
 // 暴露到 window.electron

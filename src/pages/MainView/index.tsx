@@ -208,6 +208,12 @@ export default function MainView() {
         if (url) {
           void useTabStore.getState().updateTabUrl(existingTab.id, url);
         }
+        // 标题显式恢复为 AI 应用名（Profile.name）——顶栏与标签栏始终显示应用名，
+        // 与主进程持久化恢复逻辑一致，防止任何环节把标题覆盖为网页标题
+        const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId);
+        if (profile && existingTab.title !== profile.name) {
+          void useTabStore.getState().renameTab(existingTab.id, profile.name);
+        }
         useTabStore.getState().setActiveTab(existingTab.id);
       }
 

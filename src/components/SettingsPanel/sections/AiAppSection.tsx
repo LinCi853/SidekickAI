@@ -42,9 +42,9 @@ export interface AiAppSectionProps {
   hideForeignModels: boolean;
   /** 屏蔽国外模型开关回调；不传时不渲染开关（由外部高级分类承载） */
   onToggleHideForeignModels?: () => void;
-  /** 关闭所有广告屏蔽规则开关当前值；不传时不渲染开关 */
+  /** 广告屏蔽规则开关当前值（true=已禁用）；不传时不渲染开关 */
   disableAllBlockRules?: boolean;
-  /** 关闭所有广告屏蔽规则开关回调；不传时不渲染开关（由外部高级分类承载） */
+  /** 广告屏蔽规则开关回调；不传时不渲染开关（由外部高级分类承载） */
   onToggleDisableAllBlockRules?: () => void;
   /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
   collapsibleTitle?: boolean;
@@ -167,12 +167,12 @@ export default function AiAppSection({
           )}
 
           {onToggleDisableAllBlockRules && (
-            <FormRow label="关闭所有广告屏蔽规则">
+            <FormRow label="启用广告屏蔽规则">
               <Toggle
-                checked={disableAllBlockRules ?? false}
-                onChange={onToggleDisableAllBlockRules}
-                aria-label="关闭所有广告屏蔽规则"
-                data-name="settings.ai-app.disable-all-block-rules-toggle"
+                checked={!(disableAllBlockRules ?? false)}
+                onChange={() => onToggleDisableAllBlockRules()}
+                aria-label="启用广告屏蔽规则"
+                data-name="settings.ai-app.enable-block-rules-toggle"
               />
             </FormRow>
           )}

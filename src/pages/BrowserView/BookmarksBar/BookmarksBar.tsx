@@ -33,6 +33,8 @@ export default function BookmarksBar({ visible, onOpenBookmarkManager }: Bookmar
   const [clipboard, setClipboard] = useState<Bookmark | null>(null);
 
   const newTab = useBrowserTabStore((s) => s.newTab);
+  // 书签点击：已存在同 URL 标签则切换聚焦（书签标准语义）
+  const openTabOrFocus = useBrowserTabStore((s) => s.openTabOrFocus);
 
   useEffect(() => {
     void load();
@@ -66,7 +68,7 @@ export default function BookmarksBar({ visible, onOpenBookmarkManager }: Bookmar
               <BookmarkItem
                 key={b.id}
                 bookmark={b}
-                onClick={() => newTab(b.url, { kind: 'web' })}
+                onClick={() => openTabOrFocus(b.url, { kind: 'web' })}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();

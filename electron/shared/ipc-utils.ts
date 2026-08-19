@@ -9,9 +9,13 @@
 //
 // requireSenderWindow 接收 findWindowId 函数作为参数注入，避免与 window-factory 产生
 // 循环依赖（window-factory/helpers.ts 反向依赖 shared/ipc-channels.ts）。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+// 降级实现：当未传入 scope 时，直接使用 ipcMain.handle/ipcMain.on（不经过 EffectScope 管理）。
 
 import { ipcMain, BrowserWindow } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
+import type { EffectScope } from '../modules/effect-scope.js'
 
 /** IPC 失败响应（成功时直接返回数据，不包装） */
 export interface IpcErrorResponse {
@@ -25,23 +29,42 @@ export interface IpcErrorResponse {
  * - 成功：直接返回 handler 的返回值（与现有 notes-db/whiteboard-db 一致，不包装为 {ok:true,data}）
  * - 失败：console.error 记录日志，返回 {ok:false, error:String(err)}
  *
+ * 降级实现：当未传入 scope 时，直接使用 ipcMain.handle（不经过 EffectScope 管理）。
+ * 完全替换后应传入 scope 参数。
+ *
  * @param channel IPC 频道名
  * @param handler 业务处理函数，返回值直接透传给渲染进程
  * @param label   日志前缀标签（如 'notes-db'）
+ * @param scope   可选 EffectScope（传入时通过 scope 管理，否则降级为直接 ipcMain.handle）
  */
 export function registerSafeIpcHandler<T>(
   channel: string,
   handler: (event: IpcMainInvokeEvent, ...args: any[]) => T | Promise<T>,
   label: string,
+  scope?: EffectScope,
 ): void {
-  ipcMain.handle(channel, async (event, ...args) => {
-    try {
-      return await handler(event, ...args)
-    } catch (err) {
-      console.error(`[${label}] 失败:`, err)
-      return { ok: false, error: String(err) }
-    }
-  })
+  if (scope) {
+    // 通过 EffectScope 管理（推荐路径）
+    scope.ipcHandle(channel, async (event: any, ...args: any[]) => {
+      try {
+        return await handler(event, ...args)
+      } catch (err) {
+        console.error(`[${label}] 失败:`, err)
+        return { ok: false, error: String(err) }
+      }
+    })
+  } else {
+    // 降级实现：直接使用 ipcMain.handle（不经过 EffectScope 管理）
+    console.warn(`[ipc-utils:registerSafeIpcHandler] ⚠️ 降级实现: ${channel} 未传入 scope，直接使用 ipcMain.handle（不经过 EffectScope 管理）`)
+    ipcMain.handle(channel, async (event, ...args) => {
+      try {
+        return await handler(event, ...args)
+      } catch (err) {
+        console.error(`[${label}] 失败:`, err)
+        return { ok: false, error: String(err) }
+      }
+    })
+  }
 }
 
 /**
@@ -51,24 +74,44 @@ export function registerSafeIpcHandler<T>(
  *         与现有 {ok:true} 行为等价）
  * - 失败：console.error 记录日志，event.returnValue = {ok:false, error:String(err)}
  *
+ * 降级实现：当未传入 scope 时，直接使用 ipcMain.on（不经过 EffectScope 管理）。
+ * 完全替换后应传入 scope 参数。
+ *
  * @param channel IPC 频道名
  * @param handler 业务处理函数，返回值放入 returnValue.data
  * @param label   日志前缀标签
+ * @param scope   可选 EffectScope（传入时通过 scope 管理，否则降级为直接 ipcMain.on）
  */
 export function registerSyncIpcHandler(
   channel: string,
   handler: (event: IpcMainInvokeEvent, ...args: any[]) => unknown,
   label: string,
+  scope?: EffectScope,
 ): void {
-  ipcMain.on(channel, (event, ...args) => {
-    try {
-      const data = handler(event, ...args)
-      event.returnValue = { ok: true, data }
-    } catch (err) {
-      console.error(`[${label}] 失败:`, err)
-      event.returnValue = { ok: false, error: String(err) }
-    }
-  })
+  if (scope) {
+    // 通过 EffectScope 管理（推荐路径）
+    scope.ipcOn(channel, (event: any, ...args: any[]) => {
+      try {
+        const data = handler(event, ...args)
+        event.returnValue = { ok: true, data }
+      } catch (err) {
+        console.error(`[${label}] 失败:`, err)
+        event.returnValue = { ok: false, error: String(err) }
+      }
+    })
+  } else {
+    // 降级实现：直接使用 ipcMain.on（不经过 EffectScope 管理）
+    console.warn(`[ipc-utils:registerSyncIpcHandler] ⚠️ 降级实现: ${channel} 未传入 scope，直接使用 ipcMain.on（不经过 EffectScope 管理）`)
+    ipcMain.on(channel, (event, ...args) => {
+      try {
+        const data = handler(event, ...args)
+        event.returnValue = { ok: true, data }
+      } catch (err) {
+        console.error(`[${label}] 失败:`, err)
+        event.returnValue = { ok: false, error: String(err) }
+      }
+    })
+  }
 }
 
 /**
