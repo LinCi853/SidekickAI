@@ -20,6 +20,224 @@ import {
   toggleMaximizeForWindow,
 } from '../ipc/window-control-ipc.js'
 
+// ── 快捷键描述符 ──────────────────────────────────────────────────────────
+
+interface HotkeyCtx {
+  mods: string[]
+  key: string
+  code: string
+  hasCtrl: boolean
+  hasAlt: boolean
+  hasShift: boolean
+  hasMeta: boolean
+  isBrowser: boolean
+  wc: Electron.WebContents
+  parentWebContents: Electron.WebContents
+  win: Electron.BrowserWindow
+}
+
+interface HotkeyDef {
+  /** 首选按键标识（Electron input.key 值，如 'F5', 'Tab', 'Escape'） */
+  key: string
+  /** 次选按键标识（匹配 key 或 keyAlt 之一即可，用于同一 action 多键位） */
+  keyAlt?: string
+  /** 必须按下的修饰键 */
+  ctrl?: boolean
+  alt?: boolean
+  shift?: boolean
+  meta?: boolean
+  /** 字母键大小写不敏感匹配（将 key 和 input.key 均转为小写比较） */
+  toLower?: boolean
+  /**
+   * 原始 input.code 匹配模式：
+   * 'prefix' — code 以此值开头时匹配（如 'Digit' 匹配 Digit1~9, 'Numpad' 匹配 Numpad1~9）
+   * 'exact'  — code 精确匹配（如 'Backquote'）
+   */
+  matchByCode?: 'prefix' | 'exact'
+  /**
+   * 浏览器窗口条件过滤：
+   * 'only'   — 仅浏览器窗口生效（非浏览器窗口不匹配，按键穿透到页面）
+   * 'never'  — 仅非浏览器窗口生效
+   * undefined — 所有窗口通用
+   */
+  condition?: 'only' | 'never'
+  /** 此快捷键需在 tryForward 去重后才执行（与 uiohook 兜底通道协同） */
+  tryFwd?: boolean
+  /** 日志消息模板（{0} 替换为按键组合） */
+  log: string
+  /**
+   * 快捷键触发时执行的回调。
+   * 返回 { action, data? } 时通过 IPC WEBVIEW_HOTKEY 转发渲染层；
+   * 返回 void/undefined 时不发送 IPC（由回调内部直接处理）。
+   */
+  action: (ctx: HotkeyCtx) => { action: string; data?: unknown } | void
+}
+
+/** 通用快捷键（所有窗口均适用，云电脑模式除外） */
+const commonHotkeys: HotkeyDef[] = [
+  // F4：后退（排除 Alt 以避免与 Alt+F4 关闭窗口冲突）
+  { key: 'F4', log: 'F4 → 后退', action: () => ({ action: 'navBack' }) },
+
+  // F5：刷新当前标签
+  { key: 'F5', log: 'F5 → 刷新', action: () => ({ action: 'navRefresh' }) },
+
+  // Ctrl+Shift+R / Ctrl+F5：强制刷新（清除缓存）
+  { key: 'r', ctrl: true, shift: true, toLower: true, log: 'Ctrl+Shift+R → 强制刷新', action: () => ({ action: 'forceRefresh' }) },
+  { key: 'F5', ctrl: true, log: 'Ctrl+F5 → 强制刷新', action: () => ({ action: 'forceRefresh' }) },
+
+  // F6：聚焦循环（主窗口聚焦 AI 输入框，浏览器窗口循环聚焦）
+  { key: 'F6', log: 'F6 → 聚焦循环', action: () => ({ action: 'focusCycle' }) },
+
+  // F10：切换主题（light/dark）
+  { key: 'F10', log: 'F10 → 切换主题', action: () => ({ action: 'toggleTheme' }) },
+
+  // Alt+P：冻结/恢复当前页面
+  {
+    key: 'p', alt: true, toLower: true, tryFwd: true,
+    log: 'Alt+P → 冻结/恢复当前页面',
+    action: (ctx) => {
+      const record = getRecordByWebContentsId(ctx.wc.id)
+      return { action: 'toggleFreeze', data: record ? { tabId: record.tabId } : undefined }
+    },
+  },
+
+  // Alt+1~9：切换到第 N 个标签
+  {
+    key: '', alt: true, matchByCode: 'prefix',
+    log: 'Alt+{0} → 切换标签 #{0}',
+    action: (ctx) => {
+      for (const prefix of ['Digit', 'Numpad']) {
+        if (ctx.code.startsWith(prefix)) {
+          const n = parseInt(ctx.code.slice(prefix.length), 10)
+          if (n >= 1 && n <= 9) return { action: 'switchTab', data: { index: n - 1 } }
+        }
+      }
+    },
+  },
+
+  // Ctrl+Tab / Ctrl+Shift+Tab：循环切换标签
+  {
+    key: 'Tab', ctrl: true,
+    log: `Ctrl+Tab → 循环切换标签`,
+    action: (ctx) => ({ action: 'cycleTab', data: { reverse: ctx.hasShift } }),
+  },
+
+  // Ctrl+T：当前窗口独立（脱离当前标签为新窗口）
+  { key: 't', ctrl: true, toLower: true, log: 'Ctrl+T → 当前窗口独立', action: () => ({ action: 'detachCurrent' }) },
+
+  // Ctrl+W：关闭当前标签
+  { key: 'w', ctrl: true, toLower: true, log: 'Ctrl+W → 关闭当前标签', action: () => ({ action: 'closeTab' }) },
+
+  // Ctrl+G：切换手柄/键盘空间导航模式
+  { key: 'g', ctrl: true, toLower: true, log: 'Ctrl+G → 切换空间导航模式', action: () => ({ action: 'toggleSpatialNav' }) },
+
+  // Ctrl+D：添加当前页面到书签
+  { key: 'd', ctrl: true, toLower: true, log: 'Ctrl+D → 添加书签', action: () => ({ action: 'addBookmark' }) },
+
+  // Ctrl+H：打开历史标签
+  { key: 'h', ctrl: true, toLower: true, log: 'Ctrl+H → 打开历史', action: () => ({ action: 'openHistory' }) },
+
+  // Ctrl+J：打开下载标签
+  { key: 'j', ctrl: true, toLower: true, log: 'Ctrl+J → 打开下载', action: () => ({ action: 'openDownloads' }) },
+
+  // Ctrl+K / Ctrl+E：聚焦地址栏并进入搜索模式
+  { key: 'k', ctrl: true, toLower: true, log: `Ctrl+K → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
+  { key: 'e', ctrl: true, toLower: true, log: `Ctrl+E → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
+
+  // Ctrl+Shift+Del：清除浏览数据
+  { key: 'Delete', ctrl: true, shift: true, log: 'Ctrl+Shift+Del → 清除浏览数据', action: () => ({ action: 'clearBrowsingData' }) },
+
+  // Ctrl+F：页内查找
+  { key: 'f', ctrl: true, toLower: true, log: 'Ctrl+F → 页内查找', action: () => ({ action: 'findInPage' }) },
+
+  // Ctrl+P：打印当前页面
+  { key: 'p', ctrl: true, toLower: true, log: 'Ctrl+P → 打印', action: () => ({ action: 'print' }) },
+
+  // Ctrl+S：另存为当前页面（仅浏览器窗口；AI 应用窗口保留页面自身行为）
+  { key: 's', ctrl: true, toLower: true, condition: 'only', log: 'Ctrl+S → 另存为当前页面', action: () => ({ action: 'savePageAs' }) },
+
+  // Ctrl+U：查看网页源代码（仅浏览器窗口）
+  { key: 'u', ctrl: true, toLower: true, condition: 'only', log: 'Ctrl+U → 查看网页源代码', action: () => ({ action: 'viewSource' }) },
+
+  // Ctrl+= / Ctrl+- / Ctrl+0：页面缩放（仅浏览器窗口）
+  {
+    key: '=', keyAlt: '+', ctrl: true, toLower: true, condition: 'only',
+    log: 'Ctrl+= → 页面放大', action: () => ({ action: 'zoomIn' }),
+  },
+  { key: '-', ctrl: true, condition: 'only', log: 'Ctrl+- → 页面缩小', action: () => ({ action: 'zoomOut' }) },
+  { key: '0', ctrl: true, condition: 'only', log: 'Ctrl+0 → 重置缩放', action: () => ({ action: 'zoomReset' }) },
+
+  // 反引号(`) 呼出快捷键说明窗口
+  { key: '`', keyAlt: '~', matchByCode: 'exact', log: '` → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
+
+  // Shift+? 呼出快捷键说明窗口
+  { key: '?', shift: true, log: '? → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
+]
+
+/** 浏览器窗口专用快捷键（非浏览器窗口不匹配，按键穿透到页面） */
+const browserHotkeys: HotkeyDef[] = [
+  // Ctrl+L / Alt+D：聚焦地址栏
+  { key: 'l', ctrl: true, toLower: true, log: 'Ctrl+L → 聚焦地址栏 (browser)', action: () => ({ action: 'focusAddressBar' }) },
+  { key: 'd', alt: true, toLower: true, log: 'Alt+D → 聚焦地址栏 (browser)', action: () => ({ action: 'focusAddressBar' }) },
+
+  // Ctrl+R：刷新（F5 已在通用处理）
+  { key: 'r', ctrl: true, toLower: true, log: 'Ctrl+R → 刷新 (browser)', action: () => ({ action: 'navRefresh' }) },
+
+  // Ctrl+Shift+B：切换书签栏
+  { key: 'b', ctrl: true, shift: true, toLower: true, log: 'Ctrl+Shift+B → 切换书签栏 (browser)', action: () => ({ action: 'toggleBookmarkBar' }) },
+
+  // Ctrl+Shift+T：恢复最近关闭的标签
+  { key: 't', ctrl: true, shift: true, toLower: true, log: 'Ctrl+Shift+T → 恢复最近关闭标签 (browser)', action: () => ({ action: 'reopenClosed' }) },
+
+  // Alt+Left / Alt+Right：后退 / 前进
+  { key: 'ArrowLeft', alt: true, log: 'Alt+← → 后退 (browser)', action: () => ({ action: 'navBack' }) },
+  { key: 'ArrowRight', alt: true, log: 'Alt+→ → 前进 (browser)', action: () => ({ action: 'navForward' }) },
+]
+
+// ── 匹配引擎 ──────────────────────────────────────────────────────────────
+
+function matchHotkey(def: HotkeyDef, ctx: HotkeyCtx): boolean {
+  // 修饰键检查（未声明的修饰键必须未按下）
+  if (!!def.ctrl !== ctx.hasCtrl) return false
+  if (!!def.alt !== ctx.hasAlt) return false
+  if (!!def.shift !== ctx.hasShift) return false
+  if (!!def.meta !== ctx.hasMeta) return false
+
+  // 窗口类型条件过滤
+  if (def.condition === 'only' && !ctx.isBrowser) return false
+  if (def.condition === 'never' && ctx.isBrowser) return false
+
+  // matchByCode 模式：按 input.code 前缀/精确匹配（用于 Alt+1~9 / 反引号等）
+  if (def.matchByCode) {
+    if (def.matchByCode === 'prefix') {
+      const defKey = def.key || def.keyAlt || ''
+      return ctx.code.startsWith(defKey) || (def.keyAlt ? ctx.code.startsWith(def.keyAlt) : false)
+    }
+    return ctx.code === def.key
+  }
+
+  // 标准 key 匹配
+  const k = def.toLower ? def.key.toLowerCase() : def.key
+  const inputKey = def.toLower ? ctx.key.toLowerCase() : ctx.key
+  if (inputKey === k) return true
+  if (def.keyAlt) {
+    const alt = def.toLower ? def.keyAlt.toLowerCase() : def.keyAlt
+    if (inputKey === alt) return true
+  }
+
+  return false
+}
+
+/** 在描述符数组中查找匹配的快捷键定义 */
+function findMatch(
+  defs: HotkeyDef[],
+  ctx: HotkeyCtx,
+): HotkeyDef | undefined {
+  return defs.find((d) => matchHotkey(d, ctx))
+}
+
+// ── 主处理器 ──────────────────────────────────────────────────────────────
+
 /**
  * 在 guest webContents 上注册 before-input-event 快捷键路由。
  *
@@ -36,7 +254,7 @@ export function attachWebviewHotkeyRouter(
   // 云电脑模式三连击 Esc 检测（每次 webview attach 独立统计）
   let escPressTimes: number[] = []
   wc.on('before-input-event', (e, input) => {
-    // 需求 8：跟踪 Ctrl 按下/释放状态（keyDown + keyUp 均需处理）
+    // 跟踪 Ctrl 按下/释放状态（keyDown + keyUp 均需处理）
     // 用于 setWindowOpenHandler 内 Ctrl+click 放行判断
     if (input.key === 'Control') {
       if (input.type === 'keyDown') onCtrlKeyChange(true)
@@ -54,12 +272,17 @@ export function attachWebviewHotkeyRouter(
     const hasMeta = mods.includes('meta') || mods.includes('command')
     const key = input.key
     const code = input.code
+    const isBrowser = isBrowserWindowContents(parentWebContents)
+
+    const ctx: HotkeyCtx = {
+      mods, key, code, hasCtrl, hasAlt, hasShift, hasMeta,
+      isBrowser, wc, parentWebContents, win,
+    }
 
     // Ctrl+Alt+C：进入/退出云电脑模式（最高优先级，云电脑模式下同样可用——
     // 保证即使状态残留也能通过快捷键退出，避免死锁）
     if (hasCtrl && hasAlt && !hasShift && !hasMeta && key.toLowerCase() === 'c') {
-      const isBrowserWin = isBrowserWindowContents(parentWebContents)
-      if (isBrowserWin && tryForward('toggleCloudPc')) {
+      if (isBrowser && tryForward('toggleCloudPc')) {
         console.log('[hotkey] Ctrl+Alt+C → 切换云电脑模式')
         e.preventDefault()
         parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleCloudPc' })
@@ -67,45 +290,23 @@ export function attachWebviewHotkeyRouter(
       return
     }
 
-    // ===== 浏览器窗口 webview 焦点时的导航/标签快捷键转发（与渲染层 defs 的 action 对应） =====
-    const isBrowserWin = isBrowserWindowContents(parentWebContents)
-    if (isBrowserWin) {
-      // Ctrl+L / Alt+D：聚焦地址栏
-      if ((hasCtrl && !hasShift && !hasAlt && key.toLowerCase() === 'l')
-        || (hasAlt && !hasCtrl && !hasShift && key.toLowerCase() === 'd')) {
-        console.log('[hotkey] Ctrl+L/Alt+D → 聚焦地址栏 (browser)')
+    // ===== 描述符驱动的快捷键匹配 =====
+
+    // 优先匹配浏览器窗口专用快捷键（与通用快捷键冲突时浏览器专用优先）
+    let matched = findMatch(browserHotkeys, ctx)
+    if (!matched) matched = findMatch(commonHotkeys, ctx)
+
+    if (matched) {
+      const result = matched.action(ctx)
+      if (result) {
+        if (matched.tryFwd && !tryForward(result.action)) return
+        // 替换日志模板中的 {0} 占位符（用于 Alt+N 等动态键位）
+        const logKey = code.match(/^(Digit|Numpad)(\d)$/)?.[2] ?? key
+        console.log(`[hotkey] ${matched.log.replace(/\{0\}/g, logKey)}`)
         e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'focusAddressBar' })
-        return
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, result)
       }
-      // Ctrl+R：刷新（F5 已在下方通用处理）
-      if (hasCtrl && !hasShift && !hasAlt && key.toLowerCase() === 'r') {
-        console.log('[hotkey] Ctrl+R → 刷新 (browser)')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'navRefresh' })
-        return
-      }
-      // Ctrl+Shift+B：切换书签栏
-      if (hasCtrl && hasShift && !hasAlt && key.toLowerCase() === 'b') {
-        console.log('[hotkey] Ctrl+Shift+B → 切换书签栏 (browser)')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleBookmarkBar' })
-        return
-      }
-      // Ctrl+Shift+T：恢复最近关闭的标签
-      if (hasCtrl && hasShift && !hasAlt && key.toLowerCase() === 't') {
-        console.log('[hotkey] Ctrl+Shift+T → 恢复最近关闭标签 (browser)')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'reopenClosed' })
-        return
-      }
-      // Alt+Left / Alt+Right：后退 / 前进
-      if (hasAlt && !hasCtrl && !hasShift && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-        console.log('[hotkey] Alt+方向键 → 后退/前进 (browser)')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: key === 'ArrowLeft' ? 'navBack' : 'navForward' })
-        return
-      }
+      return
     }
 
     // ===== 云电脑模式：所有按键直通远端页面（不拦截），仅保留冗余退出组合 =====
@@ -139,81 +340,31 @@ export function attachWebviewHotkeyRouter(
       return
     }
 
-
-    // F4：后退（排除 Alt 以避免与 Alt+F4 关闭窗口冲突）
-    if (key === 'F4' && !hasCtrl && !hasAlt) {
-      console.log('[hotkey] F4 → 后退')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'navBack' })
-      return
-    }
-
-    // Ctrl+Shift+R 或 Ctrl+F5：强制刷新（清除缓存）
-    if (
-      !hasAlt &&
-      ((hasCtrl && hasShift && key.toLowerCase() === 'r') || (hasCtrl && key === 'F5'))
-    ) {
-      console.log('[hotkey] Ctrl+Shift+R/Ctrl+F5 → 强制刷新')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'forceRefresh' })
-      return
-    }
-
-    // F5：刷新当前标签
-    if (key === 'F5' && !hasCtrl && !hasAlt) {
-      console.log('[hotkey] F5 → 刷新')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'navRefresh' })
-      return
-    }
-
-    // F6：通过 IPC 转发到渲染层处理（主窗口聚焦 AI 输入框，浏览器窗口循环聚焦）
-    if (key === 'F6' && !hasCtrl && !hasAlt && !hasShift) {
-      console.log('[hotkey] F6 → 聚焦循环')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'focusCycle' })
-      return
-    }
-
-    // F10：切换主题（light/dark）
-    if (key === 'F10' && !hasCtrl && !hasAlt && !hasShift) {
-      console.log('[hotkey] F10 → 切换主题')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleTheme' })
-      return
-    }
+    // ===== F11/F12/Escape：含窗口类型分支的特殊快捷键 =====
 
     // F11：切换全屏/最大化（按窗口类型区分）
     // - 浏览器窗口：切换原生全屏（沉浸式全屏，渲染层收到状态后隐藏标签/导航/书签栏）
     // - 其他窗口：切换最大化/还原（接入 WindowMaximizeManager）
     if (key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
-      const isBrowserWin = isBrowserWindowContents(parentWebContents)
-      if (isBrowserWin && tryForward('toggleFullscreen')) {
+      if (isBrowser && tryForward('toggleFullscreen')) {
         console.log('[hotkey] F11 → 浏览器窗口切换沉浸式全屏')
         e.preventDefault()
-        // enter-full-screen / leave-full-screen 事件会广播 WIN_CONTROL_FULLSCREEN_TOGGLED
-        try {
-          win.setFullScreen(!win.isFullScreen())
-        } catch (err) {
-          console.error('[hotkey] 切换全屏失败:', err)
-        }
+        try { win.setFullScreen(!win.isFullScreen()) }
+        catch (err) { console.error('[hotkey] 切换全屏失败:', err) }
         return
       }
       console.log('[hotkey] F11 → 切换最大化')
       e.preventDefault()
-      const winId = findWindowIdByWin(win)
-      toggleMaximizeForWindow(win, winId)
+      toggleMaximizeForWindow(win, findWindowIdByWin(win))
       return
     }
 
     // Escape：浏览器窗口全屏时退出全屏（沉浸式全屏的标准退出方式）
     if (key === 'Escape' && !hasCtrl && !hasAlt && !hasShift) {
-      if (isBrowserWindowContents(parentWebContents) && win.isFullScreen()) {
+      if (isBrowser && win.isFullScreen()) {
         console.log('[hotkey] Escape → 退出浏览器窗口全屏')
         e.preventDefault()
-        try {
-          win.setFullScreen(false)
-        } catch { /* ignore */ }
+        try { win.setFullScreen(false) } catch { /* ignore */ }
         return
       }
     }
@@ -222,7 +373,6 @@ export function attachWebviewHotkeyRouter(
     if (key === 'F12' && !hasCtrl) {
       // 冻结期间短路 F12：debugger 已占用，开 DevTools 会冲突
       const wcId = wc.id
-      // 按 webContentsId 反查 tabId 较重，这里用「任意冻结中」粗判即可（冻结态本就罕见）
       if (wcId !== undefined) {
         const rec = getRecordByWebContentsId(wcId)
         if (rec && isFrozen(rec.tabId)) {
@@ -232,11 +382,7 @@ export function attachWebviewHotkeyRouter(
         }
       }
 
-      // 判断是否为浏览器窗口（URL 含 mode=browser）
-      const isBrowserWindow = isBrowserWindowContents(parentWebContents)
-
-      if (isBrowserWindow) {
-        // 浏览器窗口：通知渲染层切换 DevTools
+      if (isBrowser) {
         console.log('[hotkey] F12 → DevTools 切换 (browser window)')
         e.preventDefault()
         parentWebContents.send(IPC_CHANNELS.BROWSER_TOGGLE_DEVTOOLS)
@@ -249,189 +395,15 @@ export function attachWebviewHotkeyRouter(
       // 最大化/全屏与置顶互斥：先退出最大化/全屏，再切换置顶
       if (win.isMaximized()) {
         win.unmaximize()
-        // 手动同步渲染层最大化状态（unmaximize 事件处理器仅记日志不发 IPC）
         parentWebContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
       }
       if (win.isFullScreen()) {
         win.setFullScreen(false)
-        // leave-full-screen 事件会自动同步渲染层全屏状态
       }
       const windowId = findWindowIdByWin(win)
       const next = !win.isAlwaysOnTop()
       const actual = setAlwaysOnTopForWindow(win, windowId, next)
       parentWebContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, actual)
-      return
-    }
-
-    // Alt+1~9：切换到第 N 个标签（仅 Alt，无其它修饰键）
-    if (hasAlt && !hasCtrl && !hasMeta && !hasShift) {
-      // Alt+P：冻结/恢复当前页面（防撤回保险，浏览器窗口专用）
-      if (key.toLowerCase() === 'p') {
-        // 与 uiohook 兜底通道去重（同一 action 250ms 内仅一条生效）
-        if (tryForward('toggleFreeze')) {
-          console.log('[hotkey] Alt+P → 冻结/恢复当前页面')
-          e.preventDefault()
-          const record = getRecordByWebContentsId(wc.id)
-          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, {
-            action: 'toggleFreeze',
-            data: record ? { tabId: record.tabId } : undefined,
-          })
-        }
-        return
-      }
-      let n: number | null = null
-      if (code.startsWith('Digit')) {
-        const parsed = parseInt(code.slice('Digit'.length), 10)
-        if (parsed >= 1 && parsed <= 9) n = parsed
-      } else if (code.startsWith('Numpad')) {
-        const parsed = parseInt(code.slice('Numpad'.length), 10)
-        if (parsed >= 1 && parsed <= 9) n = parsed
-      }
-      if (n != null) {
-        console.log(`[hotkey] Alt+${n} → 切换标签 #${n}`)
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'switchTab', data: { index: n - 1 } })
-        return
-      }
-    }
-
-    // Ctrl+Tab / Ctrl+Shift+Tab：循环切换标签
-    if (hasCtrl && key === 'Tab') {
-      console.log(`[hotkey] Ctrl+Tab${hasShift ? '+Shift' : ''} → 循环切换标签(${hasShift ? '反向' : '正向'})`)
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'cycleTab', data: { reverse: hasShift } })
-      return
-    }
-
-    // Ctrl+T：当前窗口独立（脱离当前标签为新窗口）
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 't') {
-      console.log('[hotkey] Ctrl+T → 当前窗口独立（detachCurrent）')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'detachCurrent' })
-      return
-    }
-
-    // Ctrl+W：关闭当前标签（无标签时不操作，不关闭窗口）
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'w') {
-      console.log('[hotkey] Ctrl+W → 关闭当前标签')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'closeTab' })
-      return
-    }
-
-    // Ctrl+G：切换手柄/键盘空间导航模式
-    if (hasCtrl && !hasAlt && !hasShift && key.toLowerCase() === 'g') {
-      console.log('[hotkey] Ctrl+G → 切换空间导航模式')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleSpatialNav' })
-      return
-    }
-
-    // Ctrl+D：添加当前页面到书签
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'd') {
-      console.log('[hotkey] Ctrl+D → 添加书签')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'addBookmark' })
-      return
-    }
-
-    // Ctrl+H：打开历史标签
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'h') {
-      console.log('[hotkey] Ctrl+H → 打开历史')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'openHistory' })
-      return
-    }
-
-    // Ctrl+J：打开下载标签
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'j') {
-      console.log('[hotkey] Ctrl+J → 打开下载')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'openDownloads' })
-      return
-    }
-
-    // Ctrl+K / Ctrl+E：聚焦地址栏并进入搜索模式
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && (key.toLowerCase() === 'k' || key.toLowerCase() === 'e')) {
-      console.log(`[hotkey] Ctrl+${key.toUpperCase()} → 聚焦搜索`)
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'focusSearch' })
-      return
-    }
-
-    // Ctrl+Shift+Del：清除浏览数据
-    if (hasCtrl && hasShift && !hasAlt && !hasMeta && key === 'Delete') {
-      console.log('[hotkey] Ctrl+Shift+Del → 清除浏览数据')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'clearBrowsingData' })
-      return
-    }
-
-    // Ctrl+F：页内查找
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'f') {
-      console.log('[hotkey] Ctrl+F → 页内查找')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'findInPage' })
-      return
-    }
-
-    // Ctrl+P：打印当前页面
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'p') {
-      console.log('[hotkey] Ctrl+P → 打印')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'print' })
-      return
-    }
-
-    // Ctrl+S：另存为当前页面（仅浏览器窗口；AI 应用窗口保留页面自身行为）
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 's') {
-      const isBrowserWin = isBrowserWindowContents(parentWebContents)
-      if (isBrowserWin) {
-        console.log('[hotkey] Ctrl+S → 另存为当前页面')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'savePageAs' })
-      }
-      return
-    }
-
-    // Ctrl+U：查看网页源代码（仅浏览器窗口）
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && key.toLowerCase() === 'u') {
-      const isBrowserWin = isBrowserWindowContents(parentWebContents)
-      if (isBrowserWin) {
-        console.log('[hotkey] Ctrl+U → 查看网页源代码')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'viewSource' })
-      }
-      return
-    }
-
-    // Ctrl+= / Ctrl+- / Ctrl+0：页面缩放（仅浏览器窗口）
-    if (hasCtrl && !hasShift && !hasAlt && !hasMeta && (key === '=' || key === '+' || key === '-' || key === '0')) {
-      const isBrowserWin = isBrowserWindowContents(parentWebContents)
-      if (isBrowserWin) {
-        e.preventDefault()
-        if (key === '-') {
-          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'zoomOut' })
-        } else if (key === '0') {
-          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'zoomReset' })
-        } else {
-          parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'zoomIn' })
-        }
-      }
-      return
-    }
-
-    // 反引号(` ~) 或 Shift+? 呼出快捷键说明窗口
-    if (!hasAlt && !hasCtrl && !hasMeta && !hasShift && (key === '`' || key === '~' || code === 'Backquote')) {
-      console.log('[hotkey] ` → 切换快捷键窗口')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'openShortcuts' })
-      return
-    }
-    if (!hasAlt && !hasCtrl && !hasMeta && hasShift && key === '?') {
-      console.log('[hotkey] ? → 切换快捷键窗口')
-      e.preventDefault()
-      parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'openShortcuts' })
       return
     }
   })
