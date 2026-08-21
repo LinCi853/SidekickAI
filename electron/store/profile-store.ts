@@ -10,57 +10,32 @@ import type { Profile } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { generateUniqueName } from '../shared/naming.js'
-import { AI_PLATFORMS } from '../presets/ai-platforms.js'
+import { getDefaultProfileParams, createDefaultProfileParams } from './default-config.js'
 import { getPreset } from './preset-store.js'
 import { createSqliteJsonStore } from './module-state-store.js'
 
-// Windows Chrome 125 默认 UA（与 presets/devices.ts 中 win-chrome-125 预设一致）
-const WINDOWS_CHROME_125_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+// Windows Chrome 125 默认 UA 已迁移到 default-config.ts
 
 // 持久化存储实例（写入 profiles.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径（AppData\Roaming\<appName>）
 const store = createSqliteJsonStore<{ profiles: Profile[]; version: number }>({
   tableName: 'profiles',
-  legacyName: 'profiles',
   defaults: { profiles: [], version: 1 },
 })
 
 /**
  * 创建默认 Profile
- * 指纹种子每次随机，保证 Profile 间指纹差异。
+ * 使用 default-config.ts 统一管理的默认参数。
  * id 与时间戳由 create() 重新生成（不接受外部传入）。
  */
 function createDefaultProfile(): Profile {
+  const params = createDefaultProfileParams()
   return {
+    ...params,
     id: randomUUID(),
-    name: '未命名 Profile',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    devicePreset: 'win-chrome-125',
-    userAgent: WINDOWS_CHROME_125_UA,
-    platform: 'desktop',
-    viewport: { width: 1920, height: 1080 },
-    devicePixelRatio: 1,
-    language: 'zh-CN',
-    timezone: 'Asia/Shanghai',
-    proxy: '',
-    fingerprint: {
-      seed: Math.floor(Math.random() * 0xffffffff),
-      canvas: 'noise',
-      webgl: 'noise',
-      audio: 'noise',
-      fonts: 'noise',
-      webrtc: 'real',
-    },
-    // 默认窗口尺寸：类似旧版 QQ 的窄长条形
-    width: 320,
-    height: 720,
-    alwaysOnTop: false,
-    order: 0,
-    // 浏览器独立窗口主页 URL（留空时回退到 aiPlatformUrl）
-    browserHomePage: '',
   }
 }
 
@@ -325,8 +300,7 @@ export function registerProfileIPC(): void {
  * 首次启动自动创建 9 个 AI 平台 Profile（移动端指纹）
  *
  * 仅在 store 中 profiles 为空时创建。每个平台使用 iPhone 15 Pro 移动端指纹，
- * DeepSeek 为默认平台。从 devices.ts 获取 iPhone 预设的完整配置（viewport, dpr,
- * language, timezone 等），保证与设备预设字典一致。
+ * DeepSeek 为默认平台。使用 default-config.ts 统一管理的默认配置。
  *
  * @returns 创建的 Profile 列表（若已存在 Profile 则返回空数组）
  */
@@ -336,116 +310,20 @@ export function ensureDefaultProfiles(): Profile[] {
     return []
   }
 
-  // 获取 iPhone 15 Pro 预设的完整配置（viewport, dpr, language, timezone 等）
-  const iphonePreset = getPreset('iphone-15-pro-safari')
-  if (!iphonePreset) {
-    console.error(
-      '[profile-store] 找不到 iphone-15-pro-safari 预设，无法创建默认 AI 平台 Profile',
-    )
-    return []
-  }
-
   const created: Profile[] = []
-  AI_PLATFORMS.forEach((platform, index) => {
-    const profile = profileStore.create({
-      name: platform.name,
-      // v0.0.9: DeepSeek 为保底内置应用，不可删除、不可重命名
-      isBuiltIn: platform.id === 'deepseek',
-      devicePreset: platform.defaultMobilePreset,
-      userAgent: platform.defaultUA,
-      platform: 'mobile',
-      viewport: {
-        width: iphonePreset.viewport.width,
-        height: iphonePreset.viewport.height,
-      },
-      devicePixelRatio: iphonePreset.devicePixelRatio,
-      language: iphonePreset.language,
-      timezone: iphonePreset.timezone,
-      isAIPlatform: true,
-      aiPlatformUrl: platform.url,
-      aiPlatformId: platform.id,
-      aiPlatformRegion: platform.region,
-      aiDesktopPreset: platform.defaultDesktopPreset,
-      aiMobilePreset: platform.defaultMobilePreset,
-      aiThemeColor: platform.themeColor,
-      // 窗口尺寸采用移动端比例
-      width: iphonePreset.viewport.width,
-      height: iphonePreset.viewport.height,
-      // 按平台在 AI_PLATFORMS 中的索引设置 order，保证首次创建即有正确顺序
-      order: index,
-      fingerprint: {
-        seed: Math.floor(Math.random() * 0xffffffff),
-        canvas: 'noise',
-        webgl: 'noise',
-        audio: 'noise',
-        fonts: 'noise',
-        webrtc: 'real',
-      },
-    })
-    created.push(profile)
-  })
-
-  console.log(
-    `[profile-store] 首次启动：自动创建 ${created.length} 个 AI 平台 Profile（移动端指纹）`,
-  )
+  try {
+    const defaultParams = getDefaultProfileParams()
+    for (const params of defaultParams) {
+      const profile = profileStore.create(params)
+      created.push(profile)
+    }
+    console.log(
+      `[profile-store] 首次启动：自动创建 ${created.length} 个 AI 平台 Profile（移动端指纹）`,
+    )
+  } catch (err) {
+    console.error('[profile-store] 创建默认 Profile 失败:', err)
+  }
   return created
 }
 
-/**
- * 迁移：为旧版 AI 平台 Profile 补齐 aiPlatformId / aiPlatformRegion / aiDesktopPreset / aiMobilePreset / aiThemeColor。
- * 旧数据仅通过 aiPlatformUrl 关联平台，编辑 URL 后会失联；
- * 这里按 platform.id / platform.name / platform.url 推断关联平台。
- */
-export function migrateAIPlatformIds(): void {
-  const profiles = store.get('profiles')
-  let changed = false
-  for (const profile of profiles) {
-    if (!profile.isAIPlatform) continue
-    const platform = AI_PLATFORMS.find(
-      (p) =>
-        p.id === profile.aiPlatformId ||
-        p.name === profile.name ||
-        p.url === profile.aiPlatformUrl,
-    )
-    if (!platform) continue
-    // 补齐 aiPlatformId
-    if (!profile.aiPlatformId) {
-      profile.aiPlatformId = platform.id
-      changed = true
-      console.log(`[profile-store] 迁移 aiPlatformId: ${profile.name} -> ${platform.id}`)
-    }
-    // 补齐 aiPlatformRegion
-    if (!profile.aiPlatformRegion) {
-      profile.aiPlatformRegion = platform.region
-      changed = true
-      console.log(`[profile-store] 迁移 aiPlatformRegion: ${profile.name} -> ${platform.region}`)
-    }
-    // 补齐 aiDesktopPreset
-    if (!profile.aiDesktopPreset) {
-      profile.aiDesktopPreset = platform.defaultDesktopPreset
-      changed = true
-      console.log(`[profile-store] 迁移 aiDesktopPreset: ${profile.name} -> ${platform.defaultDesktopPreset}`)
-    }
-    // 补齐 aiMobilePreset
-    if (!profile.aiMobilePreset) {
-      profile.aiMobilePreset = platform.defaultMobilePreset
-      changed = true
-      console.log(`[profile-store] 迁移 aiMobilePreset: ${profile.name} -> ${platform.defaultMobilePreset}`)
-    }
-    // 补齐 aiThemeColor
-    if (!profile.aiThemeColor) {
-      profile.aiThemeColor = platform.themeColor
-      changed = true
-      console.log(`[profile-store] 迁移 aiThemeColor: ${profile.name} -> ${platform.themeColor}`)
-    }
-    // v0.0.9: 迁移 isBuiltIn 标记（DeepSeek 保底应用）
-    if (platform.id === 'deepseek' && !profile.isBuiltIn) {
-      profile.isBuiltIn = true
-      changed = true
-      console.log(`[profile-store] 迁移 isBuiltIn: ${profile.name} -> true (deepseek)`)
-    }
-  }
-  if (changed) {
-    store.set('profiles', profiles)
-  }
-}
+

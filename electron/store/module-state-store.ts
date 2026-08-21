@@ -18,12 +18,11 @@
 
 import Database from 'better-sqlite3'
 import path from 'path'
-import { existsSync, readFileSync, renameSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { app } from 'electron'
 import {
   createSingletonHolder,
   createSqliteDb,
-  getStoreCwd,
   isPortableMode,
   MetaTable,
   resolveSqlitePath,
@@ -86,38 +85,6 @@ export function getAppSettingsTable(): MetaTable<string> {
   return new MetaTable<string>(getModuleStateDb(), 'app_settings')
 }
 
-/**
- * 一次性迁移：旧 electron-store 的 app-settings.json → settings.db 的 app_settings 表。
- * 迁移成功后旧文件改名为 .bak（保留证据，不再作为数据源）。
- * 幂等：settings_meta.appSettingsMigrated='1' 后不再执行。
- */
-export function migrateAppSettingsJson(): boolean {
-  const db = getModuleStateDb()
-  const meta = new MetaTable<string>(db, 'settings_meta')
-  if (meta.get('appSettingsMigrated') === '1') return false
-  let migrated = false
-  try {
-    const dir = getStoreCwd() ?? app.getPath('userData')
-    const legacyPath = path.join(dir, 'app-settings.json')
-    if (existsSync(legacyPath)) {
-      const parsed = JSON.parse(readFileSync(legacyPath, 'utf-8')) as {
-        settings?: Record<string, unknown>
-      }
-      const settings = parsed?.settings ?? (parsed as unknown as Record<string, unknown>)
-      if (settings && typeof settings === 'object') {
-        getAppSettingsTable().set('appSettings', JSON.stringify(settings))
-        renameSync(legacyPath, legacyPath + '.bak')
-        migrated = true
-      }
-    }
-  } catch (err) {
-    console.warn('[module-state] app-settings 旧 JSON 迁移失败（不影响启动）:', err)
-  }
-  meta.set('appSettingsMigrated', '1')
-  console.log('[module-state] app-settings 入库迁移:', migrated ? '已迁入 settings.db（旧文件保留为 .bak）' : '无旧数据或已迁移')
-  return migrated
-}
-
 /** 读取安装清单中某大模块是否已安装（便携版恒 true；清单缺失按已安装处理） */
 export function isLargeModuleInstalledByManifestFile(moduleId: string): boolean {
   if (isPortableMode()) return true
@@ -178,13 +145,9 @@ export function saveModuleState(rec: ModuleStateRecord): void {
 // ============================================================================
 
 /**
- * SQLite KV 存储适配器：与 electron-store 接口兼容（get/set），
- * 供 createCrudStore 等上层代码零改动使用。
+ * SQLite KV 存储适配器。
  *
- * 每个 store 的数据存为 settings.db 中独立的 KV 表（单行 key='__data__',
- * value=JSON），旧 JSON 文件一次性迁移后改名 .bak。
- *
- * 迁移幂等：settings_meta 中 'migrated:<tableName>' = '1' 后不再执行。
+ * 每个 store 的数据存为 settings.db 中独立的 KV 表（单行 key='__data__', value=JSON）。
  */
 export interface JsonStore<T> {
   get(key: string): any
@@ -195,34 +158,9 @@ export interface JsonStore<T> {
 
 export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
   tableName: string
-  legacyName: string
   defaults: T
 }): JsonStore<T> {
-  const db = getModuleStateDb()
-  const meta = new MetaTable<string>(db, 'settings_meta')
-  const table = new MetaTable<string>(db, opts.tableName)
-
-  // 一次性迁移旧 JSON → SQLite（幂等）
-  const migrationKey = 'migrated:' + opts.tableName
-  if (meta.get(migrationKey) !== '1') {
-    try {
-      const dir = getStoreCwd() ?? app.getPath('userData')
-      const legacyPath = path.join(dir, opts.legacyName + '.json')
-      if (existsSync(legacyPath)) {
-        const parsed = JSON.parse(readFileSync(legacyPath, 'utf-8'))
-        // electron-store 文件结构：{ "storeName": { ...data } }
-        const data = parsed?.[opts.legacyName] ?? parsed
-        if (data && typeof data === 'object') {
-          table.set('__data__', JSON.stringify(data))
-          try { renameSync(legacyPath, legacyPath + '.bak') } catch { /* ignore */ }
-          console.log('[store] 已迁移 ' + opts.legacyName + '.json → settings.db/' + opts.tableName)
-        }
-      }
-    } catch (err) {
-      console.warn('[store] 迁移 ' + opts.legacyName + ' 失败（不影响启动）:', err)
-    }
-    meta.set(migrationKey, '1')
-  }
+  const table = new MetaTable<string>(getModuleStateDb(), opts.tableName)
 
   // 缓存：避免每次 get 都解析 JSON
   let cache: T | null = null

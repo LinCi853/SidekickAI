@@ -82,7 +82,7 @@ export interface Profile {
   language: string
   /** 时区 */
   timezone: string
-  /** 代理配置（空字符串=直连）—— 旧字段，仅作兼容；优先使用 proxyConfig */
+  /** 代理配置（空字符串=直连） */
   proxy: string
   /**
    * Profile 级独立代理配置（完整对象）。
@@ -182,7 +182,7 @@ export interface AIPlatform {
   defaultDesktopPreset: string
   /** 默认移动端 UA 对应的设备预设 id（默认值，用户可在设置中覆盖） */
   defaultMobilePreset: string
-  /** 默认 UA（兼容旧字段，值等于 defaultMobilePreset 对应 UA） */
+  /** 默认 UA（值等于 defaultMobilePreset 对应 UA） */
   defaultUA: string
   /** 默认分辨率 */
   defaultResolution: { width: number; height: number }

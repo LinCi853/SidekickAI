@@ -2,7 +2,6 @@
 //
 // 包含：
 //   - 自定义对话窗口（CHAT_OPEN_WINDOW / CHAT_OPEN_HISTORY_WINDOW）
-//   - chat 脱离窗口管理（CHAT_LIST/CREATE/UPDATE/REMOVE/SHOW_DETACHED/GET_CONFIG）
 //   - Profile 级窗口管理（WINDOW_OPEN/CLOSE/CLOSE_ALL/SWITCH_UA/SWITCH_DEVICE/SET_ALWAYS_ON_TOP/GET_OPEN_IDS/SETUP_SESSION）
 //   - 指纹脚本（FINGERPRINT_GET_SCRIPT）
 //   - 当前窗口控制（WIN_CONTROL_MINIMIZE/MAXIMIZE_TOGGLE/CLOSE/SET_ALWAYS_ON_TOP/IS_MAXIMIZED/GET_BOUNDS/RESIZE/TOGGLE_FULLSCREEN）
@@ -20,7 +19,6 @@ import { createMaximizeManager } from '../window-factory/window-maximize-manager
 import {
   IPC_CHANNELS,
   type WindowStateData,
-  type ChatWindowConfig,
 } from '../shared/types.js'
 import type { WindowManager } from '../window/manager.js'
 import type { FingerprintEngine } from '../fingerprint/engine.js'
@@ -37,8 +35,6 @@ export interface WindowControlIpcDeps {
   createChatWindow: () => BrowserWindow | null
   /** 显示历史搜索独立窗口（单例） */
   showHistoryWindow: () => void
-  /** 获取脱离窗口 Map 中的窗口实例 */
-  getDetachedWindow: (windowId: string) => BrowserWindow | undefined
 }
 
 /**
@@ -54,7 +50,6 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
     findWindowIdByWin,
     createChatWindow,
     showHistoryWindow,
-    getDetachedWindow,
   } = deps
 
   // 辅助函数：根据是否有 scope 选择注册方式
@@ -71,44 +66,6 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   // ===== 历史搜索独立窗口 IPC（单例，列举所有本地保存数据） =====
   handle(IPC_CHANNELS.CHAT_OPEN_HISTORY_WINDOW, () => {
     showHistoryWindow()
-  })
-
-  // ===== 自定义对话脱离窗口管理 IPC（已停用，保留 IPC 通道兼容旧渲染层调用） =====
-  // 4.7 重构后：Alt+Q 改为切换 进阶面板（toggleAdvancedPanelWindow），
-  // 不再创建/显示旧的 per-provider chat 脱离窗口（mode='chat'）。
-  // 各 handler 降级为 no-op / 空返回，避免旧渲染层调用时崩溃。
-  // 列出 chat 脱离窗口：始终返回空数组（不再有活跃的 chat 脱离窗口）
-  handle(IPC_CHANNELS.CHAT_LIST_DETACHED, () => {
-    return []
-  })
-  // 创建 chat 脱离窗口：已停用，返回空字符串（不再创建）
-  handle(IPC_CHANNELS.CHAT_CREATE_DETACHED, () => {
-    console.warn('[window-control-ipc] ⚠️ 降级实现: CHAT_CREATE_DETACHED 已停用（4.7 重构），请使用 进阶面板')
-    return ''
-  })
-  // 更新 chat 脱离窗口配置：no-op
-  ipcMain.handle(
-    IPC_CHANNELS.CHAT_UPDATE_DETACHED,
-    (_e, _windowId: string, _config: ChatWindowConfig) => {
-      console.warn('[window-control-ipc] CHAT_UPDATE_DETACHED 已停用（4.7 重构）')
-    },
-  )
-  // 删除 chat 脱离窗口：仅清理状态（关闭可能残留的窗口）
-  ipcMain.handle(IPC_CHANNELS.CHAT_REMOVE_DETACHED, (_e, windowId: string) => {
-    const w = getDetachedWindow(windowId)
-    if (w && !w.isDestroyed()) {
-      w.close()
-    }
-    windowStore.remove(windowId)
-  })
-  // 显示 chat 脱离窗口：已停用，no-op（不再显示旧的 per-provider chat 窗口）
-  ipcMain.handle(IPC_CHANNELS.CHAT_SHOW_DETACHED, (_e, windowId: string) => {
-    console.warn(`[window-control-ipc] CHAT_SHOW_DETACHED 已停用（4.7 重构），windowId=${windowId}，请使用 进阶面板`)
-  })
-  // 获取当前窗口的 chatConfig（ChatView 渲染时调用，保留兼容）
-  ipcMain.handle(IPC_CHANNELS.CHAT_GET_CONFIG, (_e, windowId: string) => {
-    const state = windowStore.get(windowId)
-    return state?.chatConfig ?? null
   })
 
   // ===== 窗口管理 IPC（Profile 级别）=====

@@ -10,7 +10,6 @@ import { IPC_CHANNELS } from '../../shared/types.js'
 import { EffectScope } from '../effect-scope.js'
 import { registerWhiteboardIPC, closeWhiteboardDb } from '../../store/whiteboard-db.js'
 import { registerWhiteboardAssetIPC } from '../../store/whiteboard-asset-store.js'
-import { migrateWhiteboardNotes } from '../../store/migrate-whiteboard-notes.js'
 import { openAdvancedPanelWindow } from '../../window-factory.js'
 import { windowState } from '../../window-state.js'
 import { resolveSqlitePath } from '../../store/store-paths.js'
@@ -63,8 +62,6 @@ function handleWhiteboardPushImage(
 export function initWhiteboardModule(): void {
   // 幂等：先清理旧注册再注册（init 重入/热重载安全）
   void scope.dispose().then(() => {
-    // 一次性数据迁移（幂等）：electron-store JSON → SQLite
-    migrateWhiteboardNotes()
     // 传递 scope 给 registerWhiteboardIPC，使其使用 EffectScope 管理 IPC handler
     registerWhiteboardIPC(scope)
     // 注意：registerWhiteboardAssetIPC 内部已含协议注册，勿重复调用 registerWhiteboardAssetProtocol

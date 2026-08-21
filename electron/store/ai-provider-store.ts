@@ -43,7 +43,6 @@ export function deriveAudioEndpoint(apiEndpoint: string, path: 'speech' | 'trans
 // 持久化存储实例（写入 ai-providers.json）
 const store = createSqliteJsonStore<{ providers: PersistedProvider[]; version: number }>({
   tableName: 'ai_providers',
-  legacyName: 'ai-providers',
   defaults: { providers: [], version: 1 },
 })
 

@@ -22,7 +22,6 @@ import { mkdirSync, existsSync } from 'fs'
 import {
   registerProfileIPC,
   ensureDefaultProfiles,
-  migrateAIPlatformIds,
 } from './store/profile-store.js'
 import {
   registerBlockRulesIPC,
@@ -348,9 +347,8 @@ app.whenReady().then(async () => {
     registerPromptIPC()
   }
 
-  // 首次启动创建默认 AI 平台 Profile，并迁移旧数据补齐 aiPlatformId
+  // 首次启动创建默认 AI 平台 Profile
   ensureDefaultProfiles()
-  migrateAIPlatformIds()
 
   // 注册页面组件屏蔽规则 IPC + 首次启动填充预置规则
   registerBlockRulesIPC()
@@ -538,7 +536,6 @@ app.whenReady().then(async () => {
     findWindowIdByWin,
     createChatWindow,
     showHistoryWindow,
-    getDetachedWindow: (windowId: string) => windowState.detachedWindows.get(windowId),
   })
 
   // ===== 注册标签 IPC（标签 CRUD + DETACH_TAB） =====

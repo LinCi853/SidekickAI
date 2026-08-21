@@ -22,8 +22,6 @@ export interface MigratedTabInfo {
   /** 标签来源：'initial' | 'new' | 'external' | 'settings' | 'bookmark-manager'。
    *  'settings' 迁移后通知主窗口切换至主页，不作为主窗口主页插入 */
   source?: BrowserTabState['source']
-  /** 兼容旧字段：tabId（等同于 parentTabId 或浏览器窗口内 tab id） */
-  tabId?: string
   url: string
   title: string
 }

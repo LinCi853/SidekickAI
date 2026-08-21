@@ -29,15 +29,10 @@ type HotkeyStoreSchema = {
   'hotkey.enabled.toggleDetachedWindows': boolean
   'hotkey.enabled.backgroundVoice': boolean
   'hotkey.enabled.toggleVoice': boolean
-  /** 旧版 key（迁移后删除） */
-  'hotkey.toggle'?: string
-  /** 旧版 key（已下线，迁移时删除） */
-  'hotkey.toggleAlwaysOnTop'?: string
 }
 
 export const hotkeyStore = createSqliteJsonStore<HotkeyStoreSchema>({
   tableName: 'hotkey_config',
-  legacyName: 'hotkey',
   defaults: {
     'hotkey.toggleMainWindow': DEFAULT_HOTKEYS.toggleMainWindow,
     'hotkey.toggleDetachedWindows': DEFAULT_HOTKEYS.toggleDetachedWindows,
@@ -49,31 +44,6 @@ export const hotkeyStore = createSqliteJsonStore<HotkeyStoreSchema>({
     'hotkey.enabled.toggleVoice': false,
   },
 })
-
-/** 旧版配置迁移：hotkey.toggle -> hotkey.toggleMainWindow */
-function migrateLegacyHotkey(): void {
-  const legacy = hotkeyStore.get('hotkey.toggle')
-  if (typeof legacy === 'string' && legacy) {
-    // 仅在新 key 仍为默认值时迁移（避免覆盖用户已设置的新值）
-    const current = hotkeyStore.get('hotkey.toggleMainWindow')
-    if (current === DEFAULT_HOTKEYS.toggleMainWindow) {
-      hotkeyStore.set('hotkey.toggleMainWindow', legacy)
-      console.log(
-        `[HotkeyManager] 迁移旧热键 hotkey.toggle -> hotkey.toggleMainWindow: ${legacy}`,
-      )
-    }
-    // 删除旧 key
-    hotkeyStore.delete('hotkey.toggle')
-  }
-  // 一次性迁移：删除已下线的 toggleAlwaysOnTop 残留键
-  if (hotkeyStore.has('hotkey.toggleAlwaysOnTop')) {
-    hotkeyStore.delete('hotkey.toggleAlwaysOnTop')
-    console.log('[HotkeyManager] 清理已下线热键 hotkey.toggleAlwaysOnTop')
-  }
-}
-
-// 启动时迁移一次
-migrateLegacyHotkey()
 
 export const storeKey = (action: HotkeyAction): string => `hotkey.${action}`
 export const enabledStoreKey = (action: HotkeyAction): string => `hotkey.enabled.${action}`

@@ -113,10 +113,8 @@ export function useBrowserInit() {
           title: t.title || '',
           originalOrder: idx,
           source: t.source,
-          // 兼容旧字段：tabId 用于旧版主窗口回退逻辑
-          tabId: t.parentTabId || t.id,
         }));
-      // 兼容：同时传当前激活标签的 url/title（旧逻辑）
+      // 同时传当前激活标签的 url/title
       const activeTab = store.tabs.find((t) => t.id === store.activeTabId);
       const isMigratable = activeTab && activeTab.source !== 'settings' && activeTab.source !== 'bookmark-manager' && activeTab.source !== 'history' && activeTab.source !== 'downloads';
       const activeUrl = isMigratable

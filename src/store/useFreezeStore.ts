@@ -90,7 +90,7 @@ export const useFreezeStore = create<FreezeStore>((set, get) => ({
   },
 
   doDetach: async (tabId) => {
-    if (!freezeActive()) return false;
+    if (!freezeActive()) return true; // 模块未启用，无需清理，安全关闭
     const ok = await detachFreeze(tabId);
     if (!ok) {
       await get().syncStatus(tabId);

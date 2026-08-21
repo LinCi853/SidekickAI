@@ -396,8 +396,8 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
    ===================================================================== */
 
 export interface VoiceConfigState {
-  confirmMode: 'auto' | 'manual' | 'clipboard';
-  setConfirmMode: Dispatch<SetStateAction<'auto' | 'manual' | 'clipboard'>>;
+  confirmMode: 'auto' | 'clipboard';
+  setConfirmMode: Dispatch<SetStateAction<'auto' | 'clipboard'>>;
   inputMethod: 'layered' | 'clipboard' | 'type';
   setInputMethod: Dispatch<SetStateAction<'layered' | 'clipboard' | 'type'>>;
   enterToSend: boolean;
@@ -423,7 +423,7 @@ export interface VoiceConfigState {
 }
 
 export function useVoiceConfig(enabled: boolean): VoiceConfigState {
-  const [confirmMode, setConfirmMode] = useState<'auto' | 'manual' | 'clipboard'>('auto');
+  const [confirmMode, setConfirmMode] = useState<'auto' | 'clipboard'>('auto');
   const [inputMethod, setInputMethod] = useState<'layered' | 'clipboard' | 'type'>('layered');
   const [enterToSend, setEnterToSend] = useState(false);
   const [sttMode, setSttMode] = useState<'ai' | 'local'>('ai');

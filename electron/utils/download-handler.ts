@@ -152,7 +152,7 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
         startTime,
         endTime,
       })
-      // 兼容旧逻辑：completed 时广播 APP_DOWNLOAD_DONE
+      // completed 时广播 APP_DOWNLOAD_DONE
       if (state === 'completed') {
         const info = { filename: item.getFilename(), path: item.getSavePath() }
         console.log('[download-handler] 下载完成:', info)

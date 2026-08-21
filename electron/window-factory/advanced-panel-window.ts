@@ -134,10 +134,11 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
   })
 
-  // 进阶面板：保存 bounds，下次打开时恢复窗口大小和位置（白板模式除外）
+  // 进阶面板：不保存 bounds，取消最大化时由 WindowMaximizeManager 使用
+  // centered70 策略还原为工作区居中 70% 尺寸（与浏览器窗口同步）
   attachDetachedWindowLifecycle(win, ADVANCED_PANEL_WINDOW_ID, () => {
     windowState.advancedPanelWindow = null
-  }, { trackBounds: true })
+  }, { trackBounds: false })
 
   return win
 }

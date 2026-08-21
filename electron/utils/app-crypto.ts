@@ -18,7 +18,6 @@ interface AppKeyFile {
 /** 密钥文件存储实例（写入 app-key.json） */
 const keyStore = createSqliteJsonStore<AppKeyFile>({
   tableName: 'app_key',
-  legacyName: 'app-key',
   defaults: {
     version: 1,
     key: '',

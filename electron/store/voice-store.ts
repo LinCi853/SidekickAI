@@ -15,6 +15,10 @@ import { ipcMain } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type AudioDeviceInfo } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
+import { VOICE_CONFIG } from './default-config.js'
+
+// 重新导出 VoiceConfig 类型（供 default-config.ts 使用）
+export type { VoiceConfig } from '../shared/api/voice.api.js'
 
 // 持久化存储实例（写入 voice-config.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
@@ -23,10 +27,9 @@ export interface VoiceConfig {
   /**
    * 语音识别完成后的上屏方式：
    * - 'auto'（默认）：识别完成后自动注入/粘贴上屏（前台注入 webview，后台 Ctrl+V 粘贴）
-   * - 'manual'：同 'auto'，保留枚举仅为兼容旧配置
    * - 'clipboard'：仅写入剪贴板，不模拟按键（用户手动粘贴）
    */
-  confirmMode: 'auto' | 'manual' | 'clipboard'
+  confirmMode: 'auto' | 'clipboard'
   /**
    * 后台语音上屏模式（仅影响应用外的第三方应用）：
    * - 'layered'（推荐）：分层降级 UI Automation → SendInput → 剪贴板
@@ -74,48 +77,21 @@ export interface VoiceConfig {
   ttsProvider?: string
 }
 
-const DEFAULT_VOICE_CONFIG: VoiceConfig = {
-  confirmMode: 'auto',
-  inputMethod: 'layered',
-  enterToSend: false,
-  sttMode: 'ai',
-  aiProvider: '',
-  language: 'zh',
-  localExePath: '',
-  localArgs: '',
-  inputDeviceId: '',
-  inputDeviceList: [],
-  ttsMode: 'disable',
-  ttsProvider: '',
-}
+// VOICE_CONFIG 已迁移到 default-config.ts
 
 const store = createSqliteJsonStore<{ config: VoiceConfig; version: number }>({
   tableName: 'voice_config',
-  legacyName: 'voice-config',
+
   defaults: {
-    config: DEFAULT_VOICE_CONFIG,
+    config: VOICE_CONFIG,
     version: 2,
   },
 })
 
-/** 读取语音配置（自动合并默认值，确保所有字段都存在；自动迁移旧配置） */
+/** 读取语音配置（自动合并默认值，确保所有字段都存在） */
 export function getVoiceConfig(): VoiceConfig {
   const stored = (store.get('config') || {}) as Partial<VoiceConfig>
-  const merged: VoiceConfig = { ...DEFAULT_VOICE_CONFIG, ...stored }
-  // 老用户：仅 enterToSend 有值但 confirmMode 未显式设置时，统一迁移到 'auto'
-  // （候选窗已移除，manual 与 auto 行为一致，统一用 auto 表示"自动上屏"）
-  if (stored.enterToSend !== undefined && (stored as { confirmMode?: string }).confirmMode === undefined) {
-    merged.confirmMode = 'auto'
-  }
-  // 老用户：旧值 'manual' 保留兼容（行为等同 'auto'），不强制改写避免频繁写盘
-  // 老用户迁移：旧的 builtin/download 模式统一迁移到 ai
-  // （sttMode 类型已收窄为 'ai' | 'local'，但旧磁盘数据可能仍存有 builtin/download，
-  //   需基于原始存储值判断，避免类型断言把迁移逻辑判为永不成立）
-  const rawSttMode = (stored as { sttMode?: string }).sttMode
-  if (rawSttMode === 'builtin' || rawSttMode === 'download') {
-    merged.sttMode = 'ai'
-  }
-  return merged
+  return { ...VOICE_CONFIG, ...stored }
 }
 
 /** 更新语音配置（合并 patch） */

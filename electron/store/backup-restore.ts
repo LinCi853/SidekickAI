@@ -19,23 +19,12 @@ import { closeModuleStateDb } from './module-state-store.js';
 import { profileStore } from './profile-store.js';
 import { getStoreCwd, isPortableMode } from './store-paths.js';
 
-/** 必须迁移的文件列表（相对数据目录） */
+/** 必须备份的文件列表（相对数据目录） */
 const BACKUP_FILES = [
-  // ===== Phase 3：settings.db 是所有 JSON 设置的单一数据源 =====
-  // 旧 JSON 文件（app-settings.json 等）迁移后变为 .bak，保留兼容旧版本
+  // ===== settings.db =====
   'settings.db',
   'settings.db-wal',
   'settings.db-shm',
-  // 旧 JSON 文件（迁移前存在，迁移后为 .bak，备份时一并包含）
-  'app-settings.json',
-  'window-states.json',
-  'ai-providers.json',
-  'profiles.json',
-  'voice-config.json',
-  'hotkey.json',
-  'prompts.json',
-  'presets.json',
-  'block-rules.json',
   // ===== SQLite 数据库（各模块数据） =====
   'chat.db',
   'chat.db-wal',

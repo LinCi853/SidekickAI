@@ -76,7 +76,7 @@ export function registerTabIpc(deps: TabIpcDeps, scope?: EffectScope): void {
     profileId: string
     url: string
     title: string
-    finalUrls?: Array<{ tabId: string; url: string; title: string }>
+    finalUrls?: Array<{ parentTabId?: string; url: string; title: string }>
   }) => {
     const mainWindow = windowState.mainWindow
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -90,7 +90,7 @@ export function registerTabIpc(deps: TabIpcDeps, scope?: EffectScope): void {
     const profileName = profileStore.get(payload.profileId)?.name ?? null
     const restoredTabs = mainState.tabs.map((t) => {
       if (t.profileId !== payload.profileId) return t
-      const final = payload.finalUrls?.find((f) => f.tabId === t.id)
+      const final = payload.finalUrls?.find((f) => f.parentTabId === t.id)
       return {
         ...t,
         url: final?.url ?? t.url,

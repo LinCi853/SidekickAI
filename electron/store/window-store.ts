@@ -22,7 +22,7 @@ type WindowStateStore = {
 
 const store = createSqliteJsonStore<WindowStateStore>({
   tableName: 'window_states',
-  legacyName: 'window-states',
+
   defaults: { states: {} },
 })
 

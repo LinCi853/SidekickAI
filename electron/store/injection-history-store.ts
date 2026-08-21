@@ -31,7 +31,6 @@ const MAX_RECORDS = 200
 
 const store = createSqliteJsonStore<{ records: InjectionRecord[]; version: number }>({
   tableName: 'injection_history',
-  legacyName: 'injection-history',
   defaults: { records: [], version: 1 },
 })
 

@@ -14,7 +14,7 @@ import type { CustomAIProvider } from '../../../lib/electron-api';
 import VoiceProviderConfig from './VoiceProviderConfig';
 
 type SttMode = 'ai' | 'local';
-type ConfirmMode = 'auto' | 'manual' | 'clipboard';
+type ConfirmMode = 'auto' | 'clipboard';
 
 interface VoiceSectionProps {
   voice: VoiceSettings;
@@ -418,7 +418,7 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
         <SegmentedControl
           className="voice-mode-group"
           name="confirm-mode"
-          value={voiceConfirmMode === 'manual' ? 'auto' : voiceConfirmMode}
+          value={voiceConfirmMode}
           onChange={async (mode: 'auto' | 'clipboard') => {
             setVoiceConfirmMode(mode);
             try {

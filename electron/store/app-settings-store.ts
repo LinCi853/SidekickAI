@@ -1,32 +1,30 @@
 // electron/store/app-settings-store.ts — 应用全局设置持久化存储 + IPC 注册
 //
-// 决策 0.4（既有需求）：设置尽量入库。应用设置现持久化到 SQLite settings.db 的
-// app_settings 表（首次启动自动把旧 app-settings.json 迁入，旧文件改名 .bak）。
+// 应用设置持久化到 SQLite settings.db 的 app_settings 表。
 // 当前字段：
 //   - hideForeignModels: boolean  是否隐藏国外模型/平台（默认 true，安装后仅显示国内可用服务）
 //   - tabBarCollapsed: boolean    顶部标签栏是否默认收起（hover 展开），默认 true
 //   - proxyMode: 'system' | 'direct' | 'custom'  代理模式（system=系统代理 / direct=直连 / custom=自定义）
 //   - customProxy: string         自定义代理地址（proxyMode=custom 时有效，空字符串=不使用自定义代理）
 //   - proxyUsername/proxyPassword/proxyBypass: 自定义代理的认证与绕过列表
-//
 
 import { ipcMain, BrowserWindow, app, session, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { IPC_CHANNELS, ALL_TOP_BAR_BUTTON_GROUPS, type TopBarButtonGroup } from '../shared/types.js'
+import { IPC_CHANNELS, type TopBarButtonGroup } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { isPortableMode, getStoreCwd } from './store-paths.js'
-import { getAppSettingsTable, migrateAppSettingsJson } from './module-state-store.js'
+import { getAppSettingsTable } from './module-state-store.js'
 import { getHotkeyManagerInstance } from '../hotkey/manager.js'
+import { getDefaultAppSettings, type DefaultAppSettings } from './default-config.js'
 
 // ===== SQLite 持久化（settings.db / app_settings 表） =====
 
 /** 内存缓存（进程内读写即时生效，writeSettingsRaw 同步落库） */
 let settingsCache: AppSettings | null = null
 
-/** 读原始设置（含默认值兜底与一次性旧 JSON 迁移） */
+/** 读原始设置（含默认值兜底） */
 function readSettingsRaw(): AppSettings {
-  migrateAppSettingsJson()
   if (!settingsCache) {
     const raw = getAppSettingsTable().get('appSettings')
     if (raw) {
@@ -35,10 +33,10 @@ function readSettingsRaw(): AppSettings {
         console.log('[app-settings] 从 settings.db 加载设置, onboardingCompleted=', settingsCache.onboardingCompleted)
       } catch (err) {
         console.error('[app-settings] 解析 settings.db 失败，回退默认值:', err)
-        settingsCache = { ...DEFAULT_SETTINGS }
+        settingsCache = getDefaultSettings()
       }
     } else {
-      settingsCache = { ...DEFAULT_SETTINGS }
+      settingsCache = getDefaultSettings()
       console.log('[app-settings] 首次启动，使用默认设置, onboardingCompleted=', settingsCache.onboardingCompleted)
       getAppSettingsTable().set('appSettings', JSON.stringify(settingsCache))
     }
@@ -58,230 +56,19 @@ export function resetSettingsCacheForTest(): void {
 }
 
 // 持久化存储实例（写入 app-settings.json）
-export interface AppSettings {
-  /** 是否隐藏国外模型/平台 */
-  hideForeignModels: boolean
-  /** 顶部标签栏是否默认收起（hover 才展开），关闭则常驻显示 */
-  tabBarCollapsed: boolean
-  /** 代理模式：system=系统代理 direct=直连 custom=自定义 */
-  proxyMode: 'system' | 'direct' | 'custom'
-  /** 自定义代理地址（proxyMode=custom 时有效） */
-  customProxy: string
-  /** 自定义代理用户名（可选） */
-  proxyUsername: string
-  /** 自定义代理密码（可选） */
-  proxyPassword: string
-  /** 代理绕过列表（逗号分隔域名，不走代理） */
-  proxyBypass: string
-  /** 用户手动隐藏的 AI 平台 id 列表（与一键隐藏国外模型叠加生效，设置面板仍可见以便管理） */
-  hiddenPlatforms: string[]
-  /** Enter 键默认发送消息（Shift+Enter 换行），关闭后 Enter 换行 */
-  enterToSend: boolean
-  /** 默认桌面端 UA 对应的设备预设 id（用户从设备预设中自选） */
-  defaultDesktopUaPreset: string
-  /** 默认移动端 UA 对应的设备预设 id（用户从设备预设中自选） */
-  defaultMobileUaPreset: string
-  /** 关闭按钮行为：close=直接关闭退出 / minimize=最小化到托盘（默认托盘模式，不退出应用） */
-  closeBehavior: 'close' | 'minimize'
-  /** 开机自启动 */
-  autoLaunch: boolean
-  /** 静默启动（启动后隐藏到托盘，仅 autoLaunch=true 时有意义） */
-  silentStart: boolean
-  /** UI 比例：small=紧凑 / medium=中档（默认）/ large=大号，控制字体和组件大小 */
-  uiScale: 'small' | 'medium' | 'large'
-  /** 启动时默认打开：home=平台首页 / lastConversation=最近对话地址（无历史时回退首页） */
-  startupOpen: 'home' | 'lastConversation'
-  /** 引导是否已完成（首次启动为 false，完成引导后置 true，后续启动不再弹引导窗） */
-  onboardingCompleted: boolean
-  /** 顶栏默认显示的按钮组（未列出的隐藏；最小化/最大化/关闭三按钮始终显示） */
-  topBarVisibleButtons: TopBarButtonGroup[]
-  /** 点击已打开应用时的行为：switch=切换到该标签（默认）/ close=关闭该标签 */
-  appClickBehavior: 'switch' | 'close'
-  /** 缓存自动清理频率：never=不自动 / daily / weekly / monthly */
-  cacheAutoClean: 'never' | 'daily' | 'weekly' | 'monthly'
-  /** 上次缓存清理时间戳（ms），用于自动清理触发判定 */
-  lastCacheCleanAt: number
-  /** 下载目录绝对路径；空串=使用 app.getPath('downloads') */
-  downloadDir: string
-  /** 下载行为：ask=每次弹保存框 / auto=自动保存到 downloadDir */
-  downloadBehavior: 'ask' | 'auto'
-  /** 连续 Alt+Space 触发恢复主窗口默认位置的次数阈值（默认 6） */
-  altSpaceResetThreshold: number
-  /** 代理失败兜底：custom 代理加载失败时自动切换到兜底模式（默认关闭） */
-  proxyFallbackEnabled: boolean
-  /** 代理失败兜底模式：direct=直连 / system=系统代理 */
-  proxyFallbackMode: 'direct' | 'system'
-  /** 使用统计与操作日志：记录启动时间 + data-name 点击日志到 SQLite（默认开，完全本地存储） */
-  usageTrackingEnabled: boolean
-  /** 需求 7：Cookie 弹窗白名单（自动点击"接受全部"），默认含 google.com / openai.com */
-  cookieWhitelist: string[]
-  /** 需求 7：Cookie 弹窗黑名单（直接隐藏所有 cookie 弹窗） */
-  cookieBlacklist: string[]
-  /** 需求 7：同域名重复弹窗冷却时间（ms），默认 60000（60 秒） */
-  cookiePopupCooldownMs: number
-  /** 需求 7：Cookie 弹窗自动处理总开关（默认 true） */
-  cookieHandlerEnabled: boolean
-  /** v0.5.2 R-3：进阶面板默认打开的 tab（Alt+Q 入口） */
-  defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
-  /** 白板应用层侧边栏是否可见（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口） */
-  whiteboardSidebarVisible: boolean
-  /** 关闭所有广告屏蔽规则：开启后所有单独配置的屏蔽规则均不生效（默认 false） */
-  disableAllBlockRules: boolean
-  /** 灵感笔记侧边栏宽度（默认 160px，范围 120-400） */
-  notesSidebarWidth: number
-  /** 灵感笔记侧边栏是否收起 */
-  notesSidebarCollapsed: boolean
-  /** 灵感笔记是否恢复上次光标位置（默认 true） */
-  notesRestoreCursor: boolean
-  /** 自定义对话侧边栏宽度（默认 160px，范围 120-400） */
-  chatSidebarWidth: number
-  /** 自定义对话侧边栏是否收起 */
-  chatSidebarCollapsed: boolean
-  /** 自定义对话输入框光标位置（持久化，关闭重开后恢复） */
-  chatInputCursorPos: number
-  /** 进阶面板标签切换快捷键（Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab，默认 true） */
-  advancedPanelTabSwitchShortcuts: boolean
-  /** 白板侧边栏宽度（默认 130px） */
-  whiteboardSidebarWidth: number
-  /** 白板侧边栏是否收起 */
-  whiteboardSidebarCollapsed: boolean
-  /** 弹窗白名单：URL 前缀数组，匹配的 URL 允许弹独立 BrowserWindow（登录/OAuth/验证页等） */
-  popupWhitelist: string[]
-  /** 浏览器标签累积持久化模式：memory=内存模式（默认，主窗口关闭清空）/ persistent=持久化到磁盘 */
-  browserTabPersistence: 'memory' | 'persistent'
-  /** 默认搜索引擎配置（G1：地址栏非 URL 输入时使用的搜索引擎，urlTemplate 使用 {query} 占位符） */
-  defaultSearchEngine: {
-    name: string
-    urlTemplate: string
-  }
+export interface AppSettings extends DefaultAppSettings {
+  // AppSettings 继承自 DefaultAppSettings，保持类型一致性
+  // 所有字段定义已在 default-config.ts 中统一管理
 }
 
-const DEFAULT_SETTINGS: AppSettings = {
-      hideForeignModels: true,
-      tabBarCollapsed: true,
-      proxyMode: 'system',
-      customProxy: '',
-      proxyUsername: '',
-      proxyPassword: '',
-      proxyBypass: '',
-      hiddenPlatforms: [],
-      enterToSend: true,
-      defaultDesktopUaPreset: 'win-chrome-125',
-      defaultMobileUaPreset: 'iphone-15-pro-safari',
-      // 安装版默认最小化到托盘，便携版默认直接关闭
-      closeBehavior: isPortableMode() ? 'close' : 'minimize',
-      autoLaunch: false,
-      silentStart: false,
-      uiScale: 'medium',
-      startupOpen: 'lastConversation',
-      onboardingCompleted: false,
-      topBarVisibleButtons: ['navBack', 'navForward', 'navHome', 'pinToggle'],
-      // 点击已打开应用时默认切换到该标签（不关闭），需用户主动改为 close 才关闭
-      appClickBehavior: 'switch',
-      // 缓存清理：默认不自动清理（用户主动触发），首次启动 lastCacheCleanAt=0
-      cacheAutoClean: 'never',
-      lastCacheCleanAt: 0,
-      // 下载：默认使用系统下载目录，每次弹保存框
-      downloadDir: '',
-      downloadBehavior: 'ask',
-      // Alt+Space 连续触发恢复窗口位置：默认 6 次（时间窗口随阈值线性放大）
-      altSpaceResetThreshold: 6,
-      // 代理失败兜底：默认关闭，符合用户要求"新增一个默认关闭的设置"
-      proxyFallbackEnabled: false,
-      proxyFallbackMode: 'direct',
-      // 使用统计与操作日志：默认开启，完全本地存储，用户可在设置中关闭
-      usageTrackingEnabled: true,
-      // 需求 7：Cookie 弹窗处理默认配置
-      cookieWhitelist: ['google.com', 'openai.com'],
-      cookieBlacklist: [],
-      cookiePopupCooldownMs: 60000,
-      cookieHandlerEnabled: true,
-      // v0.5.2 R-3：进阶面板默认打开的 tab
-      defaultAdvancedPanelTab: 'chat',
-      // 白板应用层侧边栏默认隐藏（单白板模式；如需管理多白板可在设置中开启）
-      whiteboardSidebarVisible: false,
-      // 关闭所有广告屏蔽规则：默认关闭（即默认启用屏蔽规则）
-      disableAllBlockRules: false,
-      // 灵感笔记侧边栏：默认 160px 宽，未收起
-      notesSidebarWidth: 160,
-      notesSidebarCollapsed: false,
-      // 灵感笔记恢复光标位置：默认开启
-      notesRestoreCursor: true,
-      // 自定义对话侧边栏：默认 130px 宽，未收起
-      chatSidebarWidth: 130,
-      chatSidebarCollapsed: false,
-      // 自定义对话输入框光标位置：默认 0（行首）
-      chatInputCursorPos: 0,
-      // 进阶面板标签切换快捷键：默认开启
-      advancedPanelTabSwitchShortcuts: true,
-      // 白板侧边栏：默认 130px 宽，未收起
-      whiteboardSidebarWidth: 130,
-      whiteboardSidebarCollapsed: false,
-      // 弹窗白名单：默认为空（登录域白名单硬编码在 helpers.ts LOGIN_POPUP_WHITELIST）
-      popupWhitelist: [],
-      // 浏览器标签累积持久化：默认内存模式（主窗口关闭清空），persistent=持久化到磁盘可重启恢复
-      browserTabPersistence: 'memory',
-      // G1：默认搜索引擎（Bing），地址栏非 URL 输入时使用
-      defaultSearchEngine: { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' },
+/** 获取默认设置（根据便携/安装模式） */
+function getDefaultSettings(): AppSettings {
+  return getDefaultAppSettings(isPortableMode()) as AppSettings
 }
 
 /** 读取应用设置 */
 export function getAppSettings(): AppSettings {
-  const s = { ...readSettingsRaw() }
-  // 迁移旧的 'navigation' 组到拆分后的 'navBack'/'navForward'/'navHome'
-  const raw = (s.topBarVisibleButtons ?? []) as string[]
-  const migrated: string[] = []
-  for (const g of raw) {
-    if (g === 'navigation') {
-      migrated.push('navBack', 'navForward', 'navHome')
-    } else {
-      migrated.push(g)
-    }
-  }
-  // 过滤已废弃的按钮组（appSwitcher/menu 已改为常驻，不再可自定义）
-  const valid = new Set<TopBarButtonGroup>(ALL_TOP_BAR_BUTTON_GROUPS)
-  s.topBarVisibleButtons = migrated.filter((g) => valid.has(g as TopBarButtonGroup)) as TopBarButtonGroup[]
-  // 兼容旧版本设置文件：缓存清理与下载相关字段可能不存在
-  s.cacheAutoClean = s.cacheAutoClean ?? 'never'
-  s.lastCacheCleanAt = s.lastCacheCleanAt ?? 0
-  s.downloadDir = s.downloadDir ?? ''
-  s.downloadBehavior = s.downloadBehavior ?? 'ask'
-  s.altSpaceResetThreshold = s.altSpaceResetThreshold ?? 6
-  // 兼容旧版本设置文件：代理失败兜底字段可能不存在
-  s.proxyFallbackEnabled = s.proxyFallbackEnabled ?? false
-  s.proxyFallbackMode = s.proxyFallbackMode ?? 'direct'
-  // 兼容旧版本设置文件：使用统计字段可能不存在
-  s.usageTrackingEnabled = s.usageTrackingEnabled ?? true
-  // 兼容旧版本设置文件：需求 7 Cookie 弹窗处理字段可能不存在
-  s.cookieWhitelist = s.cookieWhitelist ?? ['google.com', 'openai.com']
-  s.cookieBlacklist = s.cookieBlacklist ?? []
-  s.cookiePopupCooldownMs = s.cookiePopupCooldownMs ?? 60000
-  s.cookieHandlerEnabled = s.cookieHandlerEnabled ?? true
-  // v0.5.2 R-3：兼容旧版本设置文件
-  s.defaultAdvancedPanelTab = s.defaultAdvancedPanelTab ?? 'chat'
-  // 白板应用层侧边栏：老用户无此字段时默认隐藏
-  s.whiteboardSidebarVisible = s.whiteboardSidebarVisible ?? false
-  // 关闭所有广告屏蔽规则：老用户无此字段时默认 false（即启用屏蔽规则）
-  s.disableAllBlockRules = s.disableAllBlockRules ?? false
-  // 灵感笔记侧边栏宽度/收起：老用户无此字段时使用默认值
-  s.notesSidebarWidth = s.notesSidebarWidth ?? 160
-  s.notesSidebarCollapsed = s.notesSidebarCollapsed ?? false
-  s.notesRestoreCursor = s.notesRestoreCursor ?? true
-  // 自定义对话侧边栏宽度/收起：老用户无此字段时使用默认值
-  s.chatSidebarWidth = s.chatSidebarWidth ?? 130
-  s.chatSidebarCollapsed = s.chatSidebarCollapsed ?? false
-  s.chatInputCursorPos = s.chatInputCursorPos ?? 0
-  s.advancedPanelTabSwitchShortcuts = s.advancedPanelTabSwitchShortcuts ?? true
-  s.whiteboardSidebarWidth = s.whiteboardSidebarWidth ?? 130
-  s.whiteboardSidebarCollapsed = s.whiteboardSidebarCollapsed ?? false
-  // 兼容旧版本设置文件：默认 UA 预设字段可能不存在
-  s.defaultDesktopUaPreset = s.defaultDesktopUaPreset || 'win-chrome-125'
-  s.defaultMobileUaPreset = s.defaultMobileUaPreset || 'iphone-15-pro-safari'
-  // 兼容旧版本：浏览器标签累积持久化模式
-  s.browserTabPersistence = s.browserTabPersistence ?? 'memory'
-  // G1：兼容旧版本设置文件，默认搜索引擎字段可能不存在
-  s.defaultSearchEngine = s.defaultSearchEngine ?? { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' }
-  return s
+  return { ...readSettingsRaw() }
 }
 
 /**
@@ -395,22 +182,40 @@ export async function clearAllData(): Promise<void> {
 
   // 给文件系统一点时间释放底层句柄（Windows 上 destroy 后 LevelDB/IndexedDB
   // 句柄释放是异步的，立即 rmSync 可能 EBUSY）
-  await new Promise((resolve) => setTimeout(resolve, 200))
+  // 增加到 500ms 以确保 Windows 上 SQLite WAL/SHM 文件锁完全释放
+  await new Promise((resolve) => setTimeout(resolve, 500))
 
   // 6. 递归删除数据目录（设置、窗口状态、AI供应商、对话历史等全部持久化数据）
   // 先直接尝试删除 settings.db（最关键：阻止重启后读到旧 onboardingCompleted）
   const settingsDbPath = path.join(dataDir, 'settings.db')
   const settingsDbWal = path.join(dataDir, 'settings.db-wal')
   const settingsDbShm = path.join(dataDir, 'settings.db-shm')
-  for (const f of [settingsDbPath, settingsDbWal, settingsDbShm]) {
-    try {
-      if (fs.existsSync(f)) {
-        fs.unlinkSync(f)
-        console.log('[app-settings] 已删除关键文件:', f)
+  
+  // 带重试的文件删除函数（Windows 上文件锁释放可能需要多次尝试）
+  const unlinkWithRetry = (filePath: string, maxRetries = 3, delayMs = 200): boolean => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath)
+          console.log(`[app-settings] 已删除关键文件 (attempt ${attempt}):`, filePath)
+          return true
+        }
+        return true // 文件不存在也算成功
+      } catch (err) {
+        console.warn(`[app-settings] 删除文件失败 (attempt ${attempt}/${maxRetries}):`, filePath, err)
+        if (attempt < maxRetries) {
+          // 同步等待后重试
+          const start = Date.now()
+          while (Date.now() - start < delayMs) { /* busy wait */ }
+        }
       }
-    } catch (err) {
-      console.error('[app-settings] 删除关键文件失败:', f, err)
     }
+    return false
+  }
+  
+  // 优先删除 settings.db 及其 WAL/SHM 文件
+  for (const f of [settingsDbPath, settingsDbWal, settingsDbShm]) {
+    unlinkWithRetry(f)
   }
 
   try {
@@ -450,20 +255,6 @@ export async function clearAllData(): Promise<void> {
       'settings.db',
       'settings.db-wal',
       'settings.db-shm',
-      // 旧 JSON 文件（迁移前存在，迁移后为 .bak）
-      'app-settings.json',
-      'window-states.json',
-      'ai-providers.json',
-      'profiles.json',
-      'voice-config.json',
-      'hotkey.json',
-      'prompts.json',
-      'presets.json',
-      'block-rules.json',
-      'injection-history.json',
-      'browser-downloads.json',
-      'conversation-store.json',
-      'accumulated-links.json',
       // 各模块独立 SQLite 数据库
       'chat.db',
       'chat.db-wal',
@@ -508,7 +299,21 @@ export async function clearAllData(): Promise<void> {
     }
   }
 
-  // 7. 重启应用
+  // 7. 最终验证：确保 settings.db 已被删除（最关键）
+  //    如果 settings.db 仍然存在，重启后会读到旧的 onboardingCompleted=true，导致引导不显示
+  if (fs.existsSync(settingsDbPath)) {
+    console.error('[app-settings] 警告：settings.db 仍然存在，尝试最后强制删除')
+    // 再等待 300ms 后重试
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    try {
+      fs.unlinkSync(settingsDbPath)
+      console.log('[app-settings] 最终强制删除成功')
+    } catch (finalErr) {
+      console.error('[app-settings] 最终删除仍失败，重启后将依赖新进程清理:', finalErr)
+    }
+  }
+
+  // 8. 重启应用
   app.relaunch()
   app.exit(0)
 }

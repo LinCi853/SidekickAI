@@ -10,12 +10,11 @@ import type { BlockRule } from '../shared/block-rules.types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createCrudStore } from './store-paths.js'
 import { createSqliteJsonStore } from './module-state-store.js'
-import { DEFAULT_BLOCK_RULES } from './block-rules-default.js'
+import { BLOCK_RULES } from './default-config.js'
 
 // 持久化存储实例（写入 block-rules.json）
 const store = createSqliteJsonStore<{ rules: BlockRule[]; version: number }>({
   tableName: 'block_rules',
-  legacyName: 'block-rules',
   defaults: { rules: [], version: 1 },
 })
 
@@ -92,16 +91,16 @@ export function ensureDefaultBlockRules(): void {
   const existing = store.get('rules') as BlockRule[]
   if (existing.length === 0) {
     // 首次启动：填充全部预置规则
-    for (const rule of DEFAULT_BLOCK_RULES) {
+    for (const rule of BLOCK_RULES) {
       blockRulesStore.save(rule)
     }
-    console.log(`[block-rules-store] 首次启动：填充 ${DEFAULT_BLOCK_RULES.length} 条预置屏蔽规则`)
+    console.log(`[block-rules-store] 首次启动：填充 ${BLOCK_RULES.length} 条预置屏蔽规则`)
     return
   }
 
   // 已有规则：同步内置规则的内容修正（按 id 匹配，更新 selector/jsCode/label，保留 enabled 状态）
   let updated = 0
-  for (const defRule of DEFAULT_BLOCK_RULES) {
+  for (const defRule of BLOCK_RULES) {
     const idx = existing.findIndex((r) => r.id === defRule.id)
     if (idx !== -1) {
       const current = existing[idx]

@@ -12,7 +12,6 @@ type BrowserWindowStateStore = {
 
 const store = createSqliteJsonStore<BrowserWindowStateStore>({
   tableName: 'browser_windows',
-  legacyName: 'browser-windows',
   defaults: { states: {} },
 })
 

@@ -49,10 +49,9 @@ export interface VoiceConfig {
   /**
    * 语音识别完成后的上屏方式：
    * - 'auto'（默认）：识别完成后自动注入/粘贴上屏
-   * - 'manual'：同 'auto'，保留枚举仅为兼容旧配置
    * - 'clipboard'：仅写入剪贴板，不模拟按键（用户手动粘贴）
    */
-  confirmMode: 'auto' | 'manual' | 'clipboard'
+  confirmMode: 'auto' | 'clipboard'
   /**
    * 后台语音上屏模式（仅影响应用外的第三方应用）：
    * - 'layered'（推荐）：分层降级 UI Automation → SendInput → 剪贴板

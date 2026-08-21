@@ -10,13 +10,13 @@ import type { DevicePreset } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createCrudStore } from './store-paths.js'
 import { createSqliteJsonStore } from './module-state-store.js'
-import { DEFAULT_PRESETS, PRESETS_DEFAULT_VERSION } from './presets-default.js'
+import { PRESETS, PRESETS_VERSION, getDefault } from './default-config.js'
 
 // 持久化存储实例（写入 presets.json）
 const store = createSqliteJsonStore<{ presets: DevicePreset[]; version: number }>({
   tableName: 'device_presets',
-  legacyName: 'presets',
-  defaults: { presets: [], version: PRESETS_DEFAULT_VERSION },
+
+  defaults: { presets: [], version: PRESETS_VERSION },
 })
 
 /**
@@ -73,10 +73,26 @@ export class PresetStore {
 export const presetStore = new PresetStore()
 
 /**
- * 根据 id 查找预设（优先从持久化 store 读取，store 未初始化时回退到硬编码 DEFAULT_PRESETS）
+ * 根据 id 查找预设（优先从持久化 store 读取，store 未初始化时通过路由器 fallback 到 PRESETS 列表）
  */
 export function getPreset(id: string): DevicePreset | null {
-  return presetStore.get(id) ?? DEFAULT_PRESETS.find((p) => p.id === id) ?? null
+  return presetStore.get(id) ?? PRESETS.find((p) => p.id === id) ?? null
+}
+
+/**
+ * 路由：获取默认桌面端预设（通过 default-config 路由器）
+ * 用户设置偏好 → 使用用户偏好；未设置 → 第一个代码项
+ */
+export function getDefaultDesktopPreset(userPreferredId?: string | null): DevicePreset {
+  return getDefault(PRESETS.filter((p) => p.platform === 'desktop'), userPreferredId) ?? PRESETS[0]
+}
+
+/**
+ * 路由：获取默认移动端预设（通过 default-config 路由器）
+ * 用户设置偏好 → 使用用户偏好；未设置 → 第一个移动端代码项
+ */
+export function getDefaultMobilePreset(userPreferredId?: string | null): DevicePreset {
+  return getDefault(PRESETS.filter((p) => p.platform === 'mobile'), userPreferredId) ?? PRESETS.find((p) => p.platform === 'mobile') ?? PRESETS[0]
 }
 
 /**
@@ -106,16 +122,16 @@ export function ensureDefaultPresets(): void {
   const existing = store.get('presets') as DevicePreset[]
   if (existing.length === 0) {
     // 首次启动：填充全部预置预设
-    for (const preset of DEFAULT_PRESETS) {
+    for (const preset of PRESETS) {
       presetStore.save(preset)
     }
-    console.log(`[preset-store] 首次启动：填充 ${DEFAULT_PRESETS.length} 个预置设备预设`)
+    console.log(`[preset-store] 首次启动：填充 ${PRESETS.length} 个预置设备预设`)
     return
   }
 
   // 已有预设：补充版本升级时新增的内置预设（按 id 匹配，不存在则 push）
   let updated = 0
-  for (const defPreset of DEFAULT_PRESETS) {
+  for (const defPreset of PRESETS) {
     const idx = existing.findIndex((p) => p.id === defPreset.id)
     if (idx === -1) {
       existing.push(defPreset)

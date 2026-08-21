@@ -42,18 +42,14 @@ const ASSET_MAP: Record<string, WhisperCliAsset> = {
 }
 
 /**
- * 获取 whisper-cli 可执行文件候选名（按平台，按优先级排序）。
- * - win32: whisper-cli.exe / whisper.exe / main.exe
- * - darwin / linux: whisper-cli / whisper / main
- *
- * whisper.cpp v1.7.x 起将 main 重命名为 whisper-cli，这里保留多候选兼容旧版本。
+ * 获取 whisper-cli 可执行文件候选名（按平台）。
  */
 export function getWhisperCliBinaryNames(
   platform: NodeJS.Platform = process.platform,
 ): string[] {
   return platform === 'win32'
-    ? ['whisper-cli.exe', 'whisper.exe', 'main.exe']
-    : ['whisper-cli', 'whisper', 'main']
+    ? ['whisper-cli.exe']
+    : ['whisper-cli']
 }
 
 /**
@@ -113,8 +109,5 @@ export function getWhisperModelUrls(modelFileName: string): string[] {
   ]
 }
 
-/**
- * 兼容旧引用：按当前平台导出 whisper-cli 候选文件名常量。
- * engine.ts / voice-ipc.ts 原直接引用 WHISPER_CLI_BINARIES，现统一从此处导入。
- */
+/** 按当前平台导出 whisper-cli 候选文件名常量 */
 export const WHISPER_CLI_BINARIES = getWhisperCliBinaryNames()
