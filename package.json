@@ -1,6 +1,6 @@
 {
   "name": "sidekick-ai",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "description": "工百窗（SidekickAI）—— 全平台 AI 聚合 + 反检测多 Profile 浏览器（Electron）",
   "main": "out/main/index.js",
   "author": "SidekickAI",
