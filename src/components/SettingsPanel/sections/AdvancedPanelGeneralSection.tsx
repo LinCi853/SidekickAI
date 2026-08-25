@@ -4,6 +4,7 @@
    后续可扩展更多 Alt+Q 专属设置（如窗口尺寸、标签栏样式等）。
    ===================================================================== */
 
+import { useMemo } from 'react';
 import { updateAppSettings } from '../../../lib/electron-api';
 import { useModuleStore } from '../../../store/useModuleStore';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
@@ -11,41 +12,43 @@ import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
 import { SectionTitle, FormRow } from '../../ui';
 
-type AdvancedPanelTab = 'chat' | 'whiteboard' | 'notes';
-
-/** tab 值 → 模块 id 映射（'chat' 对应 custom-chat 模块，过滤时必须用模块 id） */
-const TAB_TO_MODULE: Record<AdvancedPanelTab, string> = {
-  chat: 'custom-chat',
-  whiteboard: 'whiteboard',
-  notes: 'notes',
-};
-
-const TAB_OPTIONS: Array<{ value: AdvancedPanelTab; label: string }> = [
-  { value: 'chat', label: '自定义对话' },
-  { value: 'whiteboard', label: '白板' },
-  { value: 'notes', label: '灵感笔记' },
-];
-
 export default function AdvancedPanelGeneralSection() {
   const { draft, setDraft } = useSettingsDraft();
   // 模块联动：「默认打开」始终显示完整三个选项，已关闭模块的选项置灰不可选；
   // 可选项仅剩一项时隐藏整行；模块状态未加载完成时回退显示全部（防闪失）。
   // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
+  const modules = useModuleStore((s) => s.modules);
   const enabledModuleIds = useModuleStore((s) =>
     s.modules.filter((m) => m.enabled).map((m) => m.id),
   );
   const modulesInitialized = useModuleStore((s) => s.initialized);
-  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
-  const availableTabs = modulesInitialized
-    ? TAB_OPTIONS.filter((o) => enabledModuleIds.includes(TAB_TO_MODULE[o.value]))
-    : TAB_OPTIONS;
 
-  const defaultTab: AdvancedPanelTab = draft?.defaultAdvancedPanelTab ?? 'chat';
+  // 从模块信息动态构建 tab 选项（内置 + 插件声明的 advancedPanelTab）
+  const tabOptions = useMemo(() => {
+    const opts: Array<{ value: string; label: string; moduleId: string }> = [
+      { value: 'chat', label: '自定义对话', moduleId: 'custom-chat' },
+      { value: 'whiteboard', label: '白板', moduleId: 'whiteboard' },
+      { value: 'notes', label: '灵感笔记', moduleId: 'notes' },
+    ];
+    for (const m of modules) {
+      if (m.advancedPanelTab && !opts.some((o) => o.value === m.advancedPanelTab!.key)) {
+        opts.push({ value: m.advancedPanelTab.key, label: m.advancedPanelTab.label, moduleId: m.id });
+      }
+    }
+    return opts;
+  }, [modules]);
+
+  const availableTabs = modulesInitialized
+    ? tabOptions.filter((o) => enabledModuleIds.includes(o.moduleId))
+    : tabOptions;
+  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
+
+  const defaultTab: string = draft?.defaultAdvancedPanelTab ?? 'chat';
   const whiteboardSidebarVisible = draft?.whiteboardSidebarVisible ?? false;
   const notesRestoreCursor = draft?.notesRestoreCursor ?? true;
   const tabSwitchShortcuts = draft?.advancedPanelTabSwitchShortcuts ?? true;
 
-  const handleChangeTab = async (value: AdvancedPanelTab) => {
+  const handleChangeTab = async (value: string) => {
     const prev = defaultTab;
     setDraft({ defaultAdvancedPanelTab: value });
     try {

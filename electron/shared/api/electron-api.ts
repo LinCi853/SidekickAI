@@ -121,7 +121,7 @@ export interface ElectronAPI {
   toggleAdvancedPanelWindow: () => Promise<void>
   /** 主→渲染：单例窗口复用时通知切换 tab/provider */
   onAdvancedPanelNavigate: (
-    callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
+    callback: (payload: { tab: string; providerId?: string }) => void,
   ) => () => void
   /** 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后通知各窗口重新计算最小尺寸） */
   onUiScaleChanged: (callback: (uiScale: 'small' | 'medium' | 'large') => void) => () => void
@@ -143,4 +143,14 @@ export interface ElectronAPI {
   freeze: FreezeAPI
   /** 模块管理（插件市场 / 开发者选项） */
   modules: ModulesAPI
+  /**
+   * 通用插件 IPC 通道。插件通过此命名空间调用主进程注册的 IPC handler。
+   * 用法：`window.electron.plugins.invoke('my-plugin:doSomething', arg)`
+   * 主进程侧：插件在 init() 中通过 scope.ipcHandle('my-plugin:doSomething', handler) 注册。
+   */
+  plugins: {
+    invoke(channel: string, ...args: unknown[]): Promise<unknown>
+    send(channel: string, ...args: unknown[]): void
+    on(channel: string, callback: (...args: unknown[]) => void): () => void
+  }
 }

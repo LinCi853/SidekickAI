@@ -86,7 +86,7 @@ export interface DefaultAppSettings {
   cookieBlacklist: string[]
   cookiePopupCooldownMs: number
   cookieHandlerEnabled: boolean
-  defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
+  defaultAdvancedPanelTab: string
   whiteboardSidebarVisible: boolean
   disableAllBlockRules: boolean
   notesSidebarWidth: number

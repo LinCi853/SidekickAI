@@ -169,7 +169,7 @@ export type ToggleAdvancedPanelWindowFn = () => Promise<void>
 
 /** 主→渲染：单例窗口复用时通知切换 tab/provider */
 export type OnAdvancedPanelNavigateCallback = (
-  callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
+  callback: (payload: { tab: string; providerId?: string }) => void,
 ) => () => void
 
 /** 浏览器窗口（v0.0.9：多标签浏览器） */

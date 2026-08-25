@@ -42,8 +42,8 @@ import * as focusManager from '../utils/focus-manager.js'
 interface AdvancedPanelWindowOptions {
   /** 初始展示的供应商 id（切换到「自定义对话」页并选中该 provider） */
   providerId?: string
-  /** 初始展示的页签：'chat' | 'whiteboard' | 'notes'。默认 'chat'（Alt+Q 入口语义） */
-  initialTab?: 'chat' | 'whiteboard' | 'notes'
+  /** 初始展示的页签。默认 'chat'（Alt+Q 入口语义） */
+  initialTab?: string
 }
 
 /**
@@ -147,10 +147,19 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
  * 打开 进阶面板（单例）。
  * 若窗口已存在则聚焦并切换到指定 tab/provider；否则创建。
  */
-export function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptions): void {
-  // 模块门控（11.10）：自定义对话/白板/笔记全关时进阶面板无可用内容，拒绝打开
-  if (!isModuleEnabled('custom-chat') && !isModuleEnabled('whiteboard') && !isModuleEnabled('notes')) {
-    console.warn('[advanced-panel-window] 自定义对话/白板/笔记模块均未启用，拒绝打开进阶面板')
+export async function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptions): Promise<void> {
+  // 模块门控（11.10）：检查内置模块 + 插件声明的 advancedPanelTab
+  const builtinAvailable = isModuleEnabled('custom-chat') || isModuleEnabled('whiteboard') || isModuleEnabled('notes')
+  let pluginAvailable = false
+  try {
+    // 动态导入避免循环依赖
+    const { listModuleInfos } = await import('../modules/registry.js')
+    pluginAvailable = listModuleInfos().some(
+      (m) => m.enabled && !!m.advancedPanelTab,
+    )
+  } catch { /* ignore */ }
+  if (!builtinAvailable && !pluginAvailable) {
+    console.warn('[advanced-panel-window] 无可用面板模块，拒绝打开进阶面板')
     return
   }
   createAdvancedPanelWindow(options)

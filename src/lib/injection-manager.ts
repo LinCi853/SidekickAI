@@ -22,7 +22,6 @@
  *   │ block-rules     │ block-rules      │ disableAllBlockRules       │ 可关闭   │
  *   │ cookie-handler  │ cookie-handler   │ cookieHandlerEnabled       │ 可关闭   │
  *   │ spatial-nav     │ spatial-nav      │ Ctrl+G 运行时              │ 可关闭   │
- *   │ enter-to-send   │ enter-to-send    │ enterToSend                │ 可关闭   │
  *   │ login-detect    │ login-detect     │ profile.isAIPlatform       │ 可关闭   │
  *   │ chat-scrape     │ chat-scrape      │ 始终注入                     │ 核心     │
  *   │ cloud-pc        │ cloud-pc         │ 浏览器模块开关              │ 模块级   │
@@ -475,29 +474,10 @@ export async function registerDefaultInjectionPoints(): Promise<void> {
     reinjectOnNavigation: false, // 对话抓取是轮询模式，不需要重新注入
   }
 
-  /** Enter 发送注入点 */
-  ENTER_TO_SEND_INJECTION = {
-    id: 'enter-to-send',
-    kind: 'enter-to-send',
-    order: 80,
-    scriptFn: async () => {
-      const settings = await getAppSettings()
-      return `
-        (function() {
-          if (window.__ai_enter_send_injected__) {
-            window.__ai_enter_send_enabled__ = ${settings.enterToSend !== false};
-            return;
-          }
-          window.__ai_enter_send_injected__ = true;
-          window.__ai_enter_send_enabled__ = ${settings.enterToSend !== false};
-        })()
-      `
-    },
-    enabled: () => true,
-    reinjectOnNavigation: true,
-  }
-
   // 注册所有注入点
+  // 注意：enter-to-send 不在此处注册，由 useWebviewInjection 的 buildEnterToSendScript() 处理
+  // 以避免竞态：injection-manager 的 stub 先设置 __ai_enter_send_injected__=true 导致
+  // buildEnterToSendScript() 跳过 keydown 监听器注册
   injectionManager.registerMany([
     FINGERPRINT_INJECTION,
     UA_VIEWPORT_INJECTION,
@@ -506,7 +486,6 @@ export async function registerDefaultInjectionPoints(): Promise<void> {
     SPATIAL_NAV_INJECTION,
     LOGIN_DETECT_INJECTION,
     CHAT_SCRAPE_INJECTION,
-    ENTER_TO_SEND_INJECTION,
   ])
 
   console.log('[injection-manager] 已注册所有默认注入点')

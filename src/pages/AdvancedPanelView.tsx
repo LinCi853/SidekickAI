@@ -51,14 +51,20 @@ import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { MAIN_WINDOW_MIN_HEIGHT } from '../../electron/shared/window-size';
 import './AdvancedPanelView.css';
 
-type TabKey = 'chat' | 'whiteboard' | 'notes';
+type TabKey = string;
+
+/** 内置 tab 注册表（模块 ID → tab key + label） */
+const BUILTIN_TAB_REGISTRY: Record<string, { key: string; label: string }> = {
+  'custom-chat': { key: 'chat', label: '自定义对话' },
+  whiteboard: { key: 'whiteboard', label: '白板' },
+  notes: { key: 'notes', label: '灵感笔记' },
+}
 
 /** 从 URL 查询参数读取初始 tab */
 function readInitialTab(): TabKey {
   if (typeof window === 'undefined') return 'chat';
   const t = new URLSearchParams(window.location.search).get('tab');
-  if (t === 'whiteboard' || t === 'notes') return t;
-  return 'chat';
+  return t ?? 'chat';
 }
 
 /** 从 URL 查询参数读取初始 providerId */
@@ -72,20 +78,33 @@ export default function AdvancedPanelView() {
   // 模块门控：自定义对话 / 白板 / 笔记模块关闭时隐藏对应 tab
   // 注意：不能用 (s) => s.isEnabled 作为 selector（函数引用恒定，zustand 不会触发重渲染）；
   // 改为订阅 modules 数组派生 enabled 集合，模块状态变化时组件必然重渲染。
-  const enabledModuleIds = useModuleStore((s) =>
-    s.modules.filter((m) => m.enabled).map((m) => m.id),
-  );
+  const modules = useModuleStore((s) => s.modules);
+  const enabledModuleIds = useMemo(() => modules.filter((m) => m.enabled).map((m) => m.id), [modules]);
   const modulesInitialized = useModuleStore((s) => s.initialized);
   const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
+
+  // tab 注册表：合并内置 tab 和插件声明的 advancedPanelTab
+  const tabRegistry = useMemo(() => {
+    const reg: Record<string, { moduleId: string; label: string }> = {};
+    // 内置 tab
+    for (const [moduleId, tab] of Object.entries(BUILTIN_TAB_REGISTRY)) {
+      reg[tab.key] = { moduleId, label: tab.label };
+    }
+    // 插件 tab（从 module info 的 advancedPanelTab 字段读取）
+    for (const m of modules) {
+      if (m.advancedPanelTab && !reg[m.advancedPanelTab.key]) {
+        reg[m.advancedPanelTab.key] = { moduleId: m.id, label: m.advancedPanelTab.label };
+      }
+    }
+    return reg;
+  }, [modules]);
+
   const availableTabs = useMemo<TabKey[]>(() => {
-    // 模块状态未加载完成时回退到静态三 tab，避免顶栏短暂/持续空白（加载完成后再过滤）
-    if (!modulesInitialized) return ['chat', 'whiteboard', 'notes'];
-    const list: TabKey[] = [];
-    if (enabledModuleIds.includes('custom-chat')) list.push('chat');
-    if (enabledModuleIds.includes('whiteboard')) list.push('whiteboard');
-    if (enabledModuleIds.includes('notes')) list.push('notes');
-    return list;
-  }, [enabledModuleIds, modulesInitialized]);
+    if (!modulesInitialized) return Object.keys(tabRegistry);
+    return Object.entries(tabRegistry)
+      .filter(([, entry]) => enabledModuleIds.includes(entry.moduleId))
+      .map(([key]) => key);
+  }, [tabRegistry, enabledModuleIds, modulesInitialized]);
   const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } = useWindowMaximizedAndPinned();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initialProviderId = useMemo(() => readInitialProviderId(), []);
@@ -192,7 +211,7 @@ export default function AdvancedPanelView() {
             className="advanced-panel-segmented"
             options={availableTabs.map((t) => ({
               value: t,
-              label: t === 'chat' ? '自定义对话' : t === 'whiteboard' ? '白板' : '灵感笔记',
+              label: tabRegistry[t]?.label ?? t,
             }))}
           />
         }
@@ -240,6 +259,14 @@ export default function AdvancedPanelView() {
         )}
         {activeTab === 'notes' && moduleEnabled('notes') && (
           <NotesView onOpenSettings={() => setSettingsOpen(true)} />
+        )}
+        {/* 插件 tab 渲染：非内置 tab 时显示插件提供的 UI 或占位 */}
+        {!['chat', 'whiteboard', 'notes'].includes(activeTab) && tabRegistry[activeTab] && (
+          <div className="advanced-panel-plugin-tab" data-name={'advanced-panel.plugin.' + activeTab}>
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--foreground-muted)' }}>
+              {tabRegistry[activeTab].label}
+            </div>
+          </div>
         )}
         {availableTabs.length === 0 && <div style={{ height: '100%' }} data-name="advanced-panel.empty" />}
       </div>

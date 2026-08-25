@@ -74,7 +74,7 @@ export interface AppSettings {
   /** 需求 7：Cookie 弹窗自动处理总开关（默认 true） */
   cookieHandlerEnabled: boolean
   /** v0.5.2 R-3：进阶面板默认打开的 tab（Alt+Q 入口） */
-  defaultAdvancedPanelTab: 'chat' | 'whiteboard' | 'notes'
+  defaultAdvancedPanelTab: string
   /** 白板应用层侧边栏是否可见（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口） */
   whiteboardSidebarVisible: boolean
   /** 关闭所有广告屏蔽规则：开启后所有单独配置的屏蔽规则均不生效（默认 false） */

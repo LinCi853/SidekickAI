@@ -28,9 +28,9 @@ export const bootstrapApi = {
   },
   /** 主→渲染：单例窗口复用时通知切换 tab/provider */
   onAdvancedPanelNavigate: (
-    callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
+    callback: (payload: { tab: string; providerId?: string }) => void,
   ) => {
-    const handler = (_e: unknown, payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) =>
+    const handler = (_e: unknown, payload: { tab: string; providerId?: string }) =>
       callback(payload)
     ipcRenderer.on(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, handler)

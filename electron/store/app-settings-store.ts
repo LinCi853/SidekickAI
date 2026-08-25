@@ -111,6 +111,11 @@ export async function clearAllData(): Promise<void> {
   }
 
   // 3. 关闭所有 SQLite 连接（释放 WAL 旁路文件锁，避免 fs.rmSync 失败）
+  // 模块声明的 closeDb 钩子（插件数据库）
+  try {
+    const { closeAllModuleDbs } = await import('../modules/registry.js')
+    await closeAllModuleDbs()
+  } catch { /* ignore */ }
   const sqliteClosures = [
     () => import('./chat-store.js').then(m => m.closeChatStore()).catch(() => {}),
     () => import('./module-state-store.js').then(m => m.closeModuleStateDb()).catch(() => {}),
@@ -284,6 +289,15 @@ export async function clearAllData(): Promise<void> {
       'whiteboard-assets',
       'notes-assets',
     ]
+    // 追加插件声明的数据库文件和资产目录
+    try {
+      const { collectModuleDataFiles } = await import('../modules/registry.js')
+      const pluginFiles = collectModuleDataFiles()
+      for (const db of pluginFiles.dbFiles) {
+        subPaths.push(db, db + '-wal', db + '-shm')
+      }
+      subPaths.push(...pluginFiles.assetDirs)
+    } catch { /* ignore */ }
     for (const sub of subPaths) {
       try {
         fs.rmSync(path.join(dataDir, sub), { recursive: true, force: true })

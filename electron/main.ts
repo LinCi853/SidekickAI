@@ -82,7 +82,8 @@ import {
 import { createTray, hasTray } from './window/tray.js'
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js'
 import { BUILTIN_MODULES } from './modules/manifests.js'
-import { initEnabledModules, registerModule, isModuleEnabled } from './modules/registry.js'
+import { initEnabledModules, registerModule, isModuleEnabled, listManifests } from './modules/registry.js'
+import { loadBuiltinPlugins } from './modules/plugin-loader.js'
 import { registerModuleIpc } from './ipc/module-ipc.js'
 import { closeModuleStateDb } from './store/module-state-store.js'
 import { capabilityRegistry } from './modules/capability-registry.js'
@@ -319,13 +320,18 @@ app.whenReady().then(async () => {
   // 规范：docs/功能插件系统与安装管控方案.md 第 11 章；状态存 SQLite settings.db（决策 0.4）。
   // 启动即隔离：禁用模块的 init 不会执行，重启后依然（11.10 硬保证）。
   BUILTIN_MODULES.forEach((m) => registerModule(m))
+
+  // 加载内置插件（electron/modules/plugins/ 目录自动发现）
+  const builtinPlugins = await loadBuiltinPlugins()
+  builtinPlugins.forEach((m) => registerModule(m))
+
   registerModuleIpc()
 
   // ===== 统一注入管线初始化 =====
   // 注册所有 TargetAdapter 到 InjectionBroker
   injectionBroker.registerAdapters(allAdapters)
-  // 从 manifest 中提取能力声明并注册到 CapabilityRegistry
-  const capabilities = extractCapabilities(BUILTIN_MODULES)
+  // 从所有已注册 manifest（含插件）中提取能力声明并注册到 CapabilityRegistry
+  const capabilities = extractCapabilities(listManifests())
   if (capabilities.length > 0) {
     capabilityRegistry.registerMany(capabilities)
     console.log(`[main] 已注册 ${capabilities.length} 个能力声明`)

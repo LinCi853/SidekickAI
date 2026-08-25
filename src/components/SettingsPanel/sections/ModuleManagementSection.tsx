@@ -28,8 +28,9 @@ export default function ModuleManagementSection() {
     if (!initialized) void useModuleStore.getState().init();
   }, [initialized]);
 
-  // 插件市场只展示稳定模块；开发者模块与开发者设置见「开发者选项」独立栏目
+  // 插件市场只展示稳定模块；功能插件独立栏目；开发者模块与开发者设置见「开发者选项」独立栏目
   const stable = useMemo(() => modules.filter((m) => m.category === 'stable'), [modules]);
+  const plugins = useMemo(() => modules.filter((m) => m.category === 'plugin'), [modules]);
   const hasMissingLarge = modules.some((m) => m.sizeLevel === 'large' && !m.installed);
 
   const handleToggle = async (m: ModuleInfo, enabled: boolean) => {
@@ -133,6 +134,15 @@ export default function ModuleManagementSection() {
           </p>
         )}
       </div>
+
+      {plugins.length > 0 && (
+        <>
+          <div className="module-column-title" data-name="settings.modules.plugins-title">功能插件</div>
+          <div className="module-column" data-name="settings.modules.plugins-list">
+            {plugins.map((m, i) => renderModule(m, i))}
+          </div>
+        </>
+      )}
 
       <ConfirmDialog
         open={pendingClear !== null}

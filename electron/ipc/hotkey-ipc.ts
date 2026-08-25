@@ -16,7 +16,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type HotkeyAction } from '../shared/types.js'
-import { isModuleEnabled } from '../modules/registry.js'
+import { isModuleEnabled, listModuleInfos } from '../modules/registry.js'
 import { syncVoiceHotkeyRegistration } from '../modules/wiring/voice.js'
 import {
   setAdvancedPanelAvailability,
@@ -29,6 +29,16 @@ import type { HotkeyManager } from '../hotkey/manager.js'
 import { resetMainWindowToDefault } from '../window-factory/main-window.js'
 import { getAppSettings } from '../store/app-settings-store.js'
 import * as focusManager from '../utils/focus-manager.js'
+
+/** 进阶面板是否可用（内置模块或插件声明了 advancedPanelTab 的已启用模块） */
+function isAdvancedPanelAvailable(): boolean {
+  return (
+    isModuleEnabled('custom-chat') ||
+    isModuleEnabled('whiteboard') ||
+    isModuleEnabled('notes') ||
+    listModuleInfos().some((m) => m.enabled && !!m.advancedPanelTab)
+  )
+}
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface HotkeyIpcDeps {
@@ -112,7 +122,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
     },
     toggleDetachedWindows: () => {
       // Alt+Q 切换 进阶面板；无可用 tab 模块时已由 hotkey-sync 注销，此处兜底守卫
-      if (!isModuleEnabled('custom-chat') && !isModuleEnabled('whiteboard') && !isModuleEnabled('notes')) return
+      if (!isAdvancedPanelAvailable()) return
       toggleAdvancedPanelWindow()
     },
     // backgroundVoice 由 registerVoiceHotkey 独立处理（uiohook keydown/keyup），
@@ -256,9 +266,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   })
 
   // 模块 → 热键自动同步：注入可用性判断与回调
-  setAdvancedPanelAvailability(
-    () => isModuleEnabled('custom-chat') || isModuleEnabled('whiteboard') || isModuleEnabled('notes'),
-  )
+  setAdvancedPanelAvailability(isAdvancedPanelAvailable)
   setAdvancedPanelCallback(() => toggleAdvancedPanelWindow())
   setBrowserAvailability(() => isModuleEnabled('browser'))
 

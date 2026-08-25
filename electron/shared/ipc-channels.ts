@@ -287,7 +287,7 @@ export const IPC_CHANNELS = {
   ADVANCED_PANEL_OPEN: 'advancedPanel:open',
   ADVANCED_PANEL_TOGGLE: 'advancedPanel:toggle',
   // 主进程 → 进阶面板渲染：单例窗口复用时通知切换 tab/provider
-  // 载荷：{ tab: 'chat' | 'whiteboard' | 'notes', providerId?: string }
+  // 载荷：{ tab: string, providerId?: string }
   ADVANCED_PANEL_NAVIGATE: 'advancedPanel:navigate',
   // 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）
   // 载荷：{ action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab', data?: unknown }

@@ -4,8 +4,13 @@
 // 状态存储（electron/store/module-state-store.ts）与渲染层设置页共用。
 // 设计规范见 docs/功能插件系统与安装管控方案.md 第 8、11 章。
 
-/** 模块分类：stable=插件市场（稳定）/ dev=开发者选项（实验性，默认关闭 + 测试标签） */
-export type ModuleCategory = 'stable' | 'dev'
+/** 模块分类：stable=插件市场（稳定）/ dev=开发者选项（实验性，默认关闭 + 测试标签）/ plugin=功能插件 */
+export type ModuleCategory = 'stable' | 'dev' | 'plugin'
+
+/**
+ * 进阶面板 tab 标识。内置 tab：chat / whiteboard / notes；插件可扩展。
+ */
+export type AdvancedPanelTabKey = string
 
 /** 体积级别：large=大模块（>10MB，安装期可选）/ small=小模块（≤10MB，恒安装） */
 export type ModuleSizeLevel = 'large' | 'small'
@@ -44,6 +49,8 @@ export interface ModuleInfo {
   enabled: boolean
   /** 当前是否已安装（false 时设置页置灰 + 「重新运行安装包补装」） */
   installed: boolean
+  /** 进阶面板 tab 声明（可选，渲染层用于动态 tab 注册） */
+  advancedPanelTab?: { key: string; label: string }
 }
 
 /**
@@ -133,6 +140,23 @@ export interface ModuleManifest {
   clearData?: () => void | Promise<void>
   /** 本模块拥有的能力声明（统一注入管线扩展，可选） */
   capabilities?: CapabilityRef[]
+
+  // === 进阶面板 tab 声明（可选） ===
+  /** 声明本模块在进阶面板中注册的 tab（key + label） */
+  advancedPanelTab?: {
+    /** tab 标识（如 'tasks'、'timer'） */
+    key: string
+    /** tab 显示名（如 '任务'、'计时'） */
+    label: string
+  }
+
+  // === 数据生命周期声明（可选，用于备份/清除自动化） ===
+  /** 本模块使用的 SQLite 数据库文件名（不含路径，如 ['kanban.db']） */
+  dbFiles?: string[]
+  /** 本模块使用的资产目录名（不含路径，如 ['kanban-assets']） */
+  assetDirs?: string[]
+  /** 关闭本模块的数据库连接（清除数据/导出备份前调用） */
+  closeDb?: () => void | Promise<void>
 }
 
 /** 模块状态变更广播载荷（主 → 所有窗口渲染层） */

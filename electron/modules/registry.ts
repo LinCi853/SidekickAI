@@ -23,6 +23,7 @@ import { getHotkeyManagerInstance } from '../hotkey/manager.js'
 import { syncAdvancedPanelHotkey, syncBrowserProfileShortcuts } from './wiring/hotkey-sync.js'
 import { injectionBroker } from './injection-broker.js'
 import { targetRegistry } from './target-registry.js'
+import { capabilityRegistry } from './capability-registry.js'
 
 /** 注册表：id → manifest */
 const manifests = new Map<string, ModuleManifest>()
@@ -80,7 +81,7 @@ export interface ResidualScanResult {
   disabledModules: string[]
 }
 
-/** 模块专属 IPC 通道前缀（残留扫描用） */
+/** 模块专属 IPC 通道前缀（残留扫描用，兜底映射） */
 const MODULE_IPC_PREFIXES: Record<string, string[]> = {
   'custom-chat': ['AI_PROVIDER_', 'CHAT_'],
   'prompt-library': ['PROMPT_', 'INJECTION_'],
@@ -90,6 +91,25 @@ const MODULE_IPC_PREFIXES: Record<string, string[]> = {
   freeze: ['FREEZE_'],
   whiteboard: ['WHITEBOARD_'],
   notes: ['NOTES_'],
+}
+
+/**
+ * 从 CapabilityRegistry 动态推导模块 IPC 前缀（插件无需手动维护映射）。
+ * 兜底：硬编码映射优先（兼容现有模块）。
+ */
+function getModuleIpcPrefixes(moduleId: string): string[] {
+  // 硬编码映射优先（已验证的前缀）
+  const hardcoded = MODULE_IPC_PREFIXES[moduleId]
+  if (hardcoded) return hardcoded
+  // 从 capabilityId 推导：如 'task-manager.ipc' → 'TASK_MANAGER_'
+  try {
+    const caps = capabilityRegistry.getByModule(moduleId)
+    return caps
+      .filter((c) => c.kind === 'ipc')
+      .map((c) => c.capabilityId.replace(/\.[^.]+$/, '').toUpperCase().replace(/-/g, '_') + '_')
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -152,8 +172,8 @@ export function runResidualScan(): ResidualScanResult {
     const { ipcMain } = require('electron')
     const registeredChannels = ipcMain.eventNames()
     for (const moduleId of disabled) {
-      const prefixes = MODULE_IPC_PREFIXES[moduleId]
-      if (!prefixes) continue
+      const prefixes = getModuleIpcPrefixes(moduleId)
+      if (prefixes.length === 0) continue
       for (const channel of registeredChannels) {
         const channelStr = String(channel)
         if (prefixes.some((prefix) => channelStr.startsWith(prefix))) {
@@ -186,8 +206,34 @@ export function listModuleInfos(): ModuleInfo[] {
       hotkeys: [...m.hotkeys],
       enabled: rt.enabled,
       installed: rt.installed,
+      advancedPanelTab: m.advancedPanelTab,
     }
   })
+}
+
+/**
+ * 收集所有已注册模块声明的数据库文件名和资产目录名。
+ * 供 clearAllData / BACKUP_FILES 使用，避免硬编码。
+ */
+export function collectModuleDataFiles(): { dbFiles: string[]; assetDirs: string[] } {
+  const dbFiles: string[] = []
+  const assetDirs: string[] = []
+  for (const m of listManifests()) {
+    if (m.dbFiles) dbFiles.push(...m.dbFiles)
+    if (m.assetDirs) assetDirs.push(...m.assetDirs)
+  }
+  return { dbFiles, assetDirs }
+}
+
+/**
+ * 调用所有已注册模块的 closeDb() 钩子（清除数据/导出备份前释放数据库连接）。
+ */
+export async function closeAllModuleDbs(): Promise<void> {
+  for (const m of listManifests()) {
+    if (m.closeDb) {
+      try { await m.closeDb() } catch { /* ignore */ }
+    }
+  }
 }
 
 /** 广播模块状态到所有窗口 */
@@ -254,6 +300,29 @@ export async function initEnabledModules(): Promise<void> {
   }
   const enabledIds = listModuleInfos().filter((x) => x.enabled).map((x) => x.id)
   console.log(`[modules] 模块初始化完成，启用: ${enabledIds.join(', ') || '（无）'}`)
+  // 进阶面板保护：至少一个面板模块（custom-chat / whiteboard / notes）必须启用，
+  // 否则 Alt+Q 完全失效。如果全部被禁用，强制恢复 custom-chat。
+  const panelModules = ['custom-chat', 'whiteboard', 'notes']
+  const anyPanelEnabled = panelModules.some((id) => isModuleEnabled(id))
+  if (!anyPanelEnabled) {
+    console.warn('[modules] 所有进阶面板模块均被禁用，强制恢复 custom-chat')
+    const st = getModuleState('custom-chat')
+    if (st) {
+      st.enabled = true
+      st.updatedAt = Date.now()
+      saveModuleState(st)
+      runtime.set('custom-chat', { enabled: true, installed: true })
+      const m = manifests.get('custom-chat')
+      if (m?.init) {
+        try {
+          await m.init()
+          console.log('[modules] 已强制恢复 custom-chat')
+        } catch (err) {
+          console.error('[modules] 强制恢复 custom-chat 失败:', err)
+        }
+      }
+    }
+  }
   // 启动即隔离验收：禁用模块零残留
   runResidualScan()
 }

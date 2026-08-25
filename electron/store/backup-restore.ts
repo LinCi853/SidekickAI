@@ -58,6 +58,16 @@ const BACKUP_FILES = [
 /** 基础数据中包含的资产目录（图片等，随 basicData 一起备份） */
 const ASSET_DIRS = ['whiteboard-assets', 'notes-assets'];
 
+/** 收集插件声明的额外备份文件（延迟加载避免循环依赖） */
+async function collectPluginExtraFiles(): Promise<{ dbFiles: string[]; assetDirs: string[] }> {
+  try {
+    const { collectModuleDataFiles } = await import('../modules/registry.js')
+    return collectModuleDataFiles()
+  } catch {
+    return { dbFiles: [], assetDirs: [] }
+  }
+}
+
 /** Partitions/<id>/ 下属于「登录凭据」的文件（根级文件，非目录） */
 const PARTITION_COOKIE_FILES = ['Cookies'];
 
@@ -209,15 +219,20 @@ export function formatBytes(bytes: number): string {
  * 估算各类别导出体积（字节）
  * 遍历文件系统统计大小，不读取文件内容，仅 stat
  */
-export function estimateExportSizes(): ExportSizeEstimate {
+export async function estimateExportSizes(): Promise<ExportSizeEstimate> {
   const dataDir = getDataDir();
   let basicDataSize = 0;
   let cookiesSize = 0;
   let indexedDBSize = 0;
   let cacheSize = 0;
 
-  // 基础数据：BACKUP_FILES 的总体积
-  for (const fileName of BACKUP_FILES) {
+  // 基础数据：BACKUP_FILES 的总体积（含插件声明的数据库）
+  const pluginExtra = await collectPluginExtraFiles()
+  const allBackupFiles = [...BACKUP_FILES]
+  for (const db of pluginExtra.dbFiles) {
+    allBackupFiles.push(db, db + '-wal', db + '-shm')
+  }
+  for (const fileName of allBackupFiles) {
     const filePath = path.join(dataDir, fileName);
     if (fs.existsSync(filePath)) {
       try {
@@ -226,8 +241,9 @@ export function estimateExportSizes(): ExportSizeEstimate {
       } catch { /* ignore */ }
     }
   }
-  // 基础数据：资产目录（白板/笔记图片）体积
-  for (const dirName of ASSET_DIRS) {
+  // 基础数据：资产目录（白板/笔记图片 + 插件资产）体积
+  const allAssetDirs = [...ASSET_DIRS, ...pluginExtra.assetDirs]
+  for (const dirName of allAssetDirs) {
     const dirPath = path.join(dataDir, dirName);
     if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
       basicDataSize += getDirSize(dirPath);
@@ -449,6 +465,11 @@ export async function exportAllData(
 
     // 1. 关闭所有 SQLite 连接，确保 WAL 写回主 db
     try {
+      // 模块声明的 closeDb 钩子（插件数据库）
+      try {
+        const { closeAllModuleDbs } = await import('../modules/registry.js')
+        await closeAllModuleDbs()
+      } catch { /* ignore */ }
       closeChatStore();
       closeWhiteboardDb();
       closeNotesDb();
@@ -464,15 +485,21 @@ export async function exportAllData(
     // 记录跳过的文件（EBUSY 等锁定错误）
     const skippedFiles: string[] = [];
 
-    // 3. 基础数据（配置 JSON + chat.db + app-key.json + 资产目录）
+    // 3. 基础数据（配置 JSON + chat.db + app-key.json + 资产目录 + 插件数据）
     if (options.basicData) {
-      for (const fileName of BACKUP_FILES) {
+      const pluginExtra = await collectPluginExtraFiles()
+      const allBackupFiles = [...BACKUP_FILES]
+      for (const db of pluginExtra.dbFiles) {
+        allBackupFiles.push(db, db + '-wal', db + '-shm')
+      }
+      for (const fileName of allBackupFiles) {
         const filePath = path.join(dataDir, fileName);
         if (!fs.existsSync(filePath)) continue;
         await addFileWithRetry(zip, filePath, fileName, skippedFiles);
       }
-      // 资产目录（白板/笔记图片，跨设备迁移不丢图片）
-      for (const dirName of ASSET_DIRS) {
+      // 资产目录（白板/笔记图片 + 插件资产，跨设备迁移不丢图片）
+      const allAssetDirs = [...ASSET_DIRS, ...pluginExtra.assetDirs]
+      for (const dirName of allAssetDirs) {
         const dirPath = path.join(dataDir, dirName);
         if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
           await addFolderWithRetry(zip, dirPath, dirName, skippedFiles);

@@ -117,7 +117,7 @@ export function openAdvancedPanelWindow(providerId?: string): Promise<void> {
 
 /** 监听单例窗口复用时的 tab/provider 切换通知 */
 export function onAdvancedPanelNavigate(
-  callback: (payload: { tab: 'chat' | 'whiteboard' | 'notes'; providerId?: string }) => void,
+  callback: (payload: { tab: string; providerId?: string }) => void,
 ): () => void {
   const api = requireElectron();
   return api.onAdvancedPanelNavigate(callback);

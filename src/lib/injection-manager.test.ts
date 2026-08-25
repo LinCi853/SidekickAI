@@ -322,7 +322,7 @@ describe('InjectionManager', () => {
       expect(injectionManager.has('spatial-nav')).toBe(true)
       expect(injectionManager.has('login-detect')).toBe(true)
       expect(injectionManager.has('chat-scrape')).toBe(true)
-      expect(injectionManager.has('enter-to-send')).toBe(true)
+      // enter-to-send 已移至 buildEnterToSendScript() 处理，不在 injection-manager 注册
     })
   })
 })
