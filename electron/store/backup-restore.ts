@@ -635,6 +635,9 @@ async function addFolderWithRetry(
  * 导入完成后应用会自动重启以加载新数据。
  * @param zipPath 用户选择的 zip 文件路径
  */
+/** 导入进行中标志（阻止 window-all-closed 退出进程） */
+export let isImportingData = false
+
 export async function importAllData(zipPath: string): Promise<ImportResult> {
   // 检测加密文件，返回 encrypted 标记让渲染层弹密码框
   if (isSabkEncrypted(zipPath)) {
@@ -645,6 +648,7 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
 
 /** 实际导入逻辑（明文 zip） */
 async function importAllDataInner(zipPath: string): Promise<ImportResult> {
+  isImportingData = true
   try {
     console.log('[backup-restore] 开始导入数据:', zipPath);
 
@@ -784,6 +788,8 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
     const message = (err as Error).message;
     console.error('[backup-restore] 导入失败:', message);
     return { success: false, error: message };
+  } finally {
+    isImportingData = false
   }
 }
 
