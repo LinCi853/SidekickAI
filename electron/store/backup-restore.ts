@@ -668,22 +668,10 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
 
     // 2. 销毁所有 BrowserWindow（必须在关闭 SQLite 之前，否则窗口 close 事件
     //    触发 cleanupOnQuit → getChatStore() 会因已关闭的连接而崩溃）
-    //    suppressDestroyErrors 捕获 destroy 后残留事件处理器的 "Object has been destroyed" 错误
-    const suppressDestroyErrors = (err: Error) => {
-      if (err.message.includes('Object has been destroyed')) return
-      console.error('[backup-restore] 窗口销毁错误:', err)
-    }
-    process.on('uncaughtException', suppressDestroyErrors)
-    try {
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) {
-          try { win.destroy(); } catch { /* ignore */ }
-        }
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        try { win.destroy(); } catch { /* ignore */ }
       }
-      // 等待残留事件处理完成
-      await new Promise((r) => setTimeout(r, 200))
-    } finally {
-      process.removeListener('uncaughtException', suppressDestroyErrors)
     }
 
     // 3. 清理所有 session（释放 partition 文件锁）

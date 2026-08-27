@@ -357,8 +357,9 @@ const hostAltPHotkeySet = new Set<number>()
 
 function attachHostAltPHotkey(win: BrowserWindow): void {
   if (win.isDestroyed() || hostAltPHotkeySet.has(win.webContents.id)) return
-  hostAltPHotkeySet.add(win.webContents.id)
-  win.webContents.once('destroyed', () => hostAltPHotkeySet.delete(win.webContents.id))
+  const wcId = win.webContents.id
+  hostAltPHotkeySet.add(wcId)
+  win.webContents.once('destroyed', () => hostAltPHotkeySet.delete(wcId))
   win.webContents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return
     if (input.isAutoRepeat) return
