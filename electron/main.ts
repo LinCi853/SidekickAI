@@ -590,10 +590,8 @@ app.on('window-all-closed', () => {
   // 有托盘时不退出，托盘可恢复窗口
   if (hasTray()) return
   // 导入数据进行中时不退出（窗口已销毁但流程未完成）
-  try {
-    const { isImportingData } = require('./store/backup-restore.js')
-    if (isImportingData) return
-  } catch { /* ignore */ }
+  const { isImportingData } = require('./store/import-guard.js')
+  if (isImportingData) return
   if (process.platform !== 'darwin') {
     app.quit()
   }
