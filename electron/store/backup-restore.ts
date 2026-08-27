@@ -184,7 +184,7 @@ async function addSessionFromBaseToZip(
 
 /**
  * 导出选项（细粒度控制，4 项互不重叠）
- * - basicData：配置 JSON + chat.db + app-key.json（必选，核心数据）
+ * - basicData：配置 JSON + chat.db + settings.db 含 app_key（必选，核心数据）
  * - cookies：登录凭据（Cookies 文件 + Local Storage 目录）
  * - indexedDB：应用数据（IndexedDB 目录，含离线应用数据）
  * - cache：离线缓存（Service Worker / Cache / GPUCache 等，可安全排除）
@@ -621,17 +621,13 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
     const entryNames = new Set(entries.map((e) => e.entryName));
-    // 验证：必须有 app-key.json + 数据源（settings.db 或旧版 profiles.json）
-    if (!entryNames.has('app-key.json')) {
+    // 验证：必须有数据源（settings.db 或旧版 profiles.json）
+    // app-key.json 已迁入 settings.db/app_key 表，新版备份不再单独包含；
+    // 兼容旧版备份（仍含 app-key.json）和新版备份（仅 settings.db）。
+    if (!entryNames.has('settings.db') && !entryNames.has('profiles.json') && !entryNames.has('app-key.json')) {
       return {
         success: false,
-        error: '备份文件不完整：缺少 app-key.json',
-      };
-    }
-    if (!entryNames.has('settings.db') && !entryNames.has('profiles.json')) {
-      return {
-        success: false,
-        error: '备份文件不完整：缺少 settings.db 或 profiles.json',
+        error: '备份文件不完整：缺少 settings.db 或 app-key.json',
       };
     }
 
