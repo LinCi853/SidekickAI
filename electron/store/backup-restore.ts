@@ -662,15 +662,12 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       };
     }
 
-    // 2. 关闭所有 SQLite 连接
-    try {
-      closeChatStore();
-      closeWhiteboardDb();
-      closeNotesDb();
-      closeBookmarkStore();
-      closeModuleStateDb();
-    } catch (err) {
-      console.warn('[backup-restore] 关闭 SQLite 失败:', err);
+    // 2. 销毁所有 BrowserWindow（必须在关闭 SQLite 之前，否则窗口 close 事件
+    //    触发 cleanupOnQuit → getChatStore() 会因已关闭的连接而崩溃）
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        try { win.destroy(); } catch { /* ignore */ }
+      }
     }
 
     // 3. 清理所有 session（释放 partition 文件锁）
@@ -690,11 +687,15 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       }),
     );
 
-    // 4. 销毁所有 BrowserWindow
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        try { win.destroy(); } catch { /* ignore */ }
-      }
+    // 4. 关闭所有 SQLite 连接（窗口已销毁，不会再触发 getChatStore()）
+    try {
+      closeChatStore();
+      closeWhiteboardDb();
+      closeNotesDb();
+      closeBookmarkStore();
+      closeModuleStateDb();
+    } catch (err) {
+      console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }
 
     // 5. 解压到临时目录
