@@ -4,6 +4,7 @@
 // 通过 IPC 暴露给渲染进程，设置页可显示当前权限状态。
 
 import { app, ipcMain, safeStorage, systemPreferences } from 'electron'
+import { getDeviceId } from '../store/device-id.js'
 import { execSync } from 'child_process'
 import {
   checkAccessibilityPermission,
@@ -25,6 +26,8 @@ export interface PlatformCapabilities {
   hasLowLevelHook: boolean
   storageBackend: StorageBackend
   isWayland: boolean
+  /** 设备唯一码（UUID，首次启动生成，持久化在 settings.db） */
+  deviceId: string
 }
 
 /** 检测 Linux 是否运行在 Wayland 会话下 */
@@ -95,6 +98,7 @@ export async function getPlatformCapabilities(): Promise<PlatformCapabilities> {
     hasLowLevelHook: !isWayland, // uiohook 在 Wayland 下不可用
     storageBackend,
     isWayland,
+    deviceId: getDeviceId(),
   }
 }
 

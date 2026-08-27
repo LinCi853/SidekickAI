@@ -16,7 +16,7 @@ export const appSettingsApi = {
     setProfileShortcut: (profileId: string, accelerator: string | null) =>
       ipcRenderer.invoke(IPC_CHANNELS.PROFILE_SHORTCUT_SET, { profileId, accelerator }),
     clearAllData: () => ipcRenderer.invoke(IPC_CHANNELS.APP_CLEAR_ALL_DATA),
-    selectExportPath: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_EXPORT_PATH),
+    selectExportPath: (encrypted?: boolean) => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_EXPORT_PATH, encrypted),
     selectImportFile: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_IMPORT_FILE),
     exportData: (
       targetPath: string,
@@ -27,9 +27,12 @@ export const appSettingsApi = {
         cache: boolean;
         voiceAssets: boolean;
       },
-    ) => ipcRenderer.invoke(IPC_CHANNELS.APP_EXPORT_DATA, targetPath, options),
-    importData: (zipPath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA, zipPath),
+      encrypt?: { password: string },
+    ) => ipcRenderer.invoke(IPC_CHANNELS.APP_EXPORT_DATA, targetPath, options, encrypt),
+    importData: (filePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA, filePath),
+    importDataDecrypted: (filePath: string, password: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, filePath, password),
     estimateExportSizes: () => ipcRenderer.invoke(IPC_CHANNELS.APP_ESTIMATE_EXPORT_SIZES),
     openExportWindow: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_EXPORT_WINDOW),
     // 缓存清理：清理缓存数据（仅缓存类目录与 session cache，保留登录态）

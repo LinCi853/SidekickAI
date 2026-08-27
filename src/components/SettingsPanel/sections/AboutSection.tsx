@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { PlatformCapabilities } from '../../../lib/electron-api';
 import {
   getPlatformCapabilities,
@@ -24,6 +24,15 @@ export default function AboutSection() {
   const [caps, setCaps] = useState<PlatformCapabilities | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyDeviceId = useCallback(() => {
+    if (!caps?.deviceId) return;
+    void navigator.clipboard.writeText(caps.deviceId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [caps?.deviceId]);
 
   useEffect(() => {
     void getPlatformCapabilities().then(setCaps).catch(() => {});
@@ -52,6 +61,17 @@ export default function AboutSection() {
       <SectionTitle>关于</SectionTitle>
       <div className="about-row" data-name="settings.about.name-row"><span data-name="settings.about.name-label">名称</span><span data-name="settings.about.name-value">SidekickAI（工百窗）</span></div>
       <div className="about-row" data-name="settings.about.version-row"><span data-name="settings.about.version-label">版本</span><span data-name="settings.about.version-value">v{caps?.appVersion ?? '—'}</span></div>
+      <div className="about-row" data-name="settings.about.device-id-row">
+        <span data-name="settings.about.device-id-label">设备码</span>
+        <span
+          data-name="settings.about.device-id-value"
+          onClick={handleCopyDeviceId}
+          title="点击复制"
+          style={{ cursor: 'pointer', fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}
+        >
+          {caps?.deviceId ?? '—'}{copied && <span style={{ color: 'var(--success)', marginLeft: 8 }}>已复制</span>}
+        </span>
+      </div>
       <div className="about-row" data-name="settings.about.platform-row">
         <span data-name="settings.about.platform-label">平台</span>
         <span data-name="settings.about.platform-value">{caps ? `${PLATFORM_LABELS[caps.platform] ?? caps.platform} (${caps.arch})` : '—'}</span>

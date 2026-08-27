@@ -22,6 +22,8 @@ import {
   exportData,
   selectImportFile,
   importData,
+  importDataDecrypted,
+  getPlatformCapabilities,
 } from '../../lib/electron-api';
 import { AlertIcon } from '@/components/icons';
 import './index.css';
@@ -106,10 +108,21 @@ export default function DataExportWindow() {
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<Status>(null);
 
+  // 加密导出状态
+  const [encryptEnabled, setEncryptEnabled] = useState(false);
+  const [encryptPassword, setEncryptPassword] = useState('');
+  const [encryptPasswordConfirm, setEncryptPasswordConfirm] = useState('');
+
   // 导入状态
   const [importFilePath, setImportFilePath] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<Status>(null);
+  // 加密导入密码
+  const [importPassword, setImportPassword] = useState('');
+  const [importNeedsPassword, setImportNeedsPassword] = useState(false);
+  // 导入成功后来源设备 ID
+  const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
 
   // ESC / Ctrl+W 关窗：复用统一 hook（覆盖 INPUT/TEXTAREA/SELECT/contentEditable 跳过逻辑）
   useEscToCloseWindow();
@@ -171,17 +184,28 @@ export default function DataExportWindow() {
   // 导出
   const handleExport = async () => {
     if (!canExport) return;
+    // 验证加密密码
+    if (encryptEnabled) {
+      if (encryptPassword.length < 6) {
+        setExportStatus({ type: 'error', message: '密码至少 6 位' });
+        return;
+      }
+      if (encryptPassword !== encryptPasswordConfirm) {
+        setExportStatus({ type: 'error', message: '两次密码不一致' });
+        return;
+      }
+    }
     setExporting(true);
     setExportStatus(null);
     try {
-      const targetPath = await selectExportPath();
+      const targetPath = await selectExportPath(encryptEnabled);
       if (!targetPath) {
         setExporting(false);
         return;
       }
-      const result = await exportData(targetPath, options);
+      const result = await exportData(targetPath, options, encryptEnabled ? { password: encryptPassword } : undefined);
       if (result.success) {
-        setExportStatus({ type: 'success', message: `已导出到：${result.filePath}` });
+        setExportStatus({ type: 'success', message: `已${encryptEnabled ? '加密' : ''}导出到：${result.filePath}` });
       } else {
         setExportStatus({ type: 'error', message: result.error ?? '导出失败' });
       }
@@ -200,6 +224,10 @@ export default function DataExportWindow() {
       const filePath = await selectImportFile();
       if (!filePath) return;
       setImportFilePath(filePath);
+      setImportNeedsPassword(false);
+      setImportPassword('');
+      setSourceDeviceId(null);
+      setCurrentDeviceId(null);
     } catch (err) {
       setImportStatus({ type: 'error', message: (err as Error).message });
     }
@@ -213,19 +241,51 @@ export default function DataExportWindow() {
       `确认导入以下文件？\n\n${importFilePath}\n\n此操作将完全覆盖当前所有数据，应用将自动重启。`,
     );
     if (!confirmed) return;
+    await doImport(importFilePath);
+  };
+
+  // 执行导入（支持加密文件自动检测）
+  const doImport = async (filePath: string, password?: string) => {
     setImporting(true);
     setImportStatus(null);
     try {
-      const result = await importData(importFilePath);
+      let result: { success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string };
+      if (password) {
+        const r = await importDataDecrypted(filePath, password);
+        result = { ...r, encrypted: false };
+      } else {
+        result = await importData(filePath);
+      }
       if (!result.success) {
+        if (result.encrypted) {
+          // 加密文件，需要密码
+          setImportNeedsPassword(true);
+          setImportStatus({ type: 'error', message: '此备份已加密，请输入密码' });
+          setImporting(false);
+          return;
+        }
         setImportStatus({ type: 'error', message: result.error ?? '导入失败' });
         setImporting(false);
+        return;
+      }
+      // 成功：显示来源设备 ID，短暂延迟后应用自动重启
+      if (result.sourceDeviceId) {
+        const caps = await getPlatformCapabilities().catch(() => null);
+        setSourceDeviceId(result.sourceDeviceId);
+        setCurrentDeviceId(caps?.deviceId ?? null);
+        setImportStatus({ type: 'success', message: '导入成功，应用即将重启…' });
       }
       // 成功时应用自动重启，无需更新状态
     } catch (err) {
       setImportStatus({ type: 'error', message: (err as Error).message });
       setImporting(false);
     }
+  };
+
+  // 加密文件输入密码后确认导入
+  const handleDecryptImport = async () => {
+    if (!importFilePath || !importPassword) return;
+    await doImport(importFilePath, importPassword);
   };
 
   return (
@@ -378,6 +438,48 @@ export default function DataExportWindow() {
               <span className="data-export-total-value" data-name="data-export.total-value">{formatBytes(totalSize)}</span>
             </div>
 
+            {/* 加密选项 */}
+            <div className="data-export-options" data-name="data-export.encrypt-section">
+              <label className={`data-export-option${encryptEnabled ? ' is-checked' : ''}`} data-name="data-export.encrypt-toggle">
+                <input
+                  type="checkbox"
+                  className="data-export-option-checkbox"
+                  checked={encryptEnabled}
+                  onChange={() => { setEncryptEnabled(!encryptEnabled); setEncryptPassword(''); setEncryptPasswordConfirm(''); }}
+                  disabled={exporting}
+                  data-name="data-export.encrypt-checkbox"
+                />
+                <div className="data-export-option-content">
+                  <div className="data-export-option-header">
+                    <span className="data-export-option-label">加密备份</span>
+                  </div>
+                  <div className="data-export-option-desc">密码 + 设备码派生密钥，AES-256-GCM 加密整个备份文件</div>
+                </div>
+              </label>
+              {encryptEnabled && (
+                <div style={{ padding: '0 0 8px 28px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input
+                    type="password"
+                    placeholder="输入密码（至少 6 位）"
+                    value={encryptPassword}
+                    onChange={(e) => setEncryptPassword(e.target.value)}
+                    disabled={exporting}
+                    style={{ padding: '6px 10px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)' }}
+                    data-name="data-export.encrypt-password-input"
+                  />
+                  <input
+                    type="password"
+                    placeholder="确认密码"
+                    value={encryptPasswordConfirm}
+                    onChange={(e) => setEncryptPasswordConfirm(e.target.value)}
+                    disabled={exporting}
+                    style={{ padding: '6px 10px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)' }}
+                    data-name="data-export.encrypt-password-confirm-input"
+                  />
+                </div>
+              )}
+            </div>
+
             {/* 导出状态消息 */}
             {exportStatus && (
               <div
@@ -433,6 +535,41 @@ export default function DataExportWindow() {
               </div>
             )}
 
+            {/* 加密文件密码输入 */}
+            {importNeedsPassword && importFilePath && (
+              <div style={{ padding: '8px 0', display: 'flex', gap: 8, alignItems: 'center' }} data-name="data-export.import-password-section">
+                <input
+                  type="password"
+                  placeholder="输入备份密码"
+                  value={importPassword}
+                  onChange={(e) => setImportPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleDecryptImport(); }}
+                  disabled={importing}
+                  style={{ flex: 1, padding: '6px 10px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)' }}
+                  data-name="data-export.import-password-input"
+                />
+                <button
+                  type="button"
+                  className="btn-primary-flat"
+                  onClick={() => void handleDecryptImport()}
+                  disabled={!importPassword || importing}
+                  data-name="data-export.import-decrypt-button"
+                >
+                  {importing ? '解密中…' : '解密导入'}
+                </button>
+              </div>
+            )}
+
+            {/* 导入成功后设备 ID 对比 */}
+            {sourceDeviceId && currentDeviceId && (
+              <div className="data-export-import-warning" style={{ borderColor: 'var(--success)', color: 'var(--foreground)' }} data-name="data-export.device-id-compare">
+                <div style={{ marginBottom: 4, fontWeight: 600 }}>数据来源对比</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>来源设备：{sourceDeviceId}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>当前设备：{currentDeviceId}</div>
+                <div style={{ marginTop: 4, fontSize: 'var(--text-xs)', color: 'var(--foreground-muted)' }}>重启后仅显示当前设备码</div>
+              </div>
+            )}
+
             {/* 导入状态消息 */}
             {importStatus && (
               <div
@@ -453,7 +590,7 @@ export default function DataExportWindow() {
                 style={{ flex: 1 }}
                 data-name="data-export.select-file-button"
               >
-                {importFilePath ? '重新选择文件' : '选择 zip 文件'}
+                {importFilePath ? '重新选择文件' : '选择备份文件'}
               </button>
               <button
                 type="button"

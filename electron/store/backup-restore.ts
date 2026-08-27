@@ -18,6 +18,8 @@ import { closeBookmarkStore } from './bookmark-store.js';
 import { closeModuleStateDb } from './module-state-store.js';
 import { profileStore } from './profile-store.js';
 import { getStoreCwd, isPortableMode } from './store-paths.js';
+import { getDeviceId } from './device-id.js';
+import { encryptFile, decryptFile, isSabkEncrypted } from '../utils/file-crypto.js';
 
 /** 必须备份的文件列表（相对数据目录） */
 const BACKUP_FILES = [
@@ -448,6 +450,10 @@ export interface ExportResult {
 export interface ImportResult {
   success: boolean;
   error?: string;
+  /** 加密文件需要密码解密时返回 true */
+  encrypted?: boolean;
+  /** 导入成功后返回来源设备 ID */
+  sourceDeviceId?: string;
 }
 
 /**
@@ -458,6 +464,7 @@ export interface ImportResult {
 export async function exportAllData(
   targetPath: string,
   options: ExportOptions,
+  encrypt?: { password: string },
 ): Promise<ExportResult> {
   try {
     const dataDir = getDataDir();
@@ -534,8 +541,23 @@ export async function exportAllData(
       await addSessionFromBaseToZip(zip, dataDir, '', options, skippedFiles);
     }
 
-    // 5. 写入 zip
-    zip.writeZip(targetPath);
+    // 5. 写入 manifest.json（设备码 + 版本 + 时间戳，用于导入时识别来源）
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify({
+      deviceId: getDeviceId(),
+      appVersion: app.getVersion(),
+      exportedAt: new Date().toISOString(),
+    }, null, 2), 'utf-8'));
+
+    // 6. 写入 zip（可能为临时路径，加密后会替换）
+    const zipPath = encrypt ? targetPath + '.tmp.zip' : targetPath
+    zip.writeZip(zipPath);
+
+    // 7. 如果需要加密，将 zip 加密为 .sabackup 格式
+    if (encrypt) {
+      encryptFile(zipPath, targetPath, encrypt.password, getDeviceId())
+      try { fs.rmSync(zipPath) } catch { /* ignore */ }
+      console.log('[backup-restore] 加密导出成功:', targetPath);
+    }
     console.log('[backup-restore] 导出成功:', targetPath);
 
     if (skippedFiles.length > 0) {
@@ -614,6 +636,15 @@ async function addFolderWithRetry(
  * @param zipPath 用户选择的 zip 文件路径
  */
 export async function importAllData(zipPath: string): Promise<ImportResult> {
+  // 检测加密文件，返回 encrypted 标记让渲染层弹密码框
+  if (isSabkEncrypted(zipPath)) {
+    return { success: false, encrypted: true, error: '需要密码解密' }
+  }
+  return importAllDataInner(zipPath)
+}
+
+/** 实际导入逻辑（明文 zip） */
+async function importAllDataInner(zipPath: string): Promise<ImportResult> {
   try {
     console.log('[backup-restore] 开始导入数据:', zipPath);
 
@@ -704,16 +735,78 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch { /* ignore */ }
 
-    // 10. 重启应用
+    // 10. 兼容旧版备份：app-key.json → settings.db/app_key 迁移
+    // 旧版备份的 app-key.json 是独立文件，新版从 settings.db/app_key 表读取。
+    // 如果导入的备份含 app-key.json 但 settings.db/app_key 表为空，从文件迁移。
+    try {
+      const appKeyPath = path.join(dataDir, 'app-key.json')
+      if (fs.existsSync(appKeyPath)) {
+        const raw = JSON.parse(fs.readFileSync(appKeyPath, 'utf-8'))
+        if (raw.key) {
+          // 动态导入 app-crypto 内部的 keyStore 逻辑
+          const { createSqliteJsonStore } = await import('./module-state-store.js')
+          const keyStore = createSqliteJsonStore<{ version: number; key: string; createdAt: number }>({
+            tableName: 'app_key',
+            defaults: { version: 1, key: '', createdAt: 0 },
+          })
+          if (!keyStore.get('key')) {
+            keyStore.set('version', raw.version ?? 1)
+            keyStore.set('key', raw.key)
+            keyStore.set('createdAt', raw.createdAt ?? Date.now())
+            console.log('[backup-restore] 已从 app-key.json 迁移密钥到 settings.db/app_key')
+          }
+          // 迁移完成，删除旧文件避免残留
+          try { fs.rmSync(appKeyPath) } catch { /* ignore */ }
+        }
+      }
+    } catch (err) {
+      console.warn('[backup-restore] app-key.json 迁移失败（非致命）:', err)
+    }
+
+    // 11. 读取 manifest.json 中的来源设备 ID（兼容旧版备份：无 manifest 时返回 undefined）
+    let sourceDeviceId: string | undefined
+    try {
+      const manifestPath = path.join(dataDir, 'manifest.json')
+      if (fs.existsSync(manifestPath)) {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+        sourceDeviceId = manifest.deviceId
+      }
+    } catch { /* ignore */ }
+
+    // 12. 重启应用
     console.log('[backup-restore] 导入成功，重启应用');
     app.relaunch();
     app.exit(0);
 
-    return { success: true };
+    return { success: true, sourceDeviceId };
   } catch (err) {
     const message = (err as Error).message;
     console.error('[backup-restore] 导入失败:', message);
     return { success: false, error: message };
+  }
+}
+
+/**
+ * 从加密的 .sabackup 文件导入数据。
+ * 先解密为临时 zip，再走正常导入流程。
+ */
+export async function importAllDataDecrypted(filePath: string, password: string): Promise<ImportResult> {
+  try {
+    const tempZip = filePath + '.tmp.zip'
+    const sourceDeviceId = decryptFile(filePath, tempZip, password)
+    if (!sourceDeviceId) {
+      try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
+      return { success: false, error: '密码错误或文件损坏' }
+    }
+    const result = await importAllDataInner(tempZip)
+    try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
+    // 注入来源设备 ID（importAllDataInner 重启前已读取 manifest，但加密场景额外提供）
+    if (result.success && !result.sourceDeviceId) {
+      result.sourceDeviceId = sourceDeviceId
+    }
+    return result
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
   }
 }
 

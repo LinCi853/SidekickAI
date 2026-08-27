@@ -155,7 +155,7 @@ export interface AppSettingsAPI {
   /** 清除所有用户数据（恢复出厂设置），完成后应用自动重启 */
   clearAllData(): Promise<boolean>
   /** 选择导出文件保存路径（弹出系统保存对话框） */
-  selectExportPath(): Promise<string | null>
+  selectExportPath(encrypted?: boolean): Promise<string | null>
   /** 选择导入文件（弹出系统打开对话框） */
   selectImportFile(): Promise<string | null>
   /**
@@ -172,9 +172,12 @@ export interface AppSettingsAPI {
       cache: boolean;
       voiceAssets: boolean;
     },
+    encrypt?: { password: string },
   ): Promise<{ success: boolean; filePath?: string; error?: string }>
-  /** 从 zip 文件导入所有数据（导入后应用自动重启） */
-  importData(zipPath: string): Promise<{ success: boolean; error?: string }>
+  /** 从 zip/sabackup 文件导入所有数据（导入后应用自动重启）。加密文件返回 encrypted: true */
+  importData(filePath: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }>
+  /** 从加密的 .sabackup 文件导入（输入密码解密后导入） */
+  importDataDecrypted(filePath: string, password: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }>
   /**
    * 估算导出各类别体积（字节）
    * 返回 basicData/cookies/indexedDB/cache 各项大小，

@@ -88,9 +88,9 @@ export function clearAllData(): Promise<boolean> {
 }
 
 /** 选择导出文件保存路径（弹出系统保存对话框） */
-export async function selectExportPath(): Promise<string | null> {
+export async function selectExportPath(encrypted?: boolean): Promise<string | null> {
   const api = requireElectron();
-  return api.appSettings.selectExportPath();
+  return api.appSettings.selectExportPath(encrypted);
 }
 
 /** 选择导入文件（弹出系统打开对话框） */
@@ -99,7 +99,7 @@ export async function selectImportFile(): Promise<string | null> {
   return api.appSettings.selectImportFile();
 }
 
-/** 导出数据到指定路径（细粒度控制：基础数据 / 登录凭据 / 应用数据 / 离线缓存 / 语音资产） */
+/** 导出数据到指定路径（细粒度控制：基础数据 / 登录凭据 / 应用数据 / 离线缓存 / 语音资产，可选加密） */
 export async function exportData(
   targetPath: string,
   options: {
@@ -109,15 +109,22 @@ export async function exportData(
     cache: boolean;
     voiceAssets: boolean;
   },
+  encrypt?: { password: string },
 ): Promise<{ success: boolean; filePath?: string; error?: string }> {
   const api = requireElectron();
-  return api.appSettings.exportData(targetPath, options);
+  return api.appSettings.exportData(targetPath, options, encrypt);
 }
 
-/** 从 zip 文件导入所有数据（导入后应用自动重启） */
-export async function importData(zipPath: string): Promise<{ success: boolean; error?: string }> {
+/** 从 zip/sabackup 文件导入所有数据（导入后应用自动重启）。加密文件返回 encrypted: true */
+export async function importData(filePath: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }> {
   const api = requireElectron();
-  return api.appSettings.importData(zipPath);
+  return api.appSettings.importData(filePath);
+}
+
+/** 从加密的 .sabackup 文件导入（输入密码解密后导入） */
+export async function importDataDecrypted(filePath: string, password: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }> {
+  const api = requireElectron();
+  return api.appSettings.importDataDecrypted(filePath, password);
 }
 
 /** 估算导出各类别体积（字节） */

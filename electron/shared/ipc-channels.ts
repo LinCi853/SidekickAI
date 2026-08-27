@@ -212,6 +212,7 @@ export const IPC_CHANNELS = {
   // 数据迁移（导出/导入完整数据，跨设备迁移）
   APP_EXPORT_DATA: 'app:exportData',
   APP_IMPORT_DATA: 'app:importData',
+  APP_IMPORT_DATA_DECRYPTED: 'app:importDataDecrypted',
   APP_SELECT_EXPORT_PATH: 'app:selectExportPath',
   APP_SELECT_IMPORT_FILE: 'app:selectImportFile',
   // 估算导出各类别体积（基础数据 / 登录态 / 完整分区 / 语音模型）

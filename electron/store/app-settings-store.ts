@@ -432,39 +432,46 @@ export function registerAppSettingsIPC(): void {
   })
 
   // 数据迁移：选择导出文件保存路径（弹出系统保存对话框）
-  ipcMain.handle(IPC_CHANNELS.APP_SELECT_EXPORT_PATH, async () => {
+  ipcMain.handle(IPC_CHANNELS.APP_SELECT_EXPORT_PATH, async (_e, encrypted?: boolean) => {
+    const ext = encrypted ? 'sabackup' : 'zip'
     const result = await dialog.showSaveDialog({
-      filters: [{ name: 'Zip', extensions: ['zip'] }],
-      defaultPath: `sidekickai-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+      filters: [{ name: encrypted ? '加密备份' : 'Zip', extensions: [ext] }],
+      defaultPath: `sidekickai-backup-${new Date().toISOString().slice(0, 10)}.${ext}`,
     })
     return result.canceled ? null : result.filePath
   })
 
-  // 数据迁移：选择导入文件（弹出系统打开对话框）
+  // 数据迁移：选择导入文件（弹出系统打开对话框，支持 .zip 和 .sabackup）
   ipcMain.handle(IPC_CHANNELS.APP_SELECT_IMPORT_FILE, async () => {
     const result = await dialog.showOpenDialog({
-      filters: [{ name: 'Zip', extensions: ['zip'] }],
+      filters: [{ name: '备份文件', extensions: ['zip', 'sabackup'] }],
       properties: ['openFile'],
     })
     return result.canceled ? null : result.filePaths[0]
   })
 
-  // 数据迁移：导出所有数据到指定路径（细粒度控制）
+  // 数据迁移：导出所有数据到指定路径（细粒度控制，可选加密）
   ipcMain.handle(IPC_CHANNELS.APP_EXPORT_DATA, async (_e, targetPath: string, options: {
     basicData: boolean;
     cookies: boolean;
     indexedDB: boolean;
     cache: boolean;
     voiceAssets: boolean;
-  }) => {
+  }, encrypt?: { password: string }) => {
     const { exportAllData } = await import('./backup-restore.js')
-    return exportAllData(targetPath, options)
+    return exportAllData(targetPath, options, encrypt)
   })
 
-  // 数据迁移：从 zip 文件导入所有数据（导入后应用自动重启）
+  // 数据迁移：从 zip/sabackup 文件导入所有数据（导入后应用自动重启）
   ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA, async (_e, zipPath: string) => {
     const { importAllData } = await import('./backup-restore.js')
     return importAllData(zipPath)
+  })
+
+  // 数据迁移：从加密的 .sabackup 文件导入（输入密码解密后导入）
+  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, async (_e, filePath: string, password: string) => {
+    const { importAllDataDecrypted } = await import('./backup-restore.js')
+    return importAllDataDecrypted(filePath, password)
   })
 
   // 数据迁移：估算各类别导出体积（字节）
