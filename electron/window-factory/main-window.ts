@@ -242,6 +242,14 @@ export function createMainWindow(): void {
 
   win.on('closed', () => {
     windowState.mainWindow = null
+    // 数据导入中不退出（窗口已销毁但导入流程未完成，由导入流程控制重启）
+    try {
+      const { isImportingData } = require('../store/backup-restore.js')
+      if (isImportingData) {
+        console.log('[main] 主窗口关闭但数据导入中，跳过退出')
+        return
+      }
+    } catch { /* ignore */ }
     // 走到这里说明窗口已被真正销毁（closeBehavior=close 或 app.quit）
     const settings = getAppSettings()
     if (settings.closeBehavior === 'close') {
