@@ -68,6 +68,9 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   }
 
   const saved = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
+  const rawSaved = windowStore.get(ADVANCED_PANEL_WINDOW_ID)
+  console.log('[advanced-panel-window] saved state:', JSON.stringify(rawSaved))
+  console.log('[advanced-panel-window] hasSavedBounds:', !!rawSaved, 'isMaximized:', saved.isMaximized)
   const isWhiteboard = options?.initialTab === 'whiteboard'
   // 区分"用户真实保存的 bounds"与 getOrDefault 返回的默认占位 bounds（420×820，为 webview 主窗口设计的窄长形态）。
   // 本窗口为 API 直连聊天界面（webviewTag:false），首次打开应使用 900×680，仅在用户曾保存过时才用 saved 尺寸。
@@ -178,12 +181,21 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     windowState.advancedPanelWindow = null
   }, { trackBounds: true })
 
+  // 调试：记录关闭时的最终状态
+  win.on('close', () => {
+    const finalState = windowStore.get(ADVANCED_PANEL_WINDOW_ID)
+    console.log('[advanced-panel-window] close - saved state:', JSON.stringify(finalState))
+    console.log('[advanced-panel-window] close - current bounds:', JSON.stringify(win.getBounds()), 'maximized:', win.isMaximized())
+  })
+
   // 同步 normalBounds：用户移动/调整窗口尺寸时更新，确保取消最大化后恢复到正确位置
   const syncNormalBounds = () => {
     if (win.isDestroyed() || win.isMaximized() || win.isFullScreen()) return
+    const bounds = win.getBounds()
     const state = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
-    state.normalBounds = win.getBounds()
+    state.normalBounds = bounds
     windowStore.save(ADVANCED_PANEL_WINDOW_ID, state)
+    console.log('[advanced-panel-window] syncNormalBounds:', JSON.stringify(bounds))
   }
   win.on('resize', syncNormalBounds)
   win.on('move', syncNormalBounds)
