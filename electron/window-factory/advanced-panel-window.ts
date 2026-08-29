@@ -74,11 +74,30 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   // 白板模式不恢复 bounds，始终使用默认尺寸居中显示。
   const hasSavedBounds = !!windowStore.get(ADVANCED_PANEL_WINDOW_ID) && !isWhiteboard
   const workArea = screen.getPrimaryDisplay().workArea
-  // 默认尺寸 900×680，居中显示；用户已保存 bounds 则优先用
-  const width = (hasSavedBounds && saved.bounds.width) || Math.min(900, workArea.width - 80)
-  const height = (hasSavedBounds && saved.bounds.height) || Math.min(680, workArea.height - 80)
-  const x = (hasSavedBounds && saved.bounds.x != null) ? saved.bounds.x : workArea.x + Math.round((workArea.width - width) / 2)
-  const y = (hasSavedBounds && saved.bounds.y != null) ? saved.bounds.y : workArea.y + Math.round((workArea.height - height) / 2)
+
+  // 校验 saved bounds 是否在当前可见屏幕范围内（防止窗口跑到已断开的显示器上）
+  let savedBoundsValid = hasSavedBounds
+  if (hasSavedBounds && saved.bounds.x != null && saved.bounds.y != null) {
+    const displays = screen.getAllDisplays()
+    const savedCenter = {
+      x: saved.bounds.x + (saved.bounds.width || 900) / 2,
+      y: saved.bounds.y + (saved.bounds.height || 680) / 2,
+    }
+    savedBoundsValid = displays.some((d) => {
+      const b = d.bounds
+      return savedCenter.x >= b.x && savedCenter.x <= b.x + b.width &&
+             savedCenter.y >= b.y && savedCenter.y <= b.y + b.height
+    })
+    if (!savedBoundsValid) {
+      console.warn('[advanced-panel-window] saved bounds 超出屏幕范围，回退到默认位置')
+    }
+  }
+
+  // 默认尺寸 900×680，居中显示；用户已保存 bounds 且在屏幕内则优先用
+  const width = (savedBoundsValid && saved.bounds.width) || Math.min(900, workArea.width - 80)
+  const height = (savedBoundsValid && saved.bounds.height) || Math.min(680, workArea.height - 80)
+  const x = (savedBoundsValid && saved.bounds.x != null) ? saved.bounds.x : workArea.x + Math.round((workArea.width - width) / 2)
+  const y = (savedBoundsValid && saved.bounds.y != null) ? saved.bounds.y : workArea.y + Math.round((workArea.height - height) / 2)
 
   // 进阶窗口默认全屏（最大化）：首次打开（无保存状态）或用户上次以最大化关闭时
   // 白板模式始终最大化；其他模式恢复上次状态
