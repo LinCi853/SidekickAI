@@ -110,11 +110,13 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   focusManager.track(win)
 
   // 默认最大化：记录初始 normalBounds 供取消最大化时还原
-  if (shouldMaximize) {
+  // 注意：不在 show:false 的窗口上调用 maximize()，Windows DWM 可能不正确处理。
+  // 延迟到 ready-to-show 后在 showOnce 中执行。
+  const pendingMaximize = shouldMaximize
+  if (pendingMaximize) {
     const state = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
     state.normalBounds = { x, y, width, height }
     state.isMaximized = true
-    win.maximize()
     windowStore.save(ADVANCED_PANEL_WINDOW_ID, state)
   }
 
@@ -132,7 +134,11 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     const currentMinWidth = getAdvancedPanelMinWidth(getUiScaleFromSettings())
     win.setMinimumSize(currentMinWidth, ADVANCED_PANEL_MIN_HEIGHT)
     win.show()
-    win.moveTop() // 确保在主窗口之上（非 alwaysOnTop 时可能被遮挡）
+    // 先 show 再 maximize，避免在 show:false 窗口上调用 maximize 导致 DWM 状态异常
+    if (pendingMaximize && !win.isMaximized()) {
+      win.maximize()
+    }
+    win.moveTop()
     win.focus()
     safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
   }
