@@ -68,9 +68,6 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   }
 
   const saved = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
-  const rawSaved = windowStore.get(ADVANCED_PANEL_WINDOW_ID)
-  console.log('[advanced-panel-window] saved state:', JSON.stringify(rawSaved))
-  console.log('[advanced-panel-window] hasSavedBounds:', !!rawSaved, 'isMaximized:', saved.isMaximized)
   const isWhiteboard = options?.initialTab === 'whiteboard'
   // 区分"用户真实保存的 bounds"与 getOrDefault 返回的默认占位 bounds（420×820，为 webview 主窗口设计的窄长形态）。
   // 本窗口为 API 直连聊天界面（webviewTag:false），首次打开应使用 900×680，仅在用户曾保存过时才用 saved 尺寸。
@@ -78,29 +75,30 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   const hasSavedBounds = !!windowStore.get(ADVANCED_PANEL_WINDOW_ID) && !isWhiteboard
   const workArea = screen.getPrimaryDisplay().workArea
 
-  // 校验 saved bounds 是否在当前可见屏幕范围内（防止窗口跑到已断开的显示器上）
+  // 优先使用 normalBounds（正常窗口位置），它不受最大化跨显示器坐标污染。
+  // bounds 可能包含最大化时的坐标（如多显示器下 x:2684 超出主屏范围）。
+  const restoreBounds = saved.normalBounds || saved.bounds
+
+  // 校验恢复坐标是否在当前可见屏幕范围内（防止窗口跑到已断开的显示器上）
   let savedBoundsValid = hasSavedBounds
-  if (hasSavedBounds && saved.bounds.x != null && saved.bounds.y != null) {
+  if (hasSavedBounds && restoreBounds.x != null && restoreBounds.y != null) {
     const displays = screen.getAllDisplays()
-    const savedCenter = {
-      x: saved.bounds.x + (saved.bounds.width || 900) / 2,
-      y: saved.bounds.y + (saved.bounds.height || 680) / 2,
+    const center = {
+      x: restoreBounds.x + (restoreBounds.width || 900) / 2,
+      y: restoreBounds.y + (restoreBounds.height || 680) / 2,
     }
     savedBoundsValid = displays.some((d) => {
       const b = d.bounds
-      return savedCenter.x >= b.x && savedCenter.x <= b.x + b.width &&
-             savedCenter.y >= b.y && savedCenter.y <= b.y + b.height
+      return center.x >= b.x && center.x <= b.x + b.width &&
+             center.y >= b.y && center.y <= b.y + b.height
     })
-    if (!savedBoundsValid) {
-      console.warn('[advanced-panel-window] saved bounds 超出屏幕范围，回退到默认位置')
-    }
   }
 
   // 默认尺寸 900×680，居中显示；用户已保存 bounds 且在屏幕内则优先用
-  const width = (savedBoundsValid && saved.bounds.width) || Math.min(900, workArea.width - 80)
-  const height = (savedBoundsValid && saved.bounds.height) || Math.min(680, workArea.height - 80)
-  const x = (savedBoundsValid && saved.bounds.x != null) ? saved.bounds.x : workArea.x + Math.round((workArea.width - width) / 2)
-  const y = (savedBoundsValid && saved.bounds.y != null) ? saved.bounds.y : workArea.y + Math.round((workArea.height - height) / 2)
+  const width = (savedBoundsValid && restoreBounds.width) || Math.min(900, workArea.width - 80)
+  const height = (savedBoundsValid && restoreBounds.height) || Math.min(680, workArea.height - 80)
+  const x = (savedBoundsValid && restoreBounds.x != null) ? restoreBounds.x : workArea.x + Math.round((workArea.width - width) / 2)
+  const y = (savedBoundsValid && restoreBounds.y != null) ? restoreBounds.y : workArea.y + Math.round((workArea.height - height) / 2)
 
   // 进阶窗口默认全屏（最大化）：首次打开（无保存状态）或用户上次以最大化关闭时
   // 白板模式始终最大化；其他模式恢复上次状态
@@ -181,21 +179,12 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     windowState.advancedPanelWindow = null
   }, { trackBounds: true })
 
-  // 调试：记录关闭时的最终状态
-  win.on('close', () => {
-    const finalState = windowStore.get(ADVANCED_PANEL_WINDOW_ID)
-    console.log('[advanced-panel-window] close - saved state:', JSON.stringify(finalState))
-    console.log('[advanced-panel-window] close - current bounds:', JSON.stringify(win.getBounds()), 'maximized:', win.isMaximized())
-  })
-
   // 同步 normalBounds：用户移动/调整窗口尺寸时更新，确保取消最大化后恢复到正确位置
   const syncNormalBounds = () => {
     if (win.isDestroyed() || win.isMaximized() || win.isFullScreen()) return
-    const bounds = win.getBounds()
     const state = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
-    state.normalBounds = bounds
+    state.normalBounds = win.getBounds()
     windowStore.save(ADVANCED_PANEL_WINDOW_ID, state)
-    console.log('[advanced-panel-window] syncNormalBounds:', JSON.stringify(bounds))
   }
   win.on('resize', syncNormalBounds)
   win.on('move', syncNormalBounds)
