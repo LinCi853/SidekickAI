@@ -178,6 +178,16 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     windowState.advancedPanelWindow = null
   }, { trackBounds: true })
 
+  // 同步 normalBounds：用户移动/调整窗口尺寸时更新，确保取消最大化后恢复到正确位置
+  const syncNormalBounds = () => {
+    if (win.isDestroyed() || win.isMaximized() || win.isFullScreen()) return
+    const state = windowStore.getOrDefault(ADVANCED_PANEL_WINDOW_ID)
+    state.normalBounds = win.getBounds()
+    windowStore.save(ADVANCED_PANEL_WINDOW_ID, state)
+  }
+  win.on('resize', syncNormalBounds)
+  win.on('move', syncNormalBounds)
+
   return win
 }
 
