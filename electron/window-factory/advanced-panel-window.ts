@@ -132,6 +132,7 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     const currentMinWidth = getAdvancedPanelMinWidth(getUiScaleFromSettings())
     win.setMinimumSize(currentMinWidth, ADVANCED_PANEL_MIN_HEIGHT)
     win.show()
+    win.moveTop() // 确保在主窗口之上（非 alwaysOnTop 时可能被遮挡）
     win.focus()
     safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
   }
