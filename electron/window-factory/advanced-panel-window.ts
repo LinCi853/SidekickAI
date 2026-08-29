@@ -173,11 +173,10 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   }, 3000)
   win.once('closed', () => clearTimeout(showTimeout))
 
-  // 进阶面板：不保存 bounds，取消最大化时由 WindowMaximizeManager 使用
-  // centered70 策略还原为工作区居中 70% 尺寸（与浏览器窗口同步）
+  // 进阶面板：保存 bounds（关闭时持久化位置/尺寸），下次打开恢复到上次位置
   attachDetachedWindowLifecycle(win, ADVANCED_PANEL_WINDOW_ID, () => {
     windowState.advancedPanelWindow = null
-  }, { trackBounds: false })
+  }, { trackBounds: true })
 
   return win
 }
