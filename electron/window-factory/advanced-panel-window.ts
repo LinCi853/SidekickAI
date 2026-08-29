@@ -125,14 +125,27 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   // 进阶面板不含 webview，需在主 webContents 上注册 F12 拦截
   attachWindowHotkeyInterceptor(win.webContents)
 
-  win.once('ready-to-show', () => {
-    // 确保最小尺寸与缓存值一致（UI 比例变化时由 App.tsx 更新缓存）
+  let shown = false
+  const showOnce = () => {
+    if (shown || win.isDestroyed()) return
+    shown = true
     const currentMinWidth = getAdvancedPanelMinWidth(getUiScaleFromSettings())
     win.setMinimumSize(currentMinWidth, ADVANCED_PANEL_MIN_HEIGHT)
     win.show()
     win.focus()
     safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
-  })
+  }
+
+  win.once('ready-to-show', showOnce)
+
+  // 超时兜底：ready-to-show 未在 3 秒内触发（渲染器加载失败）时强制显示
+  const showTimeout = setTimeout(() => {
+    if (!shown && !win.isDestroyed()) {
+      console.warn('[advanced-panel-window] ready-to-show 超时，强制显示窗口')
+      showOnce()
+    }
+  }, 3000)
+  win.once('closed', () => clearTimeout(showTimeout))
 
   // 进阶面板：不保存 bounds，取消最大化时由 WindowMaximizeManager 使用
   // centered70 策略还原为工作区居中 70% 尺寸（与浏览器窗口同步）
