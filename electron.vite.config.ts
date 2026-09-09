@@ -14,6 +14,12 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
         },
+        // 输出 CJS：Electron 主进程在 asar 里加载 ESM .js 会报
+        // "Cannot use import statement outside a module"（不认 package.json 的 type:"module"）
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].cjs'
+        },
         // 主进程依赖由 externalizeDepsPlugin 外置，无需 manualChunks
       },
     },
@@ -32,6 +38,10 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
           webview: resolve(__dirname, 'electron/webview-preload.ts'),
+        },
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].cjs'
         },
       },
     },

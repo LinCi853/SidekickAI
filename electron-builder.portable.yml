@@ -12,6 +12,12 @@ files:
   - node_modules/uiohook-napi/prebuilds/win32-*/**
   # 删除 Chromium 协议汇总文件（10MB+，用户可在线查阅）
   - '!LICENSES.chromium.html'
+  # 渲染层依赖已由 Vite 打包进渲染层 bundle，源码不 import，整包进 asar 属死重：
+  # 剔除后可显著减小体积（mermaid ~81MB / @excalidraw ~46MB / katex ~4MB / @tiptap ~1MB）
+  - '!node_modules/@excalidraw/**'
+  - '!node_modules/mermaid/**'
+  - '!node_modules/katex/**'
+  - '!node_modules/@tiptap/**'
 # 原生 .node 必须解压到磁盘（无法从 asar 内加载 process.dlopen）
 # electron-builder 默认会 unpack *.node，显式声明确保跨平台稳定
 asarUnpack:
