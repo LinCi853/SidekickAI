@@ -17,9 +17,6 @@ import { IPC_CHANNELS, type AudioDeviceInfo } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
 import { VOICE_CONFIG } from './default-config.js'
 
-// 重新导出 VoiceConfig 类型（供 default-config.ts 使用）
-export type { VoiceConfig } from '../shared/api/voice.api.js'
-
 // 持久化存储实例（写入 voice-config.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
 // 生产环境：使用默认 userData 路径

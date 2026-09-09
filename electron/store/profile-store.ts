@@ -13,6 +13,7 @@ import { generateUniqueName } from '../shared/naming.js'
 import { getDefaultProfileParams, createDefaultProfileParams } from './default-config.js'
 import { getPreset } from './preset-store.js'
 import { createSqliteJsonStore } from './module-state-store.js'
+import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 
 // Windows Chrome 125 默认 UA 已迁移到 default-config.ts
 

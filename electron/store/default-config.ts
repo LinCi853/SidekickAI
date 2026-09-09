@@ -736,14 +736,7 @@ export interface DefaultProfileParams {
   width: number
   height: number
   order: number
-  fingerprint: {
-    seed: number
-    canvas: string
-    webgl: string
-    audio: string
-    fonts: string
-    webrtc: string
-  }
+  fingerprint: Profile['fingerprint']
 }
 
 /**
