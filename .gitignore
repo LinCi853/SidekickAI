@@ -74,6 +74,21 @@ showcase.html
 *.asar
 
 # ============================================================
+# IDE / Tool local state (workspace 元数据，IDE 会不断改)
+# ============================================================
+.tokeny/
+.zcode/
+
+# ============================================================
+# installer-tauri (Tauri 2 + React 安装向导子项目) 非源码产物
+# ============================================================
+installer-tauri/node_modules/
+installer-tauri/dist/
+installer-tauri/src-tauri/target/
+installer-tauri/src-tauri/gen/
+installer-tauri/payload.7z
+
+# ============================================================
 # Non-Windows platforms (已移除，仅保留 Windows 桌面端)
 # ============================================================
 mobile/
