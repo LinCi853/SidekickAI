@@ -118,8 +118,20 @@ export async function setMinimumSize(width: number, height: number): Promise<voi
 
 /** 切换当前窗口全屏状态 */
 export async function toggleFullscreenWindow(): Promise<boolean> {
+  console.log('[electron-api] toggleFullscreenWindow called');
   const api = requireElectron();
-  return api.windowControl.toggleFullscreen();
+  const result = await api.windowControl.toggleFullscreen();
+  console.log('[electron-api] toggleFullscreenWindow result:', result);
+  return result;
+}
+
+/** 确定性退出全屏：仅在全屏时退出，不做 toggle（防止状态不一致时重新进入） */
+export async function exitFullscreenWindow(): Promise<boolean> {
+  console.log('[electron-api] exitFullscreenWindow called');
+  const api = requireElectron();
+  const result = await api.windowControl.exitFullscreen();
+  console.log('[electron-api] exitFullscreenWindow result:', result);
+  return result;
 }
 
 /** 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中） */

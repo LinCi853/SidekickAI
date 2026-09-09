@@ -38,28 +38,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* 新建白板按钮 */
-.wb-sidebar-new-btn {
-  flex: none;
-  background: var(--accent-10);
-  border: 1px solid var(--accent-25);
-  border-radius: var(--radius-sm);
-  color: var(--accent-bright);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-.wb-sidebar-new-btn:hover {
-  background: var(--accent-25);
-  border-color: var(--accent-50);
-}
-.wb-sidebar-new-btn svg {
-  width: var(--icon-svg);
-  height: var(--icon-svg);
-}
+/* .wb-sidebar-new-btn 已删除（TSX 已迁移到 sidebar-shell-new-btn） */
 
 .wb-sidebar-list {
   flex: 1;

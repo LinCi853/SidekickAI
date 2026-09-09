@@ -13,7 +13,7 @@ import type { UiohookEvent, UiohookModule } from './types.js'
  */
 function loadUiohook(): UiohookModule | null {
   try {
-    const require = createRequire(import.meta.url)
+    const require = createRequire(__filename)
     return require('uiohook-napi') as UiohookModule
   } catch (err) {
     console.warn(

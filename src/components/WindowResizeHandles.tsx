@@ -22,6 +22,7 @@ import {
   isWindowMaximized,
   maximizeToggleWindow,
   onMaximizeToggled,
+  onFullscreenToggled,
 } from '../lib/electron-api';
 
 type Edge = 'n' | 'sl' | 'sr' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -76,10 +77,16 @@ export default function WindowResizeHandles({ disabled = false, fullscreenMode =
   // 仅用于触发光标样式重渲染；拖拽逻辑全部用 ref，避免闭包陈旧
   const [activeEdge, setActiveEdge] = useState<Edge | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     isWindowMaximized().then(setIsMaximized).catch(() => {});
     const unsub = onMaximizeToggled(setIsMaximized);
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = onFullscreenToggled(setIsFullscreen);
     return unsub;
   }, []);
   const startRef = useRef<{ x: number; y: number; bounds: { x: number; y: number; width: number; height: number } } | null>(null);
@@ -217,7 +224,7 @@ export default function WindowResizeHandles({ disabled = false, fullscreenMode =
   if (disabled) return null;
 
   // block 模式下最大化/全屏时隐藏 resize 手柄
-  if (isMaximized && fullscreenMode === 'block') return null;
+  if ((isMaximized || isFullscreen) && fullscreenMode === 'block') return null;
 
   return (
     <>

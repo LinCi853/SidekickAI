@@ -138,19 +138,20 @@ export function useWebviewLifecycleEvents({
     // ERR_FAILED (-2) 且 isMainFrame：guest 进程可能处于僵尸状态（未正式崩溃但无法加载），
     // 延迟 500ms 后触发 remount（给 render-process-gone 事件留出先到达的时间）
     let remountTimer: ReturnType<typeof setTimeout> | null = null;
-    // 代理兜底已触发标记：避免同一 tab 反复触发（用户下次 reload 时由 cleanup 重置）
-    let proxyFallbackTriggered = false;
-    // 代理相关错误码（Chromium net error codes）：
-    //   -102 ERR_CONNECTION_FAILED    -103 ERR_CONNECTION_REFUSED
-    //   -104 ERR_CONNECTION_RESET     -105 ERR_CONNECTION_ABORTED
-    //   -106 ERR_CONNECTION_CLOSED    -107 ERR_CONNECTION_ENDED
+    // 代理兜底已触发标记：全局共享，避免多个标签页重复触发同一次兜底
+    // 用户手动修改代理设置时由 applyProxyToAllSessions 重置
+    let proxyFallbackTriggered = (window as any).__proxyFallbackGlobal ?? false;
+    // 代理/网络相关错误码（Chromium net error codes）：
+    //   -100 ERR_CONNECTION_CLOSED     -102 ERR_CONNECTION_FAILED
+    //   -103 ERR_CONNECTION_REFUSED    -104 ERR_CONNECTION_RESET
+    //   -105 ERR_CONNECTION_ABORTED    -107 ERR_CONNECTION_ENDED
     //   -111 ERR_TUNNEL_CONNECTION_FAILED  -118 ERR_CONNECTION_TIMED_OUT
     //   -127 ERR_PROXY_AUTH_UNSUPPORTED    -130 ERR_PROXY_CONNECTION_FAILED
     //   -136 ERR_PROXY_CERTIFICATE_INVALID -137 ERR_NAME_NOT_RESOLVED
     //   -202 ERR_CERT_AUTHORITY_INVALID (代理 MITM 证书问题)
     //   -300 ERR_INVALID_URL (代理配置错误)
     const PROXY_ERROR_CODES = new Set([
-      -102, -103, -104, -105, -106, -107,
+      -100, -102, -103, -104, -105, -107,
       -111, -118,
       -127, -130, -136,
       -137, -202, -300,
@@ -158,14 +159,8 @@ export function useWebviewLifecycleEvents({
     const handleFailLoad = (e: Event) => {
       const ev = e as unknown as { errorCode?: number; errorDescription?: string; validatedURL?: string; isMainFrame?: boolean };
       if (ev.errorCode === -3) return; // ERR_ABORTED: 导航被取消，忽略
-      console.warn('[WebviewTab] 加载失败:', {
-        tabId: tab.id,
-        code: ev.errorCode,
-        desc: ev.errorDescription,
-        url: ev.validatedURL,
-        isMainFrame: ev.isMainFrame,
-      });
-      // 代理错误码 + 主帧 + 未触发过兜底：触发代理失败兜底
+      console.warn(`[WebviewTab] 加载失败: tabId=${tab.id} code=${ev.errorCode} desc="${ev.errorDescription}" url="${ev.validatedURL}" isMain=${ev.isMainFrame}`);
+      // 代理错误码 + 主帧 + 未触发过兜底：延迟检查页面是否真的白屏
       if (
         ev.isMainFrame &&
         ev.errorCode != null &&
@@ -173,30 +168,52 @@ export function useWebviewLifecycleEvents({
         !proxyFallbackTriggered
       ) {
         proxyFallbackTriggered = true;
-        console.warn('[WebviewTab] 检测到代理/网络错误，尝试代理失败兜底:', ev.errorCode, ev.errorDescription);
-        void (async () => {
-          try {
-            const result = await applyProxyFallback();
-            if (result.switched) {
-              console.warn(`[WebviewTab] 代理兜底已切换到 ${result.mode} 模式，重新加载`);
-              // 等待 200ms 让 session 代理生效，然后 reload
-              setTimeout(() => {
-                try {
-                  const reloadUrl = ev.validatedURL || tab.url || '';
-                  if (reloadUrl) {
-                    void safeLoadURLWebview(webview, reloadUrl);
-                  } else {
-                    webview.reload();
+        (window as any).__proxyFallbackGlobal = true;
+        const failedUrl = ev.validatedURL || tab.url || '';
+        console.warn(`[proxy-fallback] 检测到网络错误 ${ev.errorCode}，1.5s 后检查页面是否有内容...`);
+        // 等待 1.5s 让页面有机会恢复（重定向、SPA 渲染等），然后检查是否白屏
+        setTimeout(() => {
+          void (async () => {
+            try {
+              // 执行 JS 检查页面是否有可见内容（文本或 DOM 子元素）
+              // 某些页面（如 Claude 地区限制页）用 JS 渲染、无纯文本，需要检查 DOM 结构
+              const pageInfo: { textLen: number; childCount: number; htmlLen: number } = await (webview as any).executeJavaScript(
+                '(function(){try{var b=document.body;if(!b)return{textLen:0,childCount:0,htmlLen:0};return{textLen:(b.innerText||"").trim().length,childCount:b.children?b.children.length:0,htmlLen:(b.innerHTML||"").length}}catch(e){return{textLen:0,childCount:0,htmlLen:0}}})()'
+              );
+              console.warn(`[proxy-fallback] 页面内容检查: textLen=${pageInfo.textLen} childCount=${pageInfo.childCount} htmlLen=${pageInfo.htmlLen} url="${failedUrl}"`);
+              // 有文本内容 或 有 DOM 子元素 或 HTML 长度超过最小阈值 → 页面已渲染，不是白屏
+              if (pageInfo.textLen > 0 || pageInfo.childCount > 0 || pageInfo.htmlLen > 200) {
+                console.warn('[proxy-fallback] 页面有内容/结构，不触发兜底（错误已恢复或非白屏）');
+                return;
+              }
+              // 确认白屏，执行兜底
+              console.warn('[proxy-fallback] 确认白屏（无可见内容），执行代理兜底...');
+              const result = await applyProxyFallback();
+              console.warn(`[proxy-fallback] ← switched=${result.switched} mode=${result.mode}`);
+              if (result.switched) {
+                console.warn(`[proxy-fallback] 200ms 后重新加载: ${failedUrl}`);
+                setTimeout(() => {
+                  try {
+                    if (failedUrl) {
+                      void safeLoadURLWebview(webview, failedUrl);
+                    } else {
+                      webview.reload();
+                    }
+                    console.warn('[proxy-fallback] reload 已触发');
+                  } catch (err) {
+                    console.error('[proxy-fallback] reload 失败:', err);
                   }
-                } catch (err) {
-                  console.error('[WebviewTab] 代理兜底 reload 失败:', err);
-                }
-              }, 200);
+                }, 200);
+              } else {
+                console.warn('[proxy-fallback] 未切换（兜底开关关闭）');
+              }
+            } catch (err) {
+              console.error('[proxy-fallback] 页面检查异常:', err);
             }
-          } catch (err) {
-            console.error('[WebviewTab] 调用代理兜底失败:', err);
-          }
-        })();
+          })();
+        }, 1500);
+      } else if (ev.isMainFrame && ev.errorCode != null && PROXY_ERROR_CODES.has(ev.errorCode) && proxyFallbackTriggered) {
+        console.warn(`[proxy-fallback] 已触发过，跳过: tabId=${tab.id} errorCode=${ev.errorCode}`);
       }
       // ERR_FAILED (-2) 且主帧：guest 可能已死亡，延迟触发 remount
       // （如果 render-process-gone 先到达并已触发 remount，这里的定时器会在 cleanup 中被清除）

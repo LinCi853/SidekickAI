@@ -79,7 +79,46 @@ export function useWebviewLifecycle({
     // B2: NavBar 进度条 —— 导航完成与页面完全加载事件
     webview.addEventListener('did-finish-navigation', handleFinishNavigation as EventListener);
     webview.addEventListener('did-finish-load', handleFinishLoad as EventListener);
-    webview.addEventListener('did-fail-load', handleFailLoad as EventListener);
+    // did-fail-load：UI 更新 + 代理兜底检测（先确认白屏再执行兜底）
+    const PROXY_ERROR_CODES = new Set([
+      -100, -102, -103, -104, -105, -107,
+      -111, -118, -127, -130, -136, -137, -202, -300,
+    ]);
+    let proxyFallbackTriggered = (window as any).__proxyFallbackGlobal ?? false
+    const handleFailLoadWithProxy = (e: Event) => {
+      handleFailLoad() // UI 更新（进度条、状态文本）
+      const ev = e as unknown as { errorCode?: number; errorDescription?: string; validatedURL?: string; isMainFrame?: boolean }
+      if (ev.errorCode === -3) return // ERR_ABORTED 忽略
+      if (ev.isMainFrame && ev.errorCode != null && PROXY_ERROR_CODES.has(ev.errorCode) && !proxyFallbackTriggered) {
+        proxyFallbackTriggered = true;
+        (window as any).__proxyFallbackGlobal = true;
+        const failedUrl = ev.validatedURL || ''
+        console.warn(`[proxy-fallback][BrowserView] 检测到网络错误 ${ev.errorCode}，1.5s 后检查页面...`)
+        setTimeout(() => {
+          void (webview as any).executeJavaScript(
+            '(function(){try{var b=document.body;if(!b)return{textLen:0,childCount:0,htmlLen:0};return{textLen:(b.innerText||"").trim().length,childCount:b.children?b.children.length:0,htmlLen:(b.innerHTML||"").length}}catch(e){return{textLen:0,childCount:0,htmlLen:0}}})()'
+          ).then((info: { textLen: number; childCount: number; htmlLen: number }) => {
+            console.warn(`[proxy-fallback][BrowserView] textLen=${info.textLen} childCount=${info.childCount} htmlLen=${info.htmlLen}`)
+            if (info.textLen > 0 || info.childCount > 0 || info.htmlLen > 200) {
+              console.warn('[proxy-fallback][BrowserView] 页面有内容/结构，不触发兜底')
+              return
+            }
+            console.warn('[proxy-fallback][BrowserView] 确认白屏，执行兜底...')
+            return import('../../../lib/electron-api').then(api => api.applyProxyFallback())
+          }).then((result: { switched: boolean; mode: string | null } | undefined) => {
+            if (result?.switched) {
+              console.warn(`[proxy-fallback][BrowserView] 切换到 ${result.mode}，200ms 后重载`)
+              setTimeout(() => {
+                try { failedUrl ? (webview as any).loadURL(failedUrl) : webview.reload() } catch { /* ignore */ }
+              }, 200)
+            }
+          }).catch((err: unknown) => {
+            console.error('[proxy-fallback][BrowserView] 异常:', err)
+          })
+        }, 1500)
+      }
+    }
+    webview.addEventListener('did-fail-load', handleFailLoadWithProxy as EventListener);
 
     // v0.0.9 音频事件（webview 的 media-started-playing / media-paused）
     webview.addEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
@@ -131,7 +170,7 @@ export function useWebviewLifecycle({
       webview.removeEventListener('did-stop-loading', handleStopLoading as EventListener);
       webview.removeEventListener('did-finish-navigation', handleFinishNavigation as EventListener);
       webview.removeEventListener('did-finish-load', handleFinishLoad as EventListener);
-      webview.removeEventListener('did-fail-load', handleFailLoad as EventListener);
+      webview.removeEventListener('did-fail-load', handleFailLoadWithProxy as EventListener);
       webview.removeEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
       webview.removeEventListener('media-paused', handleMediaPaused as EventListener);
       webview.removeEventListener('console-message', handleConsoleMessage as EventListener);

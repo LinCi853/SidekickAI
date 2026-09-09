@@ -91,7 +91,7 @@ export default function NotesEditor({
         </div>
         <div className="notes-editor-actions" data-name="advanced-panel.notes-editor-actions">
           <button
-            className={`notes-icon-btn ${note.pinned ? 'active' : ''}`}
+            className={`btn-icon ${note.pinned ? 'is-active' : ''}`}
             onClick={onTogglePin}
             title={note.pinned ? '取消置顶' : '置顶'}
             aria-pressed={note.pinned}
@@ -105,7 +105,7 @@ export default function NotesEditor({
 
       <div className="notes-toolbar" data-name="advanced-panel.notes-toolbar">
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => setMode(mode === 'source' ? 'preview' : 'source')}
           title={mode === 'source' ? '查看预览' : '查看源码'}
           aria-label={mode === 'source' ? '查看预览' : '查看源码'}
@@ -114,7 +114,7 @@ export default function NotesEditor({
           {mode === 'source' ? '👁' : '</>'}
         </button>
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => insertSyntax('**', '**', '粗体')}
           title="加粗"
           aria-label="加粗"
@@ -123,7 +123,7 @@ export default function NotesEditor({
           B
         </button>
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => insertSyntax('*', '*', '斜体')}
           title="斜体"
           aria-label="斜体"
@@ -132,7 +132,7 @@ export default function NotesEditor({
           I
         </button>
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => insertLinePrefix('## ')}
           title="标题"
           aria-label="标题"
@@ -141,7 +141,7 @@ export default function NotesEditor({
           H
         </button>
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => insertLinePrefix('- ')}
           title="无序列表"
           aria-label="无序列表"
@@ -150,7 +150,7 @@ export default function NotesEditor({
           •
         </button>
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => insertLinePrefix('- [ ] ')}
           title="任务列表"
           aria-label="任务列表"
@@ -159,7 +159,7 @@ export default function NotesEditor({
           ☑
         </button>
         <button
-          className="notes-icon-btn"
+          className="btn-icon"
           onClick={() => insertSyntax('\n```\n', '\n```\n', '代码')}
           title="代码块"
           aria-label="代码块"
@@ -203,10 +203,10 @@ export default function NotesEditor({
           {markdownText.length} 字
         </span>
         <div className="notes-bottom-actions" data-name="advanced-panel.notes-bottom-actions">
-          <button className="btn-outline notes-action-btn notes-action-btn-secondary" onClick={onSaveAsPrompt} data-name="advanced-panel.notes-save-as-prompt-button">
+          <button className="btn-outline btn-text" onClick={onSaveAsPrompt} data-name="advanced-panel.notes-save-as-prompt-button">
             存为提示词
           </button>
-          <button className="notes-action-btn notes-action-btn-primary" onClick={onSendToAi} data-name="advanced-panel.notes-send-to-ai-button">
+          <button className="btn-primary-flat" onClick={onSendToAi} data-name="advanced-panel.notes-send-to-ai-button">
             发送到 AI
           </button>
         </div>

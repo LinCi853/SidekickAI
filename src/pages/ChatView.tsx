@@ -35,6 +35,7 @@ import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
 import { MessageBubble } from './MessageBubble';
 import { generateChatAccentVars } from '../lib/oxy-color-engine';
 import { AlertIcon, GearIcon } from '@/components/icons';
+import './ChatBubble.css';
 import './ChatView.css';
 
 export default function ChatView({ windowId }: { windowId?: string }) {

@@ -22,6 +22,7 @@ import { useZoomStore } from '../../../store/useZoomStore.js';
 import { useFreezeStore } from '../../../store/useFreezeStore.js';
 import {
   toggleFullscreenWindow,
+  exitFullscreenWindow,
   onFullscreenToggled,
   onCloudPcChanged,
   onCloudPcKeys,
@@ -302,6 +303,7 @@ export function useBrowserWebview({
 
   useEffect(() => {
     const off = onFullscreenToggled((fs) => {
+      console.log('[fullscreen] onFullscreenToggled IPC received:', fs);
       setIsFullscreen(fs);
       if (!fs) setFsBarVisible(false);
     });
@@ -309,12 +311,33 @@ export function useBrowserWebview({
   }, []);
 
   const handleToggleFullscreen = useCallback(() => {
-    void toggleFullscreenWindow();
-  }, []);
+    console.log('[fullscreen] handleToggleFullscreen called, isFullscreen=', isFullscreen);
+    void toggleFullscreenWindow().then((result) => {
+      console.log('[fullscreen] toggleFullscreenWindow IPC returned:', result);
+    }).catch((err) => {
+      console.error('[fullscreen] toggleFullscreenWindow IPC failed:', err);
+    });
+  }, [isFullscreen]);
 
   const handleExitFullscreen = useCallback(() => {
-    void toggleFullscreenWindow();
-  }, []);
+    console.log('[fullscreen] handleExitFullscreen called, isFullscreen=', isFullscreen);
+    void exitFullscreenWindow().then((result) => {
+      console.log('[fullscreen] exitFullscreenWindow IPC returned:', result);
+    }).catch((err) => {
+      console.error('[fullscreen] exitFullscreenWindow IPC failed:', err);
+    });
+    // 联动：如果处于云电脑模式，同时退出
+    const cloudPcActive = useCloudPcStore.getState().isActive;
+    console.log('[fullscreen] cloudPcActive=', cloudPcActive);
+    if (cloudPcActive) {
+      void setCloudPcMode(false).then((res) => {
+        console.log('[fullscreen] setCloudPcMode(false) returned:', res);
+        if (res.ok) useCloudPcStore.getState().setActive(false);
+      }).catch((err) => {
+        console.error('[fullscreen] setCloudPcMode(false) failed:', err);
+      });
+    }
+  }, [isFullscreen]);
 
   // 全屏悬浮退出条：进入全屏立即显示一次（告知退出入口）；
   // 之后通过主进程光标坐标轮询探测——webview 覆盖全屏时宿主收不到 mousemove 事件，

@@ -19,6 +19,8 @@
 
 import type { BrowserWindow } from 'electron'
 import { exec } from 'child_process'
+import { findWindowIdByWin } from '../window-factory/window-utils.js'
+import { isTrackedFullscreen } from './fullscreen-tracker.js'
 
 /** 窗口 → 追踪状态（外部句柄 + 隐藏前的窗口形态，供 show 时精确恢复） */
 interface TrackedState {
@@ -62,7 +64,9 @@ export function show(win: BrowserWindow): void {
   win.show()
   if (st?.wasFullScreen) {
     // 全屏窗口：恢复全屏
-    if (!win.isFullScreen()) win.setFullScreen(true)
+    const wid = findWindowIdByWin(win)
+    const isFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
+    if (!isFs) win.setFullScreen(true)
   } else if (st?.wasMaximized) {
     // 最大化窗口：minimize + hide 往返后，frameless 窗口的原生最大化标记可能丢失，
     // 表现为恢复后变成普通尺寸（宽度莫名其妙变化）。此处重新最大化。
@@ -97,7 +101,8 @@ export function hide(win: BrowserWindow): void {
   const st = states.get(win) ?? { prevHandle: null, wasMaximized: false, wasFullScreen: false, bounds: null }
   // 记住隐藏前的窗口形态（minimize 之前读取，避免动画中间态）
   st.wasMaximized = win.isMaximized()
-  st.wasFullScreen = win.isFullScreen()
+  const wid = findWindowIdByWin(win)
+  st.wasFullScreen = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
   st.bounds = win.getBounds()
   states.set(win, st)
   // 同步隐藏：minimize + skipTaskbar + hide，窗口立即从所有界面消失

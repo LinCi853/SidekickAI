@@ -12,6 +12,7 @@
 // 避免引入 openai/anthropic SDK 带来的额外依赖与版本耦合。
 
 import { request } from 'undici'
+import { getProxyDispatcher } from '../store/proxy-helper.js'
 import type { CustomAIProvider, CustomAIProviderInput, ChatMessage } from '../shared/types.js'
 
 /** 默认最大输出 token 数 */
@@ -250,6 +251,7 @@ export async function streamChat(
       headers,
       body,
       signal: options.signal,
+      dispatcher: getProxyDispatcher(),
     })
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -383,6 +385,7 @@ export async function testProvider(provider: CustomAIProvider): Promise<TestResu
       body,
       headersTimeout: PROVIDER_TEST_TIMEOUT_MS,
       bodyTimeout: PROVIDER_TEST_TIMEOUT_MS,
+      dispatcher: getProxyDispatcher(),
     })
     const latencyMs = Date.now() - start
 
@@ -440,6 +443,7 @@ export async function listModels(input: CustomAIProviderInput): Promise<string[]
       headers,
       headersTimeout: PROVIDER_TEST_TIMEOUT_MS,
       bodyTimeout: PROVIDER_TEST_TIMEOUT_MS,
+      dispatcher: getProxyDispatcher(),
     })
   } catch (err) {
     throw new Error(`请求失败：${err instanceof Error ? err.message : String(err)}`)

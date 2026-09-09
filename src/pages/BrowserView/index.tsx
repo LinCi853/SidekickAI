@@ -32,6 +32,7 @@ import { useBrowserNavigation } from './hooks/useBrowserNavigation.js';
 import { useBrowserWebview } from './hooks/useBrowserWebview.js';
 import { useBrowserShortcuts } from './hooks/useBrowserShortcuts.js';
 import './styles.css';
+import '../HistoryDownloadView/styles.css';
 
 export default function BrowserView() {
   const {
@@ -158,7 +159,7 @@ export default function BrowserView() {
               </button>
             </>
           )}
-          <button type="button" onClick={webview.handleExitFullscreen} data-name="browser.fullscreen-exit">
+          <button type="button" onClick={() => { console.log('[fullscreen-ui] 退出全屏 button clicked'); webview.handleExitFullscreen(); }} data-name="browser.fullscreen-exit">
             退出全屏 (F11 / Esc)
           </button>
         </div>

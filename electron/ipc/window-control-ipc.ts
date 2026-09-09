@@ -22,6 +22,7 @@ import {
 } from '../shared/types.js'
 import type { WindowManager } from '../window/manager.js'
 import type { FingerprintEngine } from '../fingerprint/engine.js'
+import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface WindowControlIpcDeps {
@@ -170,27 +171,42 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   // 切换全屏：进入前记录当前 bounds，退出时由 leave-full-screen 事件恢复
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN, (e) => {
     const win = getSenderWindow(e)
-    if (!win) return false
-    if (win.isFullScreen()) {
+    if (!win) { console.log('[fullscreen-ipc] TOGGLE: no sender window'); return false }
+    const windowId = findWindowIdByWin(win)
+    const wasFs = windowId ? isTrackedFullscreen(windowId) : win.isFullScreen()
+    console.log('[fullscreen-ipc] TOGGLE called, wasFullScreen=', wasFs, 'windowId=', windowId)
+    if (wasFs) {
       // 退出全屏：leave-full-screen 事件会恢复到 fullscreenNormalBounds
       win.setFullScreen(false)
-      if (!win.isDestroyed()) {
-        win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, false)
-      }
       return false
     }
     // 进入全屏前：记录当前 bounds 到 fullscreenNormalBounds，供退出时精确恢复
-    const windowId = findWindowIdByWin(win)
     if (windowId) {
       const state = windowStore.getOrDefault(windowId)
       state.fullscreenNormalBounds = win.getBounds()
       windowStore.save(windowId, state)
     }
     win.setFullScreen(true)
-    if (!win.isDestroyed()) {
-      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, true)
-    }
     return true
+  })
+  // 确定性退出全屏：仅在全屏时退出，不做 toggle（防止状态不一致时重新进入）
+  ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_EXIT_FULLSCREEN, (e) => {
+    const win = getSenderWindow(e)
+    if (!win) { console.log('[fullscreen-ipc] EXIT: no sender window'); return false }
+    const windowId = findWindowIdByWin(win)
+    const wasFs = windowId ? isTrackedFullscreen(windowId) : win.isFullScreen()
+    console.log('[fullscreen-ipc] EXIT called, wasFullScreen=', wasFs, 'windowId=', windowId)
+    if (!wasFs) return false
+    // 保存 bounds（F11/Escape 直接路径可能未保存）
+    if (windowId) {
+      const state = windowStore.getOrDefault(windowId)
+      if (!state.fullscreenNormalBounds) {
+        state.fullscreenNormalBounds = win.getBounds()
+        windowStore.save(windowId, state)
+      }
+    }
+    win.setFullScreen(false)
+    return false
   })
   // 动态设置当前窗口的最小尺寸（UI 比例变化时重新约束）
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_SET_MIN_SIZE, (e, width: number, height: number) => {

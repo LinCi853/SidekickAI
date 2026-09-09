@@ -15,6 +15,8 @@ import { isCloudPc, forceExitCloudPc } from '../utils/cloud-pc.js'
 import { tryForward } from '../utils/browser-hotkey-fallback.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
 import { findWindowIdByWin } from './window-utils.js'
+import { windowStore } from '../store/window-store.js'
+import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import {
   setAlwaysOnTopForWindow,
   toggleMaximizeForWindow,
@@ -347,9 +349,19 @@ export function attachWebviewHotkeyRouter(
     // - 其他窗口：切换最大化/还原（接入 WindowMaximizeManager）
     if (key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
       if (isBrowser && tryForward('toggleFullscreen')) {
-        console.log('[hotkey] F11 → 浏览器窗口切换沉浸式全屏')
+        const wid = findWindowIdByWin(win)
+        const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
+        console.log('[hotkey] F11 → 浏览器窗口切换沉浸式全屏, wasFullScreen=', wasFs)
         e.preventDefault()
-        try { win.setFullScreen(!win.isFullScreen()) }
+        if (!wasFs) {
+          // 进入全屏前保存 bounds
+          if (wid) {
+            const state = windowStore.getOrDefault(wid)
+            state.fullscreenNormalBounds = win.getBounds()
+            windowStore.save(wid, state)
+          }
+        }
+        try { win.setFullScreen(!wasFs) }
         catch (err) { console.error('[hotkey] 切换全屏失败:', err) }
         return
       }
@@ -361,7 +373,10 @@ export function attachWebviewHotkeyRouter(
 
     // Escape：浏览器窗口全屏时退出全屏（沉浸式全屏的标准退出方式）
     if (key === 'Escape' && !hasCtrl && !hasAlt && !hasShift) {
-      if (isBrowser && win.isFullScreen()) {
+      const wid = findWindowIdByWin(win)
+      const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
+      console.log('[hotkey] Escape → isBrowser=', isBrowser, 'wasFullScreen=', wasFs)
+      if (isBrowser && wasFs) {
         console.log('[hotkey] Escape → 退出浏览器窗口全屏')
         e.preventDefault()
         try { win.setFullScreen(false) } catch { /* ignore */ }

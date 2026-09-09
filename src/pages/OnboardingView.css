@@ -335,24 +335,16 @@
   display: flex;
   gap: var(--space-1);
 }
+/* .onboarding-radio 定义在 globals.css（共享），此处仅覆盖引导页特有行为 */
 .onboarding-radio {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
   font-size: var(--text-2xs);
-  color: var(--muted-foreground);
-  transition: all 0.1s;
+  padding: 2px var(--space-1);
+  gap: 4px;
 }
 .onboarding-radio input {
   display: none;
 }
 .onboarding-radio.is-active {
-  border-color: var(--primary);
-  color: var(--primary);
   background: var(--primary-bg, rgba(var(--primary-rgb, 0, 0, 0), 0.05));
 }
 

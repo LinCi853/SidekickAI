@@ -216,30 +216,6 @@
   align-items: stretch;
   gap: var(--space-1);
 }
-.advanced-panel-chat-new-btn {
-  flex: none;
-  width: var(--compact-h);
-  height: var(--compact-h);
-  background: var(--accent-10);
-  border: 1px solid var(--accent-25);
-  border-radius: var(--radius-sm);
-  color: var(--accent-bright);
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-.advanced-panel-chat-new-btn:hover {
-  background: var(--accent-25);
-  border-color: var(--accent-50);
-}
-.advanced-panel-chat-new-btn svg {
-  width: var(--icon-svg);
-  height: var(--icon-svg);
-}
 .advanced-panel-chat-send {
   min-height: var(--compact-h);
   font-size: var(--text-xs);
@@ -253,22 +229,6 @@
 }
 .advanced-panel-chat-send.cancel {
   background: var(--window-close);
-}
-
-/* ===== 侧边栏拖拽手柄 ===== */
-.sidebar-resizer {
-  position: absolute;
-  right: -3px;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 5;
-  background: transparent;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.sidebar-resizer:hover {
-  background: var(--accent-bright);
 }
 
 

@@ -9,6 +9,7 @@
 // 完全覆盖全局 AppSettings 代理。
 
 import { session, app, net, type Session } from 'electron'
+import { ProxyAgent, type Dispatcher } from 'undici'
 import { getAppSettings, type AppSettings } from './app-settings-store.js'
 import { profileStore } from './profile-store.js'
 import type { Profile, ProfileProxyConfig } from '../shared/types.js'
@@ -75,6 +76,28 @@ export function computeProfileProxyConfig(proxyConfig: ProfileProxyConfig): Prox
     case 'system':
     default:
       return { mode: 'system' }
+  }
+}
+
+/**
+ * 获取 undici 代理 Dispatcher（供 AI 客户端等使用 undici 的模块走代理）。
+ * - custom 模式：返回 ProxyAgent（HTTP/SOCKS5）
+ * - direct / system：返回 undefined（undici 直连，system 模式暂不支持自动检测）
+ */
+export function getProxyDispatcher(): Dispatcher | undefined {
+  const cfg = getAppSettings()
+  if (cfg.proxyMode !== 'custom') return undefined
+  const proxyUrl = (cfg.customProxy || '').trim()
+  if (!proxyUrl) return undefined
+  try {
+    const opts: ConstructorParameters<typeof ProxyAgent>[0] = { uri: proxyUrl }
+    if (cfg.proxyUsername) {
+      opts.token = `Basic ${Buffer.from(`${cfg.proxyUsername}:${cfg.proxyPassword || ''}`).toString('base64')}`
+    }
+    return new ProxyAgent(opts)
+  } catch (err) {
+    console.warn('[proxy] 创建 ProxyAgent 失败:', err)
+    return undefined
   }
 }
 
@@ -378,95 +401,97 @@ export async function testProfileProxyConnectivity(profileId: string): Promise<{
 }
 
 /**
- * 代理失败兜底：当 webview 加载失败且错误码为代理相关时，
- * 临时将 session 切换到兜底模式（direct 或 system）。
+ * 根据当前代理模式自动计算兜底模式（无需用户手动选择）：
+ * - system → direct（系统代理不通时切直连）
+ * - direct → system（直连不通时切系统代理）
+ * - custom → direct（自定义代理不通时切直连）
+ */
+function computeFallbackMode(currentMode: string): 'direct' | 'system' {
+  if (currentMode === 'system') return 'direct'
+  if (currentMode === 'direct') return 'system'
+  return 'direct'
+}
+
+/**
+ * 代理失败兜底：临时切换到自动计算的兜底模式（不修改持久化设置）。
+ * 兜底模式由当前模式自动决定，无需用户手动选择。
  *
- * 传入 profileId 时：仅对该 Profile 的 session 生效，读取 Profile.proxyConfig 的兜底配置
- *   （未配置 proxyConfig 则回退到全局 AppSettings 兜底配置）。
- * 不传 profileId 时：对所有 session 生效（全局兜底，忽略 Profile 级代理覆盖）。
- *
- * 仅当以下条件全部满足时才切换：
- *   1. 兜底开关开启（Profile.proxyConfig.proxyFallbackEnabled 或全局 proxyFallbackEnabled）
- *   2. 当前生效模式 === 'custom'（system/direct 模式无需兜底）
- *
- * 注意：此函数不修改 AppSettings / Profile，仅临时改变 session 代理。
- * 用户下次手动修改代理设置时，applyProxyToAllSessions / applyProfileProxy 会恢复正常配置。
- *
+ * @param profileId 可选：仅对指定 Profile 的 session 应用兜底；省略则全局兜底
  * @returns { switched, mode } switched=true 表示已切换，mode 为切换到的模式
  */
 export async function applyProxyFallback(profileId?: string): Promise<{
   switched: boolean
   mode: 'direct' | 'system' | null
 }> {
+  console.warn(`[proxy-fallback] === applyProxyFallback 开始 === profileId=${profileId ?? '(全局)'}`)
+
   // Profile 级兜底
   if (profileId) {
     const profile = profileStore.get(profileId)
-    if (!profile) return { switched: false, mode: null }
-    const pc = profile.proxyConfig
-    if (pc) {
-      if (!pc.proxyFallbackEnabled) return { switched: false, mode: null }
-      if (pc.proxyMode !== 'custom') return { switched: false, mode: null }
-      const fallbackMode = pc.proxyFallbackMode
-      console.warn(`[proxy] Profile ${profileId} 代理失败兜底：custom → ${fallbackMode}（临时）`)
-      const config: ProxyConfig = fallbackMode === 'system' ? { mode: 'system' } : { mode: 'direct' }
-      try {
-        const ses = session.fromPartition(`persist:${profileId}`)
-        await ses.setProxy(config)
-        const browserSes = session.fromPartition(`persist:${profileId}-browser`)
-        await browserSes.setProxy(config)
-      } catch (err) {
-        console.error(`[proxy] Profile ${profileId} 兜底切换失败:`, err)
-        return { switched: false, mode: null }
-      }
-      return { switched: true, mode: fallbackMode }
-    }
-    // Profile 无 proxyConfig：仍走全局兜底逻辑（仅作用于该 Profile 的 session）
-    const cfg = getAppSettings()
-    if (!cfg.proxyFallbackEnabled || cfg.proxyMode !== 'custom') {
+    if (!profile) {
+      console.warn(`[proxy-fallback] Profile ${profileId} 不存在，跳过`)
       return { switched: false, mode: null }
     }
-    const fallbackMode = cfg.proxyFallbackMode
+    const pc = profile.proxyConfig
+    const effectiveMode = pc?.proxyMode ?? getAppSettings().proxyMode
+    const fallbackEnabled = pc?.proxyFallbackEnabled ?? getAppSettings().proxyFallbackEnabled
+    console.warn(`[proxy-fallback] Profile 兜底检查: effectiveMode=${effectiveMode} fallbackEnabled=${fallbackEnabled} hasProxyConfig=${!!pc}`)
+
+    if (!fallbackEnabled) {
+      console.warn('[proxy-fallback] 兜底开关未开启，跳过')
+      return { switched: false, mode: null }
+    }
+
+    const fallbackMode = computeFallbackMode(effectiveMode)
+    console.warn(`[proxy-fallback] 计算兜底模式: ${effectiveMode} → ${fallbackMode}`)
     const config: ProxyConfig = fallbackMode === 'system' ? { mode: 'system' } : { mode: 'direct' }
+
     try {
       const ses = session.fromPartition(`persist:${profileId}`)
       await ses.setProxy(config)
+      console.warn(`[proxy-fallback] 已切换 persist:${profileId} → ${JSON.stringify(config)}`)
       const browserSes = session.fromPartition(`persist:${profileId}-browser`)
       await browserSes.setProxy(config)
+      console.warn(`[proxy-fallback] 已切换 persist:${profileId}-browser → ${JSON.stringify(config)}`)
     } catch (err) {
-      console.error(`[proxy] Profile ${profileId} 兜底切换失败:`, err)
+      console.error(`[proxy-fallback] Profile ${profileId} session 切换失败:`, err)
       return { switched: false, mode: null }
     }
+    console.warn(`[proxy-fallback] === Profile 兜底完成: switched=true mode=${fallbackMode} ===`)
     return { switched: true, mode: fallbackMode }
   }
 
-  // 全局兜底（原有逻辑）
+  // 全局兜底
   const cfg = getAppSettings()
+  console.warn(`[proxy-fallback] 全局兜底检查: proxyMode=${cfg.proxyMode} proxyFallbackEnabled=${cfg.proxyFallbackEnabled}`)
+
   if (!cfg.proxyFallbackEnabled) {
+    console.warn('[proxy-fallback] 全局兜底开关未开启，跳过')
     return { switched: false, mode: null }
   }
-  if (cfg.proxyMode !== 'custom') {
-    return { switched: false, mode: null }
-  }
-  const fallbackMode = cfg.proxyFallbackMode
-  console.warn(
-    `[proxy] 代理失败兜底触发：custom → ${fallbackMode}（临时切换，不修改设置）`,
-  )
-  const config: ProxyConfig =
-    fallbackMode === 'system' ? { mode: 'system' } : { mode: 'direct' }
-  // 应用到默认 session + 所有 profile partition session（忽略 profile 级代理覆盖）
+
+  const fallbackMode = computeFallbackMode(cfg.proxyMode)
+  console.warn(`[proxy-fallback] 计算兜底模式: ${cfg.proxyMode} → ${fallbackMode}`)
+  const config: ProxyConfig = fallbackMode === 'system' ? { mode: 'system' } : { mode: 'direct' }
+
   try {
     await session.defaultSession.setProxy(config)
+    console.warn(`[proxy-fallback] 已切换 defaultSession → ${JSON.stringify(config)}`)
+
     const profiles = profileStore.list()
+    console.warn(`[proxy-fallback] 遍历 ${profiles.length} 个 Profile 的 session...`)
     for (const profile of profiles) {
       const ses = session.fromPartition(`persist:${profile.id}`)
       await ses.setProxy(config)
-      // 浏览器窗口独立 session 也应用兜底
       const browserSes = session.fromPartition(`persist:${profile.id}-browser`)
       await browserSes.setProxy(config)
     }
+    console.warn(`[proxy-fallback] 所有 session 已切换完成`)
   } catch (err) {
-    console.error('[proxy] 兜底切换失败:', err)
+    console.error('[proxy-fallback] 全局兜底切换失败:', err)
     return { switched: false, mode: null }
   }
+
+  console.warn(`[proxy-fallback] === 全局兜底完成: switched=true mode=${fallbackMode} ===`)
   return { switched: true, mode: fallbackMode }
 }

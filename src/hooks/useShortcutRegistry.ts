@@ -173,6 +173,8 @@ export function useShortcutRegistry(
       if (entry.enabled === false) continue
       if (!matchAccelerator(event, entry.accelerator)) continue
 
+      console.log('[shortcut-registry] matched:', entry.accelerator, 'handler exists:', !!entry.handler)
+
       // hold 模式：按住开始 + 计时触发；普通模式：立即触发
       if (entry.holdMs != null || entry.onHoldStart || entry.onHoldEnd) {
         if (!event.repeat) {

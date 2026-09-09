@@ -17,7 +17,6 @@
 
 import { app, BrowserWindow, Menu, ipcMain, protocol, screen, session, systemPreferences } from 'electron'
 import path from 'path'
-import { fileURLToPath } from 'url'
 import { mkdirSync, existsSync } from 'fs'
 import {
   registerProfileIPC,
@@ -35,6 +34,7 @@ import { registerPdfProtocol } from './utils/pdf-protocol.js'
 import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js'
 import { setBrowserHotkeyFallback, tryForward, VK_F11, VK_C, VK_P } from './utils/browser-hotkey-fallback.js'
 import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting } from './store/app-settings-store.js'
+import { seedFromInstallConfig } from './store/install-config-seed.js'
 import { registerProxyAuthHandler } from './store/proxy-helper.js'
 import { initChatStore, getChatStore } from './store/chat-store.js'
 import { registerBaseChatIpc, registerUsageTraceIpc } from './ai/handler.js'
@@ -53,6 +53,8 @@ import { promptAccessibilityPermission } from './utils/permission-manager.js'
 import { registerPlatformInfoIPC } from './utils/platform-info.js'
 import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache } from './utils/download-handler.js'
 import { windowState } from './window-state.js'
+import { windowStore } from './store/window-store.js'
+import { isTrackedFullscreen } from './utils/fullscreen-tracker.js'
 import {
   createMainWindow,
   createBrowserWindow,
@@ -99,7 +101,7 @@ const DEFAULT_MAIN_WINDOW_WIDTH = 420
 /** 主窗口默认高度（窗口复位时使用） */
 const DEFAULT_MAIN_WINDOW_HEIGHT = 820
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = path.dirname(__filename)
 
 // 全局错误捕获
 process.on('unhandledRejection', (reason) => {
@@ -193,6 +195,12 @@ app.whenReady().then(async () => {
   // DevTools 可通过 --dev-tools 启动参数或 DEV_TOOLS=1 环境变量打开（见下方 autoOpenDevTools）。
   Menu.setApplicationMenu(null)
 
+  // ===== 安装期配置播种 =====
+  // 首次启动读取 NSIS 落盘的 install-config.json，把安装向导中选择的功能开关
+  // 与应用选项写入 settings.db（仅一次）。必须在 initEnabledModules() 与任何
+  // getAppSettings() 之前执行，否则模块状态/默认设置已按旧值初始化。
+  seedFromInstallConfig()
+
   // --dev-tools 启动参数：启动后自动为所有新窗口打开 DevTools（调试模式）
   const autoOpenDevTools = process.argv.includes('--dev-tools') || process.env.DEV_TOOLS === '1'
   if (autoOpenDevTools) {
@@ -266,8 +274,18 @@ app.whenReady().then(async () => {
     // F11：切换沉浸式全屏（主进程直接执行，不依赖渲染层/guest 拦截）
     if (e.keycode === VK_F11 && !e.ctrl && !e.alt && !e.shift && !e.meta) {
       if (tryForward('toggleFullscreen')) {
-        console.log('[hotkey-fallback] F11 → 切换沉浸式全屏 (uiohook)')
-        try { win.setFullScreen(!win.isFullScreen()) } catch { /* ignore */ }
+        const wid = findWindowIdByWin(win)
+        const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
+        console.log('[hotkey-fallback] F11 → 切换沉浸式全屏 (uiohook), wasFullScreen=', wasFs)
+        if (!wasFs) {
+          // 进入全屏前保存 bounds
+          if (wid) {
+            const state = windowStore.getOrDefault(wid)
+            state.fullscreenNormalBounds = win.getBounds()
+            windowStore.save(wid, state)
+          }
+        }
+        try { win.setFullScreen(!wasFs) } catch { /* ignore */ }
       }
       return
     }

@@ -17,6 +17,8 @@ import type { BrowserWindow } from 'electron'
 import { exec } from 'child_process'
 import type { HotkeyManager } from '../hotkey/manager.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import { findWindowIdByWin } from '../window-factory/window-utils.js'
+import { isTrackedFullscreen } from './fullscreen-tracker.js'
 
 /** 处于云电脑模式的浏览器窗口（parentWebContents.id） */
 const cloudPcParentIds = new Set<number>()
@@ -69,7 +71,9 @@ export function exitCloudPc(parentWebContentsId: number): void {
 export function forceExitCloudPc(win: BrowserWindow, parentWebContentsId: number): void {
   exitCloudPc(parentWebContentsId)
   try {
-    if (win.isFullScreen()) {
+    const wid = findWindowIdByWin(win)
+    const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
+    if (wasFs) {
       win.setFullScreen(false)
     }
   } catch { /* ignore */ }

@@ -10,15 +10,14 @@
 // redirectUserData() 顶层调用。否则便携版数据会误写入系统目录。
 
 import path from 'path'
-import { fileURLToPath } from 'url'
 import { existsSync, mkdirSync } from 'fs'
 import Database from 'better-sqlite3'
 // electron-store 已移除（Phase 3：全部 JSON store 已迁入 SQLite settings.db）
 import { app } from 'electron'
 
-/** 等价于 CommonJS __dirname，用于 ESM 获取当前模块目录 */
+/** 等价于 CommonJS __dirname，用于获取当前模块目录（CJS bundle 下直接用全局 __filename） */
 export function getModuleDirname(): string {
-  return path.dirname(fileURLToPath(import.meta.url))
+  return path.dirname(__filename)
 }
 
 /**

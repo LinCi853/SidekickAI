@@ -12,6 +12,7 @@ import {
   toggleMaximizeForWindow,
 } from '../ipc/window-control-ipc.js'
 import { safeLogWindowTrace, findWindowIdByWin } from './window-utils.js'
+import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 
 /** 获取调用方所在的 BrowserWindow */
 export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow | null {
@@ -34,7 +35,7 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
   ;(win as any).__markUserPinAction = markUserPinAction
 
   const reapplyAlwaysOnTop = () => {
-    if (win.isMaximized() || win.isFullScreen()) return
+    if (win.isMaximized() || isTrackedFullscreen(windowId)) return
     // 用户主动操作后 2 秒内不自动覆盖，防止窗口 focus/restore 竞态
     if (Date.now() - lastPinActionAt < 2000) return
     const state = windowStore.getOrDefault(windowId)
@@ -113,7 +114,7 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
       setTimeout(() => {
         const state = windowStore.getOrDefault(windowId)
         // 仅非最大化、非全屏状态时保存 bounds，避免全屏/最大化尺寸覆盖小窗口尺寸
-        if (!state.isMaximized && !win.isFullScreen()) {
+        if (!state.isMaximized && !isTrackedFullscreen(windowId)) {
           state.bounds = win.getBounds()
         }
         // isMaximized 状态由手动切换逻辑维护，这里不覆盖
@@ -129,7 +130,7 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
   // 仅在 show/focus/restore 时重新应用——maximize/fullscreen 与置顶互为冲突状态，
   // 进入时主动取消，退出时不自动恢复（用户需手动按 F12 重新置顶）。
   const reapplyAlwaysOnTop = () => {
-    if (win.isMaximized() || win.isFullScreen()) return
+    if (win.isMaximized() || isTrackedFullscreen(windowId)) return
     const state = windowStore.getOrDefault(windowId)
     if (state.alwaysOnTop && !win.isAlwaysOnTop()) {
       win.setAlwaysOnTop(true, 'screen-saver')
@@ -287,10 +288,10 @@ export function attachWindowHotkeyInterceptor(parentWebContents: Electron.WebCon
         win.unmaximize()
         parentWebContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
       }
-      if (win.isFullScreen()) {
+      const windowId = findWindowIdByWin(win)
+      if (windowId && isTrackedFullscreen(windowId)) {
         win.setFullScreen(false)
       }
-      const windowId = findWindowIdByWin(win)
       const next = !win.isAlwaysOnTop()
       const actual = setAlwaysOnTopForWindow(win, windowId, next)
       parentWebContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, actual)

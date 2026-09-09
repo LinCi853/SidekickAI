@@ -8,7 +8,7 @@
 
 import type { TopBarButtonGroup } from '../shared/types.js'
 import type { BlockRule } from '../shared/block-rules.types.js'
-import type { DevicePreset, PromptTemplate, Profile } from '../shared/types.js'
+import type { DevicePreset, PromptTemplate, Profile, FingerprintConfig } from '../shared/types.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { IPHONE_VIEWPORT } from '../presets/devices.js'
 import type { VoiceConfig } from './voice-store.js'
@@ -69,6 +69,8 @@ export interface DefaultAppSettings {
   closeBehavior: 'close' | 'minimize'
   autoLaunch: boolean
   silentStart: boolean
+  autoUpdate: boolean
+  logLevel: 'error' | 'warn' | 'info' | 'debug'
   uiScale: 'small' | 'medium' | 'large'
   startupOpen: 'home' | 'lastConversation'
   onboardingCompleted: boolean
@@ -129,6 +131,8 @@ export function getDefaultAppSettings(isPortable: boolean): DefaultAppSettings {
     closeBehavior: isPortable ? 'close' : 'minimize',
     autoLaunch: false,
     silentStart: false,
+    autoUpdate: true,
+    logLevel: 'info',
     uiScale: 'medium',
     startupOpen: 'lastConversation',
     onboardingCompleted: false,
@@ -736,7 +740,7 @@ export interface DefaultProfileParams {
   width: number
   height: number
   order: number
-  fingerprint: Profile['fingerprint']
+  fingerprint: FingerprintConfig
 }
 
 /**

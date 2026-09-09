@@ -905,11 +905,7 @@
   height: 100%;
 }
 
-.browser-settings-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 24px;
-}
+/* .browser-settings-title 已移至 BrowserSettingsTab.css（共享） */
 
 .browser-settings-section {
   margin-bottom: 24px;
@@ -1010,22 +1006,7 @@
   font-size: 12px;
 }
 
-.rule-status {
-  margin-left: auto;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.rule-status.enabled {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-}
-
-.rule-status.disabled {
-  background: rgba(156, 163, 175, 0.15);
-  color: #9ca3af;
-}
+/* .rule-status 已移至 BrowserSettingsTab.css（使用设计令牌） */
 
 .browser-settings-empty {
   font-size: 13px;
@@ -1033,14 +1014,7 @@
   font-style: italic;
 }
 
-.browser-settings-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--muted-foreground, #999);
-  font-size: 14px;
-}
+/* .browser-settings-loading 已移至 BrowserSettingsTab.css（使用设计令牌） */
 
 /* ===== 下载指示器（保留现有样式） ===== */
 .browser-download-badge {
@@ -1610,20 +1584,7 @@
   background: #5eea92;
 }
 
-/* ===== 设置页云电脑模式开关 ===== */
-.browser-settings-cloud-pc-btn {
-  padding: 8px 18px;
-  border-radius: 8px;
-  border: 1px solid rgba(74, 222, 128, 0.4);
-  background: rgba(74, 222, 128, 0.12);
-  color: #4ade80;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.browser-settings-cloud-pc-btn:hover {
-  background: rgba(74, 222, 128, 0.22);
-}
+/* .browser-settings-cloud-pc-btn 已移至 BrowserSettingsTab.css（使用设计令牌） */
 
 /* ===== 页面缩放浮窗（右上角） ===== */
 .browser-zoom-indicator {

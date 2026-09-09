@@ -29,7 +29,9 @@ function readSettingsRaw(): AppSettings {
     const raw = getAppSettingsTable().get('appSettings')
     if (raw) {
       try {
-        settingsCache = JSON.parse(raw) as AppSettings
+        // 合并默认值：新增字段（如 autoUpdate / logLevel）对旧安装的 settings JSON
+        // 缺省时自动补齐默认值，避免读到 undefined。
+        settingsCache = { ...getDefaultSettings(), ...(JSON.parse(raw) as AppSettings) }
         console.log('[app-settings] 从 settings.db 加载设置, onboardingCompleted=', settingsCache.onboardingCompleted)
       } catch (err) {
         console.error('[app-settings] 解析 settings.db 失败，回退默认值:', err)
@@ -357,6 +359,27 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
   // 广播设置变更到所有窗口（跨窗口同步：顶栏按钮、标签栏、主题、屏蔽规则等）
   broadcastAppSettingsChanged(next)
   return next
+}
+
+/**
+ * 应用安装期选项到 AppSettings（首次启动播种 install-config.json 时调用）。
+ * 将安装向导的 optionId 映射到 AppSettings 字段，复用 updateAppSettings 的
+ * 合并 + autoLaunch 系统同步逻辑。optionId 与 installer/src/shared/install-manifest.ts
+ * 的 INSTALL_OPTIONS 保持一致。
+ */
+export function applyInstallConfigOptions(options: Record<string, boolean | string>): void {
+  const patch: Partial<AppSettings> = {}
+  if (typeof options.autoUpdate === 'boolean') patch.autoUpdate = options.autoUpdate
+  if (typeof options.autoLaunch === 'boolean') patch.autoLaunch = options.autoLaunch
+  if (typeof options.usageTracking === 'boolean') patch.usageTrackingEnabled = options.usageTracking
+  if (typeof options.logLevel === 'string') {
+    const v = options.logLevel
+    if (v === 'error' || v === 'warn' || v === 'info' || v === 'debug') {
+      patch.logLevel = v
+    }
+  }
+  if (Object.keys(patch).length === 0) return
+  updateAppSettings(patch)
 }
 
 /**

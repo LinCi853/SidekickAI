@@ -9,13 +9,12 @@
 
 import { app, Menu, Tray, nativeImage, screen } from 'electron'
 import path from 'path'
-import { fileURLToPath } from 'url'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { windowState } from '../window-state.js'
 import { createMainWindow } from '../window-factory.js'
 import * as focusManager from '../utils/focus-manager.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = path.dirname(__filename)
 
 // 系统托盘实例（本模块私有）
 let tray: Tray | null = null

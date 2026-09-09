@@ -89,6 +89,10 @@
   --accent-10: rgba(241, 72, 30, 0.10);
   --accent-05: rgba(241, 72, 30, 0.05);
 
+  /* === 代码块（浅色模式适配暖色调） === */
+  --code-bg: #2a2023;
+  --code-text: #e8ddd8;
+
   /* === 装饰光晕 === */
   --halo-1: radial-gradient(ellipse at top right, rgba(247, 102, 60, 0.22), transparent 60%);
   --halo-2: radial-gradient(ellipse at bottom left, rgba(214, 58, 20, 0.20), transparent 60%);

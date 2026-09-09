@@ -452,40 +452,7 @@
   background: transparent;
 }
 
-/* ===== 图标按钮 ===== */
-.notes-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  transition: color var(--duration-fast) var(--ease-out),
-              background var(--duration-fast) var(--ease-out);
-}
-
-.notes-icon-btn:hover:not(:disabled) {
-  color: var(--foreground);
-  background: var(--accent-10, rgba(247, 102, 60, 0.1));
-}
-
-.notes-icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.notes-icon-btn.active,
-.notes-icon-btn[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-10, rgba(247, 102, 60, 0.15));
-}
+/* .notes-icon-btn 已删除（TSX 已迁移到 btn-icon + is-active） */
 
 /* ===== 底栏 ===== */
 .notes-bottom {
@@ -510,45 +477,7 @@
   gap: var(--space-2);
 }
 
-.notes-action-btn {
-  padding: var(--space-1) var(--space-3);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: font-weight var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-
-.notes-action-btn:hover:not(:disabled) {
-  font-weight: 700;
-}
-
-.notes-action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.notes-action-btn-primary {
-  color: var(--accent-bright-foreground);
-  background: var(--accent-bright);
-  border-radius: var(--radius-sm);
-}
-
-.notes-action-btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-.notes-action-btn-secondary {
-  color: var(--muted-foreground);
-}
-
-.notes-action-btn-secondary:hover:not(:disabled) {
-  color: var(--foreground);
-}
+/* .notes-action-btn 已删除（TSX 已迁移到 btn-primary-flat / btn-text） */
 
 /* ===== Toast ===== */
 .notes-toast {
@@ -564,28 +493,7 @@
   animation: toast-in var(--duration-normal) var(--ease-out);
 }
 
-/* ===== 新建笔记按钮（内联于搜索行） ===== */
-.notes-sidebar-new-btn {
-  flex: none;
-  background: var(--accent-10);
-  border: 1px solid var(--accent-25);
-  border-radius: var(--radius-sm);
-  color: var(--accent-bright);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-.notes-sidebar-new-btn:hover {
-  background: var(--accent-25);
-  border-color: var(--accent-50);
-}
-.notes-sidebar-new-btn svg {
-  width: var(--icon-svg);
-  height: var(--icon-svg);
-}
+/* .notes-sidebar-new-btn 已删除（TSX 已迁移到 sidebar-shell-new-btn） */
 
 /* ===== 笔记列表底部：设置 + 收起（嵌入列表内，高度对齐输入区） ===== */
 .notes-sidebar-list-footer {
@@ -638,18 +546,4 @@
   height: var(--icon-svg);
 }
 
-/* ===== 侧边栏拖拽手柄 ===== */
-.sidebar-resizer {
-  position: absolute;
-  right: -3px;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 5;
-  background: transparent;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.sidebar-resizer:hover {
-  background: var(--accent-bright);
-}
+/* sidebar-resizer 已移至 SidebarShell.css（共享） */

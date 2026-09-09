@@ -43,6 +43,7 @@ export const IPC_CHANNELS = {
   WIN_CONTROL_SET_MIN_SIZE: 'winControl:setMinSize',
   WIN_CONTROL_GET_MIN_SIZE: 'winControl:getMinSize',
   WIN_CONTROL_TOGGLE_FULLSCREEN: 'winControl:toggleFullscreen',
+  WIN_CONTROL_EXIT_FULLSCREEN: 'winControl:exitFullscreen',
   // 主→渲染：webview 快捷键主进程兜底触发后，同步状态到渲染层（按钮图标等）
   WIN_CONTROL_MAXIMIZE_TOGGLED: 'winControl:maximizeToggled',
   WIN_CONTROL_FULLSCREEN_TOGGLED: 'winControl:fullscreenToggled',

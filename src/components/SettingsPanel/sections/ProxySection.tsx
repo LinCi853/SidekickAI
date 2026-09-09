@@ -42,7 +42,6 @@ export default function ProxySection({
     proxyPassword,
     proxyBypass,
     proxyFallbackEnabled,
-    proxyFallbackMode,
   } = proxy;
 
   // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部完成
@@ -269,10 +268,10 @@ export default function ProxySection({
           </div>
         )}
 
-        {/* 代理失败兜底：custom 模式加载失败时自动切换到兜底模式 */}
+        {/* 代理失败兜底：加载失败时自动切换到反向模式（system↔direct，custom→direct） */}
         <div className="proxy-fallback-block" data-name="settings.proxy.fallback-block">
           <div className="proxy-fallback-header" data-name="settings.proxy.fallback-header">
-            <div className="proxy-field-label" data-name="settings.proxy.fallback-label">代理失败兜底</div>
+            <div className="proxy-field-label" data-name="settings.proxy.fallback-label">代理失败自动切换</div>
             <Toggle
               checked={proxyFallbackEnabled}
               onChange={async (checked) => {
@@ -287,25 +286,8 @@ export default function ProxySection({
             />
           </div>
           {proxyFallbackEnabled && (
-            <div className="proxy-fallback-mode" data-name="settings.proxy.fallback-mode-row">
-              <label className="proxy-field-label" data-name="settings.proxy.fallback-mode-label">兜底模式</label>
-              <SegmentedControl
-                className="seg-control-row"
-                name="proxy-fallback-mode"
-                value={proxyFallbackMode}
-                onChange={async (mode) => {
-                  setProxyFallbackMode(mode);
-                  try {
-                    await persist({ proxyFallbackMode: mode });
-                  } catch (e) {
-                    console.error('保存代理兜底模式失败:', e);
-                  }
-                }}
-                options={[
-                  { value: 'direct', label: '直连' },
-                  { value: 'system', label: '系统代理' },
-                ]}
-              />
+            <div className="settings-section-hint" data-name="settings.proxy.fallback-hint">
+              当前代理不可用时自动切换：系统代理 ↔ 直连，自定义代理 → 直连
             </div>
           )}
         </div>

@@ -164,7 +164,7 @@ export function buildShortcutDefs(o: BrowserKeyboardOptions): BrowserShortcutDef
     { accelerator: 'Ctrl+-', action: 'zoomOut', handler: () => o.onZoomOut?.() },
 
     // ===== 窗口 / 系统级 =====
-    { accelerator: 'F11', handler: () => o.onToggleFullscreen?.() },
+    { accelerator: 'F11', handler: () => { console.log('[fullscreen-keyboard] F11 pressed, calling onToggleFullscreen'); o.onToggleFullscreen?.(); } },
     { accelerator: 'F12', handler: () => o.onToggleDevTools() },
     { accelerator: 'Alt+P', action: 'toggleFreeze', handler: (d) => o.onToggleFreeze?.((d as { tabId?: string } | undefined)?.tabId) },
 
@@ -186,14 +186,18 @@ export function buildShortcutDefs(o: BrowserKeyboardOptions): BrowserShortcutDef
 
   function handleEscape(): void {
     const activeEl = document.activeElement;
+    console.log('[fullscreen-keyboard] Escape pressed, isFullscreen=', o.isFullscreen, 'activeEl=', activeEl?.tagName);
     if (activeEl?.tagName === 'INPUT' && activeEl.classList.contains('browser-address-input')) {
       // 地址栏处理 ESC（退出编辑状态），不执行其他行为
+      console.log('[fullscreen-keyboard] Escape: address bar focused, skipping');
       return;
     }
     if (o.isFullscreen) {
+      console.log('[fullscreen-keyboard] Escape: calling onExitFullscreen');
       o.onExitFullscreen?.();
       return;
     }
+    console.log('[fullscreen-keyboard] Escape: not fullscreen, calling onStopLoading');
     o.onStopLoading();
   }
 

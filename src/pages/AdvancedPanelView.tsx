@@ -49,6 +49,7 @@ import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinne
 import { isTypingTarget } from '../lib/shared-utils';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { MAIN_WINDOW_MIN_HEIGHT } from '../../electron/shared/window-size';
+import './ChatBubble.css';
 import './AdvancedPanelView.css';
 
 type TabKey = string;
@@ -584,8 +585,18 @@ function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
             </div>
           )}
           {messages.map((m) => (
-            <MessageBubble key={m.id} message={m} />
+            <MessageBubble key={m.id} message={m} streaming={streaming && m.id === messages[messages.length - 1]?.id} />
           ))}
+          {streaming && !streamingText && (
+            <div className="chat-msg-row assistant" data-name="advanced-panel.chat-thinking">
+              <div className="chat-avatar assistant">AI</div>
+              <div className="chat-thinking" data-name="advanced-panel.chat-thinking-dots">
+                <span className="chat-thinking-dot" />
+                <span className="chat-thinking-dot" />
+                <span className="chat-thinking-dot" />
+              </div>
+            </div>
+          )}
           {streaming && streamingText && (
             <MessageBubble
               message={{
@@ -595,6 +606,7 @@ function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
                 content: streamingText,
                 createdAt: Date.now(),
               }}
+              streaming
             />
           )}
           {streamError && (
@@ -639,7 +651,7 @@ function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
           <div className="advanced-panel-chat-input-actions" data-name="advanced-panel.chat-input-actions">
             <IconButton
               type="button"
-              className="advanced-panel-chat-new-btn"
+              className="sidebar-shell-new-btn"
               onClick={startNewConversation}
               title="新建对话"
               aria-label="新建对话"

@@ -34,6 +34,8 @@ export const windowApi = {
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_RESIZE, bounds),
     toggleFullscreen: () =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN),
+    exitFullscreen: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_EXIT_FULLSCREEN),
     // 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中）
     setCursor: (x: number, y: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.CURSOR_SET, x, y),

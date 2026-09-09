@@ -27,6 +27,8 @@ import { navHistoryStore } from '../store/nav-history-store.js'
 import { bookmarkStore } from '../store/bookmark-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../window-state.js'
+import { findWindowIdByWin } from '../window-factory.js'
+import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import type { EffectScope } from '../modules/effect-scope.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
@@ -125,15 +127,26 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
     const win = getSenderWindow(e as IpcMainInvokeEvent)
     if (!win || win.isDestroyed()) return { ok: false }
     if (enter) {
+      // 进入云电脑模式前保存 bounds（云电脑要求全屏）
+      const wid = findWindowIdByWin(win)
+      const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
+      if (!wasFs) {
+        if (wid) {
+          const state = windowStore.getOrDefault(wid)
+          state.fullscreenNormalBounds = win.getBounds()
+          windowStore.save(wid, state)
+        }
+      }
       enterCloudPc(win.webContents.id, win)
-      // 云电脑模式要求全屏（沉浸式），渲染层同时会隐藏浏览器 UI
       try {
-        if (!win.isFullScreen()) win.setFullScreen(true)
+        if (!wasFs) win.setFullScreen(true)
       } catch { /* ignore */ }
     } else {
       exitCloudPc(win.webContents.id)
+      const wid = findWindowIdByWin(win)
+      const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
       try {
-        if (win.isFullScreen()) win.setFullScreen(false)
+        if (wasFs) win.setFullScreen(false)
       } catch { /* ignore */ }
     }
     try {

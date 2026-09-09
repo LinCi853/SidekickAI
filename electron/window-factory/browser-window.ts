@@ -33,6 +33,7 @@ import { isFrozen } from '../freeze/freeze-manager.js'
 import { getRecordByTabId } from '../freeze/webview-registry.js'
 import { consumeAskSavePath } from '../utils/ask-save-path.js'
 import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
+import { trackFullscreen, isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'
@@ -295,8 +296,15 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     // 不依赖渲染层 defs；webview 聚焦时由 helpers.ts 的 guest 拦截处理）
     if (input.key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
       event.preventDefault()
-      console.log('[browser-window] F11 → 宿主兜底切换沉浸式全屏')
-      try { win.setFullScreen(!win.isFullScreen()) } catch (err) {
+      const wasFs = isTrackedFullscreen(windowId)
+      console.log('[browser-window] F11 → 宿主兜底切换沉浸式全屏, wasFullScreen=', wasFs, '→', !wasFs)
+      if (!wasFs) {
+        // 进入全屏前保存 bounds
+        const state = windowStore.getOrDefault(windowId)
+        state.fullscreenNormalBounds = win.getBounds()
+        windowStore.save(windowId, state)
+      }
+      try { win.setFullScreen(!wasFs) } catch (err) {
         console.error('[browser-window] 切换全屏失败:', err)
       }
       return
@@ -304,7 +312,9 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
 
     // Escape：全屏时退出（沉浸式全屏的标准退出方式，宿主兜底）
     if (input.key === 'Escape' && !hasCtrl && !hasAlt && !hasShift) {
-      if (win.isFullScreen()) {
+      const wasFs = isTrackedFullscreen(windowId)
+      console.log('[browser-window] Escape → wasFullScreen=', wasFs)
+      if (wasFs) {
         event.preventDefault()
         console.log('[browser-window] Escape → 宿主兜底退出全屏')
         try { win.setFullScreen(false) } catch { /* ignore */ }
@@ -347,9 +357,14 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
   // 浏览器窗口：不保存 bounds，取消最大化时由 WindowMaximizeManager 使用
   // centered70 策略还原为工作区居中 70% 尺寸（固定设计，不记忆位置/大小）
   attachDetachedWindowLifecycle(win, windowId, () => {}, { trackBounds: false })
+  // 全屏状态追踪：win.isFullScreen() 在 Windows frameless 窗口中不可靠，
+  // 通过原生事件维护可信状态
+  trackFullscreen(win, windowId)
   win.on('leave-full-screen', () => {
+    console.log('[fullscreen-event] leave-full-screen fired, windowId=', windowId)
     const state = windowStore.getOrDefault(windowId)
     if (state.fullscreenNormalBounds && !win.isDestroyed()) {
+      console.log('[fullscreen-event] restoring bounds:', state.fullscreenNormalBounds)
       try {
         win.setBounds(state.fullscreenNormalBounds)
       } catch {
@@ -359,10 +374,12 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
       windowStore.save(windowId, state)
     }
     if (!win.isDestroyed()) {
+      console.log('[fullscreen-event] sending FULLSCREEN_TOGGLED=false to renderer')
       win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, false)
     }
   })
   win.on('enter-full-screen', () => {
+    console.log('[fullscreen-event] enter-full-screen fired, windowId=', windowId)
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, true)
     }

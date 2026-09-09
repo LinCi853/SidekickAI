@@ -30,6 +30,7 @@ import { useCloudPcStore } from '../../store/useCloudPcStore';
 import HotkeyRecorder from '../../components/ui/HotkeyRecorder';
 import { Button, FormRow, SectionTitle } from '../../components/ui';
 import './BrowserSettingsTab.css';
+import '../../components/SettingsPanel/styles.css';
 
 /** G1：搜索引擎预设清单（自定义模式允许用户手动输入 name 和 urlTemplate） */
 const SEARCH_ENGINE_PRESETS = [

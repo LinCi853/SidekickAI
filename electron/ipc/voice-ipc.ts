@@ -14,9 +14,11 @@
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
 import { ipcMain } from 'electron'
+import { request } from 'undici'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { updateVoiceConfig } from '../store/voice-store.js'
 import { aiProviderStore, deriveAudioEndpoint } from '../store/ai-provider-store.js'
+import { getProxyDispatcher } from '../store/proxy-helper.js'
 import type { SttEngine } from '../stt/engine.js'
 import type { AudioDeviceInfo } from '../shared/api.types.js'
 import type { EffectScope } from '../modules/effect-scope.js'
@@ -150,7 +152,7 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
         return { ok: false, message: '供应商未配置 TTS 模型或端点/API Key' }
       }
       const endpoint = deriveAudioEndpoint(provider.apiEndpoint, 'speech')
-      const res = await fetch(endpoint, {
+      const res = await request(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${provider.apiKey}`,
@@ -160,19 +162,22 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
           model: provider.ttsModel,
           input: '测试合成',
         }),
+        headersTimeout: 15000,
+        bodyTimeout: 15000,
+        dispatcher: getProxyDispatcher(),
       })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        const text = await res.body.text().catch(() => '')
         return {
           ok: false,
-          message: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+          message: `HTTP ${res.statusCode}: ${text.slice(0, 200)}`,
         }
       }
-      const buf = await res.arrayBuffer()
+      const buf = await res.body.arrayBuffer()
       if (buf.byteLength === 0) {
         return { ok: false, message: '端点返回空响应，可能不支持 TTS 格式' }
       }
-      const contentType = res.headers.get('Content-Type') || 'audio/mpeg'
+      const contentType = (res.headers['content-type'] as string) || 'audio/mpeg'
       const mime = contentType.split(';')[0].trim()
       const audioDataUrl = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`
       return { ok: true, message: '合成成功', audioDataUrl }

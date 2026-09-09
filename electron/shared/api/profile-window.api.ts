@@ -59,6 +59,8 @@ export interface WindowControlAPI {
   resize(bounds: { x?: number; y?: number; width: number; height: number }): Promise<void>
   /** 切换全屏（保留接口，当前无热键绑定） */
   toggleFullscreen(): Promise<boolean>
+  /** 确定性退出全屏：仅在全屏时退出，不做 toggle */
+  exitFullscreen(): Promise<boolean>
   /** 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中） */
   setCursor(x: number, y: number): Promise<{ ok: boolean; error?: string }>
   /**

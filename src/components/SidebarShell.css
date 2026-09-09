@@ -177,3 +177,19 @@
 .sidebar-shell-collapsed-bar .combobox-input {
   padding-right: 4px;
 }
+
+/* ===== 侧边栏拖拽手柄 ===== */
+.sidebar-resizer {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.sidebar-resizer:hover {
+  background: var(--accent-bright);
+}
