@@ -2,7 +2,7 @@
 
 ---
 
-## v0.2.0 — 2026-09-10
+## v0.1.0-alpha — 2026-09-10
 
 > 本版本重点：安装器整体重写为 Tauri 2 单文件自解压，打包体积近乎减半，并完成开源前清理。
 
@@ -38,6 +38,13 @@
 
 - **依赖修复**：修复 `file-uri-to-path` 缺失；`clearAllData` 全量清理遗漏。
 
+- **文本上屏（Windows）**
+  - UIA / SendInput 两条通道改为「临时文件传参」：PowerShell 脚本与待上屏文本各自写入临时文件后再执行，
+    规避 `-Command` 经 cmd 多层转义破坏中文、引号与换行的问题。
+  - 脚本内显式 `Add-Type -AssemblyName UIAutomationClient/Types`，写入后回读 `ValuePattern.Current.Value` 校验结果。
+  - 执行前过滤 `$env:LIB` 中失效的 VS 路径，避免 `Add-Type` 把警告当错误而编译失败。
+  - 剪贴板通道延长等待（触发 150 → 200 ms、还原前 500 ms），确保外部应用完成粘贴读取后再恢复剪贴板。
+
 ### 性能与体积
 
 将渲染层依赖降为 `devDependencies`（electron-builder 会自动排除其依赖树），并移除白板插件中从未被引用的 `deps` 死重：
@@ -47,6 +54,16 @@
 | 绿色包 | 500 MB | 239 MB |
 | 安装包 | 249 MB | 119 MB |
 | `app.asar` | 156 MB | 29 MB |
+
+### 运行时升级
+
+- **Electron 30.5.1 → 43.6.0**（配套 `electron-builder` 24.13.3 → 26.16.1、`better-sqlite3` 12 → 13、tiptap 3.28 → 3.31）
+  - 选定 43.x 而非 44.x：44 起移除旧版同步 `clipboard` API，会波及输入法上屏链路；43.6.0 保留该 API 且已脱离漏洞区间。
+  - 实测确认：Electron 43.6.0（Node 24 / ABI 148）主进程下 `better-sqlite3` 与 `uiohook-napi` 均可直接加载并执行。
+- **关闭打包期 `npmRebuild`**
+  - 两个原生模块均为 N-API 预编译产物（ABI 稳定），打包时无需再走 node-gyp 交叉编译。
+  - 顺带规避在 x64 机上为 arm64 目标重建时、缺少 ARM64 MSVC 工具集导致的 MSB8020 失败。
+  - `asarUnpack` 同步改为解包 `prebuilds/*.node`。
 
 ### 重构
 
@@ -74,6 +91,7 @@
 - 类型检查：`npm run typecheck` 通过。
 - 单元测试：`npm test` 24 个文件 / 259 个用例通过。
 - 构建：`npm run build` 通过。
+- 运行时：Electron 43.6.0 主进程下原生模块加载与 SQL 执行实测通过。
 
 ---
 

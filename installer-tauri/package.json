@@ -1,6 +1,6 @@
 {
   "name": "sidekickai-installer-tauri",
-  "version": "0.2.0",
+  "version": "0.1.0-alpha",
   "private": true,
   "type": "module",
   "description": "SidekickAI 安装向导（Tauri 2 + React，4K 矢量渲染）",
