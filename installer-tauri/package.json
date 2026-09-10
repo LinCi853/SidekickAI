@@ -5,6 +5,9 @@
   "type": "module",
   "description": "SidekickAI 安装向导（Tauri 2 + React，4K 矢量渲染）",
   "scripts": {
+    "predev": "node ../scripts/gen-install-manifest.cjs",
+    "prebuild": "node ../scripts/gen-install-manifest.cjs",
+    "prettauri": "node ../scripts/gen-install-manifest.cjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

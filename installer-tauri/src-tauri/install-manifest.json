@@ -1,0 +1,122 @@
+{
+  "features": [
+    {
+      "id": "whiteboard",
+      "name": "画板/白板",
+      "description": "Excalidraw 无限画布：多白板管理、SQLite 持久化、截图推送到白板",
+      "category": "stable",
+      "defaultEnabled": true,
+      "installRequired": true,
+      "sizeLevel": "large"
+    },
+    {
+      "id": "notes",
+      "name": "笔记",
+      "description": "Tiptap 富文本灵感笔记：任务列表、代码块、图片，全文搜索（FTS5）",
+      "category": "stable",
+      "defaultEnabled": true,
+      "sizeLevel": "small"
+    },
+    {
+      "id": "custom-chat",
+      "name": "自定义对话 API",
+      "description": "OpenAI / Anthropic / Custom 三协议直连：自定义供应商、SSE 流式对话、SQLite 会话持久化",
+      "category": "stable",
+      "defaultEnabled": true,
+      "required": true,
+      "sizeLevel": "small"
+    },
+    {
+      "id": "prompt-library",
+      "name": "提示词库",
+      "description": "提示词模板管理、热键注入、注入历史去重",
+      "category": "stable",
+      "defaultEnabled": true,
+      "sizeLevel": "small"
+    },
+    {
+      "id": "voice",
+      "name": "语音输入",
+      "description": "Alt+V 后台语音：按住说话、STT 识别（AI 接入 / 本地程序）、分层上屏（实验性）",
+      "category": "dev",
+      "defaultEnabled": false,
+      "sizeLevel": "small"
+    },
+    {
+      "id": "tts",
+      "name": "TTS（语音合成）",
+      "description": "自定义供应商 TTS 合成（实验性）",
+      "category": "dev",
+      "defaultEnabled": false,
+      "sizeLevel": "small"
+    },
+    {
+      "id": "browser",
+      "name": "浏览器",
+      "description": "Chrome 风格多标签浏览器窗口：标签/导航/书签/下载/历史/搜索、云游戏手柄（实验性）",
+      "category": "dev",
+      "defaultEnabled": false,
+      "sizeLevel": "small"
+    },
+    {
+      "id": "freeze",
+      "name": "页面冻结（防撤回）",
+      "description": "冻结 AI 网页防止对方撤回/删除内容：抓取对话入库 + 文本层选择复制（实验性）",
+      "category": "dev",
+      "defaultEnabled": false,
+      "sizeLevel": "small"
+    }
+  ],
+  "options": [
+    {
+      "id": "autoUpdate",
+      "label": "自动更新",
+      "description": "有可用更新时自动下载并在下次启动时应用",
+      "type": "boolean",
+      "page": "behavior",
+      "defaultValue": true
+    },
+    {
+      "id": "autoLaunch",
+      "label": "开机自启",
+      "description": "登录 Windows 后自动在后台启动",
+      "type": "boolean",
+      "page": "behavior",
+      "defaultValue": false
+    },
+    {
+      "id": "logLevel",
+      "label": "日志级别",
+      "description": "决定记录多少运行日志（debug 最详细）",
+      "type": "choice",
+      "choices": [
+        {
+          "value": "error",
+          "label": "仅错误"
+        },
+        {
+          "value": "warn",
+          "label": "警告及以上"
+        },
+        {
+          "value": "info",
+          "label": "常规信息"
+        },
+        {
+          "value": "debug",
+          "label": "调试（最详细）"
+        }
+      ],
+      "page": "logging",
+      "defaultValue": "info"
+    },
+    {
+      "id": "usageTracking",
+      "label": "使用统计",
+      "description": "匿名收集使用数据以改进产品",
+      "type": "boolean",
+      "page": "behavior",
+      "defaultValue": true
+    }
+  ]
+}

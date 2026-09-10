@@ -1,14 +1,14 @@
 // electron/modules/manifests.ts — 内置模块 manifest 清单
 //
-// 7 个可选模块的声明（元数据）。声明内容（名称/分类/默认值/入口/热键）与
-// 《模块管理系统与安装管控方案》3.2 表格一致。
-//
-// init / teardown / clearData 在 main.ts 模块化接线阶段逐模块接入
-// （见方案文档第 11 章《模块实现统一设计规范》）。
+// 声明式字段（id/名称/分类/默认值/入口/热键/安装语义）统一收敛到
+// builtin-module-data.ts（见《模块管理系统与安装管控方案》3.2 表格），
+// 本文件仅负责绑定各模块的 wiring 生命周期（init/teardown/clearData/capabilities），
+// 组装出最终 BUILTIN_MODULES。新增模块只需加 data + wiring 两份。
 //
 // 注册顺序约束：被依赖模块必须先注册（依赖校验按注册顺序遍历）。
 
 import type { ModuleManifest } from '../shared/types.js'
+import { BUILTIN_MODULE_INSTALL_DATA } from './builtin-module-data.js'
 import {
   initWhiteboardModule,
   teardownWhiteboardModule,
@@ -30,19 +30,12 @@ import { initTtsModule, teardownTtsModule, clearTtsData } from './wiring/tts.js'
 import { initBrowserModule, teardownBrowserModule, clearBrowserData } from './wiring/browser.js'
 import { initFreezeModule, teardownFreezeModule, clearFreezeData } from './wiring/freeze.js'
 
-
-export const BUILTIN_MODULES: ModuleManifest[] = [
-  {
-    id: 'whiteboard',
-    name: '画板/白板',
-    description: 'Excalidraw 无限画布：多白板管理、SQLite 持久化、截图推送到白板',
-    category: 'stable',
-    sizeLevel: 'large',
-    testBadge: false,
-    defaultEnabled: true,
-    dependencies: [],
-    entries: ['进阶面板「白板」标签页', '主窗口「截图推送到白板」'],
-    hotkeys: [],
+/** 模块 id → wiring 生命周期 + 能力声明 */
+const WIRING: Record<
+  string,
+  Pick<ModuleManifest, 'init' | 'teardown' | 'clearData' | 'capabilities'>
+> = {
+  whiteboard: {
     init: initWhiteboardModule,
     teardown: teardownWhiteboardModule,
     clearData: clearWhiteboardData,
@@ -51,17 +44,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'whiteboard', capabilityId: 'whiteboard.asset-protocol', kind: 'ipc', scope: 'global', trigger: 'startup', reversible: true, description: '白板图片资产协议' },
     ],
   },
-  {
-    id: 'notes',
-    name: '笔记',
-    description: 'Tiptap 富文本灵感笔记：任务列表、代码块、图片，全文搜索（FTS5）',
-    category: 'stable',
-    sizeLevel: 'small',
-    testBadge: false,
-    defaultEnabled: true,
-    dependencies: [],
-    entries: ['进阶面板「笔记」标签页', '笔记「发送到 AI」', '笔记「存为提示词」（提示词库启用时）'],
-    hotkeys: [],
+  notes: {
     init: initNotesModule,
     teardown: teardownNotesModule,
     clearData: clearNotesData,
@@ -70,17 +53,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'notes', capabilityId: 'notes.asset-protocol', kind: 'ipc', scope: 'global', trigger: 'startup', reversible: true, description: '笔记图片资产协议' },
     ],
   },
-  {
-    id: 'custom-chat',
-    name: '自定义对话 API',
-    description: 'OpenAI / Anthropic / Custom 三协议直连：自定义供应商、SSE 流式对话、SQLite 会话持久化',
-    category: 'stable',
-    sizeLevel: 'small',
-    testBadge: false,
-    defaultEnabled: true,
-    dependencies: [],
-    entries: ['进阶面板「自定义供应商 / 对话」', '独立对话窗口', '设置「供应商」分区'],
-    hotkeys: [],
+  'custom-chat': {
     init: initCustomChatModule,
     teardown: teardownCustomChatModule,
     clearData: clearCustomChatData,
@@ -89,17 +62,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'custom-chat', capabilityId: 'custom-chat.window', kind: 'window', scope: 'global', trigger: 'user-command', reversible: true, description: '独立对话窗口' },
     ],
   },
-  {
-    id: 'prompt-library',
-    name: '提示词库',
-    description: '提示词模板管理、热键注入、注入历史去重',
-    category: 'stable',
-    sizeLevel: 'small',
-    testBadge: false,
-    defaultEnabled: true,
-    dependencies: [],
-    entries: ['抽屉菜单「提示词」', '提示词库窗口', '笔记「存为提示词」'],
-    hotkeys: ['提示词注入热键（用户自定义）'],
+  'prompt-library': {
     init: initPromptLibraryModule,
     teardown: teardownPromptLibraryModule,
     clearData: clearPromptLibraryData,
@@ -109,17 +72,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'prompt-library', capabilityId: 'prompt.injection', kind: 'webview-script', scope: 'document', trigger: 'user-command', reversible: false, description: '提示词注入到页面' },
     ],
   },
-  {
-    id: 'voice',
-    name: '语音输入',
-    description: 'Alt+V 后台语音：按住说话、STT 识别（AI 接入 / 本地程序）、分层上屏（实验性）',
-    category: 'dev',
-    sizeLevel: 'small',
-    testBadge: true,
-    defaultEnabled: false,
-    dependencies: [],
-    entries: ['后台语音 Alt+V', '设置「语音」分区', '录音指示窗'],
-    hotkeys: ['Alt+V（后台语音）'],
+  voice: {
     init: initVoiceModule,
     teardown: teardownVoiceModule,
     clearData: clearVoiceData,
@@ -129,17 +82,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'voice', capabilityId: 'voice.preview-window', kind: 'window', scope: 'global', trigger: 'user-command', reversible: true, description: '录音指示窗' },
     ],
   },
-  {
-    id: 'tts',
-    name: 'TTS（语音合成）',
-    description: '自定义供应商 TTS 合成（实验性）',
-    category: 'dev',
-    sizeLevel: 'small',
-    testBadge: true,
-    defaultEnabled: false,
-    dependencies: ['custom-chat'],
-    entries: ['设置「语音」分区（TTS 配置）'],
-    hotkeys: [],
+  tts: {
     init: initTtsModule,
     teardown: teardownTtsModule,
     clearData: clearTtsData,
@@ -147,18 +90,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'tts', capabilityId: 'tts.ipc', kind: 'ipc', scope: 'global', trigger: 'startup', reversible: true, description: 'TTS 测试 IPC 通道', dependencies: ['custom-chat.ipc'] },
     ],
   },
-  {
-    id: 'browser',
-    name: '浏览器',
-    description:
-      'Chrome 风格多标签浏览器窗口：标签/导航/书签/下载/历史/搜索、云游戏手柄（实验性）',
-    category: 'dev',
-    sizeLevel: 'small',
-    testBadge: true,
-    defaultEnabled: false,
-    dependencies: [],
-    entries: ['每应用「脱离/回归」快捷键', '标签脱离到浏览器窗口'],
-    hotkeys: ['每应用浏览器窗口快捷键（用户配置）'],
+  browser: {
     init: initBrowserModule,
     teardown: teardownBrowserModule,
     clearData: clearBrowserData,
@@ -168,17 +100,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'browser', capabilityId: 'browser.profile-shortcuts', kind: 'hotkey', scope: 'profile', trigger: 'startup', reversible: true, description: '每应用浏览器快捷键' },
     ],
   },
-  {
-    id: 'freeze',
-    name: '页面冻结（防撤回）',
-    description: '冻结 AI 网页防止对方撤回/删除内容：抓取对话入库 + 文本层选择复制（实验性）',
-    category: 'dev',
-    sizeLevel: 'small',
-    testBadge: true,
-    defaultEnabled: false,
-    dependencies: [],
-    entries: ['浏览器窗口内冻结按钮与控制条'],
-    hotkeys: [],
+  freeze: {
     init: initFreezeModule,
     teardown: teardownFreezeModule,
     clearData: clearFreezeData,
@@ -188,5 +110,24 @@ export const BUILTIN_MODULES: ModuleManifest[] = [
       { ownerModule: 'freeze', capabilityId: 'freeze.text-layer', kind: 'webview-script', scope: 'tab', trigger: 'user-command', reversible: false, description: '冻结前提取文本层' },
     ],
   },
+}
 
-]
+export const BUILTIN_MODULES: ModuleManifest[] = BUILTIN_MODULE_INSTALL_DATA.map((d) => {
+  const w = WIRING[d.id] ?? {}
+  return {
+    id: d.id,
+    name: d.name,
+    description: d.description,
+    category: d.category,
+    sizeLevel: d.sizeLevel,
+    testBadge: d.testBadge,
+    defaultEnabled: d.defaultEnabled,
+    dependencies: d.dependencies,
+    entries: d.entries,
+    hotkeys: d.hotkeys,
+    init: w.init,
+    teardown: w.teardown,
+    clearData: w.clearData,
+    capabilities: w.capabilities,
+  }
+})

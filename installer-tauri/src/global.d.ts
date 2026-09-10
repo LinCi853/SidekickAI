@@ -10,6 +10,8 @@ export interface InstallOptions {
   forAllUsers: boolean
   createDesktopShortcut: boolean
   launchAfterInstall: boolean
+  /** 安装完成后打开使用指南（首次启动引导窗）；默认不勾选 */
+  showGuideAfterInstall: boolean
   /** 功能开关（moduleId → enabled） */
   features: Record<string, boolean>
   /** 安装选项（optionId → value） */
@@ -20,6 +22,12 @@ export interface InstallOptions {
   cleanupPaths?: string[]
   /** 卸载时是否删除用户数据 */
   deleteUserData?: boolean
+  /** 卸载数据策略：keep（保留默认）/ export（导出加密备份后删除）/ delete（直接删除） */
+  dataStrategy?: 'keep' | 'export' | 'delete'
+  /** dataStrategy=export 时的备份保存路径（.sabackup） */
+  backupPath?: string
+  /** dataStrategy=export 时的备份密码 */
+  backupPassword?: string
   /** 已同意的协议 id */
   acceptedLicenses?: string[]
 }
@@ -60,6 +68,12 @@ export interface DonePayload {
   residualNote: string
 }
 
+/** 预读已安装位置的安装期配置 */
+export interface InstalledConfig {
+  modules: Record<string, { enabled: boolean }>
+  options: Record<string, boolean | string>
+}
+
 declare global {
   interface Window {
     installer: {
@@ -67,7 +81,13 @@ declare global {
       scanInstallations(): Promise<ScanResult>
       browseDir(current: string): Promise<string>
       needsAdmin(dir: string, forAllUsers: boolean): Promise<boolean>
+      /** 保存文件对话框（导出加密备份用）；取消返回空字符串 */
+      saveBackupDialog(defaultName: string): Promise<string>
       start(opts: InstallOptions): Promise<boolean>
+      /** 读取已安装位置的 install-config.json（覆盖安装/修复时预读作初始值） */
+      readInstallConfig(dir: string): Promise<InstalledConfig | null>
+      /** 用户完成/关闭向导时写入最终 install-config.json */
+      flushConfig(opts: InstallOptions): Promise<boolean>
       cancel(): Promise<boolean>
       closeWindow(): Promise<void>
       openDir(dir: string): Promise<void>

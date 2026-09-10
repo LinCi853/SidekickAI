@@ -1,7 +1,28 @@
-// manifest.rs —— 安装期「功能 / 选项 / 协议」清单 + 类型（单一数据源，与 install-manifest.ts 对齐）
+// manifest.rs —— 安装期「功能 / 选项 / 协议」清单 + 类型
+// 功能/选项清单统一由主应用生成（见 scripts/gen-install-manifest.cjs 与
+// electron/shared/install-manifest-source.ts），本文件仅负责解析与透出。
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
-#[derive(Serialize, Clone)]
+const INSTALL_MANIFEST_FILE: &str = include_str!("../install-manifest.json");
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ManifestDoc {
+    features: Vec<InstallFeature>,
+    options: Vec<InstallOption>,
+}
+
+static INSTALL_MANIFEST: OnceLock<Result<ManifestDoc, String>> = OnceLock::new();
+
+fn manifest_doc() -> &'static Result<ManifestDoc, String> {
+    INSTALL_MANIFEST.get_or_init(|| {
+        serde_json::from_str::<ManifestDoc>(INSTALL_MANIFEST_FILE)
+            .map_err(|e| format!("解析 install-manifest.json 失败: {e}"))
+    })
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallFeature {
     pub id: String,
@@ -11,15 +32,25 @@ pub struct InstallFeature {
     pub default_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required: Option<bool>,
+    /// 需独立安装才能使用（安装前选定，安装中不可调整）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install_required: Option<bool>,
+    /// 体积级别：large = 需独立安装 / small = 恒随包
+    #[serde(default = "default_size_level")]
+    pub size_level: String,
 }
 
-#[derive(Serialize, Clone)]
+fn default_size_level() -> String {
+    "small".into()
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct InstallOptionChoice {
     pub value: String,
     pub label: String,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallOption {
     pub id: String,
@@ -105,10 +136,16 @@ pub struct ScanResult {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallRequest {
+    /// 子任务标识："" = 正常安装/修复/卸载；"flush-config" = 仅写 install-config.json
+    #[serde(default)]
+    pub action: String,
     pub install_dir: String,
     pub for_all_users: bool,
     pub create_desktop_shortcut: bool,
     pub launch_after_install: bool,
+    /// 安装完成后打开使用指南（首次启动引导窗）；默认不勾选
+    #[serde(default)]
+    pub show_guide_after_install: bool,
     pub features: serde_json::Map<String, serde_json::Value>,
     pub options: serde_json::Map<String, serde_json::Value>,
     /// 安装模式；缺省 = install（兼容旧请求）
@@ -120,6 +157,16 @@ pub struct InstallRequest {
     /// 卸载时是否删除用户数据（配置/Profile/缓存/日志）
     #[serde(default)]
     pub delete_user_data: bool,
+    /// 卸载数据策略：keep（保留默认）/ export（导出加密备份后删除）/ delete（直接删除）
+    /// 三选一可选字段；优先于 delete_user_data（兼容旧请求布尔值）
+    #[serde(default)]
+    pub data_strategy: String,
+    /// data_strategy=export 时的备份保存路径（.sabackup）
+    #[serde(default)]
+    pub backup_path: String,
+    /// data_strategy=export 时的备份密码
+    #[serde(default)]
+    pub backup_password: String,
     /// 已同意的协议 id 列表
     #[serde(default)]
     pub accepted_licenses: Vec<String>,
@@ -136,74 +183,18 @@ pub struct DonePayload {
 const EULA_ZH: &str = include_str!("../EULA.zh-CN.txt");
 const LICENSE: &str = include_str!("../License.txt");
 
-fn feat(id: &str, name: &str, desc: &str, category: &str, default: bool, required: bool) -> InstallFeature {
-    InstallFeature {
-        id: id.to_string(),
-        name: name.to_string(),
-        description: desc.to_string(),
-        category: category.to_string(),
-        default_enabled: default,
-        required: if required { Some(true) } else { None },
+pub fn features() -> Vec<InstallFeature> {
+    match manifest_doc() {
+        Ok(doc) => doc.features.clone(),
+        Err(e) => panic!("{e}"),
     }
 }
 
-pub fn features() -> Vec<InstallFeature> {
-    vec![
-        feat("whiteboard", "画板 / 白板", "Excalidraw 无限画布：多白板管理、SQLite 持久化、截图推送到白板", "stable", true, false),
-        feat("notes", "笔记", "富文本灵感笔记：任务列表、代码块、图片、全文搜索", "stable", true, false),
-        feat("custom-chat", "自定义对话 API", "OpenAI / Anthropic / Custom 三协议直连与流式对话", "stable", true, true),
-        feat("prompt-library", "提示词库", "提示词模板管理、热键注入、注入历史去重", "stable", true, false),
-        feat("browser", "多标签浏览器", "Chrome 风格多标签浏览器窗口：标签 / 导航 / 书签 / 下载 / 历史", "dev", false, false),
-        feat("voice", "语音输入", "后台语音：按住说话、STT 识别、分层上屏（实验性）", "dev", false, false),
-        feat("tts", "TTS 语音合成", "自定义供应商 TTS 合成（实验性，依赖自定义对话 API）", "dev", false, false),
-        feat("freeze", "页面冻结（防撤回）", "冻结 AI 网页防止对方撤回 / 删除内容（实验性）", "dev", false, false),
-    ]
-}
-
 pub fn options() -> Vec<InstallOption> {
-    vec![
-        InstallOption {
-            id: "autoUpdate".into(),
-            label: "自动更新".into(),
-            description: "有可用更新时自动下载并在下次启动时应用".into(),
-            opt_type: "boolean".into(),
-            default_value: serde_json::json!(true),
-            choices: None,
-            page: Some("behavior".into()),
-        },
-        InstallOption {
-            id: "autoLaunch".into(),
-            label: "开机自启".into(),
-            description: "登录 Windows 后自动在后台启动".into(),
-            opt_type: "boolean".into(),
-            default_value: serde_json::json!(false),
-            choices: None,
-                   page: Some("behavior".into()),
-        },
-        InstallOption {
-            id: "logLevel".into(),
-            label: "日志级别".into(),
-            description: "决定记录多少运行日志（debug 最详细）".into(),
-            opt_type: "choice".into(),
-            default_value: serde_json::json!("debug"),
-            choices: Some(vec![
-                InstallOptionChoice { value: "error".into(), label: "仅错误".into() },
-                InstallOptionChoice { value: "warn".into(), label: "警告及以上".into() },
-                InstallOptionChoice { value: "info".into(), label: "常规信息".into() },
-                InstallOptionChoice { value: "debug".into(), label: "调试（最详细）".into() },
-            ]),
-            page: Some("logging".into()),
-        },
-        InstallOption {
-            id: "usageTracking".into(),
-            label: "使用统计".into(),
-            description: "匿名收集使用数据以改进产品".into(),
-            opt_type: "boolean".into(),
-            default_value: serde_json::json!(true),
-            choices: None,
-            page: Some("behavior".into()),
-        },
-    ]
+    match manifest_doc() {
+        Ok(doc) => doc.options.clone(),
+        Err(e) => panic!("{e}"),
+    }
 }
 
 pub fn licenses() -> Vec<LicenseDoc> {

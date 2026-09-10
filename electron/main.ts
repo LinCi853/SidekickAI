@@ -33,7 +33,7 @@ import {
 import { registerPdfProtocol } from './utils/pdf-protocol.js'
 import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js'
 import { setBrowserHotkeyFallback, tryForward, VK_F11, VK_C, VK_P } from './utils/browser-hotkey-fallback.js'
-import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting } from './store/app-settings-store.js'
+import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js'
 import { seedFromInstallConfig } from './store/install-config-seed.js'
 import { registerProxyAuthHandler } from './store/proxy-helper.js'
 import { initChatStore, getChatStore } from './store/chat-store.js'
@@ -210,6 +210,10 @@ app.whenReady().then(async () => {
 
   // --hidden 启动参数：由开机自启动注入，启动后隐藏到托盘不显示主窗口
   const silentStartRequested = process.argv.includes('--hidden')
+  // 安装向导注入：--show-guide = 安装后打开使用指南（强制显示引导窗）
+  const showGuideRequested = process.argv.includes('--show-guide')
+  // 安装向导注入：--skip-guide = 安装后跳过使用指南（标记引导完成，不再默认弹出）
+  const skipGuideRequested = process.argv.includes('--skip-guide')
 
   // 初始化应用前台状态追踪（用于语音识别后注入 vs 剪贴板判断）
   initAppFocusTracker()
@@ -463,9 +467,16 @@ app.whenReady().then(async () => {
   // 首次启动引导：onboardingCompleted=false 时弹出引导窗，主窗口保持隐藏
   // 引导窗完成（ONBOARDING_COMPLETE）后显示主窗口并触发 defaultDeepSeek 加载
   // 静默启动（--hidden）时跳过引导，避免弹出引导窗破坏静默语义
-  let pendingOnboarding = false
+  // 安装向导注入：--show-guide 强制打开使用指南（即使已标记完成）；
+  //              --skip-guide 跳过引导并标记完成（安装版默认不弹指南）
+  let pendingOnboarding = showGuideRequested
   try {
-    pendingOnboarding = !silentStartRequested && !getAppSettings().onboardingCompleted
+    if (!pendingOnboarding && !skipGuideRequested && !silentStartRequested) {
+      pendingOnboarding = !getAppSettings().onboardingCompleted
+    }
+    if (skipGuideRequested && !getAppSettings().onboardingCompleted) {
+      updateAppSettings({ onboardingCompleted: true })
+    }
   } catch (e) {
     console.warn('[main] 读取 onboardingCompleted 失败，跳过引导:', e)
   }

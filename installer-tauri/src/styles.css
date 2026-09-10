@@ -527,6 +527,15 @@ body {
   align-items: center;
 }
 
+/* 卸载导出加密备份的展开区块 */
+.export-fields {
+  padding: 12px 14px;
+  background: rgba(127, 127, 127, 0.06);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+  margin-bottom: 2px;
+}
+
 .input {
   flex: 1;
   height: 36px;
@@ -771,29 +780,28 @@ body {
 }
 
 /* =====================================================================
-   完成页
+   完成页（小型标志）
    ===================================================================== */
 .done-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
   text-align: center;
-  padding: 20px;
+  padding: 14px 20px 6px;
 }
 
 .done__icon {
-  width: 72px;
-  height: 72px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #dcfce7;
   color: var(--success);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
-  margin-bottom: 22px;
+  font-size: 22px;
+  margin-bottom: 12px;
   animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -809,7 +817,7 @@ body {
 }
 
 .done__title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
@@ -819,7 +827,7 @@ body {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.7;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .done__actions {
@@ -1211,4 +1219,90 @@ body {
 
 .done__settings .opt-group {
   margin-top: 4px;
+}
+
+/* =====================================================================
+   协议正文（标签栏式阅读）
+   ===================================================================== */
+.license-body {
+  height: clamp(220px, 42vh, 380px);
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 14px 16px;
+}
+
+/* 协议逐个勾选行 */
+.license-accept {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding-left: 14px;
+}
+
+/* =====================================================================
+   执行中：小型状态标志（状态点 + 文本 + 百分比）
+   ===================================================================== */
+.state-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.state-dot {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--brand-500);
+}
+
+.state-dot__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.state-dot--error {
+  background: var(--danger);
+}
+
+.state-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.state-text--error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.state-percent {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-600);
+  font-variant-numeric: tabular-nums;
 }

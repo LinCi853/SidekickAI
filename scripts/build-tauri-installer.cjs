@@ -65,8 +65,11 @@ function checkAppDirs() {
   }
 }
 
-// 2. 前端构建（tsc 类型检查 + vite 打包）
+// 2. 前端构建（先生成 latest 清单 json → tsc 类型检查 + vite 打包）
 function buildFrontend() {
+  run(NODE, [path.join(ROOT, 'scripts', 'gen-install-manifest.cjs')], '清单生成 (install-manifest.json)', {
+    cwd: ROOT
+  })
   if (!fs.existsSync(VITE_BIN)) {
     throw new Error(`找不到 vite 二进制: ${VITE_BIN}，请先 cd installer-tauri && pnpm install`)
   }

@@ -467,6 +467,10 @@ fn acquire_install_lock() -> Option<fs::File> {
 }
 
 pub fn run(req: &InstallRequest) -> Result<(), String> {
+    // 轻量子任务：仅在用户点击完成/关闭向导时写入最终配置
+    if req.action == "flush-config" {
+        return flush_install_config(req);
+    }
     match req.mode {
         InstallMode::Repair => run_repair(req),
         InstallMode::Uninstall => run_uninstall_request(req),
@@ -677,14 +681,14 @@ fn run_repair(req: &InstallRequest) -> Result<(), String> {
     Ok(())
 }
 
-/// 统一卸载入口（安装器 UI 触发；数据策略由 delete_user_data 决定）
+/// 统一卸载入口（安装器 UI 触发；数据策略由 data_strategy / delete_user_data 决定）
 fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
     let _lock = acquire_install_lock().ok_or_else(|| {
         "检测到另一个安装器实例正在运行，请等待其完成或关闭后重试。".to_string()
     });
     write_log(&format!(
-        "I|安装引擎启动，模式 uninstall，目标：{}，删除用户数据：{}",
-        req.install_dir, req.delete_user_data
+        "I|安装引擎启动，模式 uninstall，目标：{}，数据策略：{:?} / delete_user_data: {}",
+        req.install_dir, req.data_strategy, req.delete_user_data
     ));
     progress(5);
     let install_dir = PathBuf::from(&req.install_dir);
@@ -692,13 +696,57 @@ fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
         return Err("未找到要卸载的安装目录。".into());
     }
 
+    // 数据策略归一化：新字段优先，兼容旧布尔字段
+    let strategy = if !req.data_strategy.is_empty() {
+        req.data_strategy.as_str()
+    } else if req.delete_user_data {
+        "delete"
+    } else {
+        "keep"
+    };
+
     status("正在关闭软件…");
     let pid = find_running_pid();
     if pid > 0 {
         kill_pid(pid);
     }
 
-    progress(30);
+    // 用户数据候选目录：当前 %APPDATA%\sidekick-ai（Electron app.getName() 取 package.json 的 name），
+    // 以及历史版本遗留目录（ai-window / SidekickAI），备份与删除均覆盖全部候选
+    let data_dirs: Vec<PathBuf> = std::env::var("APPDATA")
+        .ok()
+        .map(|a| {
+            let base = PathBuf::from(&a);
+            ["sidekick-ai", "ai-window", "SidekickAI"]
+                .iter()
+                .map(|name| base.join(name))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // 导出加密备份（data_strategy=export）：在删除任何东西之前完成，失败则中止卸载
+    if strategy == "export" {
+        progress(30);
+        status("正在导出并加密用户数据…");
+        if req.backup_path.is_empty() {
+            return Err("未指定备份保存路径，已中止卸载。".into());
+        }
+        if req.backup_password.is_empty() {
+            return Err("未设置备份密码，已中止卸载。".into());
+        }
+        let backup_dir = PathBuf::from(&req.backup_path);
+        if let Some(parent) = backup_dir.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("无法创建备份目录 {}：{}", parent.display(), e))?;
+        }
+        if let Some(src) = data_dirs.iter().find(|d| d.exists()).cloned() {
+            crate::encrypt::export_encrypted_backup(&src, &backup_dir, &req.backup_password)?;
+            status("用户数据已导出加密备份");
+        } else {
+            write_log("W|未发现用户数据目录，跳过备份导出");
+        }
+    }
+
+    progress(50);
     status("正在删除快捷方式与卸载项…");
     for all in [false, true] {
         remove_shortcuts(all);
@@ -707,17 +755,14 @@ fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
         remove_uninstall_entry(root);
     }
 
-    if req.delete_user_data {
-        progress(50);
-        status("正在删除用户数据…");
-        // 用户数据位于 %APPDATA%\SidekickAI（配置/Profile/缓存/日志）
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            let data_dir = PathBuf::from(&appdata).join("SidekickAI");
+    // 仅当策略要求删除用户数据时才删除（keep 始终保留；export 导出成功后一并删除）
+    if strategy == "delete" || strategy == "export" {
+        for data_dir in &data_dirs {
             if data_dir.exists() {
-                clear_readonly_attributes(&data_dir);
-                if let Err(e) = fs::remove_dir_all(&data_dir) {
-                    write_log(&format!("W|删除用户数据失败：{}", e));
-                }
+                status(&format!("正在删除用户数据 {}…", data_dir.display()));
+                clear_readonly_attributes(data_dir);
+                fs::remove_dir_all(data_dir)
+                    .map_err(|e| format!("删除用户数据 {} 失败：{}", data_dir.display(), e))?;
             }
         }
     }
@@ -739,6 +784,24 @@ fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
     progress(100);
     status("卸载完成");
     Ok(())
+}
+
+/// 读取已存在安装位置的 install-config.json（覆盖安装/修复时预读作初始值）。
+/// 返回 {"modules": {...}, "options": {...}}；文件不存在或解析失败返回 None。
+pub fn read_install_config(dir: &std::path::Path) -> Option<serde_json::Value> {
+    let path = dir.join("install-config.json");
+    let raw = fs::read_to_string(path).ok()?;
+    let cfg: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    Some(serde_json::json!({
+        "modules": cfg.get("modules").cloned().unwrap_or_default(),
+        "options": cfg.get("options").cloned().unwrap_or_default(),
+    }))
+}
+
+/// 用户完成/关闭向导时写入最终配置（执行期已写过初始快照，此处覆盖为用户最终选择）。
+pub fn flush_install_config(req: &InstallRequest) -> Result<(), String> {
+    write_log("I|flush-config：写入最终安装配置");
+    write_install_config(req, Path::new(&req.install_dir))
 }
 
 fn write_install_config(req: &InstallRequest, dir: &Path) -> Result<(), String> {

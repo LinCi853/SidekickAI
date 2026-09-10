@@ -1,13 +1,18 @@
 // lib.rs —— Tauri 安装向导：命令 + 事件 + 提权子进程入口
 mod elevate;
+mod encrypt;
 mod engine;
 mod manifest;
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
 pub static RUNNING: AtomicBool = AtomicBool::new(false);
 static CANCELLED: AtomicBool = AtomicBool::new(false);
+/// 安装成功、用户勾选「向导关闭后启动」时记录的目标程序：(exe 路径, 启动参数)
+/// 在窗口真正关闭（完成按钮 / 右上角 ✕）时才启动，避免安装完成即打开应用。
+static PENDING_LAUNCH: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 #[tauri::command]
 fn get_info() -> manifest::InstallerInfo {
@@ -35,8 +40,29 @@ fn browse_dir(app: AppHandle, current: String) -> String {
     current
 }
 
+/// 保存文件对话框：返回完整保存路径；用户取消返回空字符串
+/// 用于卸载时导出加密备份，默认文件名带时间戳
+#[tauri::command]
+fn save_backup_dialog(app: AppHandle, default_name: String) -> String {
+    use tauri_plugin_dialog::DialogExt;
+    if let Some(fp) = app
+        .dialog()
+        .file()
+        .add_filter("SidekickAI 加密备份", &["sabackup"])
+        .set_file_name(&default_name)
+        .blocking_save_file()
+    {
+        return fp.to_string();
+    }
+    String::new()
+}
+
 #[tauri::command]
 fn close_window(window: tauri::Window) {
+    // 关闭窗口（完成 / 右上角 ✕）时若有待启动程序，先启动再关窗
+    if let Some((exe, arg)) = PENDING_LAUNCH.lock().unwrap().take() {
+        let _ = std::process::Command::new(&exe).arg(&arg).spawn();
+    }
     let _ = window.close();
 }
 
@@ -49,6 +75,29 @@ fn open_dir(dir: String) {
 fn cancel() -> bool {
     CANCELLED.store(true, Ordering::SeqCst);
     true
+}
+
+/// 读取已安装位置的 install-config.json（覆盖安装/修复时预读作初始值）
+#[tauri::command]
+fn read_install_config(dir: String) -> Option<serde_json::Value> {
+    engine::read_install_config(std::path::Path::new(&dir))
+}
+
+/// 用户完成/关闭向导时写入最终 install-config.json（按需提权）
+#[tauri::command]
+async fn flush_config(opts: manifest::InstallRequest) -> Result<bool, String> {
+    let mut config_opts = opts;
+    config_opts.action = "flush-config".into();
+    if elevate::needs_admin(&config_opts.install_dir, config_opts.for_all_users) {
+        let req_path = std::env::temp_dir().join("SidekickAI-install-request.json");
+        std::fs::write(&req_path, serde_json::to_string(&config_opts).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        // 复用提权通道：UAC 子进程只执行「写配置」轻量任务（读 req → engine::run → 结果文件）
+        let _ = elevate::run_elevated(&req_path)?;
+        return Ok(true);
+    }
+    engine::flush_install_config(&config_opts)?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -68,6 +117,7 @@ async fn start(app: AppHandle, opts: manifest::InstallRequest) -> Result<bool, S
     std::thread::spawn(move || tail_log(&tail_app, &tail_log_path));
 
     let launch_after = opts.launch_after_install && opts.mode == manifest::InstallMode::Install;
+    let show_guide = opts.show_guide_after_install;
     let install_dir = opts.install_dir.clone();
     let mode = opts.mode;
     // 卸载/修复按模式不需要另一位置的默认清理逻辑（cleanup_paths 显式传入）
@@ -115,7 +165,11 @@ async fn start(app: AppHandle, opts: manifest::InstallRequest) -> Result<bool, S
             if launch_after {
                 let exe = std::path::Path::new(&install_dir).join("SidekickAI.exe");
                 if exe.exists() {
-                    let _ = std::process::Command::new(&exe).spawn();
+                    // --show-guide：安装后打开使用指南（首次启动引导窗）
+                    // --skip-guide：默认跳过引导（主程序见参数即标记引导完成，不再弹出）
+                    // 不立即启动：记录待启动程序，等向导关闭（完成/右上角 ✕）时才拉起
+                    let arg = if show_guide { "--show-guide".to_string() } else { "--skip-guide".to_string() };
+                    *PENDING_LAUNCH.lock().unwrap() = Some((exe.to_string_lossy().into_owned(), arg));
                 }
             }
             let _ = app.emit("install-done", manifest::DonePayload { install_dir, residual_note });
@@ -166,10 +220,13 @@ pub fn run() {
             scan_installations,
             needs_admin,
             browse_dir,
+            save_backup_dialog,
             close_window,
             open_dir,
             cancel,
-            start
+            start,
+            read_install_config,
+            flush_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
