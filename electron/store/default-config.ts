@@ -5,6 +5,13 @@
 //   用户没设置     → 自动使用第一个代码项
 //
 // 各 Store 通过 import 调用路由函数，不在本地做默认值逻辑。
+// 便捷路由函数见 preset-store.ts（getDefaultDesktopPreset / getDefaultMobilePreset）
+// 与 prompt-store.ts（getDefaultPrompt）。
+//
+// 添加新配置的三步：
+//   1. 在下方定义配置数组（第一个元素即默认值）
+//   2. 导出类型数组供各 Store import
+//   3. 如需便捷路由函数，在对应 Store 中添加
 
 import type { TopBarButtonGroup } from '../shared/types.js'
 import type { BlockRule } from '../shared/block-rules.types.js'

@@ -3,7 +3,13 @@
 // 使用 Vite 的 import.meta.glob 在编译时静态发现 plugins/ 子目录中的 manifest.ts。
 // Rollup 会将所有匹配文件打包到输出中，确保 dev 和 production 行为一致。
 // 第一方插件（TypeScript，编译时集成）使用此加载器；第三方外部插件（Phase 2）暂不实现。
-// 设计规范见 docs/功能插件系统与安装管控方案.md。
+//
+// 第一方插件的目录契约（plugins/<插件名>/）：
+//   manifest.ts — 模块声明，default export 为 ModuleManifest（必需）
+//   wiring.ts   — 生命周期 init / teardown / clearData
+//   ipc.ts      — IPC 处理器（可选）
+//   db.ts       — SQLite 持久化（可选）
+// 启动时自动发现并加载，无需修改 manifests.ts。
 
 import type { ModuleManifest } from '../shared/module-manifest.types.js'
 
