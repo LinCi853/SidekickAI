@@ -1,0 +1,35 @@
+# 统一换行符为 LF（仓库内），检出时按平台自动转换
+* text=auto eol=lf
+
+# 明确声明为文本的文件类型
+*.ts    text
+*.tsx   text
+*.css   text
+*.json  text
+*.md    text
+*.yml   text
+*.yaml  text
+*.toml  text
+*.rs    text
+*.cjs   text
+*.mjs   text
+*.html  text
+*.bat   text eol=crlf
+
+# 二进制文件（禁止换行符转换与合并）
+*.exe   binary
+*.dll   binary
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.asar  binary
+*.7z    binary
+*.pak   binary
+*.bin   binary
+*.dat   binary
+*.woff  binary
+*.woff2 binary
+
+# 语言统计：标记生成/第三方目录，避免污染 GitHub 语言占比
+installer-tauri/src-tauri/icons/* linguist-documentation
+build/License.txt linguist-documentation

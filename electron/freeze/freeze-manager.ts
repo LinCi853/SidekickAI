@@ -3,14 +3,14 @@
 // 防撤回保险的核心：对 webview 的 guest webContents 执行 Debugger.pause，
 // 锁死 JS 主线程（定时器/rAF/事件/SSE 回调全部停止），页面画面彻底定格。
 //
-// 冻结策略演进（scripts/freeze-poc-*.cjs 逐轮验证）：
+// 冻结策略演进（曾用本地 PoC 脚本逐轮验证，PoC 未入库）：
 //   v1-v3 Debugger.pause 彻底定格（虚拟时间方案在有 SSE 页面不可靠已移除）
 //   v4-v6 智能解冻交互（before-input-event / 宿主 DOM / uiohook 触发链）——
 //       用户实测确认：冻结画面不应在交互时「活过来」（追帧/内容跳变），
 //       改为应用组件实现选中复制，冻结永不解除。
 //   v7 文本层方案（当前）—— 冻结前用 CDP DOMSnapshot.captureSnapshot 提取
-//       页面文本层（文本 + 文档坐标 + scrollOffset，freeze-poc-textlayer.cjs
-//       验证：bounds[i]=[x,y,w,h] 文档坐标、strings 在顶层返回）。冻结后由
+//       页面文本层（文本 + 文档坐标 + scrollOffset，已由 PoC 验证：
+//       bounds[i]=[x,y,w,h] 文档坐标、strings 在顶层返回）。冻结后由
 //       渲染层覆盖「选择层」组件：拖拽高亮预览 → 矩形∩文本层拼文本 →
 //       主进程写剪贴板。页面保持 Debugger.pause 绝对定格，永不 resume
 //       （除非用户 Alt+P 主动恢复）。

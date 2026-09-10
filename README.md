@@ -117,8 +117,14 @@ AI harness（Claude Code、Cursor、Codex）让 AI 替开发者写代码。工�
 - **ISC**：lucide-react（图标库）
 - **BSD-3-Clause**：highlight.js（代码高亮，二进制分发需保留版权声明）
 - **(MPL-2.0 OR Apache-2.0)**：DOMPurify（HTML 消毒，本项目选择适用 Apache-2.0 分支）
+- **LGPL-2.1-or-later**：7-Zip 命令行 7zr（`build/tools/7zr.exe`，安装器运行时解压载荷用）
 
 Excalidraw 内嵌字体（Cascadia、Liberation、Nunito、Xiaolai、Virgil、Excalifont 等）均为 SIL Open Font License 或同类宽松字体许可，允许商用与再分发。
+
+> **7-Zip 署名**：本项目的安装器在运行时分发并使用 7-Zip 的精简命令行版本 `7zr.exe`（仅支持 7z 格式）。
+> 7-Zip 版权所有 © 1999-2026 Igor Pavlov，以 **GNU LGPL-2.1-or-later** 许可分发；LZMA SDK 部分为公有领域。
+> GNU LGPL 全文见 <https://www.gnu.org/licenses/lgpl-2.1.html>，源码见 <https://www.7-zip.org/>。
+> 如需替换，可将 `build/tools/7zr.exe` 换为自行编译的同版本二进制。
 
 完整依赖许可证清单可通过 `npx license-checker --production` 生成。
 
