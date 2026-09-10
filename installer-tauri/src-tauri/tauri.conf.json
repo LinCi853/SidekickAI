@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "SidekickAI",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.sidekickai.installer",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "set TAURI_ENV_PLATFORM=windows&& node node_modules/vite/bin/vite.js build",
     "frontendDist": "../dist"

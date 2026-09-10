@@ -1,10 +1,10 @@
 // scripts/after-pack.cjs
 // electron-builder afterPack 钩子：
 //   1. 删除 Chromium 自带的 LICENSES.chromium.html（10MB+）
-//   2. 白板依赖：解析 pnpm 符号链接后拷贝（可选组件，约 140MB）
+//   2. 删除白板依赖死目录与 asar 内残留的渲染层死依赖（约 270MB）
 //   3. 删除 electron-builder 生成的调试文件（builder-debug.yml 等）
-// 注意：白板 deps 不走 extraResources——pnpm 的相对符号链接会以断链形式进包，
-// 必须在打包后用 realpath 解析到 .pnpm 真实路径再拷贝。
+// 说明：渲染层依赖已降为 devDependencies，electron-builder 会自动排除，
+// 这里只做兜底清理（详见下方各段注释）。
 const fs = require('fs')
 const path = require('path')
 

@@ -71,7 +71,7 @@ function buildFrontend() {
     cwd: ROOT
   })
   if (!fs.existsSync(VITE_BIN)) {
-    throw new Error(`找不到 vite 二进制: ${VITE_BIN}，请先 cd installer-tauri && pnpm install`)
+    throw new Error(`找不到 vite 二进制: ${VITE_BIN}，请先 cd installer-tauri && npm install`)
   }
   // 显式设置 TAURI_ENV_PLATFORM=windows → vite base 用相对路径 './'，
   // 否则 Tauri (tauri://localhost) 下 /assets/ 绝对路径资源加载不到，白屏/无法访问
@@ -81,7 +81,7 @@ function buildFrontend() {
 // 3. Rust 后端构建
 function buildRust() {
   if (!fs.existsSync(TAURI_CLI)) {
-    throw new Error(`找不到 Tauri CLI: ${TAURI_CLI}，请先 cd installer-tauri && pnpm install`)
+    throw new Error(`找不到 Tauri CLI: ${TAURI_CLI}，请先 cd installer-tauri && npm install`)
   }
   // 必须通过 tauri build 生成上下文并嵌入 frontendDist；直接 cargo build
   // 会读取 devUrl，最终 exe 启动时会访问 localhost:1420。

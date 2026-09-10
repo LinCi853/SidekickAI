@@ -125,6 +125,8 @@ npm run build:tauri-installer  # 构建单文件安装器（向导 exe + 载荷�
 
 安装器载荷包含 x64 与 ARM64 两个架构的产物，因此构建安装器前需先产出双架构目录（`npm run build:win`）。
 
+> 构建安装器前还需要单独安装向导子项目的依赖：`cd installer-tauri && npm install`（该目录是独立的 npm 子项目，有自己的 `package-lock.json`）。
+>
 > 说明：`build/tools/7zr.exe` 为运行时解压载荷所需，已随仓库分发（见下方 7-Zip 署名）。
 
 ## 商标声明
