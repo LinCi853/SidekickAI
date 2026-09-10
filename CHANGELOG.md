@@ -60,9 +60,19 @@
 - 补齐许可合规（README 增加 7-Zip / LGPL-2.1-or-later 署名）。
 - 新增 `.editorconfig`、`.gitattributes`、`CONTRIBUTING.md`、`SECURITY.md`、CI 与 Issue/PR 模板。
 
+### 安全修复
+
+- **zip 解压加固（zip-slip / 符号链接覆盖）**
+  - 新增 `electron/utils/safe-zip.ts`：统一的不可信 zip 解压入口，校验条目名（拒绝绝对路径、盘符、`..` 穿越、控制字符）、确认落盘路径在目标目录之内、目标或其父目录为符号链接时拒绝、跳过 zip 内携带的 symlink 条目、限制条目数与单条体积。
+  - 接入点：`electron/store/backup-restore.ts`（用户导入的备份）与 `electron/utils/zip-extractor.ts`（模型包解压）。
+  - 依赖 `adm-zip` 由 `^0.5.16` 升级至 `^0.6.0`（修复「构造 zip 触发 4GB 内存分配」，GHSA-xcpc-8h2w-3j85）；
+    「解压跟随目标端符号链接」（GHSA-vwc7-r8mq-g2x9）上游至 0.6.0 仍未修复，由本层的路径与符号链接校验兜住。
+  - 新增 12 项防护单测（`electron/utils/safe-zip.test.ts`），此前该路径零覆盖。
+
 ### 验证
 
 - 类型检查：`npm run typecheck` 通过。
+- 单元测试：`npm test` 24 个文件 / 259 个用例通过。
 - 构建：`npm run build` 通过。
 
 ---

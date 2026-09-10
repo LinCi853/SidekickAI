@@ -20,6 +20,7 @@ import { profileStore } from './profile-store.js';
 import { getStoreCwd, isPortableMode } from './store-paths.js';
 import { getDeviceId } from './device-id.js';
 import { encryptFile, decryptFile, isSabkEncrypted } from '../utils/file-crypto.js';
+import { safeExtractAll } from '../utils/safe-zip.js';
 import { setImportingData } from './import-guard.js';
 
 /** 必须备份的文件列表（相对数据目录） */
@@ -693,7 +694,9 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
 
     // 2. 解压到临时目录（仍不销毁窗口；解压失败可直接报错）
     const tempDir = path.join(app.getPath('temp'), `sidekickai-restore-${Date.now()}`);
-    zip.extractAllTo(tempDir, true);
+    // 走 safeExtractAll：备份 zip 属用户提供的不可信输入，
+    // 必须校验条目名、拒绝路径穿越与符号链接目标（见 safe-zip.ts 说明）
+    safeExtractAll(zip, tempDir, { tag: '[backup-restore]' })
 
     // 3. 销毁所有 BrowserWindow（必须在关闭 SQLite 之前，否则窗口 close 事件
     //    触发 cleanupOnQuit → getChatStore() 会因已关闭的连接而崩溃）

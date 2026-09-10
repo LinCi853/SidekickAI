@@ -12,6 +12,7 @@ import * as path from 'path'
 import { exec } from 'child_process'
 import AdmZip from 'adm-zip'
 import { WHISPER_CLI_BINARIES } from '../stt/binary-resolver.js'
+import { safeExtractAll } from './safe-zip.js'
 
 /**
  * 解压 zip 到目标目录（跨平台）。
@@ -71,13 +72,9 @@ export async function extractZipViaAdmZip(zipPath: string, destDir: string): Pro
   if (entries.length === 0) {
     throw new Error('zip 包为空')
   }
-  fs.mkdirSync(destDir, { recursive: true })
-  // maintainEntryPath=false：把条目平铺到 destDir 根目录（去掉 zip 内部子目录）
-  // overwrite=true：同名文件直接覆盖，避免残留旧版本
-  for (const entry of entries) {
-    if (entry.isDirectory) continue
-    zip.extractEntryTo(entry, destDir, false, true)
-  }
+  // 走 safeExtractAll：校验条目名、拒绝路径穿越与符号链接目标（见 safe-zip.ts 说明）
+  // flatten=true：把条目平铺到 destDir 根目录（去掉 zip 内部子目录）
+  safeExtractAll(zip, destDir, { flatten: true, tag: '[zip-extractor]' })
   // 验证解压后是否真的产出了可执行文件
   const possibleNames = WHISPER_CLI_BINARIES
   const found = possibleNames.some((n) => fs.existsSync(path.join(destDir, n)))
