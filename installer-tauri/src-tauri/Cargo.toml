@@ -24,7 +24,7 @@ aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha2 = "0.10"
 hmac = "0.12"
-getrandom = "0.2"
+getrandom = "0.4"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
