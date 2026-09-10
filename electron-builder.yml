@@ -1,5 +1,9 @@
 appId: com.sidekickai.app
 productName: SidekickAI
+# better-sqlite3 / uiohook-napi 均为 N-API 预编译（prebuilds/），按目标架构自动选取。
+# 默认 npmRebuild 会在 x64 机上为 arm64 走 node-gyp 交叉编译，需要完整 ARM64 MSVC 工具集，
+# 本机 VS18 仅有 Win32/x64 平台时会 MSB8020 失败。关闭重建后直接打包预编译产物。
+npmRebuild: false
 directories:
   buildResources: resources
   output: dist
@@ -24,9 +28,12 @@ files:
 # 原生 .node 必须解压到磁盘（无法从 asar 内加载 process.dlopen）
 # electron-builder 默认会 unpack *.node，显式声明确保跨平台稳定
 asarUnpack:
-  - node_modules/better-sqlite3/build/Release/*.node
+  # N-API 预编译：运行时按 process.platform/arch 选取（x64/arm64 通用）
+  - node_modules/better-sqlite3/prebuilds/*.node
   # 仅解包 Windows 平台的原生模块
   - node_modules/uiohook-napi/prebuilds/win32-*/**/*.node
+  # 本地 electron-rebuild 产出（开发机 x64）；运行时 prebuilds 优先
+  - node_modules/better-sqlite3/build/Release/*.node
   - node_modules/uiohook-napi/build/Release/*.node
 # 打包后钩子：删除 Chromium 自带的 LICENSES.chromium.html 等大文件
 afterPack: scripts/after-pack.cjs
