@@ -17,7 +17,7 @@ echo  [2] Package release        (installer + portable, all to release\)
 echo  [3] Installer only         (direct installer, reuse build dirs)
 echo  [4] Dev with DevTools      (auto open DevTools)
 echo  [5] Preview production     (npm run preview)
-echo  [6] Clean install deps     (pnpm install at workspace root)
+echo  [6] Reinstall deps          (npm install, keeps package-lock.json)
 echo  [7] Installer dev          (tauri dev, hot reload)
 echo  [8] Exit
 echo.
@@ -154,10 +154,9 @@ exit /b 0
 
 :clean
 echo.
-echo [launch] Cleaning dependencies (pnpm at workspace root)...
-if exist "package-lock.json" del /q "package-lock.json"
-echo [launch] Running pnpm install at workspace root...
-call pnpm install
+echo [launch] Reinstalling dependencies (npm, into THIS project)...
+echo [launch] package-lock.json is kept as the source of truth.
+call npm install
 if errorlevel 1 goto clean-fail
 echo.
 echo [launch] Dependencies reinstalled successfully. Press any key to return to menu...
@@ -165,7 +164,7 @@ pause >nul
 goto menu
 
 :clean-fail
-echo [launch] pnpm install failed.
+echo [launch] npm install failed.
 pause
 goto menu
 
