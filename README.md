@@ -100,6 +100,33 @@ AI harness（Claude Code、Cursor、Codex）让 AI 替开发者写代码。工�
 
 脚本已内置国内镜像配置，无需手动设置环境变量。
 
+## 开发构建
+
+### 环境要求
+
+- **Node.js** ≥ 20（开发环境为 Node 22 / npm 10）
+- **Windows**：本项目当前仅支持 Windows 桌面端（x64 / ARM64）
+- **Rust 工具链**：仅构建 Tauri 单文件安装器时需要（edition 2021）
+
+### 常用命令
+
+```bash
+npm install                    # 安装依赖（postinstall 用 electron-rebuild 重建 better-sqlite3 / uiohook-napi 原生模块）
+npm run dev                    # 开发模式启动
+npm test                       # 单元测试（Vitest）
+npm run typecheck              # 类型检查（tsc --noEmit）
+
+npm run build:win-x64          # 构建 x64 免安装目录 → dist/win-unpacked
+npm run build:win-arm64        # 构建 ARM64 免安装目录 → dist/win-arm64-unpacked
+npm run build:win              # 上两者顺序执行
+npm run build:portable         # 便携版
+npm run build:tauri-installer  # 构建单文件安装器（向导 exe + 载荷自解压）
+```
+
+安装器载荷包含 x64 与 ARM64 两个架构的产物，因此构建安装器前需先产出双架构目录（`npm run build:win`）。
+
+> 说明：`build/tools/7zr.exe` 为运行时解压载荷所需，已随仓库分发（见下方 7-Zip 署名）。
+
 ## 商标声明
 
 本项目为用户侧 AI 操作工具，不隶属于所聚合的任何 AI 服务提供商。所有第三方平台名称、Logo、品牌标识（包括但不限于 ChatGPT、Claude、Gemini、豆包、文心一言、Kimi、通义千问、智谱清言、DeepSeek、Mimo、Grok、Perplexity 等）均为各自所有者的注册商标，本项目不持有、不主张任何权利。
