@@ -20,7 +20,7 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 卸载时导出加密备份（与主程序 backup-restore 的 SABK 格式一致）
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha2 = "0.10"
 hmac = "0.12"
