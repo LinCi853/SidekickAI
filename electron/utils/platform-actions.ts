@@ -10,6 +10,9 @@
 
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
 import {
   checkAccessibilityPermission,
   promptAccessibilityPermission,
@@ -315,48 +318,100 @@ export async function insertTextLayered(
 }
 
 /**
+ * 写入 UTF-8 临时文件并返回路径；调用方负责 finally 删除。
+ * 用于把「脚本」和「待上屏文本」分开传递，避免 PowerShell/cmd 多层转义破坏中文与引号。
+ */
+function writeTempFile(prefix: string, content: string, withBom = false): string {
+  const file = path.join(
+    os.tmpdir(),
+    `sidekick-${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  )
+  fs.writeFileSync(file, withBom ? '﻿' + content : content, 'utf8')
+  return file
+}
+
+/**
+ * 通过临时 .ps1 执行 PowerShell，规避 -Command 引号地狱。
+ */
+async function runPowerShellFile(script: string, timeout: number): Promise<string> {
+  const scriptFile = writeTempFile('ps', script, true)
+  try {
+    const result = await execAsync(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`,
+      { timeout, windowsHide: true },
+    )
+    return result.stdout || ''
+  } finally {
+    try {
+      fs.unlinkSync(scriptFile)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
  * UI Automation 方式插入文本
- * 通过 COM 接口直接操作焦点控件的文本
+ * 通过 COM 接口直接操作焦点控件的文本。
+ * 文本经临时文件传入，脚本内显式加载 UIAutomation 程序集。
  */
 async function insertTextViaUIA(text: string): Promise<InsertTextResult> {
+  const textFile = writeTempFile('uia-text', text)
   const psScript = `
+$ErrorActionPreference = 'Stop'
 try {
+  Add-Type -AssemblyName UIAutomationClient
+  Add-Type -AssemblyName UIAutomationTypes
+  $text = [System.IO.File]::ReadAllText('${textFile.replace(/'/g, "''")}')
+  if ([string]::IsNullOrEmpty($text)) { throw 'Empty text payload' }
+
   $uia = [System.Windows.Automation.AutomationElement]::FocusedElement
-  if ($uia -eq $null) { throw "No focused element" }
+  if ($null -eq $uia) { throw 'No focused element' }
 
   $pattern = $uia.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-  if ($pattern -eq $null) { throw "No ValuePattern" }
+  if ($null -eq $pattern) { throw 'No ValuePattern' }
 
   $pattern.SetValue($text)
-  Write-Output "OK"
+  $verify = $pattern.Current.Value
+  if ($verify -ne $text) { throw "UIA verify failed: got '$verify'" }
+  Write-Output 'OK'
 } catch {
-  Write-Output "FAIL: $_"
+  Write-Output ('FAIL: ' + $_.Exception.Message)
 }
 `
   try {
-    const { execAsync } = await import('child_process').then(m => ({ execAsync: require('util').promisify(m.exec) }))
-    const result = await execAsync(
-      `powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`,
-      { timeout: 3000 }
-    )
-    if (result.stdout.trim() === 'OK') {
+    const stdout = await runPowerShellFile(psScript, 4000)
+    if (stdout.trim() === 'OK') {
       return { success: true, method: 'uia' }
     }
-    return { success: false, method: 'uia', error: result.stdout.trim() }
+    return { success: false, method: 'uia', error: stdout.trim() || 'UIA no output' }
   } catch (e) {
     return { success: false, method: 'uia', error: String(e) }
+  } finally {
+    try {
+      fs.unlinkSync(textFile)
+    } catch {
+      /* ignore */
+    }
   }
 }
 
 /**
  * SendInput 方式插入文本（Unicode 模式）
- * 逐字符发送 Unicode 键码，比 SendKeys 更可靠
+ * 逐字符发送 Unicode 键码。C# 类型与文本都走临时文件，避免 Add-Type 字符串被 shell 转义破坏。
  */
 async function insertTextViaSendInput(text: string): Promise<InsertTextResult> {
-  // 将文本转为 Unicode 码点数组，用 PowerShell SendInput 发送
-  const codePoints = Array.from(text).map(c => c.codePointAt(0))
+  const textFile = writeTempFile('si-text', text)
   const psScript = `
-Add-Type -TypeDefinition '
+$ErrorActionPreference = 'Stop'
+# 某些机器 LIB 含失效的 VS 路径，Add-Type 会把警告当错误而编译失败
+if ($env:LIB) {
+  $env:LIB = ((@($env:LIB -split ';')) | Where-Object { $_ -and (Test-Path $_) }) -join ';'
+}
+$text = [System.IO.File]::ReadAllText('${textFile.replace(/'/g, "''")}')
+if ([string]::IsNullOrEmpty($text)) { throw 'Empty text payload' }
+
+$src = @'
 using System;
 using System.Runtime.InteropServices;
 
@@ -405,24 +460,29 @@ public class InputSender {
     }
   }
 }
-'
+'@
+
+if (-not ('InputSender' -as [type])) {
+  Add-Type -TypeDefinition $src -Language CSharp
+}
 
 [InputSender]::TypeText($text)
-Write-Output "OK"
+Write-Output 'OK'
 `
   try {
-    const { execAsync } = await import('child_process').then(m => ({ execAsync: require('util').promisify(m.exec) }))
-    const escaped = text.replace(/'/g, "''")
-    const result = await execAsync(
-      `powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"').replace('$text', `'${escaped}'`)}"`,
-      { timeout: 5000 }
-    )
-    if (result.stdout.trim() === 'OK') {
+    const stdout = await runPowerShellFile(psScript, 8000)
+    if (stdout.trim() === 'OK') {
       return { success: true, method: 'sendinput' }
     }
-    return { success: false, method: 'sendinput', error: result.stdout.trim() }
+    return { success: false, method: 'sendinput', error: stdout.trim() || 'SendInput no output' }
   } catch (e) {
     return { success: false, method: 'sendinput', error: String(e) }
+  } finally {
+    try {
+      fs.unlinkSync(textFile)
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -445,20 +505,25 @@ function insertTextViaClipboard(
     const snapshot = clipboardBackup.backup()
     clipboardBackup.write(text)
 
-    // 延迟后模拟 Ctrl+V
+    // 延迟后模拟 Ctrl+V（等 OS 剪贴板就绪 + 本窗口失焦）
     setTimeout(() => {
-      simulatePaste().catch(e => {
-        console.error('[platform-actions] 剪贴板模式 Ctrl+V 失败:', e)
-      })
-      // 再延迟恢复剪贴板
+      simulatePaste()
+        .then(() => {
+          console.log('[platform-actions] 剪贴板模式 Ctrl+V 已触发')
+        })
+        .catch(e => {
+          console.error('[platform-actions] 剪贴板模式 Ctrl+V 失败:', e)
+        })
+      // 再延迟恢复剪贴板，确保外部应用已完成粘贴读取
       setTimeout(() => {
         try {
           clipboardBackup.restore(snapshot)
+          console.log('[platform-actions] 剪贴板已恢复')
         } catch (e) {
           console.error('[platform-actions] 恢复剪贴板失败:', e)
         }
       }, 500)
-    }, 150)
+    }, 200)
 
     return { success: true, method: 'clipboard' }
   } catch (e) {
