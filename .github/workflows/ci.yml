@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的新推送取消上一次未完成的运行
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 类型检查与构建
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # --ignore-scripts：跳过 electron 二进制下载与原生模块编译（CI 只做静态校验，
+      # 不需要真正可运行的 Electron；安装器相关构建另由发布流程负责）
+      - name: 安装依赖
+        run: npm ci --ignore-scripts
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 构建（主进程 / preload / 渲染层）
+        run: npm run build

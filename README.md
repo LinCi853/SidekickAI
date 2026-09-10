@@ -155,6 +155,12 @@ Excalidraw 内嵌字体（Cascadia、Liberation、Nunito、Xiaolai、Virgil、Ex
 
 完整依赖许可证清单可通过 `npx license-checker --production` 生成。
 
+## 参与贡献
+
+- 想改代码：先读 [CONTRIBUTING.md](./CONTRIBUTING.md)（开发环境、代码约定、提交规范）
+- 发现安全漏洞：**不要提 Issue**，见 [SECURITY.md](./SECURITY.md) 的私密报告通道
+- 版本变更记录：[CHANGELOG.md](./CHANGELOG.md)
+
 ## 许可证
 
 [MIT License](./LICENSE) © 2026 LinCi853

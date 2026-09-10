@@ -1,0 +1,69 @@
+name: Bug 反馈
+description: 报告可复现的问题（安全漏洞请走 SECURITY.md 的私密通道）
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先搜索是否已有相同 Issue。
+        **安全漏洞请勿在此提交**，见 [SECURITY.md](../blob/main/SECURITY.md)。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 应用「关于」页或安装包文件名里的版本号
+      placeholder: 例：v0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 系统
+      options:
+        - Windows 11
+        - Windows 10
+        - 其他（请在描述里写明）
+    validations:
+      required: true
+  - type: input
+    id: install
+    attributes:
+      label: 安装方式与架构
+      description: 单文件安装器 / 免安装目录 / 便携版；x64 或 ARM64
+      placeholder: 例：单文件安装器，x64
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象
+      description: 实际发生了什么
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 …
+        2. 点击 …
+        3. 出现 …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: |
+        应用日志可在数据目录找到（安装版为安装目录下的 `app-data`）。
+        请先自行检查并**移除其中的隐私内容**（网址、账号、令牌等）。
+      render: shell
+    validations:
+      required: false

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题（私密报告）
+    url: https://github.com/LinCi853/SidekickAI/security/advisories/new
+    about: 请勿用公开 Issue 报告漏洞，走私密通道
+  - name: 使用问题 / 讨论
+    url: https://github.com/LinCi853/SidekickAI/discussions
+    about: 不确定是不是 Bug，或想聊聊用法，来这里
