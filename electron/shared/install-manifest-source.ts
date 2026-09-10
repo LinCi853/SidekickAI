@@ -62,7 +62,7 @@ const OPTION_META: Array<
   {
     id: 'autoUpdate',
     label: '自动更新',
-    description: '有可用更新时自动下载并在下次启动时应用',
+    description: '预留：检查并应用更新（后续版本提供真实更新链路，当前仅保存偏好）',
     type: 'boolean',
     page: 'behavior',
   },

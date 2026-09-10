@@ -26,8 +26,12 @@ export interface InstallOptions {
   dataStrategy?: 'keep' | 'export' | 'delete'
   /** dataStrategy=export 时的备份保存路径（.sabackup） */
   backupPath?: string
-  /** dataStrategy=export 时的备份密码 */
+  /** dataStrategy=export 时的备份密码（backupEncrypt=true 时必填） */
   backupPassword?: string
+  /** dataStrategy=export 时是否加密（false = 明文 zip）；默认 true */
+  backupEncrypt?: boolean
+  /** dataStrategy=export 时的导出类别（basicData/cookies/indexedDB/cache/voiceAssets）；空 = 全量 */
+  backupCategories?: string[]
   /** 已同意的协议 id */
   acceptedLicenses?: string[]
 }
@@ -88,6 +92,8 @@ declare global {
       readInstallConfig(dir: string): Promise<InstalledConfig | null>
       /** 用户完成/关闭向导时写入最终 install-config.json */
       flushConfig(opts: InstallOptions): Promise<boolean>
+      /** 完成页最终勾选：更新关闭向导时要启动的程序 */
+      setPendingLaunch(installDir: string, launch: boolean, showGuide: boolean): Promise<boolean>
       cancel(): Promise<boolean>
       closeWindow(): Promise<void>
       openDir(dir: string): Promise<void>

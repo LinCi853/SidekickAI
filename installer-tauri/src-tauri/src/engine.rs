@@ -129,7 +129,8 @@ fn kill_pid(pid: u32) -> bool {
         .status();
     let ok = r.map(|s| s.success()).unwrap_or(false);
     if ok {
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        // 强杀后句柄释放需要时间；过短会导致随后导出读到锁定/半写文件
+        std::thread::sleep(std::time::Duration::from_millis(1200));
     }
     ok
 }
@@ -681,6 +682,57 @@ fn run_repair(req: &InstallRequest) -> Result<(), String> {
     Ok(())
 }
 
+/// 优先调用已安装的 SidekickAI.exe 执行导出（与软件内 backup-restore 同一套代码）。
+/// exe 不存在或执行失败时返回 Err，由调用方决定是否回退到 Rust 整目录打包。
+fn export_via_main_app(install_dir: &Path, req: &InstallRequest) -> Result<(), String> {
+    let exe = install_dir.join("SidekickAI.exe");
+    if !exe.exists() {
+        return Err(format!("未找到主程序 {}", exe.display()));
+    }
+    let req_path = std::env::temp_dir().join("SidekickAI-export-request.json");
+    let res_path = std::env::temp_dir().join("SidekickAI-export-result.json");
+    let _ = fs::remove_file(&res_path);
+
+    let encrypt = req.backup_encrypt;
+    let payload = serde_json::json!({
+        "outputPath": req.backup_path,
+        "encrypt": encrypt,
+        "password": if encrypt { req.backup_password.as_str() } else { "" },
+        "categories": req.backup_categories,
+        "resultPath": res_path.to_string_lossy(),
+    });
+    fs::write(&req_path, payload.to_string()).map_err(|e| format!("写入导出请求失败：{}", e))?;
+
+    status("正在通过主程序导出用户数据（与软件内备份同一套逻辑）…");
+    let out = Command::new(&exe)
+        .hidden()
+        .arg("--export-user-data")
+        .arg(&req_path)
+        .output()
+        .map_err(|e| format!("启动主程序导出失败：{}", e))?;
+
+    let code = out.status.code().unwrap_or(-1);
+    let result_msg = fs::read_to_string(&res_path).unwrap_or_default();
+    let backup_ok = fs::metadata(&req.backup_path)
+        .map(|m| m.len() > 1024)
+        .unwrap_or(false);
+    if code == 0 && backup_ok {
+        let _ = fs::remove_file(&req_path);
+        let _ = fs::remove_file(&res_path);
+        return Ok(());
+    }
+    let detail = if result_msg.is_empty() {
+        format!(
+            "导出进程退出码 {}，备份文件缺失或过小（{} bytes）",
+            code,
+            fs::metadata(&req.backup_path).map(|m| m.len()).unwrap_or(0)
+        )
+    } else {
+        result_msg
+    };
+    Err(detail)
+}
+
 /// 统一卸载入口（安装器 UI 触发；数据策略由 data_strategy / delete_user_data 决定）
 fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
     let _lock = acquire_install_lock().ok_or_else(|| {
@@ -724,25 +776,45 @@ fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
         })
         .unwrap_or_default();
 
-    // 导出加密备份（data_strategy=export）：在删除任何东西之前完成，失败则中止卸载
+    // 导出备份（data_strategy=export）：在删除任何东西之前完成，失败则中止卸载
     if strategy == "export" {
         progress(30);
-        status("正在导出并加密用户数据…");
+        status("正在导出用户数据…");
         if req.backup_path.is_empty() {
             return Err("未指定备份保存路径，已中止卸载。".into());
         }
-        if req.backup_password.is_empty() {
+        if req.backup_encrypt && req.backup_password.is_empty() {
             return Err("未设置备份密码，已中止卸载。".into());
         }
         let backup_dir = PathBuf::from(&req.backup_path);
         if let Some(parent) = backup_dir.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("无法创建备份目录 {}：{}", parent.display(), e))?;
         }
-        if let Some(src) = data_dirs.iter().find(|d| d.exists()).cloned() {
-            crate::encrypt::export_encrypted_backup(&src, &backup_dir, &req.backup_password)?;
-            status("用户数据已导出加密备份");
-        } else {
-            write_log("W|未发现用户数据目录，跳过备份导出");
+        // 首选：主程序 CLI 导出（与软件内「数据迁移」共用 backup-restore.exportAllData）
+        let primary = export_via_main_app(&install_dir, req);
+        match primary {
+            Ok(()) => {
+                status("用户数据已由主程序导出");
+            }
+            Err(primary_err) => {
+                write_log(&format!("W|主程序导出失败，回退 Rust 整目录打包：{}", primary_err));
+                if let Some(src) = data_dirs.iter().find(|d| d.exists()).cloned() {
+                    if req.backup_encrypt {
+                        crate::encrypt::export_encrypted_backup(
+                            &src,
+                            &backup_dir,
+                            &req.backup_password,
+                            &req.backup_categories,
+                        )?;
+                        status("用户数据已导出加密备份（兼容回退路径）");
+                    } else {
+                        crate::encrypt::export_plain_backup(&src, &backup_dir, &req.backup_categories)?;
+                        status("用户数据已导出（兼容回退路径）");
+                    }
+                } else {
+                    write_log("W|未发现用户数据目录，跳过备份导出");
+                }
+            }
         }
     }
 
@@ -804,7 +876,19 @@ pub fn flush_install_config(req: &InstallRequest) -> Result<(), String> {
     write_install_config(req, Path::new(&req.install_dir))
 }
 
-fn write_install_config(req: &InstallRequest, dir: &Path) -> Result<(), String> {
+/// 磁盘上的 install-config.json 是否已与将写入内容一致（一致则完成页无需再提权写入）。
+pub fn install_config_matches(req: &InstallRequest) -> bool {
+    let path = Path::new(&req.install_dir).join("install-config.json");
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(existing) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    existing == build_install_config_json(req)
+}
+
+fn build_install_config_json(req: &InstallRequest) -> serde_json::Value {
     let mut modules = serde_json::Map::new();
     for f in manifest::features() {
         let enabled = req
@@ -823,7 +907,11 @@ fn write_install_config(req: &InstallRequest, dir: &Path) -> Result<(), String> 
             .unwrap_or_else(|| o.default_value.clone());
         options.insert(o.id, v);
     }
-    let config = serde_json::json!({ "schemaVersion": 1, "modules": modules, "options": options });
+    serde_json::json!({ "schemaVersion": 1, "modules": modules, "options": options })
+}
+
+fn write_install_config(req: &InstallRequest, dir: &Path) -> Result<(), String> {
+    let config = build_install_config_json(req);
     fs::write(
         dir.join("install-config.json"),
         serde_json::to_string_pretty(&config).unwrap(),

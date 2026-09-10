@@ -5,7 +5,7 @@
 //   repair: 选择目标 → 修复确认 → 执行 → 完成
 //   uninstall: 选择目标 → 数据策略 → 执行 → 完成
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import './styles.css'
 import type { InstallerInfo, InstallLocation, InstallMode, ScanResult } from './global'
 
@@ -68,6 +68,24 @@ export default function App() {
   const [dataStrategy, setDataStrategy] = useState<'keep' | 'export' | 'delete'>('keep')
   const [backupPath, setBackupPath] = useState('')
   const [backupPassword, setBackupPassword] = useState('')
+  // 导出细项预设与类别（对齐软件内数据迁移语义）
+  const [backupCategories, setBackupCategories] = useState<string[]>([
+    'basicData',
+    'cookies',
+    'indexedDB',
+  ])
+  const [backupEncrypt, setBackupEncrypt] = useState(true)
+
+  // 由当前类别反推预设高亮（自定义时不高亮任何预设）
+  const backupPreset = useMemo(() => {
+    const set = new Set(backupCategories)
+    const same = (keys: string[]) =>
+      keys.length === set.size && keys.every((k) => set.has(k))
+    if (same(['basicData', 'cookies'])) return 'minimal' as const
+    if (same(['basicData', 'cookies', 'indexedDB'])) return 'recommended' as const
+    if (same(['basicData', 'cookies', 'indexedDB', 'cache', 'voiceAssets'])) return 'full' as const
+    return 'custom' as const
+  }, [backupCategories])
 
   // 许可协议
   const [acceptedLicenses, setAcceptedLicenses] = useState<string[]>([])
@@ -244,14 +262,22 @@ export default function App() {
       dataStrategy,
       backupPath,
       backupPassword,
+      backupEncrypt,
+      backupCategories,
       acceptedLicenses
     })
-  }, [installDir, forAllUsers, features, options, launchAfterInstall, showGuideAfterInstall, mode, cleanupPaths, dataStrategy, backupPath, backupPassword, acceptedLicenses])
+  }, [installDir, forAllUsers, features, options, launchAfterInstall, showGuideAfterInstall, mode, cleanupPaths, dataStrategy, backupPath, backupPassword, backupEncrypt, backupCategories, acceptedLicenses])
 
-  // ---- 完成/关闭向导：写入最终配置（install/repair）后再关窗 ----
+  // ---- 完成/关闭向导：按完成页最终勾选设置启动 → 写入最终配置（install/repair）后再关窗 ----
   const finalizeAndClose = useCallback(async () => {
     if (installDone && (mode === 'install' || mode === 'repair') && installDir) {
       try {
+        // 以完成页当前勾选为准（覆盖安装开始时的快照），避免「打开使用指南」不生效
+        await window.installer.setPendingLaunch(
+          installDir,
+          launchAfterInstall,
+          showGuideAfterInstall
+        )
         await window.installer.flushConfig({
           installDir,
           forAllUsers,
@@ -295,11 +321,27 @@ export default function App() {
     if (picked) setInstallDir(picked)
   }, [installDir])
 
-  /** 选取卸载时加密备份的保存路径（.sabackup） */
+  /** 选取卸载时备份的保存路径（加密 .sabackup / 明文 .zip） */
   const browseBackup = useCallback(async () => {
-    const defaultName = `SidekickAI-用户数据-${new Date().toISOString().slice(0, 10)}.sabackup`
+    const ext = backupEncrypt ? 'sabackup' : 'zip'
+    const defaultName = `SidekickAI-用户数据-${new Date().toISOString().slice(0, 10)}.${ext}`
     const picked = await window.installer.saveBackupDialog(defaultName)
     if (picked) setBackupPath(picked)
+  }, [backupEncrypt])
+
+  const applyBackupPreset = useCallback((preset: 'minimal' | 'recommended' | 'full') => {
+    if (preset === 'minimal') setBackupCategories(['basicData', 'cookies'])
+    else if (preset === 'recommended') setBackupCategories(['basicData', 'cookies', 'indexedDB'])
+    else setBackupCategories(['basicData', 'cookies', 'indexedDB', 'cache', 'voiceAssets'])
+  }, [])
+
+  const toggleBackupCategory = useCallback((key: string) => {
+    setBackupCategories((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+      // basicData 必选
+      if (!next.includes('basicData')) next.unshift('basicData')
+      return next
+    })
   }, [])
 
   // ---- 功能开关 / 选项交互 ----
@@ -620,38 +662,102 @@ export default function App() {
                   <div className="radio__dot" />
                 </div>
                 <div>
-                  <div className="card__title">导出加密备份后删除</div>
-                  <div className="card__desc">打包全部用户数据并加密为 .sabackup 文件，再删除本机数据</div>
+                  <div className="card__title">导出备份后删除</div>
+                  <div className="card__desc">按所选范围打包用户数据，再删除本机数据（可选加密）</div>
                 </div>
               </div>
             </div>
             {dataStrategy === 'export' && (
-              <div className="export-fields">
-                <div className="field-label">备份保存位置</div>
+              <div className="export-fields export-panel">
+                <div className="field-label">导出范围</div>
+                <div className="preset-row">
+                  {(
+                    [
+                      ['minimal', '最小'],
+                      ['recommended', '推荐'],
+                      ['full', '完整'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`btn preset-btn ${backupPreset === key ? 'preset-btn--active' : ''}`}
+                      onClick={() => applyBackupPreset(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="opt-group" style={{ marginTop: 8 }}>
+                  {(
+                    [
+                      ['basicData', '基础数据', '配置、笔记、模块状态等（必选）', true],
+                      ['cookies', '登录凭据', 'Cookies / Local Storage，恢复后无需重新登录', false],
+                      ['indexedDB', '应用数据', 'IndexedDB 离线数据', false],
+                      ['cache', '离线缓存', 'Cache / GPUCache 等，可安全排除', false],
+                      ['voiceAssets', '语音模型', '本地语音识别模型等大文件', false],
+                    ] as const
+                  ).map(([key, title, desc, required]) => (
+                    <div
+                      key={key}
+                      className={`check-row check-row--rich ${required ? 'check-row--locked' : ''}`}
+                      onClick={() => {
+                        if (!required) toggleBackupCategory(key)
+                      }}
+                    >
+                      <div className={`checkbox ${backupCategories.includes(key) ? 'checkbox--checked' : ''}`}>
+                        {backupCategories.includes(key) ? '✓' : ''}
+                      </div>
+                      <div className="check-row__text">
+                        <div className="opt-title">
+                          {title}
+                          {required ? <span className="opt-tag">必选</span> : null}
+                        </div>
+                        <div className="opt-desc">{desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="check-row" style={{ marginTop: 10 }} onClick={() => setBackupEncrypt(!backupEncrypt)}>
+                  <div className={`checkbox ${backupEncrypt ? 'checkbox--checked' : ''}`}>
+                    {backupEncrypt ? '✓' : ''}
+                  </div>
+                  <div className="check-row__text">
+                    加密备份
+                    <div className="opt-desc">AES-256-GCM；关闭则导出明文 zip</div>
+                  </div>
+                </div>
+
+                <div className="field-label" style={{ marginTop: 10 }}>备份保存位置</div>
                 <div className="path-row">
                   <input
                     className="input input--mono"
                     value={backupPath}
                     onChange={(e) => setBackupPath(e.target.value)}
-                    placeholder="选择 .sabackup 保存路径"
+                    placeholder={backupEncrypt ? '选择 .sabackup 保存路径' : '选择 .zip 保存路径'}
                     spellCheck={false}
                   />
                   <button className="btn" onClick={browseBackup}>
                     浏览
                   </button>
                 </div>
-                <div className="field-label" style={{ marginTop: 10 }}>备份密码</div>
-                <input
-                  className="input"
-                  type="password"
-                  value={backupPassword}
-                  onChange={(e) => setBackupPassword(e.target.value)}
-                  placeholder="加密备份用，之后可通过「导入备份」恢复"
-                />
-                <div className="hint" style={{ marginTop: 8 }}>
-                  <span className="hint__icon">!</span>
-                  <span>请务必牢记密码；密码丢失将无法解密还原数据。</span>
-                </div>
+                {backupEncrypt && (
+                  <>
+                    <div className="field-label" style={{ marginTop: 10 }}>备份密码</div>
+                    <input
+                      className="input"
+                      type="password"
+                      value={backupPassword}
+                      onChange={(e) => setBackupPassword(e.target.value)}
+                      placeholder="至少 6 位；丢失后无法解密"
+                    />
+                    <div className="hint" style={{ marginTop: 8 }}>
+                      <span className="hint__icon">!</span>
+                      <span>请务必牢记密码；密码丢失将无法解密还原数据。</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <div
@@ -1000,7 +1106,9 @@ export default function App() {
         const exportReady =
           mode !== 'uninstall' ||
           dataStrategy !== 'export' ||
-          (backupPath.trim() !== '' && backupPassword !== '')
+          (backupPath.trim() !== '' &&
+            (!backupEncrypt || backupPassword.length >= 6) &&
+            backupCategories.includes('basicData'))
         nextDisabled = !hasTarget || !exportReady
         onNext = () => startRun()
         next = mode === 'repair' ? '开始修复' : '开始卸载'

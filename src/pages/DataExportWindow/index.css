@@ -303,3 +303,48 @@
   color: var(--foreground);
   border-color: var(--accent);
 }
+
+/* 加密导入密码区：独立卡片，确保可点击可聚焦 */
+.data-export-import-password {
+  padding: var(--space-3);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  position: relative;
+  z-index: 1;
+}
+.data-export-import-password-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+}
+.data-export-import-password-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.data-export-import-password-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.data-export-import-password-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-10);
+}
+.data-export-import-password-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

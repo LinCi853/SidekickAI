@@ -21,15 +21,82 @@ const AUTH_TAG_LENGTH: usize = 16;
 const KEY_LENGTH: usize = 32;
 const PBKDF2_ITERATIONS: u32 = 100000;
 
+/// 相对路径是否应包含在备份中（类别互斥；空列表 = 全量）。
+/// 路径段匹配对齐主程序 backup-restore：根级与 Partitions/<id>/ 使用同一套目录名。
+fn include_rel_path(rel: &str, categories: &[String]) -> bool {
+    if categories.is_empty() {
+        return true;
+    }
+    let has = |c: &str| categories.iter().any(|x| x == c);
+    let lower = rel.to_ascii_lowercase();
+    // 永远包含 manifest / 元数据，保证导入端可识别
+    if lower.ends_with("manifest.json") || lower.ends_with("app-key.json") {
+        return true;
+    }
+
+    // 任一路径段精确匹配（兼容根级 Cache/ 与 Partitions/xx/Cache/）
+    let segs: Vec<&str> = lower.split('/').collect();
+    let seg_is = |name: &str| segs.iter().any(|s| *s == name);
+    let file_is = |name: &str| segs.last().map(|s| *s == name).unwrap_or(false);
+
+    // 离线缓存：Service Worker / File System / Cache / Code Cache / GPUCache / blob_storage
+    if seg_is("service worker")
+        || seg_is("file system")
+        || seg_is("cache")
+        || seg_is("code cache")
+        || seg_is("gpucache")
+        || seg_is("blob_storage")
+    {
+        return has("cache");
+    }
+    // 登录凭据：Cookies 文件 + Local Storage / Session Storage 目录
+    if file_is("cookies")
+        || file_is("cookies-journal")
+        || seg_is("local storage")
+        || seg_is("session storage")
+    {
+        return has("cookies");
+    }
+    // 应用数据：IndexedDB
+    if seg_is("indexeddb") {
+        return has("indexedDB");
+    }
+    // 语音模型等大文件
+    if lower.contains("whisper")
+        || lower.contains("voice")
+        || lower.ends_with(".onnx")
+        || (lower.ends_with(".bin") && lower.contains("model"))
+    {
+        return has("voiceAssets");
+    }
+    // 其余视为基础数据（settings.db / profiles / notes / assets 等）
+    has("basicData")
+}
+
+/// 导出未加密 zip（backup_encrypt=false 时）；categories 语义与加密导出一致
+pub fn export_plain_backup(
+    src_dir: &Path,
+    target_path: &Path,
+    categories: &[String],
+) -> Result<(), String> {
+    if !src_dir.exists() {
+        return Err("用户数据目录不存在，无需导出".into());
+    }
+    status(&format!("正在打包用户数据 {}", src_dir.display()));
+    pack_dir_to_zip(src_dir, target_path, categories)
+}
+
 /// 打包并加密用户数据目录为 .sabackup 文件
 ///
 /// - src_dir: 用户数据目录（如 %APPDATA%\sidekick-ai）
 /// - target_path: 输出的 .sabackup 完整路径
 /// - password: 用户设置的备份密码（用于派生加密密钥）
+/// - categories: 导出类别；空 = 全量
 pub fn export_encrypted_backup(
     src_dir: &Path,
     target_path: &Path,
     password: &str,
+    categories: &[String],
 ) -> Result<(), String> {
     if !src_dir.exists() {
         return Err("用户数据目录不存在，无需导出".into());
@@ -37,7 +104,7 @@ pub fn export_encrypted_backup(
     status(&format!("正在打包用户数据 {}", src_dir.display()));
     // 1. 打包为 zip（临时文件）
     let tmp_zip = std::env::temp_dir().join(format!("SidekickAI-export-{}.zip", std::process::id()));
-    pack_dir_to_zip(src_dir, &tmp_zip)?;
+    pack_dir_to_zip(src_dir, &tmp_zip, categories)?;
 
     // 2. 读入内存并加密（zip 通常不大；若超大再触达后优化为流式）
     let plaintext = fs::read(&tmp_zip).map_err(|e| format!("读取临时 zip 失败：{}", e))?;
@@ -77,8 +144,8 @@ pub fn export_encrypted_backup(
     Ok(())
 }
 
-/// 递归打包目录为 zip（用 zip crate 内部 Deflate 压缩）
-fn pack_dir_to_zip(src_dir: &Path, zip_path: &Path) -> Result<(), String> {
+/// 递归打包目录为 zip（用 zip crate 内部 Deflate 压缩）；categories 过滤相对路径
+fn pack_dir_to_zip(src_dir: &Path, zip_path: &Path, categories: &[String]) -> Result<(), String> {
     let file = fs::File::create(zip_path).map_err(|e| format!("创建 zip 失败：{}", e))?;
     let mut zip = zip::ZipWriter::new(file);
     let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -101,6 +168,9 @@ fn pack_dir_to_zip(src_dir: &Path, zip_path: &Path) -> Result<(), String> {
                 pending.push(path);
                 let dir_name = format!("{}/", name);
                 let _ = zip.add_directory(dir_name, options);
+                continue;
+            }
+            if !include_rel_path(&name, categories) {
                 continue;
             }
             // 文件：读入内存后写入 zip

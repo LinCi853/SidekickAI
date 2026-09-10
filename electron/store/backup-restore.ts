@@ -471,9 +471,13 @@ export async function exportAllData(
     const dataDir = getDataDir();
     console.log('[backup-restore] 开始导出数据:', dataDir, '选项:', options);
 
+    // 0. 必须在关闭 SQLite 之前读取 deviceId：
+    //    device-id 的 JsonStore 在模块加载时捕获了 settings.db 连接；
+    //    close 之后再 getDeviceId() 会在已关闭连接上抛错，导致卸载 CLI 导出静默失败。
+    const deviceId = getDeviceId();
+
     // 1. 关闭所有 SQLite 连接，确保 WAL 写回主 db
     try {
-      // 模块声明的 closeDb 钩子（插件数据库）
       try {
         const { closeAllModuleDbs } = await import('../modules/registry.js')
         await closeAllModuleDbs()
@@ -489,11 +493,9 @@ export async function exportAllData(
 
     // 2. 创建 zip
     const zip = new AdmZip();
-
-    // 记录跳过的文件（EBUSY 等锁定错误）
     const skippedFiles: string[] = [];
 
-    // 3. 基础数据（配置 JSON + chat.db + app-key.json + 资产目录 + 插件数据）
+    // 3. 基础数据
     if (options.basicData) {
       const pluginExtra = await collectPluginExtraFiles()
       const allBackupFiles = [...BACKUP_FILES]
@@ -505,7 +507,6 @@ export async function exportAllData(
         if (!fs.existsSync(filePath)) continue;
         await addFileWithRetry(zip, filePath, fileName, skippedFiles);
       }
-      // 资产目录（白板/笔记图片 + 插件资产，跨设备迁移不丢图片）
       const allAssetDirs = [...ASSET_DIRS, ...pluginExtra.assetDirs]
       for (const dirName of allAssetDirs) {
         const dirPath = path.join(dataDir, dirName);
@@ -515,14 +516,9 @@ export async function exportAllData(
       }
     }
 
-    // 4. 会话数据：各 profile session（Partitions/<id>/）+ 默认 session（数据目录根级）
-    // 同一套分类常量覆盖两类 session，避免根级 Local Storage / Cookies 等被遗漏
-    // - cookies：Cookies 文件 + Local Storage 目录
-    // - indexedDB：IndexedDB 目录
-    // - cache：Service Worker / Cache 等目录
+    // 4. 会话数据
     const wantSession = options.cookies || options.indexedDB || options.cache;
     if (wantSession) {
-      // 各 profile session
       const partitionsDir = path.join(dataDir, 'Partitions');
       if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
         const partitionEntries = fs.readdirSync(partitionsDir, { withFileTypes: true });
@@ -538,28 +534,43 @@ export async function exportAllData(
           );
         }
       }
-      // 默认 session（根级）：含主题偏好、最近对话 ID、设置面板宽度等关键 UI 状态
       await addSessionFromBaseToZip(zip, dataDir, '', options, skippedFiles);
     }
 
-    // 5. 写入 manifest.json（设备码 + 版本 + 时间戳，用于导入时识别来源）
+    // 5. manifest（使用步骤 0 捕获的 deviceId）
     zip.addFile('manifest.json', Buffer.from(JSON.stringify({
-      deviceId: getDeviceId(),
+      deviceId,
       appVersion: app.getVersion(),
       exportedAt: new Date().toISOString(),
     }, null, 2), 'utf-8'));
 
-    // 6. 写入 zip（可能为临时路径，加密后会替换）
+    // 5b. 关键文件校验：没有 settings.db 的备份不可用，宁可失败也不要导出“空包”
+    const entryNames = new Set(zip.getEntries().map((e) => e.entryName.replace(/\\/g, '/')))
+    if (!entryNames.has('settings.db') && !entryNames.has('profiles.json')) {
+      const skippedNote = skippedFiles.length ? `；锁定跳过: ${skippedFiles.join(', ')}` : ''
+      return {
+        success: false,
+        error: `导出失败：备份中缺少 settings.db（数据目录 ${dataDir}）${skippedNote}`,
+      }
+    }
+    if (skippedFiles.includes('settings.db') || skippedFiles.includes('chat.db')) {
+      return {
+        success: false,
+        error: `导出失败：关键数据库被占用未能打包（${skippedFiles.join(', ')}），请确认软件已完全退出后重试`,
+      }
+    }
+
+    // 6. 写 zip
     const zipPath = encrypt ? targetPath + '.tmp.zip' : targetPath
     zip.writeZip(zipPath);
 
-    // 7. 如果需要加密，将 zip 加密为 .sabackup 格式
+    // 7. 加密
     if (encrypt) {
-      encryptFile(zipPath, targetPath, encrypt.password, getDeviceId())
+      encryptFile(zipPath, targetPath, encrypt.password, deviceId)
       try { fs.rmSync(zipPath) } catch { /* ignore */ }
       console.log('[backup-restore] 加密导出成功:', targetPath);
     }
-    console.log('[backup-restore] 导出成功:', targetPath);
+    console.log('[backup-restore] 导出成功:', targetPath, 'entries=', entryNames.size);
 
     if (skippedFiles.length > 0) {
       console.warn('[backup-restore] 以下文件因锁定被跳过:', skippedFiles);
@@ -645,19 +656,34 @@ export async function importAllData(zipPath: string): Promise<ImportResult> {
   return importAllDataInner(zipPath)
 }
 
+/** 强制重启：relaunch + exit + process.exit 兜底；成功路径保持 importing 标志阻止托盘驻留 */
+function scheduleAppRestart(delayMs = 80): void {
+  setTimeout(() => {
+    try {
+      app.relaunch()
+    } catch (err) {
+      console.error('[backup-restore] relaunch 失败:', err)
+    }
+    try {
+      app.exit(0)
+    } catch { /* ignore */ }
+    // 托盘/残留监听可能导致 app.exit 不彻底
+    setTimeout(() => process.exit(0), 50).unref?.()
+  }, delayMs)
+}
+
 /** 实际导入逻辑（明文 zip） */
 async function importAllDataInner(zipPath: string): Promise<ImportResult> {
   setImportingData(true)
+  let dataDir = ''
+  let bakDir = ''
   try {
     console.log('[backup-restore] 开始导入数据:', zipPath);
 
-    // 1. 验证 zip 完整性
+    // 1. 验证 zip 完整性（在销毁任何窗口之前，失败时 UI 仍可用）
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
     const entryNames = new Set(entries.map((e) => e.entryName));
-    // 验证：必须有数据源（settings.db 或旧版 profiles.json）
-    // app-key.json 已迁入 settings.db/app_key 表，新版备份不再单独包含；
-    // 兼容旧版备份（仍含 app-key.json）和新版备份（仅 settings.db）。
     if (!entryNames.has('settings.db') && !entryNames.has('profiles.json') && !entryNames.has('app-key.json')) {
       return {
         success: false,
@@ -665,7 +691,11 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       };
     }
 
-    // 2. 销毁所有 BrowserWindow（必须在关闭 SQLite 之前，否则窗口 close 事件
+    // 2. 解压到临时目录（仍不销毁窗口；解压失败可直接报错）
+    const tempDir = path.join(app.getPath('temp'), `sidekickai-restore-${Date.now()}`);
+    zip.extractAllTo(tempDir, true);
+
+    // 3. 销毁所有 BrowserWindow（必须在关闭 SQLite 之前，否则窗口 close 事件
     //    触发 cleanupOnQuit → getChatStore() 会因已关闭的连接而崩溃）
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
@@ -673,7 +703,7 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       }
     }
 
-    // 3. 清理所有 session（释放 partition 文件锁）
+    // 4. 清理所有 session（释放 partition 文件锁）
     const sessionsToClean = [session.defaultSession];
     try {
       for (const profile of profileStore.list()) {
@@ -690,7 +720,7 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       }),
     );
 
-    // 4. 关闭所有 SQLite 连接（窗口已销毁，不会再触发 getChatStore()）
+    // 5. 关闭所有 SQLite 连接
     try {
       closeChatStore();
       closeWhiteboardDb();
@@ -701,15 +731,11 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }
 
-    // 5. 解压到临时目录
-    const tempDir = path.join(app.getPath('temp'), `sidekickai-restore-${Date.now()}`);
-    zip.extractAllTo(tempDir, true);
-
     // 6. 获取数据目录
-    const dataDir = getDataDir();
+    dataDir = getDataDir();
 
     // 7. 备份当前数据目录（重命名为 .bak-<timestamp>）
-    const bakDir = `${dataDir}.bak-${Date.now()}`;
+    bakDir = `${dataDir}.bak-${Date.now()}`;
     try {
       if (fs.existsSync(dataDir)) {
         fs.renameSync(dataDir, bakDir);
@@ -721,17 +747,21 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
     // 8. 将解压内容覆盖到数据目录
     try {
       fs.mkdirSync(dataDir, { recursive: true });
-      // 复制临时目录的所有内容到 dataDir
       copyDirRecursive(tempDir, dataDir);
     } catch (err) {
       console.error('[backup-restore] 覆盖数据目录失败:', err);
-      // 尝试恢复备份
       try {
         if (fs.existsSync(bakDir)) {
+          if (fs.existsSync(dataDir)) {
+            fs.rmSync(dataDir, { recursive: true, force: true });
+          }
           fs.renameSync(bakDir, dataDir);
         }
       } catch { /* ignore */ }
-      return { success: false, error: (err as Error).message };
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      // 窗口已销毁：重启回旧数据，避免无界面残留进程
+      scheduleAppRestart(0)
+      return { success: false, error: `导入失败已回滚：${(err as Error).message}` };
     }
 
     // 9. 清理临时目录
@@ -740,14 +770,11 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
     } catch { /* ignore */ }
 
     // 10. 兼容旧版备份：app-key.json → settings.db/app_key 迁移
-    // 旧版备份的 app-key.json 是独立文件，新版从 settings.db/app_key 表读取。
-    // 如果导入的备份含 app-key.json 但 settings.db/app_key 表为空，从文件迁移。
     try {
       const appKeyPath = path.join(dataDir, 'app-key.json')
       if (fs.existsSync(appKeyPath)) {
         const raw = JSON.parse(fs.readFileSync(appKeyPath, 'utf-8'))
         if (raw.key) {
-          // 动态导入 app-crypto 内部的 keyStore 逻辑
           const { createSqliteJsonStore } = await import('./module-state-store.js')
           const keyStore = createSqliteJsonStore<{ version: number; key: string; createdAt: number }>({
             tableName: 'app_key',
@@ -759,7 +786,6 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
             keyStore.set('createdAt', raw.createdAt ?? Date.now())
             console.log('[backup-restore] 已从 app-key.json 迁移密钥到 settings.db/app_key')
           }
-          // 迁移完成，删除旧文件避免残留
           try { fs.rmSync(appKeyPath) } catch { /* ignore */ }
         }
       }
@@ -767,7 +793,15 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       console.warn('[backup-restore] app-key.json 迁移失败（非致命）:', err)
     }
 
-    // 11. 读取 manifest.json 中的来源设备 ID（兼容旧版备份：无 manifest 时返回 undefined）
+    // 10b. 导入后标记 install-config，避免 seed 覆盖导入结果
+    try {
+      const { stampInstallConfigHashAfterImport } = await import('./install-config-seed.js')
+      stampInstallConfigHashAfterImport()
+    } catch (err) {
+      console.warn('[backup-restore] 导入后 stamp install-config 失败（非致命）:', err)
+    }
+
+    // 11. 来源设备 ID
     let sourceDeviceId: string | undefined
     try {
       const manifestPath = path.join(dataDir, 'manifest.json')
@@ -777,18 +811,29 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       }
     } catch { /* ignore */ }
 
-    // 12. 重启应用
-    console.log('[backup-restore] 导入成功，重启应用');
-    app.relaunch();
-    app.exit(0);
-
-    return { success: true, sourceDeviceId };
+    // 12. 成功：保持 importing=true（阻止托盘驻留），短延迟后强制重启
+    console.log('[backup-restore] 导入成功，即将重启应用')
+    scheduleAppRestart(120)
+    // 成功路径不 finally 清 importing，交给进程退出
+    return { success: true, sourceDeviceId }
   } catch (err) {
     const message = (err as Error).message;
     console.error('[backup-restore] 导入失败:', message);
+    // 窗口可能已销毁：尽量拉起正常实例，避免残留无界面进程
+    if (BrowserWindow.getAllWindows().length === 0) {
+      try {
+        if (bakDir && dataDir && fs.existsSync(bakDir) && !fs.existsSync(dataDir)) {
+          fs.renameSync(bakDir, dataDir)
+        }
+      } catch { /* ignore */ }
+      scheduleAppRestart(0)
+    }
     return { success: false, error: message };
   } finally {
-    setImportingData(false)
+    // 成功时上面已 return，此处仅失败/校验失败路径会清标志
+    if (BrowserWindow.getAllWindows().length > 0) {
+      setImportingData(false)
+    }
   }
 }
 
@@ -797,21 +842,32 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
  * 先解密为临时 zip，再走正常导入流程。
  */
 export async function importAllDataDecrypted(filePath: string, password: string): Promise<ImportResult> {
+  const tempZip = filePath + '.tmp.zip'
   try {
-    const tempZip = filePath + '.tmp.zip'
     const sourceDeviceId = decryptFile(filePath, tempZip, password)
     if (!sourceDeviceId) {
       try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
       return { success: false, error: '密码错误或文件损坏' }
     }
+    // 解密产物必须是合法 zip，否则 AdmZip 会在销毁窗口后才炸
+    try {
+      const testZip = new AdmZip(tempZip)
+      if (testZip.getEntries().length === 0) {
+        try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
+        return { success: false, error: '解密成功但备份内容为空' }
+      }
+    } catch {
+      try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
+      return { success: false, error: '解密结果不是有效备份文件' }
+    }
     const result = await importAllDataInner(tempZip)
     try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
-    // 注入来源设备 ID（importAllDataInner 重启前已读取 manifest，但加密场景额外提供）
     if (result.success && !result.sourceDeviceId) {
       result.sourceDeviceId = sourceDeviceId
     }
     return result
   } catch (err) {
+    try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
     return { success: false, error: (err as Error).message }
   }
 }

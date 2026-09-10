@@ -1306,3 +1306,30 @@ body {
   color: var(--brand-600);
   font-variant-numeric: tabular-nums;
 }
+
+/* 卸载导出细项面板 */
+.export-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 10px;
+  background: var(--bg-soft, #f8fafc);
+  animation: export-panel-in 160ms ease-out;
+}
+@keyframes export-panel-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.preset-row {
+  display: flex;
+  gap: 8px;
+}
+.preset-btn {
+  flex: 1;
+}
+.preset-btn--active {
+  border-color: var(--accent, #6366f1);
+  background: color-mix(in srgb, var(--accent, #6366f1) 12%, transparent);
+  color: var(--accent, #6366f1);
+  font-weight: 600;
+}

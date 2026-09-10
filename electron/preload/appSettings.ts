@@ -33,6 +33,8 @@ export const appSettingsApi = {
       ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA, filePath),
     importDataDecrypted: (filePath: string, password: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, filePath, password),
+    detectBackupEncrypted: (filePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_DETECT_BACKUP_ENCRYPTED, filePath),
     estimateExportSizes: () => ipcRenderer.invoke(IPC_CHANNELS.APP_ESTIMATE_EXPORT_SIZES),
     openExportWindow: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_EXPORT_WINDOW),
     // 缓存清理：清理缓存数据（仅缓存类目录与 session cache，保留登录态）

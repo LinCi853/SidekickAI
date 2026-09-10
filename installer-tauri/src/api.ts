@@ -29,6 +29,8 @@ const api = {
   readInstallConfig: (dir: string): Promise<InstalledConfig | null> =>
     invoke<InstalledConfig | null>('read_install_config', { dir }),
   flushConfig: (opts: InstallOptions): Promise<boolean> => invoke<boolean>('flush_config', { opts }),
+  setPendingLaunch: (installDir: string, launch: boolean, showGuide: boolean): Promise<boolean> =>
+    invoke<boolean>('set_pending_launch', { installDir, launch, showGuide }),
   cancel: (): Promise<boolean> => invoke<boolean>('cancel'),
   closeWindow: (): Promise<void> => invoke<void>('close_window'),
   openDir: (dir: string): Promise<void> => invoke<void>('open_dir', { dir }),

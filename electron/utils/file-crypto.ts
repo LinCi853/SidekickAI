@@ -4,7 +4,7 @@
 // 密钥派生：PBKDF2-SHA256，100000 迭代，salt = deviceId UTF-8 字节
 
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'crypto'
-import { readFileSync, writeFileSync } from 'fs'
+import { closeSync, openSync, readFileSync, readSync, writeFileSync } from 'fs'
 
 const MAGIC = Buffer.from('SABK')
 const VERSION = 1
@@ -74,11 +74,17 @@ export function decryptFile(inputPath: string, outputPath: string, password: str
   }
 }
 
-/** 检测文件是否为 SABK 加密格式 */
+/** 检测文件是否为 SABK 加密格式（只读文件头，避免大备份全量读入） */
 export function isSabkEncrypted(filePath: string): boolean {
   try {
-    const header = readFileSync(filePath).subarray(0, 4)
-    return header.equals(MAGIC)
+    const fd = openSync(filePath, 'r')
+    try {
+      const header = Buffer.alloc(4)
+      const n = readSync(fd, header, 0, 4, 0)
+      return n === 4 && header.equals(MAGIC)
+    } finally {
+      closeSync(fd)
+    }
   } catch {
     return false
   }

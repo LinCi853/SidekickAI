@@ -497,6 +497,16 @@ export function registerAppSettingsIPC(): void {
     return importAllDataDecrypted(filePath, password)
   })
 
+  // 选文件后立即检测是否 SABK 加密（不进入导入流程）
+  ipcMain.handle(IPC_CHANNELS.APP_DETECT_BACKUP_ENCRYPTED, async (_e, filePath: string) => {
+    const { isSabkEncrypted } = await import('../utils/file-crypto.js')
+    try {
+      return isSabkEncrypted(filePath)
+    } catch {
+      return false
+    }
+  })
+
   // 数据迁移：估算各类别导出体积（字节）
   ipcMain.handle(IPC_CHANNELS.APP_ESTIMATE_EXPORT_SIZES, async () => {
     const { estimateExportSizes } = await import('./backup-restore.js')

@@ -41,17 +41,17 @@ fn browse_dir(app: AppHandle, current: String) -> String {
 }
 
 /// 保存文件对话框：返回完整保存路径；用户取消返回空字符串
-/// 用于卸载时导出加密备份，默认文件名带时间戳
+/// 用于卸载时导出备份（加密 .sabackup / 明文 .zip），默认文件名带时间戳
 #[tauri::command]
 fn save_backup_dialog(app: AppHandle, default_name: String) -> String {
     use tauri_plugin_dialog::DialogExt;
-    if let Some(fp) = app
-        .dialog()
-        .file()
-        .add_filter("SidekickAI 加密备份", &["sabackup"])
-        .set_file_name(&default_name)
-        .blocking_save_file()
-    {
+    let mut dlg = app.dialog().file();
+    if default_name.to_ascii_lowercase().ends_with(".zip") {
+        dlg = dlg.add_filter("Zip 备份", &["zip"]);
+    } else {
+        dlg = dlg.add_filter("SidekickAI 加密备份", &["sabackup"]);
+    }
+    if let Some(fp) = dlg.set_file_name(&default_name).blocking_save_file() {
         return fp.to_string();
     }
     String::new()
@@ -83,20 +83,51 @@ fn read_install_config(dir: String) -> Option<serde_json::Value> {
     engine::read_install_config(std::path::Path::new(&dir))
 }
 
-/// 用户完成/关闭向导时写入最终 install-config.json（按需提权）
+/// 完成页更新待启动程序（以完成页最终勾选为准，覆盖安装开始时的快照）
+#[tauri::command]
+fn set_pending_launch(install_dir: String, launch: bool, show_guide: bool) -> bool {
+    if !launch {
+        *PENDING_LAUNCH.lock().unwrap() = None;
+        return true;
+    }
+    let exe = std::path::Path::new(&install_dir).join("SidekickAI.exe");
+    if !exe.exists() {
+        *PENDING_LAUNCH.lock().unwrap() = None;
+        return false;
+    }
+    let arg = if show_guide {
+        "--show-guide".to_string()
+    } else {
+        "--skip-guide".to_string()
+    };
+    *PENDING_LAUNCH.lock().unwrap() = Some((exe.to_string_lossy().into_owned(), arg));
+    true
+}
+
+/// 用户完成/关闭向导时写入最终 install-config.json。
+/// 提权策略：已提权或目录可写则直写；磁盘内容一致则跳过；仅在必须更新且不可写时才 UAC。
 #[tauri::command]
 async fn flush_config(opts: manifest::InstallRequest) -> Result<bool, String> {
     let mut config_opts = opts;
     config_opts.action = "flush-config".into();
-    if elevate::needs_admin(&config_opts.install_dir, config_opts.for_all_users) {
-        let req_path = std::env::temp_dir().join("SidekickAI-install-request.json");
-        std::fs::write(&req_path, serde_json::to_string(&config_opts).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        // 复用提权通道：UAC 子进程只执行「写配置」轻量任务（读 req → engine::run → 结果文件）
-        let _ = elevate::run_elevated(&req_path)?;
+    let dir = std::path::PathBuf::from(&config_opts.install_dir);
+
+    // 已提权或目录可写 → 继承权限直接写，不再弹 UAC
+    if elevate::is_process_elevated() || elevate::dir_is_writable(&dir) {
+        engine::flush_install_config(&config_opts)?;
         return Ok(true);
     }
-    engine::flush_install_config(&config_opts)?;
+
+    // 不可写：若磁盘已有相同配置（安装提权阶段已写入），跳过
+    if engine::install_config_matches(&config_opts) {
+        return Ok(true);
+    }
+
+    // 确实需要更新且当前无权限 → 才申请一次提权
+    let req_path = std::env::temp_dir().join("SidekickAI-install-request.json");
+    std::fs::write(&req_path, serde_json::to_string(&config_opts).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    let _ = elevate::run_elevated(&req_path)?;
     Ok(true)
 }
 
@@ -116,6 +147,7 @@ async fn start(app: AppHandle, opts: manifest::InstallRequest) -> Result<bool, S
     let tail_log_path = log_path.clone();
     std::thread::spawn(move || tail_log(&tail_app, &tail_log_path));
 
+    // 启动/指南以完成页最终勾选为准；安装结束只记录默认值，关闭向导前由 set_pending_launch 覆盖
     let launch_after = opts.launch_after_install && opts.mode == manifest::InstallMode::Install;
     let show_guide = opts.show_guide_after_install;
     let install_dir = opts.install_dir.clone();
@@ -226,7 +258,8 @@ pub fn run() {
             cancel,
             start,
             read_install_config,
-            flush_config
+            flush_config,
+            set_pending_launch
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

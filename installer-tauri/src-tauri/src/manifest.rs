@@ -15,6 +15,10 @@ struct ManifestDoc {
 
 static INSTALL_MANIFEST: OnceLock<Result<ManifestDoc, String>> = OnceLock::new();
 
+fn default_backup_encrypt() -> bool {
+    true
+}
+
 fn manifest_doc() -> &'static Result<ManifestDoc, String> {
     INSTALL_MANIFEST.get_or_init(|| {
         serde_json::from_str::<ManifestDoc>(INSTALL_MANIFEST_FILE)
@@ -164,9 +168,16 @@ pub struct InstallRequest {
     /// data_strategy=export 时的备份保存路径（.sabackup）
     #[serde(default)]
     pub backup_path: String,
-    /// data_strategy=export 时的备份密码
+    /// data_strategy=export 时的备份密码（backup_encrypt=true 时必填）
     #[serde(default)]
     pub backup_password: String,
+    /// data_strategy=export 时是否加密（false = 明文 zip）
+    #[serde(default = "default_backup_encrypt")]
+    pub backup_encrypt: bool,
+    /// data_strategy=export 时的导出类别（basicData/cookies/indexedDB/cache/voiceAssets）；
+    /// 空 = 全量（兼容旧行为）
+    #[serde(default)]
+    pub backup_categories: Vec<String>,
     /// 已同意的协议 id 列表
     #[serde(default)]
     pub accepted_licenses: Vec<String>,

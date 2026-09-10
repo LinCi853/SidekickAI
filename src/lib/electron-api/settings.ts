@@ -127,6 +127,12 @@ export async function importDataDecrypted(filePath: string, password: string): P
   return api.appSettings.importDataDecrypted(filePath, password);
 }
 
+/** 选文件后立即检测是否 SABK 加密备份 */
+export async function detectBackupEncrypted(filePath: string): Promise<boolean> {
+  const api = requireElectron();
+  return api.appSettings.detectBackupEncrypted(filePath);
+}
+
 /** 估算导出各类别体积（字节） */
 export async function estimateExportSizes(): Promise<{
   basicData: number;

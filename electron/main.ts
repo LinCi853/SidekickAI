@@ -127,7 +127,16 @@ if (process.platform === 'linux') {
 }
 
 // ===== 单实例锁：避免重复启动开多个主窗口 =====
-const gotSingleInstanceLock = app.requestSingleInstanceLock()
+// 卸载器导出模式（--export-user-data）必须能与安装器并行，不抢单实例锁
+const exportCliRequestPath = (() => {
+  const i = process.argv.indexOf('--export-user-data')
+  if (i === -1) return null
+  const p = process.argv[i + 1]
+  return p && !p.startsWith('--') ? p : null
+})()
+const isExportCliMode = exportCliRequestPath !== null
+
+const gotSingleInstanceLock = isExportCliMode ? true : app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
   // 第二实例：直接退出，由 first-instance 处理唤醒
   console.log('[main] 检测到已有实例运行，第二实例退出')
@@ -190,6 +199,19 @@ let hotkeyManager: HotkeyManager
  * 应用就绪：初始化所有管理器并注册 IPC
  */
 app.whenReady().then(async () => {
+  // 卸载器/脚本导出模式：复用 backup-restore.exportAllData，不创建任何窗口
+  if (exportCliRequestPath) {
+    try {
+      const { runExportCli } = await import('./store/export-cli.js')
+      const code = await runExportCli(exportCliRequestPath)
+      app.exit(code)
+    } catch (err) {
+      console.error('[main] export CLI failed:', err)
+      app.exit(1)
+    }
+    return
+  }
+
   // 移除默认应用菜单：释放 F12（默认 toggleDevTools）等系统级快捷键，
   // 交由应用内 keydown / before-input-event 统一处理。
   // DevTools 可通过 --dev-tools 启动参数或 DEV_TOOLS=1 环境变量打开（见下方 autoOpenDevTools）。

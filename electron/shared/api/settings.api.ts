@@ -178,6 +178,8 @@ export interface AppSettingsAPI {
   importData(filePath: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }>
   /** 从加密的 .sabackup 文件导入（输入密码解密后导入） */
   importDataDecrypted(filePath: string, password: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }>
+  /** 选文件后立即检测是否 SABK 加密备份 */
+  detectBackupEncrypted(filePath: string): Promise<boolean>
   /**
    * 估算导出各类别体积（字节）
    * 返回 basicData/cookies/indexedDB/cache 各项大小，

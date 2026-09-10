@@ -9,7 +9,7 @@
    - 三档预设：最小迁移 / 推荐迁移 / 完整备份
    ===================================================================== */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
 import { IconButton, PinToggleButton } from '../../components/ui';
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
@@ -23,6 +23,7 @@ import {
   selectImportFile,
   importData,
   importDataDecrypted,
+  detectBackupEncrypted,
   getPlatformCapabilities,
 } from '../../lib/electron-api';
 import { AlertIcon } from '@/components/icons';
@@ -120,6 +121,7 @@ export default function DataExportWindow() {
   // 加密导入密码
   const [importPassword, setImportPassword] = useState('');
   const [importNeedsPassword, setImportNeedsPassword] = useState(false);
+  const importPasswordRef = useRef<HTMLInputElement>(null);
   // 导入成功后来源设备 ID
   const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
@@ -216,7 +218,7 @@ export default function DataExportWindow() {
     }
   };
 
-  // 选择导入文件
+  // 选择导入文件：立刻识别是否 SABK 加密，需要密码时直接展示输入区
   const handleSelectImportFile = async () => {
     if (importing) return;
     setImportStatus(null);
@@ -224,23 +226,35 @@ export default function DataExportWindow() {
       const filePath = await selectImportFile();
       if (!filePath) return;
       setImportFilePath(filePath);
-      setImportNeedsPassword(false);
       setImportPassword('');
+      setImportNeedsPassword(false);
       setSourceDeviceId(null);
       setCurrentDeviceId(null);
+      const encrypted = await detectBackupEncrypted(filePath).catch(() => false);
+      setImportNeedsPassword(encrypted);
+      if (encrypted) {
+        setImportStatus({ type: 'error', message: '此备份已加密，请输入密码后解密导入' });
+      } else {
+        setImportStatus(null);
+      }
     } catch (err) {
       setImportStatus({ type: 'error', message: (err as Error).message });
     }
   };
 
-  // 确认导入（二次确认）
-  const handleConfirmImport = async () => {
-    if (!importFilePath || importing) return;
-    // 二次确认
-    const confirmed = window.confirm(
+  const confirmOverwrite = () =>
+    window.confirm(
       `确认导入以下文件？\n\n${importFilePath}\n\n此操作将完全覆盖当前所有数据，应用将自动重启。`,
     );
-    if (!confirmed) return;
+
+  // 确认导入（仅明文 zip；加密文件走解密导入）
+  const handleConfirmImport = async () => {
+    if (!importFilePath || importing) return;
+    if (importNeedsPassword) {
+      await handleDecryptImport();
+      return;
+    }
+    if (!confirmOverwrite()) return;
     await doImport(importFilePath);
   };
 
@@ -258,7 +272,7 @@ export default function DataExportWindow() {
       }
       if (!result.success) {
         if (result.encrypted) {
-          // 加密文件，需要密码
+          // 加密文件，需要密码（选文件时应已识别；此处兜底）
           setImportNeedsPassword(true);
           setImportStatus({ type: 'error', message: '此备份已加密，请输入密码' });
           setImporting(false);
@@ -282,11 +296,23 @@ export default function DataExportWindow() {
     }
   };
 
-  // 加密文件输入密码后确认导入
+  // 加密文件输入密码后解密导入
   const handleDecryptImport = async () => {
-    if (!importFilePath || !importPassword) return;
+    if (!importFilePath || !importPassword || importing) return;
+    if (!confirmOverwrite()) return;
     await doImport(importFilePath, importPassword);
   };
+
+  // 检测到加密备份后立即聚焦密码框，避免用户找不到可输入焦点
+  useEffect(() => {
+    if (importNeedsPassword) {
+      const t = window.setTimeout(() => {
+        importPasswordRef.current?.focus();
+        importPasswordRef.current?.select();
+      }, 50);
+      return () => window.clearTimeout(t);
+    }
+  }, [importNeedsPassword]);
 
   return (
     <>
@@ -535,28 +561,42 @@ export default function DataExportWindow() {
               </div>
             )}
 
-            {/* 加密文件密码输入 */}
+            {/* 加密文件密码输入：置于状态条之上，可聚焦可键入 */}
             {importNeedsPassword && importFilePath && (
-              <div style={{ padding: '8px 0', display: 'flex', gap: 8, alignItems: 'center' }} data-name="data-export.import-password-section">
-                <input
-                  type="password"
-                  placeholder="输入备份密码"
-                  value={importPassword}
-                  onChange={(e) => setImportPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') void handleDecryptImport(); }}
-                  disabled={importing}
-                  style={{ flex: 1, padding: '6px 10px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)' }}
-                  data-name="data-export.import-password-input"
-                />
-                <button
-                  type="button"
-                  className="btn-primary-flat"
-                  onClick={() => void handleDecryptImport()}
-                  disabled={!importPassword || importing}
-                  data-name="data-export.import-decrypt-button"
-                >
-                  {importing ? '解密中…' : '解密导入'}
-                </button>
+              <div className="data-export-import-password" data-name="data-export.import-password-section">
+                <div className="data-export-import-password-label" data-name="data-export.import-password-label">
+                  此备份已加密，请输入密码
+                </div>
+                <div className="data-export-import-password-row" data-name="data-export.import-password-row">
+                  <input
+                    ref={importPasswordRef}
+                    type="password"
+                    className="data-export-import-password-input"
+                    placeholder="输入备份密码"
+                    value={importPassword}
+                    onChange={(e) => setImportPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleDecryptImport();
+                      }
+                    }}
+                    disabled={importing}
+                    autoFocus
+                    autoComplete="off"
+                    spellCheck={false}
+                    data-name="data-export.import-password-input"
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary-flat"
+                    onClick={() => void handleDecryptImport()}
+                    disabled={!importPassword || importing}
+                    data-name="data-export.import-decrypt-button"
+                  >
+                    {importing ? '解密中…' : '解密导入'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -580,7 +620,7 @@ export default function DataExportWindow() {
               </div>
             )}
 
-            {/* 导入按钮 */}
+            {/* 导入按钮：加密文件时主操作为「解密导入」，避免再次点「确认导入」走无密码路径 */}
             <div className="data-export-actions" data-name="data-export.import-actions">
               <button
                 type="button"
@@ -592,16 +632,18 @@ export default function DataExportWindow() {
               >
                 {importFilePath ? '重新选择文件' : '选择备份文件'}
               </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => void handleConfirmImport()}
-                disabled={!importFilePath || importing}
-                style={{ flex: 1 }}
-                data-name="data-export.confirm-import-button"
-              >
-                {importing ? '导入中…' : '确认导入'}
-              </button>
+              {!importNeedsPassword && (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => void handleConfirmImport()}
+                  disabled={!importFilePath || importing}
+                  style={{ flex: 1 }}
+                  data-name="data-export.confirm-import-button"
+                >
+                  {importing ? '导入中…' : '确认导入'}
+                </button>
+              )}
             </div>
           </div>
         </div>
