@@ -65,6 +65,15 @@
   - 顺带规避在 x64 机上为 arm64 目标重建时、缺少 ARM64 MSVC 工具集导致的 MSB8020 失败。
   - `asarUnpack` 同步改为解包 `prebuilds/*.node`。
 
+### 构建
+
+- **便携版打包改用独立 Node 脚本**（`scripts/pack-portable.cjs`）
+  - 原先 `build:portable-zip` 内联的 PowerShell 单行命令依赖多层转义，且 `Compress-Archive` 在大目录下会偶发静默失败、产出空 zip。
+  - 改为 7z（`-tzip`）压缩并保留 PowerShell 回退；压缩后**校验 zip 结构**（条目根、入口 exe、`app.asar`、`portable.txt` 及体积下限），空包 / 半包直接判失败而非蒙混通过。
+  - 删除无引用的旧脚本 `scripts/make-portable-zip.cjs`（其产物名带 `v` 前缀，与 `launch.bat` 的收集逻辑不匹配）。
+- **`payload.7z` 改为每次全新生成**：7z 的 `a` 为增量语义，此前会把上一版已删除的文件永久留在归档中（实测残留 6 个，含旧原生模块与 `elevate.exe`）。
+- **剔除 `better-sqlite3` 的非 Windows 预编译**，并为打包前的文件删除 / 重命名加上占用重试（E 盘搜索索引器会短暂锁定刚写入的大文件）。
+
 ### 重构
 
 - 主进程：IPC 安全包装、窗口广播、store 路径基础设施抽公共模块。
