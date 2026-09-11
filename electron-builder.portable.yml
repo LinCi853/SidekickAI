@@ -10,6 +10,10 @@ files:
   - node_modules/better-sqlite3/build/Release/better_sqlite3.node
   # 仅打包 Windows 预编译（剔除 darwin / linux 平台 .node，节省 ~2 MB）
   - node_modules/uiohook-napi/prebuilds/win32-*/**
+  # better-sqlite3 的 prebuilds 是平铺文件（darwin-x64.node 等），
+  # Windows 便携版只需 win32-*.node，排除其余平台可省约 13MB（解包后）
+  - '!node_modules/better-sqlite3/prebuilds/darwin*'
+  - '!node_modules/better-sqlite3/prebuilds/linux*'
   # 删除 Chromium 协议汇总文件（10MB+，用户可在线查阅）
   - '!LICENSES.chromium.html'
   # 渲染层依赖已由 Vite 打包进渲染层 bundle，源码不 import，整包进 asar 属死重：

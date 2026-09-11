@@ -106,6 +106,13 @@ function buildPayload() {
     console.log(`[build] ✓ 复用已有载荷: ${mb(payload)} MB`)
     return payload
   }
+  // 重新生成前必须先删除旧归档：7z 的 `a` 是「增量更新」语义，
+  // 直接 add 到既有归档会保留上一版有、本版已删除的文件（ghost 残留），
+  // 导致安装器释放出旧版 DLL / 旧原生模块等不该存在的文件。
+  if (fs.existsSync(payload)) {
+    fs.rmSync(payload, { force: true })
+    console.log('[build] 已删除旧载荷，重新生成（避免增量残留）')
+  }
   run(
     SEVENZ,
     ['a', '-t7z', '-mx=9', '-md=256m', '-ms=on', '-y', payload, 'win-unpacked', 'win-arm64-unpacked'],
