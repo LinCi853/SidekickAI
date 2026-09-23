@@ -1,5 +1,6 @@
-appId: com.sidekickai.app
-productName: SidekickAI
+appId: com.sidekickai.opensource
+productName: SidekickAI-OpenSource
+npmRebuild: false
 directories:
   buildResources: resources
   output: dist-portable
@@ -14,8 +15,6 @@ files:
   # Windows 便携版只需 win32-*.node，排除其余平台可省约 13MB（解包后）
   - '!node_modules/better-sqlite3/prebuilds/darwin*'
   - '!node_modules/better-sqlite3/prebuilds/linux*'
-  # 删除 Chromium 协议汇总文件（10MB+，用户可在线查阅）
-  - '!LICENSES.chromium.html'
   # 渲染层依赖已由 Vite 打包进渲染层 bundle，源码不 import，整包进 asar 属死重：
   # 剔除后可显著减小体积（mermaid ~81MB / @excalidraw ~46MB / katex ~4MB / @tiptap ~1MB）
   - '!node_modules/@excalidraw/**'
@@ -25,16 +24,18 @@ files:
 # 原生 .node 必须解压到磁盘（无法从 asar 内加载 process.dlopen）
 # electron-builder 默认会 unpack *.node，显式声明确保跨平台稳定
 asarUnpack:
+  - node_modules/better-sqlite3/prebuilds/win32-*.node
   - node_modules/better-sqlite3/build/Release/*.node
   # 仅解包 Windows 平台的原生模块
   - node_modules/uiohook-napi/prebuilds/win32-*/**/*.node
   - node_modules/uiohook-napi/build/Release/*.node
-# 打包后钩子：删除 Chromium 自带的 LICENSES.chromium.html 等大文件
-afterPack: scripts/after-pack.cjs
 # 便携模式标记文件：放置到 exe 同级目录
 extraFiles:
   - from: resources/portable.txt
     to: portable.txt
+extraResources:
+  - from: LICENSE
+    to: LICENSE.application.txt
 win:
   target:
     - target: dir

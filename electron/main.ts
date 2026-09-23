@@ -15,9 +15,9 @@
 // 已分别抽离到 electron/voice/、electron/window/tray.ts、electron/ipc/、
 // electron/lifecycle.ts，本文件仅做 bootstrap 编排。
 
+import { exportCliRequestPath } from './runtime-environment.js'
 import { app, BrowserWindow, Menu, ipcMain, protocol, screen, session, systemPreferences } from 'electron'
 import path from 'path'
-import { mkdirSync, existsSync } from 'fs'
 import {
   registerProfileIPC,
   ensureDefaultProfiles,
@@ -36,8 +36,10 @@ import { setBrowserHotkeyFallback, tryForward, VK_F11, VK_C, VK_P } from './util
 import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js'
 import { seedFromInstallConfig } from './store/install-config-seed.js'
 import { registerProxyAuthHandler } from './store/proxy-helper.js'
-import { initChatStore, getChatStore } from './store/chat-store.js'
+import { initChatStore, getChatStore, closeChatStore } from './store/chat-store.js'
+import { isImportingData } from './store/import-guard.js'
 import { registerBaseChatIpc, registerUsageTraceIpc } from './ai/handler.js'
+import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js'
 import { WindowManager } from './window/manager.js'
 import { FingerprintEngine } from './fingerprint/engine.js'
 import { HotkeyManager } from './hotkey/manager.js'
@@ -68,12 +70,9 @@ import {
   toggleAdvancedPanelWindow,
   showOnboardingWindow,
   setOnboardingLifecycleCallbacks,
-  showProcessCleanupWindow,
   getSenderWindow,
   findWindowIdByWin,
 } from './window-factory.js'
-import { isPortableMode } from './store/store-paths.js'
-import { detectResidualProcesses, killProcesses } from './utils/process-guard.js'
 import { initAppFocusTracker } from './voice/preview-window.js'
 import {
   peekSttEngine,
@@ -125,62 +124,6 @@ app.commandLine.appendSwitch('disable-features', 'RestrictGamepadAccess')
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('force-device-scale-factor', '1')
 }
-
-// ===== 单实例锁：避免重复启动开多个主窗口 =====
-// 卸载器导出模式（--export-user-data）必须能与安装器并行，不抢单实例锁
-const exportCliRequestPath = (() => {
-  const i = process.argv.indexOf('--export-user-data')
-  if (i === -1) return null
-  const p = process.argv[i + 1]
-  return p && !p.startsWith('--') ? p : null
-})()
-const isExportCliMode = exportCliRequestPath !== null
-
-const gotSingleInstanceLock = isExportCliMode ? true : app.requestSingleInstanceLock()
-if (!gotSingleInstanceLock) {
-  // 第二实例：直接退出，由 first-instance 处理唤醒
-  console.log('[main] 检测到已有实例运行，第二实例退出')
-  app.quit()
-}
-// second-instance 处理在 whenReady 后注册（需要 mainWindow 引用）
-
-// 便携模式检测：
-// - 开发环境：userData 重定向到项目内 .app-data/
-// - 生产便携版：在 exe 同级目录放置 portable.txt 标记文件，
-//   userData 重定向到 exe 同级 data/ 目录（绿色版，数据跟随 exe）
-// - 生产安装版：使用系统默认 %APPDATA%/ai-window
-function redirectUserData(): void {
-  // 开发模式
-  if (process.env.ELECTRON_RENDERER_URL) {
-    const userDataPath = path.join(__dirname, '..', '..', '.app-data')
-    try {
-      mkdirSync(userDataPath, { recursive: true })
-      app.setPath('userData', userDataPath)
-      console.log('[main] Dev mode: userData redirected to', app.getPath('userData'))
-    } catch (err) {
-      console.error('[main] Failed to set userData path:', err)
-    }
-    return
-  }
-
-  // 生产便携模式：检测 exe 同级 portable.txt
-  try {
-    const exePath = app.getPath('exe')
-    const exeDir = path.dirname(exePath)
-    const portableMarker = path.join(exeDir, 'portable.txt')
-    if (existsSync(portableMarker)) {
-      const userDataPath = path.join(exeDir, 'data')
-      mkdirSync(userDataPath, { recursive: true })
-      app.setPath('userData', userDataPath)
-      console.log('[main] Portable mode: userData redirected to', app.getPath('userData'))
-    } else {
-      console.log('[main] Production install mode: userData =', app.getPath('userData'))
-    }
-  } catch (err) {
-    console.error('[main] Portable mode detection failed:', err)
-  }
-}
-redirectUserData()
 
 // 注册白板图片自定义协议为特权协议（必须在 app ready 前调用）
 // 解决 dev 模式下 file:// 被 webSecurity CORS 阻止的问题
@@ -439,31 +382,6 @@ app.whenReady().then(async () => {
     console.warn('[main] 同步自启动设置失败:', e)
   }
 
-  // ===== 便携版残留进程检测 =====
-  // 便携版可能因上次异常退出残留 SidekickAI.exe 进程（占用文件锁/单实例锁），
-  // 弹出独立窗口提示用户"一键清理"或"忽略并继续"。
-  // 仅在便携模式 + 非 win32 之外平台跳过（process-guard 仅 win32 实现）。
-  if (isPortableMode() && process.platform === 'win32') {
-    try {
-      const residuals = await detectResidualProcesses()
-      if (residuals.length > 0) {
-        console.log(`[main] 便携版检测到 ${residuals.length} 个残留进程，弹出清理窗口`)
-        const action = await showProcessCleanupWindow(residuals)
-        if (action === 'clean') {
-          const killed = await killProcesses(residuals.map((p) => p.pid))
-          console.log(`[main] 已清理 ${killed.length}/${residuals.length} 个残留进程`)
-          // 等待 1 秒让进程完全退出，释放文件锁
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-        } else {
-          console.log('[main] 用户选择忽略残留进程，继续启动')
-        }
-      }
-    } catch (err) {
-      // 检测失败不阻塞启动
-      console.warn('[main] 便携版残留进程检测失败:', err)
-    }
-  }
-
   // 创建主窗口
   createMainWindow()
   // 使用统计：主窗口加载完成后下发窗口类型（供点击日志的 windowType 字段）
@@ -567,6 +485,7 @@ app.whenReady().then(async () => {
 
   // ===== 对话/痕迹基础 IPC（历史搜索 FTS5、登录/窗口痕迹、最近对话、用量统计） =====
   registerBaseChatIpc()
+  registerNavHistoryIpc()
 
   // ===== 使用统计与操作日志 IPC（基础功能，独立于自定义对话模块） =====
   registerUsageTraceIpc()
@@ -641,7 +560,6 @@ app.on('window-all-closed', () => {
   // 有托盘时不退出，托盘可恢复窗口
   if (hasTray()) return
   // 导入数据进行中时不退出（窗口已销毁但流程未完成）
-  const { isImportingData } = require('./store/import-guard.js')
   if (isImportingData) return
   if (process.platform !== 'darwin') {
     app.quit()
@@ -649,6 +567,10 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  closeModuleStateDb()
   cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() })
+})
+
+app.on('will-quit', () => {
+  closeChatStore()
+  closeModuleStateDb()
 })

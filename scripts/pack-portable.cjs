@@ -1,13 +1,5 @@
-// scripts/pack-portable.cjs
-// 便携版打包后处理：win-unpacked 重命名为 SidekickAI，再压缩为 zip。
-//
-// 用 7z 替代 PowerShell Compress-Archive —— 后者在数十万文件的场景下会
-// 偶发静默失败并产出空 zip。压缩完成后本脚本会自行校验产物结构
-// （见 verifyZip），确保「空包 / 半包」不再以"成功"姿态溜过去。
-//
-// 关于重试：本机构建目录位于 E 盘，Windows Search 索引器在爬取刚写入的
-// 大文件时会短暂持有句柄，导致 unlink / rename 偶发 EBUSY / EPERM。
-// 这类锁是临时的，退避重试即可自愈。
+// Archive the standalone runtime and verify its portable entry points.
+// Retry temporary filesystem locks without terminating application processes.
 
 const fs = require('fs')
 const path = require('path')
@@ -16,12 +8,12 @@ const { spawnSync } = require('child_process')
 const ROOT = path.join(__dirname, '..')
 const DIST_PORTABLE = path.join(ROOT, 'dist-portable')
 const SRC_DIR = path.join(DIST_PORTABLE, 'win-unpacked')
-const DST_DIR = path.join(DIST_PORTABLE, 'SidekickAI')
+const DST_DIR = path.join(DIST_PORTABLE, 'SidekickAI-OpenSource')
 const DIR_NAME = path.basename(DST_DIR)
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'))
 const VERSION = pkg.version
-const ZIP_NAME = `SidekickAI-Portable-${VERSION}-win-x64.zip`
+const ZIP_NAME = `SidekickAI-OpenSource-Portable-${VERSION}-win-x64.zip`
 const ZIP_FILE = path.join(DIST_PORTABLE, ZIP_NAME)
 
 // zip 体积下限（MB）。带完整 Electron 运行时的便携包不可能低于此值，
@@ -111,7 +103,7 @@ function verifyZip(zipPath) {
   const entries = listZipEntries(zipPath)
 
   if (entries) {
-    const hasExe = entries.includes(`${DIR_NAME}/SidekickAI.exe`)
+    const hasExe = entries.includes(`${DIR_NAME}/SidekickAI-OpenSource.exe`)
     const hasAsar = entries.includes(`${DIR_NAME}/resources/app.asar`)
     const hasFlag = entries.includes(`${DIR_NAME}/portable.txt`)
     if (!hasExe || !hasAsar || !hasFlag) {
@@ -152,25 +144,17 @@ if (!fs.existsSync(SRC_DIR)) {
   process.exit(1)
 }
 
-// 2. 关掉可能占用文件的 SidekickAI 进程（失败不影响流程）
-if (process.platform === 'win32') {
-  spawnSync('taskkill', ['/IM', 'SidekickAI.exe', '/F'], { stdio: 'ignore', shell: true })
+// Existing packages may contain user data or retained release evidence.
+if (fs.existsSync(DST_DIR) || fs.existsSync(ZIP_FILE)) {
+  console.error('[pack-portable] Output already exists; archive it before packaging again.')
+  process.exit(1)
 }
 
-// 3. 清理旧目标目录与旧 zip（索引器可能短暂占用，故重试）
-if (fs.existsSync(DST_DIR)) {
-  withRetry(`删除旧目录 ${DIR_NAME}`, () => fs.rmSync(DST_DIR, { recursive: true, force: true }))
-}
-if (fs.existsSync(ZIP_FILE)) {
-  withRetry(`删除旧 zip ${ZIP_NAME}`, () => fs.rmSync(ZIP_FILE, { force: true }))
-}
-
-// 4. 重命名 win-unpacked -> SidekickAI
+// Retain the unpacked runtime under the edition's distribution name.
 withRetry('重命名 win-unpacked', () => fs.renameSync(SRC_DIR, DST_DIR))
 console.log(`[pack-portable] ${path.basename(SRC_DIR)} -> ${DIR_NAME}`)
 
-// 5. 压缩：优先 7z，失败回退 PowerShell。
-//    以「相对名 + cwd」调用，保证 zip 内条目根为 SidekickAI/（而非绝对路径）。
+// Relative inputs keep the distribution directory as the archive root.
 const SEVENZ = 'C:\\Program Files\\7-Zip\\7z.exe'
 let packed = false
 

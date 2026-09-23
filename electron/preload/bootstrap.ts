@@ -42,24 +42,26 @@ export const bootstrapApi = {
  * Called by the main preload.ts entry point.
  */
 export function setupDomSideEffects() {
-  // 在 <html> 标记平台，供 CSS 按平台调整拖拽区域（macOS 避让交通灯等）。
-  // contextIsolation 下 preload 与渲染层共享 DOM，可直接写 document 属性。
-  document.documentElement.setAttribute('data-platform', process.platform)
+  const initializeDocument = () => {
+    document.documentElement.setAttribute('data-platform', process.platform)
+    updateWindowShapeAttributes()
+  }
+  if (document.documentElement) initializeDocument()
+  else document.addEventListener('DOMContentLoaded', initializeDocument, { once: true })
 
   // 监听窗口最大化/全屏状态，设置 html data 属性以控制窗口级圆角。
   // 普通窗口保持圆角；最大化/全屏时移除圆角，避免黑边。
   function updateWindowShapeAttributes() {
     ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_IS_MAXIMIZED).then((isMax: boolean) => {
-      document.documentElement.setAttribute('data-maximized', String(isMax))
+      document.documentElement?.setAttribute('data-maximized', String(isMax))
     }).catch(() => { /* ignore */ })
   }
   ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, (_e, isMax: boolean) => {
-    document.documentElement.setAttribute('data-maximized', String(isMax))
+    document.documentElement?.setAttribute('data-maximized', String(isMax))
   })
   ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, (_e, isFs: boolean) => {
-    document.documentElement.setAttribute('data-fullscreen', String(isFs))
+    document.documentElement?.setAttribute('data-fullscreen', String(isFs))
   })
-  updateWindowShapeAttributes()
 
   // ===== 使用统计：全局 data-name 点击日志监听器 =====
   // 监听主进程下发的窗口类型（main/chat/advanced-panel/history/prompt-library/...），

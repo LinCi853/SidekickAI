@@ -106,22 +106,32 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
  * 避免被 Windows 全屏窗口覆盖后失效。
  */
 export function setupBoundsTracking(win: BrowserWindow, windowId: string): void {
+  let pendingTimer: NodeJS.Timeout | undefined
+  win.once('closed', () => {
+    if (!pendingTimer) return
+    clearTimeout(pendingTimer)
+    if (windowState.boundsSaveTimers.get(windowId) === pendingTimer) {
+      windowState.boundsSaveTimers.delete(windowId)
+    }
+  })
   const debouncedSave = () => {
+    if (win.isDestroyed()) return
     const existing = windowState.boundsSaveTimers.get(windowId)
     if (existing) clearTimeout(existing)
-    windowState.boundsSaveTimers.set(
-      windowId,
-      setTimeout(() => {
-        const state = windowStore.getOrDefault(windowId)
-        // 仅非最大化、非全屏状态时保存 bounds，避免全屏/最大化尺寸覆盖小窗口尺寸
-        if (!state.isMaximized && !isTrackedFullscreen(windowId)) {
-          state.bounds = win.getBounds()
-        }
-        // isMaximized 状态由手动切换逻辑维护，这里不覆盖
-        windowStore.save(windowId, state)
+    pendingTimer = setTimeout(() => {
+      if (windowState.boundsSaveTimers.get(windowId) === pendingTimer) {
         windowState.boundsSaveTimers.delete(windowId)
-      }, 500),
-    )
+      }
+      pendingTimer = undefined
+      if (win.isDestroyed()) return
+      const state = windowStore.getOrDefault(windowId)
+      // Preserve the bounds used when leaving maximized or fullscreen mode.
+      if (!state.isMaximized && !isTrackedFullscreen(windowId)) {
+        state.bounds = win.getBounds()
+      }
+      windowStore.save(windowId, state)
+    }, 500)
+    windowState.boundsSaveTimers.set(windowId, pendingTimer)
   }
   win.on('resize', debouncedSave)
   win.on('move', debouncedSave)

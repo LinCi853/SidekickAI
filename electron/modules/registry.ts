@@ -87,7 +87,7 @@ const MODULE_IPC_PREFIXES: Record<string, string[]> = {
   'prompt-library': ['PROMPT_', 'INJECTION_'],
   voice: ['STT_', 'VOICE_'],
   tts: ['VOICE_TEST_TTS'],
-  browser: ['BROWSER_', 'NAV_HISTORY_', 'BOOKMARK_', 'CURSOR_'],
+  browser: ['BROWSER_', 'BOOKMARK_', 'CURSOR_'],
   freeze: ['FREEZE_'],
   whiteboard: ['WHITEBOARD_'],
   notes: ['NOTES_'],

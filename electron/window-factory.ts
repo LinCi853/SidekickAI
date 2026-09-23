@@ -27,4 +27,3 @@ export {
   toggleAdvancedPanelWindow,
 } from './window-factory/advanced-panel-window.js'
 export { showOnboardingWindow, setOnboardingLifecycleCallbacks } from './window-factory/onboarding-window.js'
-export { showProcessCleanupWindow } from './window-factory/process-cleanup-window.js'

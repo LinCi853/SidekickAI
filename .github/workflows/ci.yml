@@ -35,5 +35,8 @@ jobs:
       - name: 类型检查
         run: npm run typecheck
 
+      - name: 单元回归
+        run: npm test -- --maxWorkers=4 --minWorkers=1
+
       - name: 构建（主进程 / preload / 渲染层）
         run: npm run build

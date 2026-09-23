@@ -1,6 +1,6 @@
 {
-  "name": "sidekick-ai",
-  "version": "0.1.0-alpha",
+  "name": "sidekickai-opensource",
+  "version": "0.1.0-alpha.1",
   "description": "工百窗（SidekickAI）—— 全平台 AI 聚合 + 反检测多 Profile 浏览器（Electron）",
   "main": "out/main/index.cjs",
   "author": "SidekickAI",
@@ -25,8 +25,9 @@
     "build:win-all": "npm run build:win && npm run build:portable-zip",
     "build:tauri-installer": "node scripts/build-tauri-installer.cjs",
     "test": "vitest run",
+    "test:desktop": "electron-vite build && node scripts/verify-desktop.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "clean": "node -e \"const fs=require('fs');['out','dist','dist-portable','release'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('[clean] Removed',d)}})\"",
+    "clean": "npm run clean:build",
     "clean:build": "node -e \"const fs=require('fs');['out'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('[clean] Removed',d)}})\""
   },
   "dependencies": {
@@ -65,6 +66,7 @@
     "katex": "^0.16.11",
     "lucide-react": "^0.400.0",
     "mermaid": "^11.4.1",
+    "playwright": "1.59.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-markdown": "^10.1.0",

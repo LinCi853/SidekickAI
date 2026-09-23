@@ -50,6 +50,7 @@ export function isPortableMode(): boolean {
  *   - 生产安装版：undefined（electron-store 使用默认 userData 路径）
  */
 export function getStoreCwd(): string | undefined {
+  if (process.env.SIDEKICK_DATA_DIR) return app.getPath('userData')
   // dev 模式
   if (process.env.ELECTRON_RENDERER_URL) {
     return path.join(getModuleDirname(), '..', '..', '.app-data')
@@ -75,6 +76,7 @@ export function getStoreCwd(): string | undefined {
  *   - 生产安装版：userData/<filename>
  */
 export function resolveSqlitePath(filename: string): string {
+  if (process.env.SIDEKICK_DATA_DIR) return path.join(app.getPath('userData'), filename)
   if (process.env.ELECTRON_RENDERER_URL) {
     const dir = path.join(getModuleDirname(), '..', '..', '.app-data')
     mkdirSync(dir, { recursive: true })

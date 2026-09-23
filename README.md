@@ -1,5 +1,15 @@
 # 工百窗 / SidekickAI
 
+本目录维护独立的开源单机版本，当前候选版本为 `0.1.0-alpha.1`。程序名为 `SidekickAI-OpenSource`，安装模式数据名为 `sidekickai-opensource`；开发数据位于本目录 `.app-data`，便携数据位于程序旁的 `data`。与继续深耕的版本分别维护，升级或迁移数据前先导出备份。
+
+本地笔记、白板、提示词和设置可独立运行；AI 网页、远程 API 和在线语音仍需要相应网络与用户配置。Oxy 在此版本中是本地外观系统。
+
+可靠性验证使用 `npm run test:desktop`：真实启动 Electron，阻断测试实例的外部网络，验证笔记与白板操作、即时退出保存、重启、加密导出、损坏备份拒绝和隔离恢复。日志、截图与一次性数据保存在 `local/desktop-verification-*`。规格见 [维护契约](maintenance/reliability.md)。
+
+当前发布准备仅面向 x64 便携候选。旧安装器尚未完成独立身份和完整运行库修复验收，其构建入口暂不提供开源版安装包。ARM64 包与实机验证不包含在 x64 验证结论内。构建不会自动推送或发布。
+
+多版本并行使用时，请为它们设置不同的全局快捷键。数据目录和实例锁相互隔离，并不代表默认快捷键能够同时注册。当前便携候选未进行代码签名。
+
 > AI 时代的个人操作台 — 省时间，不绕路
 
 不是 AI，不是 AI 开发工具，而是你操作 AI、管理事务、节省时间的一站式平台。
@@ -115,17 +125,18 @@ npm install                    # 安装依赖（postinstall 用 electron-rebuild
 npm run dev                    # 开发模式启动
 npm test                       # 单元测试（Vitest）
 npm run typecheck              # 类型检查（tsc --noEmit）
+npm run test:desktop           # 真实 Electron 单机可靠性回归
 
 npm run build:win-x64          # 构建 x64 免安装目录 → dist/win-unpacked
 npm run build:win-arm64        # 构建 ARM64 免安装目录 → dist/win-arm64-unpacked
 npm run build:win              # 上两者顺序执行
-npm run build:portable         # 便携版
-npm run build:tauri-installer  # 构建单文件安装器（向导 exe + 载荷自解压）
+npm run build:portable         # x64 便携目录
+npm run build:portable-zip     # x64 便携 ZIP，已有归档须先保留到独立位置
 ```
 
-安装器载荷包含 x64 与 ARM64 两个架构的产物，因此构建安装器前需先产出双架构目录（`npm run build:win`）。
+`build:win-*` 仅生成目录，不代表对应架构已经运行验收。开源版本当前以 x64 便携包作为验证与交付入口。
 
-> 构建安装器前还需要单独安装向导子项目的依赖：`cd installer-tauri && npm install`（该目录是独立的 npm 子项目，有自己的 `package-lock.json`）。
+> 历史安装器源码保留在 `installer-tauri`，其安装、修复与卸载逻辑需要独立验证后才能恢复构建入口。
 >
 > 说明：`build/tools/7zr.exe` 为运行时解压载荷所需，已随仓库分发（见下方 7-Zip 署名）。
 

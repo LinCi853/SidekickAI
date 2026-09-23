@@ -8,13 +8,11 @@ import { IPC_CHANNELS } from '../../shared/types.js'
 import { EffectScope } from '../effect-scope.js'
 import { registerBrowserIpc } from '../../ipc/browser-ipc.js'
 import { registerBrowserTabAudioIpc } from '../../ipc/browser-tab-audio-ipc.js'
-import { registerNavHistoryIpc } from '../../ipc/nav-history-ipc.js'
 import { registerCursorIpc } from '../../utils/cursor.js'
 import { createBrowserWindow, showHistoryDownloadWindow } from '../../window-factory.js'
 import { searchHistoryStore, closeSearchHistoryStore } from '../../store/search-history-store.js'
 import { browserDownloadStore, closeBrowserDownloadStore } from '../../store/browser-download-store.js'
 import { closeBookmarkStore } from '../../store/bookmark-store.js'
-import { closeNavHistoryStore } from '../../store/nav-history-store.js'
 import { browserWindowStore } from '../../store/browser-window-store.js'
 import { windowState } from '../../window-state.js'
 import { resolveSqlitePath } from '../../store/store-paths.js'
@@ -49,13 +47,6 @@ const BROWSER_CHANNELS = [
   IPC_CHANNELS.BROWSER_DOWNLOAD_CLEAR_ALL,
   IPC_CHANNELS.BROWSER_TOGGLE_DEVTOOLS,
   IPC_CHANNELS.BROWSER_TOGGLE_FULLSCREEN,
-  IPC_CHANNELS.NAV_HISTORY_RECORD,
-  IPC_CHANNELS.NAV_HISTORY_GET,
-  IPC_CHANNELS.NAV_HISTORY_CLEAR,
-  IPC_CHANNELS.NAV_HISTORY_LIST,
-  IPC_CHANNELS.NAV_HISTORY_SEARCH,
-  IPC_CHANNELS.NAV_HISTORY_DELETE,
-  IPC_CHANNELS.NAV_HISTORY_CLEAR_ALL,
   IPC_CHANNELS.BOOKMARK_LIST,
   IPC_CHANNELS.BOOKMARK_ADD,
   IPC_CHANNELS.BOOKMARK_UPDATE,
@@ -75,8 +66,6 @@ export function initBrowserModule(): void {
       getDownloadStore: () => browserDownloadStore,
     }, scope)
     registerBrowserTabAudioIpc({})
-    // 传递 scope 给 registerNavHistoryIpc，使其使用 EffectScope 管理 IPC handler
-    registerNavHistoryIpc(scope)
     registerCursorIpc()
     scope.ipcHandle(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN, () => {
       showHistoryDownloadWindow()
@@ -101,12 +90,11 @@ export function teardownBrowserModule(): void {
   try { closeSearchHistoryStore() } catch (err) { console.warn('[wiring:browser] close search-history:', err) }
   try { closeBrowserDownloadStore() } catch (err) { console.warn('[wiring:browser] close download:', err) }
   try { closeBookmarkStore() } catch (err) { console.warn('[wiring:browser] close bookmark:', err) }
-  try { closeNavHistoryStore() } catch (err) { console.warn('[wiring:browser] close nav-history:', err) }
 }
 
 export function clearBrowserData(): void {
   teardownBrowserModule()
-  for (const name of ['nav-history.db', 'bookmarks.db', 'browser-downloads.db', 'search-history.db']) {
+  for (const name of ['bookmarks.db', 'browser-downloads.db', 'search-history.db']) {
     const p = resolveSqlitePath(name)
     for (const f of [p, p + '-wal', p + '-shm']) {
       if (fs.existsSync(f)) fs.rmSync(f, { force: true })

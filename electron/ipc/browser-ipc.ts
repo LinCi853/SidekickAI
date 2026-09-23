@@ -17,13 +17,11 @@ import { randomUUID } from 'crypto'
 import type {
   BrowserWindowState,
   BrowserTabState,
-  NavHistoryEntry,
   BrowserDownloadRecord,
   SearchHistoryEntry,
 } from '../shared/types.js'
 import type { BookmarkInput, BookmarkFilter, BookmarkPatch } from '../shared/bookmark.types.js'
 import { browserWindowStore } from '../store/browser-window-store.js'
-import { navHistoryStore } from '../store/nav-history-store.js'
 import { bookmarkStore } from '../store/bookmark-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../window-state.js'
@@ -367,20 +365,6 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
     } catch (err) {
       return { ok: false, error: String(err) }
     }
-  })
-
-  // ===== 导航历史 =====
-
-  handle(IPC_CHANNELS.NAV_HISTORY_RECORD, (_e, profileId: string, entry: NavHistoryEntry) => {
-    navHistoryStore.record(profileId, entry)
-  })
-
-  handle(IPC_CHANNELS.NAV_HISTORY_GET, (_e, profileId: string) => {
-    return navHistoryStore.get(profileId)
-  })
-
-  handle(IPC_CHANNELS.NAV_HISTORY_CLEAR, (_e, profileId: string) => {
-    navHistoryStore.clear(profileId)
   })
 
   // ===== 书签系统（v0.0.9） =====

@@ -26,7 +26,7 @@ npm test           # 单元测试
 - **TypeScript strict**：不使用 `any` 兜底；类型定义优先放 `electron/shared/`
 - **缩进与格式**：2 空格、单引号、加分号；Rust 用 4 空格（见 `.editorconfig`）
 - **文件命名**：组件 `PascalCase.tsx`，工具/模块 `kebab-case.ts`
-- **注释**：中文；解释「为什么」而不是「做了什么」。涉及非直觉决策（比如为什么必须 `Debugger.pause` 而非虚拟时间）必须在文件头写清动机
+- **代码与注释**：英文；注释解释必要约束。用户界面优先中文。
 - **渲染层依赖必须放 `devDependencies`**：electron-builder 会自动排除 devDeps，主进程真正 require 的才放 `dependencies`。放错会让安装包体积翻倍
 - **IPC**：新增通道要走现有的安全包装（`electron/ipc-utils`），不要在渲染层直接暴露 `ipcRenderer`
 

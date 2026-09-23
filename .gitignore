@@ -31,6 +31,7 @@ target-check/
 # ============================================================
 .app-data/
 .app-data-installed/
+local/
 .dsh-shots/
 
 # ============================================================
@@ -74,6 +75,7 @@ showcase.html
 !LICENSE
 !CONTRIBUTING.md
 !SECURITY.md
+!AGENTS.md
 
 # ============================================================
 # Misc

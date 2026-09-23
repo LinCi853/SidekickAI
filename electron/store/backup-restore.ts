@@ -7,7 +7,7 @@
 // - Session 数据：Partitions/ 目录（cookies/localStorage/IndexedDB，保证登录态迁移）
 
 
-import { app, session, BrowserWindow } from 'electron';
+import { app, session, BrowserWindow, dialog } from 'electron';
 import AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -22,6 +22,12 @@ import { getDeviceId } from './device-id.js';
 import { encryptFile, decryptFile, isSabkEncrypted } from '../utils/file-crypto.js';
 import { safeExtractAll } from '../utils/safe-zip.js';
 import { setImportingData } from './import-guard.js';
+import { snapshotSqliteDatabase } from './sqlite-snapshot.js';
+import { replaceRestoreEntries, validateRestoreDirectory, RestoreRecoveryError } from './restore-files.js';
+import { closeSearchHistoryStore } from './search-history-store.js';
+import { closeBrowserDownloadStore } from './browser-download-store.js';
+import { closeNavHistoryStore } from './nav-history-store.js';
+import { accumulatedLinksStore } from './accumulated-links-store.js';
 
 /** 必须备份的文件列表（相对数据目录） */
 const BACKUP_FILES = [
@@ -308,6 +314,7 @@ function getDirSize(dirPath: string): number {
 
 /** 获取数据目录路径 */
 function getDataDir(): string {
+  if (process.env.SIDEKICK_DATA_DIR) return app.getPath('userData');
   if (isPortableMode()) {
     return path.join(path.dirname(app.getPath('exe')), 'data');
   }
@@ -468,29 +475,12 @@ export async function exportAllData(
   options: ExportOptions,
   encrypt?: { password: string },
 ): Promise<ExportResult> {
+  let snapshotDir: string | undefined;
   try {
     const dataDir = getDataDir();
     console.log('[backup-restore] 开始导出数据:', dataDir, '选项:', options);
 
-    // 0. 必须在关闭 SQLite 之前读取 deviceId：
-    //    device-id 的 JsonStore 在模块加载时捕获了 settings.db 连接；
-    //    close 之后再 getDeviceId() 会在已关闭连接上抛错，导致卸载 CLI 导出静默失败。
     const deviceId = getDeviceId();
-
-    // 1. 关闭所有 SQLite 连接，确保 WAL 写回主 db
-    try {
-      try {
-        const { closeAllModuleDbs } = await import('../modules/registry.js')
-        await closeAllModuleDbs()
-      } catch { /* ignore */ }
-      closeChatStore();
-      closeWhiteboardDb();
-      closeNotesDb();
-      closeBookmarkStore();
-      closeModuleStateDb();
-    } catch (err) {
-      console.warn('[backup-restore] 关闭 SQLite 失败:', err);
-    }
 
     // 2. 创建 zip
     const zip = new AdmZip();
@@ -498,15 +488,24 @@ export async function exportAllData(
 
     // 3. 基础数据
     if (options.basicData) {
+      snapshotDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'sidekickai-backup-'));
       const pluginExtra = await collectPluginExtraFiles()
       const allBackupFiles = [...BACKUP_FILES]
       for (const db of pluginExtra.dbFiles) {
         allBackupFiles.push(db, db + '-wal', db + '-shm')
       }
-      for (const fileName of allBackupFiles) {
+      for (const fileName of new Set(allBackupFiles)) {
+        if (fileName.endsWith('-wal') || fileName.endsWith('-shm')) continue;
         const filePath = path.join(dataDir, fileName);
         if (!fs.existsSync(filePath)) continue;
-        await addFileWithRetry(zip, filePath, fileName, skippedFiles);
+        if (fileName.endsWith('.db')) {
+          const snapshotPath = path.join(snapshotDir, fileName);
+          fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+          await snapshotSqliteDatabase(filePath, snapshotPath);
+          zip.addFile(fileName, fs.readFileSync(snapshotPath));
+        } else {
+          await addFileWithRetry(zip, filePath, fileName, skippedFiles);
+        }
       }
       const allAssetDirs = [...ASSET_DIRS, ...pluginExtra.assetDirs]
       for (const dirName of allAssetDirs) {
@@ -515,6 +514,7 @@ export async function exportAllData(
           await addFolderWithRetry(zip, dirPath, dirName, skippedFiles);
         }
       }
+      if (skippedFiles.length) throw new Error(`基础数据未能完整导出：${skippedFiles.join(', ')}`);
     }
 
     // 4. 会话数据
@@ -582,6 +582,8 @@ export async function exportAllData(
     const message = (err as Error).message;
     console.error('[backup-restore] 导出失败:', message);
     return { success: false, error: message };
+  } finally {
+    if (snapshotDir) fs.rmSync(snapshotDir, { recursive: true, force: true });
   }
 }
 
@@ -678,6 +680,7 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
   setImportingData(true)
   let dataDir = ''
   let bakDir = ''
+  let tempDir = ''
   try {
     console.log('[backup-restore] 开始导入数据:', zipPath);
 
@@ -685,18 +688,27 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
     const entryNames = new Set(entries.map((e) => e.entryName));
-    if (!entryNames.has('settings.db') && !entryNames.has('profiles.json') && !entryNames.has('app-key.json')) {
+    if (!entryNames.has('settings.db') && !entryNames.has('profiles.json')) {
       return {
         success: false,
-        error: '备份文件不完整：缺少 settings.db 或 app-key.json',
+        error: '备份文件不完整：缺少 settings.db 或 profiles.json',
       };
     }
 
     // 2. 解压到临时目录（仍不销毁窗口；解压失败可直接报错）
-    const tempDir = path.join(app.getPath('temp'), `sidekickai-restore-${Date.now()}`);
+    dataDir = getDataDir();
+    tempDir = fs.mkdtempSync(path.join(path.dirname(dataDir), '.sidekickai-restore-'));
     // 走 safeExtractAll：备份 zip 属用户提供的不可信输入，
     // 必须校验条目名、拒绝路径穿越与符号链接目标（见 safe-zip.ts 说明）
-    safeExtractAll(zip, tempDir, { tag: '[backup-restore]' })
+    const files = entries.filter(entry => !entry.isDirectory);
+    const names = files.map(entry => entry.entryName.replace(/\\/g, '/').toLowerCase());
+    if (new Set(names).size !== names.length) throw new Error('备份包含重复文件');
+    if (names.some(name => name.split('/').some(part => /[:<>"|?*]|[. ]$/.test(part)))) {
+      throw new Error('备份包含无效文件名');
+    }
+    const extracted = safeExtractAll(zip, tempDir, { tag: '[backup-restore]' });
+    if (extracted !== files.length) throw new Error('备份含有无法安全恢复的文件');
+    validateRestoreDirectory(tempDir);
 
     // 3. 销毁所有 BrowserWindow（必须在关闭 SQLite 之前，否则窗口 close 事件
     //    触发 cleanupOnQuit → getChatStore() 会因已关闭的连接而崩溃）
@@ -706,7 +718,7 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       }
     }
 
-    // 4. 清理所有 session（释放 partition 文件锁）
+    // Flush sessions without deleting data that may be absent from the backup.
     const sessionsToClean = [session.defaultSession];
     try {
       for (const profile of profileStore.list()) {
@@ -717,9 +729,8 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
     }
     await Promise.all(
       sessionsToClean.map(async (s) => {
-        try { await s.clearStorageData(); } catch { /* ignore */ }
-        try { await s.clearCache(); } catch { /* ignore */ }
-        try { await s.clearAuthCache(); } catch { /* ignore */ }
+        s.flushStorageData();
+        await s.cookies.flushStore();
       }),
     );
 
@@ -729,43 +740,18 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
       closeWhiteboardDb();
       closeNotesDb();
       closeBookmarkStore();
+      closeSearchHistoryStore();
+      closeBrowserDownloadStore();
+      closeNavHistoryStore();
+      accumulatedLinksStore.close();
       closeModuleStateDb();
     } catch (err) {
       console.warn('[backup-restore] 关闭 SQLite 失败:', err);
     }
 
-    // 6. 获取数据目录
-    dataDir = getDataDir();
-
-    // 7. 备份当前数据目录（重命名为 .bak-<timestamp>）
+    // Each included root is moved aside before its replacement is installed.
     bakDir = `${dataDir}.bak-${Date.now()}`;
-    try {
-      if (fs.existsSync(dataDir)) {
-        fs.renameSync(dataDir, bakDir);
-      }
-    } catch (err) {
-      console.warn('[backup-restore] 备份原数据目录失败:', err);
-    }
-
-    // 8. 将解压内容覆盖到数据目录
-    try {
-      fs.mkdirSync(dataDir, { recursive: true });
-      copyDirRecursive(tempDir, dataDir);
-    } catch (err) {
-      console.error('[backup-restore] 覆盖数据目录失败:', err);
-      try {
-        if (fs.existsSync(bakDir)) {
-          if (fs.existsSync(dataDir)) {
-            fs.rmSync(dataDir, { recursive: true, force: true });
-          }
-          fs.renameSync(bakDir, dataDir);
-        }
-      } catch { /* ignore */ }
-      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
-      // 窗口已销毁：重启回旧数据，避免无界面残留进程
-      scheduleAppRestart(0)
-      return { success: false, error: `导入失败已回滚：${(err as Error).message}` };
-    }
+    replaceRestoreEntries(tempDir, dataDir, bakDir);
 
     // 9. 清理临时目录
     try {
@@ -822,17 +808,20 @@ async function importAllDataInner(zipPath: string): Promise<ImportResult> {
   } catch (err) {
     const message = (err as Error).message;
     console.error('[backup-restore] 导入失败:', message);
+    if (err instanceof RestoreRecoveryError) {
+      dialog.showErrorBox('数据恢复未完成', `自动回滚未完成，程序将关闭。原始数据保留在：\n${err.recoveryDirectory}\n请保留此目录后进行恢复。`);
+      app.exit(1);
+      return { success: false, error: message };
+    }
     // 窗口可能已销毁：尽量拉起正常实例，避免残留无界面进程
     if (BrowserWindow.getAllWindows().length === 0) {
-      try {
-        if (bakDir && dataDir && fs.existsSync(bakDir) && !fs.existsSync(dataDir)) {
-          fs.renameSync(bakDir, dataDir)
-        }
-      } catch { /* ignore */ }
       scheduleAppRestart(0)
     }
     return { success: false, error: message };
   } finally {
+    if (tempDir) {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
     // 成功时上面已 return，此处仅失败/校验失败路径会清标志
     if (BrowserWindow.getAllWindows().length > 0) {
       setImportingData(false)
@@ -872,23 +861,5 @@ export async function importAllDataDecrypted(filePath: string, password: string)
   } catch (err) {
     try { fs.rmSync(tempZip, { force: true }) } catch { /* ignore */ }
     return { success: false, error: (err as Error).message }
-  }
-}
-
-/** 递归复制目录 */
-function copyDirRecursive(src: string, dest: string): void {
-  if (!fs.existsSync(src)) return;
-  if (!fs.existsSync(dest)) {
-    fs.mkdirSync(dest, { recursive: true });
-  }
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
   }
 }

@@ -28,6 +28,10 @@ const CARGO_TARGET_DIR = path.join(os.homedir(), '.cargo', 'sidekick-target')
 const WIZARD_EXE = path.join(CARGO_TARGET_DIR, 'release', 'sidekickai-installer.exe')
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'))
+if (pkg.name === 'sidekickai-opensource') {
+  console.error('The legacy installer uses the development edition identity and is not available for this edition. Use build:portable-zip.')
+  process.exit(1)
+}
 const VERSION = pkg.version
 const OUT_DIR = path.join(ROOT, 'release')
 const OUT_EXE = path.join(OUT_DIR, `SidekickAI-Setup-${VERSION}-x64.exe`)

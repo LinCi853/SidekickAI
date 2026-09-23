@@ -160,12 +160,22 @@ export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
   tableName: string
   defaults: T
 }): JsonStore<T> {
-  const table = new MetaTable<string>(getModuleStateDb(), opts.tableName)
-
-  // 缓存：避免每次 get 都解析 JSON
+  let connection: Database.Database | null = null
+  let table: MetaTable<string>
   let cache: T | null = null
 
+  function currentTable(): MetaTable<string> {
+    const db = getModuleStateDb()
+    if (connection !== db) {
+      connection = db
+      table = new MetaTable<string>(db, opts.tableName)
+      cache = null
+    }
+    return table
+  }
+
   function load(): T {
+    const table = currentTable()
     if (cache) return cache
     const raw = table.get('__data__')
     if (raw) {
@@ -184,14 +194,14 @@ export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
     },
     set(key: string, value: any): void {
       const data = { ...load(), [key]: value }
+      currentTable().set('__data__', JSON.stringify(data))
       cache = data as T
-      table.set('__data__', JSON.stringify(data))
     },
     delete(key: string): void {
-      const data = load()
+      const data = { ...load() }
       delete (data as any)[key]
+      currentTable().set('__data__', JSON.stringify(data))
       cache = data
-      table.set('__data__', JSON.stringify(data))
     },
     has(key: string): boolean {
       const data = load()
@@ -211,4 +221,3 @@ export function clearSqliteStore(tableName: string): void {
     console.warn('[store] 清除 ' + tableName + ' 失败:', err)
   }
 }
-
