@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, opensource]
   pull_request:
-    branches: [main]
+    branches: [main, opensource]
   workflow_dispatch:
 
 # 同一分支的新推送取消上一次未完成的运行
@@ -24,7 +24,7 @@ jobs:
       - name: 配置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       # --ignore-scripts：跳过 electron 二进制下载与原生模块编译（CI 只做静态校验，

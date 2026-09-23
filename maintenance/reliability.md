@@ -25,7 +25,7 @@ Backup export uses SQLite's online snapshot facility without invalidating live d
 
 Use the existing locked dependencies and isolated test profiles. Establish a failing reproduction before changing a defective behavior. Prefer meaningful tests at the storage, process and packaged-application boundaries. Keep browser interactions visible and preserve logs, screenshots and machine-readable results in the local reliability evidence directory.
 
-Run the existing type check and unit suite, targeted regression tests and the desktop compiler for changed source. Test the resulting x64 portable application itself. Review the final diff independently from implementation, simplify redundant logic and commit the reviewed changes locally. Do not publish or push automatically.
+Run the existing type check and unit suite, targeted regression tests and the desktop compiler for changed source. Test the resulting x64 portable application itself. Review the final diff independently from implementation, simplify redundant logic and commit the reviewed changes locally. Source publication follows the owner's authorization and branch boundaries in `maintenance/repository-workflow.md`; release artifacts require their separate release instruction.
 
 ## Evidence boundaries
 

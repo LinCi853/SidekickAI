@@ -14,4 +14,4 @@ The user requested the established application's icons and window names for easi
 
 ## Validation
 
-Record the existing title override in an isolated Electron instance before changing it. Verify native titles after page readiness and reload, dynamic tab renaming, source/reference icon hashes, packaged resources and the new executable icon. Run typecheck, existing unit tests and the required build. Review and simplify the diff before a local commit; do not push.
+Record the existing title override in an isolated Electron instance before changing it. Verify native titles after page readiness and reload, dynamic tab renaming, source/reference icon hashes, packaged resources and the new executable icon. Run typecheck, existing unit tests and the required build. Review and simplify the diff before a local commit; source publication follows `repository-workflow.md`.
