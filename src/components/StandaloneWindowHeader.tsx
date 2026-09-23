@@ -5,7 +5,8 @@
    消除各独立窗口（History / Prompt / Onboarding 等）的重复样板。
    ===================================================================== */
 
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
+import { formatWindowTitle } from '@/lib/window-title';
 import { TitleBar, IconButton, PinToggleButton } from '@/components/ui';
 import { GearIcon } from '@/components/icons';
 import {
@@ -59,6 +60,10 @@ export default function StandaloneWindowHeader({
   className,
 }: StandaloneWindowHeaderProps) {
   const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
+
+  useEffect(() => {
+    document.title = formatWindowTitle(title);
+  }, [title]);
 
   return (
     <TitleBar

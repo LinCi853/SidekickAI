@@ -35,6 +35,7 @@ import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { listBlockRules } from '../lib/electron-api/block-rules';
 import { buildBlockerScript, matchDomain } from '../lib/webview-blocker';
 import { injectionManager } from '../lib/injection-manager';
+import { formatWindowTitle } from '../lib/window-title';
 import './StandaloneView.css';
 
 export default function StandaloneView() {
@@ -100,6 +101,9 @@ export default function StandaloneView() {
     ? profiles.find((p) => p.id === activeTab.profileId) ?? null
     : null;
   const activeTitle = activeTab?.title ?? '工百窗';
+  useEffect(() => {
+    document.title = formatWindowTitle(activeTitle);
+  }, [activeTitle]);
 
   // webview 指纹注入 + viewport + 弹窗拦截兜底 + 屏蔽规则注入
   useEffect(() => {

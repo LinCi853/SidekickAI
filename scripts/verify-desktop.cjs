@@ -21,6 +21,7 @@ let activeApp
 fs.writeFileSync(bootstrap, `
 const { app } = require('electron');
 const fs = require('node:fs');
+app.setAppPath(${JSON.stringify(root)});
 app.setLoginItemSettings = () => {};
 app.relaunch = () => fs.writeFileSync(process.env.VERIFY_RELAUNCH_FILE, 'requested');
 process.on('uncaughtException', error => {

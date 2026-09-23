@@ -36,6 +36,7 @@ import {
 import { useUiVersionStore } from './store/useUiVersionStore';
 import { useThemeStore } from './store/useThemeStore';
 import { getOxyLayout, activateOxy, deactivateOxy, applyAppTheme } from './lib/oxy-design-system';
+const applicationIconUrl = new URL('./assets/app-icon-64.png', import.meta.url).href;
 
 /* =====================================================================
    React.lazy 页面组件 —— 辅助窗口按需加载（非首屏，可 lazy）
@@ -127,26 +128,18 @@ function LoadingScreen() {
           WebkitBackdropFilter: 'blur(12px)',
         }}
       >
-        <div
+        <img
           data-name="app.loading-screen.logo"
+          src={applicationIconUrl}
+          alt=""
           style={{
             width: 'var(--titlebar-icon)',
             height: 'var(--titlebar-icon)',
             margin: '0 auto var(--space-3)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))',
+            display: 'block',
             borderRadius: 'var(--radius-md)',
-            color: 'var(--accent-bright-foreground)',
-            fontFamily: 'var(--font-sans)',
-            fontWeight: 800,
-            fontSize: 'var(--text-md)',
-            boxShadow: '0 0 16px var(--accent-50)',
           }}
-        >
-          W
-        </div>
+        />
         <div
           data-name="app.loading-screen.title"
           style={{

@@ -58,6 +58,7 @@ import { useFileDragDrop } from './hooks/useFileDragDrop';
 import { useTabDragSort } from './hooks/useTabDragSort';
 import { useWindowMinWidth } from './hooks/useWindowMinWidth';
 import { useOxyTheme } from './hooks/useOxyTheme';
+import { formatWindowTitle } from '../../lib/window-title';
 
 export default function MainView() {
   // Store state
@@ -140,6 +141,9 @@ export default function MainView() {
   );
   const activeTab = visibleTabs.find((t) => t.id === activeTabId) ?? null;
   const activeTitle = activeTab?.title ?? '工百窗';
+  useEffect(() => {
+    document.title = formatWindowTitle(activeTitle);
+  }, [activeTitle]);
 
   const getProfile = useCallback(
     (profileId: string) => profiles.find((p) => p.id === profileId) ?? null,

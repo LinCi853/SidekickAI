@@ -6,6 +6,10 @@ import "./styles/app-layout.css";
 import "./styles/oxy-visual-hierarchy.css";
 import { useThemeStore } from "./store/useThemeStore";
 import { useUiVersionStore } from "./store/useUiVersionStore";
+import { getInitialWindowTitle } from "./lib/window-title";
+
+const windowQuery = new URLSearchParams(window.location.search);
+document.title = getInitialWindowTitle(windowQuery.get('mode'), windowQuery.get('windowId') ?? 'main');
 
 // React 渲染前同步一次主题到 DOM（与 index.html 内联脚本配合，确保无闪烁）
 useThemeStore.getState().initTheme();

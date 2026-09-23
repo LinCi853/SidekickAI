@@ -1,6 +1,6 @@
 # 工百窗 / SidekickAI
 
-本目录维护独立的开源单机版本，当前候选版本为 `0.1.0-alpha.1`。程序名为 `SidekickAI-OpenSource`，安装模式数据名为 `sidekickai-opensource`；开发数据位于本目录 `.app-data`，便携数据位于程序旁的 `data`。与继续深耕的版本分别维护，升级或迁移数据前先导出备份。
+本目录维护独立的开源单机版本，当前候选版本为 `0.1.0-alpha.2`。程序名为 `SidekickAI-OpenSource`，安装模式数据名为 `sidekickai-opensource`；开发数据位于本目录 `.app-data`，便携数据位于程序旁的 `data`。与继续深耕的版本分别维护，升级或迁移数据前先导出备份。
 
 本地笔记、白板、提示词和设置可独立运行；AI 网页、远程 API 和在线语音仍需要相应网络与用户配置。Oxy 在此版本中是本地外观系统。
 

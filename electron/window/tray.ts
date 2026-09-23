@@ -28,12 +28,15 @@ export function createTray(): void {
   try {
     const resourcesPath = path.join(__dirname, '..', '..', 'resources', 'icons')
     const isMac = process.platform === 'darwin'
-    // macOS 使用 template image（单色，自动适配深色/浅色模式）；
-    // Windows/Linux 使用彩色 icon.png（16x16）
+    // Use the optical tray artwork at native and double density.
     const iconPath = isMac
       ? path.join(resourcesPath, 'icon-tray-template.png')
-      : path.join(resourcesPath, 'icon.png')
+      : path.join(resourcesPath, 'icon-tray.png')
     let trayIcon = nativeImage.createFromPath(iconPath)
+    if (!isMac && !trayIcon.isEmpty() && !trayIcon.getScaleFactors().includes(2)) {
+      const denseIcon = nativeImage.createFromPath(path.join(resourcesPath, 'icon-tray@2x.png'))
+      if (!denseIcon.isEmpty()) trayIcon.addRepresentation({ scaleFactor: 2, buffer: denseIcon.toPNG() })
+    }
     // macOS template image 缺失时回退到 icon.png，避免托盘创建失败
     if (isMac && trayIcon.isEmpty()) {
       console.warn('[main] macOS template 托盘图标缺失，回退 icon.png')
@@ -47,7 +50,7 @@ export function createTray(): void {
       // template image 自动适配深色/浅色模式；macOS 托盘规范 22x22
       trayIcon.setTemplateImage(true)
       trayIcon = trayIcon.resize({ width: 22, height: 22 })
-    } else {
+    } else if (trayIcon.getSize().width !== 16 || trayIcon.getSize().height !== 16) {
       trayIcon = trayIcon.resize({ width: 16, height: 16 })
     }
     tray = new Tray(trayIcon)

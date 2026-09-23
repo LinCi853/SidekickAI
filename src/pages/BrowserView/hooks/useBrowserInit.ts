@@ -18,6 +18,7 @@ import { useFreezeStore } from '../../../store/useFreezeStore.js';
 import { consumeAccumulatedLinks, browserTabMigrateBack } from '../../../lib/electron-api/index.js';
 import type { Profile } from '../../../lib/electron-api/index.js';
 import { getQueryParam, INTERNAL_TAB_SOURCES } from '../constants.js';
+import { formatWindowTitle } from '../../../lib/window-title';
 
 export function useBrowserInit() {
   const {
@@ -83,18 +84,12 @@ export function useBrowserInit() {
     })();
   }, [init]);
 
-  // E3：根据标签状态同步窗口标题（document.title 控制 BrowserWindow 标题栏 + 任务栏文本）
-  // - 存在 AI 应用标签（非内部设置/书签管理器）时显示 profile.name
-  // - 所有 AI 应用标签关闭后回到默认 'SidekickAI'
+  // Keep the product and profile recognizable in the system window switcher.
   useEffect(() => {
     const hasAppTab = tabs.some(
       (t) => !INTERNAL_TAB_SOURCES.includes(t.source),
     );
-    if (hasAppTab && profile) {
-      document.title = profile.name;
-    } else {
-      document.title = 'SidekickAI';
-    }
+    document.title = formatWindowTitle(hasAppTab && profile ? profile.name : '浏览器');
   }, [tabs, profile]);
 
   // 关闭窗口时，将所有网页标签迁移回主窗口（按 parentTabId 精确恢复）
