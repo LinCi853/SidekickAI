@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, opensource]
+    branches: [main]
   pull_request:
-    branches: [main, opensource]
+    branches: [main]
   workflow_dispatch:
 
 # 同一分支的新推送取消上一次未完成的运行

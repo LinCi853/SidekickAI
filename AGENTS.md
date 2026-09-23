@@ -7,5 +7,7 @@
 - Use English code and comments; prefer Chinese user-facing text. Locate specifications by concepts rather than line numbers.
 - Protect existing changes and use disposable profiles for runtime, backup, restore and installation tests. Never stop processes by executable name.
 - Review and simplify the completed diff before committing the task's changes. Keep commits free of development-progress labels and tool attribution.
-- Keep local evidence, credentials, runtime data and release artifacts out of source commits. The owner authorizes routine publication of reviewed and verified open-source changes to `origin/opensource`; follow `maintenance/repository-workflow.md`. Do not force-push, publish the sibling edition or upload release artifacts without the corresponding release instruction.
+- Keep local evidence, credentials, runtime data and release artifacts out of source commits. The owner authorizes routine publication of reviewed and verified open-source changes to `origin/main`; follow `maintenance/repository-workflow.md`. Do not force-push, publish the sibling edition or upload release artifacts without the corresponding release instruction.
 - Store native build outputs under this workspace on E:. Do not run broad cleanup against retained release artifacts.
+
+- Product editions describe separate local workspaces, not a request for extra remote Git branches. Maintain this public repository directly on `main` unless the user explicitly requests another branch.
