@@ -23,7 +23,7 @@ serde_json = "1"
 aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha2 = "0.10"
-hmac = "0.12"
+hmac = "0.13"
 getrandom = "0.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
