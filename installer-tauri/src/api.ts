@@ -38,7 +38,8 @@ const api = {
   onStatus: (cb: (msg: string) => void) => subscribe<string>('install-status', cb),
   onProgress: (cb: (p: number) => void) => subscribe<number>('install-progress', cb),
   onDone: (cb: (payload: DonePayload) => void) => subscribe<DonePayload>('install-done', cb),
-  onError: (cb: (msg: string) => void) => subscribe<string>('install-error', cb)
+  onError: (cb: (msg: string) => void) => subscribe<string>('install-error', cb),
+  onCloseRequested: (cb: () => void) => subscribe<void>('installer-close-requested', cb)
 }
 
 ;(window as unknown as { installer: typeof api }).installer = api

@@ -51,6 +51,7 @@ export interface UseNotesDataResult {
   saveAsPromptContent: string;
   saveAsPromptTitle: string | undefined;
   setSaveAsPromptOpen: (open: boolean) => void;
+  beforeLeave: (commit: () => void) => Promise<void>;
   handleNew: () => Promise<void>;
   handleSelectNote: (note: Note) => Promise<void>;
   handleDelete: (id: string) => Promise<void>;
@@ -78,6 +79,8 @@ export function useNotesData(): UseNotesDataResult {
 
   // 草稿引用（实时跟踪编辑器内容，flushDraft 读取）
   const draftRef = useRef<DraftState | null>(null);
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const navigationRef = useRef(false);
   const activeNoteRef = useRef<Note | null>(null);
   // 最新内容引用（不被 auto-save 清空，供 handleSaveAsPrompt 读取）
   const latestContentRef = useRef<string>('');
@@ -103,26 +106,53 @@ export function useNotesData(): UseNotesDataResult {
     }
   }, []);
 
-  // ===== flushDraft（核心修复：切换/卸载前保存草稿） =====
-  const flushDraft = useCallback(async () => {
+  // Reserve an upsert id before the first write so failed or synchronous retries
+  // cannot create duplicates, even when a write committed but its reply was lost.
+  const prepareDraft = useCallback(() => {
     const draft = draftRef.current;
-    if (!draft || !draft.content.trim()) return;
-    draftRef.current = null;
-    try {
-      const input: NoteSaveInput = {
-        content: draft.content,
-        contentJson: draft.contentJson,
-      };
-      if (draft.id) input.id = draft.id;
-      if (draft.title !== null) input.title = draft.title;
-      const saved = await saveNote(input);
-      setActiveNoteState((prev) => (prev?.id === saved.id ? saved : prev));
-      await refreshList();
-      await refreshTags();
-    } catch (err) {
-      console.error('[NotesView] flushDraft failed:', err);
+    if (!draft || (!draft.id && !draft.content.trim())) return null;
+    if (!draft.id) draft.id = crypto.randomUUID();
+    const input: NoteSaveInput = { ...draft, id: draft.id, title: draft.title ?? undefined };
+    return { draft, input };
+  }, []);
+
+  const acceptSavedDraft = useCallback((draft: DraftState, saved: Note) => {
+    const current = draftRef.current;
+    if (current === draft) draftRef.current = null;
+    const active = activeNoteRef.current;
+    if (!active || (active.id && active.id !== saved.id)) return;
+    // A first save can finish after another edit; backfill its id without
+    // replacing the editor's newer content when the id change rerenders it.
+    const next = current && current !== draft && current.id === saved.id
+      ? { ...saved, ...current, id: saved.id }
+      : saved;
+    activeNoteRef.current = next;
+    setActiveNoteState(next);
+  }, []);
+
+  // Serialize writes and drain edits made while a save was pending. Only the
+  // exact acknowledged snapshot is cleared; failures leave it available to retry.
+  const flushDraft = useCallback(async (): Promise<void> => {
+    while (true) {
+      if (inFlightRef.current) {
+        await inFlightRef.current;
+        continue;
+      }
+      const pending = prepareDraft();
+      if (!pending) return;
+      const { draft, input } = pending;
+      const writing = (async () => {
+        const saved = await saveNote(input);
+        acceptSavedDraft(draft, saved);
+      })();
+      inFlightRef.current = writing;
+      try { await writing; }
+      finally { inFlightRef.current = null; }
+      // List refresh failure is not a failed durable save.
+      void refreshList().catch((error) => console.error('[NotesView] refresh failed:', error));
+      void refreshTags();
     }
-  }, [refreshList, refreshTags]);
+  }, [prepareDraft, acceptSavedDraft, refreshList, refreshTags]);
 
   // ===== 初始化 =====
   // StrictMode 防护：开发模式下 useEffect 执行两次，防止重复创建笔记
@@ -203,19 +233,20 @@ export function useNotesData(): UseNotesDataResult {
     data: draftRef.current,
     save: flushDraft,
     saveSync: () => {
-      const draft = draftRef.current;
-      if (!draft || !draft.content.trim()) return;
-      try {
-        const input: NoteSaveInput = {
-          content: draft.content,
-          contentJson: draft.contentJson,
-        };
-        if (draft.id) input.id = draft.id;
-        if (draft.title !== null) input.title = draft.title;
-        saveNoteSync(input);
-      } catch (err) {
-        console.error('[NotesView] sync save failed:', err);
-      }
+      // A pending IPC write cannot be cancelled or ordered after sendSync here.
+      // Refuse handoff instead of allowing its older snapshot to overwrite this one.
+      if (inFlightRef.current) throw new Error('Note save in progress');
+      const pending = prepareDraft();
+      if (!pending) return;
+      const { draft, input } = pending;
+      if (!saveNoteSync(input).ok) throw new Error('Note save failed');
+      const active = activeNoteRef.current;
+      if (active) acceptSavedDraft(draft, { ...active, ...draft, id: input.id!, updatedAt: Date.now() });
+    },
+    onError: (error) => {
+      showToast(error instanceof Error && error.message === 'Note save in progress'
+        ? '笔记正在保存，草稿已保留，请稍后重试'
+        : '笔记保存失败，草稿已保留，请检查磁盘空间或权限后重试');
     },
     debounceMs: 800,
   });
@@ -234,43 +265,55 @@ export function useNotesData(): UseNotesDataResult {
 
   // ===== 事件处理 =====
 
-  // 新建笔记
-  const handleNew = useCallback(async () => {
-    await flushNow();
+  // Keep internal record changes and view unmounts in the same navigation lock.
+  // The commit is synchronous so no other transition can pass a stale save check.
+  const navigate = useCallback(async (commit: () => void, activate?: () => Promise<unknown>) => {
+    if (navigationRef.current) {
+      showToast('笔记正在保存或切换，请稍后重试');
+      return;
+    }
+    navigationRef.current = true;
     try {
-      await setActiveNote(null);
-    } catch { /* ignore */ }
-    // 创建临时空 note（id 为空串表示"新建"，编辑器渲染但尚未入库）
+      try { await flushNow(); }
+      catch { return; }
+      if (activate) {
+        try { await activate(); }
+        catch { /* Active-note metadata does not discard the draft. */ }
+        // Activation IPC can yield while the editor receives another change.
+        try { await flushNow(); }
+        catch { return; }
+      }
+      commit();
+    } finally {
+      navigationRef.current = false;
+    }
+  }, [flushNow, showToast]);
+
+  const beforeLeave = useCallback((commit: () => void) => navigate(commit), [navigate]);
+
+  const handleNew = useCallback(() => navigate(() => {
+    // An untouched temporary note is not written to storage.
     const emptyNote: Note = {
-      id: '',
-      title: null,
-      content: '',
-      contentJson: '',
-      pinned: false,
-      tags: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      id: '', title: null, content: '', contentJson: '', pinned: false, tags: [],
+      createdAt: Date.now(), updatedAt: Date.now(),
     };
+    activeNoteRef.current = emptyNote;
     setActiveNoteState(emptyNote);
     draftRef.current = { id: null, title: null, content: '', contentJson: '' };
     latestContentRef.current = '';
-  }, [flushNow]);
+  }, () => setActiveNote(null)), [navigate]);
 
-  // 选择笔记
-  const handleSelectNote = useCallback(async (note: Note) => {
-    await flushNow();
-    try {
-      await setActiveNote(note.id);
-    } catch { /* ignore */ }
-    setActiveNoteState(note);
-    draftRef.current = {
-      id: note.id,
-      title: note.title,
-      content: note.content,
-      contentJson: note.contentJson,
-    };
-    latestContentRef.current = note.content;
-  }, [flushNow]);
+  const handleSelectNote = useCallback((note: Note) => {
+    if (note.id === activeNoteRef.current?.id) return Promise.resolve();
+    return navigate(() => {
+      activeNoteRef.current = note;
+      setActiveNoteState(note);
+      draftRef.current = {
+        id: note.id, title: note.title, content: note.content, contentJson: note.contentJson,
+      };
+      latestContentRef.current = note.content;
+    }, () => setActiveNote(note.id));
+  }, [navigate]);
 
   // 删除笔记
   const handleDelete = useCallback(async (id: string) => {
@@ -293,8 +336,8 @@ export function useNotesData(): UseNotesDataResult {
 
   // 内容变化：首行作为标题（剥离 markdown # 前缀），其余为正文
   const handleContentChange = useCallback((content: string, contentJson: string) => {
-    // 使用 || 而非 ??，将空串 id（新建笔记）转为 null
-    const id = activeNoteRef.current?.id || null;
+    // Keep a reserved id across edits while the first save is still pending.
+    const id = draftRef.current?.id || activeNoteRef.current?.id || null;
     // 首行非空行作为标题，剥离 markdown 标题前缀（# ## ###）
     const firstLine = content.split('\n').find((l) => l.trim()) ?? '';
     const title = firstLine.replace(/^#{1,6}\s*/, '').trim() || null;
@@ -377,6 +420,7 @@ export function useNotesData(): UseNotesDataResult {
     saveAsPromptContent,
     saveAsPromptTitle,
     setSaveAsPromptOpen,
+    beforeLeave,
     handleNew,
     handleSelectNote,
     handleDelete,

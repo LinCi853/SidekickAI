@@ -2,12 +2,14 @@
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED, HWND};
 use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
-use windows::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW, SEE_MASK_NOCLOSEPROCESS};
+use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
 
 /// 当前进程是否已以管理员身份运行（TokenElevation）。
 /// 用于「需要时才提权、已提权则继承」：避免安装完成后写配置再弹一次 UAC。
 pub fn is_process_elevated() -> bool {
-    use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+    use windows::Win32::Security::{
+        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+    };
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
     unsafe {
         let mut token = windows::Win32::Foundation::HANDLE::default();
@@ -59,7 +61,9 @@ pub fn needs_admin(dir: &str, for_all_users: bool) -> bool {
     let pf = std::env::var("ProgramFiles")
         .unwrap_or_else(|_| "C:\\Program Files".into())
         .to_lowercase();
-    let pfx86 = std::env::var("ProgramFiles(x86)").unwrap_or_default().to_lowercase();
+    let pfx86 = std::env::var("ProgramFiles(x86)")
+        .unwrap_or_default()
+        .to_lowercase();
     let windir = std::env::var("windir")
         .unwrap_or_else(|_| "C:\\Windows".into())
         .to_lowercase();
@@ -113,7 +117,10 @@ pub fn shell_execute_runas(exe: &str, args: &str) -> Result<i32, String> {
 pub fn run_elevated(req_path: &std::path::Path) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_str = exe.to_string_lossy().into_owned();
-    let result = std::env::temp_dir().join("SidekickAI-install-result.json");
+    let result = req_path
+        .parent()
+        .ok_or("缺少安装事务目录")?
+        .join("result.json");
     // 删除旧结果，避免子进程异常退出时误读上一次安装结果。
     let _ = std::fs::remove_file(&result);
     let args = format!("--elevated \"{}\"", req_path.display());
@@ -122,8 +129,8 @@ pub fn run_elevated(req_path: &std::path::Path) -> Result<(), String> {
     // 无论退出码是否为 0，都优先读取提权子进程写出的结构化错误。
     // 否则 code=1 会掩盖真正的文件系统、解压或注册表错误。
     if let Ok(s) = std::fs::read_to_string(&result) {
-        let v: serde_json::Value = serde_json::from_str(&s)
-            .map_err(|e| format!("读取安装结果失败：{}", e))?;
+        let v: serde_json::Value =
+            serde_json::from_str(&s).map_err(|e| format!("读取安装结果失败：{}", e))?;
         if v["ok"].as_bool() == Some(true) && code == 0 {
             return Ok(());
         }

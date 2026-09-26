@@ -5,8 +5,10 @@
 //   repair: 选择目标 → 修复确认 → 执行 → 完成
 //   uninstall: 选择目标 → 数据策略 → 执行 → 完成
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import './styles.css'
+import { WizardShell, CloseConfirmation, DataPolicyPicker, WizardDetails } from '../../installer-shared/presentation/Wizard'
+import { finalizeWizard } from '../../installer-shared/presentation/finalize'
 import type { InstallerInfo, InstallLocation, InstallMode, ScanResult } from './global'
 
 type StepId =
@@ -52,7 +54,7 @@ export default function App() {
 
   // 安装选项
   const [installDir, setInstallDir] = useState('')
-  const [forAllUsers, setForAllUsers] = useState(true)
+  const [forAllUsers, setForAllUsers] = useState(false)
   const [features, setFeatures] = useState<Record<string, boolean>>({})
   const [options, setOptions] = useState<Record<string, boolean | string>>({})
   const [launchAfterInstall, setLaunchAfterInstall] = useState(true)
@@ -62,30 +64,11 @@ export default function App() {
   // 当前正在查看的协议（tab 激活项；默认打开首个协议）
   const [activeLicense, setActiveLicense] = useState<string | null>(null)
 
-  // 残留清理：用户勾选要清理的其他位置
-  const [cleanupPaths, setCleanupPaths] = useState<string[]>([])
-  // 卸载数据策略：keep（保留默认）/ export（导出加密备份后删除）/ delete（直接删除）
   const [dataStrategy, setDataStrategy] = useState<'keep' | 'export' | 'delete'>('keep')
   const [backupPath, setBackupPath] = useState('')
   const [backupPassword, setBackupPassword] = useState('')
-  // 导出细项预设与类别（对齐软件内数据迁移语义）
-  const [backupCategories, setBackupCategories] = useState<string[]>([
-    'basicData',
-    'cookies',
-    'indexedDB',
-  ])
   const [backupEncrypt, setBackupEncrypt] = useState(true)
-
-  // 由当前类别反推预设高亮（自定义时不高亮任何预设）
-  const backupPreset = useMemo(() => {
-    const set = new Set(backupCategories)
-    const same = (keys: string[]) =>
-      keys.length === set.size && keys.every((k) => set.has(k))
-    if (same(['basicData', 'cookies'])) return 'minimal' as const
-    if (same(['basicData', 'cookies', 'indexedDB'])) return 'recommended' as const
-    if (same(['basicData', 'cookies', 'indexedDB', 'cache', 'voiceAssets'])) return 'full' as const
-    return 'custom' as const
-  }, [backupCategories])
+  const backupCategories = ['basicData', 'cookies', 'indexedDB', 'cache', 'voiceAssets']
 
   // 许可协议
   const [acceptedLicenses, setAcceptedLicenses] = useState<string[]>([])
@@ -94,55 +77,40 @@ export default function App() {
   const [progress, setProgress] = useState(0)
   const [statusText, setStatusText] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [closeBanner, setCloseBanner] = useState('')
   const [installDone, setInstallDone] = useState(false)
   const [finalDir, setFinalDir] = useState('')
   const [residualNote, setResidualNote] = useState('')
 
   const installingRef = useRef(false)
+  const finalizingRef = useRef(false)
+  const [loadingConfig, setLoadingConfig] = useState(true)
 
-  // ---- 初始化：读取安装器信息 + 扫描已安装位置 ----
   useEffect(() => {
-    window.installer.getInfo().then((data) => {
+    let active = true
+    Promise.all([window.installer.getInfo(), window.installer.scanInstallations()]).then(([data, installations]) => {
+      if (!active) return
+      const selected = data.initialTarget
+        ? installations.locations.find(location => location.path.toLowerCase() === data.initialTarget.toLowerCase())
+        : installations.locations[0]
+      if (data.initialMode === 'uninstall' && !selected) throw new Error('原安装位置已不存在或不属于开源版，请保留文件并重新检查。')
       setInfo(data)
-      setBootstrapError('')
-      setInstallDir(data.defaultDir)
-      const f: Record<string, boolean> = {}
-      data.features.forEach((feat) => {
-        f[feat.id] = feat.defaultEnabled
-      })
-      setFeatures(f)
-      const o: Record<string, boolean | string> = {}
-      data.options.forEach((opt) => {
-        o[opt.id] = opt.defaultValue
-      })
-      setOptions(o)
-      // 默认勾选已同意协议为空；默认打开用户许可
+      setScan(installations)
+      setInstallDir(data.initialTarget || selected?.path || data.perUserDefaultDir)
+      setForAllUsers(selected?.forAllUsers ?? false)
+      setMode(data.initialMode === 'uninstall' ? 'uninstall' : selected ? 'repair' : 'install')
+      setFeatures(Object.fromEntries(data.features.map(feature => [feature.id, feature.defaultEnabled])))
+      setOptions(Object.fromEntries(data.options.map(option => [option.id, option.defaultValue])))
     }).catch((error: unknown) => {
-      const detail = error instanceof Error ? error.message : String(error)
-      setBootstrapError(`安装器初始化失败：${detail}`)
+      if (active) setBootstrapError('安装器初始化失败：' + (error instanceof Error ? error.message : String(error)))
     })
-    window.installer.scanInstallations().then((s) => {
-      setScan(s)
-      // 已有安装 → 默认覆盖到原位置
-      if (s.locations.length > 0) {
-        setInstallDir(s.recommendedDir)
-      }
-    }).catch(() => {/* 扫描失败不阻塞流程 */})
+    return () => { active = false }
   }, [])
 
-  // ---- 安装模式切换：自动更新到对应默认目录（仅在用户主动切换时）----
-  const prevModeRef = useRef<boolean | null>(null)
-  useEffect(() => {
-    if (!info) return
-    if (prevModeRef.current === null) {
-      prevModeRef.current = forAllUsers
-      return
-    }
-    if (prevModeRef.current !== forAllUsers) {
-      prevModeRef.current = forAllUsers
-      setInstallDir(forAllUsers ? info.defaultDir : info.perUserDefaultDir)
-    }
-  }, [forAllUsers, info])
+  const selectScope = useCallback((allUsers: boolean) => {
+    setForAllUsers(allUsers)
+    if (info) setInstallDir(allUsers ? info.defaultDir : info.perUserDefaultDir)
+  }, [info])
 
   // ---- 协议 tab 默认激活首个协议 ----
   useEffect(() => {
@@ -151,64 +119,25 @@ export default function App() {
     setActiveLicense((cur) => cur ?? first?.id ?? null)
   }, [info])
 
-  // ---- 已有安装 → 默认选择「修复安装」（仅扫描首次返回时联动一次，不覆盖用户手动选择）----
-  const scanInitRef = useRef(false)
+  // Configuration belongs to the selected installation, including custom targets.
   useEffect(() => {
-    if (!scan || scanInitRef.current) return
-    scanInitRef.current = true
-    if (scan.locations.length > 0) setMode('repair')
-  }, [scan])
-
-  // ---- 已安装位置预读 install-config.json 作选项初始值 ----
-  const preloadDirRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!info || !scan || preloadDirRef.current !== null) return
-    if (scan.locations.length === 0) return
-    const dir = scan.recommendedDir
-    preloadDirRef.current = dir
-    window.installer
-      .readInstallConfig(dir)
+    if (!info || !scan || !installDir) return
+    let active = true
+    setLoadingConfig(true)
+    const installed = scan.locations.some(location => location.path.toLowerCase() === installDir.toLowerCase())
+    const config = installed ? window.installer.readInstallConfig(installDir) : Promise.resolve(null)
+    config
       .then((cfg) => {
-        if (!cfg) return
-        setFeatures((prev) => {
-          const next = { ...prev }
-          Object.keys(prev).forEach((id) => {
-            const m = cfg.modules?.[id]
-            if (m && typeof m.enabled === 'boolean') next[id] = m.enabled
-          })
-          return next
-        })
-        setOptions((prev) => {
-          const next = { ...prev }
-          Object.keys(prev).forEach((id) => {
-            const v = cfg.options?.[id]
-            if (v !== undefined && v !== null) next[id] = v as boolean | string
-          })
-          return next
-        })
+        if (!active) return
+        setFeatures(Object.fromEntries(info.features.map(feature => [feature.id, cfg?.modules?.[feature.id]?.enabled ?? feature.defaultEnabled])))
+        setOptions(Object.fromEntries(info.options.map(option => [option.id, cfg?.options?.[option.id] ?? option.defaultValue])))
       })
-      .catch(() => {/* 预读失败不阻塞 */})
-  }, [info, scan])
-
-  // ---- 安装模式：选择其他安装位置后自动勾选清理（可手动取消）----
-  useEffect(() => {
-    if (mode !== 'install') return
-    const others = (scan?.locations ?? []).filter(
-      (l) => l.path.toLowerCase() !== installDir.toLowerCase()
-    )
-    if (others.length === 0) return
-    setCleanupPaths((prev) => {
-      let changed = false
-      const next = [...prev]
-      for (const l of others) {
-        if (!next.includes(l.path)) {
-          next.push(l.path)
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [scan, installDir, mode])
+      .catch((error: unknown) => {
+        if (active) setBootstrapError('无法读取所选安装配置：' + (error instanceof Error ? error.message : String(error)))
+      })
+      .finally(() => { if (active) setLoadingConfig(false) })
+    return () => { active = false }
+  }, [info, scan, installDir])
 
   // ---- 订阅安装事件 ----
   useEffect(() => {
@@ -249,7 +178,8 @@ export default function App() {
     setErrorMsg('')
     setStatusText(mode === 'uninstall' ? '正在准备卸载…' : mode === 'repair' ? '正在准备修复…' : '正在准备安装…')
     setStep('installing')
-    await window.installer.start({
+    try {
+      await window.installer.start({
       installDir,
       forAllUsers,
       createDesktopShortcut: true,
@@ -258,27 +188,29 @@ export default function App() {
       features,
       options,
       mode,
-      cleanupPaths,
+      cleanupPaths: [],
       dataStrategy,
       backupPath,
       backupPassword,
       backupEncrypt,
       backupCategories,
       acceptedLicenses
-    })
-  }, [installDir, forAllUsers, features, options, launchAfterInstall, showGuideAfterInstall, mode, cleanupPaths, dataStrategy, backupPath, backupPassword, backupEncrypt, backupCategories, acceptedLicenses])
+      })
+    } catch (error) {
+      installingRef.current = false
+      setErrorMsg(error instanceof Error ? error.message : String(error))
+      setStatusText('操作未完成')
+    }
+  }, [installDir, forAllUsers, features, options, launchAfterInstall, showGuideAfterInstall, mode, dataStrategy, backupPath, backupPassword, backupEncrypt, backupCategories, acceptedLicenses])
 
-  // ---- 完成/关闭向导：按完成页最终勾选设置启动 → 写入最终配置（install/repair）后再关窗 ----
+  // All close gestures persist the final choices before allowing native shutdown.
   const finalizeAndClose = useCallback(async () => {
-    if (installDone && (mode === 'install' || mode === 'repair') && installDir) {
-      try {
-        // 以完成页当前勾选为准（覆盖安装开始时的快照），避免「打开使用指南」不生效
-        await window.installer.setPendingLaunch(
-          installDir,
-          launchAfterInstall,
-          showGuideAfterInstall
-        )
-        await window.installer.flushConfig({
+    if (finalizingRef.current) return
+    finalizingRef.current = true
+    try {
+      const saveRequired = installDone && mode !== 'uninstall' && Boolean(installDir)
+      await finalizeWizard({
+        save: saveRequired ? () => window.installer.flushConfig({
           installDir,
           forAllUsers,
           createDesktopShortcut: true,
@@ -287,12 +219,16 @@ export default function App() {
           features,
           options,
           mode
-        })
-      } catch {
-        // 静默失败：主程序首次启动时将回退到默认配置
-      }
+        }) : undefined,
+        prepareLaunch: saveRequired ? () => window.installer.setPendingLaunch(installDir, launchAfterInstall, showGuideAfterInstall) : undefined,
+        close: () => window.installer.closeWindow(),
+      })
+    } catch (error) {
+      await window.installer.setPendingLaunch(installDir, false, false).catch(() => {})
+      setErrorMsg('设置未能保存或向导未能关闭：' + (error instanceof Error ? error.message : String(error)) + '。请重试完成。')
+    } finally {
+      finalizingRef.current = false
     }
-    window.installer.closeWindow()
   }, [installDone, mode, installDir, forAllUsers, launchAfterInstall, showGuideAfterInstall, features, options])
 
   // ---- 关闭窗口（二次确认；完成页直接写配置并关闭）----
@@ -308,12 +244,21 @@ export default function App() {
     setShowCloseConfirm(true)
   }, [step, finalizeAndClose])
 
+  useEffect(() => window.installer.onCloseRequested(handleClose), [handleClose])
+
   const confirmClose = useCallback(async () => {
-    if (step === 'installing') {
-      await window.installer.cancel()
+    try {
+      if (step === 'installing' && installingRef.current) {
+        if (!await window.installer.cancel()) throw new Error('取消请求未被接受，请等待当前操作完成')
+        setStatusText('正在等待安全取消；提交中的操作会先完成或回滚。')
+      } else {
+        await window.installer.closeWindow()
+      }
+      setShowCloseConfirm(false)
+    } catch (error) {
+      setShowCloseConfirm(false)
+      setCloseBanner('无法关闭向导：' + String(error))
     }
-    setShowCloseConfirm(false)
-    window.installer.closeWindow()
   }, [step])
 
   const browseDir = useCallback(async () => {
@@ -329,21 +274,6 @@ export default function App() {
     if (picked) setBackupPath(picked)
   }, [backupEncrypt])
 
-  const applyBackupPreset = useCallback((preset: 'minimal' | 'recommended' | 'full') => {
-    if (preset === 'minimal') setBackupCategories(['basicData', 'cookies'])
-    else if (preset === 'recommended') setBackupCategories(['basicData', 'cookies', 'indexedDB'])
-    else setBackupCategories(['basicData', 'cookies', 'indexedDB', 'cache', 'voiceAssets'])
-  }, [])
-
-  const toggleBackupCategory = useCallback((key: string) => {
-    setBackupCategories((prev) => {
-      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-      // basicData 必选
-      if (!next.includes('basicData')) next.unshift('basicData')
-      return next
-    })
-  }, [])
-
   // ---- 功能开关 / 选项交互 ----
   const toggleFeature = useCallback((id: string) => {
     setFeatures((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -357,10 +287,6 @@ export default function App() {
     setOptions((prev) => ({ ...prev, [id]: value }))
   }, [])
 
-  const toggleCleanup = useCallback((path: string) => {
-    setCleanupPaths((prev) => (prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]))
-  }, [])
-
   // 逐个勾选/取消某个协议的同意
   const toggleLicense = useCallback((id: string) => {
     setAcceptedLicenses((prev) =>
@@ -368,44 +294,20 @@ export default function App() {
     )
   }, [])
 
-  // ---- 渲染：步骤条 ----
-  const renderSteps = () => (
-    <div className="steps">
-      {steps.map((s, i) => {
-        const cls = i === currentIndex ? 'step step--active' : i < currentIndex ? 'step step--done' : 'step'
-        return (
-          <div key={s.id + s.label} className={cls}>
-            <div className="step__dot">{i < currentIndex ? '✓' : i + 1}</div>
-            <div className="step__label">{s.label}</div>
-          </div>
-        )
-      })}
-    </div>
-  )
-
-  // ---- 渲染：安装位置条目 ----
-  const renderLocItem = (loc: InstallLocation, isTarget: boolean) => (
-    <div key={loc.path} className="loc-item">
+  const renderLocItem = (location: InstallLocation, selected: boolean) => (
+    <div key={location.path} className="loc-item">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="loc-item__path">{loc.path}</div>
+        <div className="loc-item__path">{location.path}</div>
         <div className="loc-item__meta">
-          {loc.version && <span>v{loc.version}</span>}
-          {loc.registered && <span>已注册</span>}
-          {loc.runningPid > 0 && <span className="loc-running">运行中 (PID {loc.runningPid})</span>}
-          {isTarget && <span style={{ color: 'var(--brand-500)' }}>本次目标</span>}
+          {location.version && <span>v{location.version}</span>}
+          {location.registered && <span>已注册</span>}
+          {location.runningPid > 0 && <span className="loc-running">运行中 (PID {location.runningPid})</span>}
+          {selected && <span style={{ color: 'var(--brand-500)' }}>本次目标</span>}
         </div>
       </div>
     </div>
   )
 
-  // ---- 扫描完成后：本机无安装 → 修复/卸载不可用，强制回到正常安装 ----
-  useEffect(() => {
-    if (scan && scan.locations.length === 0 && mode !== 'install') {
-      setMode('install')
-    }
-  }, [scan, mode])
-
-  // ---- 渲染：首页（模式选择）----
   const renderWelcome = () => {
     const hasInstall = (scan?.locations.length ?? 0) > 0
     // 扫描完成且本机无安装时隐藏修复/卸载入口；扫描中先按可全部选择渲染
@@ -510,21 +412,17 @@ export default function App() {
 
   // ---- 渲染：位置/残留确认页（install 与 repair/uninstall 共用骨架）----
 
-  const otherLocations = (scan?.locations ?? []).filter(
-    (l) => l.path.toLowerCase() !== installDir.toLowerCase()
-  )
-
   const renderLocation = () => {
     if (mode === 'install') {
       return (
         <>
           <h1 className="content__title">安装位置</h1>
-          <p className="content__subtitle">确认安装位置；可勾选清理其他安装位置。</p>
+          <p className="content__subtitle">确认安装位置与应用行为后再开始安装。</p>
 
           <div className="field-label" style={{ marginTop: 14 }}>安装模式</div>
           <div
             className={`card card--selectable ${forAllUsers ? 'card--selected' : ''}`}
-            onClick={() => setForAllUsers(true)}
+            onClick={() => selectScope(true)}
           >
             <div className="card__header">
               <div className="radio">
@@ -538,7 +436,7 @@ export default function App() {
           </div>
           <div
             className={`card card--selectable ${!forAllUsers ? 'card--selected' : ''}`}
-            onClick={() => setForAllUsers(false)}
+            onClick={() => selectScope(false)}
           >
             <div className="card__header">
               <div className="radio">
@@ -566,29 +464,8 @@ export default function App() {
             </div>
           </div>
 
-          {otherLocations.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <div className="field-label">清理其他安装位置</div>
-              <div className="loc-list">
-                {otherLocations.map((loc) => (
-                  <div
-                    key={loc.path}
-                    className="check-row check-row--rich"
-                    onClick={() => toggleCleanup(loc.path)}
-                  >
-                    <div className={`checkbox ${cleanupPaths.includes(loc.path) ? 'checkbox--checked' : ''}`}>
-                      {cleanupPaths.includes(loc.path) ? '✓' : ''}
-                    </div>
-                    <div className="check-row__text">
-                      <div className="opt-title">{loc.path}</div>
-                      <div className="opt-desc">清理该位置的旧版本文件</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           {renderComponents()}
+          {renderOptions()}
         </>
       )
     }
@@ -604,7 +481,7 @@ export default function App() {
         </p>
         {locations.length === 0 ? (
           <div className="error-box" style={{ marginTop: 14 }}>
-            未检测到已安装的 SidekickAI。{mode === 'repair' ? '请先执行正常安装。' : ''}
+            未检测到已安装的工百窗开源版。{mode === 'repair' ? '请先执行正常安装。' : ''}
           </div>
         ) : (
           <div className="loc-list">
@@ -612,7 +489,7 @@ export default function App() {
               <div
                 key={loc.path}
                 className={`card card--selectable ${installDir === loc.path ? 'card--selected' : ''}`}
-                onClick={() => setInstallDir(loc.path)}
+                onClick={() => { setInstallDir(loc.path); setForAllUsers(loc.forAllUsers) }}
               >
                 <div className="card__header">
                   <div className="radio">
@@ -633,92 +510,13 @@ export default function App() {
             ))}
           </div>
         )}
-        {mode === 'repair' && renderComponents()}
+        {mode === 'repair' && <>{renderComponents()}{renderOptions()}</>}
         {mode === 'uninstall' && locations.length > 0 && (
           <div style={{ marginTop: 18 }}>
-            <div className="field-label">用户数据（%APPDATA%\sidekick-ai）</div>
-            <div
-              className={`card card--selectable ${dataStrategy === 'keep' ? 'card--selected' : ''}`}
-              onClick={() => setDataStrategy('keep')}
-            >
-              <div className="card__header">
-                <div className="radio">
-                  <div className="radio__dot" />
-                </div>
-                <div>
-                  <div className="card__title">保留用户数据</div>
-                  <div className="card__desc">
-                    配置、Profile、会话登录态、书签等全部留在磁盘上，之后可重新安装找回
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div
-              className={`card card--selectable ${dataStrategy === 'export' ? 'card--selected' : ''}`}
-              onClick={() => setDataStrategy('export')}
-            >
-              <div className="card__header">
-                <div className="radio">
-                  <div className="radio__dot" />
-                </div>
-                <div>
-                  <div className="card__title">导出备份后删除</div>
-                  <div className="card__desc">按所选范围打包用户数据，再删除本机数据（可选加密）</div>
-                </div>
-              </div>
-            </div>
-            {dataStrategy === 'export' && (
+            <div className="field-label">用户数据（%APPDATA%\sidekickai-opensource）</div>
+            <DataPolicyPicker value={dataStrategy} onChange={setDataStrategy}>
               <div className="export-fields export-panel">
-                <div className="field-label">导出范围</div>
-                <div className="preset-row">
-                  {(
-                    [
-                      ['minimal', '最小'],
-                      ['recommended', '推荐'],
-                      ['full', '完整'],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`btn preset-btn ${backupPreset === key ? 'preset-btn--active' : ''}`}
-                      onClick={() => applyBackupPreset(key)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="opt-group" style={{ marginTop: 8 }}>
-                  {(
-                    [
-                      ['basicData', '基础数据', '配置、笔记、模块状态等（必选）', true],
-                      ['cookies', '登录凭据', 'Cookies / Local Storage，恢复后无需重新登录', false],
-                      ['indexedDB', '应用数据', 'IndexedDB 离线数据', false],
-                      ['cache', '离线缓存', 'Cache / GPUCache 等，可安全排除', false],
-                      ['voiceAssets', '语音模型', '本地语音识别模型等大文件', false],
-                    ] as const
-                  ).map(([key, title, desc, required]) => (
-                    <div
-                      key={key}
-                      className={`check-row check-row--rich ${required ? 'check-row--locked' : ''}`}
-                      onClick={() => {
-                        if (!required) toggleBackupCategory(key)
-                      }}
-                    >
-                      <div className={`checkbox ${backupCategories.includes(key) ? 'checkbox--checked' : ''}`}>
-                        {backupCategories.includes(key) ? '✓' : ''}
-                      </div>
-                      <div className="check-row__text">
-                        <div className="opt-title">
-                          {title}
-                          {required ? <span className="opt-tag">必选</span> : null}
-                        </div>
-                        <div className="opt-desc">{desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
+                <p className="hint">完整备份当前开源版用户数据，包括本地资源。备份可读取且校验通过后才删除。</p>
                 <div className="check-row" style={{ marginTop: 10 }} onClick={() => setBackupEncrypt(!backupEncrypt)}>
                   <div className={`checkbox ${backupEncrypt ? 'checkbox--checked' : ''}`}>
                     {backupEncrypt ? '✓' : ''}
@@ -759,39 +557,7 @@ export default function App() {
                   </>
                 )}
               </div>
-            )}
-            <div
-              className={`card card--selectable ${dataStrategy === 'delete' ? 'card--selected' : ''}`}
-              onClick={() => setDataStrategy('delete')}
-            >
-              <div className="card__header">
-                <div className="radio">
-                  <div className="radio__dot" />
-                </div>
-                <div>
-                  <div className="card__title">直接删除不保留</div>
-                  <div className="card__desc">连同配置、Profile、缓存和日志一并删除，不可恢复</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {mode === 'uninstall' && otherLocations.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <div className="field-label">同时清理其他位置</div>
-            <div className="loc-list">
-              {otherLocations.map((loc) => (
-                <div key={loc.path} className="check-row check-row--rich" onClick={() => toggleCleanup(loc.path)}>
-                  <div className={`checkbox ${cleanupPaths.includes(loc.path) ? 'checkbox--checked' : ''}`}>
-                    {cleanupPaths.includes(loc.path) ? '✓' : ''}
-                  </div>
-                  <div className="check-row__text">
-                    <div className="opt-title">{loc.path}</div>
-                    <div className="opt-desc">残留安装位置，建议一并清理</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            </DataPolicyPicker>
           </div>
         )}
       </>
@@ -1010,9 +776,6 @@ export default function App() {
         <div className="progress__bar" style={{ marginTop: 14 }}>
           <div className="progress__bar-fill" style={{ width: `${progress}%` }} />
         </div>
-        {mode !== 'uninstall' && (
-          <div style={{ marginTop: 22 }}>{renderOptions(true)}</div>
-        )}
       </div>
     )
   }
@@ -1024,13 +787,14 @@ export default function App() {
     const isRepair = mode === 'repair'
     return (
       <>
+        {errorMsg && <div className="error-box" role="alert">{errorMsg}</div>}
         <div className="done-wrap">
           <div className="done__icon">✓</div>
           <div className="done__title">{isUninstall ? '卸载完成' : isRepair ? '修复完成' : '安装完成'}</div>
           <div className="done__desc">
             {isUninstall
               ? dataStrategy === 'export'
-                ? `SidekickAI 已卸载；用户数据已加密导出至：${backupPath}`
+                ? `开源版已卸载；用户数据已导出至：${backupPath}`
                 : dataStrategy === 'delete'
                   ? 'SidekickAI 及其用户数据已完全移除。'
                   : 'SidekickAI 已卸载；用户数据已保留。'
@@ -1041,19 +805,10 @@ export default function App() {
           {!isUninstall && residualNote && (
             <div className="hint hint--warning" style={{ marginTop: 10, textAlign: 'left' }}>
               <span className="hint__icon">!</span>
-              <span>{residualNote} 可重新运行安装器再次清理。</span>
+              <span>{residualNote} 其他位置保持不变。</span>
             </div>
           )}
         </div>
-        {!isUninstall && (
-          <div style={{ marginTop: 18 }}>
-            {renderOptions(true)}
-            <div className="hint" style={{ marginTop: 10 }}>
-              <span className="hint__icon">✓</span>
-              <span>选项将在点击「完成」或关闭窗口后写入并生效。</span>
-            </div>
-          </div>
-        )}
       </>
     )
   }
@@ -1089,13 +844,13 @@ export default function App() {
     // 各步骤按钮
     let next: string | null = null
     let onNext: (() => void) | null = null
-    let nextDisabled = false
+    let nextDisabled = loadingConfig
     if (step === 'welcome') {
       onNext = () => setStep(mode === 'install' ? 'license' : 'location')
       next = mode === 'install' ? '下一步' : '继续'
     } else if (step === 'license') {
       onNext = () => setStep('location')
-      nextDisabled = !allLicensesAccepted
+      nextDisabled = loadingConfig || !allLicensesAccepted
       next = '下一步'
     } else if (step === 'location') {
       if (mode === 'install') {
@@ -1109,7 +864,7 @@ export default function App() {
           (backupPath.trim() !== '' &&
             (!backupEncrypt || backupPassword.length >= 6) &&
             backupCategories.includes('basicData'))
-        nextDisabled = !hasTarget || !exportReady
+        nextDisabled = loadingConfig || !hasTarget || !exportReady
         onNext = () => startRun()
         next = mode === 'repair' ? '开始修复' : '开始卸载'
       }
@@ -1154,39 +909,17 @@ export default function App() {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 自建标题栏 */}
-      <div className="titlebar">
-        <div className="titlebar__left" data-tauri-drag-region>
-          <div className="titlebar__logo">S</div>
-          <div className="titlebar__title">SidekickAI 安装向导</div>
-        </div>
-        <div className="titlebar__actions">
-          <button className="titlebar__btn titlebar__btn--close" onClick={handleClose} title="关闭">
-            ✕
-          </button>
-        </div>
-      </div>
+    <WizardShell edition="open-source" kind={mode === 'uninstall' ? 'uninstall' : 'install'} version={info?.version} stages={steps} currentIndex={currentIndex}
+      onClose={handleClose} className=""
+      footer={!bootstrapError && info && scan && renderFooter()}
+      overlay={showCloseConfirm && <CloseConfirmation busy={step === 'installing' && installingRef.current} onCancel={() => setShowCloseConfirm(false)} onConfirm={confirmClose} />}>
 
-      {/* 主体 */}
-      <div className="wizard">
-        <div className="brand">
-          <div className="brand__content">
-            <div className="brand__logo">S</div>
-            <div className="brand__name">SidekickAI</div>
-            <div className="brand__slogan">AI 时代的个人操作台</div>
-            {renderSteps()}
-            {info && <div className="brand__version">v{info.version}</div>}
-          </div>
-        </div>
-
-        <div className="content">
-          <div className="content__body">
+            {closeBanner && <div className="hint hint--warning" role="alert">{closeBanner}</div>}
             {bootstrapError ? (
               <div className="error-box" style={{ margin: 'auto', maxWidth: 560, whiteSpace: 'pre-wrap' }}>
                 {bootstrapError}
                 {'\n\n'}
-                请检查 %TEMP%\SidekickAI-install.log，并将错误信息反馈给开发者。
+                请保留当前错误信息，并重新运行开源版完整安装包。
               </div>
             ) : (
               <>
@@ -1197,34 +930,14 @@ export default function App() {
                 {step === 'done' && renderDone()}
               </>
             )}
-          </div>
-          {!bootstrapError && renderFooter()}
-        </div>
-      </div>
-
-      {/* 关闭确认弹窗 */}
-      {showCloseConfirm && (
-        <div className="modal-mask" onClick={() => setShowCloseConfirm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal__title">
-              {step === 'installing' ? '确定要取消操作吗？' : '确定要退出吗？'}
-            </div>
-            <div className="modal__desc">
-              {step === 'installing'
-                ? '当前操作尚未完成，取消后更改将不会应用。'
-                : '你还没有完成操作，退出后将不会有任何更改。'}
-            </div>
-            <div className="modal__actions">
-              <button className="btn" onClick={() => setShowCloseConfirm(false)}>
-                继续
-              </button>
-              <button className="btn btn--primary" onClick={confirmClose}>
-                确定退出
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      {!bootstrapError && ['location', 'installing', 'done'].includes(step) && <WizardDetails summary={[
+        ['操作', mode === 'uninstall' ? '卸载' : mode === 'repair' ? '修复或更新' : '安装'],
+        ['目标位置', installDir],
+        ['版本', (scan?.locations.find(location => location.path === installDir)?.version || '未安装') + (mode === 'uninstall' ? '' : ' → ' + (info?.version || '读取中'))],
+        ['安装范围', forAllUsers ? '所有用户' : '当前用户'],
+        ['用户数据', mode !== 'uninstall' || dataStrategy === 'keep' ? '保留现有数据' : dataStrategy === 'export' ? '完整备份并验证后删除' : '删除当前开源版数据'],
+        ['备份位置', mode === 'uninstall' && dataStrategy === 'export' ? backupPath : ''],
+      ]} lines={[statusText, errorMsg].filter(Boolean)} />}
+    </WizardShell>
   )
 }

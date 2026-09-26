@@ -1,235 +1,796 @@
-// engine.rs —— 安装引擎：扫描、staging+backup+commit+rollback、修复、卸载、7zr 解压、快捷方式、卸载注册
+use crate::elevate;
+use crate::manifest::{self, InstallLocation, InstallMode, InstallRequest, ScanResult};
+use crate::transaction::{self, Ownership, EDITION, EXECUTABLE, OWNER};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
-use crate::elevate;
-use crate::manifest::{self, InstallLocation, InstallMode, InstallRequest, ScanResult};
-
+static OPERATION_ROOT: OnceLock<PathBuf> = OnceLock::new();
+pub fn operation_root() -> &'static PathBuf {
+    OPERATION_ROOT.get_or_init(|| {
+        let base = std::env::temp_dir().join("SidekickAI-OpenSource-operation");
+        let root = transaction::sibling(&base, "session").expect("operation identifier");
+        fs::create_dir_all(&root).expect("operation directory");
+        root
+    })
+}
+pub fn set_operation_root(path: PathBuf) -> Result<(), String> {
+    transaction::plain_path(&path)?;
+    OPERATION_ROOT
+        .set(path)
+        .map_err(|_| "安装事务目录已初始化".into())
+}
 pub fn log_path() -> PathBuf {
-    std::env::temp_dir().join("SidekickAI-install.log")
+    operation_root().join("install.log")
 }
 pub fn result_path() -> PathBuf {
-    std::env::temp_dir().join("SidekickAI-install-result.json")
+    operation_root().join("result.json")
 }
-
+pub fn cancel_path() -> PathBuf {
+    operation_root().join("cancel")
+}
 fn write_log(line: &str) {
     use std::io::Write;
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_path()) {
-        let _ = writeln!(f, "{}", line);
+    if let Ok(mut file) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path())
+    {
+        let _ = writeln!(file, "{}", line);
     }
 }
-
-pub fn status(msg: &str) {
-    write_log(&format!("S|{}", msg));
+pub fn status(message: &str) {
+    write_log(&format!("S|{}", message));
 }
-pub fn progress(p: u32) {
-    write_log(&format!("P|{}", p));
+pub fn progress(value: u32) {
+    write_log(&format!("P|{}", value));
 }
-
-/// 隐藏窗口运行外部命令（CREATE_NO_WINDOW = 0x08000000）
+fn cancelled() -> Result<(), String> {
+    if cancel_path().exists() {
+        Err("已取消，原安装和用户数据未删除".into())
+    } else {
+        Ok(())
+    }
+}
 trait CommandHidden {
     fn hidden(&mut self) -> &mut Command;
 }
-
 impl CommandHidden for Command {
     fn hidden(&mut self) -> &mut Command {
         use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        self.creation_flags(CREATE_NO_WINDOW)
+        self.creation_flags(0x08000000)
     }
 }
+fn powershell(script: &str, executable: Option<&Path>) -> Result<String, String> {
+    let mut command = Command::new("powershell.exe");
+    command
+        .hidden()
+        .args(["-NoProfile", "-NonInteractive", "-Command", script]);
+    if let Some(executable) = executable {
+        command.env("SIDEKICK_TARGET_EXECUTABLE", executable);
+    }
+    let output = command.output().map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+fn running_pid(dir: &Path) -> Result<u32, String> {
+    let script = "$ErrorActionPreference='Stop'; $p=Get-CimInstance Win32_Process -Filter \"Name='SidekickAI-OpenSource.exe'\" | Where-Object { $_.ExecutablePath -eq $env:SIDEKICK_TARGET_EXECUTABLE -and $_.CommandLine -notmatch '--type=' } | Select-Object -First 1; if ($p) {$p.ProcessId} else {0}";
+    powershell(script, Some(&dir.join(EXECUTABLE)))?
+        .parse()
+        .map_err(|_| "无法确认应用进程身份".into())
+}
+fn close_running(dir: &Path) -> Result<(), String> {
+    if running_pid(dir)? == 0 {
+        return Ok(());
+    }
+    status("正在等待开源版保存并退出…");
+    let script = r#"$ErrorActionPreference='Stop';
+$session=(Get-Process -Id $PID).SessionId;
+$namespace=$env:USERPROFILE.ToLower()+'|'+$session;
+if ($env:SIDEKICK_TEST_SESSION) { $namespace='test:'+$env:SIDEKICK_TEST_SESSION }
+$hash=[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($namespace))).Replace('-','').ToLower().Substring(0,24);
+$pipe=[IO.Pipes.NamedPipeClientStream]::new('.', 'sidekick-editions-'+$hash, [IO.Pipes.PipeDirection]::InOut);
+try {
+  $pipe.Connect(1500);
+  $writer=[IO.StreamWriter]::new($pipe,[Text.UTF8Encoding]::new($false),1024,$true); $writer.AutoFlush=$true;
+  $reader=[IO.StreamReader]::new($pipe);
+  $writer.WriteLine((@{protocol=1; edition='open-source'; action='shutdown'; executable=$env:SIDEKICK_TARGET_EXECUTABLE}|ConvertTo-Json -Compress));
+  $responseTask=$reader.ReadLineAsync();
+  if (-not $responseTask.Wait(3000)) { throw '保存退出请求响应超时' }
+  $response=$responseTask.Result|ConvertFrom-Json;
+  if ($response.protocol -ne 1 -or $response.edition -ne 'open-source' -or $response.status -ne 'yielding') {throw '当前应用不能安全退出，请先完成保存或数据恢复'}
+} finally {$pipe.Dispose()}
+"#;
+    powershell(script, Some(&dir.join(EXECUTABLE)))
+        .map_err(|error| format!("未强制结束应用。请保存并退出开源版后重试：{}", error))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        cancelled()?;
+        if running_pid(dir)? == 0 {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    Err("开源版尚未完成保存退出，安装目录保持不变".into())
+}
 
-// ============================================================================
-// 扫描：固定目录优先，覆盖固定盘常见路径
-// ============================================================================
-
-fn fixed_drives() -> Vec<String> {
-    // ponytail: 逐盘 GetDriveTypeW 而非 WMI 查询；固定盘数量小，同步循环足够
-    let mut out = Vec::new();
-    for c in b'C'..=b'Z' {
-        let root = format!("{}:\\", c as char);
-        if Path::new(&root).exists() && is_fixed_drive(&root) {
-            out.push(root);
+fn registry_key(all: bool) -> String {
+    if let Ok(token) = std::env::var("SIDEKICK_INSTALL_TEST_REGISTRY") {
+        if token.len() == 32 && token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return format!(
+                "HKCU\\Software\\SidekickAI-OpenSource\\InstallerTests\\{}\\{}",
+                token,
+                if all { "machine" } else { "user" }
+            );
         }
     }
-    out
+    format!(
+        "{}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SidekickAI-OpenSource",
+        if all { "HKLM" } else { "HKCU" }
+    )
 }
-
-fn is_fixed_drive(root: &str) -> bool {
-    use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::GetDriveTypeW;
-    const DRIVE_FIXED: u32 = 3;
-    let w: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
-    unsafe { GetDriveTypeW(PCWSTR(w.as_ptr())) == DRIVE_FIXED }
+fn registry_exists(all: bool) -> bool {
+    Command::new("reg.exe")
+        .hidden()
+        .args(["query", &registry_key(all)])
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
-
-/// 有限候选路径：系统标准位置 + 各固定盘根下的常见目录
-fn candidate_dirs() -> Vec<(PathBuf, &'static str)> {
-    let mut out: Vec<(PathBuf, &'static str)> = Vec::new();
-    let pf = std::env::var("ProgramFiles").unwrap_or_default();
-    let pfx86 = std::env::var("ProgramFiles(x86)").unwrap_or_default();
-    let la = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    if !pf.is_empty() {
-        out.push((PathBuf::from(&pf).join("SidekickAI"), "program-files"));
+fn registry_value(all: bool, name: &str) -> Option<String> {
+    let output = Command::new("reg.exe")
+        .hidden()
+        .args(["query", &registry_key(all), "/v", name])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
     }
-    if !pfx86.is_empty() {
-        out.push((PathBuf::from(&pfx86).join("SidekickAI"), "program-files-x86"));
-    }
-    if !la.is_empty() {
-        out.push((PathBuf::from(&la).join("Programs").join("SidekickAI"), "local-programs"));
-    }
-    for root in fixed_drives() {
-        let r = PathBuf::from(&root);
-        out.push((r.join("SidekickAI"), "fixed-disk"));
-        out.push((r.join("Apps").join("SidekickAI"), "fixed-disk"));
-        out.push((r.join("Programs").join("SidekickAI"), "fixed-disk"));
-    }
-    out
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find(|line| line.contains(name) && line.contains("REG_SZ"))
+        .and_then(|line| {
+            line.split_once("REG_SZ")
+                .map(|(_, value)| value.trim().to_string())
+        })
 }
-
-/// 有效安装标记：目录下存在 SidekickAI.exe + resources\app.asar
-fn is_valid_install(dir: &Path) -> bool {
-    dir.join("SidekickAI.exe").exists() && dir.join("resources").join("app.asar").exists()
-}
-
-/// 通过 tasklist 输出检测 SidekickAI.exe 是否运行，返回 PID（0 = 未运行）
-/// ponytail: 用 tasklist 文本解析代替 Toolhelp 快照，避免额外依赖；进程数少时足够
-fn find_running_pid() -> u32 {
-    let out = Command::new("tasklist").hidden()
-        .args(["/FI", "IMAGENAME eq SidekickAI.exe", "/FO", "CSV", "/NH"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output();
-    if let Ok(o) = out {
-        let s = String::from_utf8_lossy(&o.stdout);
-        for line in s.lines() {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 2 && parts[0].contains("SidekickAI.exe") {
-                let pid: String = parts[1].trim_matches('"').to_string();
-                if let Ok(p) = pid.parse() {
-                    return p;
-                }
-            }
-        }
-    }
-    0
-}
-
-/// 只按路径精确关闭：taskkill /PID（设计要求：避免无条件误杀同名程序）
-fn kill_pid(pid: u32) -> bool {
-    if pid == 0 {
-        return true;
-    }
-    let r = Command::new("taskkill").hidden()
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-    let ok = r.map(|s| s.success()).unwrap_or(false);
-    if ok {
-        // 强杀后句柄释放需要时间；过短会导致随后导出读到锁定/半写文件
-        std::thread::sleep(std::time::Duration::from_millis(1200));
-    }
-    ok
-}
-
-/// 从注册表卸载项读已注册版本
-fn registered_version() -> (bool, String) {
-    for root in ["HKCU", "HKLM"] {
-        let key = format!("{}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SidekickAI", root);
-        if let Ok(o) = Command::new("reg").hidden()
-            .args(["query", &key, "/v", "DisplayVersion"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .output()
+fn check_registration(req: &InstallRequest) -> Result<(), String> {
+    if let Some(existing) = registry_value(req.for_all_users, "InstallLocation") {
+        if transaction::path_identity(Path::new(&existing))?
+            != transaction::path_identity(Path::new(&req.install_dir))?
         {
-            let s = String::from_utf8_lossy(&o.stdout);
-            if s.contains("DisplayVersion") {
-                let ver = s
-                    .lines()
-                    .find(|l| l.contains("DisplayVersion"))
-                    .and_then(|l| l.rsplit("REG_SZ").next())
-                    .map(|v| v.trim().to_string())
-                    .unwrap_or_default();
-                return (true, ver);
-            }
+            return Err(format!(
+                "此范围已登记开源版目录 {}，请选择该目录维护或先卸载它",
+                existing
+            ));
         }
     }
-    (false, String::new())
+    Ok(())
 }
-
+fn candidate_dirs() -> Vec<(PathBuf, &'static str)> {
+    let mut result = vec![
+        (system_install_dir(), "program-files"),
+        (user_install_dir(), "local-programs"),
+    ];
+    for all in [false, true] {
+        if let Some(path) = registry_value(all, "InstallLocation") {
+            result.push((PathBuf::from(path), "registered"));
+        }
+    }
+    if let Some(target) = uninstall_target() {
+        result.insert(0, (target, "uninstall"));
+    }
+    result
+}
 pub fn scan_installations() -> ScanResult {
-    write_log("I|开始扫描已安装位置");
-    let (registered, reg_version) = registered_version();
-    let running_pid = find_running_pid();
-    let mut locations: Vec<InstallLocation> = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for (dir, source) in candidate_dirs() {
-        if !seen.insert(dir.clone()) {
+    let mut locations = Vec::new();
+    for (path, source) in candidate_dirs() {
+        if !seen.insert(path.to_string_lossy().to_lowercase()) {
             continue;
         }
-        if is_valid_install(&dir) {
+        if let Ok(owner) = transaction::ownership(&path) {
             locations.push(InstallLocation {
-                path: dir.to_string_lossy().into_owned(),
-                source: source.to_string(),
-                version: reg_version.clone(),
-                arch: String::new(),
-                registered,
-                running_pid: if running_pid > 0 { running_pid } else { 0 },
+                for_all_users: owner.for_all_users,
+                path: path.to_string_lossy().into_owned(),
+                source: source.into(),
+                version: owner.version,
+                arch: owner.arch,
+                registered: registry_value(owner.for_all_users, "InstallLocation")
+                    .map(|value| value.eq_ignore_ascii_case(&path.to_string_lossy()))
+                    .unwrap_or(false),
+                running_pid: running_pid(&path).unwrap_or(0),
                 recommended_for_cleanup: false,
             });
         }
     }
-    let n = locations.len();
-    let (recommended_dir, residual_hint) = if n == 0 {
-        (
-            manifest::build_info().default_dir,
-            String::new(),
-        )
-    } else {
-        let hint = if n > 1 {
-            format!("发现 {} 处 SidekickAI 安装位置，建议保留一处并清理其余。", n)
-        } else {
-            format!("检测到已安装 SidekickAI（{}），将执行覆盖安装。", reg_version)
-        };
-        (locations[0].path.clone(), hint)
-    };
     ScanResult {
+        recommended_dir: locations
+            .first()
+            .map(|location| location.path.clone())
+            .unwrap_or_else(|| user_install_dir().to_string_lossy().into_owned()),
+        residual_hint: if locations.len() > 1 {
+            "发现多个开源版目录；本次仅处理选定目录，其余目录保留".into()
+        } else {
+            String::new()
+        },
         locations,
-        recommended_dir,
-        residual_hint,
-        fixed_drives: fixed_drives(),
+        fixed_drives: Vec::new(),
     }
 }
 
-// ============================================================================
-// 安装流水线：scan → prepare → staging 解压 → 校验 → 关进程 → backup → commit → 注册 → 验证
-// ============================================================================
+struct InstallLock {
+    _file: fs::File,
+}
 
-/// 定位 payload.7z 与 7zr.exe：
-///   1. 优先取安装器同目录（开发 / 测试态）
-///   2. 否则从自身 exe 尾部自解压（生产态单文件）
-fn locate_payload() -> Option<(PathBuf, PathBuf)> {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let payload = dir.join("payload.7z");
-            let sevenz = dir.join("7zr.exe");
-            if payload.exists() && sevenz.exists() {
-                return Some((payload, sevenz));
-            }
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+
+    #[test]
+    fn path_aliases_cannot_acquire_competing_install_locks() {
+        let root =
+            transaction::sibling(&std::env::temp_dir().join("installer-lock-test"), "fixture")
+                .unwrap();
+        let target = root.join("installed");
+        fs::create_dir_all(&target).unwrap();
+        let first = acquire_install_lock(&target).unwrap();
+        assert!(
+            acquire_install_lock(Path::new(&target.to_string_lossy().replace('\\', "/"))).is_err()
+        );
+        assert!(acquire_install_lock(&fs::canonicalize(&target).unwrap()).is_err());
+        drop(first);
+        drop(acquire_install_lock(&target).unwrap());
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+fn acquire_install_lock(target: &Path) -> Result<InstallLock, String> {
+    use sha2::{Digest, Sha256};
+    use std::os::windows::fs::OpenOptionsExt;
+    let hash = format!(
+        "{:x}",
+        Sha256::digest(
+            transaction::path_identity(target)?
+                .to_string_lossy()
+                .as_bytes()
+        )
+    );
+    let lock = target
+        .parent()
+        .ok_or("缺少父目录")?
+        .join(format!(".sidekick-open-source-{}.lock", &hash[..16]));
+    fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .share_mode(0)
+        .open(lock)
+        .map(|file| InstallLock { _file: file })
+        .map_err(|error| format!("另一安装操作正在使用此目录，或目录不可写：{}", error))
+}
+
+fn validate_request(req: &InstallRequest) -> Result<PathBuf, String> {
+    let target = PathBuf::from(&req.install_dir);
+    transaction::plain_path(&target)?;
+    let profile =
+        PathBuf::from(std::env::var("APPDATA").map_err(|_| "无法确认用户数据目录")?).join(EDITION);
+    if transaction::paths_overlap(&target, &profile)? {
+        return Err("安装目录与用户数据目录必须相互独立，请选择其他安装位置".into());
+    }
+    if !req.cleanup_paths.is_empty() {
+        return Err("本次仅维护选定的开源版目录，不自动清理其他位置".into());
+    }
+    if let Some(owner) = transaction::destination(&target)? {
+        if owner.for_all_users != req.for_all_users {
+            return Err("安装范围与原目录不一致，请选择原有用户范围".into());
         }
     }
+    check_registration(req)?;
+    Ok(target)
+}
+
+pub fn run(req: &InstallRequest) -> Result<(), String> {
+    let target = validate_request(req)?;
+    fs::create_dir_all(target.parent().ok_or("缺少父目录")?).map_err(|error| error.to_string())?;
+    let _lock = acquire_install_lock(&target)?;
+    transaction::ensure_no_pending_transaction(&target)?;
+    cancelled()?;
+    if req.action == "flush-config" {
+        return flush_install_config(req);
+    }
+    match req.mode {
+        InstallMode::Uninstall => run_uninstall_request(req),
+        InstallMode::Repair | InstallMode::Install => run_install(req),
+    }
+}
+
+fn run_install(req: &InstallRequest) -> Result<(), String> {
+    let target = PathBuf::from(&req.install_dir);
+    let old = transaction::destination(&target)?;
+    if req.mode == InstallMode::Repair && old.is_none() {
+        return Err("未找到属于开源版的安装标记，不能执行修复".into());
+    }
+    progress(3);
+    status("正在校验安装文件…");
+    let (payload, sevenz) = locate_payload().ok_or("未找到完整安装载荷，请使用开源版完整安装包")?;
+    let staging = transaction::sibling(&target, "staging")?;
+    let extracted = extract_to_staging(&payload, &sevenz, &staging)?;
+    let result = (|| -> Result<(), String> {
+        let payload = transaction::validate_payload(&extracted, manifest::host_arch())?;
+        cancelled()?;
+        close_running(&target)?;
+        cancelled()?;
+        let owner = Ownership {
+            schema: 1,
+            edition: EDITION.into(),
+            version: payload.version,
+            arch: payload.arch,
+            for_all_users: req.for_all_users,
+        };
+        fs::write(
+            extracted.join(OWNER),
+            serde_json::to_vec_pretty(&owner).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        write_install_config(req, &extracted)?;
+        write_plugins_manifest(req, &extracted)?;
+        copy_uninstaller(&extracted)?;
+        let integration = IntegrationBackup::capture(req)?;
+        progress(85);
+        status("正在提交完整运行文件…");
+        transaction::replace_install(
+            &extracted,
+            &target,
+            &integration.directory,
+            || register_uninstall(req, &target).and_then(|_| create_shortcuts(req, &target)),
+            || integration.restore(req),
+        )?;
+        status("开源版安装完成，用户数据与另一版本均已保留");
+        progress(100);
+        Ok(())
+    })();
+    if staging.exists() {
+        fs::remove_dir_all(&staging).map_err(|error| {
+            format!(
+                "临时文件保留在 {}：{}；原结果：{:?}",
+                staging.display(),
+                error,
+                result
+            )
+        })?;
+    }
+    result
+}
+
+fn data_root(req: &InstallRequest) -> Result<PathBuf, String> {
+    let root = PathBuf::from(std::env::var("APPDATA").map_err(|_| "无法确认当前用户的数据目录")?)
+        .join(EDITION);
+    if !req.user_data_dir.is_empty()
+        && !root
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&req.user_data_dir)
+    {
+        return Err("提权后的用户身份与原用户不一致；请选择保留数据，或以原用户执行卸载".into());
+    }
+    transaction::plain_path(&root)?;
+    Ok(root)
+}
+fn export_via_main_app(
+    install_dir: &Path,
+    req: &InstallRequest,
+    data: &Path,
+) -> Result<(), String> {
+    let backup = PathBuf::from(&req.backup_path);
+    transaction::plain_path(&backup)?;
+    if transaction::paths_overlap(&backup, install_dir)?
+        || transaction::paths_overlap(&backup, data)?
+    {
+        return Err("备份必须保存在安装目录和用户数据目录之外".into());
+    }
+    if backup.exists() {
+        return Err("备份文件已存在，请选择新文件名，避免覆盖已有备份".into());
+    }
+    if req.backup_encrypt && req.backup_password.is_empty() {
+        return Err("请设置备份密码".into());
+    }
+    fs::create_dir_all(backup.parent().ok_or("缺少备份目录")?)
+        .map_err(|error| error.to_string())?;
+    let request = operation_root().join("export.json");
+    let result = operation_root().join("export-result.json");
+    let options = serde_json::json!({ "outputPath": backup, "resultPath": result, "encrypt": req.backup_encrypt, "password": req.backup_password,
+        "categories": ["basicData", "cookies", "indexedDB", "cache"], "expectedDataRoot": data });
+    fs::write(&request, options.to_string()).map_err(|error| error.to_string())?;
+    let outcome = Command::new(install_dir.join(EXECUTABLE))
+        .hidden()
+        .args(["--export-user-data", &request.to_string_lossy()])
+        .env("SIDEKICK_DATA_DIR", data)
+        .status();
+    fs::remove_file(&request).map_err(|error| error.to_string())?;
+    let success = outcome.map_err(|error| error.to_string())?.success();
+    let response: serde_json::Value = serde_json::from_slice(
+        &fs::read(&result).map_err(|error| format!("未收到有效导出结果：{}", error))?,
+    )
+    .map_err(|error| error.to_string())?;
+    if !success
+        || response["ok"] != true
+        || response["verified"] != true
+        || response["dataRoot"]
+            .as_str()
+            .map(|root| !root.eq_ignore_ascii_case(&data.to_string_lossy()))
+            .unwrap_or(true)
+    {
+        return Err(format!(
+            "导出未通过验证，用户数据和安装均已保留：{}",
+            response
+        ));
+    }
+    if !backup.is_file() {
+        return Err("导出文件不存在，已中止卸载".into());
+    }
+    Ok(())
+}
+fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
+    let target = PathBuf::from(&req.install_dir);
+    transaction::ownership(&target)?;
+    let strategy = if req.data_strategy.is_empty() {
+        if req.delete_user_data {
+            "delete"
+        } else {
+            "keep"
+        }
+    } else {
+        &req.data_strategy
+    };
+    if !["keep", "delete", "export"].contains(&strategy) {
+        return Err("未知的卸载数据策略".into());
+    }
+    close_running(&target)?;
+    let data = if strategy == "keep" {
+        PathBuf::new()
+    } else {
+        data_root(req)?
+    };
+    if strategy != "keep" && data.exists() {
+        transaction::plain_tree(&data)?;
+        let identity: serde_json::Value = serde_json::from_slice(
+            &fs::read(data.join("edition-identity.json"))
+                .map_err(|_| "数据目录缺少开源版归属标记，请先运行新版或选择保留数据")?,
+        )
+        .map_err(|error| error.to_string())?;
+        if identity["edition"] != EDITION || identity["schema"] != 1 {
+            return Err("拒绝删除不属于开源版的数据".into());
+        }
+        if strategy == "export" {
+            export_via_main_app(&target, req, &data)?;
+        }
+        transaction::ensure_unlocked(&data)?;
+    }
+    cancelled()?;
+    transaction::ensure_unlocked(&target)?;
+    let backup = transaction::sibling(&target, "uninstall-recovery")?;
+    let data_backup = if strategy != "keep" && data.exists() {
+        Some(transaction::sibling(&data, "uninstall-recovery")?)
+    } else {
+        None
+    };
+    let integration = IntegrationBackup::capture(req)?;
+    let journal = target
+        .parent()
+        .ok_or("缺少父目录")?
+        .join(".sidekick-open-source-uninstall.json");
+    if journal.exists() {
+        return Err(format!("请先检查未完成的卸载事务：{}", journal.display()));
+    }
+    let record = serde_json::json!({ "schema": 1, "edition": EDITION, "target": target, "backup": backup, "data": data, "dataBackup": data_backup, "integration": integration.directory });
+    use std::io::Write;
+    let mut journal_file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&journal)
+        .map_err(|error| error.to_string())?;
+    journal_file
+        .write_all(record.to_string().as_bytes())
+        .and_then(|_| journal_file.sync_all())
+        .map_err(|error| error.to_string())?;
+    drop(journal_file);
+    if let Err(error) = fs::rename(&target, &backup) {
+        let _ = fs::remove_file(&journal);
+        return Err(error.to_string());
+    }
+    let commit = (|| -> Result<(), String> {
+        if let Some(backup) = &data_backup {
+            fs::rename(&data, backup).map_err(|error| error.to_string())?;
+        }
+        remove_shortcuts(req.for_all_users)?;
+        remove_uninstall_entry(req.for_all_users)?;
+        Ok(())
+    })();
+    if let Err(error) = commit {
+        fs::rename(&backup, &target).map_err(|restore| {
+            format!(
+                "{}；安装恢复目录：{}（{}）",
+                error,
+                backup.display(),
+                restore
+            )
+        })?;
+        if let Some(backup) = &data_backup {
+            if backup.exists() {
+                fs::rename(backup, &data).map_err(|restore| {
+                    format!("{}；数据保留在 {}：{}", error, backup.display(), restore)
+                })?;
+            }
+        }
+        integration.restore(req)?;
+        fs::remove_file(&journal).map_err(|error| error.to_string())?;
+        return Err(error);
+    }
+    fs::remove_dir_all(&backup).map_err(|error| {
+        format!(
+            "卸载登记已完成，剩余安装文件位于 {}：{}",
+            backup.display(),
+            error
+        )
+    })?;
+    if let Some(backup) = data_backup {
+        fs::remove_dir_all(&backup).map_err(|error| {
+            format!("应用已卸载，用户数据保留在 {}：{}", backup.display(), error)
+        })?;
+    }
+    progress(100);
+    fs::remove_file(&journal).map_err(|error| format!("卸载完成，事务记录保留：{}", error))?;
+    status(if strategy == "keep" {
+        "开源版已卸载，用户数据已保留"
+    } else {
+        "开源版已卸载，指定的开源版用户数据已移除"
+    });
+    Ok(())
+}
+
+pub fn read_install_config(dir: &Path) -> Option<serde_json::Value> {
+    transaction::ownership(dir).ok()?;
+    serde_json::from_slice(&fs::read(dir.join("install-config.json")).ok()?).ok()
+}
+pub fn flush_install_config(req: &InstallRequest) -> Result<(), String> {
+    let target = validate_request(req)?;
+    transaction::ownership(&target)?;
+    write_install_config(req, &target)
+}
+pub fn install_config_matches(req: &InstallRequest) -> bool {
+    read_install_config(Path::new(&req.install_dir))
+        .map(|value| value == build_install_config_json(req))
+        .unwrap_or(false)
+}
+fn desktop_dir(all: bool) -> PathBuf {
+    PathBuf::from(std::env::var(if all { "PUBLIC" } else { "USERPROFILE" }).unwrap_or_default())
+        .join("Desktop")
+}
+fn start_menu_dir(all: bool) -> PathBuf {
+    PathBuf::from(std::env::var(if all { "ProgramData" } else { "APPDATA" }).unwrap_or_default())
+        .join("Microsoft/Windows/Start Menu/Programs/SidekickAI-OpenSource")
+}
+fn shortcut_paths(all: bool) -> Vec<PathBuf> {
+    vec![
+        desktop_dir(all).join("SidekickAI-OpenSource.lnk"),
+        start_menu_dir(all).join("SidekickAI-OpenSource.lnk"),
+    ]
+}
+fn create_shortcuts(req: &InstallRequest, dir: &Path) -> Result<(), String> {
+    let links = shortcut_paths(req.for_all_users);
+    for (index, link) in links.iter().enumerate() {
+        if index == 0 && !req.create_desktop_shortcut {
+            if link.exists() {
+                fs::remove_file(link).map_err(|error| error.to_string())?;
+            }
+            continue;
+        }
+        fs::create_dir_all(link.parent().ok_or("缺少快捷方式目录")?)
+            .map_err(|error| error.to_string())?;
+        create_shortcut(
+            link,
+            &dir.join(EXECUTABLE).to_string_lossy(),
+            &dir.to_string_lossy(),
+        )?;
+    }
+    Ok(())
+}
+fn remove_shortcuts(all: bool) -> Result<(), String> {
+    for path in shortcut_paths(all) {
+        if path.exists() {
+            fs::remove_file(path).map_err(|error| error.to_string())?;
+        }
+    }
+    let directory = start_menu_dir(all);
+    if directory.is_dir()
+        && fs::read_dir(&directory)
+            .map_err(|error| error.to_string())?
+            .next()
+            .is_none()
+    {
+        fs::remove_dir(directory).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+fn remove_uninstall_entry(all: bool) -> Result<(), String> {
+    if !registry_exists(all) {
+        return Ok(());
+    }
+    let result = Command::new("reg.exe")
+        .hidden()
+        .args(["delete", &registry_key(all), "/f"])
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !result.status.success() {
+        return Err("无法移除开源版卸载登记".into());
+    }
+    Ok(())
+}
+fn register_uninstall(req: &InstallRequest, dir: &Path) -> Result<(), String> {
+    let values = [
+        (
+            "DisplayName",
+            "工百窗开源版 / SidekickAI Open Source".into(),
+        ),
+        ("DisplayVersion", env!("CARGO_PKG_VERSION").into()),
+        ("Publisher", "LinCi853".into()),
+        ("InstallLocation", dir.to_string_lossy().into_owned()),
+        (
+            "DisplayIcon",
+            dir.join(EXECUTABLE).to_string_lossy().into_owned(),
+        ),
+        (
+            "UninstallString",
+            format!("\"{}\" --uninstall", dir.join("uninstall.exe").display()),
+        ),
+    ];
+    for (name, value) in values {
+        let output = Command::new("reg.exe")
+            .hidden()
+            .args([
+                "add",
+                &registry_key(req.for_all_users),
+                "/v",
+                name,
+                "/t",
+                "REG_SZ",
+                "/d",
+                &value,
+                "/f",
+            ])
+            .output()
+            .map_err(|error| error.to_string())?;
+        if !output.status.success() {
+            return Err(format!("写入开源版卸载登记失败：{}", name));
+        }
+    }
+    Ok(())
+}
+#[derive(serde::Serialize)]
+struct IntegrationBackup {
+    directory: PathBuf,
+    registry: Option<PathBuf>,
+    links: Vec<(PathBuf, Option<Vec<u8>>)>,
+}
+impl IntegrationBackup {
+    fn capture(req: &InstallRequest) -> Result<Self, String> {
+        check_registration(req)?;
+        let directory = transaction::sibling(&operation_root().join("integration"), "snapshot")?;
+        fs::create_dir(&directory).map_err(|error| error.to_string())?;
+        let mut links = Vec::new();
+        for link in shortcut_paths(req.for_all_users) {
+            transaction::plain_path(&link)?;
+            let bytes = if link.exists() {
+                Some(fs::read(&link).map_err(|error| error.to_string())?)
+            } else {
+                None
+            };
+            links.push((link, bytes));
+        }
+        let registry = if registry_exists(req.for_all_users) {
+            let file = directory.join("registration.reg");
+            let output = Command::new("reg.exe")
+                .hidden()
+                .args([
+                    "export",
+                    &registry_key(req.for_all_users),
+                    &file.to_string_lossy(),
+                    "/y",
+                ])
+                .output()
+                .map_err(|error| error.to_string())?;
+            if !output.status.success() {
+                return Err("无法备份现有开源版卸载登记".into());
+            }
+            Some(file)
+        } else {
+            None
+        };
+        let snapshot = Self {
+            directory,
+            registry,
+            links,
+        };
+        use std::io::Write;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(snapshot.directory.join("integration.json"))
+            .map_err(|error| error.to_string())?;
+        file.write_all(&serde_json::to_vec(&snapshot).map_err(|error| error.to_string())?)
+            .and_then(|_| file.sync_all())
+            .map_err(|error| error.to_string())?;
+        Ok(snapshot)
+    }
+    fn restore(&self, req: &InstallRequest) -> Result<(), String> {
+        remove_uninstall_entry(req.for_all_users)?;
+        if let Some(file) = &self.registry {
+            let output = Command::new("reg.exe")
+                .hidden()
+                .args(["import", &file.to_string_lossy()])
+                .output()
+                .map_err(|error| error.to_string())?;
+            if !output.status.success() {
+                return Err(format!("登记备份保留在 {}", file.display()));
+            }
+        }
+        for (path, bytes) in &self.links {
+            if let Some(bytes) = bytes {
+                fs::create_dir_all(path.parent().ok_or("缺少快捷方式目录")?)
+                    .map_err(|error| error.to_string())?;
+                fs::write(path, bytes).map_err(|error| error.to_string())?;
+            } else if path.exists() {
+                fs::remove_file(path).map_err(|error| error.to_string())?;
+            }
+        }
+        Ok(())
+    }
+}
+fn copy_uninstaller(dir: &Path) -> Result<(), String> {
+    fs::copy(
+        std::env::current_exe().map_err(|error| error.to_string())?,
+        dir.join("uninstall.exe"),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+pub fn uninstall_target() -> Option<PathBuf> {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter()
+        .position(|value| value == "--uninstall-target")
+        .and_then(|index| args.get(index + 1))
+        .map(PathBuf::from)
+}
+pub fn run_uninstall() -> i32 {
+    let result = (|| -> Result<(), String> {
+        let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+        let target = executable.parent().ok_or("无法定位安装目录")?;
+        transaction::ownership(target)?;
+        let copy = operation_root().join("SidekickAI-OpenSource-Uninstall.exe");
+        fs::copy(&executable, &copy).map_err(|error| error.to_string())?;
+        Command::new(copy)
+            .args(["--uninstall-target", &target.to_string_lossy()])
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("{}", error);
+        1
+    } else {
+        0
+    }
+}
+
+fn locate_payload() -> Option<(PathBuf, PathBuf)> {
     extract_embedded()
 }
 
-/// 从自身 exe 尾部解出 payload.7z 与 7zr.exe（footer 描述两个区块长度）。
-/// 布局：exe 原生字节 + payload.7z + 7zr.exe + footer(28B)：
-///   [0..8)  magic "SKPAYLD1"
-///   [8..16) payload_len (u64 LE)
-///   [16..24) sevenz_len (u64 LE)
-///   [24..28) footer_len (u32 LE) = 28
+/// Decode an embedded archive and extractor with a checksum-bearing footer.
 fn extract_embedded() -> Option<(PathBuf, PathBuf)> {
     use std::io::{Read, Seek, SeekFrom};
 
@@ -238,33 +799,38 @@ fn extract_embedded() -> Option<(PathBuf, PathBuf)> {
     let mut f = std::fs::File::open(&exe).ok()?;
     let file_size = f.metadata().ok()?.len();
     write_log(&format!("I|安装器文件大小：{} B", file_size));
-    if file_size < 28 {
+    if file_size < 92 {
         return None;
     }
     f.seek(SeekFrom::End(-4)).ok()?;
     let mut fl = [0u8; 4];
     f.read_exact(&mut fl).ok()?;
     let footer_len = u32::from_le_bytes(fl) as u64;
-    if footer_len < 28 || footer_len > file_size {
+    if footer_len != 92 || footer_len > file_size {
         return None;
     }
     f.seek(SeekFrom::End(-(footer_len as i64))).ok()?;
     let mut footer = vec![0u8; footer_len as usize];
     f.read_exact(&mut footer).ok()?;
-    if &footer[0..8] != b"SKPAYLD1" {
+    if &footer[0..8] != b"SKOSPK01" {
         return None;
     }
     let payload_len = u64::from_le_bytes(footer[8..16].try_into().ok()?) as usize;
     let sevenz_len = u64::from_le_bytes(footer[16..24].try_into().ok()?) as usize;
-    let suffix_len = footer_len as usize + sevenz_len + payload_len;
+    let suffix_len = (footer_len as usize)
+        .checked_add(sevenz_len)?
+        .checked_add(payload_len)?;
     if suffix_len > file_size as usize {
         write_log("E|安装器尾部载荷长度超出文件范围");
         return None;
     }
     let payload_off = file_size as usize - suffix_len;
-    write_log(&format!("I|载荷偏移：{}，payload：{} B，7zr：{} B", payload_off, payload_len, sevenz_len));
+    write_log(&format!(
+        "I|载荷偏移：{}，payload：{} B，7zr：{} B",
+        payload_off, payload_len, sevenz_len
+    ));
 
-    let dir = std::env::temp_dir().join("SidekickAI-Setup");
+    let dir = operation_root().join("payload");
     std::fs::create_dir_all(&dir).ok()?;
     let payload_path = dir.join("payload.7z");
     let sevenz_path = dir.join("7zr.exe");
@@ -280,6 +846,17 @@ fn extract_embedded() -> Option<(PathBuf, PathBuf)> {
     {
         write_log("E|提取出的载荷长度校验失败");
         return None;
+    }
+    use sha2::{Digest, Sha256};
+    for (file, expected) in [
+        (&payload_path, &footer[24..56]),
+        (&sevenz_path, &footer[56..88]),
+    ] {
+        let actual = Sha256::digest(std::fs::read(file).ok()?);
+        if actual.as_slice() != expected {
+            write_log("E|安装载荷校验失败");
+            return None;
+        }
     }
     write_log("I|安装载荷提取完成");
     Some((payload_path, sevenz_path))
@@ -329,57 +906,20 @@ fn extract_percent(s: &[u8]) -> Option<u32> {
     None
 }
 
-fn clear_readonly_attributes(dir: &Path) {
-    let _ = Command::new("attrib").hidden()
-        .args(["-R", "/S", "/D", &format!("{}\\*", dir.display())])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-}
-
-fn move_dir(src: &Path, dst: &Path) -> Result<(), String> {
-    if fs::rename(src, dst).is_ok() {
-        return Ok(());
-    }
-    copy_dir(src, dst)?;
-    let _ = fs::remove_dir_all(src);
-    Ok(())
-}
-
-/// 迭代复制目录，避免 Electron 目录层级较深时递归调用导致栈溢出。
-fn copy_dir(src: &Path, dst: &Path) -> Result<(), String> {
-    let mut pending = vec![(src.to_path_buf(), dst.to_path_buf())];
-    while let Some((current_src, current_dst)) = pending.pop() {
-        fs::create_dir_all(&current_dst)
-            .map_err(|e| format!("无法创建目录 {}：{}", current_dst.display(), e))?;
-        for entry in fs::read_dir(&current_src)
-            .map_err(|e| format!("无法读取目录 {}：{}", current_src.display(), e))?
-        {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let ty = entry
-                .file_type()
-                .map_err(|e| format!("无法读取文件类型 {}：{}", entry.path().display(), e))?;
-            let from = entry.path();
-            let to = current_dst.join(entry.file_name());
-            if ty.is_dir() {
-                pending.push((from, to));
-            } else {
-                fs::copy(&from, &to)
-                    .map_err(|e| format!("无法复制 {} 到 {}：{}", from.display(), to.display(), e))?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// staging 解压：返回解压出的架构子目录
 fn extract_to_staging(payload: &Path, sevenz: &Path, staging: &Path) -> Result<PathBuf, String> {
-    let subdir = if manifest::host_arch() == "arm64" { "win-arm64-unpacked" } else { "win-unpacked" };
+    let subdir = if manifest::host_arch() == "arm64" {
+        "win-arm64-unpacked"
+    } else {
+        "win-unpacked"
+    };
     status("正在解压安装文件…");
-    let _ = fs::remove_dir_all(staging);
+    if staging.exists() {
+        return Err("临时目录已存在，拒绝覆盖".into());
+    }
     fs::create_dir_all(staging).map_err(|e| format!("无法创建临时目录：{}", e))?;
 
-    let mut child = Command::new(sevenz).hidden()
+    let mut child = Command::new(sevenz)
+        .hidden()
         .args([
             "x",
             payload.to_str().unwrap(),
@@ -425,469 +965,6 @@ fn extract_to_staging(payload: &Path, sevenz: &Path, staging: &Path) -> Result<P
     Ok(extracted)
 }
 
-/// 校验核心运行集：主程序 exe、app.asar、关键 DLL、架构目录
-fn validate_core(dir: &Path) -> Result<(), String> {
-    const CORE: &[&str] = &[
-        "SidekickAI.exe",
-        "resources\\app.asar",
-    ];
-    for rel in CORE {
-        if !dir.join(rel).exists() {
-            return Err(format!("载荷校验失败：缺少核心文件 {}", rel));
-        }
-    }
-    Ok(())
-}
-
-/// 安装锁：阻止多实例并发操作（同目录互斥文件）
-fn acquire_install_lock() -> Option<fs::File> {
-    let lock = std::env::temp_dir().join("SidekickAI-install.lock");
-    // 独占创建：已存在则说明另一实例在运行
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&lock)
-        .ok()
-        .or_else(|| {
-            // 残留锁：超过 30 分钟视为陈旧并接管
-            // ponytail: mtime 陈旧判定，崩溃场景足够；进程级互斥体需额外 crate
-            if let Ok(meta) = fs::metadata(&lock) {
-                if let Ok(mtime) = meta.modified() {
-                    if mtime.elapsed().map(|e| e.as_secs() > 1800).unwrap_or(false) {
-                        let _ = fs::remove_file(&lock);
-                        return fs::OpenOptions::new()
-                            .write(true)
-                            .create_new(true)
-                            .open(&lock)
-                            .ok();
-                    }
-                }
-            }
-            None
-        })
-}
-
-pub fn run(req: &InstallRequest) -> Result<(), String> {
-    // 轻量子任务：仅在用户点击完成/关闭向导时写入最终配置
-    if req.action == "flush-config" {
-        return flush_install_config(req);
-    }
-    match req.mode {
-        InstallMode::Repair => run_repair(req),
-        InstallMode::Uninstall => run_uninstall_request(req),
-        InstallMode::Install => run_install(req),
-    }
-}
-
-fn run_install(req: &InstallRequest) -> Result<(), String> {
-    let _lock = acquire_install_lock().ok_or_else(|| {
-        "检测到另一个安装器实例正在运行，请等待其完成或关闭后重试。".to_string()
-    });
-    write_log(&format!("I|安装引擎启动，模式 install，目标目录：{}", req.install_dir));
-    progress(3);
-    status("正在准备安装…");
-    let (payload, sevenz) = locate_payload().ok_or_else(|| {
-        let message = "未找到安装载荷 payload.7z / 7zr.exe（需与安装器同目录或内嵌于单文件）";
-        write_log(&format!("E|{}", message));
-        message
-    })?;
-    let install_dir = PathBuf::from(&req.install_dir);
-    let parent = install_dir.parent().ok_or("无效的安装目录")?;
-    fs::create_dir_all(parent).map_err(|e| format!("无法创建目录 {}：{}", parent.display(), e))?;
-
-    // ---- staging 解压 + 校验（不动旧安装）----
-    let staging = std::env::temp_dir().join(format!("SidekickAI-Extract-{}", std::process::id()));
-    let extracted = extract_to_staging(&payload, &sevenz, &staging)?;
-    if let Err(e) = validate_core(&extracted) {
-        let _ = fs::remove_dir_all(&staging);
-        return Err(e);
-    }
-
-    // ---- 关闭旧进程（按 PID 精确）----
-    status("正在关闭旧版本进程…");
-    let pid = find_running_pid();
-    if pid > 0 {
-        write_log(&format!("I|发现运行中的 SidekickAI，PID {}", pid));
-        kill_pid(pid);
-    }
-
-    // ---- backup：旧目录改名而非删除 ----
-    let had_old = install_dir.exists();
-    let backup = std::env::temp_dir().join(format!("SidekickAI-Backup-{}", std::process::id()));
-    let mut backup_created = false;
-    if had_old {
-        status("正在备份旧版本…");
-        clear_readonly_attributes(&install_dir);
-        let _ = fs::remove_dir_all(&backup);
-        if fs::rename(&install_dir, &backup).is_ok() {
-            backup_created = true;
-        } else {
-            // rename 失败（跨盘或被锁）：退回复制式备份
-            write_log("W|旧目录改名失败，改用复制式备份");
-            if copy_dir(&install_dir, &backup).is_ok() {
-                backup_created = true;
-            }
-        }
-        if !backup_created {
-            let _ = fs::remove_dir_all(&staging);
-            return Err("无法备份旧安装目录，已中止（旧版本未受影响）".into());
-        }
-    }
-
-    // ---- commit：staging → 目标 ----
-    progress(84);
-    status("正在写入安装文件…");
-    let commit = move_dir(&extracted, &install_dir);
-    if let Err(e) = commit {
-        // 回滚
-        write_log(&format!("E|提交安装失败：{}，开始回滚", e));
-        if backup_created {
-            let _ = fs::remove_dir_all(&install_dir);
-            let _ = move_dir(&backup, &install_dir);
-        }
-        let _ = fs::remove_dir_all(&staging);
-        return Err(format!("安装失败：{}（已恢复旧版本）", e));
-    }
-    let _ = fs::remove_dir_all(&staging);
-
-    // ---- 配置 / 快捷方式 / 注册表（任一失败 → 回滚）----
-    let tail = (|| -> Result<(), String> {
-        progress(90);
-        status("正在写入配置…");
-        write_install_config(req, &install_dir)?;
-        write_plugins_manifest(req, &install_dir)?;
-
-        progress(94);
-        status("正在创建快捷方式…");
-        if req.create_desktop_shortcut {
-            create_shortcuts(req, &install_dir);
-        }
-
-        progress(97);
-        status("正在写入卸载信息…");
-        register_uninstall(req, &install_dir)?;
-        copy_uninstaller(&install_dir)?;
-        Ok(())
-    })();
-
-    if let Err(e) = tail {
-        write_log(&format!("E|安装后置步骤失败：{}，开始回滚", e));
-        let _ = fs::remove_dir_all(&install_dir);
-        if backup_created {
-            let _ = move_dir(&backup, &install_dir);
-        }
-        remove_shortcuts(!req.for_all_users);
-        remove_uninstall_entry(if req.for_all_users { "HKLM" } else { "HKCU" });
-        return Err(format!("安装失败：{}（已恢复旧版本）", e));
-    }
-
-    // ---- 成功：删除 backup、清理用户确认的其他位置 ----
-    if backup_created {
-        status("正在清理备份…");
-        clear_readonly_attributes(&backup);
-        let _ = fs::remove_dir_all(&backup);
-    }
-    for extra in &req.cleanup_paths {
-        let p = PathBuf::from(extra);
-        if p != install_dir && p.exists() {
-            status(&format!("正在清理其他安装位置 {}…", p.display()));
-            clear_readonly_attributes(&p);
-            if let Err(e) = fs::remove_dir_all(&p) {
-                write_log(&format!("W|清理 {} 失败：{}（将在完成页提示）", p.display(), e));
-            }
-        }
-    }
-    // 清理另一安装模式遗留的快捷方式与卸载项，保证唯一入口
-    let other_mode = !req.for_all_users;
-    remove_shortcuts(other_mode);
-    remove_uninstall_entry(if req.for_all_users { "HKCU" } else { "HKLM" });
-
-    progress(100);
-    status("安装完成");
-    Ok(())
-}
-
-/// 修复模式：只替换校验失败/缺少的核心程序文件，保留配置与用户数据
-fn run_repair(req: &InstallRequest) -> Result<(), String> {
-    let _lock = acquire_install_lock().ok_or_else(|| {
-        "检测到另一个安装器实例正在运行，请等待其完成或关闭后重试。".to_string()
-    });
-    write_log(&format!("I|安装引擎启动，模式 repair，目标目录：{}", req.install_dir));
-    progress(5);
-    status("正在校验现有安装…");
-    let install_dir = PathBuf::from(&req.install_dir);
-    if !install_dir.exists() {
-        return Err("修复目标目录不存在，请先执行正常安装。".into());
-    }
-
-    // 校验现有核心文件，缺失/损坏则从 staging 恢复
-    let broken = validate_core(&install_dir).is_err();
-    if !broken {
-        progress(100);
-        status("核心文件完整，无需修复");
-        write_log("I|核心文件完整，跳过修复");
-        return Ok(());
-    }
-
-    let (payload, sevenz) = locate_payload().ok_or_else(|| {
-        let message = "未找到安装载荷 payload.7z / 7zr.exe（需与安装器同目录或内嵌于单文件）";
-        write_log(&format!("E|{}", message));
-        message
-    })?;
-    let staging = std::env::temp_dir().join(format!("SidekickAI-Repair-{}", std::process::id()));
-    let extracted = extract_to_staging(&payload, &sevenz, &staging)?;
-
-    status("正在关闭运行中的进程…");
-    let pid = find_running_pid();
-    if pid > 0 {
-        kill_pid(pid);
-    }
-
-    progress(80);
-    status("正在替换核心程序文件…");
-    // 只覆盖程序文件：exe、resources；不动 install-config.json、用户数据
-    let targets = [install_dir.join("SidekickAI.exe"), install_dir.join("resources")];
-    for t in &targets {
-        if !t.exists() {
-            continue;
-        }
-        if t.is_dir() {
-            let _ = fs::remove_dir_all(t);
-        } else {
-            let _ = fs::remove_file(t);
-        }
-    }
-    for name in ["SidekickAI.exe", "resources"] {
-        let src = extracted.join(name);
-        let dst = install_dir.join(name);
-        if src.exists() {
-            if src.is_dir() {
-                copy_dir(&src, &dst)?;
-            } else {
-                fs::copy(&src, &dst).map_err(|e| format!("恢复 {} 失败：{}", name, e))?;
-            }
-        }
-    }
-    let _ = fs::remove_dir_all(&staging);
-
-    if let Err(e) = validate_core(&install_dir) {
-        return Err(format!("修复后校验失败：{}", e));
-    }
-    // 修复不重写配置（保留用户设置），只确保卸载入口有效
-    if req.create_desktop_shortcut {
-        create_shortcuts(req, &install_dir);
-    }
-    progress(100);
-    status("修复完成");
-    Ok(())
-}
-
-/// 优先调用已安装的 SidekickAI.exe 执行导出（与软件内 backup-restore 同一套代码）。
-/// exe 不存在或执行失败时返回 Err，由调用方决定是否回退到 Rust 整目录打包。
-fn export_via_main_app(install_dir: &Path, req: &InstallRequest) -> Result<(), String> {
-    let exe = install_dir.join("SidekickAI.exe");
-    if !exe.exists() {
-        return Err(format!("未找到主程序 {}", exe.display()));
-    }
-    let req_path = std::env::temp_dir().join("SidekickAI-export-request.json");
-    let res_path = std::env::temp_dir().join("SidekickAI-export-result.json");
-    let _ = fs::remove_file(&res_path);
-
-    let encrypt = req.backup_encrypt;
-    let payload = serde_json::json!({
-        "outputPath": req.backup_path,
-        "encrypt": encrypt,
-        "password": if encrypt { req.backup_password.as_str() } else { "" },
-        "categories": req.backup_categories,
-        "resultPath": res_path.to_string_lossy(),
-    });
-    fs::write(&req_path, payload.to_string()).map_err(|e| format!("写入导出请求失败：{}", e))?;
-
-    status("正在通过主程序导出用户数据（与软件内备份同一套逻辑）…");
-    let out = Command::new(&exe)
-        .hidden()
-        .arg("--export-user-data")
-        .arg(&req_path)
-        .output()
-        .map_err(|e| format!("启动主程序导出失败：{}", e))?;
-
-    let code = out.status.code().unwrap_or(-1);
-    let result_msg = fs::read_to_string(&res_path).unwrap_or_default();
-    let backup_ok = fs::metadata(&req.backup_path)
-        .map(|m| m.len() > 1024)
-        .unwrap_or(false);
-    if code == 0 && backup_ok {
-        let _ = fs::remove_file(&req_path);
-        let _ = fs::remove_file(&res_path);
-        return Ok(());
-    }
-    let detail = if result_msg.is_empty() {
-        format!(
-            "导出进程退出码 {}，备份文件缺失或过小（{} bytes）",
-            code,
-            fs::metadata(&req.backup_path).map(|m| m.len()).unwrap_or(0)
-        )
-    } else {
-        result_msg
-    };
-    Err(detail)
-}
-
-/// 统一卸载入口（安装器 UI 触发；数据策略由 data_strategy / delete_user_data 决定）
-fn run_uninstall_request(req: &InstallRequest) -> Result<(), String> {
-    let _lock = acquire_install_lock().ok_or_else(|| {
-        "检测到另一个安装器实例正在运行，请等待其完成或关闭后重试。".to_string()
-    });
-    write_log(&format!(
-        "I|安装引擎启动，模式 uninstall，目标：{}，数据策略：{:?} / delete_user_data: {}",
-        req.install_dir, req.data_strategy, req.delete_user_data
-    ));
-    progress(5);
-    let install_dir = PathBuf::from(&req.install_dir);
-    if !install_dir.exists() {
-        return Err("未找到要卸载的安装目录。".into());
-    }
-
-    // 数据策略归一化：新字段优先，兼容旧布尔字段
-    let strategy = if !req.data_strategy.is_empty() {
-        req.data_strategy.as_str()
-    } else if req.delete_user_data {
-        "delete"
-    } else {
-        "keep"
-    };
-
-    status("正在关闭软件…");
-    let pid = find_running_pid();
-    if pid > 0 {
-        kill_pid(pid);
-    }
-
-    // 用户数据候选目录：当前 %APPDATA%\sidekick-ai（Electron app.getName() 取 package.json 的 name），
-    // 以及历史版本遗留目录（ai-window / SidekickAI），备份与删除均覆盖全部候选
-    let data_dirs: Vec<PathBuf> = std::env::var("APPDATA")
-        .ok()
-        .map(|a| {
-            let base = PathBuf::from(&a);
-            ["sidekick-ai", "ai-window", "SidekickAI"]
-                .iter()
-                .map(|name| base.join(name))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    // 导出备份（data_strategy=export）：在删除任何东西之前完成，失败则中止卸载
-    if strategy == "export" {
-        progress(30);
-        status("正在导出用户数据…");
-        if req.backup_path.is_empty() {
-            return Err("未指定备份保存路径，已中止卸载。".into());
-        }
-        if req.backup_encrypt && req.backup_password.is_empty() {
-            return Err("未设置备份密码，已中止卸载。".into());
-        }
-        let backup_dir = PathBuf::from(&req.backup_path);
-        if let Some(parent) = backup_dir.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("无法创建备份目录 {}：{}", parent.display(), e))?;
-        }
-        // 首选：主程序 CLI 导出（与软件内「数据迁移」共用 backup-restore.exportAllData）
-        let primary = export_via_main_app(&install_dir, req);
-        match primary {
-            Ok(()) => {
-                status("用户数据已由主程序导出");
-            }
-            Err(primary_err) => {
-                write_log(&format!("W|主程序导出失败，回退 Rust 整目录打包：{}", primary_err));
-                if let Some(src) = data_dirs.iter().find(|d| d.exists()).cloned() {
-                    if req.backup_encrypt {
-                        crate::encrypt::export_encrypted_backup(
-                            &src,
-                            &backup_dir,
-                            &req.backup_password,
-                            &req.backup_categories,
-                        )?;
-                        status("用户数据已导出加密备份（兼容回退路径）");
-                    } else {
-                        crate::encrypt::export_plain_backup(&src, &backup_dir, &req.backup_categories)?;
-                        status("用户数据已导出（兼容回退路径）");
-                    }
-                } else {
-                    write_log("W|未发现用户数据目录，跳过备份导出");
-                }
-            }
-        }
-    }
-
-    progress(50);
-    status("正在删除快捷方式与卸载项…");
-    for all in [false, true] {
-        remove_shortcuts(all);
-    }
-    for root in ["HKCU", "HKLM"] {
-        remove_uninstall_entry(root);
-    }
-
-    // 仅当策略要求删除用户数据时才删除（keep 始终保留；export 导出成功后一并删除）
-    if strategy == "delete" || strategy == "export" {
-        for data_dir in &data_dirs {
-            if data_dir.exists() {
-                status(&format!("正在删除用户数据 {}…", data_dir.display()));
-                clear_readonly_attributes(data_dir);
-                fs::remove_dir_all(data_dir)
-                    .map_err(|e| format!("删除用户数据 {} 失败：{}", data_dir.display(), e))?;
-            }
-        }
-    }
-
-    progress(70);
-    status("正在删除安装目录…");
-    clear_readonly_attributes(&install_dir);
-    fs::remove_dir_all(&install_dir).map_err(|e| format!("删除安装目录失败：{}", e))?;
-
-    // 用户确认清理的其他位置
-    for extra in &req.cleanup_paths {
-        let p = PathBuf::from(extra);
-        if p != install_dir && p.exists() {
-            clear_readonly_attributes(&p);
-            let _ = fs::remove_dir_all(p);
-        }
-    }
-
-    progress(100);
-    status("卸载完成");
-    Ok(())
-}
-
-/// 读取已存在安装位置的 install-config.json（覆盖安装/修复时预读作初始值）。
-/// 返回 {"modules": {...}, "options": {...}}；文件不存在或解析失败返回 None。
-pub fn read_install_config(dir: &std::path::Path) -> Option<serde_json::Value> {
-    let path = dir.join("install-config.json");
-    let raw = fs::read_to_string(path).ok()?;
-    let cfg: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    Some(serde_json::json!({
-        "modules": cfg.get("modules").cloned().unwrap_or_default(),
-        "options": cfg.get("options").cloned().unwrap_or_default(),
-    }))
-}
-
-/// 用户完成/关闭向导时写入最终配置（执行期已写过初始快照，此处覆盖为用户最终选择）。
-pub fn flush_install_config(req: &InstallRequest) -> Result<(), String> {
-    write_log("I|flush-config：写入最终安装配置");
-    write_install_config(req, Path::new(&req.install_dir))
-}
-
-/// 磁盘上的 install-config.json 是否已与将写入内容一致（一致则完成页无需再提权写入）。
-pub fn install_config_matches(req: &InstallRequest) -> bool {
-    let path = Path::new(&req.install_dir).join("install-config.json");
-    let Ok(raw) = fs::read_to_string(&path) else {
-        return false;
-    };
-    let Ok(existing) = serde_json::from_str::<serde_json::Value>(&raw) else {
-        return false;
-    };
-    existing == build_install_config_json(req)
-}
-
 fn build_install_config_json(req: &InstallRequest) -> serde_json::Value {
     let mut modules = serde_json::Map::new();
     for f in manifest::features() {
@@ -921,7 +998,11 @@ fn write_install_config(req: &InstallRequest, dir: &Path) -> Result<(), String> 
 }
 
 fn write_plugins_manifest(req: &InstallRequest, dir: &Path) -> Result<(), String> {
-    let wb = req.features.get("whiteboard").and_then(|v| v.as_bool()).unwrap_or(true);
+    let wb = req
+        .features
+        .get("whiteboard")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
     fs::write(
         dir.join("plugins-manifest.json"),
         format!("{{\"whiteboard\":{{\"installed\":{}}}}}\n", wb),
@@ -932,50 +1013,27 @@ fn write_plugins_manifest(req: &InstallRequest, dir: &Path) -> Result<(), String
 
 pub fn system_install_dir() -> PathBuf {
     let base = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".into());
-    PathBuf::from(base.trim_end_matches('\\')).join("SidekickAI")
+    PathBuf::from(base.trim_end_matches('\\')).join("SidekickAI-OpenSource")
 }
 
 pub fn user_install_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA")
-        .or_else(|_| std::env::var("USERPROFILE").map(|p| format!("{}\\AppData\\Local", p.trim_end_matches('\\'))))
+        .or_else(|_| {
+            std::env::var("USERPROFILE")
+                .map(|p| format!("{}\\AppData\\Local", p.trim_end_matches('\\')))
+        })
         .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into());
-    PathBuf::from(base.trim_end_matches('\\')).join("Programs").join("SidekickAI")
-}
-
-fn desktop_dir(for_all_users: bool) -> PathBuf {
-    let key = if for_all_users { "PUBLIC" } else { "USERPROFILE" };
-    let base = std::env::var(key).unwrap_or_else(|_| "C:\\Users\\Public".into());
-    PathBuf::from(base).join("Desktop")
-}
-
-fn start_menu_dir(for_all_users: bool) -> PathBuf {
-    let key = if for_all_users { "ProgramData" } else { "APPDATA" };
-    let base = std::env::var(key).unwrap_or_default();
-    PathBuf::from(base)
-        .join("Microsoft")
-        .join("Windows")
-        .join("Start Menu")
+    PathBuf::from(base.trim_end_matches('\\'))
         .join("Programs")
-        .join("SidekickAI")
-}
-
-fn create_shortcuts(req: &InstallRequest, dir: &Path) {
-    let exe = dir.join("SidekickAI.exe");
-    let target = exe.to_string_lossy().into_owned();
-    let workdir = dir.to_string_lossy().into_owned();
-    let desktop = desktop_dir(req.for_all_users).join("SidekickAI.lnk");
-    let start = start_menu_dir(req.for_all_users).join("SidekickAI.lnk");
-    if let Some(p) = start.parent() {
-        let _ = fs::create_dir_all(p);
-    }
-    let _ = create_shortcut(&desktop, &target, &workdir);
-    let _ = create_shortcut(&start, &target, &workdir);
+        .join("SidekickAI-OpenSource")
 }
 
 fn create_shortcut(lnk: &Path, target: &str, workdir: &str) -> Result<(), String> {
     use windows::core::{Interface, PCWSTR};
     use windows::Win32::System::Com::IPersistFile;
-    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+    };
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 
     let target_w = elevate::wide(target);
@@ -988,110 +1046,11 @@ fn create_shortcut(lnk: &Path, target: &str, workdir: &str) -> Result<(), String
         link.SetPath(PCWSTR(target_w.as_ptr()))
             .map_err(|e| format!("SetPath 失败：{}", e))?;
         link.SetWorkingDirectory(PCWSTR(workdir_w.as_ptr())).ok();
-        let pf: IPersistFile = link.cast().map_err(|e| format!("cast IPersistFile 失败：{}", e))?;
+        let pf: IPersistFile = link
+            .cast()
+            .map_err(|e| format!("cast IPersistFile 失败：{}", e))?;
         pf.Save(PCWSTR(lnk_w.as_ptr()), true)
             .map_err(|e| format!("保存快捷方式失败：{}", e))?;
     }
-    Ok(())
-}
-
-fn remove_uninstall_entry(root: &str) {
-    let key = format!("{}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SidekickAI", root);
-    let _ = Command::new("reg").hidden().args(["delete", &key, "/f"]).output();
-}
-
-fn remove_shortcuts(for_all_users: bool) {
-    let _ = fs::remove_file(desktop_dir(for_all_users).join("SidekickAI.lnk"));
-    let sm = start_menu_dir(for_all_users);
-    let _ = fs::remove_file(sm.join("SidekickAI.lnk"));
-    let _ = fs::remove_dir_all(sm);
-}
-
-fn register_uninstall(req: &InstallRequest, dir: &Path) -> Result<(), String> {
-    let root = if req.for_all_users { "HKLM" } else { "HKCU" };
-    let key = format!("{}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SidekickAI", root);
-    let exe = dir.join("SidekickAI.exe").to_string_lossy().into_owned();
-    let uninst = format!("\"{}\"", dir.join("uninstall.exe").to_string_lossy());
-    let quiet = format!("\"{}\" --silent", dir.join("uninstall.exe").to_string_lossy());
-    let loc = dir.to_string_lossy().into_owned();
-    let pairs: Vec<(&str, String)> = vec![
-        ("DisplayName", "SidekickAI".into()),
-        ("DisplayVersion", env!("CARGO_PKG_VERSION").into()),
-        ("Publisher", "LinCi853".into()),
-        ("InstallLocation", loc),
-        ("DisplayIcon", exe),
-        ("UninstallString", uninst),
-        ("QuietUninstallString", quiet),
-        ("NoModify", "1".into()),
-        // 修复能力已内置到安装器，允许「修复」入口
-        ("NoRepair", "1".into()),
-    ];
-    for (name, value) in &pairs {
-        let _ = Command::new("reg").hidden()
-            .args(["add", &key, "/v", name, "/t", "REG_SZ", "/d", value, "/f"])
-            .output();
-    }
-    Ok(())
-}
-
-fn copy_uninstaller(dir: &Path) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    fs::copy(&exe, dir.join("uninstall.exe")).map_err(|e| format!("复制卸载器失败：{}", e))?;
-    Ok(())
-}
-
-fn is_admin() -> bool {
-    Command::new("net")
-        .arg("session")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-pub fn run_uninstall() -> i32 {
-    match uninstall() {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("卸载失败：{}", e);
-            1
-        }
-    }
-}
-
-fn uninstall() -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let dir = exe.parent().ok_or("无法定位安装目录")?.to_path_buf();
-    let for_all_users = dir.to_string_lossy().to_lowercase().contains("program files");
-
-    // 所有用户安装且当前非管理员 → 提权后由子进程完成删除
-    if for_all_users && !is_admin() {
-        let code = elevate::shell_execute_runas(&exe.to_string_lossy(), "--uninstall")?;
-        if code == 1223 {
-            return Err("已取消卸载".into());
-        }
-        if code != 0 {
-            return Err(format!("卸载进程退出，代码 {}", code));
-        }
-        return Ok(());
-    }
-
-    // 删除快捷方式（用户级与全局都清一遍）
-    for all in [false, true] {
-        remove_shortcuts(all);
-    }
-
-    // 删除注册表卸载项（用户级与全局都清一遍）
-    for root in ["HKCU", "HKLM"] {
-        remove_uninstall_entry(root);
-    }
-
-    // 自删除：延迟删除整个安装目录（含正在运行的 uninstall.exe）
-    // ponytail: cmd /c ping 延迟是 Windows 经典自删法；改 rmdir 前置等待避免黑窗由 CREATE_NO_WINDOW 保证
-    let dir_str = dir.to_string_lossy().into_owned();
-    let _ = Command::new("cmd").hidden()
-        .args(["/c", &format!("ping 127.0.0.1 -n 3 >nul & rmdir /s /q \"{}\"", dir_str)])
-        .spawn();
     Ok(())
 }

@@ -84,6 +84,8 @@ pub struct LicenseDoc {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallerInfo {
+    pub initial_mode: String,
+    pub initial_target: String,
     pub version: String,
     pub default_dir: String,
     pub per_user_default_dir: String,
@@ -109,6 +111,7 @@ pub enum InstallMode {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallLocation {
+    pub for_all_users: bool,
     pub path: String,
     /// 来源：default / program-files / local-programs / fixed-disk
     pub source: String,
@@ -140,6 +143,8 @@ pub struct ScanResult {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallRequest {
+    #[serde(default)]
+    pub user_data_dir: String,
     /// 子任务标识："" = 正常安装/修复/卸载；"flush-config" = 仅写 install-config.json
     #[serde(default)]
     pub action: String,
@@ -226,21 +231,43 @@ pub fn licenses() -> Vec<LicenseDoc> {
 }
 
 pub fn host_arch() -> &'static str {
-    let proc = std::env::var("PROCESSOR_ARCHITECTURE").unwrap_or_default().to_ascii_lowercase();
-    let w6432 = std::env::var("PROCESSOR_ARCHITEW6432").unwrap_or_default().to_ascii_lowercase();
-    if proc == "arm64" || w6432 == "arm64" { "arm64" } else { "x64" }
+    let proc = std::env::var("PROCESSOR_ARCHITECTURE")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let w6432 = std::env::var("PROCESSOR_ARCHITEW6432")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if proc == "arm64" || w6432 == "arm64" {
+        "arm64"
+    } else {
+        "x64"
+    }
 }
 
 pub fn build_info() -> InstallerInfo {
-    let app_name = "SidekickAI".to_string();
+    let app_name = "工百窗开源版 / SidekickAI Open Source".to_string();
     let default_dir = std::env::var("ProgramFiles")
-        .map(|p| format!("{}\\SidekickAI", p.trim_end_matches('\\')))
-        .unwrap_or_else(|_| "C:\\Program Files\\SidekickAI".into());
+        .map(|p| format!("{}\\SidekickAI-OpenSource", p.trim_end_matches('\\')))
+        .unwrap_or_else(|_| "C:\\Program Files\\SidekickAI-OpenSource".into());
     let local = std::env::var("LOCALAPPDATA")
-        .or_else(|_| std::env::var("USERPROFILE").map(|p| format!("{}\\AppData\\Local", p.trim_end_matches('\\'))))
+        .or_else(|_| {
+            std::env::var("USERPROFILE")
+                .map(|p| format!("{}\\AppData\\Local", p.trim_end_matches('\\')))
+        })
         .unwrap_or_default();
-    let per_user_default_dir = format!("{}\\Programs\\SidekickAI", local.trim_end_matches('\\'));
+    let per_user_default_dir = format!(
+        "{}\\Programs\\SidekickAI-OpenSource",
+        local.trim_end_matches('\\')
+    );
     InstallerInfo {
+        initial_mode: if crate::engine::uninstall_target().is_some() {
+            "uninstall".into()
+        } else {
+            "install".into()
+        },
+        initial_target: crate::engine::uninstall_target()
+            .map(|target| target.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         default_dir,
         per_user_default_dir,

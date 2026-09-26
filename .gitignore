@@ -20,6 +20,8 @@ dist-portable/
 # 发布产物归档目录（安装包 + 便携版，由 launch.bat [2] 生成）
 release/
 target-check/
+build/cargo-targets/
+build/opensource-installer-*/
 
 # ============================================================
 # Electron Cache

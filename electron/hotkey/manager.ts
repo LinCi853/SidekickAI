@@ -24,6 +24,7 @@
 //   - manager.ts      仅保留 HotkeyManager 类与单例
 
 import { globalShortcut } from 'electron'
+import { HotkeyInputState } from './input-state.js'
 import { dispatchBrowserHotkeyFallback } from '../utils/browser-hotkey-fallback.js'
 import { checkAccessibilityPermission } from '../utils/permission-manager.js'
 import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
@@ -73,6 +74,7 @@ export function getHotkeyManagerInstance(): HotkeyManager | null {
 }
 
 export class HotkeyManager {
+  private readonly inputState = new HotkeyInputState(UiohookKey)
   /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底） */
   private registered = new Map<string, () => void>()
   /** 浏览器窗口快捷键 accelerator -> 回调（C4：scope='global' 的浏览器快捷键，独立跟踪） */
@@ -168,15 +170,7 @@ export class HotkeyManager {
 
   /** 扫描 UiohookKey 枚举，收集各修饰键的所有 keycode（含左/右变体） */
   private buildModifierKeyCodes(): void {
-    for (const key of Object.keys(UiohookKey)) {
-      const kc = UiohookKey[key]
-      if (typeof kc !== 'number') continue
-      const up = key.toUpperCase()
-      if (up === 'ALT' || up === 'LEFTALT' || up === 'RIGHTALT') this._modKeyCodes.alt.add(kc)
-      else if (up === 'CTRL' || up === 'CONTROL' || up === 'LEFTCTRL' || up === 'RIGHTCTRL') this._modKeyCodes.ctrl.add(kc)
-      else if (up === 'SHIFT' || up === 'LEFTSHIFT' || up === 'RIGHTSHIFT') this._modKeyCodes.shift.add(kc)
-      else if (up === 'META' || up === 'LEFTMETA' || up === 'RIGHTMETA' || up === 'SUPER' || up === 'LEFTSUPER' || up === 'RIGHTSUPER' || up === 'COMMAND') this._modKeyCodes.meta.add(kc)
-    }
+    this._modKeyCodes = this.inputState.codes
   }
 
   /** 构建 uiohook keycode → Electron 键名的反向映射 */
@@ -227,7 +221,10 @@ export class HotkeyManager {
     }
 
     // 包装回调：加入去重窗口
-    const throttledCallback = () => this.trigger(accelerator, callback)
+    const throttledCallback = () => {
+      if (this.registered.get(accelerator) !== throttledCallback && this.browserShortcuts.get(accelerator) !== throttledCallback) return
+      this.trigger(accelerator, callback)
+    }
     this.registered.set(accelerator, throttledCallback)
 
     // 加入 uiohook 匹配器（兜底）
@@ -237,7 +234,9 @@ export class HotkeyManager {
     })
     this.ensureUiohookStarted()
 
-    // ---- 主路径：globalShortcut ----
+    if (this._paused || this._recordingCallback) return true
+
+    // Register with the operating system.
     try {
       // 预检查：若已被占用（本应用或其他应用），记录警告
       if (globalShortcut.isRegistered(accelerator)) {
@@ -267,9 +266,11 @@ export class HotkeyManager {
 
   /** 统一触发入口：200ms 去重，避免 globalShortcut + uiohook 双触发 */
   private trigger(accelerator: string, callback: () => void): void {
+    if (this._paused || this._recordingCallback) return
+    if (this.uiohookStarted && !this.inputState.claim(parseAccelerator(accelerator))) return
     const now = Date.now()
     const last = this.lastTriggeredAt.get(accelerator) ?? 0
-    if (now - last < TRIGGER_DEBOUNCE_MS) {
+    if (!this.uiohookStarted && now - last < TRIGGER_DEBOUNCE_MS) {
       console.log(`[HotkeyManager] 触发去重: ${accelerator}`)
       return
     }
@@ -282,7 +283,15 @@ export class HotkeyManager {
     }
   }
 
-  /** 启动 uiohook 监听（幂等） */
+  private syncModifierState(): void {
+    const state = this.inputState.modifiers
+    this.modAlt = state.alt
+    this.modCtrl = state.ctrl
+    this.modShift = state.shift
+    this.modMeta = state.meta
+  }
+
+  /** Start the input hook once. */
   private ensureUiohookStarted(): void {
     if (this.uiohookStarted) return
     // macOS 需要辅助功能权限才能使用 uiohook 低级键盘钩子
@@ -305,11 +314,8 @@ export class HotkeyManager {
   private attachUiohookListener(): void {
     uIOhook.on('keydown', (e) => {
       if (e.type !== EventType.EVENT_KEY_PRESSED) return
-      // 追踪修饰键按下状态（解决 uiohook altKey 状态残留导致误触发）
-      if (this._modKeyCodes.alt.has(e.keycode)) this.modAlt = true
-      if (this._modKeyCodes.ctrl.has(e.keycode)) this.modCtrl = true
-      if (this._modKeyCodes.shift.has(e.keycode)) this.modShift = true
-      if (this._modKeyCodes.meta.has(e.keycode)) this.modMeta = true
+      this.inputState.observe(e, true)
+      this.syncModifierState()
       // 云电脑模式按键路由：系统级按键（Win/Alt+Tab/Win+Tab/Win+D/Alt+F4/Esc）
       // 必须在 _paused 检查之前处理（云电脑模式正是暂停状态）
       if (this.cloudPcKeyListener) {
@@ -319,22 +325,20 @@ export class HotkeyManager {
         }
       }
 
-      // 浏览器窗口快捷键 uiohook 兜底通道（Alt 组合在 guest 拦截中不可靠时的第二通道；
-      // 修饰键状态用 uiohook 自行追踪的 modAlt/modCtrl，不依赖 Electron modifiers）
-      dispatchBrowserHotkeyFallback({
-        keycode: e.keycode,
-        ctrl: this.modCtrl,
-        alt: this.modAlt,
-        shift: this.modShift,
-        meta: this.modMeta,
-      })
       // 录制模式：跳过常规热键匹配，仅由 handleRecordingKeydown 处理
       if (this._recordingCallback) {
         this.handleRecordingKeydown(e)
         return
       }
       // 暂停状态：跳过所有热键匹配（如使用指南窗口打开时）
-      if (this._paused) return
+      if (this._paused) {
+        this.inputState.suspend()
+        return
+      }
+      const observedBinding = { keycode: e.keycode, ...this.inputState.modifiers }
+      if (this.inputState.freshPress && this.inputState.matches(observedBinding)) {
+        dispatchBrowserHotkeyFallback(observedBinding)
+      }
       // 主映射（globalShortcut 兜底）：使用追踪的修饰键状态而非事件自带字段
       for (const [acc, matcher] of this.uiohookMatchers) {
         if (!matcher.keycode) continue
@@ -354,10 +358,7 @@ export class HotkeyManager {
         const m = this.voiceMatcher
         if (
           e.keycode === m.keycode &&
-          (m.alt ? this.modAlt : true) &&
-          (m.ctrl ? this.modCtrl : true) &&
-          (m.shift ? this.modShift : true) &&
-          (m.meta ? this.modMeta : true)
+          this.inputState.matches(m)
         ) {
           // 关键修复：长按时 OS 会重复发 keydown 事件（每 ~30ms 一次），
           // 之前每次都触发 onKeyDown → startBackgroundVoice → 上轮未 stop → 自愈循环
@@ -390,18 +391,15 @@ export class HotkeyManager {
           this.cloudPcKeyListener({ key: routed, down: false, alt: e.altKey, win: this.modMeta })
         }
       }
-      // 追踪修饰键释放状态（与 keydown 配对，解决 uiohook altKey 状态残留）
-      if (this._modKeyCodes.alt.has(e.keycode)) this.modAlt = false
-      if (this._modKeyCodes.ctrl.has(e.keycode)) this.modCtrl = false
-      if (this._modKeyCodes.shift.has(e.keycode)) this.modShift = false
-      if (this._modKeyCodes.meta.has(e.keycode)) this.modMeta = false
+      this.inputState.observe(e, false)
+      this.syncModifierState()
       // 语音热键 keyup：主键匹配就触发 onKeyUp
       // 1) voiceKeyPressed=true 时 → 标准路径（已记录按下态）
       // 2) voiceKeyPressed=false 时 → 兜底路径：可能 keydown 事件因任何原因丢失，
       //    直接信任 keyup 的主键匹配，仍然补发 onKeyUp，让录音能正常结束
       if (this.voiceMatcher && this.voiceMatcher.keycode) {
         const m = this.voiceMatcher
-        if (e.keycode === m.keycode) {
+        if (e.keycode === m.keycode && this.voiceKeyPressed) {
           console.log(
             `[HotkeyManager] 语音热键 keyup: keycode=${e.keycode} altKey=${e.altKey} voiceKeyPressed=${this.voiceKeyPressed}`,
           )
@@ -498,7 +496,10 @@ export class HotkeyManager {
     // 浏览器快捷键同时走 globalShortcut 主路径 + uiohook 兜底，若不包 trigger()，
     // 同一次按键会被两路各触发一次 → toggleBrowserWindow 连续开关（闪一下关闭）
     // 或在窗口入映射前各开一个（同应用多窗口）。
-    const throttledCallback = () => this.trigger(accelerator, callback)
+    const throttledCallback = () => {
+      if (this.registered.get(accelerator) !== throttledCallback && this.browserShortcuts.get(accelerator) !== throttledCallback) return
+      this.trigger(accelerator, callback)
+    }
     this.browserShortcuts.set(accelerator, throttledCallback)
     // 加入 uiohook 匹配器（兜底），复用主映射机制
     if (!this.uiohookMatchers.has(accelerator)) {
@@ -508,7 +509,8 @@ export class HotkeyManager {
       })
     }
     this.ensureUiohookStarted()
-    // 主路径：globalShortcut
+    if (this._paused || this._recordingCallback) return true
+    // Register with the operating system.
     try {
       if (globalShortcut.isRegistered(accelerator)) {
         globalShortcut.unregister(accelerator)
@@ -567,6 +569,8 @@ export class HotkeyManager {
     } catch (err) {
       console.warn('[HotkeyManager] unregisterAll 异常', err)
     }
+    this.inputState.reset()
+    this.stopVoicePolling()
     this.registered.clear()
     this.browserShortcuts.clear()
     this.actionAccelerators.clear()
@@ -737,6 +741,7 @@ export class HotkeyManager {
     // 仅修饰键，等待下一个按键
     const keyName = this._uiohookKeyToName.get(e.keycode)
     if (!keyName) return
+    if (!this.inputState.matches({ keycode: e.keycode, ...this.inputState.modifiers })) return
 
     // Escape 取消录制（仅无修饰键时）
     if (keyName === 'Esc' && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -802,6 +807,7 @@ export class HotkeyManager {
 
   /** 录制结束后恢复：注销所有抑制器，恢复原有热键回调 */
   private restoreAfterRecording(): void {
+    this.inputState.suspend()
     // 注销所有抑制器
     for (const supAcc of this._recordingSuppressors) {
       try { globalShortcut.unregister(supAcc) } catch { /* ignore */ }
@@ -809,7 +815,7 @@ export class HotkeyManager {
     // 恢复原有热键回调
     for (const { accelerator, callback } of this._recordingBackup) {
       try {
-        globalShortcut.register(accelerator, callback)
+        if (!this._paused && (this.registered.get(accelerator) === callback || this.browserShortcuts.get(accelerator) === callback)) globalShortcut.register(accelerator, callback)
       } catch {
         // ignore
       }
@@ -831,6 +837,7 @@ export class HotkeyManager {
     if (this._recordingCallback) {
       this.stopRecording()
     }
+    this.inputState.suspend()
     this._recordingCallback = callback
     this._recordingPartialCallback = onPartial ?? null
 
@@ -843,7 +850,7 @@ export class HotkeyManager {
 
     // 临时将本应用已注册的 globalShortcut 热键替换为空回调抑制器，
     // 防止录制期间触发原有功能（如 Alt+Space 切换窗口）
-    for (const [acc, cb] of this.registered) {
+    for (const [acc, cb] of [...this.registered, ...this.browserShortcuts]) {
       try {
         if (globalShortcut.isRegistered(acc)) {
           globalShortcut.unregister(acc)
@@ -895,7 +902,8 @@ export class HotkeyManager {
   pauseAllShortcuts(): void {
     if (this._paused) return
     this._paused = true
-    for (const acc of this.registered.keys()) {
+    this.inputState.suspend()
+    for (const acc of [...this.registered.keys(), ...this.browserShortcuts.keys()]) {
       try { globalShortcut.unregister(acc) } catch { /* ignore */ }
     }
     // 暂停语音热键
@@ -913,7 +921,9 @@ export class HotkeyManager {
   resumeAllShortcuts(): void {
     if (!this._paused) return
     this._paused = false
-    for (const [acc, cb] of this.registered) {
+    this.inputState.suspend()
+    if (this._recordingCallback) return
+    for (const [acc, cb] of [...this.registered, ...this.browserShortcuts]) {
       try { globalShortcut.register(acc, cb) } catch { /* ignore */ }
     }
     console.log('[HotkeyManager] 所有全局热键已恢复')

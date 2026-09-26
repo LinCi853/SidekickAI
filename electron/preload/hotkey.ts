@@ -1,18 +1,36 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
 
+type ShortcutHandler = (_event: unknown, accelerator: string) => void
+const shortcutHandlers = new Map<string, ShortcutHandler>()
+function removeShortcutHandler(accelerator: string, expected?: ShortcutHandler): void {
+  const handler = shortcutHandlers.get(accelerator)
+  if (!handler || (expected && expected !== handler)) return
+  ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_TRIGGERED, handler)
+  shortcutHandlers.delete(accelerator)
+}
+
 export const hotkeyApi = {
   // 热键
   hotkey: {
-    register: (accelerator: string, callback: () => void) => {
+    register: async (accelerator: string, callback: () => void) => {
+      removeShortcutHandler(accelerator)
       const handler = (_e: unknown, acc: string) => {
         if (acc === accelerator) callback()
       }
+      shortcutHandlers.set(accelerator, handler)
       ipcRenderer.on(IPC_CHANNELS.HOTKEY_TRIGGERED, handler)
-      return ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_REGISTER, accelerator)
+      try {
+        return await ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_REGISTER, accelerator)
+      } catch (error) {
+        removeShortcutHandler(accelerator, handler)
+        throw error
+      }
     },
-    unregister: (accelerator: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_UNREGISTER, accelerator),
+    unregister: (accelerator: string) => {
+      removeShortcutHandler(accelerator)
+      return ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_UNREGISTER, accelerator)
+    },
     isRegistered: (accelerator: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_IS_REGISTERED, accelerator),
     getAll: () => ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_GET_ALL),

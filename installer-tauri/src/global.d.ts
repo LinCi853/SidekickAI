@@ -37,6 +37,7 @@ export interface InstallOptions {
 }
 
 export interface InstallLocation {
+  forAllUsers: boolean
   path: string
   source: string
   version: string
@@ -54,6 +55,8 @@ export interface ScanResult {
 }
 
 export interface InstallerInfo {
+  initialMode: InstallMode
+  initialTarget: string
   version: string
   /** 「所有用户」模式默认目录（C:\Program Files\SidekickAI） */
   defaultDir: string
@@ -101,6 +104,7 @@ declare global {
       onProgress(cb: (p: number) => void): () => void
       onDone(cb: (payload: DonePayload) => void): () => void
       onError(cb: (msg: string) => void): () => void
+      onCloseRequested(cb: () => void): () => void
     }
   }
 }

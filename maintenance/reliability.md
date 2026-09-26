@@ -13,7 +13,7 @@ Backup export uses SQLite's online snapshot facility without invalidating live d
 ## Observable behavior
 
 - A fresh profile opens the application and settings without an uncaught main-process or renderer exception.
-- The active data directory is determined before stores and the single-instance lock are initialized. Separate portable directories coexist; a second process using the same directory cannot open a competing database writer.
+- The active data directory is determined before stores and the single-instance lock are initialized. Separate installation and portable directories retain independent data, but one edition owns the interactive session. The online edition requests graceful open-source shutdown before activation; a second process using the same directory cannot open a competing database writer.
 - Local notes, whiteboards, prompts and settings remain usable without external network access and survive a normal restart.
 - Main-window navigation history remains available when the optional browser module is disabled, toggled or cleared.
 - Backup captures committed local records and assets. Restoring into a separate disposable profile preserves their content. Invalid or incomplete inputs do not silently replace the destination with partial data.

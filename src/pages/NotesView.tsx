@@ -11,6 +11,7 @@
    - flushDraft 将 draftRef 中的草稿同步保存到 SQLite
    ===================================================================== */
 
+import { useEffect } from 'react';
 import { useNotesData } from './hooks/useNotesData.js';
 import NotesSidebar from './components/NotesSidebar.js';
 import NotesEditor from './components/NotesEditor.js';
@@ -20,9 +21,10 @@ import './NotesView.css';
 interface NotesViewProps {
   onClose?: () => void;
   onOpenSettings?: () => void;
+  onBeforeLeaveReady?: (guard: ((commit: () => void) => Promise<void>) | null) => void;
 }
 
-export default function NotesView({ onOpenSettings }: NotesViewProps) {
+export default function NotesView({ onOpenSettings, onBeforeLeaveReady }: NotesViewProps) {
   const {
     notes,
     activeNote,
@@ -41,6 +43,7 @@ export default function NotesView({ onOpenSettings }: NotesViewProps) {
     saveAsPromptContent,
     saveAsPromptTitle,
     setSaveAsPromptOpen,
+    beforeLeave,
     handleNew,
     handleSelectNote,
     handleDelete,
@@ -50,6 +53,11 @@ export default function NotesView({ onOpenSettings }: NotesViewProps) {
     handleSendToAi,
     handleSaveAsPrompt,
   } = useNotesData();
+
+  useEffect(() => {
+    onBeforeLeaveReady?.(beforeLeave);
+    return () => onBeforeLeaveReady?.(null);
+  }, [beforeLeave, onBeforeLeaveReady]);
 
   return (
     <div className="notes-view app-view-root" data-name="advanced-panel.notes-view">

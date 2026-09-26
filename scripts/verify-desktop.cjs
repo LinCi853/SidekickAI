@@ -41,6 +41,7 @@ async function launch(profile, label) {
   const env = {
     ...process.env,
     SIDEKICK_DATA_DIR: profile,
+    SIDEKICK_TEST_SESSION: evidence,
     VERIFY_RELAUNCH_FILE: path.join(evidence, `${label}-relaunch.txt`),
     VERIFY_EXCEPTION_FILE: path.join(evidence, `${label}-exception.log`),
     VERIFY_REQUEST_FILE: path.join(evidence, 'blocked-requests.log'),

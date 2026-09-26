@@ -1,3 +1,4 @@
+import { startEditionSession, markEditionReady } from './edition-runtime.js'
 // electron/main.ts — Electron 主进程入口
 //
 // AI 窗口主进程：负责窗口管理、Profile 存储、指纹引擎、热键、语音识别。
@@ -154,6 +155,8 @@ app.whenReady().then(async () => {
     }
     return
   }
+
+  if (!await startEditionSession('open-source', () => isImportingData)) return
 
   // 移除默认应用菜单：释放 F12（默认 toggleDevTools）等系统级快捷键，
   // 交由应用内 keydown / before-input-event 统一处理。
@@ -547,6 +550,7 @@ app.whenReady().then(async () => {
   // 启动后 2 秒检测一次状态，失败时通过系统通知 + 渲染层双通道告知用户
   runUiohookHealthCheck(hotkeyManager)
 
+  markEditionReady()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow()
@@ -566,11 +570,22 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
-  cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() })
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-prevent-unload', (event) => {
+    // Other listeners may allow unloading; only reset a confirmed cancellation.
+    queueMicrotask(() => {
+      if (!event.defaultPrevented) (app as unknown as { isQuitting: boolean }).isQuitting = false
+    })
+  })
+})
+
+app.on('before-quit', (event) => {
+  if (event.defaultPrevented || isImportingData) { event.preventDefault(); return }
+  ;(app as unknown as { isQuitting: boolean }).isQuitting = true
 })
 
 app.on('will-quit', () => {
+  cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() })
   closeChatStore()
   closeModuleStateDb()
 })

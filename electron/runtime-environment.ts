@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 const applicationName = 'sidekickai-opensource'
@@ -23,5 +23,13 @@ app.setPath('sessionData', directory)
 const exportArgument = process.argv.indexOf('--export-user-data')
 const exportPath = exportArgument < 0 ? undefined : process.argv[exportArgument + 1]
 export const exportCliRequestPath = exportPath && !exportPath.startsWith('--') ? exportPath : null
+if (exportCliRequestPath) app.setPath('sessionData', mkdtempSync(path.join(app.getPath('temp'), 'sidekick-export-session-')))
 
-if (!exportCliRequestPath && !app.requestSingleInstanceLock()) app.exit(0)
+if (!app.requestSingleInstanceLock()) app.exit(0)
+const identityPath = path.join(directory, 'edition-identity.json')
+if (existsSync(identityPath)) {
+  const identity = JSON.parse(readFileSync(identityPath, 'utf8'))
+  if (identity.edition !== applicationName || identity.schema !== 1) throw new Error('User data belongs to another edition')
+} else if (!exportCliRequestPath) {
+  writeFileSync(identityPath, JSON.stringify({ edition: applicationName, schema: 1 }), { flag: 'wx' })
+}

@@ -1,6 +1,6 @@
 {
   "name": "sidekickai-opensource",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "工百窗（SidekickAI）—— 全平台 AI 聚合 + 反检测多 Profile 浏览器（Electron）",
   "main": "out/main/index.cjs",
   "author": "SidekickAI",
@@ -76,5 +76,6 @@
     "vite": "^5.3.0",
     "vitest": "^2.1.9",
     "zustand": "^4.5.0"
-  }
+  },
+  "editionSessionProtocol": 1
 }

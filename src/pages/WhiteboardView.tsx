@@ -49,6 +49,7 @@ import { IconButton, EmptyState } from '../components/ui';
 import SidebarShell from '../components/SidebarShell';
 import { useToast } from '../hooks/useToast';
 import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
+import { createWhiteboardDraft, type WhiteboardBeforeLeave } from './whiteboard-draft';
 import './WhiteboardView.css';
 
 // ============================================================================
@@ -327,19 +328,23 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
 interface WhiteboardCanvasProps {
   activeId: string;
   snapshot: string | null;
+  onFlushReady: (flush: (() => Promise<void>) | null) => void;
 }
 
-function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
+type WhiteboardScene = { elements: readonly ExcalidrawElement[]; appState: AppState; files: BinaryFiles };
+
+function WhiteboardCanvas({ activeId, snapshot, onFlushReady }: WhiteboardCanvasProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
-  const activeIdRef = useRef(activeId);
-  // 最新场景数据 ref（用于防抖保存读取）
-  const latestSceneRef = useRef<{ elements: readonly ExcalidrawElement[]; appState: AppState; files: BinaryFiles } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const draft = useMemo(() => createWhiteboardDraft<WhiteboardScene>({
+    serialize: (scene) => serializeAsJSON(scene.elements, scene.appState, scene.files, 'local'),
+    save: (json) => saveWhiteboardSnapshot(activeId, json),
+    saveSync: (json) => saveWhiteboardSnapshotSync(activeId, json),
+  }), [activeId]);
   // 是否完成首次加载（避免 initialData 还原触发保存覆盖空数据）
   const hydratedRef = useRef(false);
   // 需求 12：截图推送到达时若 Excalidraw API 尚未就绪，暂存待处理载荷
   const pendingImageRef = useRef<WhiteboardPushImagePayload | null>(null);
-
-  activeIdRef.current = activeId;
 
   // 初始化数据：snapshot 反序列化，或遗留数据转换，或空场景
   // initialData 接受 Promise，可异步处理遗留图片转换
@@ -359,56 +364,35 @@ function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
     }
   }, [snapshot]);
 
-  // 防抖保存 + beforeunload 同步兜底（统一委托 useAutoSaveDraft）
-  const { schedule: scheduleSave } = useAutoSaveDraft<string>({
+  const { schedule: scheduleSave, flushNow } = useAutoSaveDraft<string>({
     data: activeId,
-    save: () => {
-      const api = apiRef.current;
-      const id = activeIdRef.current;
-      const scene = latestSceneRef.current;
-      if (!api || !id || !scene) return;
-      try {
-        const json = serializeAsJSON(
-          scene.elements as readonly ExcalidrawElement[],
-          scene.appState,
-          scene.files,
-          'local',
-        );
-        void saveWhiteboardSnapshot(id, json);
-      } catch (err) {
-        console.error('[WhiteboardCanvas] save failed:', err);
-      }
+    save: async () => {
+      await draft.flush();
+      setSaveError(null);
     },
     saveSync: () => {
-      const api = apiRef.current;
-      const id = activeIdRef.current;
-      const scene = latestSceneRef.current;
-      if (!api || !id || !scene) return;
-      try {
-        const json = serializeAsJSON(
-          scene.elements as readonly ExcalidrawElement[],
-          scene.appState,
-          scene.files,
-          'local',
-        );
-        saveWhiteboardSnapshotSync(id, json);
-      } catch (err) {
-        console.error('[WhiteboardCanvas] sync save failed:', err);
-      }
+      draft.flushSync();
+      setSaveError(null);
     },
+    onError: () => setSaveError('白板保存失败或尚未完成，已保留当前画面，请重试后再离开。'),
     debounceMs: 500,
   });
+
+  useEffect(() => {
+    onFlushReady(flushNow);
+    return () => onFlushReady(null);
+  }, [flushNow, onFlushReady]);
 
   // onChange：缓存最新场景 + 触发防抖保存
   const handleChange = useCallback(
     (elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
-      latestSceneRef.current = { elements, appState, files };
-      // 首次 hydration 完成后才保存（避免 initialData 触发 onChange 覆盖）
+      // Do not mark restoration as a user edit.
       if (hydratedRef.current) {
+        draft.update({ elements, appState, files });
         scheduleSave();
       }
     },
-    [scheduleSave],
+    [draft, scheduleSave],
   );
 
   // excalidrawAPI 就绪回调
@@ -450,6 +434,12 @@ function WhiteboardCanvas({ activeId, snapshot }: WhiteboardCanvasProps) {
 
   return (
     <div className="wb-canvas-wrap" data-name="advanced-panel.wb-canvas">
+      {saveError && (
+        <div role="alert" className="whiteboard-toast app-toast" style={{ pointerEvents: 'auto', whiteSpace: 'normal' }} data-name="advanced-panel.wb-save-error">
+          {saveError}
+          <button type="button" onClick={() => { void flushNow().catch(() => {}); }}>重试保存</button>
+        </div>
+      )}
       <Excalidraw
         initialData={initialData}
         onChange={handleChange}
@@ -469,9 +459,10 @@ interface WhiteboardViewProps {
   onClose?: () => void;
   sidebarVisible?: boolean;
   onOpenSettings?: () => void;
+  onBeforeLeaveReady?: (guard: WhiteboardBeforeLeave | null) => void;
 }
 
-function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: WhiteboardViewProps) {
+function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings, onBeforeLeaveReady }: WhiteboardViewProps) {
   const [whiteboards, setWhiteboards] = useState<WhiteboardMeta[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
@@ -479,6 +470,39 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
   const [sidebarWidth, setSidebarWidth] = useState(130);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { toast, showToast } = useToast();
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+  const flushRef = useRef<(() => Promise<void>) | null>(null);
+  const transitionRef = useRef(false);
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+  const registerFlush = useCallback((flush: (() => Promise<void>) | null) => {
+    flushRef.current = flush;
+  }, []);
+
+  // Keep the old canvas mounted through I/O, then re-flush edits made during preparation.
+  const transition = useCallback(async (prepare: () => Promise<() => void | Promise<void>>) => {
+    if (transitionRef.current || loadingRef.current) return;
+    transitionRef.current = true;
+    try {
+      await flushRef.current?.();
+      const commit = await prepare();
+      await flushRef.current?.();
+      await commit();
+      setNavigationError(null);
+    } catch (error) {
+      console.error('[WhiteboardView] transition failed:', error);
+      setNavigationError('白板保存或切换失败，已保留当前画面，请重试。');
+    } finally {
+      transitionRef.current = false;
+    }
+  }, []);
+  const beforeLeave = useCallback<WhiteboardBeforeLeave>(
+    (commit) => transition(async () => commit), [transition],
+  );
+  useEffect(() => {
+    onBeforeLeaveReady?.(beforeLeave);
+    return () => onBeforeLeaveReady?.(null);
+  }, [beforeLeave, onBeforeLeaveReady]);
 
   // 加载白板列表 + 激活白板 snapshot
   const refreshList = useCallback(async () => {
@@ -500,7 +524,8 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
     }).catch(() => {});
   }, []);
 
-  // 初始化
+  const initialSidebarVisible = useRef(sidebarVisible);
+  // Initialization must not replace a dirty canvas when the sidebar setting changes.
   useEffect(() => {
     void (async () => {
       try {
@@ -513,7 +538,7 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
           setActiveId(list[0].id);
           await setActiveWhiteboardId(list[0].id);
           await loadSnapshotFor(list[0].id);
-        } else if (!sidebarVisible) {
+        } else if (!initialSidebarVisible.current) {
           // 侧边栏隐藏时无白板：自动新建一个，避免用户无入口可点
           const wb = await createWhiteboard();
           await refreshList();
@@ -528,28 +553,30 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
         setLoading(false);
       }
     })();
-  }, [refreshList, loadSnapshotFor, showToast, sidebarVisible]);
+  }, [refreshList, loadSnapshotFor, showToast]);
 
-  // 新建白板
-  const handleCreate = useCallback(async () => {
-    try {
-      const wb = await createWhiteboard();
-      await refreshList();
-      setActiveId(wb.id);
-      await setActiveWhiteboardId(wb.id);
+  const handleCreate = useCallback(() => transition(async () => {
+    const wb = await createWhiteboard();
+    const list = await listWhiteboards();
+    if (!(await setActiveWhiteboardId(wb.id)).ok) throw new Error('Whiteboard activation failed');
+    return () => {
+      setWhiteboards(list);
       setSnapshot(null);
-    } catch (err) {
-      console.error('[WhiteboardView] create failed:', err);
-      showToast('新建白板失败');
-    }
-  }, [refreshList, showToast]);
+      setActiveId(wb.id);
+    };
+  }), [transition]);
 
-  // 切换白板
-  const handleSelect = useCallback(async (id: string) => {
-    setActiveId(id);
-    await setActiveWhiteboardId(id);
-    await loadSnapshotFor(id);
-  }, [loadSnapshotFor]);
+  const handleSelect = useCallback((id: string) => {
+    if (id === activeId) return Promise.resolve();
+    return transition(async () => {
+      const nextSnapshot = await getWhiteboardSnapshot(id);
+      if (!(await setActiveWhiteboardId(id)).ok) throw new Error('Whiteboard activation failed');
+      return () => {
+        setSnapshot(nextSnapshot);
+        setActiveId(id);
+      };
+    });
+  }, [activeId, transition]);
 
   // 重命名
   const handleRename = useCallback(async (id: string, title: string) => {
@@ -562,27 +589,21 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
     }
   }, [refreshList, showToast]);
 
-  // 删除
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      await deleteWhiteboard(id);
-      const list = await refreshList();
+  const handleDelete = useCallback((id: string) => transition(async () => {
+    const list = (await listWhiteboards()).filter((board) => board.id !== id);
+    const nextId = list[0]?.id ?? null;
+    const nextSnapshot = activeId === id && nextId ? await getWhiteboardSnapshot(nextId) : null;
+    return async () => {
+      // Deletion is an explicit destructive action; do it only after the final flush.
+      if (!(await deleteWhiteboard(id)).ok) throw new Error('Whiteboard deletion failed');
+      setWhiteboards(list);
       if (activeId === id) {
-        if (list.length > 0) {
-          setActiveId(list[0].id);
-          await setActiveWhiteboardId(list[0].id);
-          await loadSnapshotFor(list[0].id);
-        } else {
-          setActiveId(null);
-          await setActiveWhiteboardId(null);
-          setSnapshot(null);
-        }
+        setSnapshot(nextSnapshot);
+        setActiveId(nextId);
+        if (!(await setActiveWhiteboardId(nextId)).ok) throw new Error('Whiteboard activation failed');
       }
-    } catch (err) {
-      console.error('[WhiteboardView] delete failed:', err);
-      showToast('删除失败');
-    }
-  }, [refreshList, activeId, loadSnapshotFor, showToast]);
+    };
+  }), [activeId, transition]);
 
   // 侧边栏拖拽调宽
   const handleSidebarResize = useCallback((w: number) => {
@@ -628,6 +649,7 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
             key={activeId}
             activeId={activeId}
             snapshot={snapshot}
+            onFlushReady={registerFlush}
           />
         ) : (
           <div className="wb-canvas-empty" data-name="advanced-panel.wb-canvas-empty">
@@ -646,7 +668,8 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings }: Whi
           </div>
         )}
       </div>
-      {toast && <div className="whiteboard-toast app-toast" data-name="advanced-panel.whiteboard-toast">{toast}</div>}
+      {navigationError && <div role="alert" className="whiteboard-toast app-toast" data-name="advanced-panel.wb-navigation-error">{navigationError}</div>}
+      {!navigationError && toast && <div className="whiteboard-toast app-toast" data-name="advanced-panel.whiteboard-toast">{toast}</div>}
     </div>
   );
 }

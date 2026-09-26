@@ -59,7 +59,6 @@ export interface LifecycleDeps {
 
 /** Release background work while Electron closes windows through beforeunload. */
 export function cleanupOnQuit(deps: LifecycleDeps): void {
-  if ((app as unknown as { isQuitting?: boolean }).isQuitting) return
   const { hotkeyManager, sttEngine } = deps
   // 标记应用正在退出，主窗口 close 事件不再拦截（避免 minimize 模式阻止退出）
   ;(app as unknown as { isQuitting: boolean }).isQuitting = true

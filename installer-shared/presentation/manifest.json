@@ -1,0 +1,4 @@
+{
+  "designVersion": "1.0.0",
+  "files": ["Wizard.tsx", "wizard.css", "finalize.ts", "finalize.test.ts"]
+}

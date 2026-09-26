@@ -2,7 +2,7 @@
 
 [package]
 name = "sidekickai-installer"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 description = "SidekickAI 安装向导（Tauri + 7z solid 载荷）"
 authors = ["LinCi853"]
 edition = "2021"

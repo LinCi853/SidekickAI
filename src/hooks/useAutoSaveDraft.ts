@@ -25,6 +25,8 @@ interface UseAutoSaveDraftOptions<T> {
   data: T;
   save: (data: T) => Promise<void> | void;
   saveSync?: (data: T) => void;
+  /** Reports failed saves; explicit flushNow calls still reject. */
+  onError?: (error: unknown) => void;
   debounceMs?: number;
   enabled?: boolean;
 }
@@ -39,18 +41,20 @@ interface UseAutoSaveDraftResult {
 export function useAutoSaveDraft<T>(
   opts: UseAutoSaveDraftOptions<T>
 ): UseAutoSaveDraftResult {
-  const { data, save, saveSync, debounceMs = 800, enabled = true } = opts;
+  const { data, save, saveSync, onError, debounceMs = 800, enabled = true } = opts;
 
   // 通过 ref 持有最新值，避免闭包陷阱
   const dataRef = useRef(data);
   const saveRef = useRef(save);
   const saveSyncRef = useRef(saveSync);
+  const onErrorRef = useRef(onError);
   const enabledRef = useRef(enabled);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   dataRef.current = data;
   saveRef.current = save;
   saveSyncRef.current = saveSync;
+  onErrorRef.current = onError;
   enabledRef.current = enabled;
 
   const clearTimer = useCallback(() => {
@@ -60,44 +64,61 @@ export function useAutoSaveDraft<T>(
     }
   }, []);
 
-  const flushNow = useCallback((): Promise<void> => {
+  const reportError = useCallback((error: unknown) => {
+    console.error('[AutoSave] Pending changes could not be saved', error);
+    try { onErrorRef.current?.(error); }
+    catch (reportingError) { console.error('[AutoSave] Error notification failed', reportingError); }
+  }, []);
+
+  const flushNow = useCallback(async (): Promise<void> => {
     clearTimer();
-    if (!enabledRef.current) return Promise.resolve();
-    const result = saveRef.current(dataRef.current);
-    return result instanceof Promise ? result : Promise.resolve();
-  }, [clearTimer]);
+    if (!enabledRef.current) return;
+    try { await saveRef.current(dataRef.current); }
+    catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [clearTimer, reportError]);
 
   const schedule = useCallback(() => {
     if (!enabledRef.current) return;
     clearTimer();
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      void saveRef.current(dataRef.current);
+      // Background callers report failures without leaving an unhandled rejection.
+      void flushNow().catch(() => {});
     }, debounceMs);
-  }, [clearTimer, debounceMs]);
+  }, [clearTimer, debounceMs, flushNow]);
 
   // beforeunload 同步兜底
   useEffect(() => {
-    const handler = () => {
+    const handler = (event: Event) => {
       if (!enabledRef.current) return;
       clearTimer();
       if (saveSyncRef.current) {
-        saveSyncRef.current(dataRef.current);
+        try { saveSyncRef.current(dataRef.current); }
+        catch (error) {
+          reportError(error);
+          event.preventDefault();
+          if (event.type === 'beforeunload') (event as BeforeUnloadEvent).returnValue = '';
+        }
       }
     };
     window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [clearTimer]);
+    window.addEventListener('sidekick:before-handoff', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      window.removeEventListener('sidekick:before-handoff', handler);
+    };
+  }, [clearTimer, reportError]);
 
   // 组件卸载前 flush（fire-and-forget）
   useEffect(() => {
     return () => {
       clearTimer();
-      if (enabledRef.current) {
-        void saveRef.current(dataRef.current);
-      }
+      void flushNow().catch(() => {});
     };
-  }, [clearTimer]);
+  }, [clearTimer, flushNow]);
 
   return { schedule, flushNow };
 }

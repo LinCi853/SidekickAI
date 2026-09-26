@@ -76,6 +76,24 @@ function readInitialProviderId(): string | null {
 
 export default function AdvancedPanelView() {
   const [activeTab, setActiveTab] = useState<TabKey>(readInitialTab);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const beforeLeaveRef = useRef<((commit: () => void) => Promise<void>) | null>(null);
+  const registerBeforeLeave = useCallback((guard: ((commit: () => void) => Promise<void>) | null) => {
+    beforeLeaveRef.current = guard;
+  }, []);
+  const requestTab = useCallback((next: TabKey, after?: () => void) => {
+    const commit = () => {
+      activeTabRef.current = next;
+      setActiveTab(next);
+      after?.();
+    };
+    if (next !== activeTabRef.current && beforeLeaveRef.current) {
+      void beforeLeaveRef.current(commit).catch((error) => console.error('[AdvancedPanel] leave failed:', error));
+    } else {
+      commit();
+    }
+  }, []);
   // 模块门控：自定义对话 / 白板 / 笔记模块关闭时隐藏对应 tab
   // 注意：不能用 (s) => s.isEnabled 作为 selector（函数引用恒定，zustand 不会触发重渲染）；
   // 改为订阅 modules 数组派生 enabled 集合，模块状态变化时组件必然重渲染。
@@ -122,12 +140,11 @@ export default function AdvancedPanelView() {
   // 监听主进程的 navigate 事件（单例窗口复用时切换 tab/provider）
   useEffect(() => {
     return onAdvancedPanelNavigate((payload) => {
-      setActiveTab(payload.tab);
-      if (payload.providerId) {
-        useChatStore.getState().setCurrentProvider(payload.providerId);
-      }
+      requestTab(payload.tab, () => {
+        if (payload.providerId) useChatStore.getState().setCurrentProvider(payload.providerId);
+      });
     });
-  }, []);
+  }, [requestTab]);
 
   // Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab、Ctrl+Shift+Tab 切换进阶面板标签
   // 输入框内也生效（可通过设置关闭，立即生效）
@@ -147,7 +164,7 @@ export default function AdvancedPanelView() {
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         const idx = Number(e.key) - 1;
         const next = availableTabs[idx];
-        if (next) { e.preventDefault(); setActiveTab(next); }
+        if (next) { e.preventDefault(); requestTab(next); }
         return;
       }
       if (!e.ctrlKey || e.altKey || e.metaKey) return;
@@ -158,44 +175,53 @@ export default function AdvancedPanelView() {
         const nextIndex = e.shiftKey
           ? (currentIndex - 1 + tabOrder.length) % tabOrder.length
           : (currentIndex + 1) % tabOrder.length;
-        setActiveTab(tabOrder[nextIndex]);
+        if (tabOrder[nextIndex]) requestTab(tabOrder[nextIndex]);
         return;
       }
 
       if (e.shiftKey) return;
       const idx = Number(e.key) - 1;
       const next = availableTabs[idx];
-      if (next) { e.preventDefault(); setActiveTab(next); }
+      if (next) { e.preventDefault(); requestTab(next); }
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [activeTab, availableTabs]);
+  }, [activeTab, availableTabs, requestTab]);
 
   // 初始化时若 URL 指定了 provider，切换 chat tab 并选中该 provider
   useEffect(() => {
     if (initialProviderId) {
-      setActiveTab('chat');
-      useChatStore.getState().setCurrentProvider(initialProviderId);
+      requestTab('chat', () => useChatStore.getState().setCurrentProvider(initialProviderId));
     }
-  }, [initialProviderId]);
-
-  // activeTab 的 ref，供订阅回调同步读取（避免闭包陈旧）
-  const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
+  }, [initialProviderId, requestTab]);
 
   // 模块联动：当前 tab 被关闭时自动切到第一个可用 tab（避免内容区空白）
   useEffect(() => {
-    if (modulesInitialized && availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
-      setActiveTab(availableTabs[0]);
+    if (modulesInitialized && !availableTabs.includes(activeTab)) {
+      requestTab(availableTabs[0] ?? '');
     }
-  }, [availableTabs, activeTab, modulesInitialized]);
+  }, [availableTabs, activeTab, modulesInitialized, requestTab]);
 
-  // ESC / Ctrl+W 关窗：进阶面板无标题编辑态，onEsc 直接关闭窗口
-  useEscToCloseWindow();
+  const handleClose = useCallback(() => {
+    const close = () => { void closeCurrentWindow().catch(() => {}); };
+    if (beforeLeaveRef.current) {
+      void beforeLeaveRef.current(close).catch((error) => console.error('[AdvancedPanel] close failed:', error));
+    } else close();
+  }, []);
+  useEscToCloseWindow({ ctrlW: false, onEsc: (event) => { event.preventDefault(); handleClose(); return true; } });
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'w') {
+        event.preventDefault();
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [handleClose]);
 
   const handleMinimize = useCallback(() => void minimizeWindow().catch(() => {}), []);
   // handleMaximize 由 useWindowMaximizedAndPinned 统一提供
-  const handleClose = useCallback(() => void closeCurrentWindow().catch(() => {}), []);
 
   return (
     <div className="advanced-panel-provider-view app-shell app-view-root" data-name="advanced-panel.container">
@@ -207,7 +233,7 @@ export default function AdvancedPanelView() {
         center={
           <SegmentedControl<TabKey>
             value={activeTab}
-            onChange={setActiveTab}
+            onChange={requestTab}
             name="advanced-panel-tab"
             className="advanced-panel-segmented"
             options={availableTabs.map((t) => ({
@@ -251,15 +277,16 @@ export default function AdvancedPanelView() {
         {activeTab === 'chat' && moduleEnabled('custom-chat') && (
           <ChatTab onOpenSettings={() => setSettingsOpen(true)} />
         )}
-        {activeTab === 'whiteboard' && moduleEnabled('whiteboard') && (
+        {activeTab === 'whiteboard' && (
           <WhiteboardView
-            onClose={() => setActiveTab(availableTabs[0] ?? 'chat')}
+            onBeforeLeaveReady={registerBeforeLeave}
+            onClose={() => requestTab(availableTabs[0] ?? 'chat')}
             sidebarVisible={whiteboardSidebarVisible}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
-        {activeTab === 'notes' && moduleEnabled('notes') && (
-          <NotesView onOpenSettings={() => setSettingsOpen(true)} />
+        {activeTab === 'notes' && (
+          <NotesView onOpenSettings={() => setSettingsOpen(true)} onBeforeLeaveReady={registerBeforeLeave} />
         )}
         {/* 插件 tab 渲染：非内置 tab 时显示插件提供的 UI 或占位 */}
         {!['chat', 'whiteboard', 'notes'].includes(activeTab) && tabRegistry[activeTab] && (

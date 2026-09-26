@@ -8,10 +8,13 @@
 // 结果 JSON：写到 outputPath + '.result.json' 或请求内 resultPath
 
 import { writeFileSync } from 'fs'
+import { app } from 'electron'
+import { exportForUninstall } from './uninstall-export.js'
 import path from 'path'
 import { exportAllData, type ExportOptions } from './backup-restore.js'
 
 export interface ExportCliRequest {
+  expectedDataRoot?: string
   outputPath: string
   encrypt?: boolean
   password?: string
@@ -47,6 +50,14 @@ export async function runExportCli(requestPath: string): Promise<number> {
     if (!raw.outputPath) {
       writeFileSync(resultPath, JSON.stringify({ ok: false, error: '缺少 outputPath' }))
       return 1
+    }
+    if (raw.expectedDataRoot) {
+      const root = app.getPath('userData')
+      if (path.resolve(raw.expectedDataRoot).toLowerCase() !== path.resolve(root).toLowerCase()) throw new Error('The export root does not match the uninstall request')
+      if (raw.encrypt && !raw.password) throw new Error('A backup password is required')
+      await exportForUninstall(root, raw.outputPath, raw.encrypt ? raw.password : undefined)
+      writeFileSync(resultPath, JSON.stringify({ ok: true, verified: true, filePath: raw.outputPath, dataRoot: root }))
+      return 0
     }
     const options = normalizeOptions(raw.categories)
     const encrypt = raw.encrypt && raw.password ? { password: raw.password } : undefined
