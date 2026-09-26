@@ -2976,7 +2976,7 @@ name = "sidekickai-installer"
 version = "0.1.0-alpha.3"
 dependencies = [
  "aes-gcm",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "hmac",
  "pbkdf2",
  "serde",
