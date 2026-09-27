@@ -1,195 +1,252 @@
-// Archive the standalone runtime and verify its portable entry points.
-// Retry temporary filesystem locks without terminating application processes.
+'use strict'
 
-const fs = require('fs')
-const path = require('path')
-const { spawnSync } = require('child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const { spawnSync } = require('node:child_process')
+const asar = require('@electron/asar')
+const u = require('./uninstaller-build-utils.cjs')
+const { verifyPackagedNative } = require('./verify-packaged-native.cjs')
+const { ROOT, VERSION, validateArchitectures, applicationFingerprint } = require('./build-tauri-installer.cjs')
+const product = require('../packages/product-contract/manifest.json')
+const selection = require('../product-edition.json')
 
-const ROOT = path.join(__dirname, '..')
-const outputIndex = process.argv.indexOf('--output-dir')
-if (outputIndex >= 0 && !process.argv[outputIndex + 1]) throw new Error('--output-dir requires a directory')
-const DIST_PORTABLE = outputIndex < 0 ? path.join(ROOT, 'dist-portable') : path.resolve(process.argv[outputIndex + 1])
-const SRC_DIR = path.join(DIST_PORTABLE, 'win-unpacked')
-const DST_DIR = path.join(DIST_PORTABLE, 'SidekickAI-OpenSource')
-const DIR_NAME = path.basename(DST_DIR)
+const SEVENZ = process.env.SIDEKICK_7Z || 'C:\\Program Files\\7-Zip\\7z.exe'
+const DIRECTORY_NAME = product.name
+const LAYOUT = product.portable
+const MARKER = 'SidekickAI Dual Architecture Portable Marker\n'
+const MIN_ZIP_BYTES = 120 * 1024 * 1024
+const REQUIRED_RUNTIME_FILES = [
+  product.executable, 'resources/app.asar', 'resources/LICENSE.application.txt', 'LICENSE.electron.txt', 'LICENSES.chromium.html',
+  'chrome_100_percent.pak', 'chrome_200_percent.pak', 'resources.pak', 'icudtl.dat',
+  'snapshot_blob.bin', 'v8_context_snapshot.bin', 'ffmpeg.dll', 'libEGL.dll', 'libGLESv2.dll',
+  'd3dcompiler_47.dll', 'vk_swiftshader.dll', 'vk_swiftshader_icd.json', 'vulkan-1.dll',
+  'locales/en-US.pak', 'locales/zh-CN.pak', 'locales/zh-TW.pak',
+]
+const REQUIRED_ENTRIES = [
+  `${DIRECTORY_NAME}/${LAYOUT.launcher}`,
+  `${DIRECTORY_NAME}/portable-layout.json`,
+  `${DIRECTORY_NAME}/portable-manifest.json`,
+  ...Object.values(LAYOUT.runtimes).flatMap(directory => [
+    `${DIRECTORY_NAME}/${directory}/${product.executable}`,
+    `${DIRECTORY_NAME}/${directory}/resources/app.asar`,
+    `${DIRECTORY_NAME}/${directory}/portable.txt`,
+  ]),
+]
+const FORBIDDEN_NAMES = new Set([
+  'uninstall.exe', 'installer.exe', 'uninstaller.exe', 'uninstall-manifest.json', 'install-config.json', 'install-receipt.json',
+  'install-receipt.pending.json', 'install-state.json', 'payload.7z', '7zr.exe',
+  'oxy-service.json', 'oxy-deployment.json', 'edition-identity.json', '.app-data',
+  '.app-data.instance', '.git', '.env', 'devkit', 'plugin-sdk',
+])
 
-const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'))
-const VERSION = pkg.version
-const ZIP_NAME = `SidekickAI-OpenSource-Portable-${VERSION}-win-x64.zip`
-const ZIP_FILE = path.join(DIST_PORTABLE, ZIP_NAME)
-
-// zip 体积下限（MB）。带完整 Electron 运行时的便携包不可能低于此值，
-// 低于它基本可判定为空包 / 半包。
-const MIN_ZIP_MB = 60
-
-/** 同步等待（本脚本为纯同步流程） */
-function sleepSync(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+function runArchive(args, cwd) {
+  const result = spawnSync(SEVENZ, args, { cwd, stdio: 'inherit', windowsHide: true })
+  if (result.error) throw new Error(`Portable archive failed: ${result.error.message}`)
+  if (result.status !== 0) throw new Error(`Portable archive failed with exit ${result.status}`)
 }
 
-/**
- * 重试执行。仅对「文件被临时占用」类错误重试，
- * 其它错误（磁盘满、路径不存在等）立即抛出，避免掩盖真问题。
- */
-function withRetry(label, fn, attempts = 5, delayMs = 1500) {
-  const retriable = new Set(['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY', 'EMFILE'])
-  let lastErr
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      return fn()
-    } catch (err) {
-      lastErr = err
-      if (!retriable.has(err.code) || i === attempts) break
-      console.warn(
-        `[pack-portable] ${label} 被占用(${err.code})，${delayMs}ms 后重试 (${i}/${attempts - 1})`
-      )
-      sleepSync(delayMs)
+function validatePortablePath(name) {
+  const segments = name.replaceAll('\\', '/').replace(/\/$/, '').split('/')
+  if (segments.some(segment => !segment || segment === '..' || segment === '.' || /[:\x00]/.test(segment))) throw new Error(`Unexpected portable path: ${name}`)
+  for (const segment of segments) {
+    const lower = segment.toLowerCase()
+    if (FORBIDDEN_NAMES.has(lower) || lower.startsWith('.env.') || /^(?:sidekickai-)?setup.*\.exe$/i.test(segment) || /\.(?:db|sqlite|sqlite3)(?:-wal|-shm)?$/i.test(segment)) {
+      throw new Error(`Portable input contains non-distributable content: ${name}`)
     }
   }
-  throw lastErr
+  if (/(?:^|\/)(?:better-sqlite3|uiohook-napi)\/(?:build|bin)(?:\/|$)/i.test(segments.join('/'))) throw new Error(`Portable input contains a development native build: ${name}`)
+  if (segments.some(segment => segment.toLowerCase() === 'data')) throw new Error(`Portable input contains user data: ${name}`)
+}
+function readAt(fd, size, offset) {
+  const bytes = Buffer.alloc(size)
+  if (fs.readSync(fd, bytes, 0, size, offset) !== size) throw new Error('Truncated ZIP metadata')
+  return bytes
 }
 
-/**
- * 读取 zip 中央目录，返回条目名列表（无需第三方依赖）。
- * 用于校验产物，替代"只看文件大小"的盲信。
- */
+function safeInteger(value) {
+  const number = Number(value)
+  if (!Number.isSafeInteger(number) || number < 0) throw new Error('ZIP metadata exceeds the supported integer range')
+  return number
+}
+
 function listZipEntries(zipPath) {
-  const st = fs.statSync(zipPath)
+  const size = fs.statSync(zipPath).size
   const fd = fs.openSync(zipPath, 'r')
   try {
-    // 1) 从尾部找 EOCD（可能带注释，最多 64KB + 22）
-    const tailLen = Math.min(st.size, 65536 + 22)
-    const tail = Buffer.alloc(tailLen)
-    fs.readSync(fd, tail, 0, tailLen, st.size - tailLen)
-    let eocd = -1
-    for (let i = tail.length - 22; i >= 0; i--) {
-      if (tail.readUInt32LE(i) === 0x06054b50) {
-        eocd = i
+    const tailSize = Math.min(size, 65536 + 22)
+    const tailOffset = size - tailSize
+    const tail = readAt(fd, tailSize, tailOffset)
+    let endOffset = -1
+    for (let offset = tail.length - 22; offset >= 0; offset--) {
+      if (tail.readUInt32LE(offset) === 0x06054b50 && offset + 22 + tail.readUInt16LE(offset + 20) === tail.length) {
+        endOffset = offset
         break
       }
     }
-    if (eocd < 0) return null
-
-    const cdSize = tail.readUInt32LE(eocd + 12)
-    const cdOff = tail.readUInt32LE(eocd + 16)
-    if (!cdSize || cdOff === 0xffffffff) return null // zip64 不支持，交给体积校验兜底
-
-    // 2) 读中央目录
-    const cd = Buffer.alloc(cdSize)
-    fs.readSync(fd, cd, 0, cdSize, cdOff)
-    const names = []
-    let p = 0
-    while (p + 46 <= cd.length && cd.readUInt32LE(p) === 0x02014b50) {
-      const nameLen = cd.readUInt16LE(p + 28)
-      const extraLen = cd.readUInt16LE(p + 30)
-      const cmtLen = cd.readUInt16LE(p + 32)
-      names.push(cd.toString('utf8', p + 46, p + 46 + nameLen).replace(/\\/g, '/'))
-      p += 46 + nameLen + extraLen + cmtLen
+    if (endOffset < 0) throw new Error('ZIP end directory is missing')
+    if (tail.readUInt16LE(endOffset + 4) !== 0 || tail.readUInt16LE(endOffset + 6) !== 0) throw new Error('Multi-disk ZIP archives are not supported')
+    let entryCount = tail.readUInt16LE(endOffset + 10)
+    let directorySize = tail.readUInt32LE(endOffset + 12)
+    let directoryOffset = tail.readUInt32LE(endOffset + 16)
+    if (entryCount === 0xffff || directorySize === 0xffffffff || directoryOffset === 0xffffffff) {
+      const locatorOffset = tailOffset + endOffset - 20
+      if (locatorOffset < 0) throw new Error('ZIP64 locator is missing')
+      const locator = readAt(fd, 20, locatorOffset)
+      if (locator.readUInt32LE(0) !== 0x07064b50 || locator.readUInt32LE(4) !== 0 || locator.readUInt32LE(16) !== 1) throw new Error('Invalid ZIP64 locator')
+      const recordOffset = safeInteger(locator.readBigUInt64LE(8))
+      if (recordOffset + 56 > locatorOffset) throw new Error('ZIP64 directory record is outside the archive')
+      const record = readAt(fd, 56, recordOffset)
+      if (record.readUInt32LE(0) !== 0x06064b50 || record.readBigUInt64LE(4) < 44n || record.readUInt32LE(16) !== 0 || record.readUInt32LE(20) !== 0) throw new Error('Invalid ZIP64 directory record')
+      entryCount = safeInteger(record.readBigUInt64LE(32))
+      directorySize = safeInteger(record.readBigUInt64LE(40))
+      directoryOffset = safeInteger(record.readBigUInt64LE(48))
     }
+    if (!entryCount || directoryOffset + directorySize > tailOffset + endOffset) throw new Error('Invalid ZIP central directory range')
+    const directoryEnd = directoryOffset + directorySize
+    const names = []
+    let position = directoryOffset
+    while (position < directoryEnd) {
+      if (position + 46 > directoryEnd) throw new Error('Truncated ZIP central directory entry')
+      const header = readAt(fd, 46, position)
+      if (header.readUInt32LE(0) !== 0x02014b50) throw new Error('Invalid ZIP central directory entry')
+      const nameSize = header.readUInt16LE(28)
+      const extraSize = header.readUInt16LE(30)
+      const commentSize = header.readUInt16LE(32)
+      const next = position + 46 + nameSize + extraSize + commentSize
+      if (next > directoryEnd) throw new Error('ZIP entry extends beyond the central directory')
+      names.push(readAt(fd, nameSize, position + 46).toString('utf8').replaceAll('\\', '/'))
+      position = next
+    }
+    if (names.length !== entryCount) throw new Error('ZIP entry count does not match the directory')
     return names
   } finally {
     fs.closeSync(fd)
   }
 }
 
-/**
- * 校验 zip：体积合理 + 必须含入口 exe、app.asar 与 portable.txt，
- * 避免历史上出现过的「空 zip 却报成功」。
- */
-function verifyZip(zipPath) {
-  if (!fs.existsSync(zipPath)) {
-    console.error(`[pack-portable] ✗ 未生成 zip: ${zipPath}`)
-    process.exit(1)
-  }
-  const sizeMB = fs.statSync(zipPath).size / 1024 / 1024
+function verifyZip(zipPath, minimumSize = MIN_ZIP_BYTES) {
+  u.assertFile(zipPath)
+  const size = fs.statSync(zipPath).size
   const entries = listZipEntries(zipPath)
-
-  if (entries) {
-    const hasExe = entries.includes(`${DIR_NAME}/SidekickAI-OpenSource.exe`)
-    const hasAsar = entries.includes(`${DIR_NAME}/resources/app.asar`)
-    const hasFlag = entries.includes(`${DIR_NAME}/portable.txt`)
-    if (!hasExe || !hasAsar || !hasFlag) {
-      console.error('[pack-portable] ✗ zip 结构异常，疑似空包 / 半包：')
-      console.error(`    条目总数       : ${entries.length}`)
-      console.error(`    入口 exe       : ${hasExe ? '有' : '缺失'}`)
-      console.error(`    resources/asar : ${hasAsar ? '有' : '缺失'}`)
-      console.error(`    portable.txt   : ${hasFlag ? '有' : '缺失'}`)
-      console.error(`    前 10 条       : ${entries.slice(0, 10).join(', ')}`)
-      process.exit(1)
-    }
-    if (sizeMB < MIN_ZIP_MB) {
-      console.error(
-        `[pack-portable] ✗ zip 体积异常偏小: ${sizeMB.toFixed(1)} MB（下限 ${MIN_ZIP_MB} MB）`
-      )
-      process.exit(1)
-    }
-    console.log(`[pack-portable] ✓ 校验通过（${entries.length} 个条目，${sizeMB.toFixed(1)} MB）`)
-    return
+  const seen = new Set()
+  for (const name of entries) {
+    const key = name.toLowerCase().replace(/\/$/, '')
+    if (seen.has(key)) throw new Error(`Duplicate portable ZIP path: ${name}`)
+    seen.add(key)
+    if (!name.startsWith(`${DIRECTORY_NAME}/`)) throw new Error(`Unexpected portable ZIP root: ${name}`)
+    if (name === `${DIRECTORY_NAME}/` || name === `${DIRECTORY_NAME}/${LAYOUT.dataDirectory}/`) continue
+    validatePortablePath(name)
   }
+  for (const name of REQUIRED_ENTRIES) if (!entries.includes(name)) throw new Error(`Portable ZIP is missing ${name}`)
+  if (size < minimumSize) throw new Error(`Portable ZIP is unexpectedly small: ${size} bytes; minimum ${minimumSize}`)
+  runArchive(['t', zipPath], path.dirname(zipPath))
+  console.log(`[pack-portable] Verified ${entries.length} ZIP entries (${(size / 1024 / 1024).toFixed(1)} MB)`)
+  return { size, entries: entries.length, sha256: u.sha256(zipPath) }
+}
 
-  console.warn('[pack-portable] ⚠ 无法解析 zip 目录（可能为 zip64），仅做体积校验')
-  if (sizeMB < MIN_ZIP_MB) {
-    console.error(
-      `[pack-portable] ✗ zip 体积异常偏小: ${sizeMB.toFixed(1)} MB（下限 ${MIN_ZIP_MB} MB）`
-    )
-    process.exit(1)
+function universalLauncher() {
+  return [
+    '@echo off',
+    'setlocal',
+    'set "SIDEKICK_ARCH=x64"',
+    'if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "SIDEKICK_ARCH=arm64"',
+    'if /I "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "SIDEKICK_ARCH=arm64"',
+    `set "SIDEKICK_TARGET=%~dp0${LAYOUT.runtimes.x64}\\${product.executable}"`,
+    `if "%SIDEKICK_ARCH%"=="arm64" set "SIDEKICK_TARGET=%~dp0${LAYOUT.runtimes.arm64}\\${product.executable}"`,
+    'if not exist "%SIDEKICK_TARGET%" (',
+    '  echo Application runtime is missing. Extract the complete archive and try again.',
+    '  exit /b 1',
+    ')',
+    'start "" "%SIDEKICK_TARGET%" %*',
+    'exit /b %errorlevel%',
+    '',
+  ].join('\r\n')
+}
+
+function stagePortableApplication(source, destination, arch) {
+  validateArchitectures([arch])
+  const relative = path.relative(path.resolve(source), path.resolve(destination))
+  if (!relative || relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) throw new Error('Portable destination must be outside the source application directory')
+  if (fs.existsSync(destination)) throw new Error(`Portable staging directory already exists: ${destination}`)
+  const applicationInputs = applicationFingerprint(source)
+  for (const entry of applicationInputs.entries) validatePortablePath(entry.path)
+  for (const name of REQUIRED_RUNTIME_FILES) u.assertFile(path.join(source, name))
+  if (u.peInfo(fs.readFileSync(path.join(source, product.executable))).arch !== arch) throw new Error(`Portable application architecture mismatch: ${arch}`)
+  const archive = path.join(source, 'resources', 'app.asar')
+  for (const name of asar.listPackage(archive)) validatePortablePath(name.replace(/^[\\/]+/, ''))
+  const packaged = JSON.parse(asar.extractFile(archive, 'package.json').toString())
+  if (packaged.name !== product.editions.concept.packageName || packaged.version !== VERSION) throw new Error('Portable application edition/version mismatch')
+  const native = verifyPackagedNative(source, arch)
+  const existingMarker = path.join(source, 'portable.txt')
+  if (fs.existsSync(existingMarker)) {
+    u.assertFile(existingMarker)
+    if (fs.readFileSync(existingMarker, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0] !== 'AI Window Portable Mode Marker') throw new Error('Unexpected source portable marker')
   }
-  console.log(`[pack-portable] ✓ ${ZIP_NAME} (${sizeMB.toFixed(1)} MB)`)
+  fs.cpSync(source, destination, { recursive: true, errorOnExist: true, force: false })
+  u.assertUnchanged(applicationInputs, applicationFingerprint(destination))
+  fs.writeFileSync(path.join(destination, 'portable.txt'), MARKER)
+  u.assertUnchanged(applicationInputs, applicationFingerprint(source))
+  return { source, directory: destination, native, applicationInputs, inputs: applicationFingerprint(destination) }
 }
 
-// ── 主流程 ──
-
-// 1. 检查 electron-builder 产物
-if (!fs.existsSync(SRC_DIR)) {
-  console.error(`[pack-portable] 错误: ${SRC_DIR} 不存在`)
-  console.error('  请确认 electron-builder --config electron-builder.portable.yml --win 已成功执行')
-  process.exit(1)
+function packPortable({ output, applications, architectures = ['x64', 'arm64'] }) {
+  if (selection.edition !== 'concept' || !product.editions.concept.packageKinds.includes('portable')) throw new Error('Portable application distribution is only available for the concept edition')
+  validateArchitectures(architectures)
+  if (architectures.length !== 2 || !architectures.includes('x64') || !architectures.includes('arm64')) throw new Error('Portable distribution requires x64 and arm64 runtimes')
+  if (!output || !applications) throw new Error('Portable output and application directories are required')
+  output = path.resolve(output)
+  applications = path.resolve(applications)
+  u.assertFile(SEVENZ)
+  const staging = path.join(output, 'portable-staging', 'universal')
+  const directory = path.join(staging, DIRECTORY_NAME)
+  const zip = path.join(output, `SidekickAI-Portable-${VERSION}-win.zip`)
+  for (const target of [directory, zip, path.join(output, 'portable-evidence.json')]) {
+    if (fs.existsSync(target)) throw new Error(`Portable output already exists: ${target}`)
+  }
+  const applicationInputs = {}
+  for (const arch of ['x64', 'arm64']) {
+    const source = path.join(applications, LAYOUT.runtimes[arch])
+    const staged = stagePortableApplication(source, path.join(directory, LAYOUT.runtimes[arch]), arch)
+    applicationInputs[arch] = staged.applicationInputs
+  }
+  fs.mkdirSync(path.join(directory, LAYOUT.dataDirectory))
+  fs.writeFileSync(path.join(directory, LAYOUT.launcher), universalLauncher(), { flag: 'wx' })
+  fs.writeFileSync(path.join(directory, 'portable-layout.json'), JSON.stringify(LAYOUT, null, 2) + '\n', { flag: 'wx' })
+  const runtimeInputs = applicationFingerprint(directory)
+  const manifest = {
+    schemaVersion: 1, edition: 'concept', name: product.name, version: VERSION,
+    architectures: ['x64', 'arm64'], packageKind: 'portable',
+    files: runtimeInputs.entries,
+  }
+  fs.writeFileSync(path.join(directory, 'portable-manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
+  const inputs = applicationFingerprint(directory)
+  runArchive(['a', '-tzip', '-mx=5', '-y', zip, DIRECTORY_NAME], staging)
+  const verification = verifyZip(zip)
+  u.assertUnchanged(inputs, applicationFingerprint(directory))
+  for (const arch of architectures) u.assertUnchanged(applicationInputs[arch], applicationFingerprint(path.join(applications, LAYOUT.runtimes[arch])))
+  const artifacts = [{ arch: 'universal', path: zip, ...verification, directory, applicationInputs, inputs }]
+  fs.writeFileSync(path.join(output, 'portable-evidence.json'), JSON.stringify(artifacts, null, 2) + '\n', { flag: 'wx' })
+  return artifacts
 }
 
-// Existing packages may contain user data or retained release evidence.
-if (fs.existsSync(DST_DIR) || fs.existsSync(ZIP_FILE)) {
-  console.error('[pack-portable] Output already exists; archive it before packaging again.')
-  process.exit(1)
-}
-
-// Retain the unpacked runtime under the edition's distribution name.
-withRetry('重命名 win-unpacked', () => fs.renameSync(SRC_DIR, DST_DIR))
-console.log(`[pack-portable] ${path.basename(SRC_DIR)} -> ${DIR_NAME}`)
-
-// Relative inputs keep the distribution directory as the archive root.
-const SEVENZ = 'C:\\Program Files\\7-Zip\\7z.exe'
-let packed = false
-
-if (fs.existsSync(SEVENZ)) {
-  console.log('[pack-portable] 使用 7z 压缩...')
-  const r = spawnSync(SEVENZ, ['a', '-tzip', '-mx=5', '-y', ZIP_NAME, DIR_NAME], {
-    cwd: DIST_PORTABLE,
-    stdio: 'inherit',
+function main(args = process.argv.slice(2)) {
+  const options = {}
+  for (let index = 0; index < args.length; index += 2) {
+    const key = args[index] === '--output-dir' ? '--applications' : args[index]
+    if (!['--applications', '--output'].includes(key) || !args[index + 1] || args[index + 1].startsWith('--') || options[key]) throw new Error('Usage: pack-portable.cjs --applications <directory> [--output <new-directory>]')
+    options[key] = args[index + 1]
+  }
+  if (!options['--applications']) throw new Error('A shared application build directory is required (--applications)')
+  return packPortable({
+    applications: path.resolve(options['--applications']),
+    output: options['--output'] ? path.resolve(options['--output']) : u.uniqueOutput(path.join(ROOT, 'dist-portable')),
   })
-  if (r.error || r.status !== 0) {
-    console.error('[pack-portable] 7z 压缩失败，回退到 PowerShell Compress-Archive')
-    if (fs.existsSync(ZIP_FILE)) fs.rmSync(ZIP_FILE, { force: true })
-  } else {
-    packed = true
-  }
 }
 
-if (!packed) {
-  console.log('[pack-portable] 使用 PowerShell Compress-Archive 压缩...')
-  const r = spawnSync(
-    'powershell',
-    [
-      '-NoProfile',
-      '-Command',
-      `Compress-Archive -Path '${DST_DIR}' -DestinationPath '${ZIP_FILE}' -Force`,
-    ],
-    { stdio: 'inherit', shell: true }
-  )
-  if (r.error || r.status !== 0) {
-    console.error('[pack-portable] PowerShell 压缩失败')
-    process.exit(1)
-  }
+module.exports = { listZipEntries, verifyZip, universalLauncher, validatePortablePath, stagePortableApplication, packPortable, main, REQUIRED_ENTRIES, REQUIRED_RUNTIME_FILES }
+if (require.main === module) {
+  require('./packaging-lock.cjs').withPackagingLock(() => main()).catch(error => {
+    console.error(`[pack-portable] Failed: ${error.stack || error}`)
+    process.exitCode = 1
+  })
 }
-
-// 6. 校验产物结构 —— 不校验的话，空包会以「成功」返回
-verifyZip(ZIP_FILE)

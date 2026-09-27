@@ -1,28 +1,7 @@
 import { app, BrowserWindow, dialog, webContents } from 'electron'
-import fs from 'node:fs'
-import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { acquireEditionSession, editionSessionEndpoint, type Edition } from './edition-session.js'
 
 let ready = false
-
-function legacyEdition(): string | undefined {
-  if (process.platform !== 'win32' || process.env.SIDEKICK_TEST_SESSION) return undefined
-  const script = "$session=(Get-Process -Id " + process.pid + ").SessionId; @(Get-CimInstance Win32_Process -Filter \"Name='SidekickAI.exe' OR Name='SidekickAI-OpenSource.exe'\" | Where-Object { $_.SessionId -eq $session -and $_.ProcessId -ne " + process.pid + " -and $_.CommandLine -notmatch '--type=' } | Select-Object ExecutablePath) | ConvertTo-Json -Compress"
-  const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 8000 }).trim()
-  if (!output) return undefined
-  const parsed = JSON.parse(output)
-  const processes = Array.isArray(parsed) ? parsed : [parsed]
-  for (const processInfo of processes) {
-    if (!processInfo.ExecutablePath) continue
-    const executable = String(processInfo.ExecutablePath)
-    try {
-      const manifest = JSON.parse(fs.readFileSync(path.join(path.dirname(executable), 'resources', 'app.asar', 'package.json'), 'utf8'))
-      if (['sidekick-ai', 'sidekickai-opensource'].includes(manifest.name) && manifest.editionSessionProtocol !== 1) return executable
-    } catch { return executable }
-  }
-  return undefined
-}
 
 async function flushBeforeHandoff(): Promise<boolean> {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -35,7 +14,7 @@ async function flushBeforeHandoff(): Promise<boolean> {
       ])
       if (!saved) throw new Error('窗口中的更改未能保存')
     } catch (error) {
-      await dialog.showMessageBox({ type: 'warning', title: '暂时无法切换版本', message: '请先处理当前窗口的保存问题，再启动联网版。', detail: String(error), buttons: ['继续编辑'] })
+      await dialog.showMessageBox({ type: 'warning', title: '暂时无法切换版本', message: '请先处理当前窗口的保存问题，再继续操作。', detail: String(error), buttons: ['继续编辑'] })
       return false
     } finally { clearTimeout(timer) }
   }
@@ -91,15 +70,9 @@ function quitAfterHandoff(): Promise<boolean> {
 export function markEditionReady(): void { ready = true }
 
 export async function startEditionSession(edition: Edition, busy: () => boolean): Promise<boolean> {
-  const legacy = legacyEdition()
-  if (legacy) {
-    dialog.showErrorBox('请先退出旧版本', '检测到尚不支持保存交接的旧版本。请保存并退出旧版本后重试；更新两版后可自动交接。\n' + legacy)
-    app.exit(0)
-    return false
-  }
   const result = await acquireEditionSession({
     edition,
-    endpoint: editionSessionEndpoint(process.env.SIDEKICK_TEST_SESSION),
+    endpoint: editionSessionEndpoint(process.env.SIDEKICK_TEST_SESSION, edition, app.getPath('userData')),
     executable: app.getPath('exe'),
     state: () => busy() ? 'busy' : ready ? 'ready' : 'starting',
     onActivate: () => {

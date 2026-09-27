@@ -141,6 +141,7 @@ export default function HotkeySection({
                   </Button>
                 )}
               </div>
+              {h.enabled && (h.registration === 'conflict' || h.registration === 'unavailable') && <div role="status" className="hotkey-feedback feedback-text fail">{h.registrationReason ?? '快捷键暂不可用，请修改组合键或重新启用。'}</div>}
               {fb && (
                 <div className={`hotkey-feedback feedback-text ${fb.type === 'success' ? 'ok' : 'fail'}`} data-name={`settings.hotkey.hotkey-item-${idx + 1}-feedback`}>{fb.msg}</div>
               )}

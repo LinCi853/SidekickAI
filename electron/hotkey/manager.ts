@@ -24,6 +24,7 @@
 //   - manager.ts      仅保留 HotkeyManager 类与单例
 
 import { globalShortcut } from 'electron'
+import { HotkeyOwnership, type HotkeyLease } from '../../packages/desktop-common/hotkey-ownership.js'
 import { HotkeyInputState } from './input-state.js'
 import { dispatchBrowserHotkeyFallback } from '../utils/browser-hotkey-fallback.js'
 import { checkAccessibilityPermission } from '../utils/permission-manager.js'
@@ -74,6 +75,11 @@ export function getHotkeyManagerInstance(): HotkeyManager | null {
 }
 
 export class HotkeyManager {
+  private readonly ownership = new HotkeyOwnership()
+  private readonly ownershipLeases = new Map<string, HotkeyLease>()
+  private readonly registrationStates = new Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>()
+  private readonly recordingLeases = new Map<string, HotkeyLease>()
+  private voiceCleanup: (() => void) | null = null
   private readonly inputState = new HotkeyInputState(UiohookKey)
   /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底） */
   private registered = new Map<string, () => void>()
@@ -89,6 +95,7 @@ export class HotkeyManager {
   private lastTriggeredAt = new Map<string, number>()
   /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut） */
   private voiceMatcher: {
+    lease: HotkeyLease
     keycode: number | null
     alt: boolean
     ctrl: boolean
@@ -212,13 +219,19 @@ export class HotkeyManager {
    * 注册热键
    * 主路径 globalShortcut，同时加入 uiohook 兜底监听。
    * 只要其中一路生效，热键即可工作。
-   * @returns globalShortcut 是否注册成功
+   * @returns Whether an owned shortcut backend is available.
    */
   async register(accelerator: string, callback: () => void): Promise<boolean> {
     // 若已注册同名热键，先注销以避免冲突
     if (this.registered.has(accelerator)) {
       this.unregister(accelerator)
     }
+    const lease = this.ownership.acquire(accelerator, `application:${accelerator}`)
+    if (!lease) {
+      this.registrationStates.set(accelerator, 'conflict')
+      return false
+    }
+    this.ownershipLeases.set(accelerator, lease)
 
     // 包装回调：加入去重窗口
     const throttledCallback = () => {
@@ -234,7 +247,10 @@ export class HotkeyManager {
     })
     this.ensureUiohookStarted()
 
-    if (this._paused || this._recordingCallback) return true
+    if (this._paused || this._recordingCallback) {
+      this.registrationStates.set(accelerator, 'registered')
+      return true
+    }
 
     // Register with the operating system.
     try {
@@ -244,6 +260,7 @@ export class HotkeyManager {
       }
       const ok = globalShortcut.register(accelerator, throttledCallback)
       if (ok) {
+        this.registrationStates.set(accelerator, 'registered')
         console.log(`[HotkeyManager] globalShortcut 注册成功: ${accelerator}`)
         return true
       }
@@ -256,17 +273,27 @@ export class HotkeyManager {
       )
     } catch (err) {
       console.warn(
-        `[HotkeyManager] globalShortcut 注册异常: ${accelerator}，已启用 uiohook 兜底`,
+        `[HotkeyManager] System shortcut registration failed: ${accelerator}`,
         err,
       )
+      this.unregister(accelerator)
+      this.registrationStates.set(accelerator, 'unavailable')
+      return false
     }
 
+    if (this.uiohookStarted && parseAccelerator(accelerator).keycode != null) {
+      this.registrationStates.set(accelerator, 'fallback')
+      return true
+    }
+    this.unregister(accelerator)
+    this.registrationStates.set(accelerator, 'unavailable')
     return false
   }
 
   /** 统一触发入口：200ms 去重，避免 globalShortcut + uiohook 双触发 */
   private trigger(accelerator: string, callback: () => void): void {
     if (this._paused || this._recordingCallback) return
+    if (!this.ownershipLeases.get(accelerator)?.active) return
     if (this.uiohookStarted && !this.inputState.claim(parseAccelerator(accelerator))) return
     const now = Date.now()
     const last = this.lastTriggeredAt.get(accelerator) ?? 0
@@ -354,7 +381,7 @@ export class HotkeyManager {
         }
       }
       // 语音热键 keydown：要求主键 + 必备修饰键匹配，其它修饰键（Ctrl/Shift/Meta）允许不一致
-      if (this.voiceMatcher && this.voiceMatcher.keycode) {
+      if (this.voiceMatcher?.lease.active && this.voiceMatcher.keycode) {
         const m = this.voiceMatcher
         if (
           e.keycode === m.keycode &&
@@ -468,6 +495,7 @@ export class HotkeyManager {
 
   /** 注销指定热键 */
   unregister(accelerator: string): void {
+    if (!this.registered.has(accelerator)) return
     try {
       globalShortcut.unregister(accelerator)
     } catch (err) {
@@ -476,6 +504,9 @@ export class HotkeyManager {
     this.registered.delete(accelerator)
     this.uiohookMatchers.delete(accelerator)
     this.lastTriggeredAt.delete(accelerator)
+    this.ownershipLeases.get(accelerator)?.release()
+    this.ownershipLeases.delete(accelerator)
+    this.registrationStates.delete(accelerator)
   }
 
   /**
@@ -485,13 +516,19 @@ export class HotkeyManager {
    * 独立跟踪到 browserShortcuts 映射，避免与内置热键回调混淆，
    * 注销时可按 accelerator 精确移除。
    *
-   * @returns globalShortcut 是否注册成功（失败时仍有 uiohook 兜底）
+   * @returns Whether an owned shortcut backend is available.
    */
   registerBrowserShortcut(accelerator: string, callback: () => void): boolean {
     // 若已注册同名浏览器快捷键，先注销
     if (this.browserShortcuts.has(accelerator)) {
       this.unregisterBrowserShortcut(accelerator)
     }
+    const lease = this.ownership.acquire(accelerator, `browser:${accelerator}`)
+    if (!lease) {
+      this.registrationStates.set(accelerator, 'conflict')
+      return false
+    }
+    this.ownershipLeases.set(accelerator, lease)
     // 包装回调：加入 200ms 去重窗口（与内置热键 register() 一致）。
     // 浏览器快捷键同时走 globalShortcut 主路径 + uiohook 兜底，若不包 trigger()，
     // 同一次按键会被两路各触发一次 → toggleBrowserWindow 连续开关（闪一下关闭）
@@ -509,14 +546,15 @@ export class HotkeyManager {
       })
     }
     this.ensureUiohookStarted()
-    if (this._paused || this._recordingCallback) return true
+    if (this._paused || this._recordingCallback) {
+      this.registrationStates.set(accelerator, 'registered')
+      return true
+    }
     // Register with the operating system.
     try {
-      if (globalShortcut.isRegistered(accelerator)) {
-        globalShortcut.unregister(accelerator)
-      }
       const ok = globalShortcut.register(accelerator, throttledCallback)
       if (ok) {
+        this.registrationStates.set(accelerator, 'registered')
         console.log(`[HotkeyManager] 浏览器全局快捷键注册成功: ${accelerator}`)
         return true
       }
@@ -525,12 +563,22 @@ export class HotkeyManager {
       )
     } catch (err) {
       console.warn(`[HotkeyManager] 浏览器全局快捷键注册异常: ${accelerator}`, err)
+      this.unregisterBrowserShortcut(accelerator)
+      this.registrationStates.set(accelerator, 'unavailable')
+      return false
     }
+    if (this.uiohookStarted && parseAccelerator(accelerator).keycode != null) {
+      this.registrationStates.set(accelerator, 'fallback')
+      return true
+    }
+    this.unregisterBrowserShortcut(accelerator)
+    this.registrationStates.set(accelerator, 'unavailable')
     return false
   }
 
   /** 注销浏览器窗口全局快捷键 */
   unregisterBrowserShortcut(accelerator: string): void {
+    if (!this.browserShortcuts.has(accelerator)) return
     try {
       globalShortcut.unregister(accelerator)
     } catch (err) {
@@ -542,6 +590,9 @@ export class HotkeyManager {
       this.uiohookMatchers.delete(accelerator)
     }
     this.lastTriggeredAt.delete(accelerator)
+    this.ownershipLeases.get(accelerator)?.release()
+    this.ownershipLeases.delete(accelerator)
+    this.registrationStates.delete(accelerator)
   }
 
   /**
@@ -564,6 +615,7 @@ export class HotkeyManager {
 
   /** 注销全部热键（应用退出时调用） */
   unregisterAll(): void {
+    this.voiceCleanup?.()
     try {
       globalShortcut.unregisterAll()
     } catch (err) {
@@ -576,6 +628,14 @@ export class HotkeyManager {
     this.actionAccelerators.clear()
     this.uiohookMatchers.clear()
     this.lastTriggeredAt.clear()
+    this.ownership.close()
+    this.ownershipLeases.clear()
+    this.registrationStates.clear()
+    this.recordingLeases.clear()
+    this._recordingSuppressors = []
+    this._recordingBackup = []
+    this._recordingCallback = null
+    this._recordingPartialCallback = null
     this.voiceMatcher = null
     if (this.uiohookStarted) {
       try {
@@ -615,6 +675,8 @@ export class HotkeyManager {
       label: HOTKEY_LABELS[action],
       accelerator: this.getHotkey(action),
       enabled: this.getEnabled(action),
+      registration: this.getEnabled(action) ? this.registrationStates.get(this.getHotkey(action)) : undefined,
+      registrationReason: this.registrationStates.get(this.getHotkey(action)) === 'conflict' ? '此快捷键由另一个工百窗实例使用或暂时无法取得，请修改组合键或重新启用。' : undefined,
     }))
   }
 
@@ -666,7 +728,7 @@ export class HotkeyManager {
         console.log(`[HotkeyManager] 内置热键 ${action} (${acc}) 注册成功`)
       } else {
         console.warn(
-          `[HotkeyManager] 内置热键 ${action} (${acc}) globalShortcut 未成功，已启用 uiohook 兜底`,
+          `[HotkeyManager] Shortcut unavailable: ${action} (${acc})`,
         )
       }
     }
@@ -686,8 +748,21 @@ export class HotkeyManager {
     onKeyDown: () => void,
     onKeyUp: () => void,
   ): () => void {
+    this.voiceCleanup?.()
+    const lease = this.ownership.acquire(accelerator, `voice:${accelerator}`)
+    if (!lease) {
+      this.registrationStates.set(accelerator, 'conflict')
+      return () => {}
+    }
     const parsed = parseAccelerator(accelerator)
-    this.voiceMatcher = {
+    this.ensureUiohookStarted()
+    if (!this.uiohookStarted || parsed.keycode == null) {
+      lease.release()
+      this.registrationStates.set(accelerator, 'unavailable')
+      return () => {}
+    }
+    const matcher = {
+      lease,
       keycode: parsed.keycode,
       alt: parsed.alt,
       ctrl: parsed.ctrl,
@@ -696,25 +771,38 @@ export class HotkeyManager {
       onKeyDown,
       onKeyUp,
     }
+    this.voiceMatcher = matcher
+    this.ownershipLeases.set(accelerator, lease)
+    this.registrationStates.set(accelerator, 'registered')
     // 注册时清空按下态（避免上次未正确释放的残留状态）
     this.voiceKeyPressed = false
     this.voiceLastKeydownAt = 0
     this.stopVoicePolling()
-    this.ensureUiohookStarted()
-    if (this.uiohookStarted) {
-      console.log(`[HotkeyManager] 语音热键已注册: ${accelerator} (仅 uiohook keydown/keyup)`)
-    } else {
-      console.warn(
-        `[HotkeyManager] 语音热键 ${accelerator} 已注册但 uiohook 未启动（macOS 辅助功能权限未授权或 Wayland 环境），语音热键将无法触发`,
-      )
-    }
-    return () => {
+    console.log(`[HotkeyManager] Voice shortcut registered: ${accelerator}`)
+    const cleanup = () => {
+      if (this.voiceMatcher !== matcher) return
+      this.releaseVoiceHold()
       this.voiceMatcher = null
       this.voiceKeyPressed = false
       this.voiceLastKeydownAt = 0
       this.stopVoicePolling()
+      lease.release()
+      this.ownershipLeases.delete(accelerator)
+      this.registrationStates.delete(accelerator)
+      this.voiceCleanup = null
       console.log(`[HotkeyManager] 语音热键已注销: ${accelerator}`)
     }
+    this.voiceCleanup = cleanup
+    return cleanup
+  }
+
+  private releaseVoiceHold(): void {
+    if (!this.voiceKeyPressed) return
+    this.voiceKeyPressed = false
+    this.voiceLastKeydownAt = 0
+    this.stopVoicePolling()
+    try { this.voiceMatcher?.onKeyUp() }
+    catch (error) { console.warn('[HotkeyManager] Voice release failed', error) }
   }
 
   /**
@@ -759,6 +847,11 @@ export class HotkeyManager {
     if (e.metaKey) accParts.push('Meta')
     accParts.push(keyName)
     const accelerator = accParts.join('+')
+    const lease = this.ownership.retain(accelerator) || this.ownership.acquire(accelerator, `recording-probe:${accelerator}`)
+    if (!lease) {
+      this.finishRecording(accelerator, '此快捷键由另一个工百窗实例使用，请换一个组合。')
+      return
+    }
 
     // 检测可用性：尝试 globalShortcut.register
     // 如果被我们的抑制器注册了（临时阻止系统菜单的空回调），先注销再试
@@ -789,8 +882,10 @@ export class HotkeyManager {
     } catch (err) {
       reason = `快捷键 ${accelerator} 格式不支持（${err instanceof Error ? err.message : String(err)}）`
       if (isSuppressed) {
-        globalShortcut.register(accelerator, () => {})
+        try { globalShortcut.register(accelerator, () => {}) } catch {}
       }
+    } finally {
+      lease.release()
     }
 
     this.finishRecording(accelerator, reason)
@@ -820,6 +915,8 @@ export class HotkeyManager {
         // ignore
       }
     }
+    for (const lease of this.recordingLeases.values()) lease.release()
+    this.recordingLeases.clear()
     this._recordingSuppressors = []
     this._recordingBackup = []
     this._recordingCallback = null
@@ -837,6 +934,7 @@ export class HotkeyManager {
     if (this._recordingCallback) {
       this.stopRecording()
     }
+    this.releaseVoiceHold()
     this.inputState.suspend()
     this._recordingCallback = callback
     this._recordingPartialCallback = onPartial ?? null
@@ -851,6 +949,8 @@ export class HotkeyManager {
     // 临时将本应用已注册的 globalShortcut 热键替换为空回调抑制器，
     // 防止录制期间触发原有功能（如 Alt+Space 切换窗口）
     for (const [acc, cb] of [...this.registered, ...this.browserShortcuts]) {
+      const lease = this.ownership.retain(acc)
+      if (!lease) continue
       try {
         if (globalShortcut.isRegistered(acc)) {
           globalShortcut.unregister(acc)
@@ -858,6 +958,7 @@ export class HotkeyManager {
           if (ok) {
             this._recordingBackup.push({ accelerator: acc, callback: cb })
             this._recordingSuppressors.push(acc)
+            this.recordingLeases.set(acc, lease)
           } else {
             // 重新注册失败则恢复原回调
             globalShortcut.register(acc, cb)
@@ -866,6 +967,7 @@ export class HotkeyManager {
       } catch {
         // 忽略
       }
+      if (!this.recordingLeases.has(acc)) lease.release()
     }
 
     // 临时注册常见 Windows 系统快捷键作为抑制器，阻止系统菜单/窗口操作弹出
@@ -874,16 +976,23 @@ export class HotkeyManager {
       'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
     ]
     for (const supAcc of systemSuppressors) {
+      let lease
       try {
         // 跳过已被本录制流程注册为抑制器的（含上面从 registered 替换的）
         if (this._recordingSuppressors.includes(supAcc)) continue
         // 跳过已被其他应用/进程注册的
         if (globalShortcut.isRegistered(supAcc)) continue
+        lease = this.ownership.retain(supAcc) || this.ownership.acquire(supAcc, `recording-suppressor:${supAcc}`)
+        if (!lease) continue
         const ok = globalShortcut.register(supAcc, () => {})
-        if (ok) this._recordingSuppressors.push(supAcc)
+        if (ok) {
+          this._recordingSuppressors.push(supAcc)
+          this.recordingLeases.set(supAcc, lease)
+        }
       } catch {
         // ignore
       }
+      if (!this.recordingLeases.has(supAcc)) lease?.release()
     }
 
     return true
@@ -902,6 +1011,7 @@ export class HotkeyManager {
   pauseAllShortcuts(): void {
     if (this._paused) return
     this._paused = true
+    this.releaseVoiceHold()
     this.inputState.suspend()
     for (const acc of [...this.registered.keys(), ...this.browserShortcuts.keys()]) {
       try { globalShortcut.unregister(acc) } catch { /* ignore */ }
@@ -924,7 +1034,17 @@ export class HotkeyManager {
     this.inputState.suspend()
     if (this._recordingCallback) return
     for (const [acc, cb] of [...this.registered, ...this.browserShortcuts]) {
-      try { globalShortcut.register(acc, cb) } catch { /* ignore */ }
+      if (!this.ownershipLeases.get(acc)?.active) continue
+      try {
+        const registered = globalShortcut.register(acc, cb)
+        if (registered || this.uiohookStarted && parseAccelerator(acc).keycode != null) {
+          this.registrationStates.set(acc, registered ? 'registered' : 'fallback')
+          continue
+        }
+      } catch {}
+      if (this.registered.has(acc)) this.unregister(acc)
+      else this.unregisterBrowserShortcut(acc)
+      this.registrationStates.set(acc, 'unavailable')
     }
     console.log('[HotkeyManager] 所有全局热键已恢复')
   }

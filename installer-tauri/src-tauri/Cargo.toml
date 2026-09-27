@@ -2,7 +2,7 @@
 
 [package]
 name = "sidekickai-installer"
-version = "0.1.0-alpha.3"
+version = "0.1.5"
 description = "SidekickAI 安装向导（Tauri + 7z solid 载荷）"
 authors = ["LinCi853"]
 edition = "2021"
@@ -17,17 +17,20 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+sidekickai-uninstall-core = { path = "../../installer-shared/uninstall-core" }
+sidekickai-uninstall-host = { path = "../../installer-shared/uninstall-host" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# 卸载时导出加密备份（与主程序 backup-restore 的 SABK 格式一致）
-aes-gcm = "0.10"
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+# 卸载器清单/载荷校验用到的哈希（aes-gcm / pbkdf2 / zip 等由共享卸载实现承担）
 sha2 = "0.10"
-hmac = "0.12"
-getrandom = "0.2"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+ed25519-dalek = "2"
+base64 = "0.22"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+# Typed registry access: localized `reg.exe` output parsing cannot distinguish
+# "absent" from real errors and mangles non-ASCII paths under some code pages.
+winreg = "0.55"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Security",

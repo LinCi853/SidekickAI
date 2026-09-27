@@ -6,7 +6,6 @@ export type DataPolicy = 'keep' | 'export' | 'delete'
 const icon = new URL('../../resources/icons/icon.png', import.meta.url).href
 
 export interface WizardShellProps {
-  edition: 'open-source' | 'online'
   kind?: 'install' | 'uninstall'
   version?: string
   stages: Array<{ id: string; label: string }>
@@ -18,9 +17,8 @@ export interface WizardShellProps {
   className?: string
 }
 
-export function WizardShell({ edition, kind = 'install', version, stages, currentIndex, onClose, children, footer, overlay, className = '' }: WizardShellProps) {
-  const editionName = edition === 'open-source' ? '开源版' : '联网版'
-  const title = '工百窗' + editionName + (kind === 'uninstall' ? '卸载向导' : '安装向导')
+export function WizardShell({ kind = 'install', version, stages, currentIndex, onClose, children, footer, overlay, className = '' }: WizardShellProps) {
+  const title = '工百窗' + (kind === 'uninstall' ? '卸载向导' : '安装向导')
   return <div className={'sk-wizard ' + className} data-wizard-design={WIZARD_DESIGN_VERSION}>
     <header className="sk-wizard__titlebar" data-tauri-drag-region>
       <div className="sk-wizard__title" data-tauri-drag-region>
@@ -34,7 +32,6 @@ export function WizardShell({ edition, kind = 'install', version, stages, curren
         <img className="sk-wizard__mark" src={icon} alt="" draggable={false} />
         <div className="sk-wizard__name">工百窗</div>
         <div className="sk-wizard__wordmark">SidekickAI</div>
-        <div className="sk-wizard__edition">{editionName}</div>
         <ol className="sk-wizard__stages" aria-label="当前进度">
           {stages.map((stage, index) => <li key={stage.id} aria-current={index === currentIndex ? 'step' : undefined} className={index < currentIndex ? 'is-complete' : ''}>
             <span>{index < currentIndex ? '✓' : index + 1}</span><strong>{stage.label}</strong>

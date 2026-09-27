@@ -1,100 +1,27 @@
-// electron/store/store-paths.ts — store 层公共路径工具
-//
-// 抽取各 store 文件重复的 __dirname 与 STORE_CWD 计算，统一路径策略：
-//   - dev 模式（ELECTRON_RENDERER_URL 存在）：写入项目内 .app-data/
-//   - 生产便携版（exe 同级存在 portable.txt）：写入 exe 同级 data/ 目录
-//   - 生产安装版：使用 electron-store 默认 userData 路径（cwd 传 undefined）
-//
-// 关键：getStoreCwd() 必须独立检测便携模式，不能依赖 main.ts 的
-// redirectUserData()，因为 ESM import 阶段 store 就已初始化，早于
-// redirectUserData() 顶层调用。否则便携版数据会误写入系统目录。
-
 import path from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { mkdirSync } from 'fs'
 import Database from 'better-sqlite3'
-// electron-store 已移除（Phase 3：全部 JSON store 已迁入 SQLite settings.db）
 import { app } from 'electron'
+import { portableRoot } from '../runtime-paths.js'
 
-/** 等价于 CommonJS __dirname，用于获取当前模块目录（CJS bundle 下直接用全局 __filename） */
 export function getModuleDirname(): string {
   return path.dirname(__filename)
 }
 
-/**
- * 便携模式检测：exe 同级目录是否存在 portable.txt
- * 在 dev 模式下始终返回 false。
- */
-let _portableCache: boolean | null = null
 export function isPortableMode(): boolean {
-  if (_portableCache !== null) return _portableCache
-  // dev 模式不是便携版
-  if (process.env.ELECTRON_RENDERER_URL) {
-    _portableCache = false
-    return false
-  }
-  try {
-    const exePath = app.getPath('exe')
-    const exeDir = path.dirname(exePath)
-    const portableMarker = path.join(exeDir, 'portable.txt')
-    _portableCache = existsSync(portableMarker)
-  } catch {
-    _portableCache = false
-  }
-  return _portableCache
+  return app.isPackaged === true && portableRoot(app.getPath('exe')) !== undefined
 }
 
-/**
- * store 文件存储根目录：
- *   - dev 模式：项目内 .app-data/
- *   - 生产便携版：exe 同级 data/ 目录（数据跟随 exe 移动）
- *   - 生产安装版：undefined（electron-store 使用默认 userData 路径）
- */
-export function getStoreCwd(): string | undefined {
-  if (process.env.SIDEKICK_DATA_DIR) return app.getPath('userData')
-  // dev 模式
-  if (process.env.ELECTRON_RENDERER_URL) {
-    return path.join(getModuleDirname(), '..', '..', '.app-data')
-  }
-  // 生产便携模式
-  if (isPortableMode()) {
-    const exePath = app.getPath('exe')
-    const exeDir = path.dirname(exePath)
-    return path.join(exeDir, 'data')
-  }
-  // 生产安装版：用 electron-store 默认
-  return undefined
+// Runtime initialization selects userData before any persistent store is imported.
+export function getStoreCwd(): string {
+  return app.getPath('userData')
 }
 
-// =============================================================================
-// Task 14: SQLite 基础设施
-// =============================================================================
-
-/**
- * SQLite 数据库文件路径解析（统一 notes-db / whiteboard-db / chat-store 三处重复逻辑）。
- *   - dev 模式：项目内 .app-data/<filename>（自动创建目录）
- *   - 生产便携版：exe 同级 data/<filename>（自动创建目录）
- *   - 生产安装版：userData/<filename>
- */
 export function resolveSqlitePath(filename: string): string {
-  if (process.env.SIDEKICK_DATA_DIR) return path.join(app.getPath('userData'), filename)
-  if (process.env.ELECTRON_RENDERER_URL) {
-    const dir = path.join(getModuleDirname(), '..', '..', '.app-data')
-    mkdirSync(dir, { recursive: true })
-    return path.join(dir, filename)
-  }
-  if (isPortableMode()) {
-    const exeDir = path.dirname(app.getPath('exe'))
-    const dir = path.join(exeDir, 'data')
-    mkdirSync(dir, { recursive: true })
-    return path.join(dir, filename)
-  }
-  return path.join(app.getPath('userData'), filename)
+  const directory = getStoreCwd()
+  mkdirSync(directory, { recursive: true })
+  return path.join(directory, filename)
 }
-
-/**
- * 创建 SQLite 数据库连接并完成基础配置（WAL + foreign_keys + schema 初始化）。
- * 统一 notes-db / whiteboard-db / chat-store 三处 Database 初始化样板。
- */
 export function createSqliteDb(
   dbPath: string,
   initSchema: (db: Database.Database) => void,

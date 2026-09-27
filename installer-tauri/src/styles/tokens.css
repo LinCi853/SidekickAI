@@ -1,0 +1,50 @@
+/* SidekickAI 安装向导 — 现代简约视觉体系
+   主色砖红 #f7663c（与 classic.css --brand-500 一致）
+   特点：大圆角、柔和阴影、卡片分区、左侧品牌区、横向步骤条
+   渲染：Chromium 矢量渲染，任意 DPI 下清晰（解决 NSIS 的 4K 虚化问题）
+*/
+
+:root {
+  /* 品牌色 */
+  --brand-50: #fff4ee;
+  --brand-100: #ffe6dc;
+  --brand-200: #ffc8b5;
+  --brand-300: #ffab8f;
+  --brand-400: #ff845f;
+  --brand-500: #f7663c;
+  --brand-600: #f1481e;
+  --brand-700: #d63a14;
+  --brand-800: #ad2f13;
+  --brand-900: #8a2914;
+
+  /* 中性色 */
+  --bg: #ffffff;
+  --surface: #fafafa;
+  --surface-2: #f4f4f5;
+  --border: #e8e8ea;
+  --border-strong: #d8d8dc;
+  --text: #1a1a1a;
+  --text-secondary: #52525b;
+  --text-muted: #8a8a93;
+
+  /* 语义色 */
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  /* 圆角 */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1);
+  --shadow-brand: 0 6px 20px rgba(247, 102, 60, 0.28);
+
+  /* 尺寸 */
+  --titlebar-h: 44px;
+  --brand-panel-w: 260px;
+}

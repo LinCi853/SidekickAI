@@ -156,7 +156,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  if (!await startEditionSession('open-source', () => isImportingData)) return
+  if (!await startEditionSession('concept', () => isImportingData)) return
 
   // 移除默认应用菜单：释放 F12（默认 toggleDevTools）等系统级快捷键，
   // 交由应用内 keydown / before-input-event 统一处理。

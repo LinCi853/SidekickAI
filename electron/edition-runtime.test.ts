@@ -30,8 +30,8 @@ function emitVeto() {
   return veto
 }
 const send = (action: 'activate' | 'status' | 'shutdown' = 'status') => requestEdition(
-  editionSessionEndpoint(process.env.SIDEKICK_TEST_SESSION),
-  { protocol: 1, edition: action === 'shutdown' ? 'open-source' : 'online', action, executable: 'E:/fixture/SidekickAI-OpenSource.exe' },
+  editionSessionEndpoint(process.env.SIDEKICK_TEST_SESSION, 'concept', 'E:/fixture/SidekickAI-OpenSource.exe'),
+  { protocol: 1, edition: 'concept', action, executable: 'E:/fixture/SidekickAI-OpenSource.exe' },
 )
 
 beforeEach(() => {
@@ -58,9 +58,9 @@ afterEach(async () => {
 })
 
 describe('edition runtime quit cancellation', () => {
-  it.each(['activate', 'shutdown'] as const)('retries %s after an asynchronous beforeunload veto', async action => {
+  it.each(['shutdown'] as const)('retries %s after an asynchronous beforeunload veto', async action => {
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => false)
+    await runtime.startEditionSession('concept', () => false)
     runtime.markEditionReady()
     expect((await send(action)).status).toBe('yielding')
     await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce())
@@ -72,14 +72,14 @@ describe('edition runtime quit cancellation', () => {
 
   it.each(['before-quit', 'will-quit', 'close'] as const)('recovers from a canceled %s after all listeners decide', async name => {
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => false)
+    await runtime.startEditionSession('concept', () => false)
     runtime.markEditionReady()
     electron.app.quit.mockImplementation(() => {
       const target = name === 'close' ? electron.windows[0] : electron.app
       target.once(name, (value: ReturnType<typeof event>) => value.preventDefault())
       target.emit(name, event())
     })
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
     expect(electron.app.isQuitting).toBe(false)
     expect(electron.app.listenerCount('before-quit')).toBe(0)
@@ -94,13 +94,13 @@ describe('edition runtime quit cancellation', () => {
     const guest = new EventEmitter()
     if (!createdDuringQuit) electron.contents.push(guest)
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => false)
+    await runtime.startEditionSession('concept', () => false)
     runtime.markEditionReady()
     electron.app.quit.mockImplementation(() => {
       if (createdDuringQuit) electron.app.emit('web-contents-created', event(), guest)
       setImmediate(() => guest.emit('will-prevent-unload', event()))
     })
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
     expect(guest.listenerCount('will-prevent-unload')).toBe(0)
     expect(electron.app.listenerCount('web-contents-created')).toBe(0)
@@ -108,13 +108,13 @@ describe('edition runtime quit cancellation', () => {
 
   it('keeps yielding when another listener permits unload or shutdown is merely slow', async () => {
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => false)
+    await runtime.startEditionSession('concept', () => false)
     runtime.markEditionReady()
     electron.app.quit.mockImplementation(() => {
       electron.contents[0].once('will-prevent-unload', (value: ReturnType<typeof event>) => value.preventDefault())
       emitVeto()
     })
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce())
     expect((await send()).status).toBe('yielding')
     expect((await send('shutdown')).status).toBe('yielding')
@@ -128,13 +128,13 @@ describe('edition runtime quit cancellation', () => {
   it('preserves ownership and permits a retry after a save rejects', async () => {
     electron.contents[0].executeJavaScript.mockResolvedValue(false)
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => false)
+    await runtime.startEditionSession('concept', () => false)
     runtime.markEditionReady()
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
     expect(electron.app.quit).not.toHaveBeenCalled()
     electron.contents[0].executeJavaScript.mockResolvedValue(true)
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce())
   })
 
@@ -142,9 +142,9 @@ describe('edition runtime quit cancellation', () => {
     let finishSave!: (saved: boolean) => void
     electron.contents[0].executeJavaScript.mockImplementation(() => new Promise(resolve => { finishSave = resolve }))
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => false)
+    await runtime.startEditionSession('concept', () => false)
     runtime.markEditionReady()
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(() => expect(finishSave).toBeTypeOf('function'))
     expect((await send('shutdown')).status).toBe('yielding')
     expect(electron.contents[0].executeJavaScript).toHaveBeenCalledOnce()
@@ -158,15 +158,15 @@ describe('edition runtime quit cancellation', () => {
     let finishSave!: (saved: boolean) => void
     electron.windows[0].webContents.executeJavaScript.mockImplementation(() => new Promise(resolve => { finishSave = resolve }))
     const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('open-source', () => busy)
+    await runtime.startEditionSession('concept', () => busy)
     runtime.markEditionReady()
-    expect((await send('activate')).status).toBe('yielding')
+    expect((await send('shutdown')).status).toBe('yielding')
     await vi.waitFor(() => expect(finishSave).toBeTypeOf('function'))
     busy = true
     finishSave(true)
     await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
     expect(electron.app.quit).not.toHaveBeenCalled()
-    expect((await send('activate')).status).toBe('busy')
+    expect((await send('shutdown')).status).toBe('busy')
     expect((await send()).status).toBe('busy')
   })
 })

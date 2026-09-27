@@ -1,7 +1,7 @@
 {
   "name": "sidekickai-opensource",
-  "version": "0.1.0-alpha.3",
-  "description": "工百窗（SidekickAI）—— 全平台 AI 聚合 + 反检测多 Profile 浏览器（Electron）",
+  "version": "0.1.5",
+  "description": "免费、丰富、无缝融入电脑使用的 AI 入门工具",
   "main": "out/main/index.cjs",
   "author": "SidekickAI",
   "license": "MIT",
@@ -20,15 +20,32 @@
     "build:win-arm64": "electron-vite build && electron-builder --win --arm64",
     "build:win": "npm run build:win-x64 && npm run build:win-arm64",
     "dist": "electron-vite build && electron-builder",
-    "build:portable": "electron-vite build && electron-builder --config electron-builder.portable.yml --win",
-    "build:portable-zip": "electron-vite build && electron-builder --config electron-builder.portable.yml --win && node scripts/pack-portable.cjs",
-    "build:win-all": "npm run build:win && npm run build:portable-zip",
+    "build:portable": "node scripts/build-distribution.cjs --mode portable",
+    "build:portable-zip": "node scripts/build-distribution.cjs --mode portable",
+    "build:win-all": "node scripts/build-distribution.cjs --mode all",
     "build:tauri-installer": "node scripts/build-tauri-installer.cjs",
     "test": "vitest run",
     "test:desktop": "electron-vite build && node scripts/verify-desktop.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "npm run clean:build",
-    "clean:build": "node -e \"const fs=require('fs');['out'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('[clean] Removed',d)}})\""
+    "clean:build": "node -e \"const fs=require('fs');['out'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('[clean] Removed',d)}})\"",
+    "product:check": "node packages/product-contract/sync.cjs",
+    "product:sync": "node packages/product-contract/sync.cjs --apply",
+    "shared:check": "node scripts/shared-source.cjs",
+    "prebuild": "npm run product:check && npm run shared:check",
+    "test:installers": "node scripts/test-installers.cjs",
+    "build:release:installer": "node scripts/build-distribution.cjs --mode installer",
+    "preflight:tauri-installer": "node scripts/build-tauri-installer.cjs --preflight",
+    "workspace:menu": "node scripts/workspace-menu.cjs",
+    "test:workspace-menu": "node --test scripts/workspace-menu.test.cjs",
+    "test:distribution": "node --test scripts/build-distribution.test.cjs",
+    "build:candidate": "node scripts/build-distribution.cjs",
+    "build:candidate:installer": "node scripts/build-distribution.cjs --mode installer",
+    "build:release": "node scripts/build-distribution.cjs",
+    "preflight:release": "node scripts/build-distribution.cjs --preflight",
+    "build:candidate:portable": "node scripts/build-distribution.cjs --mode portable",
+    "build:candidate:all": "node scripts/build-distribution.cjs --mode all",
+    "build:release:portable": "node scripts/build-distribution.cjs --mode portable"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
@@ -77,5 +94,5 @@
     "vitest": "^2.1.9",
     "zustand": "^4.5.0"
   },
-  "editionSessionProtocol": 1
+  "editionSessionProtocol": 2
 }

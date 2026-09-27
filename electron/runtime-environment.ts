@@ -1,21 +1,23 @@
-import { app } from 'electron'
+import { product, edition } from '../packages/product-contract'
+import { app, dialog } from 'electron'
+import { duplicateVersionNotice } from '../packages/desktop-common/running-application'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { resolveRuntimePaths } from './runtime-paths'
 
-const applicationName = 'sidekickai-opensource'
-app.setName(applicationName)
-if (process.platform === 'win32') app.setAppUserModelId('com.sidekickai.opensource')
+const applicationName = edition.packageName
+app.setName(product.name)
+if (process.platform === 'win32') app.setAppUserModelId(edition.appId)
 
-const override = process.env.SIDEKICK_DATA_DIR
-if (override && !path.isAbsolute(override)) throw new Error('SIDEKICK_DATA_DIR must be an absolute path')
-const executableDirectory = path.dirname(app.getPath('exe'))
-const directory = override || (
-  process.env.ELECTRON_RENDERER_URL
-    ? path.resolve(__dirname, '../..', '.app-data')
-    : existsSync(path.join(executableDirectory, 'portable.txt'))
-      ? path.join(executableDirectory, 'data')
-      : path.join(app.getPath('appData'), applicationName)
-)
+if (app.isPackaged) delete process.env.ELECTRON_RENDERER_URL
+export const runtimePaths = resolveRuntimePaths({
+  isPackaged: app.isPackaged,
+  executable: app.getPath('exe'),
+  appData: app.getPath('appData'),
+  developmentDirectory: path.resolve(__dirname, '../..', '.app-data'),
+  dataOverride: process.env.SIDEKICK_DATA_DIR,
+})
+const directory = runtimePaths.dataDirectory
 mkdirSync(directory, { recursive: true })
 app.setPath('userData', directory)
 app.setPath('sessionData', directory)
@@ -25,7 +27,15 @@ const exportPath = exportArgument < 0 ? undefined : process.argv[exportArgument 
 export const exportCliRequestPath = exportPath && !exportPath.startsWith('--') ? exportPath : null
 if (exportCliRequestPath) app.setPath('sessionData', mkdtempSync(path.join(app.getPath('temp'), 'sidekick-export-session-')))
 
-if (!app.requestSingleInstanceLock()) app.exit(0)
+if (!app.requestSingleInstanceLock()) {
+  if (app.isPackaged) {
+    try {
+      const notice = duplicateVersionNotice()
+      if (notice) dialog.showErrorBox('已有版本正在运行', notice)
+    } catch { dialog.showErrorBox('无法核对正在运行的版本', '请先保存并退出已有工百窗实例，再重新启动。') }
+  }
+  app.exit(0)
+}
 const identityPath = path.join(directory, 'edition-identity.json')
 if (existsSync(identityPath)) {
   const identity = JSON.parse(readFileSync(identityPath, 'utf8'))

@@ -1,0 +1,23 @@
+{
+  "issuer": "services/oxy-policy/scripts/sign-resource-package.mjs",
+  "keys": [
+    {
+      "id": "installer-fixture",
+      "publicKey": {
+        "crv": "Ed25519",
+        "x": "h0xKy5bSuGFuQ4c1orXEX4bIR-ynyRrRndIk8DTXFq0",
+        "kty": "OKP"
+      }
+    }
+  ],
+  "asset": {
+    "assetId": "oxy-baseline/oxy-default@1.0.0",
+    "version": "1.0.0",
+    "digest": "ce26f4acaba9a5c9f853f79c9c4cc8097934dab6d21ae8bf7cc4a18d19a76e6b",
+    "sizeBytes": 293,
+    "kind": "resource-package",
+    "destination": "resources/cloud/oxy-baseline/oxy-default/oxy-default-1.0.0.json",
+    "payloadJson": "{\"formatVersion\":1,\"issuedAt\":\"2026-09-15T00:00:00.000Z\",\"notes\":\"\",\"payload\":{\"baselineVersion\":1,\"description\":\"\",\"design\":{\"mode\":\"dark\",\"tokens\":{\"--primary\":\"#123456\"}},\"displayName\":\"Oxy baseline\",\"settings\":{}},\"resourceId\":\"oxy-default\",\"resourceType\":\"oxy-baseline\",\"version\":\"1.0.0\"}",
+    "signedToken": "eyJhbGciOiJFZERTQSIsInR5cCI6Im94eS1yZXNvdXJjZS1wYWNrYWdlIiwia2lkIjoiaW5zdGFsbGVyLWZpeHR1cmUifQ.eyJmb3JtYXRWZXJzaW9uIjoxLCJpc3N1ZWRBdCI6IjIwMjYtMDktMTVUMDA6MDA6MDAuMDAwWiIsIm5vdGVzIjoiIiwicGF5bG9hZCI6eyJiYXNlbGluZVZlcnNpb24iOjEsImRlc2NyaXB0aW9uIjoiIiwiZGVzaWduIjp7Im1vZGUiOiJkYXJrIiwidG9rZW5zIjp7Ii0tcHJpbWFyeSI6IiMxMjM0NTYifX0sImRpc3BsYXlOYW1lIjoiT3h5IGJhc2VsaW5lIiwic2V0dGluZ3MiOnt9fSwicmVzb3VyY2VJZCI6Im94eS1kZWZhdWx0IiwicmVzb3VyY2VUeXBlIjoib3h5LWJhc2VsaW5lIiwidmVyc2lvbiI6IjEuMC4wIn0.4yUrPRMcNoCJTzJrdfqAgHo8WC1sGp3RqfbPTgY0w5-Kpwb3dcX8QSFrSvu4Dd40ROiR41FOLxSbpCrWBwkRCg"
+  }
+}

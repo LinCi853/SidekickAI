@@ -9,8 +9,10 @@ import type { HotkeyPayload } from './types.js'
 import type { EffectHandle, EffectScope } from '../effect-scope.js'
 import type { InjectionRequest } from '../injection-broker.js'
 import { getHotkeyManagerInstance } from '../../hotkey/manager.js'
+import { HotkeyOwnership } from '../../../packages/desktop-common/hotkey-ownership.js'
 
 class HotkeyAdapterImpl implements TargetAdapter {
+  private readonly ownership = new HotkeyOwnership()
   readonly kind = 'hotkey' as const
 
   async apply(request: InjectionRequest, scope: EffectScope): Promise<EffectHandle> {
@@ -23,21 +25,26 @@ class HotkeyAdapterImpl implements TargetAdapter {
       if (!hm) {
         throw new Error('[hotkey-adapter] HotkeyManager 未初始化')
       }
-      await hm.register(accelerator, callback)
+      if (!await hm.register(accelerator, callback)) throw new Error('The shortcut is owned by another instance or unavailable')
 
       return scope.create('hotkey', request.capabilityId, () => {
         hm.unregister(accelerator)
       }, request.target?.id)
     } else {
       // 使用 globalShortcut 直接注册
-      const registered = globalShortcut.register(accelerator, callback)
-      if (!registered) {
-        throw new Error(`[hotkey-adapter] 快捷键注册失败: ${accelerator}`)
+      const lease = this.ownership.acquire(accelerator, request.capabilityId)
+      if (!lease) throw new Error('The shortcut is owned by another instance or unavailable')
+      let registered = false
+      try {
+        registered = globalShortcut.register(accelerator, () => { if (lease.active) callback() })
+        if (!registered) throw new Error(`[hotkey-adapter] 快捷键注册失败: ${accelerator}`)
+        return scope.create('hotkey', request.capabilityId, () => {
+          try { globalShortcut.unregister(accelerator) } finally { lease.release() }
+        }, request.target?.id)
+      } catch (error) {
+        try { if (registered) globalShortcut.unregister(accelerator) } finally { lease.release() }
+        throw error
       }
-
-      return scope.create('hotkey', request.capabilityId, () => {
-        globalShortcut.unregister(accelerator)
-      }, request.target?.id)
     }
   }
 }

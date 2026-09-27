@@ -2,14 +2,12 @@
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED, HWND};
 use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
-use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+use windows::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW, SEE_MASK_NOCLOSEPROCESS};
 
 /// 当前进程是否已以管理员身份运行（TokenElevation）。
 /// 用于「需要时才提权、已提权则继承」：避免安装完成后写配置再弹一次 UAC。
 pub fn is_process_elevated() -> bool {
-    use windows::Win32::Security::{
-        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
-    };
+    use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
     unsafe {
         let mut token = windows::Win32::Foundation::HANDLE::default();
@@ -61,9 +59,7 @@ pub fn needs_admin(dir: &str, for_all_users: bool) -> bool {
     let pf = std::env::var("ProgramFiles")
         .unwrap_or_else(|_| "C:\\Program Files".into())
         .to_lowercase();
-    let pfx86 = std::env::var("ProgramFiles(x86)")
-        .unwrap_or_default()
-        .to_lowercase();
+    let pfx86 = std::env::var("ProgramFiles(x86)").unwrap_or_default().to_lowercase();
     let windir = std::env::var("windir")
         .unwrap_or_else(|_| "C:\\Windows".into())
         .to_lowercase();
@@ -113,37 +109,25 @@ pub fn shell_execute_runas(exe: &str, args: &str) -> Result<i32, String> {
     }
 }
 
-/// 父进程侧：以 runas 重启自身（--elevated），等待完成后读取结果文件。
-pub fn run_elevated(req_path: &std::path::Path) -> Result<(), String> {
+/// 父进程侧：以 runas 重启自身（--elevated），等待完成后读取本次操作私有目录中的结果文件。
+///
+/// `result_path` 属于同一次操作的私有目录，因此并发窗口不会互相读取结果；
+/// 结果内容还需与本次 operationId / nonce 匹配才会被接受。
+pub fn run_elevated(
+    req_path: &std::path::Path,
+    result_path: &std::path::Path,
+    operation_id: &str,
+    nonce: &str,
+) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_str = exe.to_string_lossy().into_owned();
-    let result = req_path
-        .parent()
-        .ok_or("缺少安装事务目录")?
-        .join("result.json");
     // 删除旧结果，避免子进程异常退出时误读上一次安装结果。
-    let _ = std::fs::remove_file(&result);
+    let _ = std::fs::remove_file(result_path);
     let args = format!("--elevated \"{}\"", req_path.display());
     let code = shell_execute_runas(&exe_str, &args)?;
 
     // 无论退出码是否为 0，都优先读取提权子进程写出的结构化错误。
     // 否则 code=1 会掩盖真正的文件系统、解压或注册表错误。
-    if let Ok(s) = std::fs::read_to_string(&result) {
-        let v: serde_json::Value =
-            serde_json::from_str(&s).map_err(|e| format!("读取安装结果失败：{}", e))?;
-        if v["ok"].as_bool() == Some(true) && code == 0 {
-            return Ok(());
-        }
-        if let Some(error) = v["error"].as_str() {
-            return Err(error.to_string());
-        }
-    }
-
-    if code == 0 {
-        Err("安装进程已结束，但没有返回安装结果".into())
-    } else if code == 1223 {
-        Err("已取消：未授予管理员权限".into())
-    } else {
-        Err(format!("安装进程异常退出，代码 {}（未返回详细错误）", code))
-    }
+    let raw = std::fs::read_to_string(result_path).ok();
+    crate::controller::interpret_child_result(raw.as_deref(), code, operation_id, nonce)
 }

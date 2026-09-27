@@ -1,0 +1,28 @@
+{
+  "producer": "export-tree-digest-v1",
+  "note": "Shared golden fixture: electron/store/backup-strict.test.ts and installer-shared/uninstall-host/src/execute.rs both materialize this tree and must produce `digest`.",
+  "directories": [
+    "empty-dir",
+    "notes-assets",
+    "notes-assets/嵌套目录"
+  ],
+  "files": [
+    {
+      "path": "settings.db",
+      "contentHex": "69736f6c617465642073657474696e6773206461746162617365"
+    },
+    {
+      "path": "notes-assets/note-1.txt",
+      "contentHex": "e7acace4b880e69da1e7ac94e8aeb0207061796c6f6164"
+    },
+    {
+      "path": "notes-assets/嵌套目录/éclair.txt",
+      "contentHex": "756e69636f646520c3a9636c61697220e29c93"
+    },
+    {
+      "path": "notes-assets/空格 名称.txt",
+      "contentHex": "6e616d65207769746820737061636573"
+    }
+  ],
+  "digest": "b87d99442d630bec1c9e73607cc07a5add56dfe8edd31701523e00cb79b82331"
+}

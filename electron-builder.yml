@@ -1,5 +1,5 @@
 appId: com.sidekickai.opensource
-productName: SidekickAI-OpenSource
+productName: SidekickAI
 # better-sqlite3 / uiohook-napi 均为 N-API 预编译（prebuilds/），按目标架构自动选取。
 # 默认 npmRebuild 会在 x64 机上为 arm64 走 node-gyp 交叉编译，需要完整 ARM64 MSVC 工具集，
 # 本机 VS18 仅有 Win32/x64 平台时会 MSB8020 失败。关闭重建后直接打包预编译产物。
@@ -12,6 +12,9 @@ files:
   - resources/icons/*
   # 包含全部 node_modules（electron-builder 自动排除 devDependencies）
   - node_modules/**/*
+  - '!node_modules/better-sqlite3/build/**'
+  - '!node_modules/uiohook-napi/build/**'
+  - '!node_modules/uiohook-napi/bin/**'
   # ===== 排除不需要的依赖 =====
   # 画板/渲染层大依赖：代码已由 vite 打包进渲染层 chunk，原始包不进 asar（瘦身约 140MB）
   - '!node_modules/@excalidraw/**'
@@ -35,9 +38,6 @@ asarUnpack:
   - node_modules/better-sqlite3/prebuilds/*.node
   # 仅解包 Windows 平台的原生模块
   - node_modules/uiohook-napi/prebuilds/win32-*/**/*.node
-  # 本地 electron-rebuild 产出（开发机 x64）；运行时 prebuilds 优先
-  - node_modules/better-sqlite3/build/Release/*.node
-  - node_modules/uiohook-napi/build/Release/*.node
 extraResources:
   - from: LICENSE
     to: LICENSE.application.txt

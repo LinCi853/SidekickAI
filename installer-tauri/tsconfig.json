@@ -13,7 +13,11 @@
     "strict": true,
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "baseUrl": ".",
+    "paths": {
+      "@tauri-apps/api/*": ["node_modules/@tauri-apps/api/*"]
+    }
   },
   "include": ["src"]
 }

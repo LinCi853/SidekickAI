@@ -1,78 +1,33 @@
 # 贡献指南
 
-感谢你有兴趣为 SidekickAI 做贡献。请先读完本文，能省掉双方很多来回。
+## 工作范围
 
-## 开始之前
+本仓库维护工百窗概念版，目标是把已有工具打磨得更方便。先读 [README](README.md) 了解功能与使用条件。安全问题按 [SECURITY.md](SECURITY.md) 私密报告；大范围行为或接口调整先通过 Issue 说明目标、范围和可验证的结果。
 
-- 提交 Issue 前先搜索是否已有相同问题
-- **安全漏洞不要提 Issue**，请按 [SECURITY.md](./SECURITY.md) 的私密通道报告
-- 大改动（新增模块、改动 IPC 协议、重构目录结构）请先开 Issue 讨论，避免白做
+代码、标识符和注释使用英文，用户界面优先中文。注释解释概念和约束，不记录开发过程；不顺带格式化无关文件。渲染依赖放在 devDependencies，主进程运行依赖放在 dependencies；IPC 使用已有校验和受限 preload 接口。
 
-## 开发环境
+## 本地开发与验证
 
-见 [README.md](./README.md) 的「开发构建」章节。要点：Windows、Node.js ≥ 20。
+使用 Windows、Node.js 和附带的 npm；准确兼容要求以 package.json 的 engines 为准。根及独立子项目各自维护锁文件。
 
-```bash
-npm install
-npm run dev        # 开发模式
-npm run typecheck  # 类型检查（提交前必须通过）
-npm test           # 单元测试
-```
+统一通过项目根目录的 launch.bat 操作：首次使用按 README 安装锁定依赖，日常选择“启动工具”，修改后选择“验证”。不要手工改写锁文件来绕过依赖问题。
 
-## 代码约定
+`launch.bat` 的验证子菜单区分快速、桌面和原生安装卸载回归。处理缺陷先建立可观察的失败场景，完成修复后验证关键路径；涉及数据库、安装或卸载时使用独立临时数据。文档改动检查链接、命令和现行事实，不因此重建安装包。
 
-现有的约定，照着写就行：
+## 公共源码与文档
 
-- **TypeScript strict**：不使用 `any` 兜底；类型定义优先放 `electron/shared/`
-- **缩进与格式**：2 空格、单引号、加分号；Rust 用 4 空格（见 `.editorconfig`）
-- **文件命名**：组件 `PascalCase.tsx`，工具/模块 `kebab-case.ts`
-- **代码与注释**：英文；注释解释必要约束。用户界面优先中文。
-- **渲染层依赖必须放 `devDependencies`**：electron-builder 会自动排除 devDeps，主进程真正 require 的才放 `dependencies`。放错会让安装包体积翻倍
-- **IPC**：新增通道要走现有的安全包装（`electron/ipc-utils`），不要在渲染层直接暴露 `ipcRenderer`
+产品版本以当前工作区 package.json 为准；共用品牌与路线身份由 packages/product-contract 管理。涉及共享安装维护代码时，核对 maintenance/shared-source.json，并通过已有产品和共享检查；不要覆盖其他工作区的修改。
 
-## 提交信息
+用户可见的功能和入口变化同步更新 README 与 CHANGELOG，示例操作必须与实际入口一致。README 保持长期、明确的功能介绍；内部规格、调研、测试报告与交接资料另行保管，不纳入公开提交。完成后独立审查并简化重复逻辑。
 
-使用 [Conventional Commits](https://www.conventionalcommits.org/)：
+## 仓库流程
 
-```
-<type>(<scope>): <描述>
-```
+维护者在现有 main 工作，提交前检查差异并保护已有未提交内容。外部贡献如采用 PR，应说明问题、最终行为和实际验证范围；CI 通过不能代替最终包验收。
 
-- `type`：`feat` / `fix` / `refactor` / `perf` / `docs` / `chore` / `build` / `test`
-- `scope` 可选：如 `installer`、`webview`、`store`
-- 描述可用中文
+提交保持单一主题，使用 Conventional Commits，例如 `fix(installer): preserve installation data`。提交、PR 正文和代码注释不写工具署名或开发进度标签。公开源码维护授权不等于二进制上传、社区版公开或个人安装升级授权。
 
-示例：
+## 不纳入源码
 
-```
-fix(installer): 修正提权后重复安装模式页的问题
-feat: 新增设备 ID 加密备份导入导出
-```
+运行数据、浏览器 Profile、Cookie、数据库、凭据、.env、编译缓存、发行文件和本地验收证据不进入提交。以 .gitignore 为准；运行必需的 `build/tools/7zr.exe` 是已登记例外，不泛化清理。
 
-一个提交只做一件事。不要顺手格式化无关文件——那会让 diff 无法审阅。
-
-## 提 PR
-
-1. 从 `main` 拉分支，命名如 `feat/xxx`、`fix/xxx`
-2. 确保 `npm run typecheck` 与 `npm test` 通过
-3. PR 描述里写清：**为什么改**、**怎么改的**、**怎么验证的**（命令或操作步骤）
-4. 涉及 UI 改动请附截图
-5. 关联相关 Issue（`Closes #123`）
-
-CI 必须通过才会合并。
-
-## 不要提交的东西
-
-仓库只保留**源码**。以下内容已在 `.gitignore` 中排除，请不要用 `-f` 强推：
-
-- 构建产物：`out/`、`dist/`、`dist-portable/`、`release/`
-- 运行时数据：`.app-data/`、`.app-data-installed/`
-- 设计与需求文档：`docs/`
-- IDE / AI 工具元数据：`.workbuddy/`、`.mimocode/`、`.tokeny/`、`.claude/`、`.zcode/`
-- 任何密钥、令牌、`.env`
-
-> 唯一例外：`build/tools/7zr.exe` 是安装器运行时必需组件，有意入库。
-
-## 许可证
-
-你的贡献将以 [MIT License](./LICENSE) 授权。
+贡献采用 [MIT License](LICENSE)。

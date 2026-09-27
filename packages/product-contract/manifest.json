@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "name": "SidekickAI",
+  "displayName": "工百窗",
+  "executable": "SidekickAI.exe",
+  "editions": {
+    "concept": {
+      "label": "概念版",
+      "description": "免费、丰富、无缝融入电脑使用的 AI 入门工具。",
+      "packageName": "sidekickai-opensource",
+      "appId": "com.sidekickai.opensource",
+      "directory": "SidekickAI-Concept",
+      "legacyDirectories": [
+        "SidekickAI-OpenSource"
+      ],
+      "registryKey": "SidekickAI-OpenSource",
+      "dataDirectories": [
+        "sidekickai-opensource"
+      ],
+      "legacyExecutable": "SidekickAI-OpenSource.exe",
+      "cloudResources": false,
+      "packageKinds": [
+        "installer",
+        "portable"
+      ]
+    },
+    "community": {
+      "label": "社区版",
+      "description": "开放通用接口，通过独立插件扩展工具。",
+      "packageName": "sidekick-ai",
+      "appId": "com.sidekickai.app",
+      "directory": "SidekickAI",
+      "registryKey": "SidekickAI",
+      "dataDirectories": [
+        "sidekick-ai",
+        "ai-window",
+        "SidekickAI"
+      ],
+      "legacyExecutable": "SidekickAI.exe",
+      "cloudResources": true,
+      "packageKinds": [
+        "installer"
+      ]
+    }
+  },
+  "portable": {
+    "schemaVersion": 1,
+    "edition": "concept",
+    "layout": "dual-architecture",
+    "dataDirectory": "data",
+    "runtimes": {
+      "x64": "win-unpacked",
+      "arm64": "win-arm64-unpacked"
+    },
+    "launcher": "Start-SidekickAI.cmd"
+  }
+}

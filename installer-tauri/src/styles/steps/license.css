@@ -1,0 +1,145 @@
+/* =====================================================================
+   许可协议
+   ===================================================================== */
+.license-box {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: #fff;
+  height: 260px;
+  overflow-y: auto;
+  padding: 16px 18px;
+  font-size: 12.5px;
+  line-height: 1.85;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* 协议内容允许选中复制 */
+  user-select: text;
+}
+
+.license-box h4 {
+  color: var(--brand-700);
+  margin: 18px 0 8px;
+  font-size: 13px;
+}
+
+.license-box h4:first-child {
+  margin-top: 0;
+}
+
+/* 滚动条 */
+.license-box::-webkit-scrollbar,
+.content__body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.license-box::-webkit-scrollbar-thumb,
+.content__body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+.license-box::-webkit-scrollbar-thumb:hover,
+.content__body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.license-box::-webkit-scrollbar-track,
+.content__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 协议列表 + 独立阅读弹层 */
+.license-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.license-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.license-item__title {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.doc-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.doc {
+  width: 640px;
+  max-width: 88vw;
+  max-height: 74vh;
+  background: var(--surface);
+  border-radius: var(--r-lg, 10px);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px;
+}
+
+.doc__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.doc__body {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  padding-right: 6px;
+}
+
+.doc__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* =====================================================================
+   协议正文（标签栏式阅读）
+   ===================================================================== */
+.license-body {
+  height: clamp(220px, 42vh, 380px);
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 14px 16px;
+}
+
+/* 协议逐个勾选行 */
+.license-accept {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding-left: 14px;
+}

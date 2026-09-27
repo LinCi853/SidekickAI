@@ -1,0 +1,93 @@
+/* =====================================================================
+   欢迎页
+   ===================================================================== */
+.welcome__features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.feature {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.feature__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--brand-50);
+  color: var(--brand-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.feature__text {
+  flex: 1;
+}
+
+.feature__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.feature__desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* ============================================================================
+   三模式首页 / 位置列表 / 选项分页 / 协议弹层 / 完成页延后设置
+   ============================================================================ */
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.mode-card {
+  padding: 16px 14px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.mode-card:hover {
+  border-color: var(--brand-400, #94a8ff);
+}
+
+.mode-card--selected {
+  border-color: var(--brand-500);
+  background: var(--surface-2);
+}
+
+.mode-card__icon {
+  font-size: 20px;
+  margin-bottom: 8px;
+  color: var(--brand-500);
+}
+
+.mode-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.mode-card__desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

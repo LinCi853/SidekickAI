@@ -6,6 +6,7 @@ import type { InstallFeature, InstallOption, LicenseDoc } from './install-manife
 export type InstallMode = 'install' | 'repair' | 'uninstall'
 
 export interface InstallOptions {
+  resources?: InstallationResourceStatus[]
   installDir: string
   forAllUsers: boolean
   createDesktopShortcut: boolean
@@ -34,10 +35,39 @@ export interface InstallOptions {
   backupCategories?: string[]
   /** 已同意的协议 id */
   acceptedLicenses?: string[]
+  /** 用户在组件页勾选了云端下载 */
+  cloudDownload?: boolean
+  /** 已解析并通过校验的云端资源（由前端准备，后端原子落盘） */
+  cloudAssets?: CloudAssetWire[]
+}
+
+/** Wire shape of one verified cloud asset passed to the install engine. */
+export interface CloudAssetWire {
+  assetId: string
+  version: string
+  digest: string
+  sizeBytes: number
+  kind: 'resource-package' | 'distribution'
+  destination: string
+  payloadJson?: string
+  sourcePath?: string
+  signedToken?: string
+}
+
+export interface InstallationResourceStatus {
+  resourceType: string
+  status: 'valid' | 'missing' | 'rejected'
+  reason?: string
+  resourceId?: string
+  version?: string
+  destination?: string
+  digest?: string
+  sizeBytes?: number
+  signedToken?: string
 }
 
 export interface InstallLocation {
-  forAllUsers: boolean
+  forAllUsers?: boolean
   path: string
   source: string
   version: string
@@ -48,6 +78,8 @@ export interface InstallLocation {
 }
 
 export interface ScanResult {
+  otherEditions?: { edition: string; label: string; path: string; version: string | null; arch: string }[]
+  otherEditionsWarning?: string
   locations: InstallLocation[]
   recommendedDir: string
   residualHint: string
@@ -55,8 +87,8 @@ export interface ScanResult {
 }
 
 export interface InstallerInfo {
-  initialMode: InstallMode
-  initialTarget: string
+  editionLabel?: string
+  uninstallEntry?: boolean
   version: string
   /** 「所有用户」模式默认目录（C:\Program Files\SidekickAI） */
   defaultDir: string
@@ -98,8 +130,11 @@ declare global {
       /** 完成页最终勾选：更新关闭向导时要启动的程序 */
       setPendingLaunch(installDir: string, launch: boolean, showGuide: boolean): Promise<boolean>
       cancel(): Promise<boolean>
-      closeWindow(): Promise<void>
+      /** true = the window closed; false = another operation is still busy */
+      closeWindow(): Promise<boolean>
       openDir(dir: string): Promise<void>
+      openLog(logPath: string): Promise<void>
+      onLog(cb: (payload: { text: string; path?: string; error?: string }) => void): () => void
       onStatus(cb: (msg: string) => void): () => void
       onProgress(cb: (p: number) => void): () => void
       onDone(cb: (payload: DonePayload) => void): () => void

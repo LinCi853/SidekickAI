@@ -26,15 +26,19 @@ const api = {
   needsAdmin: (dir: string, forAllUsers: boolean): Promise<boolean> =>
     invoke<boolean>('needs_admin', { dir, forAllUsers }),
   start: (opts: InstallOptions): Promise<boolean> => invoke<boolean>('start', { opts }),
+  stageCloudDownload: (assetId: string, bytes: number[]): Promise<string> =>
+    invoke<string>('stage_cloud_download', { assetId, bytes }),
   readInstallConfig: (dir: string): Promise<InstalledConfig | null> =>
     invoke<InstalledConfig | null>('read_install_config', { dir }),
   flushConfig: (opts: InstallOptions): Promise<boolean> => invoke<boolean>('flush_config', { opts }),
   setPendingLaunch: (installDir: string, launch: boolean, showGuide: boolean): Promise<boolean> =>
     invoke<boolean>('set_pending_launch', { installDir, launch, showGuide }),
   cancel: (): Promise<boolean> => invoke<boolean>('cancel'),
-  closeWindow: (): Promise<void> => invoke<void>('close_window'),
+  closeWindow: (): Promise<boolean> => invoke<boolean>('close_window'),
   openDir: (dir: string): Promise<void> => invoke<void>('open_dir', { dir }),
 
+  openLog: (logPath: string): Promise<void> => invoke('open_operation_log', { logPath }),
+  onLog: (cb: (payload: { text: string; path?: string; error?: string }) => void) => subscribe('install-log', cb),
   onStatus: (cb: (msg: string) => void) => subscribe<string>('install-status', cb),
   onProgress: (cb: (p: number) => void) => subscribe<number>('install-progress', cb),
   onDone: (cb: (payload: DonePayload) => void) => subscribe<DonePayload>('install-done', cb),

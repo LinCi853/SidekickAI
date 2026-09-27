@@ -336,6 +336,7 @@ export async function clearAllData(): Promise<void> {
 
 /** 更新应用设置（合并 patch） */
 export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
+  if (isPortableMode() && patch.autoLaunch) throw new Error('绿色便携版不注册开机自启动，请使用安装版。')
   const current = readSettingsRaw()
   const next: AppSettings = { ...current, ...patch }
   // 关闭 autoLaunch 时自动重置 silentStart=false（保持字段语义一致，避免 autoLaunch=false 但 silentStart=true 的非法态）
@@ -635,6 +636,7 @@ export async function reregisterProfileShortcuts(): Promise<void> {
  * @returns 是否设置成功（失败时返回 false 但不抛异常）
  */
 export function applyAutoLaunchSetting(enabled: boolean, silentStart: boolean): boolean {
+  if (isPortableMode()) return !enabled
   try {
     app.setLoginItemSettings({
       openAtLogin: enabled,

@@ -1,23 +1,21 @@
 // lib.rs —— Tauri 安装向导：命令 + 事件 + 提权子进程入口
+//
+// 备份导出（zip / SABK AES-256-GCM）由 installer-shared 的共享卸载实现负责；
+// 向导本身只写安装配置并驱动安装引擎，因此这里不保留独立的加密模块。
+mod cloud;
+mod application_launch;
+mod controller;
 mod elevate;
 mod engine;
 mod manifest;
-mod transaction;
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
-struct RequestGuard(std::path::PathBuf);
-impl Drop for RequestGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
+pub use controller::RUNNING;
 
-pub static RUNNING: AtomicBool = AtomicBool::new(false);
-static CANCELLED: AtomicBool = AtomicBool::new(false);
-static ALLOW_CLOSE: AtomicBool = AtomicBool::new(false);
 /// 安装成功、用户勾选「向导关闭后启动」时记录的目标程序：(exe 路径, 启动参数)
 /// 在窗口真正关闭（完成按钮 / 右上角 ✕）时才启动，避免安装完成即打开应用。
 static PENDING_LAUNCH: Mutex<Option<(String, String)>> = Mutex::new(None);
@@ -65,22 +63,43 @@ fn save_backup_dialog(app: AppHandle, default_name: String) -> String {
     String::new()
 }
 
+/// 安装/修复仍在进行时窗口必须保持打开；关闭后再由 PENDING_LAUNCH 决定是否启动。
+fn is_busy(host: &sidekickai_uninstall_host::Host) -> bool {
+    RUNNING.load(Ordering::SeqCst) || host.is_running()
+}
+
+fn prevent_close_while_busy(window: &tauri::Window, event: &tauri::WindowEvent) {
+    // Shared uninstall protection first, then install/repair state. Both cover
+    // Alt+F4 and the window ✕ because both arrive as CloseRequested.
+    sidekickai_uninstall_host::prevent_close_while_running(window, event);
+    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        if RUNNING.load(Ordering::SeqCst) {
+            api.prevent_close();
+        }
+    }
+}
+
 #[tauri::command]
-fn close_window(window: tauri::Window) -> Result<(), String> {
-    if RUNNING.load(Ordering::SeqCst) {
-        return Err("请等待当前操作完成后再关闭".into());
+async fn close_window(
+    window: tauri::Window,
+    host: tauri::State<'_, sidekickai_uninstall_host::Host>,
+) -> Result<bool, String> {
+    // While an install, a repair or an uninstall worker is busy neither closure
+    // nor the deferred app launch is allowed: the operation must not be
+    // abandoned and the app must not start on top of a deletion in progress.
+    if is_busy(&host) {
+        return Ok(false);
     }
-    if let Some((exe, arg)) = PENDING_LAUNCH.lock().unwrap().take() {
-        std::process::Command::new(&exe)
-            .arg(&arg)
-            .spawn()
-            .map_err(|error| format!("无法启动开源版：{}", error))?;
+    let pending = PENDING_LAUNCH.lock().unwrap().take();
+    if let Some((exe, arg)) = pending {
+        let admission = controller::Admission::acquire().ok_or("另一项安装操作仍在进行。")?;
+        if !controller::begin_engine() { admission.finish(); return Ok(false); }
+        let result = tauri::async_runtime::spawn_blocking(move || application_launch::launch(std::path::Path::new(&exe), &arg))
+            .await.map_err(|error| error.to_string());
+        admission.finish();
+        result??;
     }
-    ALLOW_CLOSE.store(true, Ordering::SeqCst);
-    window.close().map_err(|error| {
-        ALLOW_CLOSE.store(false, Ordering::SeqCst);
-        error.to_string()
-    })
+    Ok(sidekickai_uninstall_host::close_confirmed_window(&window).is_ok())
 }
 
 #[tauri::command]
@@ -88,13 +107,13 @@ fn open_dir(dir: String) {
     let _ = std::process::Command::new("explorer").arg(&dir).spawn();
 }
 
+/// Real cancellation: only accepted before the engine is entered. The
+/// cancellation and the engine start share one compare-and-swap state, so it is
+/// impossible for `cancel()` to report success after the engine has begun. A
+/// refusal returns `false` and the frontend keeps the busy state.
 #[tauri::command]
 fn cancel() -> bool {
-    CANCELLED.store(true, Ordering::SeqCst);
-    if std::fs::write(engine::cancel_path(), b"cancel").is_err() {
-        return false;
-    }
-    true
+    controller::cancel_operation()
 }
 
 /// 读取已安装位置的 install-config.json（覆盖安装/修复时预读作初始值）
@@ -106,12 +125,15 @@ fn read_install_config(dir: String) -> Option<serde_json::Value> {
 /// 完成页更新待启动程序（以完成页最终勾选为准，覆盖安装开始时的快照）
 #[tauri::command]
 fn set_pending_launch(install_dir: String, launch: bool, show_guide: bool) -> bool {
+    if RUNNING.load(Ordering::SeqCst) {
+        return false;
+    }
     if !launch {
         *PENDING_LAUNCH.lock().unwrap() = None;
         return true;
     }
-    let exe = std::path::Path::new(&install_dir).join("SidekickAI-OpenSource.exe");
-    if !exe.exists() {
+    let exe = std::path::Path::new(&install_dir).join("SidekickAI.exe");
+    if application_launch::validate_target(&exe).is_err() {
         *PENDING_LAUNCH.lock().unwrap() = None;
         return false;
     }
@@ -124,95 +146,204 @@ fn set_pending_launch(install_dir: String, launch: bool, show_guide: bool) -> bo
     true
 }
 
-/// 用户完成/关闭向导时写入最终 install-config.json。
-/// 提权策略：已提权或目录可写则直写；磁盘内容一致则跳过；仅在必须更新且不可写时才 UAC。
+/// Write the final `install-config.json` when the user finishes or closes the
+/// wizard.
+///
+/// Elevation policy: an already-elevated process or a writable directory writes
+/// directly; an on-disk configuration that already matches is skipped; only a
+/// required update without permission requests UAC. The elevated path reuses the
+/// same private operation directory and identity binding as an install.
 #[tauri::command]
 async fn flush_config(opts: manifest::InstallRequest) -> Result<bool, String> {
     let mut config_opts = opts;
     config_opts.action = "flush-config".into();
     let dir = std::path::PathBuf::from(&config_opts.install_dir);
 
-    // 已提权或目录可写 → 继承权限直接写，不再弹 UAC
+    let admission = controller::Admission::acquire()
+        .ok_or_else(|| "另一个安装操作正在进行。".to_string())?;
+    // A config write is not cancellable: entering the "engine" state immediately
+    // means a stray `cancel()` can never claim it stopped this operation. If a
+    // cancellation somehow won the race anyway, the write must not run.
+    if !controller::begin_engine() {
+        admission.finish();
+        return Err("已取消：写配置尚未开始。".to_string());
+    }
+
+    // No-op completion must not probe protected paths or request elevation.
+    if !engine::install_config_needs_write(&config_opts) {
+        admission.finish();
+        return Ok(true);
+    }
+
+    // Every operation owns its private directory and log, including a direct
+    // write, so no two operations share a process-wide log file.
+    let directory = controller::OperationDirectory::create("flush-op")?;
+    let log_path = directory.log_path();
+
+    // Already elevated or writable → inherit the permission and write directly.
     if elevate::is_process_elevated() || elevate::dir_is_writable(&dir) {
-        engine::run(&config_opts)?;
-        return Ok(true);
+        let result = controller::with_operation_context(log_path, || {
+            engine::flush_install_config(&config_opts)
+        });
+        admission.finish();
+        return result.map(|_| true);
     }
 
-    // 不可写：若磁盘已有相同配置（安装提权阶段已写入），跳过
-    if engine::install_config_matches(&config_opts) {
-        return Ok(true);
-    }
-
-    // 确实需要更新且当前无权限 → 才申请一次提权
-    let req_path = engine::operation_root().join("request.json");
-    std::fs::write(
-        &req_path,
-        serde_json::to_string(&config_opts).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    let _request = RequestGuard(req_path.clone());
-    elevate::run_elevated(&req_path)?;
+    // A real update without permission → request UAC once. The request lives in
+    // this operation's private directory.
+    directory.write_envelope(controller::ACTION_FLUSH_CONFIG, &config_opts)?;
+    let request_path = directory.request_path();
+    let result_path = directory.result_path();
+    let operation_id = directory.operation_id().to_string();
+    let nonce = directory.nonce().to_string();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        // Keep the private directory alive until the child result has been read.
+        let _directory = directory;
+        controller::with_operation_context(log_path, || {
+            elevate::run_elevated(&request_path, &result_path, &operation_id, &nonce)
+        })
+    })
+    .await
+    .map_err(|error| format!("提权写配置线程异常结束：{error}"))?;
+    admission.finish();
+    result?;
     Ok(true)
+}
+
+/// Stage a downloaded distribution asset into a unique temp file so the
+/// install engine (including an elevated child) can re-hash the same bytes.
+/// The path is returned to the frontend and referenced from InstallRequest.
+#[tauri::command]
+async fn fetch_resource_catalog(resource_type: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || cloud::fetch_resource_catalog(&resource_type)).await
+        .map_err(|error| format!("资源请求失败：{error}"))?
+}
+
+#[tauri::command]
+async fn fetch_resource_package(resource_type: String, resource_id: String, version: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || cloud::fetch_resource_package(&resource_type, &resource_id, &version)).await
+        .map_err(|error| format!("资源请求失败：{error}"))?
+}
+
+#[tauri::command]
+fn verify_cloud_resource(asset: manifest::CloudAssetRequest) -> Result<(), String> {
+    cloud::verify_resource_proof(&asset)
+}
+
+#[tauri::command]
+fn stage_cloud_download(asset_id: String, bytes: Vec<u8>) -> Result<String, String> {
+    if bytes.is_empty() {
+        return Err("云端下载内容为空。".into());
+    }
+    // Keep the filename boring: identity travels in the parent directory name.
+    let safe_label: String = asset_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .take(48)
+        .collect();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or_default();
+    let dir = std::env::temp_dir().join(format!(
+        "SidekickAI-Cloud-Download-{}-{nanos}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建云端下载暂存目录：{e}"))?;
+    let path = dir.join(format!("{safe_label}.bin"));
+    std::fs::write(&path, &bytes).map_err(|e| format!("无法写入云端下载暂存文件：{e}"))?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<bool, String> {
-    if RUNNING.swap(true, Ordering::SeqCst) {
-        return Err("已有安装操作正在运行".into());
+    if opts.mode == manifest::InstallMode::Uninstall {
+        return Err("请使用专用卸载命令并提供已确认的扫描令牌。".into());
     }
-    struct RunningGuard;
-    impl Drop for RunningGuard {
-        fn drop(&mut self) {
-            RUNNING.store(false, Ordering::SeqCst);
-        }
-    }
-    let _running = RunningGuard;
-    opts.user_data_dir =
-        std::path::PathBuf::from(std::env::var("APPDATA").map_err(|_| "无法确认当前用户目录")?)
-            .join("sidekickai-opensource")
-            .to_string_lossy()
-            .into_owned();
-    if engine::cancel_path().exists() {
-        std::fs::remove_file(engine::cancel_path()).map_err(|error| error.to_string())?;
+    // One operation per process: CAS admission. The guard releases the busy flag
+    // on `?` early returns, engine errors, panics and join errors, and it is
+    // released explicitly before the terminal event so the window cannot stay
+    // stuck in the busy state.
+    let admission =
+        controller::Admission::acquire().ok_or_else(|| "另一个安装操作正在进行。".to_string())?;
+    if opts.mode == manifest::InstallMode::Install {
+        opts.installation_id = manifest::new_installation_id();
     }
 
-    CANCELLED.store(false, Ordering::SeqCst);
+    // A private request / result / log per operation: two wizard windows cannot
+    // overwrite each other before the engine takes the target lock.
+    let prepared = controller::prepare_operation("install", controller::ACTION_INSTALL, &opts)?;
+    let log_path = prepared.log_path.clone();
 
-    let req_path = engine::operation_root().join("request.json");
-    let log_path = engine::log_path();
-    let _request = RequestGuard(req_path.clone());
-    let req_json = serde_json::to_string(&opts).map_err(|e| e.to_string())?;
-    std::fs::write(&req_path, &req_json).map_err(|e| e.to_string())?;
-    let _ = std::fs::write(&log_path, "");
-
-    // 后台 tail 线程：把 S/P 日志转成事件（父进程提权子进程 / 进程内引擎共用同一路径）
-    RUNNING.store(true, Ordering::SeqCst);
+    // Background tail thread: turns the S/P log lines into events. The parent
+    // process and the elevated child share this operation's log path.
     let tail_app = app.clone();
     let tail_log_path = log_path.clone();
-    std::thread::spawn(move || tail_log(&tail_app, &tail_log_path));
+    let stop_tail = Arc::new(AtomicBool::new(false));
+    let tail_stop = stop_tail.clone();
+    let operation_id = prepared.operation_id.clone();
+    let tail_operation_id = operation_id.clone();
+    let tail = std::thread::spawn(move || tail_log(&tail_app, &tail_log_path, &tail_operation_id, tail_stop));
+    controller::with_operation_context(log_path.clone(), || {
+        engine::write_log(&format!("I|操作 {}；目标版本 {}；目录 {}", operation_id, env!("CARGO_PKG_VERSION"), opts.install_dir));
+    });
 
-    // 启动/指南以完成页最终勾选为准；安装结束只记录默认值，关闭向导前由 set_pending_launch 覆盖
+    // Launch/guide follow the final checkbox on the completion page; the install
+    // end records only a default that `set_pending_launch` overrides before the
+    // wizard closes.
     let launch_after = opts.launch_after_install && opts.mode == manifest::InstallMode::Install;
     let show_guide = opts.show_guide_after_install;
     let install_dir = opts.install_dir.clone();
     let mode = opts.mode;
-    // 卸载/修复按模式不需要另一位置的默认清理逻辑（cleanup_paths 显式传入）
+    // Request UAC only when this process is not elevated and the selected target
+    // or a user-confirmed cleanup path needs administrator rights; the
+    // unselected alternate install location is never probed.
     let needs_elev = !elevate::is_process_elevated()
-        && elevate::needs_admin(&opts.install_dir, opts.for_all_users);
+        && (elevate::needs_admin(&opts.install_dir, opts.for_all_users)
+            || opts.cleanup_paths.iter().any(|p| elevate::needs_admin(p, true)));
     let req = opts;
-    let req_path_for_child = req_path.clone();
+    let request_path = prepared.request_path.clone();
+    let result_path = prepared.result_path.clone();
+    let nonce = prepared.nonce.clone();
+    let child_operation_id = prepared.operation_id.clone();
+    let engine_log_path = log_path.clone();
 
-    let result: Result<(), String> = tauri::async_runtime::spawn_blocking(move || {
-        if needs_elev {
-            elevate::run_elevated(&req_path_for_child)
-        } else {
-            engine::run(&req)
+    // The cancel / engine-start CAS makes exactly one of them the winner: when a
+    // cancellation won, the engine must not run and the terminal event reports
+    // the cancellation.
+    let result: Result<(), String> = match tauri::async_runtime::spawn_blocking(move || {
+        if !controller::begin_engine() {
+            return Err("已取消：安装尚未开始。".to_string());
         }
+        controller::with_operation_context(engine_log_path, || {
+            if needs_elev {
+                elevate::run_elevated(
+                    &request_path,
+                    &result_path,
+                    &child_operation_id,
+                    &nonce,
+                )
+            } else {
+                engine::run(&req)
+            }
+        })
     })
     .await
-    .map_err(|e| e.to_string())?;
+    {
+        Ok(result) => result,
+        // A panicking operation thread must still produce a terminal event and
+        // release admission; propagating the join error with `?` skipped the
+        // event and left the UI on the installing step forever.
+        Err(error) => Err(format!("安装操作线程异常结束：{error}")),
+    };
 
-    let _ = std::fs::remove_file(&req_path);
+    controller::with_operation_context(log_path, || match &result {
+        Ok(()) => engine::write_log("I|程序操作成功；已完成目标校验"),
+        Err(error) => engine::write_log(&format!("E|操作失败：{error}")),
+    });
+    stop_tail.store(true, Ordering::SeqCst);
+    let _ = tail.join();
+    drop(prepared);
 
     // 计算残留提示：仍有多个有效安装位置时提醒用户
     let residual_note = match &result {
@@ -220,15 +351,7 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
             let scan = engine::scan_installations();
             let n = scan.locations.len();
             if n > 1 {
-                format!(
-                    "检测到 {} 处安装位置：{}",
-                    n,
-                    scan.locations
-                        .iter()
-                        .map(|l| l.path.as_str())
-                        .collect::<Vec<_>>()
-                        .join("；")
-                )
+                format!("检测到 {} 处安装位置：{}", n, scan.locations.iter().map(|l| l.path.as_str()).collect::<Vec<_>>().join("；"))
             } else {
                 String::new()
             }
@@ -236,81 +359,82 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
         _ => String::new(),
     };
 
+    // Release admission before the terminal event: the UI must be able to leave
+    // the busy state, and no background operation may start before that.
+    admission.finish();
+
     match result {
         Ok(()) => {
             if launch_after {
-                let exe = std::path::Path::new(&install_dir).join("SidekickAI-OpenSource.exe");
+                let exe = std::path::Path::new(&install_dir).join("SidekickAI.exe");
                 if exe.exists() {
-                    // --show-guide：安装后打开使用指南（首次启动引导窗）
-                    // --skip-guide：默认跳过引导（主程序见参数即标记引导完成，不再弹出）
-                    // 不立即启动：记录待启动程序，等向导关闭（完成/右上角 ✕）时才拉起
-                    let arg = if show_guide {
-                        "--show-guide".to_string()
-                    } else {
-                        "--skip-guide".to_string()
-                    };
-                    *PENDING_LAUNCH.lock().unwrap() =
-                        Some((exe.to_string_lossy().into_owned(), arg));
+                    // --show-guide: open the first-run guide after install.
+                    // --skip-guide: mark the guide as done and do not open it.
+                    // Do not start now: record the pending program so the wizard
+                    // launches it only when the window closes (Done or ✕).
+                    let arg = if show_guide { "--show-guide".to_string() } else { "--skip-guide".to_string() };
+                    *PENDING_LAUNCH.lock().unwrap() = Some((exe.to_string_lossy().into_owned(), arg));
                 }
             }
-            let _ = app.emit(
-                "install-done",
-                manifest::DonePayload {
-                    install_dir,
-                    residual_note,
-                },
-            );
+            let _ = app.emit("install-done", manifest::DonePayload { install_dir, residual_note });
         }
         Err(e) => {
             let _ = app.emit("install-error", e);
         }
     }
-    RUNNING.store(false, Ordering::SeqCst);
     Ok(true)
 }
 
-fn tail_log(app: &AppHandle, path: &std::path::Path) {
-    use std::io::{Read, Seek, SeekFrom};
+/// Mirror one operation's non-secret log before its private request directory is released.
+fn tail_log(app: &AppHandle, bound: &std::path::Path, operation_id: &str, stop: Arc<AtomicBool>) {
     let mut offset = 0u64;
-    while RUNNING.load(Ordering::SeqCst) {
-        if let Ok(meta) = std::fs::metadata(path) {
-            let size = meta.len();
-            if size > offset {
-                if let Ok(mut file) = std::fs::File::open(path) {
-                    if file.seek(SeekFrom::Start(offset)).is_ok() {
-                        let mut buf = String::new();
-                        if file.read_to_string(&mut buf).is_ok() {
-                            for line in buf.lines() {
-                                if let Some(rest) = line.strip_prefix("S|") {
-                                    let _ = app.emit("install-status", rest);
-                                } else if let Some(rest) = line.strip_prefix("P|") {
-                                    if let Ok(p) = rest.parse::<u32>() {
-                                        let _ = app.emit("install-progress", p);
-                                    }
-                                }
-                            }
-                            offset = size;
-                        }
-                    }
-                }
-            }
+    loop {
+        emit_new_log_lines(app, bound, operation_id, &mut offset);
+        if stop.load(Ordering::SeqCst) {
+            emit_new_log_lines(app, bound, operation_id, &mut offset);
+            break;
         }
-        std::thread::sleep(std::time::Duration::from_millis(250));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
 }
 
+fn emit_new_log_lines(app: &AppHandle, path: &std::path::Path, operation_id: &str, offset: &mut u64) {
+    let Ok(text) = std::fs::read_to_string(path) else { return; };
+    let Some(end) = text.rfind('\n').map(|index| index + 1) else { return; };
+    if end as u64 <= *offset { return; }
+    let complete = &text[..end];
+    let saved = sidekickai_uninstall_host::diagnostics::save_operation_log(operation_id, complete);
+    let payload = match saved {
+        Ok(path) => serde_json::json!({ "text": complete, "path": path }),
+        Err(error) => serde_json::json!({ "text": complete, "error": format!("操作日志未能保存：{error}") }),
+    };
+    let _ = app.emit("install-log", payload);
+    for line in complete[*offset as usize..].lines() {
+        if let Some(rest) = line.strip_prefix("S|") { let _ = app.emit("install-status", rest); }
+        else if let Some(rest) = line.strip_prefix("P|") {
+            if let Ok(progress) = rest.parse::<u32>() { let _ = app.emit("install-progress", progress); }
+        }
+    }
+    *offset = end as u64;
+}
+
 pub fn run() {
+    let _wizard = match sidekickai_uninstall_host::wizard_instance::WizardInstance::acquire() {
+        Ok(instance) => instance,
+        Err(message) => { sidekickai_uninstall_host::wizard_instance::show_notice(&message); return; }
+    };
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if RUNNING.load(Ordering::SeqCst) || !ALLOW_CLOSE.load(Ordering::SeqCst) {
-                    api.prevent_close();
-                    let _ = window.emit("installer-close-requested", ());
-                }
-            }
-        })
+        .manage(sidekickai_uninstall_host::Host::installer())
+        .on_window_event(prevent_close_while_busy)
         .invoke_handler(tauri::generate_handler![
+            sidekickai_uninstall_host::diagnostics::open_operation_log,
+            sidekickai_uninstall_host::commands::uninstall_get_info,
+            sidekickai_uninstall_host::commands::uninstall_scan,
+            sidekickai_uninstall_host::commands::uninstall_start,
+            sidekickai_uninstall_host::commands::uninstall_cancel,
+            sidekickai_uninstall_host::commands::uninstall_close,
+            sidekickai_uninstall_host::commands::uninstall_choose_backup_path,
             get_info,
             scan_installations,
             needs_admin,
@@ -320,6 +444,10 @@ pub fn run() {
             open_dir,
             cancel,
             start,
+            stage_cloud_download,
+            verify_cloud_resource,
+            fetch_resource_catalog,
+            fetch_resource_package,
             read_install_config,
             flush_config,
             set_pending_launch
@@ -328,35 +456,12 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// 提权子进程入口：读取请求 JSON 并执行安装，把结果写入 result 文件。
-pub fn run_elevated_install(req_path: &str) -> i32 {
-    let Some(root) = std::path::Path::new(req_path).parent() else {
-        return 1;
-    };
-    if engine::set_operation_root(root.to_path_buf()).is_err() {
-        return 1;
-    }
-
-    let _request = RequestGuard(std::path::PathBuf::from(req_path));
-    let result = match std::fs::read_to_string(req_path) {
-        Ok(s) => match serde_json::from_str::<manifest::InstallRequest>(&s) {
-            Ok(req) => engine::run(&req),
-            Err(e) => Err(format!("解析安装请求失败：{}", e)),
-        },
-        Err(e) => Err(format!("读取安装请求失败：{}", e)),
-    };
-    let res = match &result {
-        Ok(()) => serde_json::json!({ "ok": true }),
-        Err(e) => serde_json::json!({ "ok": false, "error": e }),
-    };
-    let _ = std::fs::write(engine::result_path(), res.to_string());
-    if result.is_ok() {
-        0
-    } else {
-        1
-    }
+/// 提权子进程入口：读取本次操作私有目录中的请求并执行安装，把结果写回同一目录。
+pub fn run_elevated_install(request_path: &str) -> i32 {
+    controller::run_elevated_operation(request_path)
 }
 
 pub fn run_uninstall() -> i32 {
-    engine::run_uninstall()
+    run();
+    0
 }

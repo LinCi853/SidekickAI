@@ -22,6 +22,8 @@ export interface HotkeyConfig {
   accelerator: string
   /** 是否启用（false 时热键不注册、不响应） */
   enabled: boolean
+  registration?: 'registered' | 'fallback' | 'conflict' | 'unavailable'
+  registrationReason?: string
 }
 
 /** uiohook-napi 键盘事件 */

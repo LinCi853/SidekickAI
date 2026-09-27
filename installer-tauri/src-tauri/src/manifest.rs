@@ -84,8 +84,8 @@ pub struct LicenseDoc {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallerInfo {
-    pub initial_mode: String,
-    pub initial_target: String,
+    pub edition_label: String,
+    pub uninstall_entry: bool,
     pub version: String,
     pub default_dir: String,
     pub per_user_default_dir: String,
@@ -131,6 +131,8 @@ pub struct InstallLocation {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanResult {
+    pub other_editions: Vec<OtherEditionInstallation>,
+    pub other_editions_warning: String,
     pub locations: Vec<InstallLocation>,
     /// 推荐安装目标（已有有效安装则为其路径，否则默认目录）
     pub recommended_dir: String,
@@ -140,11 +142,52 @@ pub struct ScanResult {
     pub fixed_drives: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OtherEditionInstallation {
+    pub edition: String,
+    pub label: String,
+    pub path: String,
+    pub version: Option<String>,
+    pub arch: sidekickai_uninstall_core::protocol::UninstallArch,
+}
+
+/// One verified cloud asset the engine will stage, re-check and land.
+///
+/// Resource packages carry canonical signed envelope bytes and a detached
+/// compact proof. The engine verifies its embedded public trust before writing.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudAssetRequest {
+    /// Stable identity, e.g. `theme/oxy-dark@1.0.0` or a distribution sha256.
+    pub asset_id: String,
+    pub version: String,
+    /// Envelope / file digest as published (lowercase hex sha256).
+    pub digest: String,
+    /// Published size (envelope bytes or distribution file bytes).
+    pub size_bytes: u64,
+    /// `resource-package` | `distribution`
+    pub kind: String,
+    /// Relative destination under the install directory (`resources/cloud/...`).
+    pub destination: String,
+    /// Canonical UTF-8 envelope JSON; empty for distribution files.
+    #[serde(default)]
+    pub payload_json: String,
+    /// Absolute path of an already-downloaded distribution file; empty for
+    /// resource packages.
+    #[serde(default)]
+    pub source_path: String,
+    #[serde(default)]
+    pub signed_token: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallRequest {
     #[serde(default)]
-    pub user_data_dir: String,
+    pub installation_id: String,
+    #[serde(default)]
+    pub resources: Vec<serde_json::Value>,
     /// 子任务标识："" = 正常安装/修复/卸载；"flush-config" = 仅写 install-config.json
     #[serde(default)]
     pub action: String,
@@ -186,6 +229,20 @@ pub struct InstallRequest {
     /// 已同意的协议 id 列表
     #[serde(default)]
     pub accepted_licenses: Vec<String>,
+    /// Legacy wire compatibility; normal installations always attempt defaults.
+    #[serde(default)]
+    pub cloud_enabled: bool,
+    /// Verified cloud assets to land after the core install commits.
+    #[serde(default)]
+    pub cloud_assets: Vec<CloudAssetRequest>,
+}
+
+pub fn new_installation_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SERIAL: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos()).unwrap_or_default();
+    format!("install-{}-{nanos}-{}", std::process::id(), SERIAL.fetch_add(1, Ordering::SeqCst))
 }
 
 #[derive(Serialize, Clone)]
@@ -231,43 +288,23 @@ pub fn licenses() -> Vec<LicenseDoc> {
 }
 
 pub fn host_arch() -> &'static str {
-    let proc = std::env::var("PROCESSOR_ARCHITECTURE")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let w6432 = std::env::var("PROCESSOR_ARCHITEW6432")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if proc == "arm64" || w6432 == "arm64" {
-        "arm64"
-    } else {
-        "x64"
-    }
+    let proc = std::env::var("PROCESSOR_ARCHITECTURE").unwrap_or_default().to_ascii_lowercase();
+    let w6432 = std::env::var("PROCESSOR_ARCHITEW6432").unwrap_or_default().to_ascii_lowercase();
+    if proc == "arm64" || w6432 == "arm64" { "arm64" } else { "x64" }
 }
 
 pub fn build_info() -> InstallerInfo {
-    let app_name = "工百窗开源版 / SidekickAI Open Source".to_string();
+    let app_name = "SidekickAI".to_string();
     let default_dir = std::env::var("ProgramFiles")
-        .map(|p| format!("{}\\SidekickAI-OpenSource", p.trim_end_matches('\\')))
-        .unwrap_or_else(|_| "C:\\Program Files\\SidekickAI-OpenSource".into());
+        .map(|p| format!("{}\\{}", p.trim_end_matches('\\'), sidekickai_uninstall_core::product::edition().directory))
+        .unwrap_or_else(|_| format!("C:\\Program Files\\{}", sidekickai_uninstall_core::product::edition().directory));
     let local = std::env::var("LOCALAPPDATA")
-        .or_else(|_| {
-            std::env::var("USERPROFILE")
-                .map(|p| format!("{}\\AppData\\Local", p.trim_end_matches('\\')))
-        })
+        .or_else(|_| std::env::var("USERPROFILE").map(|p| format!("{}\\AppData\\Local", p.trim_end_matches('\\'))))
         .unwrap_or_default();
-    let per_user_default_dir = format!(
-        "{}\\Programs\\SidekickAI-OpenSource",
-        local.trim_end_matches('\\')
-    );
+    let per_user_default_dir = format!("{}\\Programs\\{}", local.trim_end_matches('\\'), sidekickai_uninstall_core::product::edition().directory);
     InstallerInfo {
-        initial_mode: if crate::engine::uninstall_target().is_some() {
-            "uninstall".into()
-        } else {
-            "install".into()
-        },
-        initial_target: crate::engine::uninstall_target()
-            .map(|target| target.to_string_lossy().into_owned())
-            .unwrap_or_default(),
+        edition_label: sidekickai_uninstall_core::product::edition().label.clone(),
+        uninstall_entry: std::env::args().skip(1).eq(["--uninstall".to_string()]),
         version: env!("CARGO_PKG_VERSION").to_string(),
         default_dir,
         per_user_default_dir,

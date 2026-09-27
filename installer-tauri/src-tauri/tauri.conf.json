@@ -1,19 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SidekickAI-OpenSource",
-  "version": "0.1.0-alpha.3",
+  "productName": "SidekickAI",
+  "version": "0.1.5",
   "identifier": "com.sidekickai.opensource.installer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "set TAURI_ENV_PLATFORM=windows&& node node_modules/vite/bin/vite.js build",
+    "beforeBuildCommand": "node ../scripts/tauri-web-build.cjs ../installer-tauri",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "工百窗开源版安装向导",
+        "title": "工百窗安装向导",
         "width": 960,
         "height": 620,
         "minWidth": 860,

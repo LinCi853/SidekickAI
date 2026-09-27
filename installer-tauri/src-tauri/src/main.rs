@@ -1,14 +1,22 @@
-// main.rs —— 入口：正常启动向导 / 提权安装子进程 / 卸载器
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(pos) = args.iter().position(|a| a == "--elevated") {
-        let req = args.get(pos + 1).cloned().unwrap_or_default();
-        std::process::exit(sidekickai_installer_lib::run_elevated_install(&req));
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.as_slice() {
+        [] => sidekickai_installer_lib::run(),
+        [flag] if flag == "--uninstall" => {
+            // Compatibility is an entry choice, never authorization to delete.
+            sidekickai_installer_lib::run_uninstall();
+        }
+        [flag, request] if flag == "--elevated" => {
+            std::process::exit(sidekickai_installer_lib::run_elevated_install(request));
+        }
+        [flag, request] if flag == "--worker" => {
+            std::process::exit(sidekickai_uninstall_host::run_worker(request));
+        }
+        _ => {
+            eprintln!("不支持的安装器参数。");
+            std::process::exit(64);
+        }
     }
-    if args.iter().any(|a| a == "--uninstall") {
-        std::process::exit(sidekickai_installer_lib::run_uninstall());
-    }
-    sidekickai_installer_lib::run();
 }

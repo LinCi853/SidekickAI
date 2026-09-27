@@ -1,3 +1,4 @@
+import { product, edition } from '../../../../packages/product-contract'
 import { useCallback, useEffect, useState } from 'react';
 import type { PlatformCapabilities } from '../../../lib/electron-api';
 import {
@@ -59,7 +60,7 @@ export default function AboutSection() {
   return (
     <section data-name="settings.about.section">
       <SectionTitle>关于</SectionTitle>
-      <div className="about-row" data-name="settings.about.name-row"><span data-name="settings.about.name-label">名称</span><span data-name="settings.about.name-value">SidekickAI（工百窗）</span></div>
+      <div className="about-row" data-name="settings.about.name-row"><span data-name="settings.about.name-label">名称</span><span data-name="settings.about.name-value">{product.name}（{product.displayName} · {edition.label}）</span></div>
       <div className="about-row" data-name="settings.about.version-row"><span data-name="settings.about.version-label">版本</span><span data-name="settings.about.version-value">v{caps?.appVersion ?? '—'}</span></div>
       <div className="about-row" data-name="settings.about.device-id-row">
         <span data-name="settings.about.device-id-label">设备码</span>

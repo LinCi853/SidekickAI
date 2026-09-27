@@ -17,7 +17,7 @@ import { closeNotesDb } from './notes-db.js';
 import { closeBookmarkStore } from './bookmark-store.js';
 import { closeModuleStateDb } from './module-state-store.js';
 import { profileStore } from './profile-store.js';
-import { getStoreCwd, isPortableMode } from './store-paths.js';
+import { getStoreCwd } from './store-paths.js';
 import { getDeviceId } from './device-id.js';
 import { encryptFile, decryptFile, isSabkEncrypted } from '../utils/file-crypto.js';
 import { safeExtractAll } from '../utils/safe-zip.js';
@@ -314,13 +314,7 @@ function getDirSize(dirPath: string): number {
 
 /** 获取数据目录路径 */
 function getDataDir(): string {
-  if (process.env.SIDEKICK_DATA_DIR) return app.getPath('userData');
-  if (isPortableMode()) {
-    return path.join(path.dirname(app.getPath('exe')), 'data');
-  }
-  const cwd = getStoreCwd();
-  if (cwd) return cwd;
-  return app.getPath('userData');
+  return getStoreCwd();
 }
 
 /**
