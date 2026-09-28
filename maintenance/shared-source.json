@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "974b8b07613fb5cef5a15f5dcea52f1b8a00af0b4102dfe114ee897f443400db",
+  "revision": "fbccbcea5e9f90480470189e007b4f6242b20d3808693b8f4be7f80a3155681a",
   "files": {
     "installer-shared/on-demand/fixtures/issuer-resource.json": "c9bfe8b043d9c9b440c1b36af8fe8bdc113a09f61f5af673dad14ca068643750",
     "installer-shared/operation-details/OperationDetails.tsx": "e0d0aa7bcc3b5cfd21a7575fa8668f3c82353451e3d99facf50c36bfe0556569",
@@ -136,7 +136,7 @@
     "installer-tauri/tsconfig.json": "0874eaf5f4da38704c09c65927c1c439891f244279f6b7b65eeab37cbb9624d0",
     "installer-tauri/tsconfig.node.json": "9e2abb169ea87b7190613a1d4da57ca608463a453bd4231fa3aeee5e308370dd",
     "installer-tauri/vite.config.ts": "4ddf901c8064202fb7e74476ad4be49084cfb1bccc629829393aa62f3daf7d9b",
-    "launch.bat": "71d82d73cfaf5b4fb9bed454127920b3f86676d9849eb6e87d29ea9920376bf5",
+    "launch.bat": "98ab1e7772601ce5eb670911e2af447859a652855653140e1b784bbc864ecf20",
     "packages/desktop-common/edition-session.ts": "bfb381e254b0bc55db10ace5ce4d4d65c160687b20c1d7d343d62d216e484eaa",
     "packages/desktop-common/hotkey-ownership.ts": "4cb2df3930ac90c4c411f83782a00128fc325d287bdd2161194bf108c14aba9b",
     "packages/desktop-common/running-application.ts": "2aaacd7041729e4f6838f7a958dc81cf9a3aa9f6ec9df375ad3ef0943304310c",
@@ -146,7 +146,7 @@
     "scripts/build-cache.cjs": "d13d3078a70cda26c4a511a8c5c286b22437cdd35f3a28ccf90170c84eae87d8",
     "scripts/build-distribution.cjs": "9453310b6b3cd1f6c5a6379316900671766e0fb78dc0207c44e1044f52799d78",
     "scripts/build-distribution.test.cjs": "75dc39778e69ae7e0442fff091438a18494e14b48dc9d00ff29e36b8c344a263",
-    "scripts/build-tauri-installer.cjs": "ce80d95fdafe6081cc74c7d1ff9a996e119028ae0bef199dafcc2273717e5fe8",
+    "scripts/build-tauri-installer.cjs": "6d25d997c4cc20e75651f93179b35803cf298de9afca2971515d6680e24f94c2",
     "scripts/check-installer-parity.cjs": "895ca5875396c36cd853e22fb884a93d01be2e303b8314037c36705a92bcc163",
     "scripts/oxy-build-config.cjs": "08a93c51cb493bb1196e025dc3c862cb3c249fea68cbef9e96d00a580e353e4f",
     "scripts/packaging-lock.cjs": "2b16ba8e0daaba6ba5d40460101603e2da5e0b5350337eeddacb4c424d8435ef",

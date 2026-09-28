@@ -289,7 +289,8 @@ function buildNative(app, arch, output, toolchain, standalone) {
   webVerify.assertEmbeddableFrontendDist(production.build.frontendDist, `${name} ${arch} frontendDist`)
   const config = path.join(output, `${name}-${arch}-production.json`)
   fs.writeFileSync(config, JSON.stringify(production, null, 2))
-  run(process.execPath, [toolchain.tauri, 'build', '--no-bundle', '--target', target, '--config', config, '--', '--offline', '--locked', '--jobs', '2'], `${name} ${arch} Tauri production`, {
+  const cargoArgs = process.env.SIDEKICK_CARGO_ONLINE === '1' ? ['--locked', '--jobs', '2'] : ['--offline', '--locked', '--jobs', '2']
+  run(process.execPath, [toolchain.tauri, 'build', '--no-bundle', '--target', target, '--config', config, '--', ...cargoArgs], `${name} ${arch} Tauri production`, {
     cwd: app, env: { ...toolchain.environments?.[arch], ...(app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : {}), CARGO_TARGET_DIR: targetDir, SIDEKICK_BUILD_FINGERPRINT: inputFingerprint },
   })
   u.assertUnchanged(before, u.fingerprint(ROOT, sourceInputs(app)))
