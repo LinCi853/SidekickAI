@@ -237,7 +237,7 @@ export async function maybeAutoCleanCache(): Promise<void> {
   if (now - last < interval) return
 
   try {
-    const { cleanCacheData } = await import('../store/backup-restore.js')
+    const { cleanCacheData } = await import('../store/cache-maintenance.js')
     const result = await cleanCacheData()
     updateAppSettings({ lastCacheCleanAt: now })
     console.log('[download-handler] 自动缓存清理完成，已清理:', result.cleanedBytes, '字节')

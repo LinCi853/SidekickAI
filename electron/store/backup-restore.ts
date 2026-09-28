@@ -17,7 +17,6 @@ import { closeNotesDb } from './notes-db.js';
 import { closeBookmarkStore } from './bookmark-store.js';
 import { closeModuleStateDb } from './module-state-store.js';
 import { profileStore } from './profile-store.js';
-import { getStoreCwd } from './store-paths.js';
 import { getDeviceId } from './device-id.js';
 import { encryptFile, decryptFile, isSabkEncrypted } from '../utils/file-crypto.js';
 import { safeExtractAll } from '../utils/safe-zip.js';
@@ -87,61 +86,14 @@ const PARTITION_COOKIE_DIRS = ['Local Storage'];
 /** Partitions/<id>/ 下属于「应用数据」的目录（IndexedDB，非缓存，含离线应用数据） */
 const PARTITION_INDEXEDDB_DIRS = ['IndexedDB'];
 
-/** Partitions/<id>/ 下属于「离线缓存」的目录（可安全排除，不影响登录态） */
-const PARTITION_CACHE_DIRS = [
-  'Service Worker',
-  'File System',
-  'Cache',
-  'Code Cache',
-  'GPUCache',
-  'blob_storage',
-];
-
-/**
- * 对一个 session 基础目录（Partitions/<id>/ 或 数据目录根）统计三类 session 体积。
- * 同一套分类常量同时覆盖各 profile session 与默认 session，避免根级存储被遗漏。
- * @param basePath session 根目录绝对路径
- */
-function collectSessionSizesFromBase(basePath: string): {
-  cookies: number;
-  indexedDB: number;
-  cache: number;
-} {
-  let cookies = 0;
-  let indexedDB = 0;
-  let cache = 0;
-  // 登录凭据：Cookies 文件 + Local Storage 目录
-  for (const fileName of PARTITION_COOKIE_FILES) {
-    const filePath = path.join(basePath, fileName);
-    if (fs.existsSync(filePath)) {
-      try {
-        const stat = fs.statSync(filePath);
-        if (stat.isFile()) cookies += stat.size;
-      } catch { /* ignore */ }
-    }
-  }
-  for (const dirName of PARTITION_COOKIE_DIRS) {
-    const dirPath = path.join(basePath, dirName);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      cookies += getDirSize(dirPath);
-    }
-  }
-  // 应用数据：IndexedDB 目录
-  for (const dirName of PARTITION_INDEXEDDB_DIRS) {
-    const dirPath = path.join(basePath, dirName);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      indexedDB += getDirSize(dirPath);
-    }
-  }
-  // 离线缓存：Service Worker / Cache 等目录
-  for (const dirName of PARTITION_CACHE_DIRS) {
-    const dirPath = path.join(basePath, dirName);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      cache += getDirSize(dirPath);
-    }
-  }
-  return { cookies, indexedDB, cache };
-}
+// 缓存分类常量与体积统计拆分至 session-dirs.ts（与 cache-maintenance.ts 共用）
+export { PARTITION_CACHE_DIRS } from './session-dirs.js';
+import {
+  PARTITION_CACHE_DIRS,
+  collectSessionSizesFromBase,
+  getDirSize,
+  getDataDir,
+} from './session-dirs.js';
 
 /**
  * 将一个 session 基础目录下的存储按选项导出到 zip。
@@ -291,157 +243,6 @@ export async function estimateExportSizes(): Promise<ExportSizeEstimate> {
     voiceAssets: 0, // 语音资产体积暂不单独统计，归入 basicData
     total: 0, // 由调用方根据选中项计算
   };
-}
-
-/** 递归计算目录总体积（字节） */
-function getDirSize(dirPath: string): number {
-  let size = 0;
-  try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        size += getDirSize(fullPath);
-      } else if (entry.isFile()) {
-        try {
-          size += fs.statSync(fullPath).size;
-        } catch { /* ignore */ }
-      }
-    }
-  } catch { /* ignore */ }
-  return size;
-}
-
-/** 获取数据目录路径 */
-function getDataDir(): string {
-  return getStoreCwd();
-}
-
-/**
- * 估算当前缓存总体积（字节）。
- * 遍历 <dataDir>/ 根与 <dataDir>/Partitions/<id>/ 下的所有缓存子目录
- * （PARTITION_CACHE_DIRS：Service Worker / Cache / Code Cache / GPUCache / blob_storage / File System），
- * 不读取文件内容，仅 stat 累加。Crashpad 也按缓存处理（Chromium 崩溃转储，可安全清理）。
- */
-export function estimateCacheSize(): number {
-  const dataDir = getDataDir();
-  let total = 0;
-
-  // 辅助：统计一个基础目录下的缓存子目录总体积
-  const sumCacheDirs = (basePath: string): number => {
-    let size = 0;
-    for (const dirName of PARTITION_CACHE_DIRS) {
-      const dirPath = path.join(basePath, dirName);
-      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-        size += getDirSize(dirPath);
-      }
-    }
-    // Crashpad 也视为缓存（Chromium 崩溃转储目录，可安全清理）
-    const crashpadPath = path.join(basePath, 'Crashpad');
-    if (fs.existsSync(crashpadPath) && fs.statSync(crashpadPath).isDirectory()) {
-      size += getDirSize(crashpadPath);
-    }
-    return size;
-  };
-
-  // 默认 session（数据目录根级）
-  total += sumCacheDirs(dataDir);
-
-  // 各 profile session
-  const partitionsDir = path.join(dataDir, 'Partitions');
-  if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
-    try {
-      const entries = fs.readdirSync(partitionsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        total += sumCacheDirs(path.join(partitionsDir, entry.name));
-      }
-    } catch { /* ignore */ }
-  }
-
-  return total;
-}
-
-/**
- * 清理缓存数据（仅缓存类目录与 session cache，保留登录态）。
- *
- * 清理流程：
- *   1. 调用 estimateCacheSize() 记录清理前体积
- *   2. 收集所有 session：defaultSession + persist:<profileId> partitions
- *   3. 每个 session 依次调用：
- *      - clearCache()：HTTP 缓存
- *      - clearAuthCache()：认证缓存
- *      - clearStorageData({ storages: ['serviceworkers', 'cachestorage'] })：仅清 SW 与 Cache API
- *      （明确不传 cookies/localstorage/indexeddb/localfilesystem 等，保留登录态与本地数据）
- *   4. 磁盘兜底：递归删除 PARTITION_CACHE_DIRS 内每个子目录 + Crashpad
- *      （处理 session API 未覆盖的 GPUCache/Crashpad 等），对 <dataDir>/ 根与每个 Partitions/<id>/ 都执行
- *   5. 返回 { cleanedBytes }
- *
- * 注意：调用前需确保所有 webview 的关键页面上已加载完成（避免清理 SW 导致当前会话异常）。
- * 若 webview 正在使用，清理后下次导航会重新生成缓存，无副作用。
- */
-export async function cleanCacheData(): Promise<{ cleanedBytes: number }> {
-  const dataDir = getDataDir();
-  const cleanedBytes = estimateCacheSize();
-  console.log('[backup-restore] 开始清理缓存，当前体积:', formatBytes(cleanedBytes));
-
-  // 1. 收集所有 session
-  const sessionsToClean: Electron.Session[] = [session.defaultSession];
-  try {
-    for (const profile of profileStore.list()) {
-      try {
-        sessionsToClean.push(session.fromPartition(`persist:${profile.id}`));
-      } catch { /* ignore */ }
-    }
-  } catch (err) {
-    console.warn('[backup-restore] 收集 partition sessions 失败:', err);
-  }
-
-  // 2. 调用 session API 清理（仅缓存类）
-  await Promise.all(
-    sessionsToClean.map(async (s) => {
-      try { await s.clearCache(); } catch { /* ignore */ }
-      try { await s.clearAuthCache(); } catch { /* ignore */ }
-      try {
-        await s.clearStorageData({
-          storages: ['serviceworkers', 'cachestorage'],
-        });
-      } catch { /* ignore */ }
-    }),
-  );
-
-  // 3. 磁盘兜底：删除缓存子目录 + Crashpad
-  const allCacheDirNames = [...PARTITION_CACHE_DIRS, 'Crashpad'];
-  const cleanBase = (basePath: string) => {
-    for (const dirName of allCacheDirNames) {
-      const dirPath = path.join(basePath, dirName);
-      try {
-        if (fs.existsSync(dirPath)) {
-          fs.rmSync(dirPath, { recursive: true, force: true });
-        }
-      } catch (err) {
-        // 单个目录删除失败不阻塞（可能被进程占用），下次清理会重试
-        console.warn(`[backup-restore] 删除缓存目录失败: ${dirPath}`, err);
-      }
-    }
-  };
-
-  // 默认 session（数据目录根级）
-  cleanBase(dataDir);
-  // 各 profile session
-  const partitionsDir = path.join(dataDir, 'Partitions');
-  if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
-    try {
-      const entries = fs.readdirSync(partitionsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        cleanBase(path.join(partitionsDir, entry.name));
-      }
-    } catch { /* ignore */ }
-  }
-
-  console.log('[backup-restore] 缓存清理完成，已清理:', formatBytes(cleanedBytes));
-  return { cleanedBytes };
 }
 
 export interface ExportResult {

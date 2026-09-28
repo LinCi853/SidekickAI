@@ -25,7 +25,8 @@ vi.mock('./nav-history-store.js', () => ({ closeNavHistoryStore() {} }))
 vi.mock('./accumulated-links-store.js', () => ({ accumulatedLinksStore: { close() {} } }))
 vi.mock('./install-config-seed.js', () => ({ stampInstallConfigHashAfterImport() {} }))
 vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }) }))
-import { cleanCacheData, estimateCacheSize, estimateExportSizes, exportAllData, importAllData } from './backup-restore'
+import { estimateExportSizes, exportAllData, importAllData } from './backup-restore'
+import { cleanCacheData, estimateCacheSize } from './cache-maintenance'
 
 let root: string
 beforeEach(() => {

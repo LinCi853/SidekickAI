@@ -38,6 +38,7 @@ import {
 } from '../lib/electron-api';
 import type { Conversation, ChatMessage, LoginTrace, WindowTrace } from '../lib/electron-api';
 import { formatTime } from '../lib/datetime';
+import { mergeDuplicateMessages } from '../lib/message-merge';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { SearchIcon } from '../components/icons';
 import './HistoryView.css';
@@ -330,22 +331,8 @@ export default function HistoryView() {
 
   // 展示层全局去重：同 role + 同 content 的消息仅保留首条，dupCount 标注总重复次数。
   // 存储层已用 content_hash + INSERT OR IGNORE 防止重复入库；此处仅做视觉合并，
-  // 保留首条并标注重复次数，重复条目折叠不渲染正文。
-  const mergedMessages = useMemo(() => {
-    const result: Array<{ msg: ChatMessage; dupCount: number }> = [];
-    const seen = new Map<string, number>(); // key(role\0content) → result 索引
-    for (const m of messages) {
-      const key = `${m.role}\u0000${m.content}`;
-      const idx = seen.get(key);
-      if (idx !== undefined) {
-        result[idx].dupCount += 1;
-      } else {
-        seen.set(key, result.length);
-        result.push({ msg: m, dupCount: 0 });
-      }
-    }
-    return result;
-  }, [messages]);
+  // 保留首条并标注重复次数，重复条目折叠不渲染正文。（纯函数实现见 lib/message-merge.ts）
+  const mergedMessages = useMemo(() => mergeDuplicateMessages(messages), [messages]);
 
   const isSearching = searchQuery.trim().length > 0;
 

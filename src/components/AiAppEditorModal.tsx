@@ -2,6 +2,8 @@
    AiAppEditorModal —— AI 应用编辑器（设置页内遮罩）
    由原独立窗口 pages/AiAppEditor/index.tsx 迁移而来。
    覆盖整个设置页面，通过 Modal portal 渲染到 document.body。
+   渲染按内聚块拆分至 ./AiAppEditorModal/：字段分组、基础信息字段、
+   屏蔽规则编辑区、弹窗白名单编辑区（均为纯展示，状态与回调集中于此）。
    ===================================================================== */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,52 +26,18 @@ import type {
   Profile,
   DevicePreset,
 } from '../lib/electron-api';
-import type { BlockRule, BlockRuleType } from '../../electron/shared/block-rules.types';
+import type { BlockRule } from '../../electron/shared/block-rules.types';
 import { generateUniqueName } from '../../electron/shared/naming';
+import { hostnameFromUrl, matchDomain, isValidHexColor } from '../pages/AiAppEditor/domain';
+import { EMPTY_RULE_DRAFT } from '../pages/AiAppEditor/constants';
 import { useToast } from '../hooks/useToast';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
-import { Combobox } from './ui';
-import type { ComboboxOption } from './ui';
-import Toggle from './ui/Toggle';
-import SegmentedControl from './ui/SegmentedControl';
+import { BasicInfoFields } from './AiAppEditorModal/BasicInfoFields';
+import { BlockRulesSection } from './AiAppEditorModal/BlockRulesSection';
+import { PopupWhitelistSection } from './AiAppEditorModal/PopupWhitelistSection';
 import '../pages/PromptLibraryView.css';
 import './AiAppEditorModal.css';
-
-/** 从 URL 提取 hostname（用于屏蔽规则域名匹配） */
-function hostnameFromUrl(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return '';
-  }
-}
-
-function matchDomain(pattern: string, hostname: string): boolean {
-  if (!pattern) return false;
-  if (pattern === '*') return true;
-  if (!hostname) return false;
-  if (pattern === hostname) return true;
-  if (pattern.startsWith('*.')) {
-    const suffix = pattern.slice(1);
-    return hostname === pattern.slice(2) || hostname.endsWith(suffix);
-  }
-  return false;
-}
-
-function isValidHexColor(s: string): boolean {
-  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
-}
-
-const EMPTY_RULE_DRAFT: Omit<BlockRule, 'id' | 'builtin'> = {
-  domainPattern: '*',
-  type: 'css',
-  selector: '',
-  jsCode: '',
-  label: '',
-  enabled: true,
-};
-
 export interface AiAppEditorModalProps {
   open: boolean;
   onClose: () => void;
@@ -414,333 +382,55 @@ export default function AiAppEditorModal({
         </div>
       ) : (
         <div className="ai-app-editor-body" data-name="ai-app-editor.body">
-          <FieldGroup label="应用名称">
-            <input
-              type="text"
-              className="ai-editor-input"
-              value={aiPlatformName}
-              onChange={(e) => setAiPlatformName(e.target.value)}
-              placeholder={platform?.name ?? '输入应用名称'}
-              data-name="ai-app-editor.name-input"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="平台 URL">
-            <input
-              type="text"
-              className="ai-editor-input"
-              value={aiPlatformUrl}
-              onChange={(e) => setAiPlatformUrl(e.target.value)}
-              placeholder="https://chat.example.com"
-              data-name="ai-app-editor.url-input"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="浏览器主页">
-            <input
-              type="text"
-              className="ai-editor-input"
-              value={browserHomePage}
-              onChange={(e) => setBrowserHomePage(e.target.value)}
-              placeholder="留空则使用平台 URL"
-              data-name="ai-app-editor.browser-home-page-input"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="桌面端 UA 预设">
-            <Combobox
-              inputValue={desktopPresets.find((p) => p.id === aiDesktopPreset)?.name ?? ''}
-              onInputChange={() => {}}
-              inputPlaceholder="选择桌面端 UA 预设"
-              inputClassName="ai-editor-input"
-              inputReadOnly
-              options={desktopPresets.map<ComboboxOption>((p) => ({
-                value: p.id,
-                label: p.name,
-                selected: p.id === aiDesktopPreset,
-              }))}
-              onSelect={(v) => setAiDesktopPreset(v)}
-              searchable
-              searchPlaceholder="搜索 UA 预设…"
-              emptyText="无匹配预设"
-              dataName="ai-app-editor.desktop-preset"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="移动端 UA 预设">
-            <Combobox
-              inputValue={mobilePresets.find((p) => p.id === aiMobilePreset)?.name ?? ''}
-              onInputChange={() => {}}
-              inputPlaceholder="选择移动端 UA 预设"
-              inputClassName="ai-editor-input"
-              inputReadOnly
-              options={mobilePresets.map<ComboboxOption>((p) => ({
-                value: p.id,
-                label: p.name,
-                selected: p.id === aiMobilePreset,
-              }))}
-              onSelect={(v) => setAiMobilePreset(v)}
-              searchable
-              searchPlaceholder="搜索 UA 预设…"
-              emptyText="无匹配预设"
-              dataName="ai-app-editor.mobile-preset"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="输入框选择器（留空用平台默认）">
-            <input
-              type="text"
-              className="ai-editor-input"
-              value={aiInputSelector}
-              onChange={(e) => setAiInputSelector(e.target.value)}
-              placeholder={platform?.inputSelector ?? '如：textarea#prompt-textarea'}
-              data-name="ai-app-editor.input-selector-input"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="发送按钮选择器（留空用平台默认）">
-            <input
-              type="text"
-              className="ai-editor-input"
-              value={aiSendSelector}
-              onChange={(e) => setAiSendSelector(e.target.value)}
-              placeholder={platform?.sendSelector ?? '如：button[data-testid="send-button"]'}
-              data-name="ai-app-editor.send-selector-input"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="主题色">
-            <div className="ai-app-editor-color-row" data-name="ai-app-editor.theme-color-row">
-              <input
-                type="color"
-                value={isValidHexColor(aiThemeColor) ? aiThemeColor : '#000000'}
-                onChange={(e) => setAiThemeColor(e.target.value)}
-                className="ai-app-editor-color-picker"
-                aria-label="主题色"
-                data-name="ai-app-editor.theme-color-picker"
-              />
-              <input
-                type="text"
-                className="ai-editor-input"
-                value={aiThemeColor}
-                onChange={(e) => setAiThemeColor(e.target.value)}
-                placeholder="#RRGGBB"
-                data-name="ai-app-editor.theme-color-input"
-              />
-            </div>
-          </FieldGroup>
-
-          <FieldGroup label="区域">
-            <SegmentedControl
-              value={aiPlatformRegion}
-              onChange={setAiPlatformRegion}
-              options={[
-                { value: 'cn', label: '国内' },
-                { value: 'global', label: '国外' },
-              ]}
-              className="seg-control-row"
-            />
-          </FieldGroup>
+          <BasicInfoFields
+            platform={platform}
+            desktopPresets={desktopPresets}
+            mobilePresets={mobilePresets}
+            aiPlatformName={aiPlatformName}
+            setAiPlatformName={setAiPlatformName}
+            aiPlatformUrl={aiPlatformUrl}
+            setAiPlatformUrl={setAiPlatformUrl}
+            browserHomePage={browserHomePage}
+            setBrowserHomePage={setBrowserHomePage}
+            aiDesktopPreset={aiDesktopPreset}
+            setAiDesktopPreset={setAiDesktopPreset}
+            aiMobilePreset={aiMobilePreset}
+            setAiMobilePreset={setAiMobilePreset}
+            aiInputSelector={aiInputSelector}
+            setAiInputSelector={setAiInputSelector}
+            aiSendSelector={aiSendSelector}
+            setAiSendSelector={setAiSendSelector}
+            aiThemeColor={aiThemeColor}
+            setAiThemeColor={setAiThemeColor}
+            aiPlatformRegion={aiPlatformRegion}
+            setAiPlatformRegion={setAiPlatformRegion}
+          />
 
           {/* 屏蔽规则：全局关闭时隐藏 */}
           {!disableAllBlockRules && (
-          <FieldGroup
-            label={`屏蔽规则（按 ${platform ? hostnameFromUrl(platform.url) || '*' : '*'} 匹配）`}
-          >
-            <div className="ai-app-editor-rules" data-name="ai-app-editor.block-rules-container">
-              {filteredRules.length === 0 && !showRuleForm && (
-                <div className="ai-app-editor-empty" data-name="ai-app-editor.block-rules-empty">
-                  暂无匹配规则
-                </div>
-              )}
-              {filteredRules.map((rule, rIdx) => (
-                <div
-                  key={rule.id}
-                  className="ai-app-editor-rule-item"
-                  data-name={`ai-app-editor.block-rule-item-${rIdx + 1}`}
-                >
-                  <span className="ai-app-editor-rule-toggle" data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-toggle-wrapper`}>
-                    <Toggle
-                      checked={rule.enabled}
-                      onChange={() => void handleRuleToggle(rule)}
-                    />
-                  </span>
-                  <span className="ai-app-editor-rule-label" data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-label`}>
-                    {rule.label || '(未命名)'}
-                    {rule.builtin && (
-                      <span className="ai-app-editor-rule-builtin" data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-builtin-badge`}>
-                        内置
-                      </span>
-                    )}
-                  </span>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleRuleEdit(rule)}
-                    data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-edit-button`}
-                  >
-                    编辑
-                  </Button>
-                  {!rule.builtin && (
-                    <Button
-                      variant="text"
-                      danger
-                      className="btn-secondary-underline danger"
-                      onClick={() => void handleRuleDelete(rule.id)}
-                      data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-delete-button`}
-                    >
-                      删除
-                    </Button>
-                  )}
-                </div>
-              ))}
-
-              {showRuleForm && (
-                <div className="ai-app-editor-rule-form" data-name="ai-app-editor.block-rule-form">
-                  <input
-                    type="text"
-                    className="ai-editor-input"
-                    value={ruleDraft.label}
-                    onChange={(e) => setRuleDraft({ ...ruleDraft, label: e.target.value })}
-                    placeholder="规则名称（如：屏蔽下载按钮）"
-                    data-name="ai-app-editor.block-rule-form-label-input"
-                  />
-                  <input
-                    type="text"
-                    className="ai-editor-input"
-                    value={ruleDraft.domainPattern}
-                    onChange={(e) => setRuleDraft({ ...ruleDraft, domainPattern: e.target.value })}
-                    placeholder="域名匹配（* / *.domain.com / domain.com）"
-                    data-name="ai-app-editor.block-rule-form-domain-input"
-                  />
-                  <SegmentedControl
-                    value={ruleDraft.type}
-                    onChange={(v) => setRuleDraft({ ...ruleDraft, type: v as BlockRuleType })}
-                    options={[
-                      { value: 'css', label: 'CSS 隐藏' },
-                      { value: 'js', label: 'JS 脚本' },
-                    ]}
-                  />
-                  {ruleDraft.type === 'css' ? (
-                    <input
-                      type="text"
-                      className="ai-editor-input"
-                      value={ruleDraft.selector}
-                      onChange={(e) => setRuleDraft({ ...ruleDraft, selector: e.target.value })}
-                      placeholder="CSS 选择器（如 .ad-banner）"
-                      data-name="ai-app-editor.block-rule-form-selector-input"
-                    />
-                  ) : (
-                    <textarea
-                      className="ai-editor-input"
-                      value={ruleDraft.jsCode}
-                      onChange={(e) => setRuleDraft({ ...ruleDraft, jsCode: e.target.value })}
-                      placeholder="JS 代码（如 window.alert = function() {};）"
-                      rows={3}
-                      data-name="ai-app-editor.block-rule-form-js-code-textarea"
-                    />
-                  )}
-                  <div className="ai-app-editor-rule-form-actions" data-name="ai-app-editor.block-rule-form-actions">
-                    <Button
-                      variant="primary-compact"
-                      onClick={() => void handleRuleSave()}
-                      data-name="ai-app-editor.block-rule-form-save-button"
-                    >
-                      保存
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleRuleCancel}
-                      data-name="ai-app-editor.block-rule-form-cancel-button"
-                    >
-                      取消
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {!showRuleForm && (
-                <Button
-                  variant="outline"
-                  onClick={handleRuleAdd}
-                  data-name="ai-app-editor.block-rule-add-button"
-                >
-                  + 新增屏蔽规则
-                </Button>
-              )}
-            </div>
-          </FieldGroup>
+            <BlockRulesSection
+              platform={platform}
+              filteredRules={filteredRules}
+              showRuleForm={showRuleForm}
+              ruleDraft={ruleDraft}
+              setRuleDraft={setRuleDraft}
+              onRuleToggle={handleRuleToggle}
+              onRuleEdit={handleRuleEdit}
+              onRuleDelete={handleRuleDelete}
+              onRuleAdd={handleRuleAdd}
+              onRuleSave={handleRuleSave}
+              onRuleCancel={handleRuleCancel}
+            />
           )}
 
           {/* 弹窗白名单 */}
-          <FieldGroup
-            label="弹窗白名单（应用专属）"
-            hint="允许这些域名弹独立窗口（登录/验证页等）。内置默认登录域已自动合并，此处只需配置本应用额外的关联域。"
-          >
-            <div className="ai-app-editor-whitelist" data-name="ai-app-editor.popup-whitelist-container">
-              {popupWhitelist.length === 0 && (
-                <div className="ai-app-editor-empty" data-name="ai-app-editor.popup-whitelist-empty">
-                  暂无应用专属白名单（依赖内置默认登录域兜底）
-                </div>
-              )}
-              {popupWhitelist.map((origin, wIdx) => (
-                <div
-                  key={wIdx}
-                  className="ai-app-editor-rule-item"
-                  data-name={`ai-app-editor.popup-whitelist-item-${wIdx + 1}`}
-                >
-                  <span className="ai-app-editor-rule-label" data-name={`ai-app-editor.popup-whitelist-item-${wIdx + 1}-text`}>
-                    {origin}
-                  </span>
-                  <Button
-                    variant="text"
-                    danger
-                    className="btn-secondary-underline danger"
-                    onClick={() => setPopupWhitelist((prev) => prev.filter((_, i) => i !== wIdx))}
-                    data-name={`ai-app-editor.popup-whitelist-item-${wIdx + 1}-delete-button`}
-                  >
-                    删除
-                  </Button>
-                </div>
-              ))}
-
-              <div className="ai-app-editor-whitelist-add" data-name="ai-app-editor.popup-whitelist-add">
-                <input
-                  type="text"
-                  className="ai-editor-input"
-                  value={whitelistInput}
-                  onChange={(e) => setWhitelistInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const v = whitelistInput.trim();
-                      if (v && !popupWhitelist.includes(v)) {
-                        setPopupWhitelist((prev) => [...prev, v]);
-                        setWhitelistInput('');
-                      }
-                    }
-                  }}
-                  placeholder="https://example.com/"
-                  data-name="ai-app-editor.popup-whitelist-input"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const v = whitelistInput.trim();
-                    if (!v) return;
-                    if (popupWhitelist.includes(v)) {
-                      showToast('该域名已在白名单中');
-                      return;
-                    }
-                    setPopupWhitelist((prev) => [...prev, v]);
-                    setWhitelistInput('');
-                  }}
-                  data-name="ai-app-editor.popup-whitelist-add-button"
-                >
-                  添加
-                </Button>
-              </div>
-            </div>
-          </FieldGroup>
+          <PopupWhitelistSection
+            popupWhitelist={popupWhitelist}
+            setPopupWhitelist={setPopupWhitelist}
+            whitelistInput={whitelistInput}
+            setWhitelistInput={setWhitelistInput}
+            showToast={showToast}
+          />
 
           {/* 操作按钮 */}
           <div className="ai-app-editor-footer" data-name="ai-app-editor.footer-actions">
@@ -771,24 +461,5 @@ export default function AiAppEditorModal({
         </div>
       )}
     </Modal>
-  );
-}
-
-/* =====================================================================
-   子组件：字段分组
-   ===================================================================== */
-function FieldGroup({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="ai-app-editor-field-group" data-name="ai-app-editor.field-group">
-      <label className="ai-app-editor-field-label" data-name="ai-app-editor.field-group-label">
-        {label}
-      </label>
-      {hint && (
-        <div className="ai-app-editor-field-hint" data-name="ai-app-editor.field-group-hint">
-          {hint}
-        </div>
-      )}
-      {children}
-    </div>
   );
 }

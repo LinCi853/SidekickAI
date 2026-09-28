@@ -522,7 +522,7 @@ export function registerAppSettingsIPC(): void {
 
   // 缓存清理：清理缓存数据（仅缓存类目录与 session cache，保留登录态）
   ipcMain.handle(IPC_CHANNELS.APP_CLEAN_CACHE, async () => {
-    const { cleanCacheData } = await import('./backup-restore.js')
+    const { cleanCacheData } = await import('./cache-maintenance.js')
     const result = await cleanCacheData()
     // 更新上次清理时间戳
     updateAppSettings({ lastCacheCleanAt: Date.now() })
@@ -531,7 +531,7 @@ export function registerAppSettingsIPC(): void {
 
   // 缓存清理：估算当前缓存体积
   ipcMain.handle(IPC_CHANNELS.APP_ESTIMATE_CACHE_SIZE, async () => {
-    const { estimateCacheSize } = await import('./backup-restore.js')
+    const { estimateCacheSize } = await import('./cache-maintenance.js')
     return estimateCacheSize()
   })
 
