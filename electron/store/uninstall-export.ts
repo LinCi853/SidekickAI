@@ -2,6 +2,7 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import AdmZip from 'adm-zip'
+import { edition } from '../../packages/product-contract'
 import { snapshotSqliteDatabase } from './sqlite-snapshot.js'
 import { validateRestoreDirectory } from './restore-files.js'
 import { safeExtractAll } from '../utils/safe-zip.js'
@@ -10,7 +11,7 @@ import { encryptFile, decryptFile } from '../utils/file-crypto.js'
 /** Archive every persistent file in the verified root before authorizing its removal. */
 export async function exportForUninstall(root: string, output: string, password?: string): Promise<void> {
   const identity = JSON.parse(fs.readFileSync(path.join(root, 'edition-identity.json'), 'utf8'))
-  if (identity.schema !== 1 || identity.edition !== 'sidekickai-opensource') throw new Error('Unrecognized user data ownership')
+  if (identity.schema !== 1 || identity.edition !== edition.packageName) throw new Error('Unrecognized user data ownership')
   if (fs.existsSync(output)) throw new Error('Backup destination already exists')
   const temporary = fs.mkdtempSync(path.join(app.getPath('temp'), 'sidekick-uninstall-export-'))
   const zip = new AdmZip()
@@ -32,7 +33,7 @@ export async function exportForUninstall(root: string, output: string, password?
     }
     await collect(root)
     if (!zip.getEntry('manifest.json')) {
-      zip.addFile('manifest.json', Buffer.from(JSON.stringify({ appVersion: app.getVersion(), edition: 'sidekickai-opensource', exportedAt: new Date().toISOString(), fullUserData: true })))
+      zip.addFile('manifest.json', Buffer.from(JSON.stringify({ appVersion: app.getVersion(), edition: edition.packageName, exportedAt: new Date().toISOString(), fullUserData: true })))
     }
     const archive = path.join(temporary, 'verified.zip')
     zip.writeZip(archive)
@@ -47,7 +48,7 @@ export async function exportForUninstall(root: string, output: string, password?
     let verified = archive
     if (password) {
       verified = path.join(temporary, 'verified.sabackup')
-      encryptFile(archive, verified, password, 'sidekickai-opensource-uninstall')
+      encryptFile(archive, verified, password, `${edition.packageName}-uninstall`)
       const decrypted = path.join(temporary, 'decrypted.zip')
       if (!decryptFile(verified, decrypted, password) || !fs.readFileSync(decrypted).equals(fs.readFileSync(archive))) throw new Error('Encrypted backup verification failed')
     }

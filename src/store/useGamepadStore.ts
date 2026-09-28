@@ -7,7 +7,7 @@
    ===================================================================== */
 
 import { create } from 'zustand';
-import type { GamepadInputFrame } from '../lib/cloud-game/input-frame';
+import type { GamepadInputFrame } from '../lib/gamepad-input/input-frame';
 
 export interface GamepadStateEntry {
   /** 手柄索引（多手柄：0..3） */

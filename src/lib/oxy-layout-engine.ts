@@ -70,14 +70,6 @@ export function scaleToOxyScale(scale: number): OxyScale {
 }
 
 /**
- * @deprecated 使用 computeDpiScale + scaleToOxyScale 替代。
- */
-export function detectOxyScale(screenWidth: number, screenHeight: number): OxyScale {
-  const scale = computeDpiScale(screenWidth, screenHeight);
-  return scaleToOxyScale(scale);
-}
-
-/**
  * 计算属性最终值 = 基础值 × scale × adjuster(scale)
  */
 function scaled(base: number, scale: number, adjuster: AdjusterConfig): number {

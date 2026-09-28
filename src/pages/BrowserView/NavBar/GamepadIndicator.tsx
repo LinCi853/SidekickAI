@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Popover from '../../../components/ui/Popover';
 import { useGamepadStore } from '../../../store/useGamepadStore';
-import type { GamepadInputFrame } from '../../../lib/cloud-game/input-frame';
+import type { GamepadInputFrame } from '../../../lib/gamepad-input/input-frame';
 
 function GamepadIcon({ active }: { active: boolean }) {
   return (

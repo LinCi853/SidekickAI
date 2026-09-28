@@ -24,12 +24,12 @@ async function run() {
       const page = await browser.newPage({ viewport: { width: 960, height: 620 } })
       await page.addInitScript(({ maintenance }) => {
         const state = { callbacks: {}, calls: [], closed: false, flushError: false, startError: false, held: false }
-        const perUser = 'E:/fixture/user/SidekickAI-OpenSource'
-        const selected = 'E:/fixture/custom/SidekickAI-OpenSource'
+        const perUser = 'E:/fixture/user/SidekickAI-Concept'
+        const selected = 'E:/fixture/custom/SidekickAI-Concept'
         const info = {
           initialMode: maintenance ? 'uninstall' : 'install', initialTarget: maintenance ? selected : '',
-          version: '0.1.0-alpha.3', defaultDir: 'E:/fixture/system/SidekickAI-OpenSource', perUserDefaultDir: perUser,
-          appName: 'SidekickAI-OpenSource', arch: 'x64', requiredSpace: '500 MB', licenses: [],
+          version: '0.1.5', defaultDir: 'E:/fixture/system/SidekickAI-Concept', perUserDefaultDir: perUser,
+          appName: 'SidekickAI', arch: 'x64', requiredSpace: '500 MB', licenses: [],
           features: [{ id: 'notes', label: '笔记', description: '本地笔记', defaultEnabled: true }],
           options: [{ id: 'autoStart', label: '开机启动', description: '随系统启动', type: 'boolean', defaultValue: false }]
         }
@@ -74,14 +74,14 @@ async function run() {
       await finishInstall(page)
       const options = await page.evaluate(() => window.fixture.state.calls.find(call => call[0] === 'start')[1])
       assert.equal(options.forAllUsers, false)
-      assert.equal(options.installDir, 'E:/fixture/user/SidekickAI-OpenSource')
+      assert.equal(options.installDir, 'E:/fixture/user/SidekickAI-Concept')
       await page.close()
     })
     await check('Maintenance preserves the explicit target, scope and default data retention', async () => {
       const page = await fixture(true)
       await page.waitForFunction(() => window.fixture.state.calls.some(call => call[0] === 'read'))
       const read = await page.evaluate(() => window.fixture.state.calls.find(call => call[0] === 'read')[1])
-      assert.equal(read, 'E:/fixture/custom/SidekickAI-OpenSource')
+      assert.equal(read, 'E:/fixture/custom/SidekickAI-Concept')
       await page.getByRole('button', { name: '继续', exact: true }).click()
       await page.getByRole('button', { name: '开始卸载', exact: true }).click()
       const options = await page.evaluate(() => window.fixture.state.calls.find(call => call[0] === 'start')[1])

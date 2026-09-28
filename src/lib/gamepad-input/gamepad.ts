@@ -1,5 +1,5 @@
 /* =====================================================================
-   lib/cloud-game/gamepad.ts —— 手柄输入采集（Gamepad API）
+   lib/gamepad-input/gamepad.ts —— 手柄输入采集（Gamepad API）
    直接使用 Chromium/Electron 渲染进程自带的 Gamepad API，无需原生模块：
    - gamepadconnected / gamepaddisconnected 管理连接状态
    - requestAnimationFrame 循环中轮询 navigator.getGamepads()

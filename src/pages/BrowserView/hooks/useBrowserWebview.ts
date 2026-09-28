@@ -32,7 +32,7 @@ import {
   printPreview,
 } from '../../../lib/electron-api/index.js';
 import type { BrowserTabState, Profile } from '../../../lib/electron-api/index.js';
-import { GamepadCollector } from '../../../lib/cloud-game/index.js';
+import { GamepadCollector } from '../../../lib/gamepad-input/index.js';
 import { useCloudPcGamepadNav } from '../useCloudPcGamepadNav.js';
 import { useCloudPcZoom } from '../useCloudPcZoom.js';
 import { INTERNAL_TAB_SOURCES, type WebviewElement } from '../constants.js';
