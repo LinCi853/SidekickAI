@@ -21,6 +21,9 @@
 //   - accelerator.ts  accelerator 字符串解析
 //   - store.ts        热键持久化（electron-store）
 //   - cloud-pc-keys.ts 云电脑系统级按键分类
+//   - recording.ts        热键录制簇（startRecording/stopRecording 等）
+//   - voice-hotkey.ts     语音热键簇（registerVoiceHotkey 等）
+//   - browser-shortcuts.ts 浏览器快捷键簇（registerBrowserShortcut 等）
 //   - manager.ts      仅保留 HotkeyManager 类与单例
 
 import { globalShortcut } from 'electron'
@@ -47,6 +50,9 @@ import type {
   HotkeyPartialCallback,
   UiohookEvent,
 } from './types.js'
+import { buildUiohookKeyMap, startRecording, stopRecording, handleRecordingKeydown } from './recording.js'
+import { registerVoiceHotkey, releaseVoiceHold, startVoicePolling, stopVoicePolling, type VoiceMatcher } from './voice-hotkey.js'
+import { registerBrowserShortcut, unregisterBrowserShortcut, unregisterAllBrowserShortcuts } from './browser-shortcuts.js'
 
 // 向后兼容 re-export：原 manager.ts 对外导出的类型与 hotkeyStore
 export type {
@@ -75,35 +81,33 @@ export function getHotkeyManagerInstance(): HotkeyManager | null {
 }
 
 export class HotkeyManager {
-  private readonly ownership = new HotkeyOwnership()
-  private readonly ownershipLeases = new Map<string, HotkeyLease>()
-  private readonly registrationStates = new Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>()
-  private readonly recordingLeases = new Map<string, HotkeyLease>()
-  private voiceCleanup: (() => void) | null = null
-  private readonly inputState = new HotkeyInputState(UiohookKey)
-  /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底） */
-  private registered = new Map<string, () => void>()
-  /** 浏览器窗口快捷键 accelerator -> 回调（C4：scope='global' 的浏览器快捷键，独立跟踪） */
-  private browserShortcuts = new Map<string, () => void>()
+  /** @internal —— manager 拆分模块协作字段 */
+  readonly ownership = new HotkeyOwnership()
+  /** @internal —— manager 拆分模块协作字段 */
+  readonly ownershipLeases = new Map<string, HotkeyLease>()
+  /** @internal —— manager 拆分模块协作字段 */
+  readonly registrationStates = new Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>()
+  /** @internal —— manager 拆分模块协作字段 */
+  readonly recordingLeases = new Map<string, HotkeyLease>()
+  /** @internal —— manager 拆分模块协作字段 */
+  voiceCleanup: (() => void) | null = null
+  /** @internal —— manager 拆分模块协作字段 */
+  readonly inputState = new HotkeyInputState(UiohookKey)
+    /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底）；@internal manager 拆分模块协作字段 */
+  registered = new Map<string, () => void>()
+    /** 浏览器窗口快捷键 accelerator -> 回调（C4：scope='global' 的浏览器快捷键，独立跟踪）；@internal manager 拆分模块协作字段 */
+  browserShortcuts = new Map<string, () => void>()
   /** action -> accelerator（当前已注册的内置热键映射） */
   private actionAccelerators = new Map<HotkeyAction, string>()
-  /** uiohook 是否已启动 */
-  private uiohookStarted = false
-  /** 已注册 accelerator 的 uiohook 匹配条件缓存 */
-  private uiohookMatchers = new Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>()
-  /** 最近触发时间戳（用于去重） */
-  private lastTriggeredAt = new Map<string, number>()
-  /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut） */
-  private voiceMatcher: {
-    lease: HotkeyLease
-    keycode: number | null
-    alt: boolean
-    ctrl: boolean
-    shift: boolean
-    meta: boolean
-    onKeyDown: () => void
-    onKeyUp: () => void
-  } | null = null
+    /** uiohook 是否已启动；@internal manager 拆分模块协作字段 */
+  uiohookStarted = false
+    /** 已注册 accelerator 的 uiohook 匹配条件缓存；@internal manager 拆分模块协作字段 */
+  uiohookMatchers = new Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>()
+    /** 最近触发时间戳（用于去重）；@internal manager 拆分模块协作字段 */
+  lastTriggeredAt = new Map<string, number>()
+    /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut）；@internal manager 拆分模块协作字段 */
+  voiceMatcher: VoiceMatcher | null = null
+  /** @internal —— manager 拆分模块协作字段 */
   /**
    * 语音热键「按下中」状态：记录 V 是否处于按下 + Alt 是否匹配。
    * 用于解决"先松 Alt 再松 V 时 keyup 严格匹配失败"的问题：
@@ -111,7 +115,8 @@ export class HotkeyManager {
    *   - 严格匹配失败场景：用户先松 Alt 再松 V → V keyup 时 altKey=false 不匹配
    * 用"按下态"标记后：V keyup 时若处于 pressed 状态，无视当前 altKey 状态直接触发 onKeyUp。
    */
-  private voiceKeyPressed = false
+  voiceKeyPressed = false
+  /** @internal —— manager 拆分模块协作字段 */
   /**
    * 最近一次 V keydown 的时间戳（用于轮询检测"按键是否还在按"）。
    * OS 长按时会按 ~30-50ms 间隔重复发 keydown；用户真正松开后，OS 不再发 keydown。
@@ -119,9 +124,9 @@ export class HotkeyManager {
    * 因此阈值不能太短，否则会把"长按中但 uiohook 暂未转发 repeat"误判为松开。
    * 当前阈值 1500ms：仅在 uiohook keyup 完全丢失且超过 1.5s 没有任何 keydown 时兜底。
    */
-  private voiceLastKeydownAt = 0
-  /** 500ms 轮询 timer id（兜底检测 keyup 丢失，阈值放宽避免误判 auto-repeat） */
-  private voicePollingTimer: ReturnType<typeof setInterval> | null = null
+  voiceLastKeydownAt = 0
+    /** 500ms 轮询 timer id（兜底检测 keyup 丢失，阈值放宽避免误判 auto-repeat）；@internal manager 拆分模块协作字段 */
+  voicePollingTimer: ReturnType<typeof setInterval> | null = null
   /** keydown 日志节流时间戳（避免 OS 重复 keydown 打爆日志） */
   private _lastKeydownLogAt = 0
   /**
@@ -130,20 +135,18 @@ export class HotkeyManager {
    */
   voiceUnregisterFn: (() => void) | null = null
 
-  /** 热键录制状态：null 表示未录制，非 null 表示录制中（含回调） */
-  private _recordingCallback: HotkeyRecordingCallback | null = null
-  /** 录制实时反馈回调（每次按键时调用，用于 UI 显示当前组合） */
-  private _recordingPartialCallback: HotkeyPartialCallback | null = null
-  /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等） */
-  private _recordingSuppressors: string[] = []
-  /** 录制前已注册的热键备份（用于录制结束后恢复） */
-  private _recordingBackup: Array<{ accelerator: string; callback: () => void }> = []
-  /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时） */
-  private _paused = false
+    /** 热键录制状态：null 表示未录制，非 null 表示录制中（含回调）；@internal manager 拆分模块协作字段 */
+  _recordingCallback: HotkeyRecordingCallback | null = null
+    /** 录制实时反馈回调（每次按键时调用，用于 UI 显示当前组合）；@internal manager 拆分模块协作字段 */
+  _recordingPartialCallback: HotkeyPartialCallback | null = null
+    /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等）；@internal manager 拆分模块协作字段 */
+  _recordingSuppressors: string[] = []
+    /** 录制前已注册的热键备份（用于录制结束后恢复）；@internal manager 拆分模块协作字段 */
+  _recordingBackup: Array<{ accelerator: string; callback: () => void }> = []
+    /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时）；@internal manager 拆分模块协作字段 */
+  _paused = false
   /** 云电脑模式按键监听（Win / Alt+Tab / Win+Tab / Win+D / Alt+F4 等系统级按键路由） */
   private cloudPcKeyListener: ((e: { key: string; down: boolean; alt: boolean; win: boolean }) => void) | null = null
-  /** uiohook keycode → Electron accelerator 主键名的反向映射 */
-  private _uiohookKeyToName = new Map<number, string>()
 
   /**
    * 修饰键实时按下状态（独立追踪，解决 uiohook altKey 状态残留问题）。
@@ -168,7 +171,7 @@ export class HotkeyManager {
   }
 
   constructor() {
-    this.buildUiohookKeyMap()
+    buildUiohookKeyMap()
     this.buildModifierKeyCodes()
     this.attachUiohookListener()
     // 记录单例引用（供 app-settings-store 注册浏览器快捷键 IPC 时获取）
@@ -178,41 +181,6 @@ export class HotkeyManager {
   /** 扫描 UiohookKey 枚举，收集各修饰键的所有 keycode（含左/右变体） */
   private buildModifierKeyCodes(): void {
     this._modKeyCodes = this.inputState.codes
-  }
-
-  /** 构建 uiohook keycode → Electron 键名的反向映射 */
-  private buildUiohookKeyMap(): void {
-    // 字母 A-Z
-    for (let i = 0; i < 26; i++) {
-      const letter = String.fromCharCode(65 + i)
-      const kc = UiohookKey[letter as keyof typeof UiohookKey]
-      if (typeof kc === 'number') this._uiohookKeyToName.set(kc, letter)
-    }
-    // 数字 0-9
-    for (let i = 0; i <= 9; i++) {
-      const kc = UiohookKey[String(i) as keyof typeof UiohookKey]
-      if (typeof kc === 'number') this._uiohookKeyToName.set(kc, String(i))
-    }
-    // 功能键 F1-F24
-    for (let i = 1; i <= 24; i++) {
-      const fname = `F${i}`
-      const kc = UiohookKey[fname as keyof typeof UiohookKey]
-      if (typeof kc === 'number') this._uiohookKeyToName.set(kc, fname)
-    }
-    // 特殊键
-    const specialMap: Array<[string, string]> = [
-      ['Space', 'Space'], ['Enter', 'Enter'], ['Escape', 'Esc'], ['Tab', 'Tab'],
-      ['Backspace', 'Backspace'], ['Delete', 'Delete'], ['Insert', 'Insert'],
-      ['Home', 'Home'], ['End', 'End'], ['PageUp', 'PageUp'], ['PageDown', 'PageDown'],
-      ['ArrowUp', 'Up'], ['ArrowDown', 'Down'], ['ArrowLeft', 'Left'], ['ArrowRight', 'Right'],
-      ['Equal', '='], ['Minus', '-'], ['Comma', ','], ['Period', '.'],
-      ['Slash', '/'], ['Semicolon', ';'], ['Quote', "'"], ['Backquote', '`'],
-      ['BracketLeft', '['], ['BracketRight', ']'], ['Backslash', '\\'],
-    ]
-    for (const [uk, name] of specialMap) {
-      const kc = UiohookKey[uk]
-      if (typeof kc === 'number') this._uiohookKeyToName.set(kc, name)
-    }
   }
 
   /**
@@ -290,8 +258,9 @@ export class HotkeyManager {
     return false
   }
 
+  /** @internal —— manager 拆分模块协作方法（browser-shortcuts.ts 经 host 调用） */
   /** 统一触发入口：200ms 去重，避免 globalShortcut + uiohook 双触发 */
-  private trigger(accelerator: string, callback: () => void): void {
+  trigger(accelerator: string, callback: () => void): void {
     if (this._paused || this._recordingCallback) return
     if (!this.ownershipLeases.get(accelerator)?.active) return
     if (this.uiohookStarted && !this.inputState.claim(parseAccelerator(accelerator))) return
@@ -318,8 +287,9 @@ export class HotkeyManager {
     this.modMeta = state.meta
   }
 
+  /** @internal —— manager 拆分模块协作方法（recording/voice-hotkey/browser-shortcuts 经 host 调用） */
   /** Start the input hook once. */
-  private ensureUiohookStarted(): void {
+  ensureUiohookStarted(): void {
     if (this.uiohookStarted) return
     // macOS 需要辅助功能权限才能使用 uiohook 低级键盘钩子
     if (process.platform === 'darwin' && !checkAccessibilityPermission()) {
@@ -445,53 +415,11 @@ export class HotkeyManager {
     })
   }
 
-  /**
-   * 启动 500ms 轮询：当 voiceKeyPressed=true 时，每 500ms 检查一次
-   * "距上次 V keydown 是否超过 1500ms"：
-   *   - 是 → 强制触发 onKeyUp（兜底：uiohook keyup 完全丢失）
-   *   - 否 → 继续轮询
-   *
-   * 设计说明：
-   *   - 主释放信号是 uiohook keyup 事件（用户松开按键时立即触发）
-   *   - 轮询仅作 keyup 丢失兜底，阈值 1500ms 远大于 uiohook auto-repeat 间隔，
-   *     避免把"长按中但 uiohook 暂未转发 repeat keydown"误判为松开
-   *   - 同时处理"按下 V 但 uiohook 完全没收到 keydown"的情况：
-   *     voiceKeyPressed 永远 false → 轮询不启动 → V keyup 兜底路径触发 onKeyUp
-   */
-  private startVoicePolling(): void {
-    if (this.voicePollingTimer) return
-    this.voicePollingTimer = setInterval(() => {
-      if (!this.voiceKeyPressed) {
-        this.stopVoicePolling()
-        return
-      }
-      const now = Date.now()
-      const elapsed = now - this.voiceLastKeydownAt
-      // 阈值 1500ms：远大于 uiohook auto-repeat 间隔，仅兜底 keyup 完全丢失
-      if (elapsed > 1500) {
-        console.log(
-          `[HotkeyManager] 轮询兜底：V 键 keyup 丢失（距上次 keydown ${elapsed}ms），强制触发 onKeyUp`,
-        )
-        this.voiceKeyPressed = false
-        this.stopVoicePolling()
-        if (this.voiceMatcher) {
-          try {
-            this.voiceMatcher.onKeyUp()
-          } catch (err) {
-            console.error('[HotkeyManager] 轮询 onKeyUp 异常:', err)
-          }
-        }
-      }
-    }, 500)
-  }
+  /** 启动 500ms 轮询（实现见 voice-hotkey.ts） */
+  private startVoicePolling(): void { startVoicePolling(this) }
 
-  /** 停止轮询 */
-  private stopVoicePolling(): void {
-    if (this.voicePollingTimer) {
-      clearInterval(this.voicePollingTimer)
-      this.voicePollingTimer = null
-    }
-  }
+  /** 停止轮询（实现见 voice-hotkey.ts） */
+  private stopVoicePolling(): void { stopVoicePolling(this) }
 
   /** 注销指定热键 */
   unregister(accelerator: string): void {
@@ -509,100 +437,19 @@ export class HotkeyManager {
     this.registrationStates.delete(accelerator)
   }
 
-  /**
-   * 注册浏览器窗口全局快捷键（C4：scope='global' 的浏览器快捷键）。
-   *
-   * 走 globalShortcut 主路径 + uiohook 兜底，与内置热键 register() 一致；
-   * 独立跟踪到 browserShortcuts 映射，避免与内置热键回调混淆，
-   * 注销时可按 accelerator 精确移除。
-   *
-   * @returns Whether an owned shortcut backend is available.
-   */
+  /** 注册浏览器窗口全局快捷键（实现见 browser-shortcuts.ts） */
   registerBrowserShortcut(accelerator: string, callback: () => void): boolean {
-    // 若已注册同名浏览器快捷键，先注销
-    if (this.browserShortcuts.has(accelerator)) {
-      this.unregisterBrowserShortcut(accelerator)
-    }
-    const lease = this.ownership.acquire(accelerator, `browser:${accelerator}`)
-    if (!lease) {
-      this.registrationStates.set(accelerator, 'conflict')
-      return false
-    }
-    this.ownershipLeases.set(accelerator, lease)
-    // 包装回调：加入 200ms 去重窗口（与内置热键 register() 一致）。
-    // 浏览器快捷键同时走 globalShortcut 主路径 + uiohook 兜底，若不包 trigger()，
-    // 同一次按键会被两路各触发一次 → toggleBrowserWindow 连续开关（闪一下关闭）
-    // 或在窗口入映射前各开一个（同应用多窗口）。
-    const throttledCallback = () => {
-      if (this.registered.get(accelerator) !== throttledCallback && this.browserShortcuts.get(accelerator) !== throttledCallback) return
-      this.trigger(accelerator, callback)
-    }
-    this.browserShortcuts.set(accelerator, throttledCallback)
-    // 加入 uiohook 匹配器（兜底），复用主映射机制
-    if (!this.uiohookMatchers.has(accelerator)) {
-      this.uiohookMatchers.set(accelerator, {
-        ...parseAccelerator(accelerator),
-        callback: throttledCallback,
-      })
-    }
-    this.ensureUiohookStarted()
-    if (this._paused || this._recordingCallback) {
-      this.registrationStates.set(accelerator, 'registered')
-      return true
-    }
-    // Register with the operating system.
-    try {
-      const ok = globalShortcut.register(accelerator, throttledCallback)
-      if (ok) {
-        this.registrationStates.set(accelerator, 'registered')
-        console.log(`[HotkeyManager] 浏览器全局快捷键注册成功: ${accelerator}`)
-        return true
-      }
-      console.warn(
-        `[HotkeyManager] 浏览器全局快捷键注册失败: ${accelerator}，已启用 uiohook 兜底`,
-      )
-    } catch (err) {
-      console.warn(`[HotkeyManager] 浏览器全局快捷键注册异常: ${accelerator}`, err)
-      this.unregisterBrowserShortcut(accelerator)
-      this.registrationStates.set(accelerator, 'unavailable')
-      return false
-    }
-    if (this.uiohookStarted && parseAccelerator(accelerator).keycode != null) {
-      this.registrationStates.set(accelerator, 'fallback')
-      return true
-    }
-    this.unregisterBrowserShortcut(accelerator)
-    this.registrationStates.set(accelerator, 'unavailable')
-    return false
+    return registerBrowserShortcut(this, accelerator, callback)
   }
 
-  /** 注销浏览器窗口全局快捷键 */
+  /** 注销浏览器窗口全局快捷键（实现见 browser-shortcuts.ts） */
   unregisterBrowserShortcut(accelerator: string): void {
-    if (!this.browserShortcuts.has(accelerator)) return
-    try {
-      globalShortcut.unregister(accelerator)
-    } catch (err) {
-      console.warn(`[HotkeyManager] 注销浏览器全局快捷键异常: ${accelerator}`, err)
-    }
-    this.browserShortcuts.delete(accelerator)
-    // 仅当内置热键主映射未使用该 accelerator 时才清理 uiohook 匹配器
-    if (!this.registered.has(accelerator)) {
-      this.uiohookMatchers.delete(accelerator)
-    }
-    this.lastTriggeredAt.delete(accelerator)
-    this.ownershipLeases.get(accelerator)?.release()
-    this.ownershipLeases.delete(accelerator)
-    this.registrationStates.delete(accelerator)
+    unregisterBrowserShortcut(this, accelerator)
   }
 
-  /**
-   * 注销全部浏览器窗口全局快捷键（reregisterProfileShortcuts 调用前置清理）。
-   * 遍历 browserShortcuts 映射逐条注销，避免影响内置热键 registered 映射。
-   */
+  /** 注销全部浏览器窗口全局快捷键（实现见 browser-shortcuts.ts） */
   unregisterAllBrowserShortcuts(): void {
-    for (const accelerator of Array.from(this.browserShortcuts.keys())) {
-      this.unregisterBrowserShortcut(accelerator)
-    }
+    unregisterAllBrowserShortcuts(this)
   }
 
   /**
@@ -735,272 +582,39 @@ export class HotkeyManager {
     return results
   }
 
-  /**
-   * 注册语音热键（Alt+V hold-to-record）
-   *
-   * 仅用 uiohook 监听 keydown/keyup（globalShortcut 不支持 keyup）。
-   * 不进入 registered/uiohookMatchers 主映射，独立管理。
-   *
-   * @returns 注销函数（调用后停止监听）
-   */
+  /** 注册语音热键（Alt+V hold-to-record，实现见 voice-hotkey.ts） */
   registerVoiceHotkey(
     accelerator: string,
     onKeyDown: () => void,
     onKeyUp: () => void,
   ): () => void {
-    this.voiceCleanup?.()
-    const lease = this.ownership.acquire(accelerator, `voice:${accelerator}`)
-    if (!lease) {
-      this.registrationStates.set(accelerator, 'conflict')
-      return () => {}
-    }
-    const parsed = parseAccelerator(accelerator)
-    this.ensureUiohookStarted()
-    if (!this.uiohookStarted || parsed.keycode == null) {
-      lease.release()
-      this.registrationStates.set(accelerator, 'unavailable')
-      return () => {}
-    }
-    const matcher = {
-      lease,
-      keycode: parsed.keycode,
-      alt: parsed.alt,
-      ctrl: parsed.ctrl,
-      shift: parsed.shift,
-      meta: parsed.meta,
-      onKeyDown,
-      onKeyUp,
-    }
-    this.voiceMatcher = matcher
-    this.ownershipLeases.set(accelerator, lease)
-    this.registrationStates.set(accelerator, 'registered')
-    // 注册时清空按下态（避免上次未正确释放的残留状态）
-    this.voiceKeyPressed = false
-    this.voiceLastKeydownAt = 0
-    this.stopVoicePolling()
-    console.log(`[HotkeyManager] Voice shortcut registered: ${accelerator}`)
-    const cleanup = () => {
-      if (this.voiceMatcher !== matcher) return
-      this.releaseVoiceHold()
-      this.voiceMatcher = null
-      this.voiceKeyPressed = false
-      this.voiceLastKeydownAt = 0
-      this.stopVoicePolling()
-      lease.release()
-      this.ownershipLeases.delete(accelerator)
-      this.registrationStates.delete(accelerator)
-      this.voiceCleanup = null
-      console.log(`[HotkeyManager] 语音热键已注销: ${accelerator}`)
-    }
-    this.voiceCleanup = cleanup
-    return cleanup
+    return registerVoiceHotkey(this, accelerator, onKeyDown, onKeyUp)
   }
 
-  private releaseVoiceHold(): void {
-    if (!this.voiceKeyPressed) return
-    this.voiceKeyPressed = false
-    this.voiceLastKeydownAt = 0
-    this.stopVoicePolling()
-    try { this.voiceMatcher?.onKeyUp() }
-    catch (error) { console.warn('[HotkeyManager] Voice release failed', error) }
+  /** @internal —— manager 拆分模块协作方法（recording.ts 经 RecordingHost 调用） */
+  releaseVoiceHold(): void {
+    releaseVoiceHold(this)
   }
 
-  /**
-   * 处理录制模式下的 uiohook keydown 事件。
-   * 从 uiohook 事件构建 accelerator 字符串，检测可用性后通知回调。
-   */
+  /** 处理录制模式下的 uiohook keydown 事件（实现见 recording.ts） */
   private handleRecordingKeydown(e: UiohookEvent): void {
-    // 实时反馈：在任何过滤之前，发送当前按键状态给渲染层
-    if (this._recordingPartialCallback) {
-      const partialMods: string[] = []
-      if (e.ctrlKey) partialMods.push('Ctrl')
-      if (e.altKey) partialMods.push('Alt')
-      if (e.shiftKey) partialMods.push('Shift')
-      if (e.metaKey) partialMods.push('Meta')
-      const partialKeyName = this._uiohookKeyToName.get(e.keycode)
-      // 修饰键自身按下时，不重复显示为 key
-      const isModifierKey = ['Ctrl', 'Alt', 'Shift', 'Meta', 'Super'].includes(partialKeyName || '')
-      this._recordingPartialCallback({
-        modifiers: partialMods,
-        key: isModifierKey || !partialKeyName ? null : partialKeyName,
-      })
-    }
-
-    // 仅修饰键，等待下一个按键
-    const keyName = this._uiohookKeyToName.get(e.keycode)
-    if (!keyName) return
-    if (!this.inputState.matches({ keycode: e.keycode, ...this.inputState.modifiers })) return
-
-    // Escape 取消录制（仅无修饰键时）
-    if (keyName === 'Esc' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      this.finishRecording('')
-      return
-    }
-
-    // 必须至少包含 Ctrl/Alt/Meta
-    if (!e.ctrlKey && !e.altKey && !e.metaKey) return
-
-    const accParts: string[] = []
-    if (e.ctrlKey) accParts.push('Ctrl')
-    if (e.altKey) accParts.push('Alt')
-    if (e.shiftKey) accParts.push('Shift')
-    if (e.metaKey) accParts.push('Meta')
-    accParts.push(keyName)
-    const accelerator = accParts.join('+')
-    const lease = this.ownership.retain(accelerator) || this.ownership.acquire(accelerator, `recording-probe:${accelerator}`)
-    if (!lease) {
-      this.finishRecording(accelerator, '此快捷键由另一个工百窗实例使用，请换一个组合。')
-      return
-    }
-
-    // 检测可用性：尝试 globalShortcut.register
-    // 如果被我们的抑制器注册了（临时阻止系统菜单的空回调），先注销再试
-    let reason: string | undefined
-    const isSuppressed = this._recordingSuppressors.includes(accelerator)
-    try {
-      if (isSuppressed) {
-        globalShortcut.unregister(accelerator)
-      }
-      // 尝试全局注册：成功 = 无其他应用占用；失败 = 被系统或其他应用占用
-      const regOk = globalShortcut.register(accelerator, () => {})
-      if (regOk) {
-        globalShortcut.unregister(accelerator)
-        // 重新注册抑制器（继续阻止系统菜单直到录制结束）
-        if (isSuppressed) {
-          globalShortcut.register(accelerator, () => {})
-        }
-      } else {
-        const sysConflict = checkSystemHotkeyConflict(accelerator)
-        reason = sysConflict
-          ? `快捷键 ${accelerator} 与系统快捷键「${sysConflict.label}」冲突，请换一个组合`
-          : `快捷键 ${accelerator} 已被系统或其他应用占用，请换一个组合`
-        // 重新注册抑制器
-        if (isSuppressed) {
-          globalShortcut.register(accelerator, () => {})
-        }
-      }
-    } catch (err) {
-      reason = `快捷键 ${accelerator} 格式不支持（${err instanceof Error ? err.message : String(err)}）`
-      if (isSuppressed) {
-        try { globalShortcut.register(accelerator, () => {}) } catch {}
-      }
-    } finally {
-      lease.release()
-    }
-
-    this.finishRecording(accelerator, reason)
-  }
-
-  /** 完成录制（成功或失败） */
-  private finishRecording(accelerator: string, reason?: string): void {
-    const cb = this._recordingCallback
-    this.restoreAfterRecording()
-    if (cb) {
-      cb({ accelerator, reason })
-    }
-  }
-
-  /** 录制结束后恢复：注销所有抑制器，恢复原有热键回调 */
-  private restoreAfterRecording(): void {
-    this.inputState.suspend()
-    // 注销所有抑制器
-    for (const supAcc of this._recordingSuppressors) {
-      try { globalShortcut.unregister(supAcc) } catch { /* ignore */ }
-    }
-    // 恢复原有热键回调
-    for (const { accelerator, callback } of this._recordingBackup) {
-      try {
-        if (!this._paused && (this.registered.get(accelerator) === callback || this.browserShortcuts.get(accelerator) === callback)) globalShortcut.register(accelerator, callback)
-      } catch {
-        // ignore
-      }
-    }
-    for (const lease of this.recordingLeases.values()) lease.release()
-    this.recordingLeases.clear()
-    this._recordingSuppressors = []
-    this._recordingBackup = []
-    this._recordingCallback = null
-    this._recordingPartialCallback = null
+    handleRecordingKeydown(this, e)
   }
 
   /**
-   * 开始录制热键。
+   * 开始录制热键。（实现见 recording.ts）
    * 使用 uiohook（系统级键盘钩子）捕获按键，能可靠检测 Alt+Space 等被系统拦截的组合。
    * 临时注册常见系统快捷键作为抑制器（空回调），阻止系统菜单弹出。
    * 通过 globalShortcut.register 检测所有应用（含外部应用）的占用情况。
    * @returns 是否成功进入录制状态
    */
   async startRecording(callback: HotkeyRecordingCallback, onPartial?: HotkeyPartialCallback): Promise<boolean> {
-    if (this._recordingCallback) {
-      this.stopRecording()
-    }
-    this.releaseVoiceHold()
-    this.inputState.suspend()
-    this._recordingCallback = callback
-    this._recordingPartialCallback = onPartial ?? null
-
-    // 启动 uiohook（录制依赖系统级键盘监听）
-    this.ensureUiohookStarted()
-    if (!this.uiohookStarted) {
-      this._recordingCallback = null
-      return false
-    }
-
-    // 临时将本应用已注册的 globalShortcut 热键替换为空回调抑制器，
-    // 防止录制期间触发原有功能（如 Alt+Space 切换窗口）
-    for (const [acc, cb] of [...this.registered, ...this.browserShortcuts]) {
-      const lease = this.ownership.retain(acc)
-      if (!lease) continue
-      try {
-        if (globalShortcut.isRegistered(acc)) {
-          globalShortcut.unregister(acc)
-          const ok = globalShortcut.register(acc, () => {})
-          if (ok) {
-            this._recordingBackup.push({ accelerator: acc, callback: cb })
-            this._recordingSuppressors.push(acc)
-            this.recordingLeases.set(acc, lease)
-          } else {
-            // 重新注册失败则恢复原回调
-            globalShortcut.register(acc, cb)
-          }
-        }
-      } catch {
-        // 忽略
-      }
-      if (!this.recordingLeases.has(acc)) lease.release()
-    }
-
-    // 临时注册常见 Windows 系统快捷键作为抑制器，阻止系统菜单/窗口操作弹出
-    const systemSuppressors = [
-      'Alt+Space', 'Alt+F4', 'Alt+Esc',
-      'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
-    ]
-    for (const supAcc of systemSuppressors) {
-      let lease
-      try {
-        // 跳过已被本录制流程注册为抑制器的（含上面从 registered 替换的）
-        if (this._recordingSuppressors.includes(supAcc)) continue
-        // 跳过已被其他应用/进程注册的
-        if (globalShortcut.isRegistered(supAcc)) continue
-        lease = this.ownership.retain(supAcc) || this.ownership.acquire(supAcc, `recording-suppressor:${supAcc}`)
-        if (!lease) continue
-        const ok = globalShortcut.register(supAcc, () => {})
-        if (ok) {
-          this._recordingSuppressors.push(supAcc)
-          this.recordingLeases.set(supAcc, lease)
-        }
-      } catch {
-        // ignore
-      }
-      if (!this.recordingLeases.has(supAcc)) lease?.release()
-    }
-
-    return true
+    return startRecording(this, callback, onPartial)
   }
 
-  /** 停止录制热键 */
+  /** 停止录制热键（实现见 recording.ts） */
   stopRecording(): void {
-    this.restoreAfterRecording()
+    stopRecording(this)
   }
 
   /**
