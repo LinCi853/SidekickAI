@@ -38,6 +38,7 @@ import { BlockRulesSection } from './AiAppEditorModal/BlockRulesSection';
 import { PopupWhitelistSection } from './AiAppEditorModal/PopupWhitelistSection';
 import '../pages/PromptLibraryView.css';
 import './AiAppEditorModal.css';
+
 export interface AiAppEditorModalProps {
   open: boolean;
   onClose: () => void;

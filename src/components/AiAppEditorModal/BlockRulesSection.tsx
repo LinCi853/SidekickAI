@@ -8,7 +8,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import Button from '../ui/Button';
 import Toggle from '../ui/Toggle';
 import SegmentedControl from '../ui/SegmentedControl';
-import type { BlockRule, BlockRuleType } from '../../../../electron/shared/block-rules.types';
+import type { BlockRule, BlockRuleType } from '../../../electron/shared/block-rules.types';
 import type { AIPlatform } from '../../lib/electron-api';
 import { hostnameFromUrl } from '../../pages/AiAppEditor/domain';
 import { FieldGroup } from './FieldGroup';
