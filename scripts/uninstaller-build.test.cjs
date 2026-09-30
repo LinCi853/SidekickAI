@@ -120,7 +120,7 @@ test('shared native and operation UI sources are release inputs for both hosts',
   for (const app of [build.INSTALLER, build.UNINSTALLER]) {
     const inputs = relative(build.sourceInputs(app))
     for (const file of ['installer-shared/operation-details', 'installer-shared/uninstall-core/build.rs', 'installer-shared/uninstall-host/build.rs']) {
-      assert.ok(inputs.includes(file), `${file} must be a release input for ${path.basename(app)}`)
+      assert.ok(inputs.some(input => input === file || input.startsWith(file + '/')), `${file} must be a release input for ${path.basename(app)}`)
     }
   }
 })

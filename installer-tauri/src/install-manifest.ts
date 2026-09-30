@@ -1,10 +1,5 @@
-// installer/src/renderer/install-manifest.ts
-// 安装期「功能 / 选项 / 协议」类型（数据由后端 getInfo 返回，声明只留类型）
-//
-// 功能/选项清单的“唯一数据源”在主应用：
-//   electron/modules/builtin-module-data.ts + electron/shared/install-manifest-source.ts
-// 经 scripts/gen-install-manifest.cjs 生成 install-manifest.json，后端解析后回传。
-// 提交新字段时同步更新此处的类型与 src-tauri/src/manifest.rs。
+// Installation types for the runtime getInfo response. Product features and
+// defaults are generated from the application and read from embedded metadata.
 
 export interface InstallFeature {
   /** 与 ModuleManifest.id 一致 */

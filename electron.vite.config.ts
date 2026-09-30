@@ -1,6 +1,7 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { compilationInputs } from './scripts/compilation-inputs'
 
 // 空模块路径：用于 alias 排除不需要的传递依赖
 const emptyMod = resolve(__dirname, 'src/lib/_empty.ts')
@@ -23,7 +24,7 @@ export default defineConfig({
         // 主进程依赖由 externalizeDepsPlugin 外置，无需 manualChunks
       },
     },
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), compilationInputs(__dirname, 'main')],
     resolve: {
       alias: {
         '@main': resolve(__dirname, 'electron'),
@@ -45,7 +46,7 @@ export default defineConfig({
         },
       },
     },
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), compilationInputs(__dirname, 'preload')],
   },
   renderer: {
     // 渲染进程（React UI），复用现有 src/ 目录
@@ -66,7 +67,7 @@ export default defineConfig({
         },
       },
     },
-    plugins: [react()],
+    plugins: [react(), compilationInputs(__dirname, 'renderer')],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),

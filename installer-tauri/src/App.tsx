@@ -1,4 +1,4 @@
-import { edition } from '../../packages/product-contract'
+import { edition } from '../../packages/product-contract/identity'
 // installer/src/renderer/App.tsx
 // SidekickAI 安装向导 — install / repair 入口；卸载走共享 UninstallPage
 //   首页：正常安装（默认）/ 修复安装 / 卸载

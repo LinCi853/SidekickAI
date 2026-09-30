@@ -95,7 +95,8 @@ fn shutdown_request(peer: &Value, applications: &[Application]) -> Result<Value,
 pub fn validate_target(executable: &Path) -> Result<(), String> {
     let directory = executable.parent().ok_or("安装目录无效。")?;
     let identity = product::package_identity(&directory.join("resources/app.asar"))?;
-    if !executable.is_file() || !product::owns_installation(directory) || identity.version.as_deref() != Some(env!("CARGO_PKG_VERSION")) {
+    let version = crate::setup_metadata::current()?.product_version.as_str();
+    if !executable.is_file() || !product::owns_installation(directory) || identity.version.as_deref() != Some(version) {
         return Err("无法确认本次安装的程序，请修复安装后再打开。".into());
     }
     Ok(())
@@ -154,7 +155,7 @@ pub fn launch(executable: &Path, argument: &str) -> Result<(), String> {
         }
         if let Ok(peer) = request(&pipe, json!({ "protocol": 1, "edition": product::edition_id(), "action": "status" })) {
             if peer["pid"].as_u64() != Some(child.id() as u64) || peer["edition"] != product::edition_id()
-                || peer["version"] != env!("CARGO_PKG_VERSION") || !peer["executable"].as_str().is_some_and(|path| paths_equal(Path::new(path), executable)) {
+                || peer["version"] != crate::setup_metadata::current()?.product_version || !peer["executable"].as_str().is_some_and(|path| paths_equal(Path::new(path), executable)) {
                 return Err("启动期间出现了另一工百窗实例，未能打开本次安装。请先退出已有程序后重试。".into());
             }
             if peer["status"] == "running" { return Ok(()); }

@@ -1,56 +1,38 @@
-// scripts/gen-install-manifest.cjs — 从主应用单一数据源生成安装向导清单
-//
-// 执行：打包 electron/shared/install-manifest-source.ts（esbuild，纯数据无副作用），
-// 将其 INSTALL_MANIFEST 序列化为 installer-tauri/src-tauri/install-manifest.json，
-// 安装向导（Rust include_str! / 前端）统一从此读取。
-//
-// 触发：installer-tauri 的 prebuild / predev，以及 install-manifest-source.ts
-// 依赖的主应用侧文件变更后手动执行：node scripts/gen-install-manifest.cjs
+'use strict'
 
-const path = require('path')
-const fs = require('fs')
+const path = require('node:path')
+const fs = require('node:fs')
+const { createRequire } = require('node:module')
 const esbuild = require('esbuild')
+const { rootPackageVersion } = require('./sync-versions.cjs')
+const { readContract } = require('./component-contract.cjs')
+const { atomicWrite } = require('./build-cache.cjs')
 
 const ROOT = path.resolve(__dirname, '..')
-const ENTRY = path.join(ROOT, 'electron', 'shared', 'install-manifest-source.ts')
-const TMP_BUNDLE = path.join(ROOT, 'build', '.install-manifest-source.cjs')
-const OUT = path.join(ROOT, 'installer-tauri', 'src-tauri', 'install-manifest.json')
 
-function fail(msg) {
-  console.error('[gen-install-manifest] ERROR:', msg)
-  process.exit(1)
+function generateManifest(root = ROOT) {
+  const entry = path.join(root, 'electron/shared/install-manifest-source.ts')
+  const result = esbuild.buildSync({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', target: 'node22', write: false, logLevel: 'silent' })
+  const module = { exports: {} }
+  new Function('require', 'module', 'exports', result.outputFiles[0].text)(createRequire(path.join(root, 'package.json')), module, module.exports)
+  const { features, options } = module.exports.INSTALL_MANIFEST
+  const contract = readContract(root)
+  const edition = JSON.parse(fs.readFileSync(path.join(root, 'product-edition.json'), 'utf8')).edition
+  const manifest = { schemaVersion: contract.setupProtocolVersion, edition, productVersion: rootPackageVersion(root),
+    componentVersion: contract.componentVersion, uninstallProtocolVersion: contract.uninstallProtocolVersion, features, options }
+  require('./setup-metadata.cjs').validateManifest(manifest, contract, edition)
+  return manifest
 }
 
-if (!fs.existsSync(ENTRY)) fail(`清单源不存在: ${ENTRY}`)
-
-// 仅打包纯数据入口，不加载任何副作用模块（wiring/store 原生依赖均不进入）
-esbuild.buildSync({
-  entryPoints: [ENTRY],
-  bundle: true,
-  platform: 'node',
-  format: 'cjs',
-  target: 'node18',
-  outfile: TMP_BUNDLE,
-  logLevel: 'silent',
-})
-
-let payload
-try {
-  payload = require(TMP_BUNDLE).INSTALL_MANIFEST
-} catch (err) {
-  fail(`加载清单源失败: ${err && err.message}`)
+function main() {
+  const manifest = generateManifest()
+  const output = path.join(ROOT, 'build/setup-metadata.json')
+  atomicWrite(output, JSON.stringify(manifest, null, 2) + '\n')
+  console.log(`[install-manifest] ${output}: ${manifest.features.length} features, ${manifest.options.length} options`)
+  return manifest
 }
 
-if (!Array.isArray(payload.features) || !Array.isArray(payload.options)) {
-  fail('清单源缺少 features/options 数组')
+module.exports = { generateManifest, main }
+if (require.main === module) {
+  try { main() } catch (error) { console.error(`[install-manifest] ${error.message}`); process.exitCode = 1 }
 }
-
-fs.mkdirSync(path.dirname(OUT), { recursive: true })
-fs.writeFileSync(OUT, JSON.stringify(payload, null, 2) + '\n', 'utf-8')
-// 临时产物保持放在 build/（clean:build 之外的目录），不混入源码
-fs.rmSync(TMP_BUNDLE, { force: true })
-
-console.log(
-  `[gen-install-manifest] 已生成 ${path.relative(ROOT, OUT)}  ` +
-    `(features=${payload.features.length}, options=${payload.options.length})`
-)

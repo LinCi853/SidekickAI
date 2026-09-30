@@ -2,28 +2,9 @@
 // 功能/选项清单统一由主应用生成（见 scripts/gen-install-manifest.cjs 与
 // electron/shared/install-manifest-source.ts），本文件仅负责解析与透出。
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
-
-const INSTALL_MANIFEST_FILE: &str = include_str!("../install-manifest.json");
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ManifestDoc {
-    features: Vec<InstallFeature>,
-    options: Vec<InstallOption>,
-}
-
-static INSTALL_MANIFEST: OnceLock<Result<ManifestDoc, String>> = OnceLock::new();
 
 fn default_backup_encrypt() -> bool {
     true
-}
-
-fn manifest_doc() -> &'static Result<ManifestDoc, String> {
-    INSTALL_MANIFEST.get_or_init(|| {
-        serde_json::from_str::<ManifestDoc>(INSTALL_MANIFEST_FILE)
-            .map_err(|e| format!("解析 install-manifest.json 失败: {e}"))
-    })
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -257,17 +238,11 @@ const EULA_ZH: &str = include_str!("../EULA.zh-CN.txt");
 const LICENSE: &str = include_str!("../License.txt");
 
 pub fn features() -> Vec<InstallFeature> {
-    match manifest_doc() {
-        Ok(doc) => doc.features.clone(),
-        Err(e) => panic!("{e}"),
-    }
+    crate::setup_metadata::current().expect("validated Setup metadata").features.clone()
 }
 
 pub fn options() -> Vec<InstallOption> {
-    match manifest_doc() {
-        Ok(doc) => doc.options.clone(),
-        Err(e) => panic!("{e}"),
-    }
+    crate::setup_metadata::current().expect("validated Setup metadata").options.clone()
 }
 
 pub fn licenses() -> Vec<LicenseDoc> {
@@ -305,7 +280,7 @@ pub fn build_info() -> InstallerInfo {
     InstallerInfo {
         edition_label: sidekickai_uninstall_core::product::edition().label.clone(),
         uninstall_entry: std::env::args().skip(1).eq(["--uninstall".to_string()]),
-        version: env!("CARGO_PKG_VERSION").to_string(),
+        version: crate::setup_metadata::current().expect("validated Setup metadata").product_version.clone(),
         default_dir,
         per_user_default_dir,
         app_name,

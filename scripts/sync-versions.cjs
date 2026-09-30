@@ -1,32 +1,16 @@
 'use strict'
 
-// Project the root package.json version into every product file that carries a
-// copy of it: the Tauri wizard and standalone uninstaller (package.json,
-// package-lock.json, tauri.conf.json, Cargo.toml), the root package-lock.json and
-// the shared uninstall-host crate together with the host entries in every
-// Cargo.lock. The root version must be a valid semver and every mandatory target
-// must exist, so the tool cannot report success over a broken product config.
-//
-// The independently versioned `installer-shared/uninstall-core` crate is NOT a
-// target: it keeps its own 0.1.x protocol version. The tool reports drift by
-// default and only rewrites files with `--apply`, so it is safe to run from a
-// verification step.
-//
-// Usage: node scripts/sync-versions.cjs [--check|--apply] [--root <dir>]
-//
-// The root package.json is the single version source; there is no --version
-// override because a second source could silently disagree with it.
+// Product and maintenance versions have independent authoritative sources.
+// The protocol core retains its own version. Checks never rewrite sources.
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { componentVersion } = require('./component-contract.cjs')
 
 const ROOT = path.resolve(__dirname, '..')
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
-// Target descriptors. `packages` lists the Cargo.lock entries owned by the host
-// product version; uninstall-core is deliberately absent everywhere. Every target
-// is mandatory except the uninstaller package-lock, which that product does not
-// ship. The shared host Cargo.lock is included only when it exists.
+// Only the root lock follows the product version; other targets follow the component.
 const TARGETS = [
   { file: 'package-lock.json', kind: 'json-lock' },
   { file: 'installer-tauri/package.json', kind: 'json-version' },
@@ -181,15 +165,16 @@ function applyTarget(root, version, target) {
 }
 
 function planVersions(root = ROOT, version = rootPackageVersion(root)) {
+  const maintenanceVersion = componentVersion(root)
   const findings = []
   const missing = []
   const requiredMissing = []
   for (const target of targetsFor(root)) {
-    const result = inspectTarget(root, version, target)
+    const result = inspectTarget(root, target.file === 'package-lock.json' ? version : maintenanceVersion, target)
     if (result.missing) (target.optional ? missing : requiredMissing).push(target.file)
     findings.push(...result.findings)
   }
-  return { version, findings, missing, requiredMissing }
+  return { version, componentVersion: maintenanceVersion, findings, missing, requiredMissing }
 }
 
 function applyVersions(root = ROOT, version = rootPackageVersion(root)) {
@@ -198,9 +183,9 @@ function applyVersions(root = ROOT, version = rootPackageVersion(root)) {
   const absentFields = plan.findings.filter(finding => finding.current === null)
   if (absentFields.length) throw new Error(`Required version fields are missing: ${absentFields.map(finding => `${finding.file} ${finding.locator}`).join(', ')}`)
   const changed = []
-  for (const target of targetsFor(root)) if (applyTarget(root, version, target)) changed.push(target.file)
+  for (const target of targetsFor(root)) if (applyTarget(root, target.file === 'package-lock.json' ? version : plan.componentVersion, target)) changed.push(target.file)
   const remaining = planVersions(root, version)
-  return { version, changed, remaining: remaining.findings, missing: remaining.missing }
+  return { version, componentVersion: plan.componentVersion, changed, remaining: remaining.findings, missing: remaining.missing }
 }
 
 function main(args = process.argv.slice(2)) {
@@ -234,8 +219,8 @@ function main(args = process.argv.slice(2)) {
     error.findings = findings
     throw error
   }
-  console.log(`[sync-versions] All product files match ${version}`)
-  return { version, findings: [] }
+  console.log(`[sync-versions] Product ${version}; maintenance ${componentVersion(options.root)}`)
+  return { version, componentVersion: componentVersion(options.root), findings: [] }
 }
 
 module.exports = {

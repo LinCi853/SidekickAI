@@ -8,12 +8,18 @@ const { createRequire } = require('node:module')
 const u = require('./uninstaller-build-utils.cjs')
 const webVerify = require('./verify-embedded-web.cjs')
 const cache = require('./build-cache.cjs')
+const maintenanceInputs = require('./maintenance-inputs.cjs')
+const componentContract = require('./component-contract.cjs')
+const setupMetadata = require('./setup-metadata.cjs')
+const buildEvidence = require('./build-evidence.cjs')
+const { toolInputs } = require('./build-tool-inputs.cjs')
 const { withPackagingLock } = require('./packaging-lock.cjs')
 const ROOT = path.resolve(__dirname, '..')
 const INSTALLER = path.join(ROOT, 'installer-tauri')
 const UNINSTALLER = path.join(ROOT, 'uninstaller-tauri')
 const EDITION = JSON.parse(fs.readFileSync(path.join(ROOT, 'product-edition.json'), 'utf8')).edition
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version
+const COMPONENT_VERSION = componentContract.componentVersion()
 const TARGETS = {
   x64: { triple: 'x86_64-pc-windows-msvc', directory: 'win-unpacked' },
   arm64: { triple: 'aarch64-pc-windows-msvc', directory: 'win-arm64-unpacked' },
@@ -59,30 +65,7 @@ function tools() {
 }
 
 function sourceInputs(app) {
-  const sharedFiles = Object.keys(require('../maintenance/shared-source.json').files).map(file => path.join(ROOT, file))
-  return [
-    ...sharedFiles,
-    ...['src', 'src-tauri/src', 'src-tauri/Cargo.toml', 'src-tauri/Cargo.lock',
-      'src-tauri/build.rs', 'src-tauri/tauri.conf.json', 'src-tauri/icons',
-      'src-tauri/capabilities', 'index.html', 'package.json', 'tsconfig.json',
-      'vite.config.ts'].map(file => path.join(app, file)),
-    ...['uninstall', 'operation-details', 'uninstall-core/src', 'uninstall-core/Cargo.toml',
-      'uninstall-core/build.rs', 'uninstall-host/src', 'uninstall-host/Cargo.toml',
-      'uninstall-host/build.rs'].map(file => path.join(ROOT, 'installer-shared', file)),
-    path.join(INSTALLER, 'package-lock.json'),
-    ...(app === INSTALLER ? ['install-manifest.json', 'License.txt', 'EULA.zh-CN.txt'].map(file => path.join(app, 'src-tauri', file)) : []),
-    path.join(ROOT, 'maintenance/shared-source.json'),
-    path.join(ROOT, 'product-edition.json'),
-    path.join(ROOT, 'packages/product-contract'),
-    path.join(ROOT, 'installer-shared/product.rs'),
-    path.join(ROOT, 'installer-shared/presentation'),
-    __filename,
-    ...(app === INSTALLER ? [path.join(__dirname, 'oxy-build-config.cjs'), ...([require('./oxy-build-config.cjs').configPath].filter(file => fs.existsSync(file)))] : []),
-    path.join(__dirname, 'uninstaller-build-utils.cjs'),
-    path.join(__dirname, 'tauri-web-build.cjs'),
-    path.join(__dirname, 'verify-embedded-web.cjs'),
-    path.join(__dirname, 'build-cache.cjs'),
-  ]
+  return maintenanceInputs.sourceInputs(app)
 }
 
 /**
@@ -116,6 +99,15 @@ function dependencyToolIdentity(root = ROOT) {
   return identity
 }
 
+function frontendTools(toolchain, native = false) {
+  const names = ['vite', '@tauri-apps/api', '@vitejs/plugin-react', 'react', 'react-dom', '@types/react', '@types/react-dom', '@types/node']
+  return [...new Set([
+    ...toolInputs(path.dirname(toolchain.modules), [...names, 'typescript', ...(native ? ['@tauri-apps/cli'] : [])]),
+    ...toolInputs(INSTALLER, names),
+    ...toolInputs(ROOT, ['react', 'react-dom', '@types/react', '@types/react-dom', '@types/node']),
+  ])].sort()
+}
+
 function compilerIdentity(toolchain, arch) {
   if (!toolchain.identities) toolchain.identities = {}
   if (toolchain.identities[arch]) return toolchain.identities[arch]
@@ -124,19 +116,21 @@ function compilerIdentity(toolchain, arch) {
     if (result.status !== 0) throw new Error(`Cannot identify ${command}: ${result.error?.message || result.stderr}`)
     return result.stdout
   })
-  const environment = Object.fromEntries(Object.entries(toolchain.environments?.[arch] || {})
-    .filter(([key]) => /^(PATH|LIB|LIBPATH|INCLUDE|VCToolsInstallDir|WindowsSdkDir|WindowsSDKVersion|CARGO_TARGET_.*_LINKER|CC_|CXX_)/i.test(key)))
-  const webTools = ['vite', 'typescript', '@tauri-apps/cli', '@tauri-apps/api', '@vitejs/plugin-react', 'react', 'react-dom']
-    .map(name => path.join(toolchain.modules, name)).filter(file => fs.existsSync(file))
-  const identity = u.hash(JSON.stringify({ versions, node: process.version, environment, webTools: u.fingerprint(ROOT, webTools).fingerprint, dependencyTools: dependencyToolIdentity() }))
+  const environment = Object.fromEntries(Object.entries({ ...process.env, ...toolchain.environments?.[arch] })
+    .filter(([key]) => /^(PATH|LIB|LIBPATH|INCLUDE|VCToolsInstallDir|WindowsSdkDir|WindowsSDKVersion|CARGO_TARGET_.*_(?:LINKER|RUSTFLAGS)|CARGO_PROFILE_|CARGO_BUILD_|RUSTC(?:$|_)|CC_|CXX_)/i.test(key)))
+  const webTools = frontendTools(toolchain, true)
+  const identity = u.hash(JSON.stringify({ versions, node: process.version, environment, webTools: u.fingerprint(ROOT, webTools).fingerprint }))
   toolchain.identities[arch] = identity
   return identity
 }
 
 function nativeInputs(app, arch, toolchain) {
+  if (process.env.CARGO_ENCODED_RUSTFLAGS || process.env.RUSTFLAGS) throw new Error('Unset RUSTFLAGS/CARGO_ENCODED_RUSTFLAGS for verified builds')
   const source = u.fingerprint(ROOT, sourceInputs(app))
   const cloud = app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : null
-  return { version: VERSION, fingerprint: u.hash(JSON.stringify({ source: source.fingerprint, arch, version: VERSION, tools: compilerIdentity(toolchain, arch), cloud })), inputs: source }
+  return { version: COMPONENT_VERSION, fingerprint: u.hash(JSON.stringify({ source: source.fingerprint, arch, version: COMPONENT_VERSION,
+    tools: compilerIdentity(toolchain, arch), cloud, command: nativeBuildArguments(app, arch),
+    config: { build: { beforeBuildCommand: '', frontendDist: '../dist' } } })), inputs: source }
 }
 
 function validateArchitectures(architectures) {
@@ -146,7 +140,7 @@ function validateArchitectures(architectures) {
   return architectures
 }
 
-/** First `version = "..."` under [package]; product_version() reads this via CARGO_PKG_VERSION. */
+/** Read the maintenance component version under the Cargo package table. */
 function readCargoPackageVersion(cargoTomlPath) {
   const source = fs.readFileSync(cargoTomlPath, 'utf8')
   let inPackage = false
@@ -165,6 +159,7 @@ function readCargoPackageVersion(cargoTomlPath) {
 }
 
 function preflight(architectures, full, output, options = {}) {
+  require('./check-node-version.cjs').assertNodeVersion()
   validateArchitectures(architectures)
   if (process.platform !== 'win32') throw new Error('Windows MSVC builds require a Windows host')
   fs.mkdirSync(output, { recursive: true })
@@ -204,13 +199,11 @@ function preflight(architectures, full, output, options = {}) {
   for (const app of full ? [UNINSTALLER, INSTALLER] : [UNINSTALLER]) {
     const configPath = path.join(app, 'src-tauri', 'tauri.conf.json')
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-    if (config.version !== VERSION) errors.push(`Product version mismatch: ${app}: ${config.version} != ${VERSION}`)
-    // product_version() is CARGO_PKG_VERSION, not tauri.conf. A Cargo.toml drift
-    // still passes the tauri.conf check and then fails at install-time uninstaller
-    // deployment validation (manifest.version vs CARGO_PKG_VERSION).
+    if (config.version !== COMPONENT_VERSION) errors.push(`Component version mismatch: ${app}: ${config.version} != ${COMPONENT_VERSION}`)
+    // Cargo and Tauri must agree on the independently versioned component.
     const cargoToml = path.join(app, 'src-tauri', 'Cargo.toml')
     const cargoVersion = readCargoPackageVersion(cargoToml)
-    if (cargoVersion !== VERSION) errors.push(`Cargo package version mismatch: ${cargoToml}: ${cargoVersion ?? 'missing'} != ${VERSION}`)
+    if (cargoVersion !== COMPONENT_VERSION) errors.push(`Cargo package version mismatch: ${cargoToml}: ${cargoVersion ?? 'missing'} != ${COMPONENT_VERSION}`)
     if (app === UNINSTALLER && (config.bundle.resources || config.bundle.externalBin)) errors.push('Standalone Tauri resources/externalBin are forbidden')
     u.assertFile(path.join(app, 'src-tauri', 'Cargo.lock'))
     // The wizard and the standalone uninstaller must embed their UI. A frontendDist
@@ -244,11 +237,49 @@ function preflight(architectures, full, output, options = {}) {
 }
 
 function buildWeb(app, toolchain) {
-  run(process.execPath, [toolchain.tsc, '--noEmit', '-p', path.join(app, 'tsconfig.json')], `${path.basename(app)} typecheck`, { cwd: app })
-  run(process.execPath, [toolchain.webBuild], `${path.basename(app)} production web`, { cwd: app, env: app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : {} })
+  const started = Date.now()
+  const before = u.fingerprint(ROOT, maintenanceInputs.frontendInputs(app))
+  const cloud = app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : {}
+  const webTools = frontendTools(toolchain)
+  const toolsBefore = u.fingerprint(ROOT, webTools)
+  const key = u.hash(JSON.stringify({ source: before.fingerprint, tools: toolsBefore,
+    node: process.version, environment: { TAURI_ENV_PLATFORM: 'windows', TAURI_ENV_DEBUG: process.env.TAURI_ENV_DEBUG || '', ...cloud } }))
+  if (!toolchain.frontends) toolchain.frontends = new Map()
+  const previous = toolchain.frontends.get(app)
+  if (previous?.key === key) {
+    u.assertUnchanged(previous.web, u.fingerprint(ROOT, [path.join(app, 'dist')]))
+    return previous.web
+  }
+  const name = `${path.basename(app)}-web`
+  const decision = cache.inspect(name, key)
+  if (decision.value) {
+    const destination = path.join(app, 'dist')
+    const expected = cache.snapshot(decision.value.directory)
+    if (!fs.existsSync(destination) || cache.snapshot(destination) !== expected) {
+      if (path.dirname(path.resolve(destination)) !== path.resolve(app)) throw new Error('Unsafe frontend output directory')
+      if (fs.existsSync(destination)) fs.rmSync(destination, { recursive: true })
+      fs.cpSync(decision.value.directory, destination, { recursive: true, errorOnExist: true, force: false })
+    }
+    if (cache.snapshot(destination) !== expected) throw new Error('Frontend cache copy did not verify')
+  } else {
+    run(process.execPath, [toolchain.tsc, '--noEmit', '-p', path.join(app, 'tsconfig.json')], `${path.basename(app)} typecheck`, { cwd: app })
+    run(process.execPath, [toolchain.webBuild], `${path.basename(app)} production web`, { cwd: app, env: app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : {} })
+    u.assertUnchanged(before, u.fingerprint(ROOT, maintenanceInputs.frontendInputs(app)))
+    const directory = cache.retainDirectory(name, key, path.join(app, 'dist'))
+    cache.remember(name, key, [directory], { directory })
+  }
   const html = fs.readFileSync(path.join(app, 'dist', 'index.html'), 'utf8')
   if (/<script[^>]+src=["'](?:https?:|\/)/i.test(html)) throw new Error('Production entry references a remote or absolute script')
-  return u.fingerprint(ROOT, [path.join(app, 'dist')])
+  u.assertUnchanged(before, u.fingerprint(ROOT, maintenanceInputs.frontendInputs(app)))
+  u.assertUnchanged(toolsBefore, u.fingerprint(ROOT, webTools))
+  const web = u.fingerprint(ROOT, [path.join(app, 'dist')])
+  toolchain.frontends.set(app, { key, web })
+  if (toolchain.evidenceOutput) buildEvidence.record(toolchain.evidenceOutput, name, key, decision, started, { outputFingerprint: web.fingerprint })
+  return web
+}
+
+function nativeBuildArguments(app, arch) {
+  return ['build', '--no-bundle', '--target', TARGETS[arch].triple, '--', '--offline', '--locked', '--jobs', '2']
 }
 
 /**
@@ -289,8 +320,9 @@ function buildNative(app, arch, output, toolchain, standalone) {
   webVerify.assertEmbeddableFrontendDist(production.build.frontendDist, `${name} ${arch} frontendDist`)
   const config = path.join(output, `${name}-${arch}-production.json`)
   fs.writeFileSync(config, JSON.stringify(production, null, 2))
-  const cargoArgs = process.env.SIDEKICK_CARGO_ONLINE === '1' ? ['--locked', '--jobs', '2'] : ['--offline', '--locked', '--jobs', '2']
-  run(process.execPath, [toolchain.tauri, 'build', '--no-bundle', '--target', target, '--config', config, '--', ...cargoArgs], `${name} ${arch} Tauri production`, {
+  const arguments_ = nativeBuildArguments(app, arch)
+  arguments_.splice(arguments_.indexOf('--'), 0, '--config', config)
+  run(process.execPath, [toolchain.tauri, ...arguments_], `${name} ${arch} Tauri production`, {
     cwd: app, env: { ...toolchain.environments?.[arch], ...(app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : {}), CARGO_TARGET_DIR: targetDir, SIDEKICK_BUILD_FINGERPRINT: inputFingerprint },
   })
   u.assertUnchanged(before, u.fingerprint(ROOT, sourceInputs(app)))
@@ -311,7 +343,8 @@ function buildNative(app, arch, output, toolchain, standalone) {
   const artifact = path.join(directory, `${name}.exe`)
   fs.copyFileSync(raw, artifact, fs.constants.COPYFILE_EXCL)
   if (u.sha256(artifact) !== info.sha256) throw new Error('Copied executable differs from raw build output')
-  const manifest = { protocolVersion: 1, edition: EDITION, version: VERSION, arch, sha256: info.sha256, size: info.size, inputFingerprint }
+  const manifest = { protocolVersion: 2, edition: EDITION, componentVersion: COMPONENT_VERSION,
+    uninstallProtocolVersion: componentContract.readContract().uninstallProtocolVersion, arch, sha256: info.sha256, size: info.size, inputFingerprint }
   fs.writeFileSync(path.join(directory, standalone ? 'uninstall-manifest.json' : 'wizard-manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
   fs.writeFileSync(path.join(directory, 'build-evidence.json'), JSON.stringify({ raw, artifact, manifest, previousRawSha256: previous, sourceInputs: before, webInputs: web, webEvidence, dependency, pe: info, productionConfig: config, productionConfigValues: production }, null, 2) + '\n')
   console.log(`[build] ${artifact}: ${info.size} bytes, ${arch}, SHA-256 ${info.sha256}, embedded UI ${webEvidence.files.length} files / ${webEvidence.streams} streams`)
@@ -323,34 +356,39 @@ function applicationPackageInputs() {
   const packages = Object.entries(lock.packages || {})
     .filter(([name, entry]) => name.startsWith('node_modules/') && !entry.dev && fs.existsSync(path.join(ROOT, name)))
     .map(([name]) => path.join(ROOT, name))
-  return ['out', 'resources', 'packages/product-contract', 'packages/desktop-common', 'product-edition.json', 'packages/plugin-sdk', 'electron-builder.yml', 'package.json', 'package-lock.json',
-    'scripts/after-pack.cjs', 'scripts/verify-packaged-native.cjs', 'scripts/verify-plugin-distribution.cjs', 'scripts/tool-source-boundary.cjs', 'build/License.txt',
+  return ['out', 'resources', 'packages/product-contract', 'packages/desktop-common', 'product-edition.json', 'electron-builder.yml', 'package.json', 'package-lock.json',
+    'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs', 'build/License.txt', 'LICENSE',
     'node_modules/electron/package.json', 'node_modules/electron-builder', 'node_modules/app-builder-lib']
     .map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file)).concat(packages, process.env.SIDEKICK_ELECTRON_DIST ? [path.resolve(process.env.SIDEKICK_ELECTRON_DIST)] : [], [__filename])
+    .flatMap(file => fs.statSync(file).isDirectory() ? u.listFiles(file, new Set(['.git'])) : [file])
 }
 
 function buildApplications(output, architectures, options = {}) {
+  require('./check-node-version.cjs').assertNodeVersion()
   validateArchitectures(architectures)
   const appOutput = path.join(output, 'application-build')
   if (fs.existsSync(appOutput)) throw new Error(`Application build directory already exists: ${appOutput}`)
   fs.mkdirSync(appOutput, { recursive: true })
-  const inputs = ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'product-edition.json', 'packages/plugin-sdk', 'package.json', 'package-lock.json', 'electron-builder.yml', 'electron.vite.config.ts', 'scripts/host-tool-boundary.ts', 'scripts/tool-source-boundary.cjs', 'scripts/after-pack.cjs', 'scripts/verify-packaged-native.cjs', 'scripts/verify-plugin-distribution.cjs', 'build/License.txt'].map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file))
+  const inputs = ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'product-edition.json', 'package.json', 'package-lock.json', 'electron-builder.yml', 'electron.vite.config.ts', 'scripts/compilation-inputs.ts', 'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs', 'build/License.txt', 'LICENSE'].map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file))
   const before = u.fingerprint(ROOT, inputs)
-  run(process.execPath, [path.join(ROOT, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js'), 'build'], 'Current application build')
+  const compilation = require('./application-build.cjs').compile(output, run)
   const packageInputs = applicationPackageInputs()
   const packageBefore = u.fingerprint(ROOT, packageInputs)
   const signing = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(CSC_|WIN_CSC_|SIGN_|ELECTRON_)/.test(key)))
   const evidence = {}
   for (const arch of architectures) {
+    const started = Date.now()
     const key = u.hash(JSON.stringify({ inputs: packageBefore.fingerprint, arch, node: process.version, signing }))
     const dir = path.join(appOutput, TARGETS[arch].directory)
-    const reused = options.reuse ? cache.load(`application-${arch}`, key) : null
+    const decision = options.reuse ? cache.inspect(`application-${arch}`, key) : { value: null, reason: 'disabled' }
+    const reused = decision.value
     if (reused) {
       const cachedInputs = applicationFingerprint(reused.directory)
       fs.cpSync(reused.directory, dir, { recursive: true, errorOnExist: true, force: false })
       u.assertUnchanged(cachedInputs, applicationFingerprint(reused.directory))
       u.assertUnchanged(cachedInputs, applicationFingerprint(dir))
       evidence[arch] = verifyApplication(dir, arch)
+      buildEvidence.record(output, `application-${arch}`, key, decision, started, { directory: dir })
       console.log(`[build] Reused verified ${arch} application package`)
       continue
     }
@@ -359,12 +397,23 @@ function buildApplications(output, architectures, options = {}) {
     run(process.execPath, args, `Current ${arch} application directory`)
     evidence[arch] = verifyApplication(dir, arch)
     u.assertUnchanged(packageBefore, u.fingerprint(ROOT, packageInputs))
-    cache.remember(`application-${arch}`, key, [dir], { directory: dir })
+    const retained = cache.retainDirectory(`application-${arch}`, key, dir)
+    cache.remember(`application-${arch}`, key, [retained], { directory: retained })
+    buildEvidence.record(output, `application-${arch}`, key, decision, started, { directory: dir })
   }
   u.assertUnchanged(packageBefore, u.fingerprint(ROOT, packageInputs))
   u.assertUnchanged(before, u.fingerprint(ROOT, inputs))
+  if (architectures.includes('x64')) {
+    const reportDirectory = path.join(output, 'packaged-ui')
+    run(process.execPath, [path.join(ROOT, 'scripts/verify-packaged-ui.cjs'), path.join(appOutput, TARGETS.x64.directory), reportDirectory], 'Packaged main window and settings acceptance')
+    evidence.x64.uiReport = path.join(reportDirectory, 'report.json')
+    u.assertUnchanged(before, u.fingerprint(ROOT, inputs))
+  }
   fs.writeFileSync(path.join(output, 'application-inputs.json'), JSON.stringify(before, null, 2) + '\n')
   fs.writeFileSync(path.join(output, 'application-evidence.json'), JSON.stringify(evidence, null, 2) + '\n')
+  fs.writeFileSync(path.join(output, 'compilation-evidence.json'), JSON.stringify(compilation, null, 2) + '\n')
+  u.assertUnchanged(compilation.dependencies, u.fingerprint(ROOT, require('./application-build.cjs').dependencyInputs(path.join(ROOT, 'out'), ROOT)))
+  u.assertUnchanged(compilation.sourceInputs, u.fingerprint(ROOT, require('./application-build.cjs').inputs(ROOT)))
   return appOutput
 }
 
@@ -387,11 +436,13 @@ function applicationFingerprint(directory) {
 }
 
 function buildPayload(output, applications, uninstallers, architectures, options = {}) {
+  const started = Date.now()
   validateArchitectures(architectures)
   const compression = options.compression || 9
   if (![5, 9].includes(compression)) throw new Error('Unsupported payload compression')
   const sources = architectures.map(arch => path.join(applications, TARGETS[arch].directory))
-  const key = u.hash(JSON.stringify({ applications: sources.map(applicationFingerprint), uninstallers: architectures.map(arch => uninstallers[arch].manifest), compression, tools: u.fingerprint(ROOT, [SEVENZ, SEVENZR, __filename]).fingerprint }))
+  const key = u.hash(JSON.stringify({ applications: sources.map(applicationFingerprint), uninstallers: architectures.map(arch => u.deploymentManifest(uninstallers[arch].manifest, VERSION)), compression, tools: u.fingerprint(ROOT, [SEVENZ, SEVENZR, __filename]).fingerprint }))
+  const decision = options.reuse ? cache.inspect('payload', key) : { reason: 'disabled' }
   const existing = options.reuse ? cache.load('payload', key) : null
   if (existing) {
     fs.mkdirSync(output, { recursive: true })
@@ -404,6 +455,7 @@ function buildPayload(output, applications, uninstallers, architectures, options
       fs.rmSync(payload, { force: true })
     } else {
       cache.atomicWrite(path.join(output, 'payload-evidence.json'), JSON.stringify({ ...existing, path: payload, reused: true }, null, 2) + '\n')
+      buildEvidence.record(output, 'payload', key, { reason: 'matched' }, started, { sha256: existing.sha256 })
       console.log('[build] Reused verified installation payload')
       return payload
     }
@@ -433,47 +485,46 @@ function buildPayload(output, applications, uninstallers, architectures, options
   u.assertUnchanged(before, applicationFingerprint(staging))
   const evidence = { architectures, applicationInputs, inputs: before, path: payload, sha256: u.sha256(payload), size: fs.statSync(payload).size }
   fs.writeFileSync(path.join(output, 'payload-evidence.json'), JSON.stringify(evidence, null, 2) + '\n')
-  cache.remember('payload', key, [payload], evidence)
+  const retained = cache.retainFile('payload', key, payload)
+  cache.remember('payload', key, [retained], { ...evidence, path: retained })
+  buildEvidence.record(output, 'payload', key, { reason: existing ? 'output-changed' : decision.reason }, started, { sha256: evidence.sha256 })
   return payload
 }
 
-function appendSetup(output, wizard, payload, architectures) {
+function appendSetup(output, wizard, payload, architectures, manifest = require('./gen-install-manifest.cjs').generateManifest()) {
+  const started = Date.now()
   validateArchitectures(architectures)
-  const wizardBytes = fs.readFileSync(wizard)
-  const wizardArch = u.peInfo(wizardBytes).arch
+  const rawWizard = fs.readFileSync(wizard)
+  const wizardArch = u.peInfo(rawWizard).arch
   if (!architectures.includes(wizardArch)) throw new Error('Setup executable architecture is missing from its application payload')
-  if (u.footerInfo(wizardBytes)) throw new Error('Raw wizard already carries a payload')
+  if (u.footerInfo(rawWizard)) throw new Error('Raw wizard already carries a payload')
+  const wizardBytes = setupMetadata.stampProductVersion(rawWizard, manifest.productVersion)
   const payloadBytes = fs.readFileSync(payload)
   const sevenzBytes = fs.readFileSync(SEVENZR)
-  const footer = Buffer.alloc(28)
-  footer.write('SKPAYLD1', 0)
-  footer.writeBigUInt64LE(BigInt(payloadBytes.length), 8)
-  footer.writeBigUInt64LE(BigInt(sevenzBytes.length), 16)
-  footer.writeUInt32LE(28, 24)
+  const metadata = setupMetadata.createMetadata(manifest, payloadBytes, sevenzBytes)
+  const metadataBytes = Buffer.from(JSON.stringify(metadata))
+  const footer = setupMetadata.footer(metadataBytes, payloadBytes.length, sevenzBytes.length)
   const suffix = wizardArch
   fs.mkdirSync(output, { recursive: true })
   const destination = path.join(output, `SidekickAI-Setup-${VERSION}-${suffix}.exe`)
   if (fs.existsSync(destination)) throw new Error('Setup destination already exists')
-  cache.atomicWrite(destination, Buffer.concat([wizardBytes, payloadBytes, sevenzBytes, footer]))
+  cache.atomicWrite(destination, Buffer.concat([wizardBytes, payloadBytes, sevenzBytes, metadataBytes, footer]))
   const bytes = fs.readFileSync(destination)
   const info = u.footerInfo(bytes)
-  if (info.wizard !== wizardBytes.length || u.hash(bytes.subarray(0, info.wizard)) !== u.hash(wizardBytes) || u.hash(bytes.subarray(info.wizard, info.wizard + info.payload)) !== u.hash(payloadBytes) || u.hash(bytes.subarray(info.wizard + info.payload, -28)) !== u.hash(sevenzBytes)) throw new Error('Setup appended bytes did not verify')
-  const evidence = { path: destination, sha256: u.sha256(destination), size: bytes.length, architecture: wizardArch, payloadArchitectures: architectures, footer: info }
+  setupMetadata.readMetadata(bytes)
+  if (info.wizard !== wizardBytes.length || u.hash(bytes.subarray(0, info.wizard)) !== u.hash(wizardBytes)
+    || u.hash(bytes.subarray(info.wizard, info.wizard + info.payload)) !== u.hash(payloadBytes)
+    || u.hash(bytes.subarray(info.wizard + info.payload, info.metadataOffset)) !== u.hash(sevenzBytes)
+    || u.hash(fs.readFileSync(wizard)) !== u.hash(rawWizard)) throw new Error('Setup appended bytes did not verify')
+  const evidence = { path: destination, sha256: u.sha256(destination), size: bytes.length, architecture: wizardArch, payloadArchitectures: architectures,
+    componentVersion: COMPONENT_VERSION, productVersion: manifest.productVersion, rawWizardSha256: u.hash(rawWizard), metadata, footer: info }
   fs.writeFileSync(path.join(output, `setup-${suffix}-evidence.json`), JSON.stringify(evidence, null, 2) + '\n')
   console.log(`[build] Verified Setup (not published): ${destination}`)
+  buildEvidence.record(output, 'setup', u.hash(JSON.stringify(metadata)), { reason: 'assembled' }, started, { sha256: evidence.sha256 })
   return destination
 }
 
-// ---------------------------------------------------------------------------
-// Shared-component cache
-//
-// The standalone uninstaller is not rebuilt for every packaging run. It is derived
-// from the shared uninstall implementation plus the uninstaller web frontend, so it
-// is keyed by a content version over exactly those inputs: unchanged sources at the
-// same package version reuse the cached executable, and a version bump or any source
-// change regenerates it. Whatever the Setup embeds is therefore the same verified
-// bytes the standalone artifact publishes, never a second independent build.
-// ---------------------------------------------------------------------------
+// Maintenance artifacts are addressed by production inputs, independent of releases.
 
 const SHARED_COMPONENTS = path.join(ROOT, 'build', 'shared-components')
 
@@ -489,18 +540,18 @@ function sharedComponentVersion(toolchain = tools(), arch = 'x64') {
 
 /** Reuse an already built component when its recorded inputs still match. */
 function reuseComponent(name, arch, expected, cacheRoot = SHARED_COMPONENTS) {
-  if (process.env.SIDEKICK_REBUILD_SHARED_COMPONENTS === '1') return null
+  if (process.env.SIDEKICK_REBUILD_SHARED_COMPONENTS === '1' || process.env.SIDEKICK_REBUILD_ALL === '1') return null
   const directory = componentCacheDirectory(name, cacheRoot)
-  const exe = path.join(directory, `${name}-${VERSION}-${arch}.exe`)
-  const record = path.join(directory, `${name}-${VERSION}-${arch}.json`)
-  if (!fs.existsSync(exe) || !fs.existsSync(record)) return null
+  const record = path.join(directory, arch, `${expected.fingerprint}.json`)
+  if (!fs.existsSync(record)) return null
   let cached
   try { cached = JSON.parse(fs.readFileSync(record, 'utf8')) } catch { return null }
   if (cached.name !== name || cached.arch !== arch || cached.version !== expected.version || cached.inputFingerprint !== expected.fingerprint) return null
-  if (cached.protocolVersion !== 1) return null
+  if (cached.protocolVersion !== 2 || !/^[a-f0-9]{64}$/.test(cached.executableSha256 || '')) return null
+  const exe = path.join(directory, arch, 'objects', `${cached.executableSha256}.exe`)
   try {
     // A cached executable is only reused after it verifies against its stored manifest.
-    const info = name === 'uninstaller' ? u.verifyArtifact(exe, cached.manifest, arch, VERSION) : { arch: u.peInfo(fs.readFileSync(exe)).arch, sha256: u.sha256(exe), size: fs.statSync(exe).size }
+    const info = u.verifyComponentArtifact(exe, cached.manifest, arch, name === 'uninstaller')
     if (info.arch !== arch || info.sha256 !== cached.manifest.sha256 || info.size !== cached.manifest.size) return null
     return { artifact: exe, manifest: cached.manifest, reused: true, cached: record }
   } catch {
@@ -511,11 +562,11 @@ function reuseComponent(name, arch, expected, cacheRoot = SHARED_COMPONENTS) {
 function rememberComponent(name, arch, expected, built, webEvidence, cacheRoot = SHARED_COMPONENTS) {
   const directory = componentCacheDirectory(name, cacheRoot)
   fs.mkdirSync(directory, { recursive: true })
-  const exe = path.join(directory, `${name}-${VERSION}-${arch}.exe`)
-  const record = path.join(directory, `${name}-${VERSION}-${arch}.json`)
-  if (name === 'uninstaller') u.verifyArtifact(built.artifact, built.manifest, arch, expected.version)
+  const exe = path.join(directory, arch, 'objects', `${built.manifest.sha256}.exe`)
+  const record = path.join(directory, arch, `${expected.fingerprint}.json`)
+  u.verifyComponentArtifact(built.artifact, built.manifest, arch, name === 'uninstaller')
   cache.atomicWrite(exe, fs.readFileSync(built.artifact))
-  const stored = { protocolVersion: 1, name, arch, version: expected.version, inputFingerprint: expected.fingerprint, manifest: built.manifest, webEvidence, storedAt: new Date().toISOString(), executableSha256: u.sha256(exe) }
+  const stored = { protocolVersion: 2, name, arch, version: expected.version, inputFingerprint: expected.fingerprint, manifest: built.manifest, webEvidence, storedAt: new Date().toISOString(), executableSha256: u.sha256(exe) }
   cache.atomicWrite(record, JSON.stringify(stored, null, 2) + '\n')
   return stored
 }
@@ -526,29 +577,46 @@ function rememberComponent(name, arch, expected, built, webEvidence, cacheRoot =
  * previously verified standalone publishes, instead of a fresh rebuild.
  */
 function buildOrReuseUninstaller(output, arch, toolchain) {
+  const started = Date.now()
+  toolchain.evidenceOutput = output
   const expected = sharedComponentVersion(toolchain, arch)
   const reused = reuseComponent('uninstaller', arch, expected)
   if (reused) {
+    buildEvidence.record(output, `uninstaller-${arch}`, expected, { reason: 'matched' }, started, { sha256: reused.manifest.sha256 })
     console.log(`[build] Reusing cached uninstaller ${arch}: ${reused.artifact} (SHA-256 ${reused.manifest.sha256})`)
     return reused
   }
+  const decision = componentDecision('uninstaller', arch, expected)
   const built = buildNative(UNINSTALLER, arch, output, toolchain, true)
   u.assertUnchanged(expected, sharedComponentVersion(toolchain, arch))
   rememberComponent('uninstaller', arch, expected, built, built.webEvidence)
+  buildEvidence.record(output, `uninstaller-${arch}`, expected, decision, started, { sha256: built.manifest.sha256 })
   return built
 }
 
 function buildOrReuseWizard(output, arch, toolchain) {
+  const started = Date.now()
+  toolchain.evidenceOutput = output
   const expected = nativeInputs(INSTALLER, arch, toolchain)
   const reused = reuseComponent('wizard', arch, expected)
   if (reused) {
+    buildEvidence.record(output, `wizard-${arch}`, expected, { reason: 'matched' }, started, { sha256: reused.manifest.sha256 })
     console.log(`[build] Reused verified ${arch} installer wizard`)
     return reused
   }
+  const decision = componentDecision('wizard', arch, expected)
   const built = buildNative(INSTALLER, arch, output, toolchain, false)
   u.assertUnchanged(expected, nativeInputs(INSTALLER, arch, toolchain))
   rememberComponent('wizard', arch, expected, built, built.webEvidence)
+  buildEvidence.record(output, `wizard-${arch}`, expected, decision, started, { sha256: built.manifest.sha256 })
   return built
+}
+
+function componentDecision(name, arch, expected) {
+  if (process.env.SIDEKICK_REBUILD_SHARED_COMPONENTS === '1' || process.env.SIDEKICK_REBUILD_ALL === '1') return { reason: 'forced' }
+  const directory = path.join(componentCacheDirectory(name), arch)
+  const record = path.join(directory, `${expected.fingerprint}.json`)
+  return { reason: fs.existsSync(record) ? 'missing-or-invalid-output' : fs.existsSync(directory) ? 'inputs-changed' : 'missing' }
 }
 
 /**
@@ -611,20 +679,22 @@ function buildInstallerArtifacts(output, applications, architectures, toolchain,
   const uninstallers = {}
   for (const arch of architectures) uninstallers[arch] = buildOrReuseUninstaller(output, arch, toolchain)
   const payload = buildPayload(output, applications, uninstallers, architectures, options)
-  run(process.execPath, [path.join(ROOT, 'scripts', 'gen-install-manifest.cjs')], 'Generate current install manifest')
+  const currentManifest = require('./gen-install-manifest.cjs').generateManifest()
+  cache.atomicWrite(path.join(output, 'setup-metadata.json'), JSON.stringify(currentManifest, null, 2) + '\n')
   const setups = {}
   const wizards = {}
   const standaloneUninstallers = {}
   const uiProbes = {}
   const wizardArch = 'x64'
   wizards[wizardArch] = buildOrReuseWizard(output, wizardArch, toolchain)
-  setups[wizardArch] = appendSetup(output, wizards[wizardArch].artifact, payload, architectures)
+  setups[wizardArch] = appendSetup(output, wizards[wizardArch].artifact, payload, architectures, currentManifest)
   uiProbes[wizardArch] = probeSetupUi(setups[wizardArch], wizardArch)
   for (const arch of architectures) {
     const destination = path.join(output, `SidekickAI-Uninstaller-${VERSION}-${arch}.exe`)
     fs.copyFileSync(uninstallers[arch].artifact, destination, fs.constants.COPYFILE_EXCL)
-    u.verifyArtifact(destination, uninstallers[arch].manifest, arch, VERSION)
-    fs.writeFileSync(destination.replace(/\.exe$/, '.json'), JSON.stringify(uninstallers[arch].manifest, null, 2) + '\n', { flag: 'wx' })
+    const deployedManifest = u.deploymentManifest(uninstallers[arch].manifest, VERSION)
+    u.verifyArtifact(destination, deployedManifest, arch, VERSION)
+    fs.writeFileSync(destination.replace(/\.exe$/, '.json'), JSON.stringify(deployedManifest, null, 2) + '\n', { flag: 'wx' })
     standaloneUninstallers[arch] = destination
     const directory = path.join(applications, TARGETS[arch].directory)
     u.assertUnchanged(initialApplications[arch].inputs, applicationFingerprint(directory))
@@ -669,7 +739,12 @@ async function buildFromArguments(args) {
   const toolchain = preflight(architectures, !standalone, output)
   if (preflightOnly) return
   if (standalone) {
-    for (const arch of architectures) buildNative(UNINSTALLER, arch, output, toolchain, true)
+    for (const arch of architectures) {
+      const built = buildOrReuseUninstaller(output, arch, toolchain)
+      const destination = path.join(output, `SidekickAI-Uninstaller-${COMPONENT_VERSION}-${arch}.exe`)
+      fs.copyFileSync(built.artifact, destination, fs.constants.COPYFILE_EXCL)
+      fs.writeFileSync(destination.replace(/\.exe$/, '.json'), JSON.stringify(built.manifest, null, 2) + '\n', { flag: 'wx' })
+    }
     return
   }
   return buildProducts(output, architectures, toolchain)
@@ -705,7 +780,7 @@ async function buildProducts(output, architectures, toolchain, dependencies = na
   return result
 }
 
-module.exports = { ROOT, VERSION, TARGETS, INSTALLER, UNINSTALLER, sourceInputs, dependencyToolIdentity, validateArchitectures, run, tools, preflight, buildWeb, buildNative, cargoTargetDir, applicationFingerprint, verifyApplication, buildApplications, buildPayload, appendSetup, buildInstallerArtifacts, buildProducts, buildOrReuseUninstaller, reuseComponent, rememberComponent, sharedComponentVersion, componentCacheDirectory, probeSetupUi, readCargoPackageVersion, main, buildFromArguments }
+module.exports = { ROOT, VERSION, COMPONENT_VERSION, TARGETS, INSTALLER, UNINSTALLER, sourceInputs, nativeInputs, dependencyToolIdentity, validateArchitectures, run, tools, preflight, buildWeb, buildNative, cargoTargetDir, applicationFingerprint, verifyApplication, buildApplications, buildPayload, appendSetup, buildInstallerArtifacts, buildProducts, buildOrReuseUninstaller, reuseComponent, rememberComponent, sharedComponentVersion, componentCacheDirectory, probeSetupUi, readCargoPackageVersion, main, buildFromArguments }
 if (require.main === module) {
   main().catch(error => {
     console.error(`[build] Failed: ${error.stack || error}`)

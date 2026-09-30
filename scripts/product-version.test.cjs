@@ -24,6 +24,7 @@ function fixture(t, edition, version) {
     fs.writeFileSync(target, JSON.stringify(value, null, 2) + '\n')
   }
   json('packages/product-contract/manifest.json', common)
+  json('maintenance/component-contract.json', require('../maintenance/component-contract.json'))
   json('product-edition.json', { edition })
   json('package.json', { name: product.editions[edition].packageName, version })
   json('package-lock.json', { version: '9.9.9', packages: { '': { version: '9.9.9' } } })
@@ -40,7 +41,7 @@ test('each edition projects its own release version from package metadata', t =>
     assert.deepEqual(synchronize(root).changed, [])
     assert.equal(productIdentity(root).version, version)
     assert.equal(readContext(root).product.version, version)
-    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'installer-tauri/package.json'))).version, version)
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'installer-tauri/package.json'))).version, '1.0.0')
     assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'))).packages[''].version, version)
   }
   assert.deepEqual(fs.readFileSync(path.join(concept, 'packages/product-contract/manifest.json')), fs.readFileSync(path.join(community, 'packages/product-contract/manifest.json')))

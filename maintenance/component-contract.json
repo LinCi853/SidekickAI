@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "componentVersion": "1.0.0",
+  "setupProtocolVersion": 2,
+  "uninstallProtocolVersion": 1,
+  "supportedFeatures": [
+    "whiteboard",
+    "notes",
+    "custom-chat",
+    "prompt-library",
+    "voice",
+    "tts",
+    "browser",
+    "freeze"
+  ],
+  "supportedOptions": {
+    "autoUpdate": {
+      "type": "boolean"
+    },
+    "autoLaunch": {
+      "type": "boolean"
+    },
+    "logLevel": {
+      "type": "choice",
+      "values": [
+        "error",
+        "warn",
+        "info",
+        "debug"
+      ]
+    },
+    "usageTracking": {
+      "type": "boolean"
+    }
+  }
+}

@@ -428,14 +428,7 @@ fn application_payload_rejects_installation_receipts() {
 }
 
 fn write_embedded_fixture(path: &Path, payload: &[u8], extractor: &[u8]) {
-    let mut bytes = b"native-installer".to_vec();
-    bytes.extend_from_slice(payload);
-    bytes.extend_from_slice(extractor);
-    bytes.extend_from_slice(b"SKPAYLD1");
-    bytes.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    bytes.extend_from_slice(&(extractor.len() as u64).to_le_bytes());
-    bytes.extend_from_slice(&28u32.to_le_bytes());
-    fs::write(path, bytes).unwrap();
+    fs::write(path, crate::setup_metadata::tests::fixture_bytes(payload, extractor)).unwrap();
 }
 
 #[test]
@@ -469,15 +462,15 @@ fn embedded_payload_refuses_truncated_overflowing_and_unbounded_footers() {
     let root = temporary_root("embedded-footer");
     let setup = root.join("setup.exe");
     for (payload_length, extractor_length, footer_length) in [
-        (u64::MAX, 1, 28), (1, u64::MAX, 28), (0, 1, 28), (1, 0, 28),
-        (1, 1, u32::MAX), (2000, 1, 28), (1, 33 * 1024 * 1024, 28),
+        (u64::MAX, 1, 68), (1, u64::MAX, 68), (0, 1, 68), (1, 0, 68),
+        (1, 1, u32::MAX), (2000, 1, 68), (1, 33 * 1024 * 1024, 68),
     ] {
         write_embedded_fixture(&setup, b"payload", b"extractor");
         let mut bytes = fs::read(&setup).unwrap();
-        let footer = bytes.len() - 28;
+        let footer = bytes.len() - 68;
         bytes[footer + 8..footer + 16].copy_from_slice(&payload_length.to_le_bytes());
         bytes[footer + 16..footer + 24].copy_from_slice(&extractor_length.to_le_bytes());
-        bytes[footer + 24..].copy_from_slice(&footer_length.to_le_bytes());
+        bytes[footer + 64..].copy_from_slice(&footer_length.to_le_bytes());
         fs::write(&setup, bytes).unwrap();
         assert!(super::payload::extract_embedded_from(&setup).is_none());
     }
@@ -509,6 +502,9 @@ fn manifest_for(exe: &[u8]) -> UninstallerManifest {
         protocol_version: 1,
         edition: sidekickai_uninstall_core::product::edition_id().into(),
         version: product_version(),
+        product_version: String::new(),
+        component_version: String::new(),
+        uninstall_protocol_version: None,
         arch: "x64".into(),
         sha256: format!("{:x}", sha2::Sha256::digest(exe)),
         size: exe.len() as u64,
@@ -520,6 +516,28 @@ fn write_pair(directory: &Path, exe: &[u8], manifest: &UninstallerManifest) {
     fs::create_dir_all(directory).unwrap();
     fs::write(directory.join("uninstall.exe"), exe).unwrap();
     fs::write(directory.join("uninstall-manifest.json"), serde_json::to_vec(manifest).unwrap()).unwrap();
+}
+
+#[test]
+fn component_uninstaller_can_be_bound_to_multiple_product_versions() {
+    let root = temporary_root("uninstaller-release-binding");
+    let exe = pe_fixture(0x35);
+    let mut metadata = manifest_for(&exe);
+    metadata.protocol_version = 2;
+    metadata.version.clear();
+    metadata.component_version = env!("CARGO_PKG_VERSION").into();
+    metadata.uninstall_protocol_version = Some(1);
+    for version in ["0.1.5-beta-rc", "0.9.0"] {
+        metadata.product_version = version.into();
+        write_pair(&root, &exe, &metadata);
+        assert!(validate_uninstaller(&root, "x64", version).is_ok());
+        assert!(validate_uninstaller(&root, "x64", "99.0.0").is_err());
+        assert_eq!(fs::read(root.join("uninstall.exe")).unwrap(), exe);
+    }
+    metadata.component_version = "99.0.0".into();
+    write_pair(&root, &exe, &metadata);
+    assert!(validate_uninstaller(&root, "x64", "0.9.0").is_err());
+    let _ = fs::remove_dir_all(root);
 }
 
 fn temporary_root(name: &str) -> PathBuf {
@@ -565,7 +583,8 @@ fn write_valid_payload(dir: &Path, exe_fill: u8, uninstaller_fill: u8) -> (Vec<u
     fs::create_dir_all(dir.join("resources")).unwrap();
     let exe = pe_fixture(exe_fill);
     fs::write(dir.join("SidekickAI.exe"), &exe).unwrap();
-    fs::write(dir.join("resources").join("app.asar"), app_archive(b"payload-asar")).unwrap();
+    fs::write(dir.join("resources").join("app.asar"), edition_fixtures::archive_for_version(
+        &sidekickai_uninstall_core::product::edition().package_name, Some(&product_version()), b"payload-asar")).unwrap();
     let uninstaller = pe_fixture(uninstaller_fill);
     write_pair(dir, &uninstaller, &manifest_for(&uninstaller));
     (exe, uninstaller)
@@ -767,6 +786,8 @@ fn install_config_round_trips_and_detects_matches() {
     assert!(install_config_matches(&req));
     let read = read_install_config(&root).unwrap();
     assert!(read.get("modules").is_some() && read.get("options").is_some());
+    let automatic_update = manifest::options().into_iter().find(|option| option.id == "autoUpdate").unwrap().default_value;
+    assert_eq!(read["options"]["autoUpdate"], automatic_update);
     // A partial JSON write must not be mistaken for a complete configuration.
     fs::write(root.join("install-config.json"), b"{").unwrap();
     assert!(!install_config_matches(&req));
@@ -1657,7 +1678,8 @@ fn repair_replaces_core_only_when_the_payload_content_differs() {
     run_with(&req, &hooks).unwrap();
 
     assert_eq!(fs::read(install.join("SidekickAI.exe")).unwrap(), new_exe);
-    assert_eq!(fs::read(install.join("resources").join("app.asar")).unwrap(), app_archive(b"payload-asar"));
+    assert_eq!(fs::read(install.join("resources").join("app.asar")).unwrap(), edition_fixtures::archive_for_version(
+        &sidekickai_uninstall_core::product::edition().package_name, Some(&product_version()), b"payload-asar"));
     assert_eq!(fs::read(install.join("install-config.json")).unwrap(), b"{\"user\":true}");
     assert!(stray_staging_dirs(&install).is_empty());
 

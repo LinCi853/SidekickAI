@@ -8,6 +8,7 @@ mod controller;
 mod elevate;
 mod engine;
 mod manifest;
+mod setup_metadata;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -21,8 +22,9 @@ pub use controller::RUNNING;
 static PENDING_LAUNCH: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 #[tauri::command]
-fn get_info() -> manifest::InstallerInfo {
-    manifest::build_info()
+fn get_info() -> Result<manifest::InstallerInfo, String> {
+    setup_metadata::current()?;
+    Ok(manifest::build_info())
 }
 
 #[tauri::command]
@@ -155,6 +157,7 @@ fn set_pending_launch(install_dir: String, launch: bool, show_guide: bool) -> bo
 /// same private operation directory and identity binding as an install.
 #[tauri::command]
 async fn flush_config(opts: manifest::InstallRequest) -> Result<bool, String> {
+    setup_metadata::current()?;
     let mut config_opts = opts;
     config_opts.action = "flush-config".into();
     let dir = std::path::PathBuf::from(&config_opts.install_dir);
@@ -257,6 +260,7 @@ fn stage_cloud_download(asset_id: String, bytes: Vec<u8>) -> Result<String, Stri
 
 #[tauri::command]
 async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<bool, String> {
+    setup_metadata::current()?;
     if opts.mode == manifest::InstallMode::Uninstall {
         return Err("请使用专用卸载命令并提供已确认的扫描令牌。".into());
     }
@@ -285,7 +289,7 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
     let tail_operation_id = operation_id.clone();
     let tail = std::thread::spawn(move || tail_log(&tail_app, &tail_log_path, &tail_operation_id, tail_stop));
     controller::with_operation_context(log_path.clone(), || {
-        engine::write_log(&format!("I|操作 {}；目标版本 {}；目录 {}", operation_id, env!("CARGO_PKG_VERSION"), opts.install_dir));
+        engine::write_log(&format!("I|操作 {}；目标版本 {}；目录 {}", operation_id, engine::product_version(), opts.install_dir));
     });
 
     // Launch/guide follow the final checkbox on the completion page; the install

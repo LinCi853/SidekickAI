@@ -32,8 +32,9 @@ function parseArguments(args, identity = productIdentity()) {
 
 function captureInputs(root = ROOT) {
   const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'installer-tauri', 'uninstaller-tauri', 'installer-shared',
-    'package.json', 'package-lock.json', 'electron-builder.yml', 'electron-builder.portable.yml', 'electron.vite.config.ts',
-    'product-edition.json', 'maintenance/shared-source.json', 'build/License.txt']
+    'package.json', 'package-lock.json', 'electron-builder.yml', 'electron-builder.portable.yml', 'electron.vite.config.ts', 'tsconfig.json', 'tsconfig.node.json',
+    'LICENSE', 'product-edition.json', 'maintenance/shared-source.json', 'maintenance/component-contract.json', 'build/License.txt',
+    '.cargo/config.toml', '.cargo/config', 'rust-toolchain.toml', 'rust-toolchain']
   const excluded = new Set(['node_modules', 'target', 'dist', 'gen', '.git'])
   const files = []
   const collect = file => {
@@ -135,6 +136,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
 }
 
 async function main(args = process.argv.slice(2)) {
+  require('./check-node-version.cjs').assertNodeVersion()
   const options = parseArguments(args)
   require('../packages/product-contract/sync.cjs').synchronize(ROOT)
   require('./shared-source.cjs').check(ROOT)

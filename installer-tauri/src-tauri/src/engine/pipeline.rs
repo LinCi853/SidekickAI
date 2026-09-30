@@ -118,6 +118,7 @@ pub(crate) fn other_registration_key(hooks: &EngineHooks, req: &InstallRequest) 
 /// freshly extracted staging directory owned by this call.
 pub(crate) fn stage_payload(hooks: &EngineHooks) -> Result<(PathBuf, PathBuf, bool), String> {
     if let Some(extracted) = &hooks.extracted {
+        super::validate::validate_payload_identity(extracted)?;
         return Ok((PathBuf::new(), extracted.clone(), false));
     }
     let files = locate_payload().ok_or_else(|| {
@@ -130,6 +131,10 @@ pub(crate) fn stage_payload(hooks: &EngineHooks) -> Result<(PathBuf, PathBuf, bo
         Ok(extracted) => extracted,
         Err(error) => { cleanup_staging(&staging, true); return Err(error); }
     };
+    if let Err(error) = super::validate::validate_payload_identity(&extracted) {
+        cleanup_staging(&staging, true);
+        return Err(error);
+    }
     Ok((staging, extracted, true))
 }
 
@@ -174,6 +179,7 @@ pub(crate) fn install_rollback_message(
 }
 
 pub fn run(req: &InstallRequest) -> Result<(), String> {
+    crate::setup_metadata::current()?;
     run_with(req, &EngineHooks::default())
 }
 

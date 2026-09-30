@@ -98,3 +98,15 @@ test('source fingerprints ignore generated artifacts and cover shared configurat
   fs.writeFileSync(product, '{"version":"changed"}')
   assert.notEqual(build.captureInputs(root).fingerprint, before.fingerprint)
 })
+
+test('compiler configuration changes invalidate the candidate source baseline', t => {
+  const root = temporary(t)
+  for (const name of ['tsconfig.json', 'tsconfig.node.json']) fs.writeFileSync(path.join(root, name), '{}')
+  const baseline = build.captureInputs(root)
+  for (const name of ['tsconfig.json', 'tsconfig.node.json']) {
+    fs.writeFileSync(path.join(root, name), '{"compilerOptions":{"target":"ES2022"}}')
+    assert.notEqual(build.captureInputs(root).fingerprint, baseline.fingerprint)
+    fs.writeFileSync(path.join(root, name), '{}')
+    assert.equal(build.captureInputs(root).fingerprint, baseline.fingerprint)
+  }
+})

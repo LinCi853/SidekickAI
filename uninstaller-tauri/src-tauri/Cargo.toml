@@ -2,7 +2,7 @@
 
 [package]
 name = "sidekickai-uninstaller"
-version = "0.1.5"
+version = "1.0.0"
 description = "SidekickAI standalone uninstaller"
 authors = ["SidekickAI"]
 edition = "2021"

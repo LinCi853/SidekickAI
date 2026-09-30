@@ -14,7 +14,14 @@ pub struct UninstallerManifest {
     pub protocol_version: u32,
     #[serde(default)]
     pub edition: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub product_version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub component_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uninstall_protocol_version: Option<u32>,
     pub arch: String,
     pub sha256: String,
     pub size: u64,
@@ -66,6 +73,15 @@ pub(crate) fn validate_application(dir: &Path) -> Result<String, String> {
     Ok(pe_arch(&fs::read(dir.join("SidekickAI.exe")).map_err(|e| e.to_string())?)?.into())
 }
 
+pub(crate) fn validate_payload_identity(dir: &Path) -> Result<(), String> {
+    let identity = sidekickai_uninstall_core::product::package_identity(&dir.join("resources/app.asar"))?;
+    if identity.name != sidekickai_uninstall_core::product::edition().package_name
+        || identity.version.as_deref() != Some(crate::setup_metadata::current()?.product_version.as_str()) {
+        return Err("应用载荷的路线或产品版本与安装包不一致，尚未安装。".into());
+    }
+    Ok(())
+}
+
 pub fn validate_uninstaller(dir: &Path, arch: &str, version: &str) -> Result<UninstallerManifest, String> {
     use sha2::{Digest, Sha256};
     let exe = dir.join("uninstall.exe");
@@ -76,14 +92,22 @@ pub fn validate_uninstaller(dir: &Path, arch: &str, version: &str) -> Result<Uni
         .map_err(|e| format!("卸载器清单无效：{e}"))?;
     let bytes = fs::read(exe).map_err(|e| e.to_string())?;
     let digest = format!("{:x}", Sha256::digest(&bytes));
-    if manifest.protocol_version != 1 || manifest.edition != sidekickai_uninstall_core::product::edition_id() || manifest.version != version || manifest.arch != arch
+    let compatible = match manifest.protocol_version {
+        1 => manifest.version == version && manifest.product_version.is_empty() && manifest.component_version.is_empty()
+            && manifest.uninstall_protocol_version.is_none(),
+        2 => manifest.version.is_empty() && manifest.product_version == version && manifest.component_version == env!("CARGO_PKG_VERSION")
+            && manifest.uninstall_protocol_version == Some(1),
+        _ => false,
+    };
+    if !compatible || manifest.edition != sidekickai_uninstall_core::product::edition_id() || manifest.arch != arch
         || pe_arch(&bytes)? != arch || manifest.size != bytes.len() as u64 || manifest.sha256 != digest
         || manifest.input_fingerprint.len() != 64 || !manifest.input_fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("卸载器清单/哈希/版本/架构不匹配".into());
     }
     // app.asar path strings are valid identity probes, not embedded application data.
-    let footer = bytes.len().checked_sub(28).and_then(|at| bytes.get(at..at + 8));
-    if footer == Some(b"SKPAYLD1") || bytes.windows(10).any(|v| v == b"payload.7z")
+    let setup_footer = [(28, b"SKPAYLD1"), (68, b"SKPAYLD2")].iter()
+        .any(|(size, magic)| bytes.len().checked_sub(*size).and_then(|at| bytes.get(at..at + 8)) == Some(magic.as_slice()));
+    if setup_footer || bytes.windows(10).any(|v| v == b"payload.7z")
         || bytes.windows(7).any(|v| v == b"7zr.exe") {
         return Err("独立卸载器中发现安装器载荷".into());
     }

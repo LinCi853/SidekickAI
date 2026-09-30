@@ -27,6 +27,11 @@ build/component-cache/
 build/shared-components/
 build/packaging.lock
 build/opensource-installer-*/
+build/incremental-concept-runs/
+build/incremental-native-acceptance/
+build/setup-metadata.json
+build/native-test-artifacts/
+build/native-test-evidence.json
 
 # ============================================================
 # Electron Cache

@@ -12,9 +12,7 @@ use super::{progress, status, write_log, CommandHidden};
 // 安装流水线：scan → prepare → staging 解压 → 校验 → 关进程 → backup → commit → 注册 → 验证
 // ============================================================================
 
-/// 定位 payload.7z 与 7zr.exe：
-///   1. 优先取安装器同目录（开发 / 测试态）
-///   2. 否则从自身 exe 尾部自解压（生产态单文件）
+/// Verified payload files with ownership of an isolated extraction directory.
 pub(crate) struct LocatedPayload {
     pub(crate) payload: PathBuf,
     pub(crate) sevenz: PathBuf,
@@ -30,11 +28,15 @@ impl Drop for LocatedPayload {
 }
 
 pub(crate) fn locate_payload() -> Option<LocatedPayload> {
+    #[cfg(debug_assertions)]
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let payload = dir.join("payload.7z");
             let sevenz = dir.join("7zr.exe");
             if payload.exists() && sevenz.exists() {
+                let metadata = crate::setup_metadata::current().ok()?;
+                crate::setup_metadata::verify_blob(&payload, metadata.payload.as_ref()?).ok()?;
+                crate::setup_metadata::verify_blob(&sevenz, metadata.extractor.as_ref()?).ok()?;
                 return Some(LocatedPayload { payload, sevenz, owned_directory: None });
             }
         }
@@ -42,40 +44,26 @@ pub(crate) fn locate_payload() -> Option<LocatedPayload> {
     extract_embedded()
 }
 
-/// 从自身 exe 尾部解出 payload.7z 与 7zr.exe（footer 描述两个区块长度）。
-/// 布局：exe 原生字节 + payload.7z + 7zr.exe + footer(28B)：
-///   [0..8)  magic "SKPAYLD1"
-///   [8..16) payload_len (u64 LE)
-///   [16..24) sevenz_len (u64 LE)
-///   [24..28) footer_len (u32 LE) = 28
+/// Extract verified payload blocks from the versioned Setup container.
 pub(crate) fn extract_embedded() -> Option<LocatedPayload> {
     let exe = std::env::current_exe().ok()?;
     extract_embedded_from(&exe)
 }
 
 pub(crate) fn extract_embedded_from(exe: &Path) -> Option<LocatedPayload> {
-    use std::io::{Seek, SeekFrom};
     let mut f = std::fs::File::open(exe).ok()?;
-    let file_size = f.metadata().ok()?.len();
-    if file_size <= 28 { return None; }
-    f.seek(SeekFrom::End(-28)).ok()?;
-    let mut footer = [0u8; 28];
-    f.read_exact(&mut footer).ok()?;
-    if &footer[0..8] != b"SKPAYLD1" || u32::from_le_bytes(footer[24..28].try_into().ok()?) != 28 { return None; }
-    let payload_len = u64::from_le_bytes(footer[8..16].try_into().ok()?);
-    let sevenz_len = u64::from_le_bytes(footer[16..24].try_into().ok()?);
-    if payload_len == 0 || sevenz_len == 0 || sevenz_len > 32 * 1024 * 1024 { return None; }
-    let suffix_len = payload_len.checked_add(sevenz_len)?.checked_add(28)?;
-    let payload_off = file_size.checked_sub(suffix_len)?;
-    if payload_off == 0 { return None; }
+    let layout = crate::setup_metadata::read_layout(&mut f).ok()?;
+    let metadata = crate::setup_metadata::read_from(&mut f, &layout).ok()?;
     let directory = super::pipeline::unique_temp_dir("SidekickAI-Payload").ok()?;
     let files = LocatedPayload {
         payload: directory.join("payload.7z"), sevenz: directory.join("7zr.exe"),
         owned_directory: Some(directory),
     };
-    copy_file_range(&mut f, payload_off, payload_len, &files.payload).ok()?;
-    copy_file_range(&mut f, payload_off + payload_len, sevenz_len, &files.sevenz).ok()?;
-    if f.metadata().ok()?.len() != file_size { return None; }
+    copy_file_range(&mut f, layout.payload_offset, layout.payload_size, &files.payload).ok()?;
+    copy_file_range(&mut f, layout.payload_offset + layout.payload_size, layout.extractor_size, &files.sevenz).ok()?;
+    if f.metadata().ok()?.len() != layout.file_size { return None; }
+    crate::setup_metadata::verify_blob(&files.payload, metadata.payload.as_ref()?).ok()?;
+    crate::setup_metadata::verify_blob(&files.sevenz, metadata.extractor.as_ref()?).ok()?;
     write_log("I|安装载荷已提取到独立临时目录");
     Some(files)
 }

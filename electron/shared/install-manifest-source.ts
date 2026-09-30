@@ -1,13 +1,5 @@
-// electron/shared/install-manifest-source.ts — 安装向导清单「单一数据源」投影
-//
-// 由 scripts/gen-install-manifest.cjs 经 esbuild 打包后执行，产出
-// installer-tauri/src-tauri/install-manifest.json，安装向导（Rust/前端）均从此读取。
-//
-// 派生规则：
-//  - 功能清单 ← builtin-module-data.ts（与主应用 BUILTIN_MODULES 同源）
-//  - 选项清单 ← 显式元数据 + getDefaultAppSettings(false) 的默认值投影（保证与主应用默认一致）
-//
-// 本文件禁止引入任何有副作用的模块（仅允许纯数据导入），保证可被 Node 安全 require。
+// Pure application data projected into runtime setup metadata.
+// Feature definitions and option defaults share the application sources.
 
 import { BUILTIN_MODULE_INSTALL_DATA } from '../modules/builtin-module-data.js'
 import { getDefaultAppSettings } from '../store/default-config.js'

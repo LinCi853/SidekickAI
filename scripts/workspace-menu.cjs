@@ -61,7 +61,7 @@ function actionPlan(context, action, mode = null) {
     case 'build-keys': return [npm(['run', 'build:oxy-key-manager'])]
     case 'verify': return [
       npm(['run', 'product:check']), npm(['run', 'shared:check']), npm(['run', 'typecheck']),
-      node(['--test', 'scripts/workspace-menu.test.cjs']),
+      node(['--test', 'scripts/workspace-menu.test.cjs', 'scripts/shared-source.test.cjs']),
     ]
     case 'verify-desktop': return context.editionId === 'concept'
       ? [npm(['test', '--', '--maxWorkers=4', '--minWorkers=1']), npm(['run', 'test:desktop'])]
@@ -137,6 +137,7 @@ function help(context) {
     'verify 为快速检查；verify-desktop 启动隔离桌面回归；verify-installer 编译并运行隔离安装卸载回归。',
     ...(context.editionId === 'community' ? ['社区工具：plugin-preview、keys-dev、build-keys。'] : []),
     `允许包型：${buildModes(context).join('、')}；build 默认 installer。`,
+    '构建按输入摘要复用应用编译和维护组件；PowerShell 中设置 $env:SIDEKICK_REBUILD_ALL="1" 可强制重建。',
     concept ? 'build-release 生成安装器；preflight-release 检查构建条件。' : '兼容入口：build-release 构建安装器候选；preflight-release 仅执行安装器构建预检。',
     '--dry-run 只显示目录、环境和参数，不运行命令；不带操作时预览各菜单。',
     concept ? '生成的文件保存在本机，不会自动上传或替换已有安装。' : '候选构建不发布、不上传、不替换个人安装；原生构建预检可能产生探测文件。',
