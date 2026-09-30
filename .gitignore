@@ -103,6 +103,7 @@ scripts/poc/
 # 均为本地工具运行时元数据，不入库（防止误提交内部链接/会话内容）
 .tokeny/
 .zcode/
+.zcodeignore
 .mimocode/
 .claude/
 

@@ -27,11 +27,11 @@ vi.mock('./uiohook.js', () => ({
   },
   EventType: { EVENT_KEY_PRESSED: 7, EVENT_KEY_RELEASED: 8 },
   uIOhook: fixture.uiohook,
+  getUiohookAvailability: () => ({ available: true, error: null }),
 }))
 vi.mock('./store.js', () => ({
   DEFAULT_HOTKEYS: { toggleMainWindow: 'Alt+Space', toggleDetachedWindows: 'Alt+Q' },
   HOTKEY_LABELS: { toggleMainWindow: '显示/隐藏主窗口', toggleDetachedWindows: '显示/隐藏脱离窗口' },
-  TRIGGER_DEBOUNCE_MS: 200,
   hotkeyStore: { get: fixture.storeGet, set: vi.fn() },
   storeKey: (action: string) => `hotkey.${action}`,
   enabledStoreKey: (action: string) => `hotkey.enabled.${action}`,

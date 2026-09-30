@@ -20,16 +20,16 @@ export interface BrowserShortcutsHost {
   registrationStates: Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>
   /** 已注册 accelerator 的 uiohook 匹配条件缓存 */
   uiohookMatchers: Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>
-  /** 最近触发时间戳（用于去重） */
-  lastTriggeredAt: Map<string, number>
+  /** 最近一次系统通路触发时间戳（accelerator → ms，长按连切仲裁用） */
+  lastSystemTriggerAt: Map<string, number>
   /** uiohook 是否已启动 */
   uiohookStarted: boolean
   /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时） */
   _paused: boolean
   /** 热键录制状态：null 表示未录制，非 null 表示录制中（含回调） */
   _recordingCallback: HotkeyRecordingCallback | null
-  /** 统一触发入口：200ms 去重，避免 globalShortcut + uiohook 双触发 */
-  trigger(accelerator: string, callback: () => void): void
+  /** 统一触发入口：source 标记来源通路，系统通路不依赖钩子物理状态（与内置热键 register() 一致） */
+  trigger(accelerator: string, callback: () => void, source?: 'system' | 'hook'): void
   /** Start the input hook once. */
   ensureUiohookStarted(): void
 }
@@ -54,20 +54,27 @@ export function registerBrowserShortcut(host: BrowserShortcutsHost, accelerator:
     return false
   }
   host.ownershipLeases.set(accelerator, lease)
-  // 包装回调：加入 200ms 去重窗口（与内置热键 register() 一致）。
-  // 浏览器快捷键同时走 globalShortcut 主路径 + uiohook 兜底，若不包 trigger()，
-  // 同一次按键会被两路各触发一次 → toggleBrowserWindow 连续开关（闪一下关闭）
+  // 注册期即分出唯一活动通路（与内置热键 register() 一致）：
+  //   - systemCallback：仅 registered 状态由 globalShortcut 调用，不依赖钩子物理状态
+  //   - hookCallback：仅 fallback 状态由钩子匹配调用（trigger 内严格校验物理按键状态）
+  // 若不区分通路，同一次按键会被两路各触发一次 → toggleBrowserWindow 连续开关（闪一下关闭）
   // 或在窗口入映射前各开一个（同应用多窗口）。
-  const throttledCallback = () => {
-    if (host.registered.get(accelerator) !== throttledCallback && host.browserShortcuts.get(accelerator) !== throttledCallback) return
-    host.trigger(accelerator, callback)
+  const systemCallback = () => {
+    if (host.browserShortcuts.get(accelerator) !== systemCallback) return
+    if (host.registrationStates.get(accelerator) !== 'registered') return
+    host.trigger(accelerator, callback, 'system')
   }
-  host.browserShortcuts.set(accelerator, throttledCallback)
+  const hookCallback = () => {
+    if (host.browserShortcuts.get(accelerator) !== systemCallback) return
+    if (host.registrationStates.get(accelerator) !== 'fallback') return
+    host.trigger(accelerator, callback, 'hook')
+  }
+  host.browserShortcuts.set(accelerator, systemCallback)
   // 加入 uiohook 匹配器（兜底），复用主映射机制
   if (!host.uiohookMatchers.has(accelerator)) {
     host.uiohookMatchers.set(accelerator, {
       ...parseAccelerator(accelerator),
-      callback: throttledCallback,
+      callback: hookCallback,
     })
   }
   host.ensureUiohookStarted()
@@ -77,7 +84,8 @@ export function registerBrowserShortcut(host: BrowserShortcutsHost, accelerator:
   }
   // Register with the operating system.
   try {
-    const ok = globalShortcut.register(accelerator, throttledCallback)
+    const ok = globalShortcut.register(accelerator, systemCallback)
+    if (host.browserShortcuts.get(accelerator) !== systemCallback) return false
     if (ok) {
       host.registrationStates.set(accelerator, 'registered')
       console.log(`[HotkeyManager] 浏览器全局快捷键注册成功: ${accelerator}`)
@@ -114,7 +122,7 @@ export function unregisterBrowserShortcut(host: BrowserShortcutsHost, accelerato
   if (!host.registered.has(accelerator)) {
     host.uiohookMatchers.delete(accelerator)
   }
-  host.lastTriggeredAt.delete(accelerator)
+  host.lastSystemTriggerAt.delete(accelerator)
   host.ownershipLeases.get(accelerator)?.release()
   host.ownershipLeases.delete(accelerator)
   host.registrationStates.delete(accelerator)

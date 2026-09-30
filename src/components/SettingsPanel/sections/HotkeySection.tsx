@@ -141,6 +141,8 @@ export default function HotkeySection({
                   </Button>
                 )}
               </div>
+              {/* 系统注册失败但钩子兜底可用：降级警告；完全不可用/冲突：失败提示 */}
+              {h.enabled && h.registration === 'fallback' && <div role="status" className="hotkey-feedback feedback-text warn">{h.registrationReason ?? '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。'}</div>}
               {h.enabled && (h.registration === 'conflict' || h.registration === 'unavailable') && <div role="status" className="hotkey-feedback feedback-text fail">{h.registrationReason ?? '快捷键暂不可用，请修改组合键或重新启用。'}</div>}
               {fb && (
                 <div className={`hotkey-feedback feedback-text ${fb.type === 'success' ? 'ok' : 'fail'}`} data-name={`settings.hotkey.hotkey-item-${idx + 1}-feedback`}>{fb.msg}</div>

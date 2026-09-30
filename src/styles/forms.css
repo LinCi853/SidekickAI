@@ -92,6 +92,7 @@
 }
 .feedback-text.ok { color: var(--success); }
 .feedback-text.fail { color: var(--danger); }
+.feedback-text.warn { color: var(--warning); }
 
 /* ===== SegmentedControl 容器通用布局类（替代跨场景复用 .proxy-mode-group） ===== */
 .seg-control-row {

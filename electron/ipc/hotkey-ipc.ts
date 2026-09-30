@@ -107,14 +107,18 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       const mainWindow = getMainWindow()
       if (!mainWindow) return
       if (!mainWindow.isVisible() || mainWindow.isMinimized()) {
-        // 显示：同步 show + focus（立即生效）
+        // 显示：同步 show + focus（立即生效），唤出后异步核验前台焦点
         focusManager.show(mainWindow)
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
         }
       } else if (!mainWindow.isFocused()) {
-        mainWindow.focus()
-        mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        // 可见但未聚焦：统一经焦点服务补焦点（含前台核验与一次有界重试），
+        // 与隐藏/最小化唤出保持同一激活语义
+        focusManager.show(mainWindow)
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+        }
       } else {
         // 隐藏：hide + 异步恢复外部窗口（不阻塞主进程）
         focusManager.hide(mainWindow)
@@ -272,6 +276,15 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
 
   // 注册 2 个默认内置热键（从持久化配置读取 accelerator）
   void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks)
+
+  // 热键运行状态推送：注册状态/钩子可用性/暂停变化时同步到主窗口渲染层，
+  // 供设置页如实展示（HOTKEY_GET_ALL 是拉取兜底，本订阅是变化推送）
+  hotkeyManager.subscribeStatus((status) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.HOTKEY_STATUS, status)
+    }
+  })
 
   // 进阶面板无可用模块时自动注销 Alt+Q
   syncAdvancedPanelHotkey()

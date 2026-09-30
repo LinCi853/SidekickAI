@@ -21,7 +21,7 @@ vi.mock('./uiohook.js', () => {
   return { UiohookKey: fixture.keys, EventType: { EVENT_KEY_PRESSED: 4, EVENT_KEY_RELEASED: 5 }, uIOhook: {
     start() { fixture.current.started = true }, stop() { fixture.current.started = false },
     on(event: string, callback: (value: unknown) => void) { fixture.current.listeners.set(event, callback) },
-  } }
+  }, getUiohookAvailability: () => ({ available: true, error: null }) }
 })
 vi.mock('./store.js', () => ({
   DEFAULT_HOTKEYS: { toggleMainWindow: 'Alt+Space', toggleDetachedWindows: 'Alt+Q', backgroundVoice: 'Alt+V' },
@@ -68,12 +68,25 @@ function release(keycode: number) {
   }
 }
 
+/** 模拟 OS 向注册者投递 WM_HOTKEY（系统通路；registered 状态下的唯一分发路径） */
+function fireSystem(key: string) {
+  for (const context of fixture.contexts) {
+    const entry = fixture.owners.get(key)
+    if (entry && entry.context === context) {
+      fixture.current = context
+      entry.callback()
+    }
+  }
+}
+
 describe('hotkey ownership between application instances', () => {
   it('does not invoke a second hook fallback when another instance owns the OS shortcut', async () => {
     const first = await manager(), second = await manager()
     const firstAction = vi.fn(), secondAction = vi.fn()
     await first.register('Alt+Q', firstAction)
     await second.register('Alt+Q', secondAction)
+    // registered 状态下系统回调是唯一分发路径，钩子事件不得重复触发
+    fireSystem('Alt+Q')
     press(fixture.keys.Q)
     expect(firstAction).toHaveBeenCalledOnce()
     expect(secondAction).not.toHaveBeenCalled()
@@ -103,8 +116,11 @@ describe('hotkey ownership between application instances', () => {
     first.pauseAllShortcuts()
     expect(await second.register('Alt+Q', vi.fn())).toBe(false)
     first.resumeAllShortcuts()
+    // 恢复后系统通路重新生效，钩子事件不得额外触发
     release(fixture.keys.Q)
     press(fixture.keys.Q)
+    expect(action).not.toHaveBeenCalled()
+    fireSystem('Alt+Q')
     expect(action).toHaveBeenCalledOnce()
   })
   it('releases ownership when native registration throws', async () => {

@@ -72,6 +72,11 @@ export class HotkeyInputState {
     return true
   }
 
+  /** 该键当前是否被钩子观察到处于按下状态（供系统通路做长按连切仲裁的证据） */
+  isKeyHeld(keycode: number): boolean {
+    return this.held.has(keycode)
+  }
+
   suspend(): void {
     this.authorized.clear()
     for (const key of this.held) this.consumed.add(key)

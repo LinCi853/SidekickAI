@@ -8,12 +8,13 @@
 //
 // 持久化到 electron-store（hotkey.json），支持从旧版 hotkey.toggle 迁移。
 //
-// 双保险机制：
-//   1. Electron globalShortcut（系统级注册，优先）
-//   2. uiohook-napi 低级键盘钩子兜底（监听系统按键事件并匹配组合键）
-//
-// 由于 uiohook 监听而非拦截，为避免与 globalShortcut 同时触发，
-// 所有回调统一经过 200ms 去重窗口，同一 accelerator 在此窗口内只触发一次。
+// 双保险机制（注册期分出唯一活动通路，2026-09 game-hotkey audit 修正）：
+//   1. Electron globalShortcut（系统级注册）→ 进入 registered 状态，仅系统回调分发，
+//      不依赖钩子物理状态（钩子无事件/漏事件时系统回调仍可触发）
+//   2. uiohook-napi 低级键盘钩子 → 仅在系统注册失败（fallback 状态）时兜底分发，
+//      严格校验钩子观察到的物理按键状态（防修饰键残留误触）
+// 同一 accelerator 只有一条通路会分发，迟到回调由身份+状态双重校验拒绝；
+// 系统通路的长按连切由证据式仲裁抑制（Electron globalShortcut 未启用 MOD_NOREPEAT）。
 //
 // 代码组织（模块拆分）：
 //   - types.ts        类型定义
@@ -32,13 +33,12 @@ import { HotkeyInputState } from './input-state.js'
 import { dispatchBrowserHotkeyFallback } from '../utils/browser-hotkey-fallback.js'
 import { checkAccessibilityPermission } from '../utils/permission-manager.js'
 import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
-import { UiohookKey, EventType, uIOhook } from './uiohook.js'
+import { UiohookKey, EventType, uIOhook, getUiohookAvailability } from './uiohook.js'
 import { parseAccelerator } from './accelerator.js'
 import { classifyCloudPcKey } from './cloud-pc-keys.js'
 import {
   DEFAULT_HOTKEYS,
   HOTKEY_LABELS,
-  TRIGGER_DEBOUNCE_MS,
   hotkeyStore,
   storeKey,
   enabledStoreKey,
@@ -80,14 +80,18 @@ export function getHotkeyManagerInstance(): HotkeyManager | null {
   return _hotkeyManagerInstance
 }
 
+/** 系统通路长按连切的时间窗口兜底（钩子不可用/未观察到按下时） */
+const SYSTEM_REPEAT_FALLBACK_MS = 300
+/** 系统通路按住抑制的时间上限（钩子中途失效导致 held 状态滞留时自愈） */
+const SYSTEM_HOLD_CAP_MS = 3000
+
 export class HotkeyManager {
   /** @internal —— manager 拆分模块协作字段 */
   readonly ownership = new HotkeyOwnership()
   /** @internal —— manager 拆分模块协作字段 */
   readonly ownershipLeases = new Map<string, HotkeyLease>()
   /** @internal —— manager 拆分模块协作字段 */
-  readonly registrationStates = new Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>()
-  /** @internal —— manager 拆分模块协作字段 */
+  readonly registrationStates = new Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>()  /** @internal —— manager 拆分模块协作字段 */
   readonly recordingLeases = new Map<string, HotkeyLease>()
   /** @internal —— manager 拆分模块协作字段 */
   voiceCleanup: (() => void) | null = null
@@ -103,8 +107,16 @@ export class HotkeyManager {
   uiohookStarted = false
     /** 已注册 accelerator 的 uiohook 匹配条件缓存；@internal manager 拆分模块协作字段 */
   uiohookMatchers = new Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>()
-    /** 最近触发时间戳（用于去重）；@internal manager 拆分模块协作字段 */
-  lastTriggeredAt = new Map<string, number>()
+    /** 最近一次系统通路触发时间戳（accelerator → ms，长按连切仲裁用）；@internal manager 拆分模块协作字段 */
+  lastSystemTriggerAt = new Map<string, number>()
+    /** 钩子观察到的主键释放时间戳（keycode → ms，系统通路长按仲裁的"已释放"证据） */
+  lastPrimaryKeyUpAt = new Map<number, number>()
+    /** 钩子最近一次收到事件的时间戳（null = 启动后未观察到任何键盘事件） */
+  lastHookEventAt: number | null = null
+    /** 钩子不可用原因（模块缺失/启动失败/macOS 权限）；null = 可用 */
+  hookError: string | null = null
+    /** 热键运行状态订阅（注册状态/钩子可用性变化时通知，供 IPC 推送） */
+  private readonly statusListeners = new Set<(status: ReturnType<HotkeyManager['getStatus']>) => void>()
     /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut）；@internal manager 拆分模块协作字段 */
   voiceMatcher: VoiceMatcher | null = null
   /** @internal —— manager 拆分模块协作字段 */
@@ -186,7 +198,7 @@ export class HotkeyManager {
   /**
    * 注册热键
    * 主路径 globalShortcut，同时加入 uiohook 兜底监听。
-   * 只要其中一路生效，热键即可工作。
+   * 注册期即分出唯一活动通路：registered 状态仅系统回调分发，fallback 状态仅钩子回调分发。
    * @returns Whether an owned shortcut backend is available.
    */
   async register(accelerator: string, callback: () => void): Promise<boolean> {
@@ -197,26 +209,36 @@ export class HotkeyManager {
     const lease = this.ownership.acquire(accelerator, `application:${accelerator}`)
     if (!lease) {
       this.registrationStates.set(accelerator, 'conflict')
+      this.notifyStatus()
       return false
     }
     this.ownershipLeases.set(accelerator, lease)
 
-    // 包装回调：加入去重窗口
-    const throttledCallback = () => {
-      if (this.registered.get(accelerator) !== throttledCallback && this.browserShortcuts.get(accelerator) !== throttledCallback) return
-      this.trigger(accelerator, callback)
+    // 双重校验（回调身份 + 注册状态）拒绝迟到回调，并保证同一 accelerator 只有一条通路分发：
+    //   - systemCallback：仅 registered 状态由 globalShortcut 调用，不依赖钩子物理状态
+    //   - hookCallback：仅 fallback 状态由钩子匹配调用，trigger 内严格校验物理按键状态
+    const systemCallback = () => {
+      if (this.registered.get(accelerator) !== systemCallback) return
+      if (this.registrationStates.get(accelerator) !== 'registered') return
+      this.trigger(accelerator, callback, 'system')
     }
-    this.registered.set(accelerator, throttledCallback)
+    const hookCallback = () => {
+      if (this.registered.get(accelerator) !== systemCallback) return
+      if (this.registrationStates.get(accelerator) !== 'fallback') return
+      this.trigger(accelerator, callback, 'hook')
+    }
+    this.registered.set(accelerator, systemCallback)
 
     // 加入 uiohook 匹配器（兜底）
     this.uiohookMatchers.set(accelerator, {
       ...parseAccelerator(accelerator),
-      callback: throttledCallback,
+      callback: hookCallback,
     })
     this.ensureUiohookStarted()
 
     if (this._paused || this._recordingCallback) {
       this.registrationStates.set(accelerator, 'registered')
+      this.notifyStatus()
       return true
     }
 
@@ -226,10 +248,12 @@ export class HotkeyManager {
       if (globalShortcut.isRegistered(accelerator)) {
         console.warn(`[HotkeyManager] 热键已被占用: ${accelerator}`)
       }
-      const ok = globalShortcut.register(accelerator, throttledCallback)
+      const ok = globalShortcut.register(accelerator, systemCallback)
+      if (this.registered.get(accelerator) !== systemCallback) return false
       if (ok) {
         this.registrationStates.set(accelerator, 'registered')
         console.log(`[HotkeyManager] globalShortcut 注册成功: ${accelerator}`)
+        this.notifyStatus()
         return true
       }
       console.warn(
@@ -246,37 +270,76 @@ export class HotkeyManager {
       )
       this.unregister(accelerator)
       this.registrationStates.set(accelerator, 'unavailable')
+      this.notifyStatus()
       return false
     }
 
+    // 系统注册失败：钩子真实可用才允许兜底（mock/不可用时不得谎报 fallback）
     if (this.uiohookStarted && parseAccelerator(accelerator).keycode != null) {
+      // 清掉残留的 claim/授权状态，兜底通路从干净状态开始
+      this.inputState.suspend()
       this.registrationStates.set(accelerator, 'fallback')
+      this.notifyStatus()
       return true
     }
     this.unregister(accelerator)
     this.registrationStates.set(accelerator, 'unavailable')
+    this.notifyStatus()
     return false
   }
 
   /** @internal —— manager 拆分模块协作方法（browser-shortcuts.ts 经 host 调用） */
-  /** 统一触发入口：200ms 去重，避免 globalShortcut + uiohook 双触发 */
-  trigger(accelerator: string, callback: () => void): void {
+  /**
+   * 统一触发入口。
+   *
+   * 系统通路不要求钩子观察过物理按键（这是 game-hotkey audit 复现的主缺陷：
+   * 旧实现要求 claim 通过，钩子无事件/漏事件时系统回调被应用自己丢弃）。
+   * 钩子兜底通路保持严格物理按键校验（防 Alt+Tab 修饰键残留、长按重复）。
+   */
+  trigger(accelerator: string, callback: () => void, source: 'system' | 'hook' = 'system'): void {
     if (this._paused || this._recordingCallback) return
     if (!this.ownershipLeases.get(accelerator)?.active) return
-    if (this.uiohookStarted && !this.inputState.claim(parseAccelerator(accelerator))) return
-    const now = Date.now()
-    const last = this.lastTriggeredAt.get(accelerator) ?? 0
-    if (!this.uiohookStarted && now - last < TRIGGER_DEBOUNCE_MS) {
-      console.log(`[HotkeyManager] 触发去重: ${accelerator}`)
-      return
+    if (source === 'hook') {
+      if (!this.inputState.claim(parseAccelerator(accelerator))) {
+        console.warn(`[HotkeyManager] 钩子兜底回调未通过物理按键状态校验: ${accelerator}`)
+        return
+      }
+    } else {
+      if (!this.canDispatchSystem(accelerator)) {
+        console.log(`[HotkeyManager] 系统通路连切仲裁抑制: ${accelerator}`)
+        return
+      }
+      this.lastSystemTriggerAt.set(accelerator, Date.now())
     }
-    this.lastTriggeredAt.set(accelerator, now)
-    console.log(`[HotkeyManager] 触发: ${accelerator}`)
+    console.log(`[HotkeyManager] 触发(${source}): ${accelerator}`)
     try {
       callback()
     } catch (err) {
       console.error(`[HotkeyManager] 热键回调异常: ${accelerator}`, err)
     }
+  }
+
+  /**
+   * 系统通路长按连切仲裁。
+   * Electron 43 的 globalShortcut 未传 MOD_NOREPEAT，按住不放会重复收到 WM_HOTKEY。
+   * 仲裁依据（按优先级）：
+   *   1. 钩子观察到主键释放（自上次触发后）→ 视为新的物理按压，放行；
+   *   2. 主键仍处于按下且未见释放 → 抑制（等价 MOD_NOREPEAT 语义），
+   *      超过 HOLD_CAP 自愈（钩子中途失效导致的 held 滞留）；
+   *   3. 钩子未观察到按下（不可用/事件缺失）→ 时间窗口兜底防连切。
+   */
+  private canDispatchSystem(accelerator: string): boolean {
+    const last = this.lastSystemTriggerAt.get(accelerator)
+    if (last == null) return true
+    const now = Date.now()
+    const primary = parseAccelerator(accelerator).keycode
+    if (primary != null && (this.lastPrimaryKeyUpAt.get(primary) ?? 0) > last) {
+      return true
+    }
+    if (primary != null && this.inputState.isKeyHeld(primary)) {
+      return now - last >= SYSTEM_HOLD_CAP_MS
+    }
+    return now - last >= SYSTEM_REPEAT_FALLBACK_MS
   }
 
   private syncModifierState(): void {
@@ -293,18 +356,32 @@ export class HotkeyManager {
     if (this.uiohookStarted) return
     // macOS 需要辅助功能权限才能使用 uiohook 低级键盘钩子
     if (process.platform === 'darwin' && !checkAccessibilityPermission()) {
+      this.hookError = 'macOS 辅助功能权限未授权'
       console.warn(
         '[HotkeyManager] macOS 辅助功能权限未授权，uiohook 不可用，降级为仅 globalShortcut',
       )
+      this.notifyStatus()
+      return
+    }
+    // 可用性如实判定：mock 的 start() 不会抛错，若据此标记已启动，
+    // 钩子兜底会谎报可用（实际永远收不到事件）
+    const availability = getUiohookAvailability()
+    if (!availability.available) {
+      this.hookError = availability.error ?? 'uiohook 原生模块不可用'
+      this.notifyStatus()
       return
     }
     try {
       uIOhook.start()
       this.uiohookStarted = true
+      this.hookError = null
       console.log('[HotkeyManager] uiohook 监听已启动')
     } catch (err) {
+      this.uiohookStarted = false
+      this.hookError = err instanceof Error ? err.message : String(err)
       console.error('[HotkeyManager] uiohook 启动失败:', err)
     }
+    this.notifyStatus()
   }
 
   /** 附加 uiohook keydown/keyup 监听器 */
@@ -312,6 +389,7 @@ export class HotkeyManager {
     uIOhook.on('keydown', (e) => {
       if (e.type !== EventType.EVENT_KEY_PRESSED) return
       this.inputState.observe(e, true)
+      this.lastHookEventAt = Date.now()
       this.syncModifierState()
       // 云电脑模式按键路由：系统级按键（Win/Alt+Tab/Win+Tab/Win+D/Alt+F4/Esc）
       // 必须在 _paused 检查之前处理（云电脑模式正是暂停状态）
@@ -389,6 +467,8 @@ export class HotkeyManager {
         }
       }
       this.inputState.observe(e, false)
+      this.lastHookEventAt = Date.now()
+      this.lastPrimaryKeyUpAt.set(e.keycode, Date.now())
       this.syncModifierState()
       // 语音热键 keyup：主键匹配就触发 onKeyUp
       // 1) voiceKeyPressed=true 时 → 标准路径（已记录按下态）
@@ -431,10 +511,11 @@ export class HotkeyManager {
     }
     this.registered.delete(accelerator)
     this.uiohookMatchers.delete(accelerator)
-    this.lastTriggeredAt.delete(accelerator)
+    this.lastSystemTriggerAt.delete(accelerator)
     this.ownershipLeases.get(accelerator)?.release()
     this.ownershipLeases.delete(accelerator)
     this.registrationStates.delete(accelerator)
+    this.notifyStatus()
   }
 
   /** 注册浏览器窗口全局快捷键（实现见 browser-shortcuts.ts） */
@@ -474,7 +555,8 @@ export class HotkeyManager {
     this.browserShortcuts.clear()
     this.actionAccelerators.clear()
     this.uiohookMatchers.clear()
-    this.lastTriggeredAt.clear()
+    this.lastSystemTriggerAt.clear()
+    this.lastPrimaryKeyUpAt.clear()
     this.ownership.close()
     this.ownershipLeases.clear()
     this.registrationStates.clear()
@@ -492,6 +574,7 @@ export class HotkeyManager {
       }
       this.uiohookStarted = false
     }
+    this.notifyStatus()
   }
 
   /** 获取某个内置热键的 accelerator（从 store 读取） */
@@ -517,14 +600,31 @@ export class HotkeyManager {
 
   /** 获取全部内置热键配置（供 UI 展示，含 enabled 状态） */
   getAllHotkeys(): HotkeyConfig[] {
-    return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).map((action) => ({
-      action,
-      label: HOTKEY_LABELS[action],
-      accelerator: this.getHotkey(action),
-      enabled: this.getEnabled(action),
-      registration: this.getEnabled(action) ? this.registrationStates.get(this.getHotkey(action)) : undefined,
-      registrationReason: this.registrationStates.get(this.getHotkey(action)) === 'conflict' ? '此快捷键由另一个工百窗实例使用或暂时无法取得，请修改组合键或重新启用。' : undefined,
-    }))
+    return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).map((action) => {
+      const acc = this.getHotkey(action)
+      return {
+        action,
+        label: HOTKEY_LABELS[action],
+        accelerator: acc,
+        enabled: this.getEnabled(action),
+        registration: this.getEnabled(action) ? this.registrationStates.get(acc) : undefined,
+        registrationReason: this.getEnabled(action) ? this.registrationReason(this.registrationStates.get(acc)) : undefined,
+      }
+    })
+  }
+
+  /** 注册状态的用户可读原因（registered 时为 undefined） */
+  private registrationReason(state: 'registered' | 'fallback' | 'conflict' | 'unavailable' | undefined): string | undefined {
+    switch (state) {
+      case 'conflict':
+        return '此快捷键由另一个工百窗实例使用或暂时无法取得，请修改组合键或重新启用。'
+      case 'fallback':
+        return '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。'
+      case 'unavailable':
+        return '系统快捷键注册失败，键盘监听兜底也不可用；请更换组合键或重启应用。'
+      default:
+        return undefined
+    }
   }
 
   /**
@@ -636,6 +736,7 @@ export class HotkeyManager {
       this.stopVoicePolling()
     }
     console.log('[HotkeyManager] 所有全局热键已暂停')
+    this.notifyStatus()
   }
 
   /**
@@ -661,6 +762,7 @@ export class HotkeyManager {
       this.registrationStates.set(acc, 'unavailable')
     }
     console.log('[HotkeyManager] 所有全局热键已恢复')
+    this.notifyStatus()
   }
 
   /**
@@ -675,21 +777,52 @@ export class HotkeyManager {
 
   /**
    * 获取热键管理器状态（用于 UI 启动状态指示）
-   * - uiohookStarted: uiohook 监听是否已启动
+   * - uiohookStarted: uiohook 监听是否已启动（如实判定：模块缺失时为 false）
+   * - hookError: 钩子不可用原因；null = 可用
+   * - lastHookEventAt: 钩子最近一次收到事件的时间戳；null = 启动后未观察到任何事件
+   * - paused: 全局热键是否处于暂停状态
    * - voiceHotkeyRegistered: 语音热键是否已注册
    * - voiceKeyPressed: 当前是否认为 V 键处于按下状态
    */
   getStatus(): {
     uiohookStarted: boolean
+    hookError: string | null
+    lastHookEventAt: number | null
+    paused: boolean
     voiceHotkeyRegistered: boolean
     voiceKeyPressed: boolean
     pollingActive: boolean
   } {
     return {
       uiohookStarted: this.uiohookStarted,
+      hookError: this.hookError,
+      lastHookEventAt: this.lastHookEventAt,
+      paused: this._paused,
       voiceHotkeyRegistered: this.voiceMatcher !== null,
       voiceKeyPressed: this.voiceKeyPressed,
       pollingActive: this.voicePollingTimer !== null,
+    }
+  }
+
+  /**
+   * 订阅热键运行状态（注册状态/钩子可用性/暂停变化时推送）。
+   * @returns 取消订阅函数
+   */
+  subscribeStatus(listener: (status: ReturnType<HotkeyManager['getStatus']>) => void): () => void {
+    this.statusListeners.add(listener)
+    listener(this.getStatus())
+    return () => { this.statusListeners.delete(listener) }
+  }
+
+  private notifyStatus(): void {
+    if (!this.statusListeners.size) return
+    const status = this.getStatus()
+    for (const listener of [...this.statusListeners]) {
+      try {
+        listener(status)
+      } catch (err) {
+        console.error('[HotkeyManager] 状态订阅回调异常', err)
+      }
     }
   }
 }

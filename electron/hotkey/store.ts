@@ -17,9 +17,6 @@ export const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   toggleVoice: '语音输入（切换）',
 }
 
-/** 同一热键连续触发的去重窗口（ms） */
-export const TRIGGER_DEBOUNCE_MS = 200
-
 type HotkeyStoreSchema = {
   'hotkey.toggleMainWindow': string
   'hotkey.toggleDetachedWindows': string
