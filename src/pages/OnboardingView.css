@@ -344,9 +344,6 @@
 .onboarding-radio input {
   display: none;
 }
-.onboarding-radio.is-active {
-  background: var(--primary-bg, rgba(var(--primary-rgb, 0, 0, 0), 0.05));
-}
 
 /* ===== 其他功能区块（并入认识窗口页，不依附窗口的模块） ===== */
 .onboarding-module-block {

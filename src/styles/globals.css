@@ -130,7 +130,7 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 /* danger 变体（替代 .prompt-btn.danger / .voice-download-btn.fail） */
 .btn-danger {
   background: var(--danger);
-  color: var(--foreground-inverse);
+  color: var(--destructive-foreground);
   box-shadow: 0 2px 12px var(--danger-bg);
 }
 .btn-danger:hover {
@@ -203,7 +203,7 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: box-shadow var(--duration-fast) var(--ease-out);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -212,7 +212,7 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   white-space: nowrap;
 }
 .btn-primary-flat:hover:not(:disabled) {
-  background: var(--brand-700);
+  box-shadow: inset 0 0 0 1px currentColor;
 }
 .btn-primary-flat:disabled {
   opacity: 0.6;
@@ -224,9 +224,6 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 }
 .btn-primary-flat.is-danger:hover:not(:disabled) {
   background: var(--danger);
-}
-.dark .btn-primary-flat {
-  color: var(--secondary-foreground);
 }
 
 /* text 变体（替代 SettingsPanel 文本按钮家族） */
