@@ -64,10 +64,10 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
   const [inputDeviceList, setInputDeviceList] = useState<Array<{ deviceId: string; label: string; groupId: string }>>([]);
   const [refreshingDevices, setRefreshingDevices] = useState(false);
 
-  const refreshDevices = async () => {
+  const refreshDevices = async (requestAccess = true) => {
     setRefreshingDevices(true);
     try {
-      const list = await enumerateInputDevices();
+      const list = await enumerateInputDevices(requestAccess);
       setInputDeviceList(list);
       await updateInputDeviceList(list);
       console.log(`[VoiceSection] 已刷新麦克风设备列表，共 ${list.length} 个`);
@@ -79,7 +79,7 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
   };
 
   useEffect(() => {
-    void refreshDevices();
+    void refreshDevices(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceSttMode]);
 
@@ -159,7 +159,7 @@ export default function VoiceSection({ voice, onChange, collapsibleTitle = true 
           <button
             type="button"
             className="btn-outline voice-btn-secondary btn-secondary-underline"
-            onClick={refreshDevices}
+            onClick={() => void refreshDevices()}
             disabled={refreshingDevices}
             data-name="settings.voice.mic-refresh-button"
           >

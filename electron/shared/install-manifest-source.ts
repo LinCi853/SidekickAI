@@ -34,7 +34,7 @@ export interface InstallManifestOption {
 }
 
 /** 功能清单：直接由内置模块数据派生，模块增删/改名只需维护 builtin-module-data.ts */
-export const INSTALL_MANIFEST_FEATURES: InstallManifestFeature[] = BUILTIN_MODULE_INSTALL_DATA.map(
+export const INSTALL_MANIFEST_FEATURES: InstallManifestFeature[] = BUILTIN_MODULE_INSTALL_DATA.filter(d => d.id !== 'freeze').map(
   (d) => ({
     id: d.id,
     name: d.name,

@@ -38,6 +38,8 @@ import { WindowTraceStore } from './window-trace-store.js'
 import { LoginTraceStore } from './login-trace-store.js'
 import { ConversationStore } from './conversation-store.js'
 import { UsageTraceStore } from './usage-trace-store.js'
+import { AiAssetsStore } from './ai-assets-store.js'
+import { exportAssetConversation } from '../assets/conversation-export.js'
 
 /**
  * 对话 SQLite 持久化存储（facade）
@@ -51,6 +53,7 @@ export class ChatStore {
   private windowTraces: WindowTraceStore
   private loginTraces: LoginTraceStore
   private usageTraces: UsageTraceStore
+  readonly assets: AiAssetsStore
 
   constructor(dbPath?: string) {
     const finalPath = dbPath ?? resolveSqlitePath('chat.db')
@@ -62,6 +65,7 @@ export class ChatStore {
     this.windowTraces = new WindowTraceStore(this.db)
     this.loginTraces = new LoginTraceStore(this.db)
     this.usageTraces = new UsageTraceStore(this.db)
+    this.assets = new AiAssetsStore(this.db)
   }
 
   /** 初始化表结构（幂等） */
@@ -309,7 +313,7 @@ export class ChatStore {
 
   /** 更新消息内容 */
   updateMessage(messageId: string, updates: Partial<Pick<ChatMessage, 'content' | 'role'>>): void {
-    this.conversations.updateMessage(messageId, updates)
+    this.assets.editMessage(messageId, updates)
   }
 
   /** 删除单条消息 */
@@ -332,7 +336,7 @@ export class ChatStore {
    * @param format 'md' | 'json'
    */
   exportConversation(conversationId: string, format: 'md' | 'json'): string {
-    return this.conversations.exportConversation(conversationId, format)
+    return exportAssetConversation(this.conversations.exportConversation(conversationId, format), format, conversationId, this.assets)
   }
 
   /**
@@ -347,7 +351,16 @@ export class ChatStore {
     data: string,
     sourceId: string,
   ): Conversation {
-    return this.conversations.importConversation(format, data, sourceId)
+    return this.db.transaction(() => {
+      const conversation = this.conversations.importConversation(format, data, sourceId)
+      if (format === 'json') {
+        const parsed = JSON.parse(data)
+        this.assets.importDetails(conversation.id, sourceId,
+          (parsed.messages ?? []).filter((m: { role: string; content: unknown }) => ['user', 'assistant', 'system'].includes(m.role) && typeof m.content === 'string'),
+          parsed.attachments ?? [])
+      }
+      return conversation
+    })()
   }
 
   // ===========================================================================
@@ -478,19 +491,22 @@ const chatStoreHolder = createSingletonHolder<ChatStore>(
   () => new ChatStore(),
   (s) => s.close(),
 )
+let initialized = false
 
 /** 初始化单例（必须在 app.whenReady 后调用） */
 export function initChatStore(): ChatStore {
-  return chatStoreHolder.get()
+  const store = chatStoreHolder.get()
+  if (!initialized) store.assets.recoverInterruptedStreams()
+  initialized = true
+  return store
 }
 
-/** 获取单例（未初始化时抛错） */
+/** Reopen a previously initialized store after maintenance releases its connection. */
 export function getChatStore(): ChatStore {
-  const s = chatStoreHolder.peek()
-  if (!s) {
+  if (!initialized) {
     throw new Error('[chat-store] 尚未初始化，请先调用 initChatStore()')
   }
-  return s
+  return chatStoreHolder.get()
 }
 
 /** 关闭单例（app before-quit 时调用） */

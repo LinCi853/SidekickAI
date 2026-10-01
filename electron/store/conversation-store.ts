@@ -210,7 +210,7 @@ export class ConversationStore {
   /** 列出会话消息（按时间升序） */
   listMessages(conversationId: string): ChatMessage[] {
     const rows = this.db
-      .prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC')
+      .prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid')
       .all(conversationId) as MessageRow[]
     return rows.map(rowToMessage)
   }
@@ -226,7 +226,7 @@ export class ConversationStore {
       content: msg.content,
       tokens: msg.tokens,
       createdAt: msg.createdAt ?? Date.now(),
-      contentHash: computeContentHash(msg.conversationId, msg.role, msg.content),
+      contentHash: msg.id ? undefined : computeContentHash(msg.conversationId, msg.role, msg.content),
       autoGrabbed: msg.autoGrabbed,
     }
     // INSERT OR IGNORE：命中 (conversation_id, content_hash) 唯一索引时跳过，防止重复抓取入库
@@ -458,8 +458,9 @@ export class ConversationStore {
           (parsed.title as string) || '导入的对话',
         )
       for (const m of messages) {
-        if (!m.role || !m.content) continue
+        if (!['user', 'assistant', 'system'].includes(m.role) || typeof m.content !== 'string') continue
         this.saveMessage({
+          id: randomUUID(),
           conversationId: conv.id,
           role: (m.role as ChatRole) || 'assistant',
           content: String(m.content),
@@ -511,6 +512,7 @@ export class ConversationStore {
           }
         }
         this.saveMessage({
+          id: randomUUID(),
           conversationId: conv.id,
           role,
           content: String(content),
@@ -559,6 +561,7 @@ export class ConversationStore {
     const conv = this.createConversation(sourceId, 'webview', title)
     for (const m of messages) {
       this.saveMessage({
+        id: randomUUID(),
         conversationId: conv.id,
         role: m.role,
         content: m.content,

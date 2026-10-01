@@ -25,6 +25,7 @@ import { recognizeWithLocalExe } from './local-exe.js'
  * - local: 自定义本地识别软件（用户配置的可执行文件）
  */
 export class SttEngine {
+  private generation = 0
   private recording = false
   private currentEngine: 'ai' | 'local' | null = null
   private audioCapture = new AudioCapture()
@@ -119,6 +120,7 @@ export class SttEngine {
 
   /** 开始录音 */
   async start(): Promise<void> {
+    const generation = this.generation
     // getFocusedWindow 是同步的，必须在任何 await 之前调用，否则焦点可能已切换
     this.sourceWindow = BrowserWindow.getFocusedWindow()
     if (this.recording) {
@@ -129,6 +131,7 @@ export class SttEngine {
     this.clearLastError()
     try {
       await this.audioCapture.start()
+      if (generation !== this.generation) { await this.audioCapture.cancel(); return }
       this.recording = true
       this.currentEngine = null
       console.info('[SttEngine] 开始录音')
@@ -146,6 +149,7 @@ export class SttEngine {
    * @returns 识别文本（全部失败时返回空串）
    */
   async stop(): Promise<string> {
+    const generation = this.generation
     if (!this.recording) {
       console.warn('[SttEngine] 未在录音中，stop 直接返回空串')
       return ''
@@ -156,6 +160,7 @@ export class SttEngine {
     let pcm: Float32Array
     try {
       pcm = await this.audioCapture.stop()
+      if (generation !== this.generation) return ''
     } catch (err) {
       console.error('[SttEngine] 停止录音失败:', err)
       this.lastError = '停止录音失败：' + (err instanceof Error ? err.message : String(err))
@@ -180,6 +185,7 @@ export class SttEngine {
       try {
         this.currentEngine = 'ai'
         const text = await this.recognizeWithAiApi(pcm, { providerId: config.aiProvider, language: config.language })
+        if (generation !== this.generation) return ''
         if (text) {
           this.notifyResult(text)
           return text
@@ -193,6 +199,7 @@ export class SttEngine {
     if (config.sttMode === 'local') {
       try {
         const text = await recognizeWithLocalExe(pcm, config)
+        if (generation !== this.generation) return ''
         if (text) {
           this.notifyResult(text)
           return text
@@ -210,13 +217,15 @@ export class SttEngine {
 
   /** 清理资源（应用退出时调用） */
   cleanup(): void {
-    try {
-      this.recording = false
-      this.currentEngine = null
-      // AudioCapture 无持久资源，临时文件已在 stop 中删除
-    } catch (err) {
-      console.error('[SttEngine] cleanup 异常:', err)
-    }
+    void this.cancel().catch(error => console.warn('[SttEngine] Cancellation failed:', error))
+  }
+
+  async cancel(): Promise<void> {
+    this.generation += 1
+    this.recording = false
+    this.currentEngine = null
+    this.partialResultCallback = null
+    await this.audioCapture.cancel()
   }
 
   /**

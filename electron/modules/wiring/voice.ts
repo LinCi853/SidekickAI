@@ -5,15 +5,15 @@
 //
 // 已迁移到统一注入管线（EffectScope）。
 
-import { IPC_CHANNELS } from '../../shared/types.js'
 import { EffectScope } from '../effect-scope.js'
 import { SttEngine } from '../../stt/engine.js'
 import { registerVoiceIpc } from '../../ipc/voice-ipc.js'
-import { registerVoiceConfigIPC, updateVoiceConfig } from '../../store/voice-store.js'
+import { updateVoiceConfig } from '../../store/voice-store.js'
 import {
   startBackgroundVoice as startBackgroundVoiceImpl,
   stopBackgroundVoice as stopBackgroundVoiceImpl,
   toggleVoiceRecording as toggleVoiceRecordingImpl,
+  cancelBackgroundVoice,
 } from '../../voice/background-voice.js'
 import { hidePreview } from '../../voice/preview-window.js'
 import { getHotkeyManagerInstance } from '../../hotkey/manager.js'
@@ -21,18 +21,6 @@ import { getHotkeyManagerInstance } from '../../hotkey/manager.js'
 /** 模块级 EffectScope */
 const scope = new EffectScope('voice', 'voice')
 
-const VOICE_CHANNELS = [
-  IPC_CHANNELS.STT_START,
-  IPC_CHANNELS.STT_STOP,
-  IPC_CHANNELS.VOICE_TEST_AI,
-  IPC_CHANNELS.VOICE_TRIGGER_START,
-  IPC_CHANNELS.VOICE_TRIGGER_STOP,
-  IPC_CHANNELS.VOICE_FORCE_STOP,
-  IPC_CHANNELS.VOICE_INPUT_DEVICES_UPDATE,
-  IPC_CHANNELS.VOICE_INPUT_DEVICES_REFRESH,
-  IPC_CHANNELS.VOICE_GET_CONFIG,
-  IPC_CHANNELS.VOICE_SET_CONFIG,
-]
 
 let sttEngine: SttEngine | null = null
 
@@ -87,28 +75,25 @@ export function toggleVoiceRecordingGated(): Promise<void> {
   return toggleVoiceRecordingImpl(sttEngine)
 }
 
-export function initVoiceModule(): void {
+export async function initVoiceModule(): Promise<void> {
   // 幂等：先清理旧注册再注册（init 重入/热重载安全）
-  void scope.dispose().then(() => {
-    const engine = getSttEngine()
-    // 运行期启用：注册语音热键（启动期由 registerHotkeyIpc 调用 sync，二者幂等）
-    syncVoiceHotkeyRegistration()
-    // 传递 scope 给 registerVoiceConfigIPC，使其使用 EffectScope 管理 IPC handler
-    registerVoiceConfigIPC(scope)
-    // 传递 scope 给 registerVoiceIpc，使其使用 EffectScope 管理 IPC handler
-    registerVoiceIpc({
-      sttEngine: engine,
-      startBackgroundVoice: () => startBackgroundVoiceImpl(engine),
-      stopBackgroundVoice: () => stopBackgroundVoiceImpl(engine),
-    }, scope)
-  })
+  await scope.dispose()
+  const engine = getSttEngine()
+  // 运行期启用：注册语音热键（启动期由 registerHotkeyIpc 调用 sync，二者幂等）
+  syncVoiceHotkeyRegistration()
+  // 传递 scope 给 registerVoiceIpc，使其使用 EffectScope 管理 IPC handler
+  registerVoiceIpc({
+    sttEngine: engine,
+    startBackgroundVoice: () => startBackgroundVoiceImpl(engine),
+    stopBackgroundVoice: () => stopBackgroundVoiceImpl(engine),
+  }, scope)
 }
 
-export function teardownVoiceModule(): void {
+export async function teardownVoiceModule(): Promise<void> {
   // 停止录音 + 隐藏预览窗 + 卸载通道
   if (sttEngine) {
     try {
-      void stopBackgroundVoiceImpl(sttEngine)
+      await cancelBackgroundVoice(sttEngine)
     } catch (err) {
       console.warn('[wiring:voice] 停止录音失败:', err)
     }
@@ -122,7 +107,7 @@ export function teardownVoiceModule(): void {
   getHotkeyManagerInstance()?.voiceUnregisterFn?.()
   const hm = getHotkeyManagerInstance()
   if (hm) hm.voiceUnregisterFn = null
-  void scope.dispose()
+  await scope.dispose()
   sttEngine = null
 }
 

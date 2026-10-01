@@ -22,6 +22,7 @@ import { getProxyDispatcher } from '../store/proxy-helper.js'
 import type { SttEngine } from '../stt/engine.js'
 import type { AudioDeviceInfo } from '../shared/api.types.js'
 import type { EffectScope } from '../modules/effect-scope.js'
+import { markRecordingRendererReady } from '../audio/capture.js'
 
 /**
  * 校验 enumerateDevices 返回的设备对象，过滤掉非法项
@@ -52,6 +53,11 @@ export interface VoiceIpcDeps {
  */
 export function registerVoiceIpc(deps: VoiceIpcDeps, scope?: EffectScope): void {
   const { sttEngine, startBackgroundVoice, stopBackgroundVoice } = deps
+  const ready = (event: Electron.IpcMainEvent) => {
+    if (event.senderFrame === event.sender.mainFrame) markRecordingRendererReady(event.sender)
+  }
+  if (scope) scope.ipcOn(IPC_CHANNELS.VOICE_RECORD_READY, ready)
+  else ipcMain.on(IPC_CHANNELS.VOICE_RECORD_READY, ready)
 
   // 辅助函数：根据是否有 scope 选择注册方式
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,6 +142,11 @@ export function registerVoiceIpc(deps: VoiceIpcDeps, scope?: EffectScope): void 
  * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
  */
 export function registerTtsTestIpc(scope?: EffectScope): void {
+  const requests = new Set<AbortController>()
+  scope?.create('event-sub', 'tts.requests', () => {
+    for (const controller of requests) controller.abort()
+    requests.clear()
+  })
   // 辅助函数：根据是否有 scope 选择注册方式
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handle = scope
@@ -143,6 +154,8 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   handle(IPC_CHANNELS.VOICE_TEST_TTS, async (_e: unknown, input: { providerId: string }) => {
+    const controller = new AbortController()
+    requests.add(controller)
     try {
       const provider = aiProviderStore.get(input.providerId)
       if (!provider) {
@@ -165,6 +178,7 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
         headersTimeout: 15000,
         bodyTimeout: 15000,
         dispatcher: getProxyDispatcher(),
+        signal: controller.signal,
       })
       if (res.statusCode < 200 || res.statusCode >= 300) {
         const text = await res.body.text().catch(() => '')
@@ -174,6 +188,7 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
         }
       }
       const buf = await res.body.arrayBuffer()
+      controller.signal.throwIfAborted()
       if (buf.byteLength === 0) {
         return { ok: false, message: '端点返回空响应，可能不支持 TTS 格式' }
       }
@@ -186,6 +201,6 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
         ok: false,
         message: e instanceof Error ? e.message : String(e),
       }
-    }
+    } finally { requests.delete(controller) }
   })
 }

@@ -1,0 +1,9 @@
+.log-center { color: var(--foreground); padding: 12px 0; }
+.log-center-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+.log-center-tools input, .log-center-tools select { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 7px; background: var(--card); color: var(--foreground); min-width: 0; }
+.log-center-tools input { flex: 1; min-width: 120px; }
+.log-center-list { max-height: 55vh; overflow: auto; }
+.log-center-list article { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
+.log-center-list span, .log-center-list p { font-size: 12px; color: var(--muted-foreground); }
+.log-center-list p { width: 100%; margin: 0; overflow-wrap: anywhere; }
+.log-center summary { cursor: pointer; font-weight: 600; }

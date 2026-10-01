@@ -30,6 +30,15 @@ import { pasteTextToExternalApp, typeTextToExternalApp, insertTextToExternalApp 
 let backgroundRecording = false
 /** 切换录音状态：true 表示当前正在录音（toggleVoice 模式） */
 let toggleRecording = false
+let generation = 0
+
+export async function cancelBackgroundVoice(sttEngine: SttEngine): Promise<void> {
+  generation += 1
+  backgroundRecording = false; toggleRecording = false
+  clearRecordingWatchdog()
+  await sttEngine.cancel()
+  hidePreview()
+}
 
 /**
  * 清除录音 watchdog 定时器
@@ -93,6 +102,7 @@ export async function startBackgroundVoice(sttEngine: SttEngine): Promise<void> 
  * 识别失败 → 预览窗显示错误提示。
  */
 export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
+  const operation = generation
   if (!backgroundRecording) {
     console.warn('[voice] stopBackgroundVoice 被调用但 backgroundRecording=false，跳过（可能 watchdog 已触发）')
     return
@@ -111,6 +121,7 @@ export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
 
   try {
     const text = await sttEngine.stop()
+    if (operation !== generation) return
     console.log('[voice] 识别结果:', text ? `"${text.slice(0, 50)}"` : '(空)')
     if (text && text.trim()) {
       deliverVoiceText(text, config)

@@ -262,7 +262,7 @@ export default function DrawerPanel({
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
             </svg>
-            <span data-name="component.drawer-panel.search-history-label">搜索历史</span>
+            <span data-name="component.drawer-panel.search-history-label">搜索 AI资产</span>
             <span className="drawer-item-shortcut" data-name="component.drawer-panel.search-history-shortcut">K</span>
           </button>
           <button
@@ -329,7 +329,7 @@ export default function DrawerPanel({
               <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
               <path d="m15 5 4 4" />
             </svg>
-            <span data-name="component.drawer-panel.prompt-library-label">提示词库</span>
+            <span data-name="component.drawer-panel.prompt-library-label">AI资产</span>
             <span className="drawer-item-shortcut" data-name="component.drawer-panel.prompt-library-shortcut">P</span>
           </button>
           )}

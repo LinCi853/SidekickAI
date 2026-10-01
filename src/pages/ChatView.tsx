@@ -23,7 +23,6 @@ import { useChatStore } from '../store/useChatStore';
 import {
   minimizeWindow,
   closeCurrentWindow,
-  getUsageStats,
   exportConversation,
   getChatConfig,
   onVoiceInjectAndSend,
@@ -31,6 +30,8 @@ import {
   openAdvancedPanelWindow,
   updateChatDetachedWindow,
 } from '../lib/electron-api';
+import { requireElectron } from '../lib/electron-api/core';
+import type { AssetTextUsage } from '../../electron/shared/ai-assets.types';
 import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
 import { MessageBubble } from './MessageBubble';
 import { generateChatAccentVars } from '../lib/oxy-color-engine';
@@ -41,7 +42,7 @@ import './ChatView.css';
 export default function ChatView({ windowId }: { windowId?: string }) {
   const [input, setInput] = useState('');
   const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
-  const [usageStats, setUsageStats] = useState<{ totalTokens: number; todayTokens: number; todayCount: number } | null>(null);
+  const [usageStats, setUsageStats] = useState<AssetTextUsage | null>(null);
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 600 : false,
   );
@@ -205,7 +206,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   // 加载 token 用量统计：初始化 + 流式结束（streaming 由 true→false）后刷新
   const refreshUsage = async () => {
     try {
-      const stats = await getUsageStats(currentProviderId ?? undefined);
+      const stats = await requireElectron().aiAssets.usage(currentProviderId ?? undefined);
       setUsageStats(stats);
     } catch (e) {
       console.error('[ChatView] 加载用量统计失败:', e);
@@ -340,13 +341,13 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                   未配置提供商
                 </span>
               )}
-              {usageStats && usageStats.todayTokens > 0 && (
+              {usageStats && usageStats.todayCharacters > 0 && (
                 <span
                   className="chat-usage-badge"
                   data-name="chat.top-bar.usage-badge"
-                  title={`今日 ${usageStats.todayTokens} tokens / 共 ${usageStats.totalTokens} tokens`}
+                  title={`今日 ${usageStats.todayCharacters} 字符 / 共 ${usageStats.totalCharacters} 字符`}
                 >
-                  今日 {usageStats.todayTokens} tok
+                  今日 {usageStats.todayCharacters} 字符
                 </span>
               )}
             </div>

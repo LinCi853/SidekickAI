@@ -16,17 +16,7 @@ import {
  * 窗口关闭时仅隐藏（复用），before-quit 时销毁。
  */
 export function showHistoryWindow(): void {
-  createSingletonPopupWindow({
-    width: 960,
-    height: 720,
-    minWidth: 560,
-    minHeight: 420,
-    title: '工百窗 - 历史搜索',
-    windowId: HISTORY_WINDOW_ID,
-    mode: 'history',
-    getExisting: () => windowState.historyWindow,
-    setWindow: (win) => { windowState.historyWindow = win },
-  })
+  showPromptWindow()
 }
 
 /**
@@ -35,11 +25,11 @@ export function showHistoryWindow(): void {
  */
 export function showPromptWindow(): void {
   createSingletonPopupWindow({
-    width: 560,
-    height: 640,
+    width: 960,
+    height: 720,
     minWidth: 360,
     minHeight: 400,
-    title: '工百窗 - 提示词库',
+    title: '工百窗 - AI资产',
     windowId: PROMPT_WINDOW_ID,
     mode: 'prompts',
     getExisting: () => windowState.promptWindow,

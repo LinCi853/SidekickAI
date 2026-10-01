@@ -9,6 +9,7 @@
 
 import { ipcMain, webContents, BrowserWindow, clipboard, app, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
+import { randomUUID } from 'node:crypto'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import {
   registerWebview,
@@ -98,8 +99,8 @@ async function scrapeSnapshot(wc: Electron.WebContents): Promise<FreezeSnapshot 
     }
     const pairs = (parsed.pairs || [])
       .map((p) => ({
-        user: (p.user || '').slice(0, 50000),
-        assistant: (p.assistant || '').slice(0, 50000),
+        user: p.user || '',
+        assistant: p.assistant || '',
       }))
       .filter((p) => p.user || p.assistant)
     return {
@@ -229,7 +230,8 @@ async function persistSnapshot(
     )
     for (const pair of snapshot.pairs) {
       if (pair.user && pair.user.trim().length >= 1) {
-        store.saveMessageWithMerge({
+        store.saveMessage({
+          id: randomUUID(),
           conversationId: conv.id,
           role: 'user',
           content: pair.user,
@@ -237,7 +239,8 @@ async function persistSnapshot(
         })
       }
       if (pair.assistant && pair.assistant.trim().length >= 1) {
-        store.saveMessageWithMerge({
+        store.saveMessage({
+          id: randomUUID(),
           conversationId: conv.id,
           role: 'assistant',
           content: pair.assistant,

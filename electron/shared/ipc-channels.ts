@@ -6,6 +6,27 @@
 // ============================================================================
 
 export const IPC_CHANNELS = {
+  VOICE_RECORD_READY: 'voice:recordReady',
+  ASSET_AUTHORIZE: 'ai-assets:authorize',
+  ASSET_OBSERVE: 'ai-assets:observe',
+  ASSET_DETAILS: 'ai-assets:details',
+  ASSET_USAGE: 'ai-assets:usage',
+  ASSET_ATTACHMENTS: 'ai-assets:attachments',
+  ASSET_ATTACHMENT_BEGIN: 'ai-assets:attachment-begin',
+  ASSET_ATTACHMENT_CHUNK: 'ai-assets:attachment-chunk',
+  ASSET_ATTACHMENT_FINISH: 'ai-assets:attachment-finish',
+  ASSET_ATTACHMENT_FAIL: 'ai-assets:attachment-fail',
+  ASSET_ATTACHMENT_FETCH: 'ai-assets:attachment-fetch',
+  ASSET_ATTACHMENT_ASSOCIATE: 'ai-assets:attachment-associate',
+  ASSET_ATTACHMENT_OPEN: 'ai-assets:attachment-open',
+  ASSET_ATTACHMENT_RETRY: 'ai-assets:attachment-retry',
+  ASSET_SUGGESTIONS: 'ai-assets:suggestions',
+  ASSET_SEARCH: 'ai-assets:search',
+  ASSET_RETRY_REQUEST: 'ai-assets:retry-request',
+  ASSET_COLLECTOR_STATE: 'ai-assets:collector-state',
+  ASSET_ATTACHMENT_EXPORT: 'ai-assets:attachment-export',
+  ASSET_FREEZE_TARGETS: 'ai-assets:freeze-targets',
+  ASSET_FOCUS_PAGE: 'ai-assets:focus-page',
   // Profile
   PROFILE_LIST: 'profile:list',
   PROFILE_CREATE: 'profile:create',

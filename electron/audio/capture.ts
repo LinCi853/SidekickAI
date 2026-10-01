@@ -21,6 +21,11 @@ const execFileAsync = promisify(execFile)
 
 /** 采样率：whisper 标准输入为 16kHz */
 const SAMPLE_RATE = 16000
+const readyRenderers = new WeakSet<Electron.WebContents>()
+
+export function markRecordingRendererReady(sender: Electron.WebContents): void {
+  if (sender.getURL().includes('mode=record-indicator')) readyRenderers.add(sender)
+}
 
 /**
  * 渲染层"快速失败"回调类型：start 阶段空回包时触发
@@ -38,6 +43,8 @@ export type AudioCaptureFailCallback = (reason: string) => void
  * 输出：16kHz mono Float32Array，范围 [-1.0, 1.0]，可直接喂给 whisper。
  */
 export class AudioCapture {
+  private generation = 0
+  private cancelPendingStop?: () => void
   private recording = false
   private process: ChildProcessWithoutNullStreams | null = null
   private tempFile = ''
@@ -129,6 +136,7 @@ export class AudioCapture {
    * 这样后续 stop() 立即返回空，不再傻等 10s 超时。
    */
   async start(): Promise<void> {
+    const generation = this.generation
     if (this.recording) {
       console.warn('[AudioCapture] 已在录音中，忽略重复 start')
       return
@@ -141,26 +149,22 @@ export class AudioCapture {
     if (this.rendererWin && !this.rendererWin.isDestroyed()) {
       const win = this.rendererWin
       try {
-        // 等待渲染层加载完成（首次创建预览窗时可能仍在加载）
-        // 使用 did-finish-load + 超时兜底，避免 isLoading 状态不一致导致的死等
         await new Promise<void>((resolve, reject) => {
           const wc = win.webContents
+          const cleanup = () => { clearTimeout(timer); ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_READY, onReady) }
           const timer = setTimeout(() => {
-            wc.removeListener('did-finish-load', onLoad)
-            reject(new Error('渲染进程加载超时（3s）'))
+            cleanup()
+            reject(new Error('录音界面准备超时（3s）'))
           }, 3000)
-          const onLoad = () => {
-            clearTimeout(timer)
+          const onReady = (event: Electron.IpcMainEvent) => {
+            if (event.sender !== wc || event.senderFrame !== wc.mainFrame) return
+            cleanup()
             resolve()
           }
-          if (wc.isLoading()) {
-            wc.once('did-finish-load', onLoad)
-          } else {
-            // 已加载完成：延迟 50ms 确保 preload / React 已初始化（IPC 监听器已注册）
-            clearTimeout(timer)
-            setTimeout(resolve, 50)
-          }
+          ipcMain.on(IPC_CHANNELS.VOICE_RECORD_READY, onReady)
+          if (readyRenderers.has(wc)) { cleanup(); resolve() }
         })
+        if (generation !== this.generation) return
         win.webContents.send(IPC_CHANNELS.VOICE_RECORD_START)
         this.recording = true
         this.tempFile = ''
@@ -287,6 +291,7 @@ export class AudioCapture {
   private installFailListener(win: BrowserWindow): void {
     this.clearFailListener()
     const handler = (_e: unknown, data: number[] | Float32Array) => {
+      if ((_e as { sender?: unknown }).sender !== win.webContents) return
       // 早期空回包 → 标记失败
       const arr = data instanceof Float32Array ? data : new Float32Array(data)
       if (arr.length === 0) {
@@ -350,10 +355,12 @@ export class AudioCapture {
       return new Promise<Float32Array>((resolve) => {
         let settled = false
         const handler = (_e: unknown, data: number[] | Float32Array) => {
+          if ((_e as { sender?: unknown }).sender !== win.webContents) return
           if (settled) return
           settled = true
           clearTimeout(timer)
           ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+          this.cancelPendingStop = undefined
           const float32 = data instanceof Float32Array ? data : new Float32Array(data)
           console.info(`[AudioCapture] 渲染进程录音完成，收到 ${float32.length} 样本`)
           resolve(float32)
@@ -362,10 +369,17 @@ export class AudioCapture {
           if (settled) return
           settled = true
           ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+          this.cancelPendingStop = undefined
           console.error('[AudioCapture] 渲染进程录音超时（10s），返回空数据')
           resolve(new Float32Array(0))
         }, 10000)
         ipcMain.on(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+        this.cancelPendingStop = () => {
+          if (settled) return
+          settled = true; clearTimeout(timer)
+          ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+          resolve(new Float32Array(0))
+        }
         win.webContents.send(IPC_CHANNELS.VOICE_RECORD_STOP)
       })
     }
@@ -423,6 +437,23 @@ export class AudioCapture {
       console.error('[AudioCapture] 读取/解析 WAV 失败:', err)
       return new Float32Array(0)
     }
+  }
+
+  async cancel(): Promise<void> {
+    this.generation += 1
+    this.recording = false
+    this.clearFailListener()
+    this.cancelPendingStop?.(); this.cancelPendingStop = undefined
+    if (this.rendererWin && !this.rendererWin.isDestroyed()) this.rendererWin.webContents.send(IPC_CHANNELS.VOICE_RECORD_STOP)
+    const captureProcess = this.process
+    this.process = null
+    if (captureProcess && captureProcess.exitCode === null) {
+      captureProcess.kill()
+      await this.waitForExit(captureProcess, 1000)
+    }
+    const file = this.tempFile
+    this.tempFile = ''
+    if (file) await unlink(file).catch(() => {})
   }
 
   /**

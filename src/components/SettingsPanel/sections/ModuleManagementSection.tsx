@@ -29,7 +29,7 @@ export default function ModuleManagementSection() {
   }, [initialized]);
 
   // 插件市场只展示稳定模块；功能插件独立栏目；开发者模块与开发者设置见「开发者选项」独立栏目
-  const stable = useMemo(() => modules.filter((m) => m.category === 'stable'), [modules]);
+  const stable = useMemo(() => modules.filter((m) => m.category === 'stable' && m.id !== 'freeze'), [modules]);
   const plugins = useMemo(() => modules.filter((m) => m.category === 'plugin'), [modules]);
   const hasMissingLarge = modules.some((m) => m.sizeLevel === 'large' && !m.installed);
 

@@ -58,16 +58,8 @@ export interface AudioDeviceInfo {
   groupId: string;
 }
 
-/**
- * 调用 navigator.mediaDevices.enumerateDevices 枚举所有音频输入设备。
- * 返回仅 kind='audioinput' 的设备列表。
- *
- * 注意：浏览器出于安全考虑，**未授权麦克风权限前** enumerateDevices 返回的 label 为空字符串。
- * 授权后（首次 getUserMedia 调用成功）才能拿到 label。
- * 本函数会先尝试一次"试探性" getUserMedia 触发权限弹窗，再 enumerateDevices 拿 label，
- * 然后立即关闭试探流（不录制任何音频）。
- */
-export async function enumerateInputDevices(): Promise<AudioDeviceInfo[]> {
+/** Device discovery requests microphone access only after an explicit refresh. */
+export async function enumerateInputDevices(requestAccess = false): Promise<AudioDeviceInfo[]> {
   if (
     typeof navigator === 'undefined' ||
     !navigator.mediaDevices ||
@@ -76,12 +68,10 @@ export async function enumerateInputDevices(): Promise<AudioDeviceInfo[]> {
     return [];
   }
   try {
-    // 试探一次 getUserMedia 触发权限弹窗，拿到 label 后立即关闭
-    try {
+    if (requestAccess) try {
       const probeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       probeStream.getTracks().forEach((t) => t.stop());
     } catch (err) {
-      // 用户拒绝 / 无麦克风 / 设备占用等情况下，label 仍可能为空
       console.warn('[voice] enumerateInputDevices 试探 getUserMedia 失败（可能未授权）:', err);
     }
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -186,5 +176,4 @@ export function sendVoiceRecordData(data: number[]): void {
   const api = requireElectron();
   api.sendVoiceRecordData(data);
 }
-
 

@@ -217,6 +217,21 @@ describe('ModuleRegistry', () => {
       expect(result.violations).toHaveLength(0)
     })
   })
+  it('uses promoted defaults for new users while preserving an existing disabled choice', async () => {
+    const state = await import('../store/module-state-store.js')
+    vi.mocked(state.getModuleState).mockImplementation(id => id === 'voice'
+      ? { id, enabled: false, installed: true, clearedAt: 0, updatedAt: 1 } : null)
+    const voice = vi.fn(), browser = vi.fn()
+    for (const [id, init] of [['voice', voice], ['browser', browser]] as const) registry.registerModule({
+      id, name: id, description: id, category: 'stable', sizeLevel: 'small', testBadge: false,
+      defaultEnabled: true, dependencies: [], entries: [], hotkeys: [], init,
+    })
+    await registry.initEnabledModules()
+    expect(registry.isModuleEnabled('voice')).toBe(false)
+    expect(voice).not.toHaveBeenCalled()
+    expect(registry.isModuleEnabled('browser')).toBe(true)
+    expect(browser).toHaveBeenCalledOnce()
+  })
 })
 
 // Import type for the manifest

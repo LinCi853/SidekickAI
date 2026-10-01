@@ -28,6 +28,7 @@ const ERROR_LOG_MAX_LEN_SHORT = 200
 export interface StreamCallbacks {
   /** 收到增量文本时调用 */
   onDelta: (delta: string) => void
+  onReasoningDelta?: (delta: string) => void
   /** 流式结束（正常）时调用 */
   onDone: (fullText: string) => void
   /** 发生错误时调用 */
@@ -194,7 +195,7 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   options: StreamOptions = {},
 ): Promise<void> {
-  const { onDelta, onDone, onError, onUsage } = callbacks
+  const { onDelta, onDone, onError, onUsage, onReasoningDelta } = callbacks
   let fullText = ''
   // token 用量（流式过程中累积，onDone 前回调）
   let promptTokens = 0
@@ -285,9 +286,18 @@ export async function streamChat(
           return
         }
 
-        try {
-          const json = JSON.parse(data)
+        let json
+        try { json = JSON.parse(data) } catch (error) {
+          console.warn('[ai-client] Invalid stream JSON:', error, data.slice(0, ERROR_LOG_MAX_LEN_SHORT))
+          continue
+        }
           if (provider.protocol === 'anthropic') {
+            if (json.type === 'content_block_delta' && typeof json.delta?.thinking === 'string') {
+              onReasoningDelta?.(json.delta.thinking)
+            }
+            if (json.type === 'content_block_start' && typeof json.content_block?.thinking === 'string') {
+              onReasoningDelta?.(json.content_block.thinking)
+            }
             // Anthropic 流式事件格式
             if (json.type === 'content_block_delta' && json.delta?.text) {
               fullText += json.delta.text
@@ -308,6 +318,8 @@ export async function streamChat(
           } else {
             // OpenAI 流式格式
             const delta = json.choices?.[0]?.delta?.content
+            const reasoning = json.choices?.[0]?.delta?.reasoning_content ?? json.choices?.[0]?.delta?.reasoning
+            if (typeof reasoning === 'string') onReasoningDelta?.(reasoning)
             if (delta) {
               fullText += delta
               onDelta(delta)
@@ -324,16 +336,12 @@ export async function streamChat(
               return
             }
           }
-        } catch (parseErr) {
-          // 单行 JSON 解析失败不应中断流，记录后跳过
-          console.warn('[ai-client] SSE 行解析失败:', parseErr, 'line:', data.slice(0, ERROR_LOG_MAX_LEN_SHORT))
-        }
+
       }
     }
 
-    // 流自然结束（未收到 [DONE] / message_stop）
     reportUsage()
-    onDone(fullText)
+    throw new Error('响应未提供完成标记，已收到的内容已保留')
   } catch (err) {
     // AbortError 视为正常取消
     if (err instanceof Error && err.name === 'AbortError') {

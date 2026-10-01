@@ -12,7 +12,7 @@ import { profileStore } from '../store/profile-store.js'
 import { getPreset } from '../store/preset-store.js'
 import { applyProxyToSession, applyRegionBasedProxy } from '../store/proxy-helper.js'
 import { copySessionCookies } from '../store/cookie-copy.js'
-import { WINDOW_BACKGROUND_COLOR } from '../window-factory/helpers.js'
+import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../window-factory/helpers.js'
 
 /** Profile 窗口最小宽度 */
 const PROFILE_WINDOW_MIN_WIDTH = 240
@@ -114,6 +114,7 @@ export class WindowManager {
         webPreferences: {
           // 关键：session.partition 隔离，Cookie/Storage/Cache 完全独立
           partition,
+          preload: getWebviewPreloadPath(),
           contextIsolation: true,
           sandbox: false,
           nodeIntegration: false,

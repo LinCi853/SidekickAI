@@ -9,6 +9,7 @@ import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browse
 import type { FreezeAPI } from './freeze.api.js'
 import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
 import type { PromptTemplate } from '../chat.types.js'
+import type { AiAssetsAPI } from '../ai-assets.types.js'
 
 /** 模块管理 API（插件市场 / 开发者选项） */
 export interface ModulesAPI {
@@ -34,6 +35,7 @@ export interface ElectronAPI {
   injection: InjectionHistoryAPI
   aiProvider: AIProviderAPI
   chat: ChatAPI
+  aiAssets: AiAssetsAPI
   fingerprint: FingerprintAPI
   /** 语音输入配置（enterToSend 等全局设置） */
   voice: VoiceConfigAPI
@@ -89,6 +91,7 @@ export interface ElectronAPI {
   /** 主→预览窗渲染：停止录音并回传 PCM */
   onVoiceRecordStop: (cb: () => void) => () => void
   /** 预览窗渲染→主：回传 Float32 PCM 数据 */
+  sendVoiceRecordReady: () => void
   sendVoiceRecordData: (data: number[]) => void
   /** 主→主窗口渲染：提示词库窗口请求注入模板到激活 webview（需求 1：传递完整模板由主窗口组合） */
   onPromptInjectRequest: (cb: (template: PromptTemplate) => void) => () => void

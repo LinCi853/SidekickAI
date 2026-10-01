@@ -44,8 +44,7 @@ const applicationIconUrl = new URL('./assets/app-icon-64.png', import.meta.url).
    ===================================================================== */
 const ChatView = lazy(() => import('./pages/ChatView'));
 const RecordIndicator = lazy(() => import('./pages/RecordIndicator'));
-const HistoryView = lazy(() => import('./pages/HistoryView'));
-const PromptLibraryView = lazy(() => import('./pages/PromptLibraryView'));
+const AiAssetsView = lazy(() => import('./pages/AiAssetsView'));
 const AiAppEditor = lazy(() => import('./pages/AiAppEditor'));
 const AdvancedPanelView = lazy(() => import('./pages/AdvancedPanelView'));
 const DataExportWindow = lazy(() => import('./pages/DataExportWindow'));
@@ -471,7 +470,7 @@ export default function App() {
   }
 
   // 路由分流：preview(默认/record-indicator) → RecordIndicator,
-  //   history → HistoryView, prompts → PromptLibraryView,
+  // Legacy history and prompt routes share the asset viewer.
   //   ai-app-editor → AiAppEditor, advanced-panel → AdvancedPanelView,
   //   notes → NotesView, whiteboard → WhiteboardView,
   //   chat → ChatView, 主窗口 → MainView, 脱离窗口 → StandaloneView
@@ -480,7 +479,7 @@ export default function App() {
   if (isChat && !moduleEnabled('custom-chat')) {
     return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
   }
-  if (isPrompts && !moduleEnabled('prompt-library')) {
+  if ((isPrompts || isHistory) && !moduleEnabled('prompt-library')) {
     return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
   }
   if (isBrowser && !moduleEnabled('browser')) {
@@ -491,8 +490,8 @@ export default function App() {
   }
 
   if (isRecordIndicator) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><RecordIndicator /></Suspense></AppErrorBoundary>;
-  if (isHistory) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><HistoryView /></Suspense></AppErrorBoundary>;
-  if (isPrompts) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><PromptLibraryView /></Suspense></AppErrorBoundary>;
+  if (isHistory) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAssetsView /></Suspense></AppErrorBoundary>;
+  if (isPrompts) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAssetsView /></Suspense></AppErrorBoundary>;
   if (isAiAppEditor) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAppEditor /></Suspense></AppErrorBoundary>;
   if (isAdvancedPanel) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AdvancedPanelView /></Suspense></AppErrorBoundary>;
   if (isDataExport) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><DataExportWindow /></Suspense></AppErrorBoundary>;

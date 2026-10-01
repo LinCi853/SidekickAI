@@ -35,7 +35,7 @@ export const BACKUP_FILES = [
 ];
 
 
-export const ASSET_DIRS = ['whiteboard-assets', 'notes-assets'];
+export const ASSET_DIRS = ['whiteboard-assets', 'notes-assets', 'ai-assets'];
 
 
 export const PARTITION_COOKIE_FILES = [

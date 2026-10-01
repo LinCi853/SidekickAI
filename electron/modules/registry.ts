@@ -29,6 +29,12 @@ import { capabilityRegistry } from './capability-registry.js'
 const manifests = new Map<string, ModuleManifest>()
 /** 运行时状态：id → { enabled, installed }（bootstrap 后与数据库一致） */
 const runtime = new Map<string, { enabled: boolean; installed: boolean }>()
+const stateObservers = new Set<() => void>()
+
+export function observeModuleState(observer: () => void): () => void {
+  stateObservers.add(observer)
+  return () => { stateObservers.delete(observer) }
+}
 
 /** 注册模块（重复注册直接抛错，保证 manifest 唯一） */
 export function registerModule(manifest: ModuleManifest): void {
@@ -238,6 +244,9 @@ export async function closeAllModuleDbs(): Promise<void> {
 
 /** 广播模块状态到所有窗口 */
 function broadcastModuleState(): void {
+  for (const observer of stateObservers) {
+    try { observer() } catch (error) { console.warn('[modules] State observer failed:', error) }
+  }
   broadcastToAllWindows(
     IPC_CHANNELS.MODULE_STATE_CHANGED,
     { modules: listModuleInfos() },

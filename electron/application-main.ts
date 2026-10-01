@@ -225,10 +225,8 @@ app.whenReady().then(async () => {
         capabilityRegistry.registerMany(capabilities);
         console.log(`[main] 已注册 ${capabilities.length} 个能力声明`);
     }
+    registerVoiceConfigIPC();
     await initEnabledModules();
-    if (!isModuleEnabled('voice')) {
-        registerVoiceConfigIPC();
-    }
     if (!isModuleEnabled('custom-chat')) {
         registerAIProviderIPC();
     }

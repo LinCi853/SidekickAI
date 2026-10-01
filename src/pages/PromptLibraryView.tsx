@@ -43,8 +43,9 @@ const EMPTY_EDITOR: EditorState = {
   hotkey: '',
 };
 
-export default function PromptLibraryView() {
-  const prompts = usePromptStore((s) => s.prompts);
+export default function PromptLibraryView({ embedded = false, query = '' }: { embedded?: boolean; query?: string } = {}) {
+  const storedPrompts = usePromptStore((s) => s.prompts);
+  const prompts = storedPrompts.filter(prompt => !query || `${prompt.title} ${prompt.content} ${prompt.category ?? ''}`.toLowerCase().includes(query.toLowerCase()));
   const init = usePromptStore((s) => s.init);
   const savePrompt = usePromptStore((s) => s.save);
   const removePrompt = usePromptStore((s) => s.remove);
@@ -178,10 +179,10 @@ export default function PromptLibraryView() {
 
   return (
     <>
-      <WindowResizeHandles />
+      {!embedded && <WindowResizeHandles />}
       <div className="prompt-view app-shell app-view-root" data-name="prompts.container">
         {/* 顶栏：统一 StandaloneWindowHeader（标题 + 置顶 + 窗口控制） */}
-        <StandaloneWindowHeader title="提示词库" dataNamePrefix="prompts.topbar" />
+        {!embedded && <StandaloneWindowHeader title="AI资产" dataNamePrefix="prompts.topbar" />}
 
         {/* 主体 */}
         <div className="prompt-view-body" data-name="prompts.body">

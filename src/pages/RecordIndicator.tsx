@@ -22,6 +22,7 @@ import {
   updateInputDeviceList,
 } from '../lib/electron-api';
 import './RecordIndicator.css';
+import { requireElectron } from '../lib/electron-api/core';
 
 type RecordStatus = 'recording' | 'transcribing' | 'done' | 'sent';
 
@@ -68,6 +69,7 @@ export default function RecordIndicator() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  const recordingGenerationRef = useRef(0);
 
   /** 启动实时音量分析循环（录音中持续运行） */
   const startVolumeAnalysis = (stream: MediaStream) => {
@@ -143,6 +145,7 @@ export default function RecordIndicator() {
 
   useEffect(() => {
     const offStart = onVoiceRecordStart(async () => {
+      const operation = ++recordingGenerationRef.current;
       try {
         chunksRef.current = [];
         let deviceId = '';
@@ -162,6 +165,7 @@ export default function RecordIndicator() {
           (audioConstraints as Record<string, unknown>).deviceId = { exact: deviceId };
         }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        if (operation !== recordingGenerationRef.current) { stream.getTracks().forEach(track => track.stop()); return; }
         mediaStreamRef.current = stream;
         // 启动实时音量分析
         startVolumeAnalysis(stream);
@@ -172,12 +176,14 @@ export default function RecordIndicator() {
         recorder.start();
         mediaRecorderRef.current = recorder;
       } catch (err) {
+        if (operation !== recordingGenerationRef.current) return;
         console.error('[RecordIndicator] getUserMedia 启动失败:', err);
         sendVoiceRecordData([]);
       }
     });
 
     const offStop = onVoiceRecordStop(() => {
+      recordingGenerationRef.current += 1;
       // 停止音量分析
       stopVolumeAnalysis();
       const recorder = mediaRecorderRef.current;
@@ -208,8 +214,10 @@ export default function RecordIndicator() {
       };
       recorder.stop();
     });
+    requireElectron().sendVoiceRecordReady();
 
     return () => {
+      recordingGenerationRef.current += 1;
       offStart();
       offStop();
       stopVolumeAnalysis();

@@ -10,6 +10,7 @@ import { windowApi } from './preload/window.js'
 import { voiceApi } from './preload/voice.js'
 import { hotkeyApi } from './preload/hotkey.js'
 import { chatApi } from './preload/chat.js'
+import { aiAssetsApi } from './preload/ai-assets.js'
 import { promptApi } from './preload/prompt.js'
 import { browserApi } from './preload/browser.js'
 import { appSettingsApi } from './preload/appSettings.js'
@@ -25,6 +26,7 @@ const api: ElectronAPI = {
   ...voiceApi,
   ...hotkeyApi,
   ...chatApi,
+  ...aiAssetsApi,
   ...promptApi,
   ...browserApi,
   ...appSettingsApi,

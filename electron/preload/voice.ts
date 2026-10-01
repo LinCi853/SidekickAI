@@ -78,6 +78,7 @@ export const voiceApi = {
     return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_RECORD_STOP, handler)
   },
   // 渲染进程音频采集：回传 PCM 数据（预览窗渲染→主）
+  sendVoiceRecordReady: () => ipcRenderer.send(IPC_CHANNELS.VOICE_RECORD_READY),
   sendVoiceRecordData: (data: number[]) => {
     ipcRenderer.send(IPC_CHANNELS.VOICE_RECORD_DATA, data)
   },

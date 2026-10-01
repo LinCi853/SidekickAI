@@ -17,6 +17,8 @@
 import { ipcMain, dialog, BrowserWindow, type WebContents } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { writeFile, readFile } from 'fs/promises'
+import { randomUUID } from 'node:crypto'
+import { StreamAssetRecorder } from '../assets/stream-recorder.js'
 import { aiProviderStore } from '../store/ai-provider-store.js'
 import { getChatStore } from '../store/chat-store.js'
 import { getAppSettings } from '../store/app-settings-store.js'
@@ -24,6 +26,8 @@ import { injectionHistoryStore } from '../store/injection-history-store.js'
 import { streamChat, testProvider, listModels } from './client.js'
 import { showNotification } from '../notify.js'
 import { IPC_CHANNELS } from '../shared/types.js'
+import { registerAiAssetIpc } from '../assets/asset-ipc.js'
+import { collectApiOriginals } from '../assets/api-originals.js'
 import type {
   CustomAIProvider,
   CustomAIProviderInput,
@@ -102,10 +106,8 @@ export function registerAIChatIPC(scope?: EffectScope): void {
       }
 
       // 2. 保存用户消息
-      const userMsg = chatStore.saveMessage({
-        conversationId,
-        role: 'user',
-        content: payload.message,
+      const userMessageId = chatStore.assets.capture(conversationId, {
+        key: randomUUID(), role: 'user', content: payload.message, status: 'complete',
       })
 
       // 3. 取消该会话之前未完成的流式请求（如果有）
@@ -140,10 +142,9 @@ export function registerAIChatIPC(scope?: EffectScope): void {
         provider,
         messages,
         controller,
-        userMsg.id,
       )
 
-      return { conversationId, userMessageId: userMsg.id }
+      return { conversationId, userMessageId: userMessageId }
     },
   )
 
@@ -187,98 +188,53 @@ async function runStream(
   provider: CustomAIProvider,
   history: ChatMessage[],
   controller: AbortController,
-  userMessageId: string,
 ): Promise<void> {
 
-  let fullText = ''
-  // token 用量（由 onUsage 回填，onDone 时写入消息）
-  let promptTokens = 0
-  let completionTokens = 0
-
+  const assistantMessageId = randomUUID()
+  const recorder = new StreamAssetRecorder(value => {
+    getChatStore().assets.capture(conversationId, {
+      key: assistantMessageId, role: 'assistant', content: value.content,
+      reasoning: value.reasoning, status: value.status,
+    }, assistantMessageId)
+    if (value.status !== 'streaming') void collectApiOriginals(provider.id, conversationId, assistantMessageId, value.content)
+      .catch(error => console.warn('[ai-assets] Linked original collection failed:', error))
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.CHAT_CONVERSATION_PERSISTED, { sourceId: provider.id })
+    }
+  })
   const sendChunk = (delta: string) => {
-    fullText += delta
+    recorder.append('output', delta)
     const chunk: ChatStreamChunk = { conversationId, delta, done: false }
-    if (!sender.isDestroyed()) {
-      sender.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, chunk)
-    }
+    if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, chunk)
   }
-
-  const sendEnd = (ok: boolean, error?: string, assistantMessageId?: string) => {
-    activeStreams.delete(conversationId)
-    if (!sender.isDestroyed()) {
-      sender.send(IPC_CHANNELS.CHAT_STREAM_END, { conversationId, ok, error, assistantMessageId })
-    }
+  const sendEnd = (ok: boolean, error?: string) => {
+    if (activeStreams.get(conversationId) === controller) activeStreams.delete(conversationId)
+    if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.CHAT_STREAM_END, {
+      conversationId, ok, error, assistantMessageId: recorder.received ? assistantMessageId : undefined,
+    })
   }
-
   try {
-    await streamChat(
-      provider,
-      history,
-      {
-        onDelta: sendChunk,
-        onUsage: (usage) => {
-          promptTokens = usage.promptTokens
-          completionTokens = usage.completionTokens
-          // 回填用户消息的输入 token 数
-          try {
-            if (promptTokens > 0) {
-              getChatStore().updateMessageTokens(userMessageId, promptTokens)
-            }
-          } catch (e) {
-            console.error('[ai-handler] 回填 user tokens 失败:', e)
-          }
-        },
-        onDone: (text) => {
-          // 保存 assistant 消息到 SQLite（含 completionTokens），并取回真实 id 随 stream-end 下发
-          let assistantMsg: ChatMessage | undefined
-          try {
-            if (text.trim()) {
-              assistantMsg = getChatStore().saveMessage({
-                conversationId,
-                role: 'assistant',
-                content: text,
-                tokens: completionTokens || undefined,
-              })
-            }
-          } catch (e) {
-            console.error('[ai-handler] 保存 assistant 消息失败:', e)
-          }
-          // 6.4: AbortError 被客户端视为 onDone，但实际是用户取消。
-          //      检测 signal.aborted 改走 sendEnd(false) 路径，让渲染层知道是取消而非正常完成。
-          if (controller.signal.aborted) {
-            sendEnd(false, 'aborted', assistantMsg?.id)
-            return
-          }
-          sendEnd(true, undefined, assistantMsg?.id)
-          // 仅当发起方窗口未聚焦时才弹通知，避免高频对话打扰用户
-          const win = BrowserWindow.fromWebContents(sender)
-          if (!win || !win.isFocused()) {
-            showNotification('AI 回复完成', `${provider.name} 已完成本轮响应`)
-          }
-        },
-        onError: (err) => {
-          console.error('[ai-handler] 流式请求失败:', err)
-          // 失败时仍保存已收到的部分文本（便于调试）
-          if (fullText.trim()) {
-            try {
-              getChatStore().saveMessage({
-                conversationId,
-                role: 'assistant',
-                content: fullText + `\n\n[错误中断: ${err.message}]`,
-              })
-            } catch (e) {
-              console.error('[ai-handler] 保存部分文本失败:', e)
-            }
-          }
-          sendEnd(false, err.message)
-        },
+    await streamChat(provider, history, {
+      onDelta: sendChunk,
+      onReasoningDelta: delta => recorder.append('reasoning', delta),
+      onDone: text => {
+        const stopped = controller.signal.aborted
+        recorder.finish(stopped ? 'stopped' : 'complete', text)
+        sendEnd(!stopped, stopped ? 'aborted' : undefined)
+        const window = BrowserWindow.fromWebContents(sender)
+        if (!stopped && (!window || !window.isFocused())) showNotification('AI 回复完成', `${provider.name} 已完成本轮响应`)
       },
-      { signal: controller.signal },
-    )
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[ai-handler] runStream 异常:', msg)
-    sendEnd(false, msg)
+      onError: error => {
+        recorder.finish('failed')
+        sendEnd(false, error.message)
+      },
+    }, { signal: controller.signal })
+  } catch (error) {
+    try { recorder.finish(controller.signal.aborted ? 'stopped' : 'failed') } catch (saveError) {
+      sendEnd(false, `本地记录保存失败：${String(saveError)}`)
+      return
+    }
+    sendEnd(false, error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -287,6 +243,7 @@ async function runStream(
  * 与自定义对话模块解耦：自定义对话关闭后这些读路径与记录仍可用（依赖规则 3.3）。
  */
 export function registerBaseChatIpc(): void {
+  registerAiAssetIpc()
   const ipc = IPC_CHANNELS
   ipcMain.handle(ipc.CHAT_LIST_CONVERSATIONS, (_e, sourceId?: string) => {
     return getChatStore().listConversations(sourceId)

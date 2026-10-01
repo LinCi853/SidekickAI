@@ -32,6 +32,7 @@ import ProxySection from '../../components/SettingsPanel/sections/ProxySection';
 import PresetSection from '../../components/SettingsPanel/sections/PresetSection';
 import CookieSection from '../../components/SettingsPanel/sections/CookieSection';
 import StorageSection from '../../components/SettingsPanel/sections/StorageSection';
+import LogCenterSection from '../../components/SettingsPanel/sections/LogCenterSection';
 import AboutSection from '../../components/SettingsPanel/sections/AboutSection';
 import ModuleManagementSection from '../../components/SettingsPanel/sections/ModuleManagementSection';
 import DeveloperOptionsSection from '../../components/SettingsPanel/sections/DeveloperOptionsSection';
@@ -40,7 +41,7 @@ import '../../components/SettingsPanel/styles.css';
 import '../../components/ui/TitleBar.css';
 import './index.css';
 
-type CategoryId = 'appearance' | 'ai' | 'voice' | 'network' | 'advanced' | 'modules' | 'developer' | 'about';
+type CategoryId = 'appearance' | 'ai' | 'voice' | 'network' | 'advanced' | 'modules' | 'developer' | 'logs' | 'about';
 
 const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
   { id: 'appearance', label: '外观与交互', icon: '◐' },
@@ -50,6 +51,7 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
   { id: 'advanced', label: '高级', icon: '⚙' },
   { id: 'modules', label: '模块管理', icon: '▦' },
   { id: 'developer', label: '开发者选项', icon: '⚗' },
+  { id: 'logs', label: '日志中心', icon: '≡' },
   { id: 'about', label: '关于', icon: 'ℹ' },
 ];
 
@@ -459,7 +461,8 @@ export default function SettingsView() {
   />
 )}
 
-{activeCategory === 'about' && (
+{activeCategory === 'logs' && <LogCenterSection />}
+          {activeCategory === 'about' && (
           <AboutSection />
         )}
           </main>

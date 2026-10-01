@@ -6,6 +6,14 @@
 // 不暴露任何 Electron/Node.js API，仅做属性覆盖。
 // contextIsolation 隔离保证 Node 能力不泄露到页面。
 
+import { startAiAssetCollector } from './assets/webview-collector.js'
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', () => { void startAiAssetCollector().catch(error => console.warn('[ai-assets] Collector unavailable:', error)) }, { once: true })
+} else {
+  void startAiAssetCollector().catch(error => console.warn('[ai-assets] Collector unavailable:', error))
+}
+
 // ===== 核心反检测：navigator.webdriver =====
 // Chromium 在自动化/WebView 环境下会将此属性设为 true，
 // 这是 DeepSeek 等网站检测非浏览器环境的首要信号。
