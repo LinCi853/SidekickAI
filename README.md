@@ -26,7 +26,16 @@
 
 维护重点是修复影响使用的问题、保持工具兼容性，并持续改进已有功能的使用体验。
 
-## 使用 launch.bat 启动
+## 下载与安装
+
+Windows 用户可直接下载 [0.1.5 正式版](https://github.com/LinCi853/SidekickAI/releases/tag/v0.1.5)：
+
+- [安装器](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Setup-0.1.5.exe)：包含 x64 与 ARM64，按电脑架构选择程序。
+- [绿色包](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Portable-0.1.5-win.zip)：完整解压后运行 `SidekickAI/Start-SidekickAI.cmd`，两套架构程序共用包内资料目录。
+
+升级前建议先导出备份。请使用自己的安装目录和资料；绿色包不要直接解压覆盖正在使用的数据目录。下载页同时提供 SHA-256 校验文件。
+
+## 从源码使用 launch.bat 启动
 
 **唯一推荐的运行入口是项目根目录中的 `launch.bat`。** 启动、安装依赖和检查都从这个入口完成。
 
