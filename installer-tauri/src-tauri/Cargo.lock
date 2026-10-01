@@ -3327,7 +3327,7 @@ name = "sidekickai-uninstall-core"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "pbkdf2",
  "serde",
  "serde_json",
@@ -3340,7 +3340,7 @@ dependencies = [
 name = "sidekickai-uninstall-host"
 version = "1.0.0"
 dependencies = [
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "serde",
  "serde_json",
  "sha2",
