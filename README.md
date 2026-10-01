@@ -28,43 +28,10 @@
 
 ## 下载与安装
 
-Windows 用户可直接下载 [0.1.5 正式版](https://github.com/LinCi853/SidekickAI/releases/tag/v0.1.5)：
+下载 [0.1.5 正式版](https://github.com/LinCi853/SidekickAI/releases/tag/v0.1.5)，支持 Windows x64 和 ARM64。
 
-- [安装器](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Setup-0.1.5.exe)：包含 x64 与 ARM64，按电脑架构选择程序。
-- [绿色包](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Portable-0.1.5-win.zip)：完整解压后运行 `SidekickAI/Start-SidekickAI.cmd`，两套架构程序共用包内资料目录。
-
-升级前建议先导出备份。请使用自己的安装目录和资料；绿色包不要直接解压覆盖正在使用的数据目录。下载页同时提供 SHA-256 校验文件。
-
-## 从源码使用 launch.bat 启动
-
-**唯一推荐的运行入口是项目根目录中的 `launch.bat`。** 启动、安装依赖和检查都从这个入口完成。
-
-### 首次使用
-
-1. 将完整项目解压到固定文件夹，保留目录结构。不要在压缩包内运行，也不要只复制 `launch.bat`。
-2. 双击 `launch.bat`。首次运行会自动安装所需工具（Node.js 便携版，安装到用户目录，无需管理员权限；下载自动使用国内镜像并校验完整性）。
-3. 输入 `5` 打开「更多工具」，再输入 `2` 选择「安装锁定依赖」。首次安装需要联网，等待完成。
-4. 输入 `0` 返回主菜单，再输入 `1` 选择「启动工具」。
-
-### 日常使用
-
-双击 `launch.bat`，选择 `1`「启动工具」即可。运行期间保留启动命令窗口；结束使用时先退出应用，再关闭命令窗口。新增或升级依赖后，可再次通过「更多工具 → 安装锁定依赖」完成安装。
-
-| 菜单 | 用途 |
-| --- | --- |
-| 1 · 启动工具 | 打开工百窗，日常使用选这一项 |
-| 2 · 验证 | 排查启动问题，先选择「快速检查」 |
-| 3 · 生成安装包 | 为需要自行打包的使用者生成文件 |
-| 4 · 预览构建 | 打开已构建的应用，检查构建结果 |
-| 5 · 更多工具 | 安装依赖及使用开发维护工具 |
-| 0 · 退出 | 退出当前菜单；子菜单中返回上一级 |
-
-### 启动遇到问题
-
-- 工具环境准备失败（自动安装 Node.js 未完成）：确认网络可访问 `npmmirror.com` 或 `nodejs.org`（必要时配置代理）后重新运行 `launch.bat`；也可以到 [Node.js 官网](https://nodejs.org/) 手动安装 LTS 版本（22.12 以上）。
-- 原生模块编译失败，提示缺少 C++ 构建工具：运行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bootstrap\ensure-node.ps1 -WithBuildTools` 一键安装（需管理员授权），或手动安装 Windows C++ 构建工具后重试。
-- 提示缺少依赖或模块：通过「更多工具 → 安装锁定依赖」重新安装。
-- 仍无法启动：选择「验证 → 快速检查」，保留错误信息并反馈。排查时保留本地数据，不要删除项目目录。
+- [安装版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Setup-0.1.5.exe)：安装后，从开始菜单或桌面快捷方式打开工百窗。
+- [绿色版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Portable-0.1.5-win.zip)：完整解压后，双击文件夹中的 `Start-SidekickAI.cmd`。
 
 ## 反馈与参与
 
