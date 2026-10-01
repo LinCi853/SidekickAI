@@ -19,7 +19,8 @@ export default defineConfig({
         // "Cannot use import statement outside a module"（不认 package.json 的 type:"module"）
         output: {
           format: 'cjs',
-          entryFileNames: '[name].cjs'
+          entryFileNames: '[name].cjs',
+          chunkFileNames: '[name]-[hash].cjs'
         },
         // 主进程依赖由 externalizeDepsPlugin 外置，无需 manualChunks
       },

@@ -356,7 +356,7 @@ function applicationPackageInputs() {
   const packages = Object.entries(lock.packages || {})
     .filter(([name, entry]) => name.startsWith('node_modules/') && !entry.dev && fs.existsSync(path.join(ROOT, name)))
     .map(([name]) => path.join(ROOT, name))
-  return ['out', 'resources', 'packages/product-contract', 'packages/desktop-common', 'product-edition.json', 'electron-builder.yml', 'package.json', 'package-lock.json',
+  return ['out', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'product-edition.json', 'electron-builder.yml', 'package.json', 'package-lock.json',
     'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs', 'build/License.txt', 'LICENSE',
     'node_modules/electron/package.json', 'node_modules/electron-builder', 'node_modules/app-builder-lib']
     .map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file)).concat(packages, process.env.SIDEKICK_ELECTRON_DIST ? [path.resolve(process.env.SIDEKICK_ELECTRON_DIST)] : [], [__filename])
@@ -369,7 +369,7 @@ function buildApplications(output, architectures, options = {}) {
   const appOutput = path.join(output, 'application-build')
   if (fs.existsSync(appOutput)) throw new Error(`Application build directory already exists: ${appOutput}`)
   fs.mkdirSync(appOutput, { recursive: true })
-  const inputs = ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'product-edition.json', 'package.json', 'package-lock.json', 'electron-builder.yml', 'electron.vite.config.ts', 'scripts/compilation-inputs.ts', 'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs', 'build/License.txt', 'LICENSE'].map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file))
+  const inputs = ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'product-edition.json', 'package.json', 'package-lock.json', 'electron-builder.yml', 'electron.vite.config.ts', 'scripts/compilation-inputs.ts', 'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs', 'build/License.txt', 'LICENSE'].map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file))
   const before = u.fingerprint(ROOT, inputs)
   const compilation = require('./application-build.cjs').compile(output, run)
   const packageInputs = applicationPackageInputs()

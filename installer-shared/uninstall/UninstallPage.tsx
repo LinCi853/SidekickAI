@@ -573,7 +573,7 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
         {dataScope.roots.map(root => <div key={root.path}>{root.path}</div>)}
       </div>}
       {dataScopeIssue && <div className="uninstall-error-box" role="alert">{dataScopeIssue}</div>}
-      {strategy === 'export' && <div className="uninstall-hint">导出失败、不完整或无法校验时，后端必须保留所有目标数据和安装文件。</div>}
+      {strategy === 'export' && <div className="uninstall-hint">导出失败或校验未通过时，保留原数据和安装文件。备份可在工百窗「数据迁移」中导入，恢复范围以导入确认提示为准。</div>}
     </>
   )
 

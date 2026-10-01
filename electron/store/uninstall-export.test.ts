@@ -6,7 +6,10 @@ import Database from 'better-sqlite3'
 import AdmZip from 'adm-zip'
 import { decryptFile } from '../utils/file-crypto.js'
 
-vi.mock('electron', () => ({ app: { getPath: () => os.tmpdir(), getVersion: () => 'test' } }))
+const state = vi.hoisted(() => ({ root: '' }))
+vi.mock('electron', () => ({ app: { getPath: (name: string) => name === 'userData' ? state.root : os.tmpdir(), getVersion: () => 'test' } }))
+vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }), closeAllModuleDbs() {} }))
+vi.mock('../../packages/backup-core/sessions.js', () => ({ captureOfflineCookies: async () => [], captureBackupSessions: async () => [] }))
 import { exportForUninstall } from './uninstall-export.js'
 
 const fixtures: string[] = []
@@ -15,6 +18,7 @@ function fixture() {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'uninstall-export-test-'))
   fixtures.push(parent)
   const root = path.join(parent, 'profile')
+  state.root = root
   fs.mkdirSync(root)
   fs.writeFileSync(path.join(root, 'edition-identity.json'), JSON.stringify({ schema: 1, edition: 'sidekickai-opensource' }))
   const db = new Database(path.join(root, 'settings.db'))
@@ -22,16 +26,16 @@ function fixture() {
   db.close()
   return { parent, root, output: path.join(parent, 'backup.zip') }
 }
-describe('complete uninstall export', () => {
-  it('retains asset names and browser sidecars outside snapshotted databases', async () => {
+describe('shared strict uninstall export', () => {
+  it('retains selected asset names and original browser sidecars', async () => {
     const { root, output } = fixture()
-    fs.mkdirSync(path.join(root, 'assets'))
-    fs.writeFileSync(path.join(root, 'assets', 'LOCK'), 'user asset')
+    fs.mkdirSync(path.join(root, 'notes-assets'))
+    fs.writeFileSync(path.join(root, 'notes-assets', 'LOCK'), 'user asset')
     fs.writeFileSync(path.join(root, 'Cookies'), 'browser file')
     fs.writeFileSync(path.join(root, 'Cookies-wal'), 'browser sidecar')
     await exportForUninstall(root, output)
     const archive = new AdmZip(output)
-    expect(archive.readAsText('assets/LOCK')).toBe('user asset')
+    expect(archive.readAsText('notes-assets/LOCK')).toBe('user asset')
     expect(archive.readAsText('Cookies-wal')).toBe('browser sidecar')
     expect(archive.getEntry('settings.db')).not.toBeNull()
   })
@@ -47,14 +51,14 @@ describe('complete uninstall export', () => {
     await expect(exportForUninstall(root, output)).rejects.toThrow(/ownership/)
     expect(fs.existsSync(output)).toBe(false)
   })
-  it('produces a decryptable complete archive and retains the original manifest', async () => {
+  it('produces a decryptable archive with the source-bound inventory and current data identity', async () => {
     const { parent, root, output } = fixture()
     fs.writeFileSync(path.join(root, 'manifest.json'), '{"original":true}')
     await exportForUninstall(root, output, 'test-password')
     const plain = path.join(parent, 'decrypted.zip')
-    expect(decryptFile(output, plain, 'test-password')).toBe('sidekickai-opensource-uninstall')
+    expect(decryptFile(output, plain, 'test-password')).toBe('concept-maintenance')
     const archive = new AdmZip(plain)
-    expect(archive.readAsText('manifest.json')).toBe('{"original":true}')
+    expect(JSON.parse(archive.readAsText('manifest.json'))).toMatchObject({ format: 'sidekickai-backup', edition: 'concept', dataSchemaVersion: 1, entries: { 'settings.db': expect.stringMatching(/^[a-f0-9]{64}$/) } })
     expect(archive.getEntry('settings.db')).not.toBeNull()
   })
 })

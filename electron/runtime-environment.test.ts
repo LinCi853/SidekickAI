@@ -16,7 +16,7 @@ vi.mock('electron', () => ({ app: {
   setName: vi.fn(), setAppUserModelId: vi.fn(),
   requestSingleInstanceLock: () => { runtime.lock(runtime.paths.userData); return runtime.ownsLock },
   exit: (code: number) => { runtime.exit(code); throw new Error('Process exited') },
-} }))
+}, dialog: { showErrorBox: vi.fn() } }))
 
 let directory: string
 beforeEach(() => {
@@ -55,7 +55,7 @@ describe('runtime data boundaries', () => {
     await import('./runtime-environment')
     expect(runtime.paths.userData).toBe(path.join(directory, 'data'))
     expect(runtime.paths.sessionData).toBe(runtime.paths.userData)
-    expect(runtime.lock).toHaveBeenCalledWith(path.join(directory, 'data'))
+    expect(runtime.lock).toHaveBeenCalledWith(path.join(directory, 'data.instance'))
   })
 
   it('preserves the data location of a legacy single architecture portable', async () => {
@@ -126,7 +126,7 @@ describe('runtime data boundaries', () => {
     dualRuntime('x64')
     fs.writeFileSync(path.join(directory, 'data'), 'occupied path')
     await expect(import('./runtime-environment')).rejects.toThrow()
-    expect(runtime.lock).not.toHaveBeenCalled()
+    expect(runtime.lock).toHaveBeenCalledWith(path.join(directory, 'data.instance'))
     expect(fs.existsSync(runtime.paths.appData)).toBe(false)
   })
 

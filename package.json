@@ -1,6 +1,6 @@
 {
   "name": "sidekickai-opensource",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "免费、丰富、无缝融入电脑使用的 AI 入门工具",
   "main": "out/main/index.cjs",
   "author": "SidekickAI",

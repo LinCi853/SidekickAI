@@ -212,6 +212,7 @@ export const IPC_CHANNELS = {
   APP_CLEAR_ALL_DATA: 'app:clearAllData',
   // 数据迁移（导出/导入完整数据，跨设备迁移）
   APP_EXPORT_DATA: 'app:exportData',
+  APP_INSPECT_BACKUP: 'app:inspectBackup',
   APP_IMPORT_DATA: 'app:importData',
   APP_IMPORT_DATA_DECRYPTED: 'app:importDataDecrypted',
   // 选文件后立即检测是否 SABK 加密备份（读文件头魔数）

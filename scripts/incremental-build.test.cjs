@@ -59,7 +59,7 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
     fs.mkdirSync(path.dirname(destination), { recursive: true })
     fs.writeFileSync(destination, bytes)
   }
-  for (const dir of ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'electron/shared']) fs.mkdirSync(path.join(root, dir), { recursive: true })
+  for (const dir of ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'electron/shared']) fs.mkdirSync(path.join(root, dir), { recursive: true })
   for (const file of ['product-edition.json', 'package.json', 'electron.vite.config.ts', 'scripts/compilation-inputs.ts', 'tsconfig.json', 'tsconfig.node.json']) write(file, '{}')
   write('package-lock.json', JSON.stringify({ packages: { 'node_modules/runtime': {} } }))
   write('node_modules/runtime/package.json', '{}')
@@ -108,10 +108,14 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
     if (previous === undefined) delete process.env.SIDEKICK_REBUILD_ALL
     else process.env.SIDEKICK_REBUILD_ALL = previous
   }
+  const beforeBackup = compile().key
+  write('packages/backup-core/compatibility.ts', 'export const schema = 2')
+  assert.notEqual(compile().key, beforeBackup)
+  assert.equal(builds, 8)
   const beforeConfig = compile().key
   write('tsconfig.json', '{"compilerOptions":{"target":"ES2022"}}')
   assert.notEqual(compile().key, beforeConfig)
-  assert.equal(builds, 8)
+  assert.equal(builds, 9)
 })
 
 test('unsupported Rust flags are rejected before any native cache lookup', () => {

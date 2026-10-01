@@ -11,7 +11,7 @@ const { toolInputs } = require('./build-tool-inputs.cjs')
 const ROOT = path.resolve(__dirname, '..')
 
 function inputs(root = ROOT, complete = false) {
-  const source = ['electron', 'src', 'packages/product-contract', 'packages/desktop-common',
+  const source = ['electron', 'src', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core',
     'resources', 'product-edition.json', 'package.json', 'package-lock.json', 'electron.vite.config.ts',
     'scripts/compilation-inputs.ts', 'tsconfig.json', 'tsconfig.node.json']
   const list = source.flatMap(relative => {

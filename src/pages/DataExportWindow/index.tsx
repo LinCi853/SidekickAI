@@ -22,6 +22,7 @@ import {
   exportData,
   selectImportFile,
   importData,
+  inspectBackup,
   importDataDecrypted,
   detectBackupEncrypted,
   getPlatformCapabilities,
@@ -242,10 +243,6 @@ export default function DataExportWindow() {
     }
   };
 
-  const confirmOverwrite = () =>
-    window.confirm(
-      `确认导入以下文件？\n\n${importFilePath}\n\n此操作将完全覆盖当前所有数据，应用将自动重启。`,
-    );
 
   // 确认导入（仅明文 zip；加密文件走解密导入）
   const handleConfirmImport = async () => {
@@ -254,7 +251,6 @@ export default function DataExportWindow() {
       await handleDecryptImport();
       return;
     }
-    if (!confirmOverwrite()) return;
     await doImport(importFilePath);
   };
 
@@ -263,12 +259,20 @@ export default function DataExportWindow() {
     setImporting(true);
     setImportStatus(null);
     try {
+      const inspection = await inspectBackup(filePath, password);
+      if (!inspection.success) {
+        setImportNeedsPassword(inspection.encrypted === true);
+        setImportStatus({ type: 'error', message: inspection.error ?? '备份检查失败' });
+        setImporting(false);
+        return;
+      }
+      if (!window.confirm(`确认导入以下文件？\n\n${filePath}\n\n${inspection.message}`)) { setImporting(false); return; }
       let result: { success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string };
       if (password) {
-        const r = await importDataDecrypted(filePath, password);
+        const r = await importDataDecrypted(filePath, password, inspection.fingerprint);
         result = { ...r, encrypted: false };
       } else {
-        result = await importData(filePath);
+        result = await importData(filePath, inspection.fingerprint);
       }
       if (!result.success) {
         if (result.encrypted) {
@@ -299,7 +303,6 @@ export default function DataExportWindow() {
   // 加密文件输入密码后解密导入
   const handleDecryptImport = async () => {
     if (!importFilePath || !importPassword || importing) return;
-    if (!confirmOverwrite()) return;
     await doImport(importFilePath, importPassword);
   };
 
@@ -548,7 +551,7 @@ export default function DataExportWindow() {
             {/* 警告 */}
             <div className="data-export-import-warning" data-name="data-export.import-warning">
               <div className="data-export-import-warning-title" data-name="data-export.import-warning-title"><AlertIcon className="data-export-warning-icon" /> 严重警告：</div>
-              <div data-name="data-export.import-warning-line-1">· 导入将完全覆盖当前所有数据（包括 AI 平台登录态、对话记录、设置等）</div>
+              <div data-name="data-export.import-warning-line-1">· 兼容的同路线备份完整恢复；跨路线或结构不兼容时仅合并通用数据，确认时会显示范围</div>
               <div data-name="data-export.import-warning-line-2">· 导入后应用将自动重启</div>
               <div data-name="data-export.import-warning-line-3">· 建议先导出当前数据作为备份</div>
             </div>

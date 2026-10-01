@@ -24,16 +24,20 @@ vi.mock('./browser-download-store.js', () => ({ closeBrowserDownloadStore() {} }
 vi.mock('./nav-history-store.js', () => ({ closeNavHistoryStore() {} }))
 vi.mock('./accumulated-links-store.js', () => ({ accumulatedLinksStore: { close() {} } }))
 vi.mock('./install-config-seed.js', () => ({ stampInstallConfigHashAfterImport() {} }))
-vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }) }))
+vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }), closeAllModuleDbs() {} }))
 import { estimateExportSizes, exportAllData, importAllData } from './backup-restore'
 import { cleanCacheData, estimateCacheSize } from './cache-maintenance'
+import { applyPendingRestore, finishPendingRestore } from '../../packages/backup-core/transaction'
+import { setImportingData } from './import-guard'
 
 let root: string
 beforeEach(() => {
+  setImportingData(false)
   vi.stubEnv('SIDEKICK_DATA_DIR', '')
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-portable-backup-'))
 })
 afterEach(() => {
+  setImportingData(false)
   vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllEnvs()
   fs.rmSync(root, { recursive: true, force: true })
 })
@@ -95,10 +99,14 @@ describe.each(['x64', 'arm64'] as const)('portable %s data operations', arch => 
     const incoming = settings(path.join(root, 'incoming'), 'restored-shared-root')
     const archive = new AdmZip()
     archive.addFile('settings.db', fs.readFileSync(incoming))
+    archive.addFile('manifest.json', Buffer.from(JSON.stringify({ edition: 'concept', appVersion: '0.1.5' })))
     const backup = path.join(root, 'restore.zip')
     archive.writeZip(backup)
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     expect(await importAllData(backup)).toMatchObject({ success: true })
+    expect(sentinel(path.join(shared, 'settings.db'))).toBe('shared-root')
+    expect(applyPendingRestore(shared).restored).toBe(true)
+    finishPendingRestore(shared)
     expect(sentinel(path.join(shared, 'settings.db'))).toBe('restored-shared-root')
     expect(sentinel(path.join(decoy, 'settings.db'))).toBe('architecture-local-sentinel')
     const recovery = fs.readdirSync(root).find(name => name.startsWith('data.bak-'))!

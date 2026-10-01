@@ -487,15 +487,19 @@ export function registerAppSettingsIPC(): void {
   })
 
   // 数据迁移：从 zip/sabackup 文件导入所有数据（导入后应用自动重启）
-  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA, async (_e, zipPath: string) => {
+  ipcMain.handle(IPC_CHANNELS.APP_INSPECT_BACKUP, async (_e, filePath: string, password?: string) => {
+    const { inspectImportData } = await import('./backup-restore.js')
+    return inspectImportData(filePath, password)
+  })
+  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA, async (_e, zipPath: string, fingerprint?: string) => {
     const { importAllData } = await import('./backup-restore.js')
-    return importAllData(zipPath)
+    return importAllData(zipPath, fingerprint)
   })
 
   // 数据迁移：从加密的 .sabackup 文件导入（输入密码解密后导入）
-  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, async (_e, filePath: string, password: string) => {
+  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, async (_e, filePath: string, password: string, fingerprint?: string) => {
     const { importAllDataDecrypted } = await import('./backup-restore.js')
-    return importAllDataDecrypted(filePath, password)
+    return importAllDataDecrypted(filePath, password, fingerprint)
   })
 
   // 选文件后立即检测是否 SABK 加密（不进入导入流程）

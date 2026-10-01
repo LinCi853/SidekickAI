@@ -1,3 +1,4 @@
+import type { BackupInspection } from '../../../packages/backup-core/types.js'
 // settings.api.ts — AppSettings / Onboarding / BlockRules / Fingerprint / PlatformCapabilities 接口
 
 import type { BlockRule } from '../block-rules.types.js'
@@ -175,9 +176,10 @@ export interface AppSettingsAPI {
     encrypt?: { password: string },
   ): Promise<{ success: boolean; filePath?: string; error?: string }>
   /** 从 zip/sabackup 文件导入所有数据（导入后应用自动重启）。加密文件返回 encrypted: true */
-  importData(filePath: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }>
+  inspectBackup(filePath: string, password?: string): Promise<BackupInspection>
+  importData(filePath: string, fingerprint?: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }>
   /** 从加密的 .sabackup 文件导入（输入密码解密后导入） */
-  importDataDecrypted(filePath: string, password: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }>
+  importDataDecrypted(filePath: string, password: string, fingerprint?: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }>
   /** 选文件后立即检测是否 SABK 加密备份 */
   detectBackupEncrypted(filePath: string): Promise<boolean>
   /**

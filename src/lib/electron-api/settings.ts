@@ -1,3 +1,4 @@
+import type { BackupInspection } from '../../../packages/backup-core/types.js'
 /* =====================================================================
    lib/electron-api/settings.ts —— 应用全局设置 / 预览窗事件 / 自定义 AI 提供商
    ===================================================================== */
@@ -116,15 +117,17 @@ export async function exportData(
 }
 
 /** 从 zip/sabackup 文件导入所有数据（导入后应用自动重启）。加密文件返回 encrypted: true */
-export async function importData(filePath: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }> {
+export async function inspectBackup(filePath: string, password?: string): Promise<BackupInspection> { return requireElectron().appSettings.inspectBackup(filePath, password) }
+
+export async function importData(filePath: string, fingerprint?: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }> {
   const api = requireElectron();
-  return api.appSettings.importData(filePath);
+  return api.appSettings.importData(filePath, fingerprint);
 }
 
 /** 从加密的 .sabackup 文件导入（输入密码解密后导入） */
-export async function importDataDecrypted(filePath: string, password: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }> {
+export async function importDataDecrypted(filePath: string, password: string, fingerprint?: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }> {
   const api = requireElectron();
-  return api.appSettings.importDataDecrypted(filePath, password);
+  return api.appSettings.importDataDecrypted(filePath, password, fingerprint);
 }
 
 /** 选文件后立即检测是否 SABK 加密备份 */

@@ -29,10 +29,11 @@ export const appSettingsApi = {
       },
       encrypt?: { password: string },
     ) => ipcRenderer.invoke(IPC_CHANNELS.APP_EXPORT_DATA, targetPath, options, encrypt),
-    importData: (filePath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA, filePath),
-    importDataDecrypted: (filePath: string, password: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, filePath, password),
+    inspectBackup: (filePath: string, password?: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_INSPECT_BACKUP, filePath, password),
+    importData: (filePath: string, fingerprint?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA, filePath, fingerprint),
+    importDataDecrypted: (filePath: string, password: string, fingerprint?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, filePath, password, fingerprint),
     detectBackupEncrypted: (filePath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_DETECT_BACKUP_ENCRYPTED, filePath),
     estimateExportSizes: () => ipcRenderer.invoke(IPC_CHANNELS.APP_ESTIMATE_EXPORT_SIZES),

@@ -4,6 +4,9 @@ import { duplicateVersionNotice } from '../packages/desktop-common/running-appli
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { resolveRuntimePaths } from './runtime-paths'
+import { applyPendingRestore, type RestoreOutcome } from '../packages/backup-core/transaction.js'
+import { prepareLimitedRestore, prepareFullRestore } from './store/backup/transfer-adapter.js'
+import { cookieHelperRequestPath, initializeCookieHelper } from '../packages/backup-core/sessions.js'
 
 const applicationName = edition.packageName
 app.setName(product.name)
@@ -17,29 +20,46 @@ export const runtimePaths = resolveRuntimePaths({
   developmentDirectory: path.resolve(__dirname, '../..', '.app-data'),
   dataOverride: process.env.SIDEKICK_DATA_DIR,
 })
-const directory = runtimePaths.dataDirectory
-mkdirSync(directory, { recursive: true })
-app.setPath('userData', directory)
-app.setPath('sessionData', directory)
-
 const exportArgument = process.argv.indexOf('--export-user-data')
 const exportPath = exportArgument < 0 ? undefined : process.argv[exportArgument + 1]
 export const exportCliRequestPath = exportPath && !exportPath.startsWith('--') ? exportPath : null
-if (exportCliRequestPath) app.setPath('sessionData', mkdtempSync(path.join(app.getPath('temp'), 'sidekick-export-session-')))
-
-if (!app.requestSingleInstanceLock()) {
-  if (app.isPackaged) {
-    try {
-      const notice = duplicateVersionNotice()
-      if (notice) dialog.showErrorBox('已有版本正在运行', notice)
-    } catch { dialog.showErrorBox('无法核对正在运行的版本', '请先保存并退出已有工百窗实例，再重新启动。') }
+export const startupRestore: RestoreOutcome = (() => {
+  try {
+    if (cookieHelperRequestPath) { initializeCookieHelper(); return { restored: false } }
+    return initializeDataRoot()
+  } catch (error) {
+    dialog.showErrorBox('应用数据操作失败', `启动已中止，请先处理文件占用或目录权限后重新启动。\n${(error as Error).message}`)
+    app.exit(1)
+    throw error
   }
-  app.exit(0)
-}
-const identityPath = path.join(directory, 'edition-identity.json')
-if (existsSync(identityPath)) {
-  const identity = JSON.parse(readFileSync(identityPath, 'utf8'))
-  if (identity.edition !== applicationName || identity.schema !== 1) throw new Error('User data belongs to another edition')
-} else if (!exportCliRequestPath) {
-  writeFileSync(identityPath, JSON.stringify({ edition: applicationName, schema: 1 }), { flag: 'wx' })
+})()
+
+function initializeDataRoot(): RestoreOutcome {
+  const directory = runtimePaths.dataDirectory
+  if (!exportCliRequestPath) {
+    const instanceRoot = `${directory}.instance`
+    mkdirSync(instanceRoot, { recursive: true })
+    app.setPath('userData', instanceRoot)
+    if (!app.requestSingleInstanceLock()) {
+      if (app.isPackaged) {
+        try {
+          const notice = duplicateVersionNotice()
+          if (notice) dialog.showErrorBox('已有版本正在运行', notice)
+        } catch { dialog.showErrorBox('无法核对正在运行的版本', '请先保存并退出已有工百窗实例，再重新启动。') }
+      }
+      app.exit(0)
+    }
+  }
+  const restored = exportCliRequestPath ? { restored: false } : applyPendingRestore(directory, prepareLimitedRestore, prepareFullRestore)
+  mkdirSync(directory, { recursive: true })
+  app.setPath('userData', directory)
+  app.setPath('sessionData', exportCliRequestPath ? mkdtempSync(path.join(app.getPath('temp'), 'sidekick-export-session-')) : directory)
+  const identityPath = path.join(directory, 'edition-identity.json')
+  if (existsSync(identityPath)) {
+    const identity = JSON.parse(readFileSync(identityPath, 'utf8'))
+    if (identity.edition !== applicationName || identity.schema !== 1) throw new Error('User data belongs to another edition')
+  } else if (!exportCliRequestPath) {
+    writeFileSync(identityPath, JSON.stringify({ edition: applicationName, schema: 1 }), { flag: 'wx' })
+  }
+  return restored
 }

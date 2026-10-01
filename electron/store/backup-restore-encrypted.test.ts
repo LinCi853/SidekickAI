@@ -29,18 +29,22 @@ vi.mock('./browser-download-store.js', () => ({ closeBrowserDownloadStore() {} }
 vi.mock('./nav-history-store.js', () => ({ closeNavHistoryStore() {} }))
 vi.mock('./accumulated-links-store.js', () => ({ accumulatedLinksStore: { close() {} } }))
 vi.mock('./install-config-seed.js', () => ({ stampInstallConfigHashAfterImport() {} }))
-vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }) }))
+vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }), closeAllModuleDbs() {} }))
 import { exportAllData, importAllData, importAllDataDecrypted } from './backup-restore'
+import { applyPendingRestore, finishPendingRestore } from '../../packages/backup-core/transaction'
+import { setImportingData } from './import-guard'
 
 const PASSWORD = '测试密码-pw'
 let root: string
 
 beforeEach(() => {
+  setImportingData(false)
   vi.stubEnv('SIDEKICK_DATA_DIR', '')
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-encrypted-backup-'))
   fixture.paths = { userData: path.join(root, 'data'), temp: root }
 })
 afterEach(() => {
+  setImportingData(false)
   vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllEnvs()
   fs.rmSync(root, { recursive: true, force: true })
 })
@@ -90,6 +94,9 @@ describe('加密备份回环（exportAllData + importAllDataDecrypted）', () =>
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     const result = await importAllDataDecrypted(backup, PASSWORD)
     expect(result).toMatchObject({ success: true, sourceDeviceId: 'fixture-device' })
+    expect(sentinel(path.join(fixture.paths.userData, 'settings.db'))).toBe('drifted')
+    expect(applyPendingRestore(fixture.paths.userData).restored).toBe(true)
+    finishPendingRestore(fixture.paths.userData)
     expect(sentinel(path.join(fixture.paths.userData, 'settings.db'))).toBe('before-encrypt')
   })
 
