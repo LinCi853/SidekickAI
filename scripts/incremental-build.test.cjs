@@ -67,6 +67,7 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('node_modules/esbuild/package.json', '{}')
   write('node_modules/esbuild/dist/tool.js', 'first tool')
   write('electron/shared/used.mjs', 'first shared source')
+  write('scripts/excalidraw-clipboard-feedback.ts', 'first clipboard adapter')
   let builds = 0
   const run = () => {
     builds++
@@ -116,6 +117,10 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('tsconfig.json', '{"compilerOptions":{"target":"ES2022"}}')
   assert.notEqual(compile().key, beforeConfig)
   assert.equal(builds, 9)
+  const beforeClipboard = compile().key
+  write('scripts/excalidraw-clipboard-feedback.ts', 'second clipboard adapter')
+  assert.notEqual(compile().key, beforeClipboard)
+  assert.equal(builds, 10)
 })
 
 test('unsupported Rust flags are rejected before any native cache lookup', () => {

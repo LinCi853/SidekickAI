@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "e7a5ba191d970ee536555ea7a64c1d0606094e4692a8cf5ae5ce9602fd12f180",
+  "revision": "f2db9175fb281561dcccf1807bde65bdd785d80c958114b7d3f41a0875a26acd",
   "files": {
     "electron.vite.config.ts": "59de18e9de01da904cad56f121904704a4ebf25ccbfaffa902b39d2b74478e37",
     "installer-shared/on-demand/fixtures/issuer-resource.json": "c9bfe8b043d9c9b440c1b36af8fe8bdc113a09f61f5af673dad14ca068643750",
@@ -158,7 +158,7 @@
     "packages/product-contract/index.ts": "29f7ae3169be7357e4c5b2186ef8dcf3a5f79b5146f2a575895db7e44bd18d91",
     "packages/product-contract/manifest.json": "54c2797a7fd4bfeebfc55e19b19a1dabc05116291921cd84c3a1a62995ae8209",
     "packages/product-contract/sync.cjs": "5a004ec31c7ffc9f20f7121ab47f210a7e4f8dba9f9468283dea2cd6da608c98",
-    "scripts/application-build.cjs": "e4ade10b3971efd675fd5cbdb0354f5f4d4206ed1be174a852b8cb904afec1d3",
+    "scripts/application-build.cjs": "66dfb3b8f220983c467c448490ca7b1ba6b5b245222d6c0621a40d65ad7f45eb",
     "scripts/build-cache.cjs": "6f145fed812398283c079f4a8dfde93ece90593c8ae833725df37fcd0a54e87c",
     "scripts/build-distribution.cjs": "0bf9c31be89c14aea0a6ba1494c8c3c940199b2ae11c9de60fc9846d25252909",
     "scripts/build-distribution.test.cjs": "717cdcba42503cb3e4becc84c43a1cff3ab093119dd45e888911208d0cdebeee",
@@ -169,7 +169,7 @@
     "scripts/check-node-version.cjs": "bc60b25ebeaa2bf2bafb88895ee8a19dbfbcca96a821e9b1de2f2117a75cde79",
     "scripts/compilation-inputs.ts": "38303368727a59a42114cce2c50b87e5bc8843d8f343fd8a3e7fd485d556eb56",
     "scripts/component-contract.cjs": "62a8aa24907fe94f9b31d31e58ea3e43efa4b8433057422007a88bc4eb79da3f",
-    "scripts/incremental-build.test.cjs": "5edc5e2aa9b8cc0657bb8eb62f15618b96fd0e2180d7b2673c3c782e29bad15e",
+    "scripts/incremental-build.test.cjs": "613f5ff3a2bb078ce4e0636838955fa8acc822b9a711a6237ad73b95793625c7",
     "scripts/maintenance-inputs.cjs": "c69924c3fda664b7cc7c40c052a81e639d744ad83035940d098561ca8184105f",
     "scripts/oxy-build-config.cjs": "08a93c51cb493bb1196e025dc3c862cb3c249fea68cbef9e96d00a580e353e4f",
     "scripts/packaging-lock.cjs": "2b16ba8e0daaba6ba5d40460101603e2da5e0b5350337eeddacb4c424d8435ef",
