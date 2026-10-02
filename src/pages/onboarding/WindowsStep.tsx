@@ -1,12 +1,3 @@
-/* =====================================================================
-   pages/onboarding/WindowsStep.tsx —— 引导页 1：认识窗口
-   职责：窗口地图卡片（主窗口 / 进阶面板 / 浏览器窗口），模块开关直接内嵌到
-   对应窗口卡片（主窗口→提示词库；进阶面板→白板/笔记/自定义对话 API；
-   浏览器窗口→浏览器/页面冻结）；不依附窗口的模块（语音/TTS）单独列出并介绍；
-   「使用推荐配置」入口（常用开、实验关）。
-   从 pages/OnboardingView.tsx 拆出，仅通过 props 回调操作状态，不改变任何行为。
-   ===================================================================== */
-
 import type { ReactNode } from 'react';
 import type { HotkeyConfig, ModuleInfo } from '../../lib/electron-api';
 import { Toggle } from '../../components/ui';
@@ -15,15 +6,16 @@ import { resolveHotkey } from './onboardingData';
 
 /** 窗口卡片 → 内嵌模块开关（按模块主要使用位置归属） */
 const WINDOW_MODULE_MAP: Record<string, string[]> = {
-  main: ['prompt-library'],
+  main: [],
+  assets: ['prompt-library', 'freeze'],
   panel: ['custom-chat', 'whiteboard', 'notes'],
-  browser: ['browser', 'freeze'],
+  browser: ['browser'],
 };
 
 /** 模块 → 用户价值描述（覆盖 manifest 中的技术描述；未覆盖时回退 manifest.description） */
 const MODULE_VALUE_DESC: Record<string, string> = {
   'custom-chat': '接入 OpenAI 兼容协议的自定义 AI 服务，流式直连对话',
-  'prompt-library': '常用提示词模板集中管理，热键一键注入',
+  'prompt-library': '集中收纳对话、提示词、资料与原件，查看文本用量',
   notes: '灵感笔记：任务列表、代码块、图片，随用随记',
   whiteboard: '无限画布白板，对话内容和截图都能推到白板',
   voice: '按住 Alt+V 说话、松开发送，后台语音输入',
@@ -89,10 +81,18 @@ export default function WindowsStep({
       moduleIds: WINDOW_MODULE_MAP.panel,
     },
     {
+      id: 'assets',
+      icon: ICONS.appWindow,
+      name: 'AI资产',
+      entry: { keys: '主窗口菜单', enabled: true },
+      desc: '对话、提示词和资料集中收纳，原件保存在本地；手动页面冻结也在这里管理。',
+      tags: ['对话与修订', '提示词管理', '资料原件', '文本用量'],
+      moduleIds: WINDOW_MODULE_MAP.assets,
+    },
+    {
       id: 'browser',
       icon: ICONS.globe,
       name: '浏览器窗口',
-      experimental: true,
       entry: browserEnabled
         ? { keys: '按应用设置', enabled: true }
         : { keys: '未启用', enabled: false },
@@ -196,7 +196,7 @@ export default function WindowsStep({
         ))}
       </div>
 
-      {/* 不依附窗口的模块：单独列出并介绍 */}
+      {/* Independent capabilities */}
       {extraModules.length > 0 && (
         <div className="onboarding-module-block" data-name="onboarding.module-block">
           <div className="onboarding-module-block-head">

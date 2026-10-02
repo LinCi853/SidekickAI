@@ -87,6 +87,14 @@ export interface AiAssetsAPI {
   suggestions(): Promise<AssetPromptSuggestion[]>
   searchConversations(query: string): Promise<string[]>
 }
+export interface AssetNavigation {
+  category?: 'conversations' | 'prompts' | 'files'
+  focusSearch?: boolean
+  freezeTabId?: string
+}
+
+export interface AssetNavigationEvent extends AssetNavigation { revision: number }
+
 export interface AssetSource {
   id: string
   type: ConversationSourceType

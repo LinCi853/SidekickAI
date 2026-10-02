@@ -74,6 +74,17 @@ export class AiAssetsStore {
     `)
   }
 
+  clearData(settingsPath: string): void {
+    this.db.prepare('ATTACH DATABASE ? AS asset_settings').run(settingsPath)
+    try {
+      this.db.transaction(() => {
+        this.db.prepare('DELETE FROM conversations').run()
+        this.db.prepare("UPDATE asset_settings.prompts SET value = json_set(value, '$.prompts', json('[]')) WHERE key = '__data__'").run()
+        this.db.prepare("UPDATE asset_settings.injection_history SET value = json_set(value, '$.records', json('[]')) WHERE key = '__data__'").run()
+      })()
+    } finally { this.db.exec('DETACH DATABASE asset_settings') }
+  }
+
   conversation(source: AssetSource, observation: Omit<AssetObservation, 'messages'>): string {
     const known = this.db.prepare('SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?')
       .get(source.id, observation.conversationKey) as { conversation_id: string } | undefined

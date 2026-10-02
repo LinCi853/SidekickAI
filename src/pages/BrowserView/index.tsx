@@ -93,7 +93,6 @@ export default function BrowserView() {
     zoomResetAction: webview.zoomResetAction,
     toggleCloudPc: webview.toggleCloudPc,
     handleToggleSpatialNav: webview.handleToggleSpatialNav,
-    handleToggleFreeze: webview.handleToggleFreeze,
   });
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;

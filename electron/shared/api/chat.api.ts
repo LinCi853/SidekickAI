@@ -1,5 +1,6 @@
 // chat.api.ts — Chat / AIProvider / AIPlatform / Prompt / InjectionHistory 接口
 
+import type { AssetNavigation, AssetNavigationEvent } from '../ai-assets.types.js'
 import type {
   Conversation,
   ConversationSourceType,
@@ -102,7 +103,9 @@ export interface PromptAPI {
   /** 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库） */
   importPrompts(): Promise<{ ok: boolean; added?: number; updated?: number; canceled?: boolean; error?: string }>
   /** 打开提示词库独立窗口（单例） */
-  openWindow(): Promise<void>
+  openWindow(request?: AssetNavigation): Promise<void>
+  navigation(): Promise<AssetNavigationEvent>
+  onNavigate(callback: (request: AssetNavigationEvent) => void): () => void
   /**
    * 请求注入模板到主窗口激活 webview（提示词库窗口 → 主进程 → 主窗口渲染）
    * 需求 1：传递完整 PromptTemplate，由主窗口渲染层在 webview 上下文中执行

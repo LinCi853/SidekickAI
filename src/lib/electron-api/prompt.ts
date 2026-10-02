@@ -3,6 +3,7 @@
    ===================================================================== */
 
 import type { PromptTemplate } from '../../../electron/shared/types';
+import type { AssetNavigation } from '../../../electron/shared/ai-assets.types';
 import { requireElectron } from './core';
 
 /* =====================================================================
@@ -28,9 +29,9 @@ export async function deletePrompt(id: string): Promise<void> {
 }
 
 /** 打开提示词库独立窗口（单例，不遮挡主页面） */
-export async function openPromptWindow(): Promise<void> {
+export async function openPromptWindow(request?: AssetNavigation): Promise<void> {
   const api = requireElectron();
-  return api.prompt.openWindow();
+  return api.prompt.openWindow(request);
 }
 
 /** 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件） */

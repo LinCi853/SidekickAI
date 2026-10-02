@@ -9,6 +9,7 @@ import { isModuleEnabled } from '../modules/registry.js'
 
 const active = new Set<string>()
 const controllers = new Map<string, AbortController>()
+export function hasLinkedOriginalTransfers(): boolean { return active.size > 0 }
 export function stopLinkedOriginalTransfers(): void {
   for (const controller of controllers.values()) controller.abort()
 }

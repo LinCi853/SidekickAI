@@ -1,7 +1,14 @@
-// electron/modules/wiring/prompt-library.ts — 提示词库模块接线（init / teardown / clearData）
-//
-// 已迁移到统一注入管线（EffectScope）。
-
+import { app } from 'electron'
+import { broadcastToAllWindows } from '../../shared/broadcast.js'
+import { getModuleStateDb } from '../../store/module-state-store.js'
+import { getChatStore } from '../../store/chat-store.js'
+import { isModuleEnabled } from '../registry.js'
+import { hasActiveAssetStreams } from '../../ai/handler.js'
+import { hasLinkedOriginalTransfers } from '../../assets/api-originals.js'
+import { hasWebOriginalTransfers } from '../../assets/asset-ipc.js'
+import { hasActiveAssetImports } from '../../assets/import-activity.js'
+import { assertAssetClearAllowed, clearAssetDirectories } from '../../assets/clear-data.js'
+import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { EffectScope } from '../effect-scope.js'
 import { registerPromptIPC, promptStore, ensureDefaultPrompts } from '../../store/prompt-store.js'
 import { registerPromptIpc } from '../../ipc/prompt-ipc.js'
@@ -10,19 +17,19 @@ import { injectionHistoryStore } from '../../store/injection-history-store.js'
 import { showPromptWindow } from '../../window-factory.js'
 import { windowState } from '../../window-state.js'
 
-/** 模块级 EffectScope */
+/** Module-owned effects. */
 const scope = new EffectScope('prompt-library', 'prompt-library')
 
 
 export async function initPromptLibraryModule(): Promise<void> {
-  // 幂等：先清理旧注册再注册（init 重入/热重载安全）
+  // Registration is idempotent.
   await scope.dispose()
-  // 首次启动填充预置提示词模板
+  // Initialize templates for a new profile.
   ensureDefaultPrompts()
-  // 传递 scope 给 store 层注册函数，使其使用 EffectScope 管理 IPC handler
+  // Register module-owned handlers.
   registerPromptIPC(scope)
   registerInjectionIpc(scope)
-  // 传递 scope 给 registerPromptIpc，使其使用 EffectScope 管理 IPC handler
+
   registerPromptIpc({
     showPromptWindow,
     getMainWindow: () => windowState.mainWindow,
@@ -31,7 +38,7 @@ export async function initPromptLibraryModule(): Promise<void> {
 }
 
 export async function teardownPromptLibraryModule(): Promise<void> {
-  // 关闭提示词库窗口（若有）
+  // Close the asset window before removing its handlers.
   const win = windowState.promptWindow
   if (win && !win.isDestroyed()) {
     win.close()
@@ -40,14 +47,18 @@ export async function teardownPromptLibraryModule(): Promise<void> {
 }
 
 export function clearPromptLibraryData(): void {
-  for (const t of promptStore.list()) {
-    promptStore.delete(t.id)
-  }
-  // 注入历史（预览 + Jaccard 去重）随提示词库数据一并清除
+  assertAssetClearAllowed(isModuleEnabled('prompt-library'), hasActiveAssetStreams() || hasLinkedOriginalTransfers() || hasWebOriginalTransfers() || hasActiveAssetImports())
+  promptStore.list()
+  injectionHistoryStore.listRecent()
+  let cleared = false
   try {
-    injectionHistoryStore.clear()
-  } catch (err) {
-    console.warn('[wiring:prompt-library] 清除注入历史失败:', err)
+    clearAssetDirectories(app.getPath('userData'), () => {
+      getChatStore().assets.clearData(getModuleStateDb().name)
+      cleared = true
+      promptStore.invalidate()
+      injectionHistoryStore.invalidate()
+    })
+  } finally {
+    if (cleared) broadcastToAllWindows(IPC_CHANNELS.ASSET_CLEARED, undefined, 'assets')
   }
-  console.log('[wiring:prompt-library] 数据已清除')
 }

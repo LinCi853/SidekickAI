@@ -1,30 +1,23 @@
-// electron/window-factory/popup-windows.ts — 独立弹出窗口创建/切换
-//
-// 从原 window-factory.ts 抽离的 showHistoryWindow / showPromptWindow。
-// 函数体与原文件逐字一致，仅 import 来源调整为从 ./helpers.js 与上级模块。
-
 import { windowState } from '../window-state.js'
+import { isModuleEnabled } from '../modules/registry.js'
+import { setAssetNavigation } from '../assets/navigation.js'
+import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import type { AssetNavigation } from '../shared/ai-assets.types.js'
 import {
-  HISTORY_WINDOW_ID,
   PROMPT_WINDOW_ID,
   createSingletonPopupWindow,
 } from './helpers.js'
 
-/**
- * 创建/显示历史搜索独立窗口（单例）。
- * 列举所有本地保存数据：对话会话（webview 抓取 + API 直连）、登录痕迹、窗口操作痕迹。
- * 窗口关闭时仅隐藏（复用），before-quit 时销毁。
- */
+/** The legacy search action opens the shared asset window. */
 export function showHistoryWindow(): void {
-  showPromptWindow()
+  showPromptWindow({ focusSearch: true })
 }
 
-/**
- * 创建/显示提示词库独立窗口（单例）。
- * 不遮挡主页面：独立窗口，点击提示词时通过 IPC 请求主窗口注入激活 webview。
- */
-export function showPromptWindow(): void {
-  createSingletonPopupWindow({
+/** Opens the module-owned asset singleton with optional navigation. */
+export function showPromptWindow(request: AssetNavigation = {}): void {
+  if (!isModuleEnabled('prompt-library')) return
+  const navigation = setAssetNavigation(request)
+  const win = createSingletonPopupWindow({
     width: 960,
     height: 720,
     minWidth: 360,
@@ -35,6 +28,7 @@ export function showPromptWindow(): void {
     getExisting: () => windowState.promptWindow,
     setWindow: (win) => { windowState.promptWindow = win },
   })
+  win.webContents.send(IPC_CHANNELS.ASSET_NAVIGATION, navigation)
 }
 
 /**

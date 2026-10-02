@@ -14,8 +14,6 @@ import {
   pinCurrentWindow,
 } from '../../../lib/electron-api';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore';
-import { useFreezeStore } from '../../../store/useFreezeStore';
-import { useModuleStore } from '../../../store/useModuleStore';
 import { useWindowMaximizedAndPinned } from '../../../hooks/useWindowMaximizedAndPinned';
 import { IconButton, PinToggleButton } from '../../../components/ui';
 import { MinimizeIcon, MaximizeIcon, RestoreIcon, CloseIcon } from '@/components/icons';
@@ -150,10 +148,6 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
       case 'toggleMute':
         setMuted(tabId, !tab.muted);
         break;
-      case 'toggleFreeze': {
-        void useFreezeStore.getState().doToggle(tabId, profile.id);
-        break;
-      }
       case 'closeOthers':
         tabs.filter((t) => t.id !== tabId).forEach((t) => void closeTab(t.id));
         break;
@@ -277,8 +271,6 @@ export default function TabsPanel({ profile, themeColor, tabs, activeTabId, onOp
           onDuplicate={() => handleContextAction('duplicate')}
           onTogglePin={() => handleContextAction('togglePin')}
           onToggleMute={() => handleContextAction('toggleMute')}
-          onToggleFreeze={useModuleStore.getState().isEnabled('freeze') ? () => handleContextAction('toggleFreeze') : undefined}
-          isFrozen={useFreezeStore.getState().states[contextMenu.tabId] === 'frozen'}
           onCloseTab={() => { void closeTab(contextMenu.tabId); }}
           onCloseOthers={() => handleContextAction('closeOthers')}
           onCloseRight={() => handleContextAction('closeRight')}

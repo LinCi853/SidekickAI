@@ -30,6 +30,8 @@ export interface ElectronAPI {
   stt: SttAPI
   hotkey: HotkeyAPI
   aiPlatform: AIPlatformAPI
+  onPromptsChanged: (callback: () => void) => () => void
+  onAiAssetsCleared: (callback: () => void) => () => void
   prompt: PromptAPI
   /** 注入历史管理（需求 2：注入预览 + Jaccard 去重） */
   injection: InjectionHistoryAPI

@@ -1,7 +1,18 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS, type PromptTemplate } from '../shared/types.js'
+import type { AssetNavigation, AssetNavigationEvent } from '../shared/ai-assets.types.js'
 
 export const promptApi = {
+  onPromptsChanged: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on(IPC_CHANNELS.PROMPT_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PROMPT_CHANGED, handler)
+  },
+  onAiAssetsCleared: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on(IPC_CHANNELS.ASSET_CLEARED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.ASSET_CLEARED, handler)
+  },
   // 提示词模板（明输入明注入）
   prompt: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_LIST),
@@ -9,7 +20,13 @@ export const promptApi = {
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_DELETE, id),
     exportPrompts: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_EXPORT),
     importPrompts: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_IMPORT),
-    openWindow: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_OPEN_WINDOW),
+    openWindow: (request?: AssetNavigation) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_OPEN_WINDOW, request),
+    navigation: () => ipcRenderer.invoke(IPC_CHANNELS.ASSET_NAVIGATION),
+    onNavigate: (callback: (request: AssetNavigationEvent) => void) => {
+      const handler = (_event: unknown, request: AssetNavigationEvent) => callback(request)
+      ipcRenderer.on(IPC_CHANNELS.ASSET_NAVIGATION, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.ASSET_NAVIGATION, handler)
+    },
     // 需求 1：传递完整 PromptTemplate，由主窗口渲染层在 webview 上下文中组合后注入
     requestInject: (template: PromptTemplate) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_INJECT_REQUEST, template),
   },

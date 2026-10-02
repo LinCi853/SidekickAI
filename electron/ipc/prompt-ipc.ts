@@ -14,11 +14,13 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { IPC_CHANNELS, type PromptTemplate } from '../shared/types.js'
 import type { EffectScope } from '../modules/effect-scope.js'
+import type { AssetNavigation } from '../shared/ai-assets.types.js'
+import { getAssetNavigation } from '../assets/navigation.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface PromptIpcDeps {
   /** 显示提示词库独立窗口（单例） */
-  showPromptWindow: () => void
+  showPromptWindow: (request?: AssetNavigation) => void
   /** 获取主窗口（用于转发注入请求到主窗口渲染层） */
   getMainWindow: () => BrowserWindow | null
   /** 获取提示词库窗口（用于转发注入结果回提示词库窗口） */
@@ -40,9 +42,10 @@ export function registerPromptIpc(deps: PromptIpcDeps, scope?: EffectScope): voi
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   // ===== 提示词库独立窗口 IPC（单例，不遮挡主页面） =====
-  handle(IPC_CHANNELS.PROMPT_OPEN_WINDOW, () => {
-    showPromptWindow()
+  handle(IPC_CHANNELS.PROMPT_OPEN_WINDOW, (_event: unknown, request?: AssetNavigation) => {
+    showPromptWindow(request)
   })
+  handle(IPC_CHANNELS.ASSET_NAVIGATION, getAssetNavigation)
   // 提示词注入请求：提示词库窗口 → 主进程 → 主窗口渲染（注入激活 webview）
   // 主窗口渲染层通过 onPromptInjectRequest 监听，执行注入后通过 IPC 回传结果
   // 需求 1：传递完整 PromptTemplate，由主窗口渲染层在 webview 上下文中组合后注入

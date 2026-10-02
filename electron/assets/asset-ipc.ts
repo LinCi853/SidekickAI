@@ -11,6 +11,8 @@ import { acquireLinkedOriginal, stopLinkedOriginalTransfers } from './api-origin
 import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
 
 let stopTransfers: (() => void) | undefined
+let transfersActive: () => boolean = () => false
+export function hasWebOriginalTransfers(): boolean { return transfersActive() }
 
 export function broadcastAiAssetState(): void {
   if (!isModuleEnabled('prompt-library')) { stopTransfers?.(); stopLinkedOriginalTransfers() }
@@ -24,6 +26,7 @@ export function registerAiAssetIpc(): void {
   const vault = new OriginalVault(path.join(app.getPath('userData'), 'ai-assets'), path.join(app.getPath('userData'), '.ai-assets-pending'))
   const owners = new Map<string, number>()
   const controllers = new Map<string, AbortController>()
+  transfersActive = () => owners.size > 0
   const abortTransfer = (id: string) => {
     const controller = controllers.get(id)
     controller?.abort()
@@ -240,6 +243,7 @@ export function registerAiAssetIpc(): void {
   })
   ipcMain.handle(ipc.ASSET_ATTACHMENT_RETRY, async (event, id: string) => {
     local(event)
+    if (!isModuleEnabled('prompt-library')) return { ok: false, error: '请先启用 AI资产再重试' }
     const item = getChatStore().assets.getAttachment(id)
     if (!item || owners.has(id)) return { ok: false, error: '资料不存在或正在传输' }
     const profile = profileStore.get(item.sourceId)

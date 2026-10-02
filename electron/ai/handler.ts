@@ -28,6 +28,7 @@ import { showNotification } from '../notify.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { registerAiAssetIpc } from '../assets/asset-ipc.js'
 import { collectApiOriginals } from '../assets/api-originals.js'
+import { runAssetImport } from '../assets/import-activity.js'
 import type {
   CustomAIProvider,
   CustomAIProviderInput,
@@ -45,6 +46,8 @@ type SaveMessageInput = Omit<ChatMessage, 'id' | 'createdAt'> &
 
 /** 正在进行的流式请求：conversationId -> AbortController */
 const activeStreams = new Map<string, AbortController>()
+const streamTasks = new Set<AbortController>()
+export function hasActiveAssetStreams(): boolean { return streamTasks.size > 0 }
 
 /**
  * 注册所有 AI Provider / Chat 相关 IPC handler。
@@ -190,6 +193,7 @@ async function runStream(
   controller: AbortController,
 ): Promise<void> {
 
+  streamTasks.add(controller)
   const assistantMessageId = randomUUID()
   const recorder = new StreamAssetRecorder(value => {
     getChatStore().assets.capture(conversationId, {
@@ -235,7 +239,7 @@ async function runStream(
       return
     }
     sendEnd(false, error instanceof Error ? error.message : String(error))
-  }
+  } finally { streamTasks.delete(controller) }
 }
 
 /**
@@ -339,7 +343,7 @@ export function registerBaseChatIpc(): void {
   )
   ipcMain.handle(
     ipc.CHAT_IMPORT_CONVERSATION,
-    async (e, format: 'json' | 'deepseek' | 'md', sourceId: string) => {
+    (e, format: 'json' | 'deepseek' | 'md', sourceId: string) => runAssetImport(async () => {
       const win = BrowserWindow.fromWebContents(e.sender) || undefined
       const filters = [
         { name: '所有支持的格式', extensions: ['json', 'md', 'markdown'] },
@@ -360,7 +364,7 @@ export function registerBaseChatIpc(): void {
       const conv = getChatStore().importConversation(format, content, sourceId)
       showNotification('导入成功', `已导入对话：${conv.title}`)
       return { ok: true, conversation: conv }
-    },
+    }),
   )
   ipcMain.handle(ipc.CHAT_CLEAR_CONVERSATIONS, (_e, sourceId?: string) => {
     return { ok: true, count: getChatStore().clearAllConversations(sourceId) }

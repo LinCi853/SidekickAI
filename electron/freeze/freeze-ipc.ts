@@ -349,13 +349,7 @@ async function performToggle(payload: {
     : performFreeze(payload)
 }
 
-/**
- * 宿主 webContents 的 Alt+P 拦截（冻结/恢复）。
- * 冻结后用户点击选择层（tabIndex 聚焦）→ 键盘焦点转移到宿主，Alt+P 路由
- * 宿主；而原 Alt+P 拦截（helpers.ts）只挂在 guest → 宿主焦点时快捷键失效。
- * 此处对每个窗口宿主 webContents 挂一份，与 helpers.ts 的唯一 guest 钩子
- * 互补，确保前台任意焦点 Alt+P 都能触发。
- */
+/** Routes the compatible host shortcut to asset controls. */
 const hostAltPHotkeySet = new Set<number>()
 
 function attachHostAltPHotkey(win: BrowserWindow): void {
@@ -373,7 +367,7 @@ function attachHostAltPHotkey(win: BrowserWindow): void {
     const hasMeta = mods.includes('meta') || mods.includes('command')
     if (hasAlt && !hasCtrl && !hasShift && !hasMeta && (input.key || '').toLowerCase() === 'p') {
       e.preventDefault()
-      console.log('[freeze-ipc] 宿主焦点 Alt+P → toggleFreeze')
+      console.log('[freeze-ipc] Host shortcut opens asset controls')
       win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' })
     }
   })
@@ -391,7 +385,7 @@ export function registerFreezeIpc(scope?: EffectScope): void {
     ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
-  // freeze-manager 内部触发的状态变化（Alt+P 恢复 / 窗口失焦自动恢复）广播到渲染层
+  // Broadcast page recovery and automatic resume state.
   setFreezeStateBroadcaster((tabId, state) => broadcastFreezeState(tabId, state))
   setWebviewDestroyedHandler(async (record, wc) => {
     if (!wc || wc.isDestroyed()) {
@@ -408,7 +402,7 @@ export function registerFreezeIpc(scope?: EffectScope): void {
     return true
   })
 
-  // 宿主 Alt+P 拦截：焦点在宿主 UI 区域（选择层聚焦后）时快捷键仍可触发
+  // Keep the compatible shortcut available with host focus.
   for (const w of BrowserWindow.getAllWindows()) attachHostAltPHotkey(w)
   app.on('browser-window-created', (_e, w) => attachHostAltPHotkey(w))
 

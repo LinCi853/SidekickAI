@@ -93,10 +93,10 @@ const commonHotkeys: HotkeyDef[] = [
   // F10：切换主题（light/dark）
   { key: 'F10', log: 'F10 → 切换主题', action: () => ({ action: 'toggleTheme' }) },
 
-  // Alt+P：冻结/恢复当前页面
+  // Open asset controls for the current page.
   {
     key: 'p', alt: true, toLower: true, tryFwd: true,
-    log: 'Alt+P → 冻结/恢复当前页面',
+    log: 'Alt+P → AI资产页面控制',
     action: (ctx) => {
       const record = getRecordByWebContentsId(ctx.wc.id)
       return { action: 'toggleFreeze', data: record ? { tabId: record.tabId } : undefined }

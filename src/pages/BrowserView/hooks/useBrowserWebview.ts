@@ -10,7 +10,6 @@
    - 沉浸式全屏（F11 切换 + 悬浮退出条）
    - 云电脑模式（进入/退出 + 按键路由 + 网站检测提醒 + 内容缩放）
    - 手柄接入（Gamepad API 采集 + guest 桥接）
-   - 冻结切换（Alt+P）
    ===================================================================== */
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
@@ -560,19 +559,6 @@ export function useBrowserWebview({
     applyZoom(1, 'auto');
   }, [applyZoom]);
 
-  /** Alt+P：冻结/恢复当前页面（防撤回保险） */
-  const handleToggleFreeze = useCallback((requestedTabId?: string) => {
-    const targetTabId = requestedTabId && useBrowserTabStore.getState().tabs.some((tab) => tab.id === requestedTabId)
-      ? requestedTabId
-      : activeTabId;
-    if (!targetTabId || !profileId) {
-      console.warn('[BrowserView] 冻结跳过：tabId 或 profileId 为空', { targetTabId, profileId });
-      return;
-    }
-    console.log('[BrowserView] Alt+P 请求主进程切换冻结状态, tabId', targetTabId);
-    void useFreezeStore.getState().doToggle(targetTabId, profileId);
-  }, [activeTabId, profileId]);
-
   /* ===== 手柄接入（Gamepad API，宿主采集 + 状态 UI + guest 桥接） ===== */
   // 采集器在宿主渲染层运行：连接状态写 store（导航栏指示器），
   // 实时帧除回调外桥接到当前激活 webview 的 window.__sidekickGamepadState，
@@ -660,6 +646,5 @@ export function useBrowserWebview({
     cloudPcZoomMode,
     cloudPcZoomFactor,
     cloudPcRemoteRes,
-    handleToggleFreeze,
   };
 }

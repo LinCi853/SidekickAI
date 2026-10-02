@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { Button, EmptyState } from '../components/ui';
@@ -18,6 +18,10 @@ import './AiAssetsView.css';
 type Category = 'conversations' | 'prompts' | 'files';
 export default function AiAssetsView() {
   const api = requireElectron().aiAssets;
+  const promptApi = requireElectron().prompt;
+  const searchRef = useRef<HTMLInputElement>(null);
+  const navigationRevision = useRef(-1);
+  const [freezeTarget, setFreezeTarget] = useState<{ tabId: string; revision: number }>();
   const [category, setCategory] = useState<Category>('conversations');
   const [query, setQuery] = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -33,6 +37,19 @@ export default function AiAssetsView() {
   const freezeEnabled = useModuleStore(state => state.isEnabled('freeze'));
   const savePrompt = usePromptStore(state => state.save);
   useEscToCloseWindow({ onEsc: () => category === 'prompts', ctrlW: category !== 'prompts' });
+
+  useEffect(() => {
+    const navigate = (request: import('../../electron/shared/ai-assets.types').AssetNavigationEvent) => {
+      if (request.revision <= navigationRevision.current) return;
+      navigationRevision.current = request.revision;
+      if (request.category) { setCategory(request.category); setQuery(''); }
+      if (request.focusSearch) searchRef.current?.focus();
+      if (request.freezeTabId) setFreezeTarget({ tabId: request.freezeTabId, revision: request.revision });
+    };
+    const off = promptApi.onNavigate(navigate);
+    void promptApi.navigation().then(navigate).catch(failure => setError(String(failure)));
+    return off;
+  }, [promptApi]);
 
   const refresh = useCallback(async () => {
     const [list, files, text, extracted] = await Promise.all([listConversations(), api.attachments(), api.usage(), api.suggestions()]);
@@ -70,7 +87,7 @@ export default function AiAssetsView() {
   };
   return <><WindowResizeHandles /><div className="assets-view app-shell app-view-root" data-name="assets.container">
     <StandaloneWindowHeader title="AI资产" dataNamePrefix="assets.topbar" />
-    <div className="assets-tools"><input className="asset-search" aria-label="搜索 AI资产" placeholder="搜索对话、提示词和资料" value={query} onChange={event => setQuery(event.target.value)} />
+    <div className="assets-tools"><input ref={searchRef} className="asset-search" aria-label="搜索 AI资产" placeholder="搜索对话、提示词和资料" value={query} onChange={event => setQuery(event.target.value)} />
       <Button variant="outline" onClick={() => void run(refresh)}>刷新</Button></div>
     <nav className="asset-categories" aria-label="资产分类">
       {([['conversations', '对话'], ['prompts', '提示词'], ['files', '资料']] as const).map(([id, label]) =>
@@ -80,7 +97,7 @@ export default function AiAssetsView() {
         if (!result.ok) throw new Error(result.error);
       })}>{freezeEnabled ? '页面冻结已启用' : '启用页面冻结'}</Button>
     </nav>
-    {freezeEnabled && <AssetFreezeControl onAction={operation => void run(operation)} />}
+    {freezeEnabled && <AssetFreezeControl target={freezeTarget} onAction={operation => void run(operation)} />}
     {usage && <div className="asset-usage" data-name="assets.text-usage" title="本地字符数，包含空白与标点；未提供的思考文本不推断">
       <strong>文本用量</strong><span>输入 {usage.inputCharacters.toLocaleString()}</span><span>思考 {usage.reasoningCharacters.toLocaleString()}</span>
       <span>输出 {usage.outputCharacters.toLocaleString()}</span><span>共 {usage.totalCharacters.toLocaleString()} 字符</span></div>}

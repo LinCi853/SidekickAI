@@ -150,6 +150,7 @@ export function saveModuleState(rec: ModuleStateRecord): void {
  * 每个 store 的数据存为 settings.db 中独立的 KV 表（单行 key='__data__', value=JSON）。
  */
 export interface JsonStore<T> {
+  invalidate(): void
   get(key: string): any
   set(key: string, value: any): void
   delete(key: string): void
@@ -188,6 +189,7 @@ export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
   }
 
   return {
+    invalidate(): void { cache = null },
     get(key: string): any {
       const data = load()
       return key in data ? (data as any)[key] : (opts.defaults as any)[key]

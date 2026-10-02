@@ -19,18 +19,6 @@
 .prompt-chip-title {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
 }
-.prompt-chip-edit {
-  width: var(--icon-svg-sm); height: var(--icon-svg-sm); display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0.5; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0;
-  flex: none;
-}
-.prompt-chip-edit:hover { opacity: 1; }
-.prompt-add {
-  flex: none; width: var(--titlebar-icon); height: var(--titlebar-icon); display: inline-flex; align-items: center; justify-content: center;
-  border-radius: var(--radius-sm); background: transparent; border: 1px dashed var(--glass-bd-2);
-  color: var(--muted-foreground); cursor: pointer; transition: all var(--duration-fast) var(--ease-out);
-}
-.prompt-add:hover { color: var(--accent-bright); border-color: var(--accent-50); background: var(--accent-10); }
 .prompt-empty { color: var(--text-muted); font-size: var(--text-sm); padding: var(--space-1) 0; }
 
 /* 编辑器弹窗样式已迁移到 pages/PromptLibraryView.css（统一新版设计令牌） */

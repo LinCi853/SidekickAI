@@ -319,6 +319,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   registerStreamListeners: () => {
+    const offClear = window.electron.onAiAssetsCleared(() => {
+      set({ conversations: [], currentConversationId: null, messages: [], streamingText: '', streaming: false, streamingConversationId: null, streamError: null, streamFinalized: false });
+    });
     const offChunk = onChatStreamChunk((chunk) => {
       // 仅处理正在流式的会话的 chunk（与 currentConversationId 解耦，避免异会话分片污染当前显示）
       if (chunk.conversationId !== get().streamingConversationId) return;
@@ -383,6 +386,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return () => {
       offChunk();
       offEnd();
+      offClear();
     };
   },
 }));

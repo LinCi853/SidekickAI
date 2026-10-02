@@ -13,8 +13,20 @@ import fs from 'fs'
 import type { PromptTemplate } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createCrudStore } from './store-paths.js'
-import { createSqliteJsonStore } from './module-state-store.js'
+import { createSqliteJsonStore, getModuleState } from './module-state-store.js'
 import { PROMPTS, getDefault } from './default-config.js'
+import { runAssetImport } from '../assets/import-activity.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
+
+let changeScheduled = false
+function notifyPromptChanges(): void {
+  if (changeScheduled) return
+  changeScheduled = true
+  queueMicrotask(() => {
+    changeScheduled = false
+    broadcastToAllWindows(IPC_CHANNELS.PROMPT_CHANGED, undefined, 'prompts')
+  })
+}
 
 // 持久化存储实例（写入 prompts.json）
 // 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
@@ -32,6 +44,7 @@ const store = createSqliteJsonStore<{ prompts: PromptTemplate[]; version: number
  * list 保持按 createdAt 升序、save 始终刷新 updatedAt 等业务规则仍在本类中实现。
  */
 export class PromptStore {
+  invalidate(): void { store.invalidate() }
   /** 标准 CRUD 操作集（基于 electron-store 的 prompts 数组） */
   private crud = createCrudStore<PromptTemplate>({ store, key: 'prompts' })
 
@@ -48,12 +61,14 @@ export class PromptStore {
     const id = template.id || randomUUID()
     const toSave: PromptTemplate = { ...template, id, updatedAt: Date.now() }
     this.crud.save(toSave)
+    notifyPromptChanges()
     return toSave
   }
 
   /** 删除模板 */
   delete(id: string): void {
     this.crud.delete(id)
+    notifyPromptChanges()
   }
 
   /** 导出全部提示词为 JSON 字符串 */
@@ -113,9 +128,7 @@ export function registerPromptIPC(scope?: EffectScope): void {
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   handle(ipc.PROMPT_LIST, () => promptStore.list())
-  handle(ipc.PROMPT_SAVE, (_e: unknown, template: PromptTemplate) =>
-    promptStore.save(template),
-  )
+  handle(ipc.PROMPT_SAVE, (_e: unknown, template: PromptTemplate) => promptStore.save(template))
   handle(ipc.PROMPT_DELETE, (_e: unknown, id: string) => promptStore.delete(id))
 
   // 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件）
@@ -139,7 +152,7 @@ export function registerPromptIPC(scope?: EffectScope): void {
   })
 
   // 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库）
-  handle(ipc.PROMPT_IMPORT, async (e: any) => {
+  handle(ipc.PROMPT_IMPORT, (e: any) => runAssetImport(async () => {
     try {
       const win = BrowserWindow.fromWebContents(e.sender)
       const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
@@ -156,7 +169,7 @@ export function registerPromptIPC(scope?: EffectScope): void {
       console.error('[prompt-store] 导入失败:', err)
       return { ok: false, error: String(err) }
     }
-  })
+  }))
 }
 
 /**
@@ -165,7 +178,7 @@ export function registerPromptIPC(scope?: EffectScope): void {
  */
 export function ensureDefaultPrompts(): void {
   const existing = store.get('prompts')
-  if (existing.length > 0) return
+  if (existing.length > 0 || getModuleState('prompt-library')?.clearedAt) return
 
   for (const p of PROMPTS) {
     promptStore.save({

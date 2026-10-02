@@ -1,7 +1,4 @@
-/* =====================================================================
-   components/DrawerPanel.tsx —— 三点菜单抽屉面板（v2 设计）
-   右侧滑入 280px，含：搜索框 + 功能列表（搜索历史/快捷键/设置/提示词）+ 页脚提示
-   ===================================================================== */
+/** Main-window menu with module-owned entrances and search shortcut compatibility. */
 
 import { useCallback, useEffect, useRef } from 'react';
 import Sun from 'lucide-react/dist/esm/icons/sun'
@@ -88,7 +85,7 @@ export default function DrawerPanel({
   // ESC：关闭抽屉（加入全局浮窗栈，与其他浮窗统一优先级管理）
   useEscToCloseOverlay(open, onClose);
 
-  // 打开时监听快捷键：K=搜索，?=快捷键，,=设置，P=提示词库（ESC 由 useEscToCloseOverlay 处理）
+  // Keep search and asset shortcuts behind the same module gate.
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -100,7 +97,7 @@ export default function DrawerPanel({
       const key = e.key.toLowerCase();
       if (key === 'k') {
         e.preventDefault();
-        handleItemClick('search');
+        if (promptEnabled) handleItemClick('search');
       } else if (key === '?' || key === '/') {
         e.preventDefault();
         handleItemClick('shortcuts');
@@ -157,32 +154,6 @@ export default function DrawerPanel({
             </svg>
           </IconButton>
         </div>
-
-        <button
-          type="button"
-          className="drawer-search"
-          data-name="component.drawer-panel.search-button"
-          onClick={() => handleItemClick('search')}
-          title="搜索对话或提示词"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            data-name="component.drawer-panel.search-icon"
-            style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <span className="drawer-search-input" data-name="component.drawer-panel.search-input" style={{ cursor: 'default' }}>
-            搜索对话或提示词...
-          </span>
-          <span className="drawer-kbd" data-name="component.drawer-panel.search-kbd">K</span>
-        </button>
 
         <div className="drawer-list" data-name="component.drawer-panel.list">
           {/* 进阶面板入口（Alt+Q）—— chat/白板/笔记全关时隐藏 */}
@@ -243,28 +214,6 @@ export default function DrawerPanel({
           {/* 分隔 */}
           <div className="drawer-divider" data-name="component.drawer-panel.divider" />
 
-          <button
-            type="button"
-            className="drawer-item"
-            data-dom-id="aw-main-search-btn"
-            data-name="component.drawer-panel.search-history-button"
-            onClick={() => handleItemClick('search')}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              data-name="component.drawer-panel.search-history-icon"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <span data-name="component.drawer-panel.search-history-label">搜索 AI资产</span>
-            <span className="drawer-item-shortcut" data-name="component.drawer-panel.search-history-shortcut">K</span>
-          </button>
           <button
             type="button"
             className="drawer-item"
@@ -330,7 +279,7 @@ export default function DrawerPanel({
               <path d="m15 5 4 4" />
             </svg>
             <span data-name="component.drawer-panel.prompt-library-label">AI资产</span>
-            <span className="drawer-item-shortcut" data-name="component.drawer-panel.prompt-library-shortcut">P</span>
+            <span className="drawer-item-shortcut" data-name="component.drawer-panel.prompt-library-shortcut">P / K</span>
           </button>
           )}
           {!isOxy && (

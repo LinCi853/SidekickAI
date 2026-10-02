@@ -222,6 +222,8 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streaming]);
 
+  useEffect(() => window.electron.onAiAssetsCleared(() => { void refreshUsage(); }), [currentProviderId]);
+
   const handleSend = async () => {
     const text = input;
     setInput('');

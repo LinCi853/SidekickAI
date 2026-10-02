@@ -11,7 +11,7 @@ import { useEffect, type MutableRefObject } from 'react';
 import { useBrowserKeyboard } from '../useBrowserKeyboard.js';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
 import { useModuleStore } from '../../../store/useModuleStore.js';
-import { onWebviewHotkey, onToggleDevTools, maximizeToggleWindow } from '../../../lib/electron-api/index.js';
+import { onWebviewHotkey, onToggleDevTools, maximizeToggleWindow, openPromptWindow } from '../../../lib/electron-api/index.js';
 
 interface UseBrowserShortcutsParams {
   addressBarRef: MutableRefObject<HTMLInputElement | null>;
@@ -40,7 +40,6 @@ interface UseBrowserShortcutsParams {
   zoomResetAction: () => void;
   toggleCloudPc: () => void;
   handleToggleSpatialNav: () => void;
-  handleToggleFreeze: (tabId?: string) => void;
 }
 
 export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
@@ -84,7 +83,10 @@ export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
     onZoomIn: p.zoomInAction,
     onZoomOut: p.zoomOutAction,
     onZoomReset: p.zoomResetAction,
-    onToggleFreeze: useModuleStore.getState().isEnabled('freeze') ? p.handleToggleFreeze : undefined,
+    onToggleFreeze: useModuleStore.getState().isEnabled('freeze') ? tabId => {
+      const target = tabId ?? useBrowserTabStore.getState().activeTabId;
+      if (target) void openPromptWindow({ freezeTabId: target });
+    } : undefined,
   });
 
   // v0.0.9 B4：接收主进程 before-input-event 转发的 Ctrl+W（closeTab），

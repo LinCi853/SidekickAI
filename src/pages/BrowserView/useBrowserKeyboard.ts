@@ -67,7 +67,7 @@ export interface BrowserKeyboardOptions {
   onToggleSpatialNav?: () => void;
   /** 整体启用开关（云电脑模式下 false：所有浏览器快捷键放行给远端） */
   enabled?: boolean;
-  /** Alt+P：冻结/恢复当前页面（防撤回保险） */
+  /** Opens asset controls for the current page. */
   onToggleFreeze?: (tabId?: string) => void;
 }
 

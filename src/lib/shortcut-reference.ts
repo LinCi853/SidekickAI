@@ -35,6 +35,7 @@ export interface AppShortcutRef {
 
 /** 应用内 / 窗口内快捷键（硬编码事实：与主进程 before-input-event、渲染层 keydown 实现对应） */
 export const APP_SHORTCUTS: AppShortcutRef[] = [
+  { keys: 'Alt + P', action: '打开 AI资产中的页面冻结控制', scope: '应用内', note: '在资产内手动冻结或恢复页面' },
   { keys: 'Alt + 1~9', action: '切换到第 N 个标签', scope: '窗口内' },
   { keys: 'Ctrl + Tab / Ctrl + Shift + Tab', action: '向前/向后循环切换标签', scope: '窗口内' },
   { keys: 'Ctrl + 1/2/3', action: '切换进阶面板标签（对话/白板/笔记）', scope: '窗口内' },

@@ -130,6 +130,9 @@ export const IPC_CHANNELS = {
   PROMPT_IMPORT: 'prompt:import',
   // 打开提示词库独立窗口（单例）
   PROMPT_OPEN_WINDOW: 'prompt:openWindow',
+  ASSET_NAVIGATION: 'asset:navigation',
+  ASSET_CLEARED: 'asset:cleared',
+  PROMPT_CHANGED: 'prompt:changed',
   // 提示词注入请求（提示词库窗口 → 主进程 → 主窗口渲染：注入激活 webview）
   PROMPT_INJECT_REQUEST: 'prompt:injectRequest',
   // 注入结果回传（主进程 → 提示词库窗口：success + platformName）

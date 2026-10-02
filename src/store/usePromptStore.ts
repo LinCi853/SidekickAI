@@ -12,6 +12,7 @@ export interface PromptStoreState {
   prompts: PromptTemplate[];
   /** 是否已初始化 */
   initialized: boolean;
+  subscribed: boolean;
 
   /** 初始化：从主进程加载模板列表 */
   init: () => Promise<void>;
@@ -21,11 +22,17 @@ export interface PromptStoreState {
   remove: (id: string) => Promise<void>;
 }
 
-export const usePromptStore = create<PromptStoreState>((set) => ({
+export const usePromptStore = create<PromptStoreState>((set, get) => ({
   prompts: [],
   initialized: false,
+  subscribed: false,
 
   init: async () => {
+    if (!get().subscribed) {
+      window.electron.onAiAssetsCleared(() => set({ prompts: [] }));
+      window.electron.onPromptsChanged(() => { void get().init(); });
+      set({ subscribed: true });
+    }
     try {
       const prompts = await listPrompts();
       set({ prompts, initialized: true });

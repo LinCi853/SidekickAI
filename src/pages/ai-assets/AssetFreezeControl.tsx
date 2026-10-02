@@ -3,7 +3,7 @@ import { Button } from '../../components/ui';
 import { requireElectron } from '../../lib/electron-api/core';
 import type { AiAssetsAPI } from '../../../electron/shared/ai-assets.types';
 
-export default function AssetFreezeControl({ onAction }: { onAction: (operation: () => Promise<void>) => void }) {
+export default function AssetFreezeControl({ target, onAction }: { target?: { tabId: string; revision: number }; onAction: (operation: () => Promise<void>) => void }) {
   const api = requireElectron();
   const [pages, setPages] = useState<Awaited<ReturnType<AiAssetsAPI['freezeTargets']>>>([]);
   const [selected, setSelected] = useState('');
@@ -11,9 +11,9 @@ export default function AssetFreezeControl({ onAction }: { onAction: (operation:
   const [error, setError] = useState('');
   const refresh = async () => {
     const targets = await api.aiAssets.freezeTargets();
-    setPages(targets); setSelected(value => targets.some(item => item.tabId === value) ? value : targets[0]?.tabId ?? '');
+    setPages(targets); setSelected(value => targets.some(item => item.tabId === target?.tabId) ? target!.tabId : targets.some(item => item.tabId === value) ? value : targets[0]?.tabId ?? '');
   };
-  useEffect(() => { void refresh().catch(failure => setError(String(failure))); }, []);
+  useEffect(() => { void refresh().catch(failure => setError(String(failure))); }, [target]);
   useEffect(() => {
     let active = true;
     if (selected) void api.freeze.status(selected).then(value => { if (active) setFrozen(value.state === 'frozen'); }).catch(() => {});
