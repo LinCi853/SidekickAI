@@ -44,7 +44,6 @@ import { createTray, hasTray } from './window/tray.js';
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js';
 import { BUILTIN_MODULES } from './modules/manifests.js';
 import { initEnabledModules, registerModule, isModuleEnabled, listManifests } from './modules/registry.js';
-import { loadBuiltinPlugins } from './modules/plugin-loader.js';
 import { registerModuleIpc } from './ipc/module-ipc.js';
 import { closeModuleStateDb } from './store/module-state-store.js';
 import { capabilityRegistry } from './modules/capability-registry.js';
@@ -222,8 +221,6 @@ app.whenReady().then(async () => {
         console.error('[main] initChatStore 失败，对话持久化功能将不可用:', err);
     }
     BUILTIN_MODULES.forEach((m) => registerModule(m));
-    const builtinPlugins = await loadBuiltinPlugins();
-    builtinPlugins.forEach((m) => registerModule(m));
     registerModuleIpc();
     injectionBroker.registerAdapters(allAdapters);
     const capabilities = extractCapabilities(listManifests());

@@ -1,7 +1,7 @@
 import { updateAppSettings, clearUsageTraces } from '../../../lib/electron-api';
 import { useState } from 'react';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
-import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
+import { useToast } from '../../../hooks/useToast';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
 import { SectionTitle, FormRow } from '../../ui';
@@ -45,7 +45,7 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
   const setUsageTrackingEnabled = (v: boolean) => onChange({ usageTrackingEnabled: v });
   const { draft, setDraft } = useSettingsDraft();
   // 使用统计清除反馈（带自动清除的字符串消息 + 独立的 success/error 类型，用于颜色区分）
-  const { feedback: usageClearMsg, showFeedback: showUsageToast } = useFeedbackToast(3000);
+  const { toast: usageClearMsg, showToast: showUsageToast } = useToast(3000);
   const [usageClearType, setUsageClearType] = useState<'success' | 'error'>('success');
   // 开机自启动 / 静默启动（通过 useSettingsDraft 从主进程加载，不经过父组件 props）
   const autoLaunch = draft?.autoLaunch ?? false;

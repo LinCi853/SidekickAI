@@ -9,7 +9,7 @@ import {
 import SegmentedControl from '../../ui/SegmentedControl';
 import { SectionTitle, FormRow } from '../../ui';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
-import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
+import { useToast } from '../../../hooks/useToast';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -33,7 +33,7 @@ function formatRelativeTime(ts: number): string {
 
 export default function StorageSection() {
   const { draft, setDraft } = useSettingsDraft();
-  const { feedback: cleanFeedback, showFeedback, clearFeedback } = useFeedbackToast(3000);
+  const { toast: cleanFeedback, showToast: showFeedback, clearToast: clearFeedback } = useToast(3000);
   const [cacheSize, setCacheSize] = useState<number | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [lastCleaned, setLastCleaned] = useState<number>(0);

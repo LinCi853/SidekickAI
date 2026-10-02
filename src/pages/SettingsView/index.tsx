@@ -14,6 +14,7 @@ import {
 import { useTabStore } from '../../store/useTabStore';
 import { useModuleStore } from '../../store/useModuleStore';
 import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData';
+import { createPlatformSettingsActions } from '../../hooks/platform-settings-actions';
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import StandaloneWindowHeader from '../../components/StandaloneWindowHeader';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
@@ -62,6 +63,11 @@ export default function SettingsView() {
 
   // ===== 状态 hook =====
   const app = useAppSettings(true);
+  const {
+    toggleForeignModels: handleToggleHideForeignModels,
+    toggleBlocking: handleToggleDisableAllBlockRules,
+    changeThreshold: handleAltSpaceThresholdChange,
+  } = createPlatformSettingsActions(app, 'SettingsView');
   const voice = useVoiceConfig(true);
   const hotkeys = useHotkeys(true);
   const presetsState = usePresets(true);
@@ -124,41 +130,6 @@ export default function SettingsView() {
     setThresholdDraft(String(clamped));
     if (clamped !== app.altSpaceResetThreshold) {
       void handleAltSpaceThresholdChange(clamped);
-    }
-  };
-
-  // ===== Handlers =====
-  const handleToggleHideForeignModels = async () => {
-    const next = !app.hideForeignModels;
-    app.setHideForeignModels(next);
-    try {
-      await updateAppSettings({ hideForeignModels: next });
-    } catch (e) {
-      console.error('[SettingsView] 切换屏蔽国外模型失败:', e);
-      app.setHideForeignModels(app.hideForeignModels);
-    }
-  };
-
-  const handleToggleDisableAllBlockRules = async () => {
-    const next = !app.disableAllBlockRules;
-    app.setDisableAllBlockRules(next);
-    try {
-      await updateAppSettings({ disableAllBlockRules: next });
-    } catch (e) {
-      console.error('[SettingsView] 切换广告屏蔽规则失败:', e);
-      app.setDisableAllBlockRules(app.disableAllBlockRules);
-    }
-  };
-
-  const handleAltSpaceThresholdChange = async (value: number) => {
-    const clamped = Math.max(3, Math.min(20, value));
-    const prev = app.altSpaceResetThreshold;
-    app.setAltSpaceResetThreshold(clamped);
-    try {
-      await updateAppSettings({ altSpaceResetThreshold: clamped });
-    } catch (e) {
-      console.error('[SettingsView] 更新 Alt+Space 阈值失败:', e);
-      app.setAltSpaceResetThreshold(prev);
     }
   };
 

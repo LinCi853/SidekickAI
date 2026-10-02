@@ -3,7 +3,7 @@ import { updateAppSettings } from '../../../lib/electron-api';
 import Toggle from '../../ui/Toggle';
 import { SectionTitle, FormRow } from '../../ui';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
-import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
+import { useToast } from '../../../hooks/useToast';
 
 /* =====================================================================
    CookieSection —— Cookie 弹窗自动处理设置（需求 7）
@@ -16,7 +16,7 @@ import { useFeedbackToast } from '../../../hooks/useFeedbackToast';
 
 export default function CookieSection() {
   const { draft, setDraft } = useSettingsDraft();
-  const { feedback: feedbackMsg, showFeedback: showToast } = useFeedbackToast(2500);
+  const { toast: feedbackMsg, showToast } = useToast(2500);
   const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
   const [whitelistDraft, setWhitelistDraft] = useState('');
   const [blacklistDraft, setBlacklistDraft] = useState('');

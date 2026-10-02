@@ -117,9 +117,6 @@ export class MetaTable<V = string> {
 
 // createJsonStore 已移除（Phase 3：全部 JSON store 已迁入 SQLite settings.db）
 
-// Phase 3：createSqliteJsonStore / clearSqliteStore 已迁移至 module-state-store.ts（此处仅保留引用）
-export { createSqliteJsonStore, clearSqliteStore } from './module-state-store.js'
-
 /**
  * 通用 CRUD 接口（基于 electron-store 的数组持久化）。
  * 适用于 prompt / preset / block-rules / profile / ai-provider 等列表型 store。

@@ -18,7 +18,7 @@ import { screen, type BrowserWindow } from 'electron'
 import { windowStore } from '../store/window-store.js'
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { ADVANCED_PANEL_WINDOW_ID } from './helpers.js'
+import { ADVANCED_PANEL_WINDOW_ID } from './constants.js'
 
 /** 窗口尺寸（位置 + 大小） */
 export interface WindowBounds {

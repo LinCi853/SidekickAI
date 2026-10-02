@@ -5,13 +5,13 @@
    ===================================================================== */
 
 import { create } from 'zustand';
-import type { ModuleInfo } from '../lib/electron-api';
+import type { ModuleInfo } from '../lib/electron-api/core';
 import {
   listModules,
   setModuleEnabled,
   clearModuleData,
   onModuleStateChanged,
-} from '../lib/electron-api';
+} from '../lib/electron-api/modules';
 
 export interface ModuleStoreState {
   /** 全部模块信息（含启用/安装状态） */

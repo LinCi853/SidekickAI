@@ -18,6 +18,7 @@ import {
 import { useTabStore } from '../../store/useTabStore';
 import { useModuleStore } from '../../store/useModuleStore';
 import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData';
+import { createPlatformSettingsActions } from '../../hooks/platform-settings-actions';
 import { usePlatformUrlConfig } from '../../hooks/usePlatformUrlConfig';
 import './styles.css';
 import type { SettingsPanelProps, VoiceSettings, GeneralSettings, ProxySettings } from './types';
@@ -40,6 +41,11 @@ import AdvancedSection from './sections/AdvancedSection';
 export default function SettingsPanel({ open, onClose, onOpenShortcuts }: SettingsPanelProps) {
   // ===== 状态 hook（替代原 50+ useState） =====
   const app = useAppSettings(open);
+  const {
+    toggleForeignModels: handleToggleHideForeignModels,
+    toggleBlocking: handleToggleDisableAllBlockRules,
+    changeThreshold: handleAltSpaceThresholdChange,
+  } = createPlatformSettingsActions(app, 'SettingsPanel');
   const voice = useVoiceConfig(open);
   const hotkeys = useHotkeys(open);
   const presetsState = usePresets(open);
@@ -69,43 +75,6 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
     } catch (e) {
       console.error('[SettingsPanel] 切换平台隐藏状态失败:', e);
       app.setHiddenPlatforms(app.hiddenPlatforms);
-    }
-  };
-
-  /** 切换「自动屏蔽国外模型」开关 */
-  const handleToggleHideForeignModels = async () => {
-    const next = !app.hideForeignModels;
-    app.setHideForeignModels(next);
-    try {
-      await updateAppSettings({ hideForeignModels: next });
-    } catch (e) {
-      console.error('[SettingsPanel] 切换屏蔽国外模型失败:', e);
-      app.setHideForeignModels(app.hideForeignModels);
-    }
-  };
-
-  /** 切换「启用广告屏蔽规则」开关 */
-  const handleToggleDisableAllBlockRules = async () => {
-    const next = !app.disableAllBlockRules;
-    app.setDisableAllBlockRules(next);
-    try {
-      await updateAppSettings({ disableAllBlockRules: next });
-    } catch (e) {
-      console.error('[SettingsPanel] 切换广告屏蔽规则失败:', e);
-      app.setDisableAllBlockRules(app.disableAllBlockRules);
-    }
-  };
-
-  /** 修改 Alt+Space 连续触发恢复窗口位置的次数阈值 */
-  const handleAltSpaceThresholdChange = async (value: number) => {
-    const clamped = Math.max(3, Math.min(20, value));
-    const prev = app.altSpaceResetThreshold;
-    app.setAltSpaceResetThreshold(clamped);
-    try {
-      await updateAppSettings({ altSpaceResetThreshold: clamped });
-    } catch (e) {
-      console.error('[SettingsPanel] 更新 Alt+Space 阈值失败:', e);
-      app.setAltSpaceResetThreshold(prev);
     }
   };
 
