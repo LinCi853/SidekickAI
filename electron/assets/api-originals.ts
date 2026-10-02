@@ -1,5 +1,6 @@
 import { app, BrowserWindow, net } from 'electron'
 import { createHash } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getChatStore } from '../store/chat-store.js'
 import type { AssetAttachment } from '../shared/ai-assets.types.js'
@@ -22,7 +23,10 @@ export async function acquireLinkedOriginal(item: AssetAttachment, fetcher: type
   const store = () => getChatStore().assets
   try {
     if (item.sha256) {
-      try { await vault.verify(item.sha256, item.size); controller.signal.throwIfAborted(); store().attachmentSaved(item.id, item.sha256, item.size!, true); return } catch {}
+      let verifiedSize: number | undefined
+      try { const file = await vault.verify(item.sha256, item.size); verifiedSize = item.size ?? (await stat(file)).size } catch {}
+      controller.signal.throwIfAborted()
+      if (verifiedSize !== undefined) { store().attachmentSaved(item.id, item.sha256, verifiedSize, true); return }
     }
     if (!/^https?:\/\//.test(item.sourceUrl ?? '')) throw new Error('临时资料已失效，请重新上传或打开原资料')
     store().attachmentPending(item.id)
@@ -39,7 +43,7 @@ export async function acquireLinkedOriginal(item: AssetAttachment, fetcher: type
         await vault.append(item.id, offset, chunk.value); offset += chunk.value.byteLength
       }
     } finally { reader.releaseLock() }
-    const original = await vault.finish(item.id, offset)
+    const original = await vault.finish(item.id, offset, item.sha256)
     controller.signal.throwIfAborted()
     store().attachmentSaved(item.id, original.sha256, original.size, original.reused)
   } catch (error) {
@@ -68,6 +72,6 @@ export async function collectApiOriginals(sourceId: string, conversationId: stri
       name, mimeType: match[1] ? 'image/*' : 'application/octet-stream',
       sourceUrl: url.href, direction: 'output',
     }, conversationId)
-    if (!['saved', 'reused'].includes(reference.status)) await acquireLinkedOriginal(reference)
+    await acquireLinkedOriginal(reference)
   }
 }

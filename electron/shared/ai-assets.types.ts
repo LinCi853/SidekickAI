@@ -25,6 +25,13 @@ export interface AssetObservation {
   rejected?: AssetRejectedCapture[]
 }
 export interface AssetRejectedCapture { key: string; reason: string; signature: string }
+export interface AssetCollectionIssue {
+  webContentsId: number
+  profileId: string
+  profileName: string
+  failures: number
+  updatedAt: number
+}
 export interface AssetRevision {
   id: string
   messageId: string
@@ -102,6 +109,7 @@ export interface AssetAttachmentInput {
   title: string
   url?: string
   messageKey?: string
+  messageId?: string
   name: string
   mimeType: string
   sourceUrl?: string
@@ -117,9 +125,11 @@ export interface AssetPromptSuggestion {
   messageId: string
 }
 export interface AiAssetsAPI {
+  collectionIssues(): Promise<AssetCollectionIssue[]>
+  onCollectionIssuesChanged(callback: (issues: AssetCollectionIssue[]) => void): () => void
   freezeTargets(): Promise<Array<{ tabId: string; profileId: string; windowId: string; webContentsId: number; title: string; url: string }>>
   focusPage(webContentsId: number): Promise<boolean>
-  observe(observation: AssetObservation): Promise<{ conversationId: string; suppressed?: boolean }>
+  observe(observation: AssetObservation): Promise<{ conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> }>
   details(conversationId: string): Promise<AssetMessageDetail[]>
   usage(sourceId?: string, conversationId?: string): Promise<AssetTextUsage>
   graph(conversationId: string): Promise<AssetConversationGraph>

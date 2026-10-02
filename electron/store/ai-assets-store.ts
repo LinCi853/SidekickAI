@@ -131,7 +131,7 @@ export class AiAssetsStore {
     return id
   }
 
-  observe(source: AssetSource, observation: AssetObservation): { conversationId: string; suppressed?: boolean } {
+  observe(source: AssetSource, observation: AssetObservation): { conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> } {
     if (this.graph.excluded(source.id, observation.conversationKey)) return { conversationId: '', suppressed: true }
     return this.db.transaction(() => {
       for (const rejected of observation.rejected ?? []) this.recordCleanup(source, observation.adapter ?? 'dom', rejected.reason, 1, 0, digest(JSON.stringify([observation.visitId, rejected.key, rejected.signature])))
@@ -156,18 +156,38 @@ export class AiAssetsStore {
           .run(source.id, observation.conversationKey, draft.conversation_id)
       }
       const conversationId = this.conversation(source, observation)
-      if (observation.snapshot) this.graph.observe(conversationId, source.id, observation,
-        (message, messageId) => this.captureMessage(conversationId, message, messageId))
-      else for (const message of observation.messages) this.capture(conversationId, message)
+      const messageIds: Record<string, string> = observation.snapshot ? this.graph.observe(conversationId, source.id, observation,
+        (message, messageId) => this.captureMessage(conversationId, message, messageId)) : Object.create(null)
+      if (!observation.snapshot) for (const message of observation.messages) {
+        const id = this.capture(conversationId, message)
+        if (id) messageIds[message.key] = id
+      }
       if (observation.visitId) this.graph.viewEvent(conversationId, `web:${observation.visitId}`)
       const title = this.localTitle(conversationId) ?? observation.title ?? '新对话'
       this.db.prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND title != ?').run(title, Date.now(), conversationId, title)
-      return { conversationId }
+      return { conversationId, messageIds }
     })()
   }
 
-  capture(conversationId: string, observed: AssetObservedMessage, messageId?: string): string {
-    return this.db.transaction(() => this.captureMessage(conversationId, observed, messageId))()
+  private registerApiConversation(conversationId: string, sourceId: string): string {
+    const key = `api:${conversationId}`
+    this.db.prepare('INSERT OR IGNORE INTO asset_conversation_keys VALUES (?, ?, ?)').run(sourceId, key, conversationId)
+    return key
+  }
+
+  capture(conversationId: string, observed: AssetObservedMessage, messageId?: string): string | undefined {
+    return this.db.transaction(() => {
+      const source = this.db.prepare('SELECT source_id, source_type FROM conversations WHERE id = ?').get(conversationId) as
+        { source_id: string; source_type: string } | undefined
+      if (!source) return undefined
+      if (source.source_type === 'api') {
+        const key = this.registerApiConversation(conversationId, source.source_id)
+        if (this.db.prepare(`SELECT 1 FROM asset_exclusions WHERE source_id = ? AND conversation_key = ?
+          AND (source_key = '' OR source_key = ? OR source_key = ?)`)
+          .get(source.source_id, key, messageId ?? observed.key, observed.key)) return undefined
+      }
+      return this.captureMessage(conversationId, observed, messageId)
+    })()
   }
 
   private captureMessage(conversationId: string, observed: AssetObservedMessage, messageId?: string): string {
@@ -198,6 +218,7 @@ export class AiAssetsStore {
     if (!fresh && !changed) return id
     const revision = previous && changed && (
       !text.startsWith(previousText) || !reasoning.startsWith(previousReasoning)
+      || (previous.status === 'complete' && (text !== previousText || reasoning !== previousReasoning))
       || status === 'withdrawn' || status === 'retained'
     )
     if (revision) this.db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
@@ -260,10 +281,31 @@ export class AiAssetsStore {
     })()
   }
   deleteConversation(id: string): void {
-    this.db.transaction(() => { this.graph.excludeConversation(id); this.db.prepare('DELETE FROM conversations WHERE id = ?').run(id) })()
+    this.db.transaction(() => {
+      const source = this.db.prepare('SELECT source_id FROM conversations WHERE id = ? AND source_type = ?').get(id, 'api') as { source_id: string } | undefined
+      if (source) this.registerApiConversation(id, source.source_id)
+      this.graph.excludeConversation(id)
+      this.db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
+    })()
   }
   deleteMessage(id: string): void {
-    this.db.transaction(() => { this.graph.excludeMessage(id); this.db.prepare('DELETE FROM messages WHERE id = ?').run(id) })()
+    this.db.transaction(() => {
+      const message = this.db.prepare(`SELECT m.conversation_id, c.source_id, s.external_key FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id LEFT JOIN asset_message_state s ON s.message_id = m.id
+        WHERE m.id = ? AND c.source_type = 'api'`).get(id) as
+        { conversation_id: string; source_id: string; external_key: string | null } | undefined
+      if (message) {
+        const key = this.registerApiConversation(message.conversation_id, message.source_id)
+        this.graph.ensure(message.conversation_id)
+        if (message.external_key && message.external_key !== id) {
+          const node = this.db.prepare('SELECT parent_id FROM asset_nodes WHERE message_id = ?').get(id) as { parent_id: string | null }
+          this.db.prepare('INSERT OR IGNORE INTO asset_exclusions VALUES (?, ?, ?, ?, ?)')
+            .run(message.source_id, key, node.parent_id ?? '', message.external_key, '')
+        }
+      }
+      this.graph.excludeMessage(id)
+      this.db.prepare('DELETE FROM messages WHERE id = ?').run(id)
+    })()
   }
   recordCleanup(source: AssetSource, adapter: string, reason: string, messages: number, conversations: number, signature: string, apiOrigin?: string): void {
     this.db.prepare('INSERT OR IGNORE INTO asset_cleanup_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -339,10 +381,17 @@ export class AiAssetsStore {
 
   beginAttachment(source: AssetSource, input: AssetAttachmentInput, knownConversationId?: string): AssetAttachment {
     const conversationId = knownConversationId ?? this.conversation(source, input)
+    const message = input.messageKey ? this.sourceMessage(conversationId, input.messageKey, input.messageId) : undefined
+    if (input.messageId !== undefined && !message) throw new Error('Original message identity is unavailable')
     const known = this.db.prepare('SELECT * FROM asset_attachments WHERE conversation_id = ? AND external_key = ?')
       .get(conversationId, input.externalKey) as AttachmentRow | undefined
-    if (known) return attachment(known)
-    const message = input.messageKey ? this.sourceMessage(conversationId, input.messageKey) : undefined
+    if (known) {
+      if (input.messageId !== undefined && known.message_id !== message!.id) {
+        this.db.prepare('UPDATE asset_attachments SET message_id = ? WHERE id = ?').run(message!.id, known.id)
+        known.message_id = message!.id
+      }
+      return attachment(known)
+    }
     const id = randomUUID()
     this.db.prepare(`INSERT INTO asset_attachments (id, conversation_id, message_id, source_id, external_key,
       name, mime_type, source_url, direction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -410,16 +459,20 @@ export class AiAssetsStore {
           '导入的是资料引用；原件需通过完整备份恢复或重新获取', Number.isSafeInteger(item.createdAt) ? item.createdAt : Date.now())
     }
   }
-  associateAttachments(sourceId: string, observation: Omit<AssetObservation, 'messages'>, messageKey: string, ids: string[]): void {
+  associateAttachments(sourceId: string, observation: Omit<AssetObservation, 'messages'>, messageKey: string, ids: string[], messageId?: string): void {
     const conversationId = this.conversation({ id: sourceId, type: 'webview' }, observation)
-    const message = this.sourceMessage(conversationId, messageKey)
+    const message = this.sourceMessage(conversationId, messageKey, messageId)
     if (!message) throw new Error('Attachment message not found')
     this.db.transaction(() => {
       for (const id of ids) this.db.prepare('UPDATE asset_attachments SET conversation_id = ?, message_id = ? WHERE id = ? AND source_id = ?')
         .run(conversationId, message.id, id, sourceId)
     })()
   }
-  private sourceMessage(conversationId: string, key: string): { id: string } | undefined {
+  private sourceMessage(conversationId: string, key: string, messageId?: string): { id: string } | undefined {
+    if (messageId !== undefined) return this.db.prepare(`SELECT m.id FROM messages m
+      LEFT JOIN asset_nodes n ON n.message_id = m.id LEFT JOIN asset_message_state s ON s.message_id = m.id
+      WHERE m.id = ? AND m.conversation_id = ? AND (n.source_key = ? OR s.external_key = ?)`)
+      .get(messageId, conversationId, key, key) as { id: string } | undefined
     const candidates = this.db.prepare(`SELECT m.id FROM messages m LEFT JOIN asset_nodes n ON n.message_id = m.id
       LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.conversation_id = ? AND (n.source_key = ? OR s.external_key = ?)
       ORDER BY m.created_at DESC, m.rowid DESC`).all(conversationId, key, key) as Array<{ id: string }>

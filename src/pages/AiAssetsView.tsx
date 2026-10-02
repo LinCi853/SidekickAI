@@ -5,6 +5,7 @@ import { Button, EmptyState } from '../components/ui';
 import PromptLibraryView from './PromptLibraryView';
 import AssetConversation from './ai-assets/AssetConversation';
 import AssetFileCard from './ai-assets/AssetFileCard';
+import AssetCollectionStatus from './ai-assets/AssetCollectionStatus';
 import AssetSettingsPanel from '../components/AssetSettingsPanel';
 import Modal from '../components/ui/Modal';
 import { useAssetSettings } from '../hooks/useAssetSettings';
@@ -124,6 +125,7 @@ export default function AiAssetsView() {
     {settingsError && <p className="asset-feedback asset-error" role="alert">{settingsError}</p>}
     {error && <p className="asset-feedback asset-error" role="alert">{error}</p>}
     {notice && <p className="asset-feedback" role="status">{notice}</p>}
+    <AssetCollectionStatus onAction={operation => void run(operation)} />
     {category === 'prompts' ? <div className="asset-prompt-body">
       {!!suggestions.length && <details className="asset-suggestions" open><summary>自动提取的重点提示词</summary>
         {suggestions.filter(item => !query || item.content.toLowerCase().includes(query.toLowerCase())).map(item => <article key={item.messageId}>

@@ -118,25 +118,34 @@ export default function PromptLibraryView({ embedded = false, query = '' }: { em
       return;
     }
     const now = Date.now();
-    await savePrompt({
-      id: editor.editing?.id ?? '',
-      title,
-      content,
-      category: editor.category.trim() || undefined,
-      createdAt: editor.editing?.createdAt ?? now,
-      updatedAt: now,
-      // 需求 2.5：持久化局内快捷键（空字符串转为 undefined）
-      hotkey: editor.hotkey.trim() || undefined,
-    });
-    setEditor(EMPTY_EDITOR);
-    showToast(editor.editing ? '已更新' : '已添加');
+    try {
+      await savePrompt({
+        id: editor.editing?.id ?? '',
+        title,
+        content,
+        category: editor.category.trim() || undefined,
+        createdAt: editor.editing?.createdAt ?? now,
+        updatedAt: now,
+        hotkey: editor.hotkey.trim() || undefined,
+      });
+      setEditor(EMPTY_EDITOR);
+      showToast(editor.editing ? '已更新' : '已添加');
+    } catch (failure) {
+      console.error('[PromptLibraryView] Failed to save template:', failure);
+      showToast('保存失败，内容仍保留，请重试');
+    }
   };
 
   const handleDelete = async () => {
     if (!editor.editing) return;
-    await removePrompt(editor.editing.id);
-    setEditor(EMPTY_EDITOR);
-    showToast('已删除');
+    try {
+      await removePrompt(editor.editing.id);
+      setEditor(EMPTY_EDITOR);
+      showToast('已删除');
+    } catch (failure) {
+      console.error('[PromptLibraryView] Failed to delete template:', failure);
+      showToast('删除失败，模板仍保留，请重试');
+    }
   };
 
   const handleExport = async () => {

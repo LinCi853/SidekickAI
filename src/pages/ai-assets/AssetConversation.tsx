@@ -16,16 +16,25 @@ function RevisionDifference({ before, after }: { before: string; after: string }
   while (end < Math.min(old.length, next.length) - start && old[old.length - end - 1] === next[next.length - end - 1]) end++;
   return <pre className="asset-diff">{old.slice(0, start).join('')}<del>{old.slice(start, old.length - end).join('')}</del><ins>{next.slice(start, next.length - end).join('')}</ins>{end ? old.slice(-end).join('') : ''}</pre>;
 }
-export default function AssetConversation({ conversation, revision, attachments, settings, branchRequest, onAction, onRefresh, onPrompt, onConversation }: {
+interface AssetConversationProps {
   conversation?: Conversation; revision: number; attachments: AssetAttachment[]; settings: AssetSettings;
   branchRequest?: { direction: number; revision: number };
   onAction: (operation: () => Promise<void>) => void; onRefresh: () => Promise<void>;
   onPrompt: (content: string) => Promise<void>; onConversation: (id: string) => void;
-}) {
+}
+const emptyGraph: AssetConversationGraph = { nodes: [], path: [], sourcePath: [] };
+export default function AssetConversation(props: AssetConversationProps) {
+  if (!props.conversation) return <EmptyState message="选择对话查看完整记录" />;
+  return <ConversationDetail key={props.conversation.id} {...props} conversation={props.conversation} />;
+}
+function ConversationDetail({ conversation, revision, attachments, settings, branchRequest, onAction, onRefresh, onPrompt, onConversation }: AssetConversationProps & { conversation: Conversation }) {
   const api = requireElectron().aiAssets;
-  const [graph, setGraph] = useState<AssetConversationGraph>({ nodes: [], path: [], sourcePath: [] });
-  const [details, setDetails] = useState<AssetMessageDetail[]>([]);
-  const [usage, setUsage] = useState<AssetTextUsage>();
+  const [loaded, setLoaded] = useState<{ graph: AssetConversationGraph; details: AssetMessageDetail[]; usage?: AssetTextUsage } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { graph = emptyGraph, details = [], usage } = loaded ?? {};
+  const request = useRef(0);
+  const mounted = useRef(false);
+  const owns = (operation: number) => mounted.current && operation === request.current;
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState<'conversation' | string>();
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
@@ -33,32 +42,45 @@ export default function AssetConversation({ conversation, revision, attachments,
   const [selection, setSelection] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    let active = true;
+    mounted.current = true;
+    return () => { mounted.current = false; request.current += 1; };
+  }, []);
+  useEffect(() => {
+    const operation = ++request.current;
+    setLoading(true);
     setError('');
-    if (!conversation) { setGraph({ nodes: [], path: [], sourcePath: [] }); setDetails([]); setUsage(undefined); return; }
     void Promise.all([api.graph(conversation.id), api.details(conversation.id), api.usage(undefined, conversation.id)]).then(([value, states, text]) => {
-      if (active) { setGraph(value); setDetails(states); setUsage(text); }
-    }).catch(failure => { if (active) setError(String(failure)); });
-    return () => { active = false; };
-  }, [api, conversation?.id, revision]);
-  useEffect(() => { setEditing(null); setRename(undefined); setPendingDelete(undefined); setSelection(''); }, [conversation?.id]);
+      if (owns(operation)) { setLoaded({ graph: value, details: states, usage: text }); setLoading(false); }
+    }).catch(failure => { if (owns(operation)) { setLoaded(null); setError(String(failure)); setLoading(false); } });
+    return () => { request.current += 1; };
+  }, [api, conversation.id, revision]);
   const siblings = (message: AssetGraphNode) => graph.nodes.filter(node => node.parentId === message.parentId && node.role === message.role);
   const switchBranch = async (message: AssetGraphNode, direction: number) => {
+    if (!mounted.current || loading || !loaded || message.conversationId !== conversation.id) return;
     const known = siblings(message);
     const index = message.branchIndex ?? known.findIndex(node => node.id === message.id) + 1;
     const target = index + direction;
     const candidate = known.find(node => (node.branchIndex ?? known.findIndex(value => value.id === node.id) + 1) === target);
     if (!candidate) { setError('此分支尚未收纳，请在原网页浏览后再查看。'); return; }
-    setError(''); setGraph(await api.selectBranch(message.conversationId, candidate.id)); setSelection('');
+    const operation = ++request.current;
+    setError(''); setLoading(true);
+    try {
+      const value = await api.selectBranch(conversation.id, candidate.id);
+      if (owns(operation)) { setLoaded(current => current && { ...current, graph: value }); setSelection(''); setLoading(false); }
+    } catch (failure) {
+      if (owns(operation)) { setError(String(failure)); setLoading(false); }
+    }
   };
   const requestRef = useRef(-1);
   useEffect(() => {
     if (!branchRequest || requestRef.current === branchRequest.revision) return;
     requestRef.current = branchRequest.revision;
     const message = [...graph.path].reverse().map(id => graph.nodes.find(node => node.id === id)!).find(node => siblings(node).length > 1 || (node.branchCount ?? 1) > 1);
-    if (message) onAction(() => switchBranch(message, branchRequest.direction));
-  }, [branchRequest, graph]);
-  if (!conversation) return <EmptyState message="选择对话查看完整记录" />;
+    if (message && !loading) onAction(() => switchBranch(message, branchRequest.direction));
+  }, [branchRequest, graph, loading]);
+  if (loading || !loaded) return <><div className="asset-detail-heading"><h2>{conversation.title}</h2></div>
+    {error && <p className="asset-error" role="alert">{error}</p>}
+    <EmptyState message={loading ? '正在加载对话' : '无法加载对话，请刷新后重试'} /></>;
   const file = (item: AssetAttachment) => <AssetFileCard key={item.id} item={item} onAction={onAction} onConversation={onConversation} />;
   const messages = graph.path.map(id => graph.nodes.find(node => node.id === id)!).filter(Boolean);
   return <><div className="asset-detail-heading">

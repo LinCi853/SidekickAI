@@ -59,7 +59,7 @@ export class AssetGraphStore {
     return !!this.db.prepare("SELECT 1 FROM asset_exclusions WHERE source_id = ? AND conversation_key = ? AND source_key = ''")
       .get(sourceId, conversationKey)
   }
-  observe(id: string, sourceId: string, observation: AssetObservation, capture: Capture): void {
+  observe(id: string, sourceId: string, observation: AssetObservation, capture: Capture): Record<string, string> {
     this.ensure(id)
     const before = this.meta(id)
     const orderedSourcePath = this.path(id, before.source_leaf)
@@ -69,11 +69,18 @@ export class AssetGraphStore {
       const node = rows.find(value => value.message_id === key)
       return node?.source_key === message.key
     })).filter(position => position >= 0)
+    const omittedTail = observation.messages.length < orderedSourcePath.length && observation.messages.every((message, index) => {
+      const node = rows.find(value => value.message_id === orderedSourcePath[index])
+      const version = message.versionKey ?? ''
+      return node?.source_key === message.key && (node.version_key === version || (!node.version_key && version
+        && !!this.db.prepare('SELECT 1 FROM messages WHERE id = ? AND role = ? AND content = ?').get(node.message_id, message.role, message.content)))
+    })
     const partial = observation.completePath === false || (knownPositions.length > 0
-      && (knownPositions[0] > 0 || knownPositions.some((position, index) => index > 0 && position > knownPositions[index - 1] + 1)))
+      && (knownPositions[0] > 0 || knownPositions.some((position, index) => index > 0 && position > knownPositions[index - 1] + 1))) || omittedTail
     let versionChanged = false
     let parent: string | null = null
     let last: string | null = null
+    const messageIds: Record<string, string> = Object.create(null)
     for (const message of observation.messages) {
       const version = message.versionKey ?? ''
       const candidates = rows.filter(node => node.source_key === message.key && node.version_key === version)
@@ -95,6 +102,7 @@ export class AssetGraphStore {
       if (suppressed) continue
       const key = node ? this.db.prepare('SELECT external_key FROM asset_message_state WHERE message_id = ?').get(node.message_id) as { external_key: string } | undefined : undefined
       const captured = capture({ ...message, key: key?.external_key ?? JSON.stringify([messageParent, message.key, version]) }, node?.message_id)
+      messageIds[message.key] = captured
       this.db.prepare(`INSERT INTO asset_nodes (message_id, conversation_id, parent_id, source_key, version_key, branch_index, branch_count)
         VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(message_id) DO UPDATE SET
         source_key = excluded.source_key, version_key = excluded.version_key,
@@ -108,6 +116,7 @@ export class AssetGraphStore {
       const selected = before.selected_leaf === before.source_leaf ? last : before.selected_leaf
       this.db.prepare('UPDATE asset_conversation_meta SET source_leaf = ?, selected_leaf = ? WHERE conversation_id = ?').run(last, selected, id)
     }
+    return messageIds
   }
   path(id: string, leaf: string | null): string[] {
     const nodes = new Map(this.rows(id).map(node => [node.message_id, node]))

@@ -22,43 +22,52 @@ export interface PromptStoreState {
   remove: (id: string) => Promise<void>;
 }
 
-export const usePromptStore = create<PromptStoreState>((set, get) => ({
-  prompts: [],
-  initialized: false,
-  subscribed: false,
-
-  init: async () => {
-    if (!get().subscribed) {
-      window.electron.onAiAssetsCleared(() => set({ prompts: [] }));
-      window.electron.onPromptsChanged(() => { void get().init(); });
-      set({ subscribed: true });
-    }
-    try {
-      const prompts = await listPrompts();
-      set({ prompts, initialized: true });
-      console.log('[usePromptStore.init] 加载完成，模板数:', prompts.length);
-    } catch (e) {
-      console.error('[usePromptStore.init] 加载失败:', e);
-      set({ initialized: true });
-    }
-  },
-
-  save: async (template) => {
-    const saved = await savePrompt(template);
-    set((s) => {
-      const idx = s.prompts.findIndex((p) => p.id === saved.id);
-      if (idx === -1) {
-        return { prompts: [...s.prompts, saved] };
-      }
-      const next = [...s.prompts];
-      next[idx] = saved;
-      return { prompts: next };
+export const usePromptStore = create<PromptStoreState>((set, get) => {
+  let readRevision = 0;
+  let clearRevision = 0;
+  const subscribe = () => {
+    if (get().subscribed) return;
+    window.electron.onAiAssetsCleared(() => {
+      readRevision += 1;
+      clearRevision += 1;
+      set({ prompts: [], initialized: true });
     });
-    return saved;
-  },
+    window.electron.onPromptsChanged(() => { void get().init(); });
+    set({ subscribed: true });
+  };
+  const mutate = async <T,>(operation: () => Promise<T>): Promise<T> => {
+    subscribe();
+    readRevision += 1;
+    const beforeClear = clearRevision;
+    try {
+      const result = await operation();
+      if (beforeClear === clearRevision) await get().init();
+      return result;
+    } catch (failure) {
+      if (beforeClear === clearRevision) await get().init();
+      throw failure;
+    }
+  };
+  return {
+    prompts: [],
+    initialized: false,
+    subscribed: false,
 
-  remove: async (id) => {
-    await deletePrompt(id);
-    set((s) => ({ prompts: s.prompts.filter((p) => p.id !== id) }));
-  },
-}));
+    init: async () => {
+      subscribe();
+      const operation = ++readRevision;
+      try {
+        const prompts = await listPrompts();
+        if (operation === readRevision) set({ prompts, initialized: true });
+      } catch (e) {
+        if (operation === readRevision) {
+          console.error('[usePromptStore.init] Failed to load templates:', e);
+          set({ initialized: true });
+        }
+      }
+    },
+
+    save: (template) => mutate(() => savePrompt(template)),
+    remove: (id) => mutate(() => deletePrompt(id)),
+  };
+});

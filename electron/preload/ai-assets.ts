@@ -4,6 +4,12 @@ import type { AiAssetsAPI } from '../shared/ai-assets.types.js'
 
 export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
   aiAssets: {
+    collectionIssues: () => ipcRenderer.invoke(ipc.ASSET_COLLECTION_ISSUES),
+    onCollectionIssuesChanged: callback => {
+      const handler = (_event: unknown, issues: import('../shared/ai-assets.types.js').AssetCollectionIssue[]) => callback(issues)
+      ipcRenderer.on(ipc.ASSET_COLLECTION_ISSUES_CHANGED, handler)
+      return () => ipcRenderer.removeListener(ipc.ASSET_COLLECTION_ISSUES_CHANGED, handler)
+    },
     freezeTargets: () => ipcRenderer.invoke(ipc.ASSET_FREEZE_TARGETS),
     focusPage: id => ipcRenderer.invoke(ipc.ASSET_FOCUS_PAGE, id),
     observe: observation => ipcRenderer.invoke(ipc.ASSET_OBSERVE, observation),

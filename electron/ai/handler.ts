@@ -112,6 +112,7 @@ export function registerAIChatIPC(scope?: EffectScope): void {
       const userMessageId = chatStore.assets.capture(conversationId, {
         key: randomUUID(), role: 'user', content: payload.message, status: 'complete',
       })
+      if (!userMessageId) throw new Error('对话已删除，无法继续发送')
 
       // 3. 取消该会话之前未完成的流式请求（如果有）
       const prev = activeStreams.get(conversationId)
@@ -195,11 +196,14 @@ async function runStream(
 
   streamTasks.add(controller)
   const assistantMessageId = randomUUID()
+  let assistantMessageStored = false
   const recorder = new StreamAssetRecorder(value => {
-    getChatStore().assets.capture(conversationId, {
+    const captured = getChatStore().assets.capture(conversationId, {
       key: assistantMessageId, role: 'assistant', content: value.content,
       reasoning: value.reasoning, status: value.status,
     }, assistantMessageId)
+    assistantMessageStored = !!captured
+    if (!captured) return
     if (value.status !== 'streaming') void collectApiOriginals(provider.id, conversationId, assistantMessageId, value.content)
       .catch(error => console.warn('[ai-assets] Linked original collection failed:', error))
     for (const window of BrowserWindow.getAllWindows()) {
@@ -214,7 +218,7 @@ async function runStream(
   const sendEnd = (ok: boolean, error?: string) => {
     if (activeStreams.get(conversationId) === controller) activeStreams.delete(conversationId)
     if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.CHAT_STREAM_END, {
-      conversationId, ok, error, assistantMessageId: recorder.received ? assistantMessageId : undefined,
+      conversationId, ok, error, assistantMessageId: assistantMessageStored ? assistantMessageId : undefined,
     })
   }
   try {

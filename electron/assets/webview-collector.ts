@@ -7,16 +7,24 @@ import { readDomConversation } from './dom-messages.js'
 export async function startAiAssetCollector(): Promise<void> {
   let cleanup: (() => void) | undefined
   let generation = 0
+  let disposed = false
   const update = async () => {
+    if (disposed) return
     const operation = ++generation
     const enabled = await ipcRenderer.invoke(ipc.ASSET_AUTHORIZE).catch(() => false)
     if (operation !== generation) return
     if (enabled && !cleanup) cleanup = collectAiAssets()
     if (!enabled && cleanup) { cleanup(); cleanup = undefined }
   }
-  const changed = () => { void update() }
+  const changed = (_event: unknown, enabled?: boolean) => {
+    if (enabled === false) {
+      generation += 1
+      cleanup?.(); cleanup = undefined
+    } else void update()
+  }
   ipcRenderer.on(ipc.ASSET_COLLECTOR_STATE, changed)
   window.addEventListener('pagehide', () => {
+    disposed = true
     generation += 1
     cleanup?.(); ipcRenderer.removeListener(ipc.ASSET_COLLECTOR_STATE, changed)
   }, { once: true })
@@ -29,12 +37,23 @@ function collectAiAssets(): () => void {
   let announcedLocation = ''
   let visitId = crypto.randomUUID()
   let lastSnapshot = ''
+  let lastMessageIds: Record<string, string> | undefined
+  let scheduledSnapshot: { fingerprint: string; sequence: number } | undefined
+  let sequence = 0
   const suppressed = new Set<string>()
   const rejectedSignatures = new Set<string>()
-  let previous = new Map<string, AssetObservedMessage>()
-  type Original = { input: AssetAttachmentInput; url?: string; blob?: Blob; id?: string; ready?: Promise<void> }
+  let documentMessages = new Map<string, AssetObservedMessage>()
+  let draftTransition: { key: string; messages: Map<string, AssetObservedMessage> } | undefined
+  const aliases = new Map<string, string>()
+  type Original = {
+    input: AssetAttachmentInput; url?: string; blob?: Blob; id?: string; ready?: Promise<void>
+    inputUsers?: Map<string, string>; associating?: boolean
+  }
+  type StartedOriginal = { id: string; saved?: boolean; busy?: boolean }
   const originals = new Map<string, Original>()
   const pendingInputs = new Set<string>()
+  const retryWaits = new Set<() => void>()
+  const lifetime = new AbortController()
   let queue = Promise.resolve()
   let originalQueue = Promise.resolve()
   let stopped = false
@@ -45,11 +64,33 @@ function collectAiAssets(): () => void {
       title: document.title, url }
   }
   const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
-  const enqueue = (operation: () => Promise<void>) => {
-    queue = queue.then(operation).catch(error => console.warn('[ai-assets] Collection failed:', error))
+  const active = (entry: Original) => !stopped && !suppressed.has(entry.input.conversationKey)
+  const userSignature = (message: AssetObservedMessage) => JSON.stringify([message.versionKey, message.content])
+  const waitForRetry = (delay: number) => new Promise<void>(resolve => {
+    const finish = () => { clearTimeout(timer); retryWaits.delete(finish); resolve() }
+    const timer = setTimeout(finish, delay)
+    retryWaits.add(finish)
+  })
+  const retryInvoke = async <T>(channel: string, args: unknown[], enabled = () => !stopped): Promise<{ value: T } | undefined> => {
+    let failures = 0
+    while (enabled()) {
+      try {
+        const value = await invoke(channel, ...args) as T
+        return enabled() ? { value } : undefined
+      } catch (error) {
+        if (!enabled()) return
+        console.warn('[ai-assets] Collection retry:', channel, error)
+        await waitForRetry(1000 * 2 ** Math.min(failures++, 3))
+      }
+    }
   }
-  const transfer = async (entry: Original, initial?: { id: string; saved?: boolean; busy?: boolean }) => {
+  const enqueue = (operation: () => Promise<void>) => {
+    queue = queue.then(() => { if (!stopped) return operation() }).catch(error => console.warn('[ai-assets] Collection failed:', error))
+  }
+  const transfer = async (entry: Original, initial?: StartedOriginal) => {
+    if (!active(entry)) return
     const started = initial ?? await invoke(ipc.ASSET_ATTACHMENT_BEGIN, entry.input)
+    if (!active(entry)) return
     entry.id = started.id
     if (started.saved) { entry.blob = undefined; return }
     if (started.busy) return
@@ -58,93 +99,103 @@ function collectAiAssets(): () => void {
         await invoke(ipc.ASSET_ATTACHMENT_FETCH, started.id)
         return
       }
-      const blob = entry.blob ?? await fetch(entry.url ?? entry.input.sourceUrl!, { credentials: 'include' }).then(response => {
+      const blob = entry.blob ?? await fetch(entry.url ?? entry.input.sourceUrl!, { credentials: 'include', signal: lifetime.signal }).then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.blob()
       })
+      if (!active(entry)) return
       if (!blob) throw new Error('Original bytes are unavailable')
       for (let offset = 0; offset < blob.size; offset += 1024 * 1024) {
         const bytes = new Uint8Array(await blob.slice(offset, offset + 1024 * 1024).arrayBuffer())
+        if (!active(entry)) return
         await invoke(ipc.ASSET_ATTACHMENT_CHUNK, started.id, offset, bytes)
       }
+      if (!active(entry)) return
       await invoke(ipc.ASSET_ATTACHMENT_FINISH, started.id, blob.size)
-      entry.blob = undefined
+      if (active(entry)) entry.blob = undefined
     } catch (error) {
-      await invoke(ipc.ASSET_ATTACHMENT_FAIL, started.id, String(error)).catch(() => {})
+      if (active(entry)) await invoke(ipc.ASSET_ATTACHMENT_FAIL, started.id, String(error)).catch(() => {})
     }
   }
   const acquire = (input: AssetAttachmentInput, blob?: Blob) => {
-    if (suppressed.has(input.conversationKey)) return
+    if (stopped || suppressed.has(input.conversationKey)) return
     const key = `${input.conversationKey}\u0000${input.externalKey}`
     if (originals.has(key)) return
-    const entry: Original = { input, blob, url: input.sourceUrl }
+    const entry: Original = { input, blob, url: input.sourceUrl,
+      inputUsers: input.direction === 'input' ? new Map(readDomConversation(document, location.hostname).messages
+        .filter(message => message.observed.role === 'user').map(message => [message.observed.key, userSignature(message.observed)])) : undefined }
     originals.set(key, entry)
-    entry.ready = queue.then(async () => {
-      if (suppressed.has(entry.input.conversationKey)) return
+    entry.ready = Promise.resolve().then(async () => {
+      if (!active(entry)) return
       const metadata = { ...entry.input }
       if (/^data:/.test(metadata.sourceUrl ?? '')) {
         const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(metadata.externalKey))
         metadata.sourceUrl = '内联资料'
         metadata.externalKey = `${metadata.messageKey}:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`
       }
+      if (!active(entry)) return
       entry.input = metadata
-      return invoke(ipc.ASSET_ATTACHMENT_BEGIN, metadata)
+      return retryInvoke<StartedOriginal>(ipc.ASSET_ATTACHMENT_BEGIN, [metadata], () => active(entry))
     }).then(started => {
       if (!started) return
-      entry.id = started.id
-      originalQueue = originalQueue.then(() => transfer(entry, started)).catch(error => console.warn('[ai-assets] Original transfer failed:', error))
+      entry.id = started.value.id
+      originalQueue = originalQueue.then(() => transfer(entry, started.value)).catch(error => console.warn('[ai-assets] Original transfer failed:', error))
     }).catch(error => console.warn('[ai-assets] Original metadata failed:', error))
     if (input.direction === 'input') pendingInputs.add(key)
+  }
+  const acquireOutputs = (outputs: AssetAttachmentInput[], messageIds?: Record<string, string>) => {
+    for (const input of outputs) {
+      const messageId = input.messageKey ? messageIds?.[input.messageKey] : undefined
+      if (messageIds && !messageId) continue
+      acquire({ ...input, messageId })
+    }
+  }
+  const associate = (source: ReturnType<typeof context>, inputs: Array<{ key: string; messageKey: string; messageId?: string }>) => {
+    const groups = new Map<string, { messageId?: string; entries: Array<{ key: string; entry: Original }> }>()
+    for (const input of inputs) {
+      const entry = originals.get(input.key)
+      if (!entry || entry.associating || !pendingInputs.has(input.key) || !active(entry)) continue
+      entry.associating = true
+      const group = groups.get(input.messageKey) ?? { messageId: input.messageId, entries: [] }
+      group.entries.push({ key: input.key, entry }); groups.set(input.messageKey, group)
+    }
+    for (const [messageKey, { messageId, entries }] of groups) {
+      void Promise.all(entries.map(({ entry }) => entry.ready)).then(async () => {
+        const ready = entries.filter(({ entry }) => entry.id && active(entry))
+        if (!ready.length || stopped || suppressed.has(source.conversationKey)) return
+        const result = await retryInvoke(ipc.ASSET_ATTACHMENT_ASSOCIATE, [source, messageKey, ready.map(({ entry }) => entry.id!), messageId],
+          () => !stopped && !suppressed.has(source.conversationKey))
+        if (result) ready.forEach(({ key }) => pendingInputs.delete(key))
+      }).catch(error => console.warn('[ai-assets] Original association failed:', error))
+        .finally(() => { entries.forEach(({ entry }) => { entry.associating = false }) })
+    }
   }
   const scan = () => {
     if (stopped) return
     const source = context()
-    const previousConversationKey = lastLocation.startsWith('document:') && !source.conversationKey.startsWith('document:') ? lastLocation : undefined
     if (lastLocation !== source.conversationKey) {
-      previous = new Map(); lastLocation = source.conversationKey
-      visitId = crypto.randomUUID(); lastSnapshot = ''
+      draftTransition = lastLocation.startsWith('document:') && !source.conversationKey.startsWith('document:')
+        ? { key: lastLocation, messages: documentMessages } : undefined
+      lastLocation = source.conversationKey
+      visitId = crypto.randomUUID(); lastSnapshot = ''; lastMessageIds = undefined; scheduledSnapshot = undefined
     }
+    if (suppressed.has(source.conversationKey)) return
     const snapshot = readDomConversation(document, location.hostname)
     const found = snapshot.messages
     const next = new Map(found.map(message => [message.observed.key, message.observed]))
+    if (source.conversationKey.startsWith('document:') && found.length) documentMessages = next
+    const transition = draftTransition
+    const previousConversationKey = transition && (!transition.messages.size || found.some(({ observed }) =>
+      transition.messages.get(observed.key)?.content === observed.content)) ? transition.key : undefined
     const fingerprint = JSON.stringify([[...next.values()], snapshot.rejected.map(item => [item.key, item.content])])
-    const newUser = [...found].reverse().find(({ observed }) => {
-      const before = previous.get(observed.key)
-      return observed.role === 'user' && (!before || before.versionKey !== observed.versionKey || before.content !== observed.content)
+    const inputAlias = previousConversationKey ?? aliases.get(source.conversationKey)
+    const inputs = [...pendingInputs].flatMap(key => {
+      const entry = originals.get(key)
+      if (!entry || (entry.input.conversationKey !== source.conversationKey && entry.input.conversationKey !== inputAlias)) return []
+      const nextUser = found.find(({ observed }) => observed.role === 'user' && entry.inputUsers?.get(observed.key) !== userSignature(observed))
+      return nextUser ? [{ key, messageKey: nextUser.observed.key }] : []
     })
-    const eventId = visitId
-    if (fingerprint !== lastSnapshot || (found.length && announcedLocation !== source.conversationKey)) enqueue(async () => {
-      const rejected = []
-      for (const item of snapshot.rejected) {
-        const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(item.content))
-        const signature = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
-        const identity = `${source.conversationKey}:${item.key}:${signature}`
-        if (rejectedSignatures.has(identity)) continue
-        rejectedSignatures.add(identity)
-        rejected.push({ key: item.key, reason: item.reason, signature })
-      }
-      if (!found.length && !rejected.length) return
-      const result = await invoke(ipc.ASSET_OBSERVE, { ...source, previousConversationKey,
-        messages: found.map(message => message.observed), snapshot: true, completePath: snapshot.completePath,
-        visitId: eventId, adapter: 'dom-conversation/2', rejected })
-      if (result.suppressed) { suppressed.add(source.conversationKey); return }
-      if (newUser && pendingInputs.size) {
-        const keys = [...pendingInputs].filter(key => {
-          const conversationKey = originals.get(key)?.input.conversationKey
-          return conversationKey === source.conversationKey || (previousConversationKey && conversationKey === previousConversationKey)
-        })
-        await Promise.all(keys.map(key => originals.get(key)?.ready))
-        const ids = keys.map(key => originals.get(key)?.id).filter((id): id is string => !!id)
-        if (ids.length) {
-          await invoke(ipc.ASSET_ATTACHMENT_ASSOCIATE, source, newUser.observed.key, ids)
-          keys.forEach(key => pendingInputs.delete(key))
-        }
-      }
-    })
-    if (found.length) announcedLocation = source.conversationKey
-    lastSnapshot = fingerprint
-    previous = next
-    if (suppressed.has(source.conversationKey)) return
+    const outputs: AssetAttachmentInput[] = []
     for (const [index, message] of found.entries()) {
       if (message.observed.role !== 'assistant') continue
       for (const element of message.element.querySelectorAll('img, a[download], a[data-attachment]')) {
@@ -155,13 +206,55 @@ function collectAiAssets(): () => void {
         let name = image ? '图片' : element.getAttribute('download') || element.textContent?.trim() || '文件'
         try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || name) } catch {}
         if (name.length > 255 || /^data:/.test(url)) name = image ? '图片' : '文件'
-        acquire({ ...source, messageKey: message.observed.key, name, mimeType: image ? 'image/*' : 'application/octet-stream',
+        outputs.push({ ...source, messageKey: message.observed.key, name, mimeType: image ? 'image/*' : 'application/octet-stream',
           direction: 'output', sourceUrl: url, externalKey: `${JSON.stringify(found.slice(0, index + 1).map(item => [item.observed.key, item.observed.versionKey ?? '']))}:${url}` })
       }
     }
+    const eventId = visitId
+    if (!found.length && !snapshot.rejected.length) return
+    if (fingerprint === (scheduledSnapshot?.fingerprint ?? lastSnapshot)
+      && (!found.length || announcedLocation === source.conversationKey || scheduledSnapshot)) {
+      if (!scheduledSnapshot) acquireOutputs(outputs, lastMessageIds)
+      return
+    }
+    const observationSequence = ++sequence
+    scheduledSnapshot = { fingerprint, sequence: observationSequence }
+    enqueue(async () => {
+      if (suppressed.has(source.conversationKey)) return
+      const rejected = []
+      const signatures = []
+      for (const item of snapshot.rejected) {
+        const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(item.content))
+        const signature = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
+        const identity = `${source.conversationKey}:${item.key}:${signature}`
+        if (rejectedSignatures.has(identity)) continue
+        signatures.push(identity)
+        rejected.push({ key: item.key, reason: item.reason, signature })
+      }
+      if (!found.length && !rejected.length) return
+      const result = await retryInvoke<{ suppressed?: boolean; messageIds?: Record<string, string> }>(ipc.ASSET_OBSERVE, [{ ...source, previousConversationKey,
+        messages: found.map(message => message.observed), snapshot: true, completePath: snapshot.completePath,
+        visitId: eventId, adapter: 'dom-conversation/2', rejected }], () => !stopped && !suppressed.has(source.conversationKey))
+      if (!result) return
+      if (result.value.suppressed) { suppressed.add(source.conversationKey); return }
+      signatures.forEach(signature => rejectedSignatures.add(signature))
+      if (previousConversationKey) aliases.set(source.conversationKey, previousConversationKey)
+      if (eventId === visitId) {
+        if (found.length) announcedLocation = source.conversationKey
+        lastSnapshot = fingerprint
+        lastMessageIds = result.value.messageIds
+        if (scheduledSnapshot?.sequence === observationSequence) scheduledSnapshot = undefined
+        if (found.length && draftTransition === transition) draftTransition = undefined
+      }
+      associate(source, inputs.flatMap(input => {
+        const messageId = result.value.messageIds?.[input.messageKey]
+        return result.value.messageIds && !messageId ? [] : [{ ...input, messageId }]
+      }))
+      acquireOutputs(outputs, result.value.messageIds)
+    })
   }
   const files = (values: FileList | File[] | null) => {
-    if (!values) return
+    if (stopped || !values) return
     for (const file of Array.from(values)) acquire({ ...context(), name: file.name, mimeType: file.type,
       direction: 'input', externalKey: `selected:${crypto.randomUUID()}` }, file)
   }
@@ -179,13 +272,15 @@ function collectAiAssets(): () => void {
   window.addEventListener('popstate', navigation)
   window.addEventListener('hashchange', navigation)
   const retry = (_event: unknown, payload: { id: string; sourceUrl?: string }) => {
+    if (stopped) return
     const entry = [...originals.values()].find(item => item.id === payload.id)
     if (entry) originalQueue = originalQueue.then(() => transfer(entry)).catch(error => console.warn('[ai-assets] Original retry failed:', error))
     else void invoke(ipc.ASSET_ATTACHMENT_FAIL, payload.id, '原页面中的临时资料已失效，请重新上传或重新打开资料链接').catch(() => {})
   }
   ipcRenderer.on(ipc.ASSET_RETRY_REQUEST, retry)
   const cleanup = () => {
-    scan(); stopped = true; observer.disconnect(); clearInterval(routeTimer)
+    stopped = true; lifetime.abort(); observer.disconnect(); clearInterval(routeTimer)
+    for (const cancel of retryWaits) cancel()
     window.removeEventListener('popstate', navigation)
     window.removeEventListener('hashchange', navigation)
     document.removeEventListener('change', change, true)

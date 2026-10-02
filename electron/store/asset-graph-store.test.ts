@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: () => '' } }))
 import { ChatStore } from './chat-store'
 import type { AssetObservation, AssetObservedMessage } from '../shared/ai-assets.types'
@@ -44,6 +47,47 @@ describe('asset conversation paths', () => {
       expect(graph(store, id).nodes.find(node => node.id === first.messageId)?.content).toBe('one')
     } finally { store.close() }
   })
+  it('binds delayed input and output originals to their acknowledged version after another version arrives', () => {
+    const store = new ChatStore(':memory:')
+    try {
+      const first = store.assets.observe(source, snapshot([message('u1', 'first', '1'), message('a1', 'one', '1')]))
+      const selected = store.assets.beginAttachment(source, { conversationKey: '/chat/1', externalKey: 'selected-file', title: 'Archive', mimeType: 'text/plain', name: 'input.txt', direction: 'input' })
+      const second = store.assets.observe(source, snapshot([message('u1', 'second', '2'), message('a1', 'two', '2')]))
+      expect(first.messageIds?.u1).not.toBe(second.messageIds?.u1)
+      store.assets.associateAttachments(source.id, { conversationKey: '/chat/1', title: 'Archive' }, 'u1', [selected.id], first.messageIds!.u1)
+      expect(store.assets.getAttachment(selected.id)?.messageId).toBe(first.messageIds!.u1)
+      const output = { conversationKey: '/chat/1', messageKey: 'a1', externalKey: 'first-output', title: 'Archive', mimeType: 'text/plain', name: 'output.txt', direction: 'output' as const }
+      const oldReference = store.assets.beginAttachment(source, output)
+      expect(oldReference.messageId).toBe(second.messageIds!.a1)
+      expect(store.assets.beginAttachment(source, { ...output, messageId: first.messageIds!.a1 }).messageId).toBe(first.messageIds!.a1)
+      const partial = store.assets.observe(source, snapshot([message('u1', 'second', '2')], { completePath: false }))
+      expect(partial.messageIds).toEqual({ u1: second.messageIds!.u1 })
+      expect(graph(store, first.conversationId).sourcePath.at(-1)).toBe(second.messageIds!.a1)
+    } finally { store.close() }
+  })
+  it('refuses deleted, foreign and mismatched exact original targets without selecting another branch', () => {
+    const store = new ChatStore(':memory:')
+    try {
+      const first = store.assets.observe(source, snapshot([message('u1', 'first', '1'), message('a1', 'one', '1')]))
+      const selected = store.assets.beginAttachment(source, { conversationKey: '/chat/1', externalKey: 'selected-file', title: 'Archive', mimeType: 'text/plain', name: 'input.txt', direction: 'input' })
+      const second = store.assets.observe(source, snapshot([message('u1', 'second', '2'), message('a1', 'two', '2')]))
+      const other = store.assets.observe(source, snapshot([message('u1', 'other')], { conversationKey: '/chat/other' }))
+      const observation = { conversationKey: '/chat/1', title: 'Archive' }
+      const output = { ...observation, messageKey: 'u1', externalKey: 'output', mimeType: 'text/plain', name: 'output.txt', direction: 'output' as const }
+      for (const invalid of [other.messageIds!.u1, second.messageIds!.a1]) {
+        expect(() => store.assets.associateAttachments(source.id, observation, 'u1', [selected.id], invalid)).toThrow()
+        expect(() => store.assets.beginAttachment(source, { ...output, messageId: invalid })).toThrow()
+      }
+      store.deleteMessage(first.messageIds!.u1)
+      expect(() => store.assets.associateAttachments(source.id, observation, 'u1', [selected.id], first.messageIds!.u1)).toThrow()
+      expect(() => store.assets.beginAttachment(source, { ...output, messageId: first.messageIds!.u1 })).toThrow()
+      expect(store.assets.getAttachment(selected.id)?.messageId).toBeUndefined()
+      expect(store.assets.attachments(first.conversationId)).toHaveLength(1)
+      const excluded = store.assets.observe(source, snapshot([message('u1', 'first', '1')]))
+      expect(excluded.messageIds).toEqual({})
+      expect(graph(store, first.conversationId).nodes.some(node => node.id === second.messageIds!.u1)).toBe(true)
+    } finally { store.close() }
+  })
   it('switches an entire suffix while sharing ancestors and retaining virtualized messages', () => {
     const store = new ChatStore(':memory:')
     try {
@@ -82,6 +126,65 @@ describe('asset conversation paths', () => {
       expect(graph(store, id).path).toHaveLength(5)
       expect(graph(store, id).nodes).toHaveLength(5)
     } finally { store.close() }
+  })
+  it('retains an omitted source suffix while accepting a real shorter branch and new suffix', () => {
+    const store = new ChatStore(':memory:')
+    try {
+      const prefix = [message('u0', 'prefix'), message('a0', 'shared answer')]
+      const initial = [...prefix, message('u1', 'first', '1'), message('a1', 'first answer', '1'), message('u2', 'followup'), message('a2', 'suffix')]
+      const { conversationId: id } = store.assets.observe(source, snapshot(initial))
+      const original = graph(store, id)
+      store.assets.observe(source, snapshot(initial.slice(0, 2)))
+      expect(graph(store, id).sourcePath).toEqual(original.sourcePath)
+      expect(graph(store, id).path).toEqual(original.path)
+      expect(store.exportConversation(id, 'md')).toContain('\nsuffix\n')
+      const alternate = [...prefix, message('u1', 'second', '2'), message('a1', 'second answer', '2')]
+      store.assets.observe(source, snapshot(alternate))
+      expect(graph(store, id).sourcePath).toHaveLength(4)
+      expect(graph(store, id).nodes).toHaveLength(8)
+      store.assets.graph.select(id, original.nodes.find(node => node.content === 'first')!.id)
+      expect(graph(store, id).path).toEqual(original.path)
+      store.assets.observe(source, snapshot([...alternate, message('u2', 'another followup'), message('a2', 'another suffix')]))
+      expect(graph(store, id).sourcePath).toHaveLength(6)
+      expect(graph(store, id).nodes).toHaveLength(10)
+      expect(graph(store, id).path).toEqual(original.path)
+    } finally { store.close() }
+  })
+  it('keeps an omitted tail when unchanged text acquires its first version counter', () => {
+    const store = new ChatStore(':memory:')
+    try {
+      const initial = [message('u0', 'prefix'), message('a0', 'answer'), message('u1', 'followup'), message('a1', 'suffix')]
+      const { conversationId: id } = store.assets.observe(source, snapshot(initial))
+      const before = graph(store, id)
+      const usage = store.assets.usage(undefined, id)
+      store.assets.observe(source, snapshot([initial[0], { ...initial[1], versionKey: '1', branchIndex: 1, branchCount: 2 }]))
+      expect(graph(store, id).sourcePath).toEqual(before.sourcePath)
+      expect(graph(store, id).nodes).toHaveLength(4)
+      expect(store.assets.usage(undefined, id)).toEqual(usage)
+    } finally { store.close() }
+  })
+  it('persists API deletion exclusions and complete revisions through database reopen and JSON', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-api-exclusions-'))
+    const file = path.join(directory, 'chat.db')
+    let store = new ChatStore(file)
+    try {
+      const conversation = store.createConversation('provider-a', 'api', 'API')
+      store.assets.capture(conversation.id, { key: 'input-key', role: 'user', content: 'Input', status: 'complete' }, 'input-id')
+      store.assets.capture(conversation.id, { key: 'output-key', role: 'assistant', content: 'First', status: 'complete' }, 'output-id')
+      store.assets.capture(conversation.id, { key: 'output-key', role: 'assistant', content: 'First extended', status: 'complete' }, 'output-id')
+      store.deleteMessage('input-id')
+      const outputUsage = store.assets.usage(undefined, conversation.id)
+      store.close(); store = new ChatStore(file)
+      expect(store.assets.capture(conversation.id, { key: 'input-key', role: 'user', content: 'Input again' }, 'input-id')).toBeUndefined()
+      expect(store.assets.details(conversation.id)[0].revisions).toMatchObject([{ content: 'First', status: 'complete' }])
+      expect(store.assets.usage(undefined, conversation.id)).toEqual(outputUsage)
+      const exported = JSON.parse(store.exportConversation(conversation.id, 'json'))
+      expect(exported.graph.exclusions).toEqual(expect.arrayContaining([expect.objectContaining({ sourceKey: 'input-id' })]))
+      const imported = store.importConversation('json', JSON.stringify(exported), 'imported')
+      expect(store.assets.details(imported.id)[0].revisions).toMatchObject([{ content: 'First', status: 'complete' }])
+      expect(JSON.parse(store.exportConversation(imported.id, 'json')).graph.exclusions).toEqual(exported.graph.exclusions)
+      expect(store.assets.usage(undefined, imported.id)).toEqual({ ...outputUsage, todayCharacters: 0 })
+    } finally { store.close(); fs.rmSync(directory, { recursive: true, force: true }) }
   })
   it('does not count known text again when its receive status changes and preserves deletion markers after removing their parent', () => {
     const store = new ChatStore(':memory:')

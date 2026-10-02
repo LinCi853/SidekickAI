@@ -36,6 +36,53 @@ describe('AI asset collection', () => {
     expect(store.details(conversationId)[0].status).toBe('complete')
     expect(store.usage().outputCharacters).toBe(6)
   })
+  it('retains complete source versions when output or reasoning grows by a prefix', () => {
+    const sample = (content: string, reasoning: string) => store.observe(source, {
+      conversationKey: '/conversation/1', title: 'Conversation',
+      messages: [{ key: 'assistant:0', role: 'assistant', content, reasoning, status: 'complete' }],
+    })
+    const { conversationId } = sample('Answer', 'Thought')
+    sample('Answer extended', 'Thought')
+    sample('Answer extended', 'Thought extended')
+    sample('Answer extended', 'Thought extended')
+    expect(store.details(conversationId)[0].revisions).toMatchObject([
+      { content: 'Answer', reasoning: 'Thought', status: 'complete' },
+      { content: 'Answer extended', reasoning: 'Thought', status: 'complete' },
+    ])
+    expect(store.usage().outputCharacters).toBe(15)
+    expect(store.usage().reasoningCharacters).toBe(16)
+  })
+  it('accumulates stream increments without recording a revision for every token', () => {
+    const { conversationId } = observe('A')
+    for (let length = 2; length <= 100; length++) observe('A'.repeat(length))
+    observe('A'.repeat(100), 'complete')
+    expect(store.details(conversationId)[0].revisions).toEqual([])
+    expect(store.usage().outputCharacters).toBe(100)
+  })
+  it('excludes deleted API output by both its explicit id and external key before graph reads', () => {
+    const api = { id: 'provider-a', type: 'api' as const }
+    const conversationId = store.conversation(api, { conversationKey: 'session-a', title: 'API' })
+    const output = { key: 'output-key', role: 'assistant' as const, content: 'First', status: 'streaming' as const }
+    store.capture(conversationId, output, 'output-id')
+    store.deleteMessage('output-id')
+    expect(store.capture(conversationId, { ...output, content: 'First second' }, 'output-id')).toBeUndefined()
+    expect(store.capture(conversationId, { ...output, content: 'First final', status: 'complete' })).toBeUndefined()
+    expect(store.details(conversationId)).toEqual([])
+    expect(store.usage().totalCharacters).toBe(0)
+    expect(store.capture(conversationId, { ...output, key: 'next-output', status: 'complete' })).toBeTruthy()
+    expect(store.usage().outputCharacters).toBe(5)
+  })
+  it('suppresses later API flushes after the conversation has been deleted', () => {
+    const api = { id: 'provider-a', type: 'api' as const }
+    const conversationId = store.conversation(api, { conversationKey: 'session-a', title: 'API' })
+    const output = { key: 'output', role: 'assistant' as const, content: 'Received', status: 'streaming' as const }
+    store.capture(conversationId, output, output.key)
+    store.deleteConversation(conversationId)
+    expect(() => store.capture(conversationId, { ...output, content: 'Received later' }, output.key)).not.toThrow()
+    expect(store.capture(conversationId, { ...output, status: 'complete' }, output.key)).toBeUndefined()
+    expect(db.prepare('SELECT * FROM conversations').all()).toEqual([])
+    expect(db.prepare('SELECT * FROM messages').all()).toEqual([])
+  })
   it('isolates accounts and conversations and persists reasoning and revisions', () => {
     const original = observe('answer')
     store.observe(source, { conversationKey: '/conversation/1', title: 'Conversation', messages: [{ key: 'assistant:0', role: 'assistant', content: 'new', reasoning: '思考 😀', status: 'complete' }] })

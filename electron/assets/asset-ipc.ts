@@ -1,11 +1,11 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, webContents, type IpcMainInvokeEvent } from 'electron'
-import { copyFile } from 'node:fs/promises'
+import { copyFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getChatStore } from '../store/chat-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { isModuleEnabled, observeModuleState } from '../modules/registry.js'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
-import type { AssetAttachmentInput, AssetObservation } from '../shared/ai-assets.types.js'
+import type { AssetAttachmentInput, AssetCollectionIssue, AssetObservation } from '../shared/ai-assets.types.js'
 import { OriginalVault } from './original-vault.js'
 import { acquireLinkedOriginal, stopLinkedOriginalTransfers } from './api-originals.js'
 import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
@@ -25,10 +25,17 @@ export function broadcastAiAssetState(): void {
 }
 
 export function registerAiAssetIpc(): void {
+  const collectionIssues = new Map<number, AssetCollectionIssue>()
+  const publishCollectionIssues = () => {
+    const issues = [...collectionIssues.values()]
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed())
+      window.webContents.send(ipc.ASSET_COLLECTION_ISSUES_CHANGED, issues)
+  }
   let assetEnabled = false
   const syncCollection = () => {
     const enabled = isModuleEnabled('prompt-library')
     if (enabled && !assetEnabled) getChatStore().cleanupInvalidConversations()
+    if (!enabled && collectionIssues.size) { collectionIssues.clear(); publishCollectionIssues() }
     assetEnabled = enabled
     broadcastAiAssetState()
   }
@@ -58,6 +65,7 @@ export function registerAiAssetIpc(): void {
     const guestId = event.sender.id
     event.sender.once('destroyed', () => {
       guests.delete(guestId)
+      if (collectionIssues.delete(guestId)) publishCollectionIssues()
       for (const [id, owner] of owners) if (owner === guestId) {
         abortTransfer(id)
         try { getChatStore().assets.attachmentFailed(id, '页面已关闭，原件传输未完成') } catch {}
@@ -74,7 +82,7 @@ export function registerAiAssetIpc(): void {
     if (!profile || event.senderFrame !== event.sender.mainFrame) throw new Error('AI asset source is not authorized')
     registerGuest(event)
     if (!isModuleEnabled('prompt-library')) throw new Error('AI assets are disabled')
-    return { id: profile.id, type: 'webview' as const }
+    return { id: profile.id, type: 'webview' as const, name: profile.name }
   }
   const own = (event: IpcMainInvokeEvent, id: string) => {
     const profile = source(event)
@@ -108,28 +116,54 @@ export function registerAiAssetIpc(): void {
         || (message.branchCount !== undefined && (!Number.isSafeInteger(message.branchCount) || message.branchCount < 1))) throw new Error('Invalid asset branch')
     }
     for (const item of observation.rejected ?? []) if (typeof item.key !== 'string' || typeof item.reason !== 'string' || !/^[a-f0-9]{64}$/.test(item.signature)) throw new Error('Invalid rejection record')
-    const result = getChatStore().assets.observe(profile, observation)
+    let result: { conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> }
+    try { result = getChatStore().assets.observe(profile, observation) }
+    catch (error) {
+      collectionIssues.set(event.sender.id, { webContentsId: event.sender.id, profileId: profile.id, profileName: profile.name,
+        failures: (collectionIssues.get(event.sender.id)?.failures ?? 0) + 1, updatedAt: Date.now() })
+      publishCollectionIssues()
+      throw error
+    }
+    if (collectionIssues.delete(event.sender.id)) publishCollectionIssues()
     broadcast(profile.id)
     return result
   })
   ipcMain.handle(ipc.ASSET_ATTACHMENT_BEGIN, async (event, input: AssetAttachmentInput) => {
     const profile = source(event)
     if (!input || typeof input.name !== 'string' || typeof input.externalKey !== 'string'
-      || typeof input.conversationKey !== 'string' || !['input', 'output'].includes(input.direction)) throw new Error('Invalid original metadata')
+      || typeof input.conversationKey !== 'string' || !['input', 'output'].includes(input.direction)
+      || (input.messageId !== undefined && (typeof input.messageId !== 'string' || typeof input.messageKey !== 'string'))) throw new Error('Invalid original metadata')
     const reference = getChatStore().assets.beginAttachment(profile, input)
-    if (reference.status === 'saved' || reference.status === 'reused') return { id: reference.id, saved: true }
     if (owners.has(reference.id)) return { id: reference.id, busy: true }
     owners.set(reference.id, event.sender.id)
     const controller = new AbortController()
     controllers.set(reference.id, controller)
     try {
+      if (reference.sha256) {
+        let verifiedSize: number | undefined
+        try { const file = await vault.verify(reference.sha256, reference.size); verifiedSize = reference.size ?? (await stat(file)).size } catch {}
+        controller.signal.throwIfAborted()
+        own(event, reference.id)
+        if (verifiedSize !== undefined) {
+          if (!['saved', 'reused'].includes(reference.status) || reference.size === undefined) {
+            getChatStore().assets.attachmentSaved(reference.id, reference.sha256, verifiedSize, true)
+            broadcast(profile.id)
+          }
+          owners.delete(reference.id); controllers.delete(reference.id)
+          return { id: reference.id, saved: true }
+        }
+        getChatStore().assets.attachmentFailed(reference.id, '原件无法读取或校验失败，正在重新收纳')
+        broadcast(profile.id)
+      }
       await vault.begin(reference.id)
       controller.signal.throwIfAborted()
       own(event, reference.id)
       getChatStore().assets.attachmentPending(reference.id)
       return { id: reference.id, saved: false }
     } catch (error) {
-      await vault.abort(reference.id)
+      if (controllers.get(reference.id) === controller) {
+        await vault.abort(reference.id)
+      }
       if (controllers.get(reference.id) === controller) {
         owners.delete(reference.id); controllers.delete(reference.id)
         getChatStore().assets.attachmentFailed(reference.id, String(error))
@@ -152,14 +186,14 @@ export function registerAiAssetIpc(): void {
     const controller = controllers.get(id)!
     try {
       if (!Number.isSafeInteger(size) || size < 0) throw new Error('Invalid original size')
-      const original = await vault.finish(id, size)
+      const original = await vault.finish(id, size, getChatStore().assets.getAttachment(id)?.sha256)
       controller.signal.throwIfAborted()
       own(event, id)
       getChatStore().assets.attachmentSaved(id, original.sha256, original.size, original.reused)
       broadcast(profile.id)
       return { ok: true }
     } catch (error) {
-      await vault.abort(id)
+      if (controllers.get(id) === controller) await vault.abort(id)
       if (controllers.get(id) === controller) getChatStore().assets.attachmentFailed(id, String(error))
       broadcast(profile.id)
       throw error
@@ -167,7 +201,10 @@ export function registerAiAssetIpc(): void {
   })
   ipcMain.handle(ipc.ASSET_ATTACHMENT_FAIL, async (event, id: string, error: string) => {
     const profile = own(event, id)
-    await vault.abort(id); owners.delete(id); controllers.delete(id)
+    const controller = controllers.get(id)!
+    await vault.abort(id)
+    if (controllers.get(id) !== controller) return
+    owners.delete(id); controllers.delete(id)
     getChatStore().assets.attachmentFailed(id, typeof error === 'string' ? error : '原件获取失败')
     broadcast(profile.id)
   })
@@ -184,31 +221,34 @@ export function registerAiAssetIpc(): void {
       try {
         for (;;) {
           const part = await reader.read()
+          controller.signal.throwIfAborted()
           if (part.done) break
           await vault.append(id, offset, part.value)
           offset += part.value.byteLength
         }
       } finally { reader.releaseLock() }
-      const original = await vault.finish(id, offset)
+      controller.signal.throwIfAborted()
+      const original = await vault.finish(id, offset, getChatStore().assets.getAttachment(id)?.sha256)
       controller.signal.throwIfAborted()
       own(event, id)
       getChatStore().assets.attachmentSaved(id, original.sha256, original.size, original.reused)
       broadcast(profile.id)
       return { ok: true }
     } catch (error) {
-      await vault.abort(id)
+      if (controllers.get(id) === controller) await vault.abort(id)
       if (controllers.get(id) === controller) getChatStore().assets.attachmentFailed(id, String(error))
       broadcast(profile.id)
       return { ok: false, error: String(error) }
     } finally { if (controllers.get(id) === controller) { owners.delete(id); controllers.delete(id) } }
   })
-  ipcMain.handle(ipc.ASSET_ATTACHMENT_ASSOCIATE, (event, observation: AssetObservation, key: string, ids: string[]) => {
+  ipcMain.handle(ipc.ASSET_ATTACHMENT_ASSOCIATE, (event, observation: AssetObservation, key: string, ids: string[], messageId?: string) => {
     const profile = source(event)
-    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Invalid attachment references')
-    getChatStore().assets.associateAttachments(profile.id, observation, key, ids)
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string') || (messageId !== undefined && typeof messageId !== 'string')) throw new Error('Invalid attachment references')
+    getChatStore().assets.associateAttachments(profile.id, observation, key, ids, messageId)
     broadcast(profile.id)
   })
   ipcMain.handle(ipc.ASSET_DETAILS, (event, id: string) => { local(event); return getChatStore().assets.details(id) })
+  ipcMain.handle(ipc.ASSET_COLLECTION_ISSUES, event => { local(event); return [...collectionIssues.values()] })
   ipcMain.handle(ipc.ASSET_FOCUS_PAGE, (event, id: number) => {
     local(event)
     if (!guests.has(id)) return false
@@ -265,12 +305,21 @@ export function registerAiAssetIpc(): void {
   ipcMain.handle(ipc.ASSET_ATTACHMENTS, (event, id?: string) => { local(event); return getChatStore().assets.attachments(id) })
   ipcMain.handle(ipc.ASSET_SUGGESTIONS, event => { local(event); return getChatStore().assets.suggestions() })
   ipcMain.handle(ipc.ASSET_SEARCH, (event, query: string) => { local(event); return getChatStore().assets.searchConversations(query) })
+  const verifiedAttachment = async (id: string) => {
+    const item = getChatStore().assets.getAttachment(id)
+    if (!item?.sha256) throw new Error('原件尚未收纳')
+    try { return { item, file: await vault.verify(item.sha256, item.size) } }
+    catch {
+      const message = '原件无法读取或校验失败，请重试收纳'
+      getChatStore().assets.attachmentFailed(item.id, message)
+      broadcast(item.sourceId)
+      throw new Error(message)
+    }
+  }
   ipcMain.handle(ipc.ASSET_ATTACHMENT_OPEN, async (event, id: string) => {
     local(event)
     try {
-      const item = getChatStore().assets.getAttachment(id)
-      if (!item?.sha256 || !['saved', 'reused'].includes(item.status)) throw new Error('原件尚未收纳')
-      const file = await vault.verify(item.sha256, item.size)
+      const { file } = await verifiedAttachment(id)
       shell.showItemInFolder(file)
       return { ok: true }
     } catch (error) { return { ok: false, error: String(error) } }
@@ -278,9 +327,7 @@ export function registerAiAssetIpc(): void {
   ipcMain.handle(ipc.ASSET_ATTACHMENT_EXPORT, async (event, id: string) => {
     local(event)
     try {
-      const item = getChatStore().assets.getAttachment(id)
-      if (!item?.sha256) throw new Error('原件尚未收纳')
-      const file = await vault.verify(item.sha256, item.size)
+      const { item, file } = await verifiedAttachment(id)
       const result = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender)!, {
         title: '导出资料原件', defaultPath: path.basename(item.name).replace(/[<>:"/\\|?*]/g, '_'),
       })

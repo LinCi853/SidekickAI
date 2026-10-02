@@ -9,6 +9,8 @@ export const IPC_CHANNELS = {
   VOICE_RECORD_READY: 'voice:recordReady',
   ASSET_AUTHORIZE: 'ai-assets:authorize',
   ASSET_OBSERVE: 'ai-assets:observe',
+  ASSET_COLLECTION_ISSUES: 'ai-assets:collection-issues',
+  ASSET_COLLECTION_ISSUES_CHANGED: 'ai-assets:collection-issues-changed',
   ASSET_DETAILS: 'ai-assets:details',
   ASSET_USAGE: 'ai-assets:usage',
   ASSET_GRAPH: 'ai-assets:graph',
