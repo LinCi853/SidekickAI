@@ -16,12 +16,14 @@ export interface TabContextMenuParams {
   closeTab: (tabId: string) => void;
   updateTabUrl: (tabId: string, url: string) => void;
   updateTabHomeUrl: (tabId: string, url: string) => void;
+  updateProfile: (profileId: string, patch: Partial<Profile>) => Promise<Profile>;
+  onHomeFeedback: (message: string) => void;
   /** 查询指定标签的 webview 是否 dom-ready（用于刷新时判断走 reload 还是 loadURL 恢复） */
   isTabDomReady?: (tabId: string) => boolean;
 }
 
 export function useTabContextMenu(params: TabContextMenuParams) {
-  const { tabs, getProfile, closeTab, updateTabUrl, updateTabHomeUrl, isTabDomReady } = params;
+  const { tabs, getProfile, closeTab, updateTabUrl, updateTabHomeUrl, updateProfile, onHomeFeedback, isTabDomReady } = params;
 
   const [contextMenuTabId, setContextMenuTabId] = useState<string | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -96,20 +98,38 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     rightTabs.forEach((t) => void closeTab(t.id));
   }, [tabs, closeTab]);
 
-  // 设为 AI 首页（仅修改当前标签的首页地址，不影响全局 profile）
+  // AI application homes share the URL used by the configuration editor.
   const setAsAIHome = useCallback(async (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;
     const profile = getProfile(tab.profileId);
     if (!profile) return;
-    const currentUrl = tab.url || profile.aiPlatformUrl;
-    if (!currentUrl) return;
+    let currentUrl = tab.url || profile.aiPlatformUrl || '';
+    const webview = document.querySelector(`webview[data-tab-id="${tabId}"]`) as WebviewElement | null;
     try {
-      await updateTabHomeUrl(tabId, currentUrl);
+      currentUrl = webview?.getURL() || currentUrl;
+    } catch { /* Use the last known tab URL when the guest is unavailable. */ }
+    currentUrl = sanitizeUrl(currentUrl);
+    if (profile.isAIPlatform) {
+      try {
+        if (!['http:', 'https:'].includes(new URL(currentUrl).protocol)) throw new Error('Unsupported homepage protocol');
+      } catch {
+        onHomeFeedback('当前页面不是有效的网页地址');
+        return;
+      }
+    } else if (!currentUrl) return;
+    try {
+      if (profile.isAIPlatform) {
+        await updateProfile(profile.id, { aiPlatformUrl: currentUrl });
+        onHomeFeedback('已设为当前 AI 首页');
+      } else {
+        await updateTabHomeUrl(tabId, currentUrl);
+      }
     } catch (e) {
-      console.error('[MainView] 设为AI首页失败:', e);
+      console.error('[MainView] Saving the homepage failed:', e);
+      onHomeFeedback('设置首页失败，请重试');
     }
-  }, [tabs, getProfile, updateTabHomeUrl]);
+  }, [tabs, getProfile, updateTabHomeUrl, updateProfile, onHomeFeedback]);
 
   // 配置此 AI 应用：打开 AI 应用编辑器（按 profileId 精确定位，支持同一平台多实例）
   const configureApp = useCallback((tabId: string) => {

@@ -75,7 +75,9 @@ export function useNavigation(
     const tab = tabs.find((t) => t.id === activeTabId);
     if (!tab) return;
     const profile = profiles.find((p) => p.id === tab.profileId);
-    let homeUrl = tab.homeUrl || profile?.aiPlatformUrl || tab.url;
+    let homeUrl = profile?.isAIPlatform
+      ? profile.aiPlatformUrl || tab.homeUrl || tab.url
+      : tab.homeUrl || profile?.aiPlatformUrl || tab.url;
     if (!homeUrl && profile?.aiPlatformId) {
       const preset = getPresetAIPlatforms().find((p) => p.id === profile.aiPlatformId);
       if (preset) homeUrl = preset.url;

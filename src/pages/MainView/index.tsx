@@ -58,6 +58,7 @@ import { useFileDragDrop } from './hooks/useFileDragDrop';
 import { useTabDragSort } from './hooks/useTabDragSort';
 import { useWindowMinWidth } from './hooks/useWindowMinWidth';
 import { useOxyTheme } from './hooks/useOxyTheme';
+import { useToast } from '../../hooks/useToast';
 import { formatWindowTitle } from '../../lib/window-title';
 
 export default function MainView() {
@@ -89,6 +90,7 @@ export default function MainView() {
 
   const profiles = useProfileStore((s) => s.profiles);
   const updateProfile = useProfileStore((s) => s.updateProfile);
+  const { toast: homepageToast, showToast: showHomepageToast } = useToast(3000);
   const updateProfileUaLockMode = useProfileStore((s) => s.updateProfileUaLockMode);
 
   // D3: 监听 AI 输入框聚焦触发器（标签迁回主窗口时触发）
@@ -397,8 +399,12 @@ export default function MainView() {
     closeTab,
     updateTabUrl,
     updateTabHomeUrl,
+    updateProfile,
+    onHomeFeedback: showHomepageToast,
     isTabDomReady: (tabId: string) => tabId === activeTabId ? activeTabDomReadyRef.current : true,
   });
+
+  const statusToast = homepageToast ?? downloadToast;
 
   return (
     <>
@@ -587,7 +593,7 @@ export default function MainView() {
 
         <FileDropOverlay visible={isDragOver} />
 
-        {downloadToast && (
+        {statusToast && (
           <div
             role="status"
             aria-live="polite"
@@ -608,7 +614,7 @@ export default function MainView() {
               pointerEvents: 'none',
             }}
           >
-            {downloadToast}
+            {statusToast}
           </div>
         )}
 
