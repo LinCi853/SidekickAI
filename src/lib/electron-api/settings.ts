@@ -178,6 +178,10 @@ export async function openDownloadDir(): Promise<void> {
   return api.appSettings.openDownloadDir();
 }
 
+export async function openLogsFolder(): Promise<void> {
+  return requireElectron().appSettings.openLogsFolder();
+}
+
 /** 读取拖拽文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容） */
 export async function dropFiles(
   filePaths: string[],

@@ -292,17 +292,17 @@ export default function PromptLibraryView({ embedded = false, query = '' }: { em
           />
           <div className="prompt-editor-footer" data-name="prompts.editor-footer">
             {editor.editing ? (
-              <Button type="button" variant="danger" className="prompt-btn danger" onClick={handleDelete} data-name="prompts.editor-delete-button">
+              <Button type="button" variant="danger" onClick={handleDelete} data-name="prompts.editor-delete-button">
                 删除
               </Button>
             ) : (
               <span data-name="prompts.editor-footer-spacer" />
             )}
             <div className="prompt-editor-actions" data-name="prompts.editor-actions">
-              <Button type="button" variant="outline" className="prompt-btn" onClick={() => setEditor(EMPTY_EDITOR)} data-name="prompts.editor-cancel-button">
+              <Button type="button" variant="outline" onClick={() => setEditor(EMPTY_EDITOR)} data-name="prompts.editor-cancel-button">
                 取消
               </Button>
-              <Button type="button" variant="primary-compact" className="prompt-btn primary" onClick={() => void handleSave()} data-name="prompts.editor-save-button">
+              <Button type="button" variant="primary-compact" onClick={() => void handleSave()} data-name="prompts.editor-save-button">
                 保存
               </Button>
             </div>

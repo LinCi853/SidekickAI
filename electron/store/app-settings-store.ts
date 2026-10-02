@@ -17,6 +17,7 @@ import { isPortableMode, getStoreCwd } from './store-paths.js'
 import { getAppSettingsTable } from './module-state-store.js'
 import { getHotkeyManagerInstance } from '../hotkey/manager.js'
 import { getDefaultAppSettings, type DefaultAppSettings } from './default-config.js'
+import { openActivityLogFolder } from './activity-log-export.js'
 
 // ===== SQLite 持久化（settings.db / app_settings 表） =====
 
@@ -556,6 +557,12 @@ export function registerAppSettingsIPC(): void {
     } catch (err) {
       console.error('[app-settings] 打开下载目录失败:', err)
     }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, async () => {
+    const { getChatStore } = await import('./chat-store.js')
+    await openActivityLogFolder(app.getPath('userData'), () => getChatStore().activityLogRecords(),
+      directory => shell.openPath(directory))
   })
 
   // 文件拖拽导入：读取文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容）

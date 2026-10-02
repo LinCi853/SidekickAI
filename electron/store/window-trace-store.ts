@@ -77,6 +77,11 @@ export class WindowTraceStore {
     return rows.map(rowToWindowTrace)
   }
 
+  listAllWindowTraces(): WindowTrace[] {
+    const rows = this.db.prepare('SELECT * FROM window_traces ORDER BY timestamp DESC, rowid DESC').all() as WindowTraceRow[]
+    return rows.map(rowToWindowTrace)
+  }
+
   /** 清空窗口操作痕迹（可选按 windowId 过滤），返回删除的行数 */
   clearWindowTraces(windowId?: string): number {
     if (windowId) {

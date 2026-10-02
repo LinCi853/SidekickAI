@@ -34,12 +34,12 @@ export default function AssetSettingsPanel({ freezeTarget }: { freezeTarget?: { 
     <label><input type="checkbox" checked={settings.expandReasoning} onChange={event => void update({ expandReasoning: event.target.checked })} />默认展开思考</label>
     <label>修订显示 <select aria-label="修订显示" value={settings.revisionDisplay} onChange={event => void update({ revisionDisplay: event.target.value as typeof settings.revisionDisplay })}>
       <option value="history">完整历史</option><option value="diff">修订差异</option></select></label>
-    <fieldset><legend>全局快捷键</legend><label>打开／关闭 AI资产 <input aria-label="打开／关闭 AI资产快捷键" placeholder="默认不绑定，如 Ctrl+Alt+A" value={globalDraft} onChange={event => setGlobalDraft(event.target.value)} /></label>
+    <fieldset><legend>全局快捷键</legend><label>打开／关闭 AI资产 <input aria-label="打开／关闭 AI资产快捷键" placeholder="未绑定" value={globalDraft} onChange={event => setGlobalDraft(event.target.value)} /></label>
       <Button variant="outline" onClick={() => void run(async () => { if (!await api.hotkey.set('toggleAiAssets', globalDraft.trim())) throw new Error('快捷键未注册，请选择其他组合'); })}>保存全局快捷键</Button>
       <label><input type="checkbox" checked={hotkey?.enabled ?? false} disabled={!hotkey?.accelerator} onChange={event => void run(() => api.hotkey.setEnabled('toggleAiAssets', event.target.checked))} />启用全局快捷键</label>
       {hotkey?.registrationReason && <p role="status">{hotkey.registrationReason}</p>}
     </fieldset>
-    <fieldset><legend>资产窗口内快捷键</legend>
+    <fieldset><legend>AI资产窗口内快捷键</legend>
       {(Object.keys(ASSET_SHORTCUT_LABELS) as Array<keyof typeof drafts>).map(key => <label key={key}>{ASSET_SHORTCUT_LABELS[key]}<input aria-label={`${ASSET_SHORTCUT_LABELS[key]}快捷键`} value={drafts[key]} onChange={event => setDrafts({ ...drafts, [key]: event.target.value })} /></label>)}
       <Button variant="outline" onClick={() => void update({ localShortcuts: drafts })}>保存局部快捷键</Button>
     </fieldset>

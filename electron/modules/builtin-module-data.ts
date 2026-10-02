@@ -52,7 +52,7 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     testBadge: false,
     defaultEnabled: true,
     dependencies: [],
-    entries: ['进阶面板「笔记」标签页', '笔记「发送到 AI」', '笔记「存为提示词」（提示词库启用时）'],
+    entries: ['进阶面板「笔记」标签页', '笔记「发送到 AI」', '笔记「存为提示词」（AI资产启用时）'],
     hotkeys: [],
   },
   {

@@ -72,7 +72,7 @@ export default function ModuleManagementSection() {
           {m.testBadge && (
             <span className="module-test-badge" data-name="settings.modules.test-badge">测试</span>
           )}
-          {m.id === 'prompt-library' && m.installed && <details className="module-asset-settings"><summary>资产设置</summary><AssetSettingsPanel /></details>}
+          {m.id === 'prompt-library' && m.installed && <details className="module-asset-settings"><summary>AI资产设置</summary><AssetSettingsPanel /></details>}
       {!m.installed && (
             <span className="module-missing-badge" data-name="settings.modules.missing-badge">未安装</span>
           )}
@@ -150,7 +150,7 @@ export default function ModuleManagementSection() {
         open={pendingClear !== null}
         title="清除模块数据"
         message={pendingClear?.id === 'prompt-library'
-          ? '请先关闭 AI资产，并结束 API 响应、文件导入和原件传输。将清除所有网页/API 对话、修订、文本用量、资料原件、提示词和注入记录（不可恢复）；保留账号与供应商配置、笔记、白板、浏览器历史和日志中心。确认清除？'
+          ? '请先关闭 AI资产，并结束 API 响应、文件导入和原件传输。将清除所有网页/API 对话、修订、文本用量、资料原件、提示词和注入记录（不可恢复）；保留账号与供应商配置、笔记、白板、浏览器历史和日志。确认清除？'
           : '清除「' + (pendingClear?.name ?? '') + '」该模块所有数据（不可恢复）？'}
         variant="danger"
         confirmLabel="清除"

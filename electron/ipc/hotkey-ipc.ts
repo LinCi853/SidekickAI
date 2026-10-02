@@ -151,14 +151,19 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   }
 
   const notifyConfiguration = () => broadcastToAllWindows(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, hotkeyManager.getAllHotkeys())
+  const unregisterAssetShortcut = () => {
+    const accelerator = hotkeyManager.getActionAccelerator('toggleAiAssets')
+    if (accelerator && !hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) hotkeyManager.unregister(accelerator)
+  }
   const syncAssetShortcut = () => {
     const accelerator = hotkeyManager.getActionAccelerator('toggleAiAssets')
+    if (hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) { notifyConfiguration(); return }
     if (!isModuleEnabled('prompt-library') || !hotkeyManager.getEnabled('toggleAiAssets') || !accelerator) {
-      if (accelerator) hotkeyManager.unregister(accelerator)
+      unregisterAssetShortcut()
     } else if (!hotkeyManager.isRegistered(accelerator)) {
       void hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets).then(ok => {
         if (!isModuleEnabled('prompt-library') || !hotkeyManager.getEnabled('toggleAiAssets') || accelerator !== hotkeyManager.getHotkey('toggleAiAssets')) {
-          if (ok) hotkeyManager.unregister(accelerator)
+          if (ok && !hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) hotkeyManager.unregister(accelerator)
         } else if (ok) hotkeyManager.recordActionAccelerator('toggleAiAssets', accelerator)
         notifyConfiguration()
       })
@@ -185,12 +190,11 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   })
   handle(IPC_CHANNELS.HOTKEY_SET, async (_e: unknown, action: HotkeyAction, accelerator: string) => {
     if (!(action in hotkeyCallbacks) || typeof accelerator !== 'string') throw new Error('Invalid shortcut')
+    if (hotkeyManager.getConflictingAction(action, accelerator)) throw new Error('快捷键与其他操作重复')
     if (action === 'toggleAiAssets') {
       validateAssetAccelerator(accelerator)
-      if (accelerator && Object.values(getAssetSettings().localShortcuts).some(value => normalizeAssetAccelerator(value) === normalizeAssetAccelerator(accelerator))) throw new Error('全局快捷键与资产窗口内的快捷键重复')
-      const oldAccelerator = hotkeyManager.getActionAccelerator(action)
-      if (accelerator && hotkeyManager.getAllHotkeys().some(config => config.action !== action && normalizeAssetAccelerator(config.accelerator) === normalizeAssetAccelerator(accelerator))) throw new Error('快捷键与其他操作重复')
-      if (oldAccelerator) hotkeyManager.unregister(oldAccelerator)
+      if (accelerator && Object.values(getAssetSettings().localShortcuts).some(value => normalizeAssetAccelerator(value) === normalizeAssetAccelerator(accelerator))) throw new Error('全局快捷键与 AI资产窗口内的快捷键重复')
+      unregisterAssetShortcut()
       if (!accelerator || !isModuleEnabled('prompt-library')) {
         hotkeyManager.setHotkey(action, accelerator)
         hotkeyManager.recordActionAccelerator(action, accelerator)
@@ -227,6 +231,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
         hotkeyManager.setEnabled('backgroundVoice', true)
       }
       console.log(`[main] backgroundVoice 热键已更新为 ${accelerator}`)
+      syncAssetShortcut()
       notifyConfiguration()
       return true
     }
@@ -250,6 +255,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       await hotkeyManager.register(oldAcc, cb)
       hotkeyManager.recordActionAccelerator(action, oldAcc)
     }
+    if (ok) syncAssetShortcut()
     notifyConfiguration()
     return ok
   })
@@ -261,6 +267,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       if (!(action in hotkeyCallbacks)) throw new Error('Invalid shortcut action')
       if (action === 'toggleAiAssets') {
         if (enabled && !hotkeyManager.getHotkey(action)) throw new Error('请先设置快捷键')
+        if (enabled && hotkeyManager.getConflictingAction(action)) throw new Error('快捷键与其他操作重复')
         hotkeyManager.setEnabled(action, enabled); syncAssetShortcut(); notifyConfiguration(); return
       }
       const prevEnabled = hotkeyManager.getEnabled(action)

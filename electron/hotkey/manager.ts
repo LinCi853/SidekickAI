@@ -33,6 +33,7 @@ import { HotkeyInputState } from './input-state.js'
 import { dispatchBrowserHotkeyFallback } from '../utils/browser-hotkey-fallback.js'
 import { checkAccessibilityPermission } from '../utils/permission-manager.js'
 import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
+import { normalizeAssetAccelerator } from '../shared/asset-settings.js'
 import { UiohookKey, EventType, uIOhook, getUiohookAvailability } from './uiohook.js'
 import { parseAccelerator } from './accelerator.js'
 import { classifyCloudPcKey } from './cloud-pc-keys.js'
@@ -598,17 +599,28 @@ export class HotkeyManager {
     hotkeyStore.set(enabledStoreKey(action), enabled)
   }
 
+  getConflictingAction(action: HotkeyAction, accelerator = this.getHotkey(action)): HotkeyAction | undefined {
+    if (!accelerator) return undefined
+    const normalized = normalizeAssetAccelerator(accelerator)
+    return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).find(other => other !== action
+      && normalizeAssetAccelerator(this.getHotkey(other)) === normalized)
+  }
+
   /** 获取全部内置热键配置（供 UI 展示，含 enabled 状态） */
   getAllHotkeys(): HotkeyConfig[] {
     return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).map((action) => {
       const acc = this.getHotkey(action)
+      const conflict = action === 'toggleAiAssets' ? this.getConflictingAction(action, acc) : undefined
+      const registration = conflict ? 'conflict' : this.registrationStates.get(acc)
       return {
         action,
         label: HOTKEY_LABELS[action],
         accelerator: acc,
         enabled: this.getEnabled(action),
-        registration: this.getEnabled(action) ? this.registrationStates.get(acc) : undefined,
-        registrationReason: this.getEnabled(action) ? this.registrationReason(this.registrationStates.get(acc)) : undefined,
+        registration: this.getEnabled(action) ? registration : undefined,
+        registrationReason: this.getEnabled(action) ? conflict
+          ? `与「${HOTKEY_LABELS[conflict]}」快捷键重复，请为 AI资产设置独立组合。`
+          : this.registrationReason(registration) : undefined,
       }
     })
   }

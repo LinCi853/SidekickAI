@@ -1,6 +1,4 @@
-/* =====================================================================
-   全局样式与重置（从 showcase.html 移植）
-   ===================================================================== */
+/* Global styles and resets. */
 @import './design-tokens.css';
 @import './forms.css';
 @import './cards.css';
@@ -91,54 +89,51 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   background: linear-gradient(90deg, transparent, var(--accent-50), transparent);
 }
 
-/* ===== 按钮 ===== */
+/* Shared action buttons. */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  padding: var(--space-2-5) var(--space-5);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  padding: 6px 14px;
   font-family: var(--font-sans);
-  font-size: var(--text-md);
-  font-weight: 500;
-  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
   user-select: none;
   white-space: nowrap;
 }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
-  color: var(--accent-bright-foreground);
-  box-shadow: 0 2px 12px var(--accent-50);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
-.btn-primary:hover {
-  background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim));
-  box-shadow: 0 4px 20px var(--accent-75);
-  transform: translateY(-1px);
+.btn-primary:hover:not(:disabled) {
+  border-color: currentColor;
 }
 .btn-ghost {
   background: var(--glass-bg-2);
   border-color: var(--glass-bd-2);
   color: var(--foreground);
 }
-.btn-ghost:hover {
+.btn-ghost:hover:not(:disabled) {
   background: var(--accent-10);
   border-color: var(--accent-25);
   color: var(--accent-bright);
 }
 
-/* ===== Button 变体扩展（替代页面重复按钮定义） ===== */
-/* danger 变体（替代 .prompt-btn.danger / .voice-download-btn.fail） */
+/* Destructive actions retain a warning color without extra emphasis. */
 .btn-danger {
-  background: var(--danger);
-  color: var(--destructive-foreground);
-  box-shadow: 0 2px 12px var(--danger-bg);
+  background: transparent;
+  color: color-mix(in srgb, var(--destructive) 60%, var(--foreground));
+  border-color: var(--danger-bd);
 }
-.btn-danger:hover {
-  background: var(--destructive);
-  box-shadow: 0 4px 20px var(--danger-bg);
-  transform: translateY(-1px);
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-bg-soft);
 }
-.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 /* link 变体（替代 .voice-uninstall-link-btn / .hotkey-shortcuts-link） */
 .btn-link {

@@ -26,7 +26,6 @@ import SettingsPanelShell from './SettingsPanelShell';
 import AppearanceSection from './sections/AppearanceSection';
 import GeneralSection from './sections/GeneralSection';
 import HotkeySection from './sections/HotkeySection';
-import LogCenterSection from './sections/LogCenterSection';
 import AboutSection from './sections/AboutSection';
 import ModuleManagementSection from './sections/ModuleManagementSection';
 import DeveloperOptionsSection from './sections/DeveloperOptionsSection';
@@ -269,7 +268,6 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
       />
 
-      <LogCenterSection collapsible />
       <AboutSection />
     </SettingsPanelShell>
   );

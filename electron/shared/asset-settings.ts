@@ -5,7 +5,7 @@ export const DEFAULT_ASSET_SETTINGS: AssetSettings = {
   localShortcuts: { search: 'Ctrl+F', conversations: 'Ctrl+1', prompts: 'Ctrl+2', files: 'Ctrl+3', freeze: 'Alt+P', previousBranch: 'Alt+Left', nextBranch: 'Alt+Right' },
 }
 export const ASSET_SHORTCUT_LABELS: Record<keyof AssetSettings['localShortcuts'], string> = {
-  search: '搜索资产', conversations: '切到对话', prompts: '切到提示词', files: '切到资料', freeze: '页面冻结控制', previousBranch: '上一个分支', nextBranch: '下一个分支',
+  search: '搜索 AI资产', conversations: '切到对话', prompts: '切到提示词', files: '切到资料', freeze: '页面冻结控制', previousBranch: '上一个分支', nextBranch: '下一个分支',
 }
 export function normalizeAssetAccelerator(value: string): string {
   return normalizeAccelerator(value.replace(/(?:CommandOrControl|Control)(?=\+)/gi, 'Ctrl')
@@ -18,14 +18,14 @@ export function validateAssetAccelerator(value: string): void {
 }
 export function mergeAssetSettings(current: AssetSettings, changes: Partial<AssetSettings>): AssetSettings {
   const next = { ...current, ...changes, localShortcuts: { ...current.localShortcuts, ...changes.localShortcuts } }
-  if (!['recent', 'views'].includes(next.sort) || typeof next.expandReasoning !== 'boolean' || !['history', 'diff'].includes(next.revisionDisplay)) throw new Error('资产设置无效')
+  if (!['recent', 'views'].includes(next.sort) || typeof next.expandReasoning !== 'boolean' || !['history', 'diff'].includes(next.revisionDisplay)) throw new Error('AI资产设置无效')
   const used = new Set<string>()
   for (const name of Object.keys(DEFAULT_ASSET_SETTINGS.localShortcuts) as Array<keyof AssetSettings['localShortcuts']>) {
     const value = next.localShortcuts[name]
     validateAssetAccelerator(value)
     if (!value) continue
     const key = normalizeAssetAccelerator(value)
-    if (used.has(key)) throw new Error('资产快捷键不能重复')
+    if (used.has(key)) throw new Error('AI资产快捷键不能重复')
     used.add(key)
   }
   return { sort: next.sort, expandReasoning: next.expandReasoning, revisionDisplay: next.revisionDisplay, localShortcuts: next.localShortcuts }

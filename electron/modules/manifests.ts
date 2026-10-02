@@ -67,8 +67,8 @@ const WIRING: Record<
     teardown: teardownPromptLibraryModule,
     clearData: clearPromptLibraryData,
     capabilities: [
-      { ownerModule: 'prompt-library', capabilityId: 'prompt.ipc', kind: 'ipc', scope: 'global', trigger: 'startup', reversible: true, description: '提示词库 IPC 通道' },
-      { ownerModule: 'prompt-library', capabilityId: 'prompt.window', kind: 'window', scope: 'global', trigger: 'user-command', reversible: true, description: '提示词库窗口' },
+      { ownerModule: 'prompt-library', capabilityId: 'prompt.ipc', kind: 'ipc', scope: 'global', trigger: 'startup', reversible: true, description: 'AI资产 IPC 通道' },
+      { ownerModule: 'prompt-library', capabilityId: 'prompt.window', kind: 'window', scope: 'global', trigger: 'user-command', reversible: true, description: 'AI资产窗口' },
       { ownerModule: 'prompt-library', capabilityId: 'prompt.injection', kind: 'webview-script', scope: 'document', trigger: 'user-command', reversible: false, description: '提示词注入到页面' },
     ],
   },

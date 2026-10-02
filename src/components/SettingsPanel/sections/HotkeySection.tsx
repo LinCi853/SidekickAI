@@ -108,6 +108,7 @@ export default function HotkeySection({
                   <input
                     type="checkbox"
                     checked={h.enabled}
+                    disabled={h.action === 'toggleAiAssets' && !h.accelerator}
                     onChange={(e) => {
                       void onToggleEnabled?.(h.action, e.target.checked);
                     }}
@@ -119,7 +120,7 @@ export default function HotkeySection({
               <div className="hotkey-input-row" data-name={`settings.hotkey.hotkey-item-${idx + 1}-input-row`}>
                 <HotkeyRecorder
                   value={draft}
-                  placeholder={h.accelerator || 'Alt+Space'}
+                  placeholder={h.accelerator || '未绑定'}
                   className="input-underline"
                   onRecord={(acc) => setDrafts((p) => ({ ...p, [h.action]: acc }))}
                   otherHotkeys={hotkeys

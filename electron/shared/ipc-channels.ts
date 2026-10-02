@@ -271,6 +271,7 @@ export const IPC_CHANNELS = {
   APP_SELECT_DOWNLOAD_DIR: 'app:selectDownloadDir',
   // 打开下载目录（在系统文件管理器中打开）
   APP_OPEN_DOWNLOAD_DIR: 'app:openDownloadDir',
+  APP_OPEN_LOGS_FOLDER: 'app:openLogsFolder',
   // 主→渲染：下载完成通知（filename + path）
   APP_DOWNLOAD_DONE: 'app:downloadDone',
   // 渲染→主：webview 文件拖拽导入（传递文件路径数组，返回 data URL 数组）

@@ -204,6 +204,8 @@ export interface AppSettingsAPI {
   selectDownloadDir(): Promise<string | null>
   /** 在系统文件管理器中打开下载目录 */
   openDownloadDir(): Promise<void>
+  /** Export activity records and open the application logs folder. */
+  openLogsFolder(): Promise<void>
   /** 读取拖拽文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容） */
   dropFiles(filePaths: string[]): Promise<Array<{ filename: string; dataUrl: string; mime: string; size: number }>>
   /** 监听下载完成事件（主进程 → 渲染层：filename + path） */

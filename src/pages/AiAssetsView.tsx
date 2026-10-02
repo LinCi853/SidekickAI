@@ -118,7 +118,7 @@ export default function AiAssetsView() {
     setNotice('已保存为提示词，可在提示词分类中编辑和调用');
   };
   return <><WindowResizeHandles /><div className="assets-view app-shell app-view-root" data-name="assets.container">
-    <StandaloneWindowHeader title="AI资产" dataNamePrefix="assets.topbar" leading={<span className="asset-window-title">AI资产</span>} onOpenSettings={() => setSettingsOpen(true)} center={<nav className="asset-categories" aria-label="资产分类">
+    <StandaloneWindowHeader title="AI资产" dataNamePrefix="assets.topbar" leading={<span className="asset-window-title">AI资产</span>} onOpenSettings={() => setSettingsOpen(true)} center={<nav className="asset-categories" aria-label="AI资产分类">
       {([['conversations', '对话'], ['prompts', '提示词'], ['files', '资料']] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={category === id} className={category === id ? 'active' : ''} onClick={() => { setCategory(id); setQuery(''); }}>{label}</button>)}
     </nav>} />
     <div className="assets-tools"><input ref={searchRef} className="asset-search" aria-label="搜索 AI资产" placeholder="搜索对话、提示词和资料" value={query} onChange={event => setQuery(event.target.value)} /><Button variant="outline" onClick={() => void run(refresh)}>刷新</Button></div>

@@ -40,6 +40,7 @@ import { ConversationStore } from './conversation-store.js'
 import { UsageTraceStore } from './usage-trace-store.js'
 import { AiAssetsStore } from './ai-assets-store.js'
 import { exportAssetConversation } from '../assets/conversation-export.js'
+import type { ActivityLogRecords } from './activity-log-export.js'
 
 /**
  * 对话 SQLite 持久化存储（facade）
@@ -405,6 +406,18 @@ export class ChatStore {
 
   listLoginTraces(profileId?: string): LoginTrace[] {
     return this.loginTraces.listLoginTraces(profileId)
+  }
+
+  activityLogRecords(): ActivityLogRecords {
+    return this.db.transaction(() => ({
+      loginRecords: this.loginTraces.listLoginTraces().map(record => ({
+        id: record.id, profileId: record.profileId, platform: record.platform,
+        loginUrl: record.loginUrl, loginTime: record.loginTime,
+      })),
+      windowRecords: this.windowTraces.listAllWindowTraces().map(record => ({
+        id: record.id, windowId: record.windowId, action: record.action, timestamp: record.timestamp,
+      })),
+    }))()
   }
 
   /** 清空登录痕迹（可选按 profileId 过滤），返回删除的行数 */
