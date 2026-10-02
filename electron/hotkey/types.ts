@@ -6,6 +6,7 @@ export type HotkeyAction =
   | 'toggleDetachedWindows'
   | 'backgroundVoice'
   | 'toggleVoice'
+  | 'toggleAiAssets'
 
 /** 热键录制回调（主进程 → 渲染层：录制完成后通知） */
 export type HotkeyRecordingCallback = (result: { accelerator: string; reason?: string }) => void

@@ -20,6 +20,8 @@
   },
   "include": [
     "electron.vite.config.ts",
-    "scripts/compilation-inputs.ts"
+    "scripts/compilation-inputs.ts",
+    "scripts/excalidraw-clipboard-feedback.ts",
+    "scripts/excalidraw-feedback.test.ts"
   ]
 }

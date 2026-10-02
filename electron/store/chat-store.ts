@@ -262,7 +262,7 @@ export class ChatStore {
 
   /** 删除会话（消息级联删除由 FK ON DELETE CASCADE 处理，FTS 由 messages_ad 触发器自动清理） */
   deleteConversation(id: string): void {
-    this.conversations.deleteConversation(id)
+    this.assets.deleteConversation(id)
   }
 
   /** 清空所有对话（可选按 sourceId 过滤），返回删除的会话数） */
@@ -276,7 +276,7 @@ export class ChatStore {
 
   /** 列出会话消息（按时间升序） */
   listMessages(conversationId: string): ChatMessage[] {
-    return this.conversations.listMessages(conversationId)
+    return this.assets.displayMessages(this.conversations.listMessages(conversationId))
   }
 
   /** 保存单条消息 */
@@ -318,12 +318,12 @@ export class ChatStore {
 
   /** 删除单条消息 */
   deleteMessage(messageId: string): void {
-    this.conversations.deleteMessage(messageId)
+    this.assets.deleteMessage(messageId)
   }
 
   /** 7.1: 清理无效会话（缺失 provider/source 的脏数据），委托 ConversationStore */
   cleanupInvalidConversations(): { deletedCount: number } {
-    return this.conversations.cleanupInvalidConversations()
+    return this.assets.cleanupNoise()
   }
 
   // ===========================================================================
@@ -336,7 +336,7 @@ export class ChatStore {
    * @param format 'md' | 'json'
    */
   exportConversation(conversationId: string, format: 'md' | 'json'): string {
-    return exportAssetConversation(this.conversations.exportConversation(conversationId, format), format, conversationId, this.assets)
+    return exportAssetConversation(this.conversations.exportConversation(conversationId, 'json'), format, conversationId, this.assets)
   }
 
   /**
@@ -357,7 +357,7 @@ export class ChatStore {
         const parsed = JSON.parse(data)
         this.assets.importDetails(conversation.id, sourceId,
           (parsed.messages ?? []).filter((m: { role: string; content: unknown }) => ['user', 'assistant', 'system'].includes(m.role) && typeof m.content === 'string'),
-          parsed.attachments ?? [])
+          parsed.attachments ?? [], parsed.graph)
       }
       return conversation
     })()

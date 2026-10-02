@@ -1,7 +1,8 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetObservedMessage } from '../shared/ai-assets.types.js'
-import { readDomMessages } from './dom-messages.js'
+import { canonicalWebConversationUrl } from './conversation-identity.js'
+import { readDomConversation } from './dom-messages.js'
 
 export async function startAiAssetCollector(): Promise<void> {
   let cleanup: (() => void) | undefined
@@ -26,6 +27,10 @@ function collectAiAssets(): () => void {
   const documentKey = crypto.randomUUID()
   let lastLocation = ''
   let announcedLocation = ''
+  let visitId = crypto.randomUUID()
+  let lastSnapshot = ''
+  const suppressed = new Set<string>()
+  const rejectedSignatures = new Set<string>()
   let previous = new Map<string, AssetObservedMessage>()
   type Original = { input: AssetAttachmentInput; url?: string; blob?: Blob; id?: string; ready?: Promise<void> }
   const originals = new Map<string, Original>()
@@ -36,7 +41,7 @@ function collectAiAssets(): () => void {
   const context = () => {
     const url = location.href
     const stable = location.pathname !== '/' && location.pathname !== '/chat' && location.pathname !== '/app'
-    return { conversationKey: stable ? location.pathname + location.search + location.hash : `document:${documentKey}`,
+    return { conversationKey: stable ? canonicalWebConversationUrl(url)! : `document:${documentKey}`,
       title: document.title, url }
   }
   const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
@@ -69,20 +74,23 @@ function collectAiAssets(): () => void {
     }
   }
   const acquire = (input: AssetAttachmentInput, blob?: Blob) => {
+    if (suppressed.has(input.conversationKey)) return
     const key = `${input.conversationKey}\u0000${input.externalKey}`
     if (originals.has(key)) return
     const entry: Original = { input, blob, url: input.sourceUrl }
     originals.set(key, entry)
     entry.ready = queue.then(async () => {
+      if (suppressed.has(entry.input.conversationKey)) return
       const metadata = { ...entry.input }
       if (/^data:/.test(metadata.sourceUrl ?? '')) {
-        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(metadata.sourceUrl!))
+        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(metadata.externalKey))
         metadata.sourceUrl = '内联资料'
         metadata.externalKey = `${metadata.messageKey}:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`
       }
       entry.input = metadata
       return invoke(ipc.ASSET_ATTACHMENT_BEGIN, metadata)
     }).then(started => {
+      if (!started) return
       entry.id = started.id
       originalQueue = originalQueue.then(() => transfer(entry, started)).catch(error => console.warn('[ai-assets] Original transfer failed:', error))
     }).catch(error => console.warn('[ai-assets] Original metadata failed:', error))
@@ -92,20 +100,34 @@ function collectAiAssets(): () => void {
     if (stopped) return
     const source = context()
     const previousConversationKey = lastLocation.startsWith('document:') && !source.conversationKey.startsWith('document:') ? lastLocation : undefined
-    if (lastLocation !== source.conversationKey) { previous = new Map(); lastLocation = source.conversationKey }
-    const found = readDomMessages(document, location.hostname)
+    if (lastLocation !== source.conversationKey) {
+      previous = new Map(); lastLocation = source.conversationKey
+      visitId = crypto.randomUUID(); lastSnapshot = ''
+    }
+    const snapshot = readDomConversation(document, location.hostname)
+    const found = snapshot.messages
     const next = new Map(found.map(message => [message.observed.key, message.observed]))
-    const changes: AssetObservedMessage[] = []
-    for (const [key, message] of next) {
-      const before = previous.get(key)
-      if (JSON.stringify(message) !== JSON.stringify(before)) changes.push(message)
-    }
-    for (const [key, message] of previous) {
-      if (!next.has(key)) changes.push({ ...message, content: '', status: message.status === 'streaming' ? 'withdrawn' : 'retained' })
-    }
-    const newUser = [...found].reverse().find(message => message.observed.role === 'user' && !previous.has(message.observed.key))
-    if (changes.length || announcedLocation !== source.conversationKey) enqueue(async () => {
-      await invoke(ipc.ASSET_OBSERVE, { ...source, previousConversationKey, messages: changes })
+    const fingerprint = JSON.stringify([[...next.values()], snapshot.rejected.map(item => [item.key, item.content])])
+    const newUser = [...found].reverse().find(({ observed }) => {
+      const before = previous.get(observed.key)
+      return observed.role === 'user' && (!before || before.versionKey !== observed.versionKey || before.content !== observed.content)
+    })
+    const eventId = visitId
+    if (fingerprint !== lastSnapshot || (found.length && announcedLocation !== source.conversationKey)) enqueue(async () => {
+      const rejected = []
+      for (const item of snapshot.rejected) {
+        const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(item.content))
+        const signature = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
+        const identity = `${source.conversationKey}:${item.key}:${signature}`
+        if (rejectedSignatures.has(identity)) continue
+        rejectedSignatures.add(identity)
+        rejected.push({ key: item.key, reason: item.reason, signature })
+      }
+      if (!found.length && !rejected.length) return
+      const result = await invoke(ipc.ASSET_OBSERVE, { ...source, previousConversationKey,
+        messages: found.map(message => message.observed), snapshot: true, completePath: snapshot.completePath,
+        visitId: eventId, adapter: 'dom-conversation/2', rejected })
+      if (result.suppressed) { suppressed.add(source.conversationKey); return }
       if (newUser && pendingInputs.size) {
         const keys = [...pendingInputs].filter(key => {
           const conversationKey = originals.get(key)?.input.conversationKey
@@ -119,9 +141,11 @@ function collectAiAssets(): () => void {
         }
       }
     })
-    announcedLocation = source.conversationKey
+    if (found.length) announcedLocation = source.conversationKey
+    lastSnapshot = fingerprint
     previous = next
-    for (const message of found) {
+    if (suppressed.has(source.conversationKey)) return
+    for (const [index, message] of found.entries()) {
       if (message.observed.role !== 'assistant') continue
       for (const element of message.element.querySelectorAll('img, a[download], a[data-attachment]')) {
         const image = element instanceof HTMLImageElement
@@ -132,7 +156,7 @@ function collectAiAssets(): () => void {
         try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || name) } catch {}
         if (name.length > 255 || /^data:/.test(url)) name = image ? '图片' : '文件'
         acquire({ ...source, messageKey: message.observed.key, name, mimeType: image ? 'image/*' : 'application/octet-stream',
-          direction: 'output', sourceUrl: url, externalKey: `${message.observed.key}:${url}` })
+          direction: 'output', sourceUrl: url, externalKey: `${JSON.stringify(found.slice(0, index + 1).map(item => [item.observed.key, item.observed.versionKey ?? '']))}:${url}` })
       }
     }
   }
@@ -149,7 +173,11 @@ function collectAiAssets(): () => void {
   document.addEventListener('paste', paste, true)
   const observer = new MutationObserver(scan)
   observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true,
-    attributeFilter: ['src', 'href', 'data-streaming', 'data-is-streaming', 'aria-busy', 'data-message-id'] })
+    attributeFilter: ['src', 'href', 'data-streaming', 'data-is-streaming', 'aria-busy', 'data-message-id', 'data-status', 'data-branch-index', 'data-branch-count', 'data-version-id'] })
+  const navigation = () => scan()
+  const routeTimer = setInterval(scan, 1000)
+  window.addEventListener('popstate', navigation)
+  window.addEventListener('hashchange', navigation)
   const retry = (_event: unknown, payload: { id: string; sourceUrl?: string }) => {
     const entry = [...originals.values()].find(item => item.id === payload.id)
     if (entry) originalQueue = originalQueue.then(() => transfer(entry)).catch(error => console.warn('[ai-assets] Original retry failed:', error))
@@ -157,7 +185,9 @@ function collectAiAssets(): () => void {
   }
   ipcRenderer.on(ipc.ASSET_RETRY_REQUEST, retry)
   const cleanup = () => {
-    scan(); stopped = true; observer.disconnect()
+    scan(); stopped = true; observer.disconnect(); clearInterval(routeTimer)
+    window.removeEventListener('popstate', navigation)
+    window.removeEventListener('hashchange', navigation)
     document.removeEventListener('change', change, true)
     document.removeEventListener('drop', drop, true)
     document.removeEventListener('paste', paste, true)

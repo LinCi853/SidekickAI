@@ -16,7 +16,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type HotkeyAction } from '../shared/types.js'
-import { isModuleEnabled, listModuleInfos } from '../modules/registry.js'
+import { isModuleEnabled, listModuleInfos, observeModuleState } from '../modules/registry.js'
 import { syncVoiceHotkeyRegistration } from '../modules/wiring/voice.js'
 import {
   setAdvancedPanelAvailability,
@@ -29,6 +29,12 @@ import type { HotkeyManager } from '../hotkey/manager.js'
 import { resetMainWindowToDefault } from '../window-factory/main-window.js'
 import { getAppSettings } from '../store/app-settings-store.js'
 import * as focusManager from '../utils/focus-manager.js'
+
+import { showPromptWindow } from '../window-factory/popup-windows.js'
+import { getAssetSettings } from '../assets/settings.js'
+import { normalizeAssetAccelerator, validateAssetAccelerator } from '../shared/asset-settings.js'
+import { windowState } from '../window-state.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
 
 /** 进阶面板是否可用（内置模块或插件声明了 advancedPanelTab 的已启用模块） */
 function isAdvancedPanelAvailable(): boolean {
@@ -124,6 +130,12 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
         focusManager.hide(mainWindow)
       }
     },
+    toggleAiAssets: () => {
+      if (!isModuleEnabled('prompt-library')) return
+      const window = windowState.promptWindow
+      if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized()) window.close()
+      else showPromptWindow()
+    },
     toggleDetachedWindows: () => {
       // Alt+Q 切换 进阶面板；无可用 tab 模块时已由 hotkey-sync 注销，此处兜底守卫
       if (!isAdvancedPanelAvailable()) return
@@ -137,6 +149,24 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       void toggleVoiceRecording()
     },
   }
+
+  const notifyConfiguration = () => broadcastToAllWindows(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, hotkeyManager.getAllHotkeys())
+  const syncAssetShortcut = () => {
+    const accelerator = hotkeyManager.getActionAccelerator('toggleAiAssets')
+    if (!isModuleEnabled('prompt-library') || !hotkeyManager.getEnabled('toggleAiAssets') || !accelerator) {
+      if (accelerator) hotkeyManager.unregister(accelerator)
+    } else if (!hotkeyManager.isRegistered(accelerator)) {
+      void hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets).then(ok => {
+        if (!isModuleEnabled('prompt-library') || !hotkeyManager.getEnabled('toggleAiAssets') || accelerator !== hotkeyManager.getHotkey('toggleAiAssets')) {
+          if (ok) hotkeyManager.unregister(accelerator)
+        } else if (ok) hotkeyManager.recordActionAccelerator('toggleAiAssets', accelerator)
+        notifyConfiguration()
+      })
+    }
+  }
+  const stopAssetShortcutSync = observeModuleState(syncAssetShortcut)
+  scope?.create('event-sub', 'assets.shortcut-state', stopAssetShortcutSync)
+  syncAssetShortcut()
 
   // ===== 热键 CRUD IPC =====
   handle(IPC_CHANNELS.HOTKEY_REGISTER, async (_e: unknown, accelerator: string) => {
@@ -154,6 +184,27 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
     return hotkeyManager.getAllHotkeys()
   })
   handle(IPC_CHANNELS.HOTKEY_SET, async (_e: unknown, action: HotkeyAction, accelerator: string) => {
+    if (!(action in hotkeyCallbacks) || typeof accelerator !== 'string') throw new Error('Invalid shortcut')
+    if (action === 'toggleAiAssets') {
+      validateAssetAccelerator(accelerator)
+      if (accelerator && Object.values(getAssetSettings().localShortcuts).some(value => normalizeAssetAccelerator(value) === normalizeAssetAccelerator(accelerator))) throw new Error('全局快捷键与资产窗口内的快捷键重复')
+      const oldAccelerator = hotkeyManager.getActionAccelerator(action)
+      if (accelerator && hotkeyManager.getAllHotkeys().some(config => config.action !== action && normalizeAssetAccelerator(config.accelerator) === normalizeAssetAccelerator(accelerator))) throw new Error('快捷键与其他操作重复')
+      if (oldAccelerator) hotkeyManager.unregister(oldAccelerator)
+      if (!accelerator || !isModuleEnabled('prompt-library')) {
+        hotkeyManager.setHotkey(action, accelerator)
+        hotkeyManager.recordActionAccelerator(action, accelerator)
+        hotkeyManager.setEnabled(action, !!accelerator)
+        notifyConfiguration(); return true
+      }
+      const ok = await hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets)
+      if (ok) {
+        hotkeyManager.setHotkey(action, accelerator); hotkeyManager.setEnabled(action, true)
+        hotkeyManager.recordActionAccelerator(action, accelerator)
+        if (!isModuleEnabled('prompt-library')) hotkeyManager.unregister(accelerator)
+      } else syncAssetShortcut()
+      notifyConfiguration(); return ok
+    }
     // backgroundVoice 走 uiohook keydown/keyup 独立路径（不支持 globalShortcut）
     if (action === 'backgroundVoice') {
       // 注销旧语音热键
@@ -176,6 +227,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
         hotkeyManager.setEnabled('backgroundVoice', true)
       }
       console.log(`[main] backgroundVoice 热键已更新为 ${accelerator}`)
+      notifyConfiguration()
       return true
     }
 
@@ -198,6 +250,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       await hotkeyManager.register(oldAcc, cb)
       hotkeyManager.recordActionAccelerator(action, oldAcc)
     }
+    notifyConfiguration()
     return ok
   })
 
@@ -205,6 +258,11 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   handle(
     IPC_CHANNELS.HOTKEY_SET_ENABLED,
     async (_e: unknown, action: HotkeyAction, enabled: boolean) => {
+      if (!(action in hotkeyCallbacks)) throw new Error('Invalid shortcut action')
+      if (action === 'toggleAiAssets') {
+        if (enabled && !hotkeyManager.getHotkey(action)) throw new Error('请先设置快捷键')
+        hotkeyManager.setEnabled(action, enabled); syncAssetShortcut(); notifyConfiguration(); return
+      }
       const prevEnabled = hotkeyManager.getEnabled(action)
       if (prevEnabled === enabled) return // 无变化
 
@@ -244,6 +302,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       }
       // 持久化启用状态
       hotkeyManager.setEnabled(action, enabled)
+      notifyConfiguration()
       console.log(`[main] ${action} 热键已${enabled ? '启用' : '禁用'}`)
     },
   )

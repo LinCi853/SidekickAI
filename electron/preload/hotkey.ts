@@ -59,6 +59,11 @@ export const hotkeyApi = {
      * 订阅热键管理器状态变化（主进程推送）
      * @param callback 状态：{ uiohookStarted, voiceHotkeyRegistered, voiceKeyPressed, pollingActive }
      */
+    onChanged: (callback: (config: import('../shared/types.js').HotkeyConfig[]) => void) => {
+      const handler = (_event: unknown, config: import('../shared/types.js').HotkeyConfig[]) => callback(config)
+      ipcRenderer.on(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, handler)
+    },
     onStatus: (callback: (status: unknown) => void) => {
       const handler = (_e: unknown, status: unknown) => callback(status)
       ipcRenderer.on(IPC_CHANNELS.HOTKEY_STATUS, handler)

@@ -5,6 +5,7 @@
    ===================================================================== */
 
 import { useCallback, useEffect, useState } from 'react';
+import { requireElectron } from '../lib/electron-api/core';
 import type { Dispatch, SetStateAction } from 'react';
 import {
   getHotkeys,
@@ -60,13 +61,18 @@ export function useHotkeys(enabled: boolean): HotkeysState {
   }, []);
 
   useEffect(() => {
-    if (enabled) void load();
+    if (!enabled) return;
+    void load();
+    return requireElectron().hotkey.onChanged(list => {
+      setHotkeys(list);
+      setDrafts(Object.fromEntries(list.map(item => [item.action, item.accelerator])));
+    });
   }, [enabled, load]);
 
   const saveHotkey = useCallback(
     async (action: HotkeyAction) => {
       const acc = (drafts[action] ?? '').trim();
-      if (!acc) {
+      if (!acc && action !== 'toggleAiAssets') {
         setFeedback((p) => ({ ...p, [action]: { type: 'error', msg: '热键不能为空' } }));
         return;
       }
@@ -74,13 +80,13 @@ export function useHotkeys(enabled: boolean): HotkeysState {
       setFeedback((p) => ({ ...p, [action]: null }));
       try {
         const current = hotkeys.find((h) => h.action === action);
-        if (current && !current.enabled) {
+        if (current && !current.enabled && action !== 'toggleAiAssets') {
           await setHotkeyEnabled(action, true);
         }
         const ok = await setHotkeyFor(action, acc);
         if (ok) {
           setHotkeys((list) =>
-            list.map((h) => (h.action === action ? { ...h, accelerator: acc, enabled: true } : h)),
+            list.map((h) => (h.action === action ? { ...h, accelerator: acc, enabled: action === 'toggleAiAssets' ? !!acc : true } : h)),
           );
           setFeedback((p) => ({ ...p, [action]: { type: 'success', msg: '已保存并生效' } }));
         } else {

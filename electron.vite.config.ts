@@ -2,6 +2,7 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { compilationInputs } from './scripts/compilation-inputs'
+import { excalidrawClipboardFeedback } from './scripts/excalidraw-clipboard-feedback'
 
 // 空模块路径：用于 alias 排除不需要的传递依赖
 const emptyMod = resolve(__dirname, 'src/lib/_empty.ts')
@@ -68,7 +69,8 @@ export default defineConfig({
         },
       },
     },
-    plugins: [react(), compilationInputs(__dirname, 'renderer')],
+    plugins: [react(), excalidrawClipboardFeedback(), compilationInputs(__dirname, 'renderer')],
+    optimizeDeps: { exclude: ['@excalidraw/excalidraw'] },
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),

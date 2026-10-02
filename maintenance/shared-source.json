@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "303faeca6fa347bc8e381e3056c326ce217f8b95438f6778b866b38f0301674d",
+  "revision": "e7a5ba191d970ee536555ea7a64c1d0606094e4692a8cf5ae5ce9602fd12f180",
   "files": {
-    "electron.vite.config.ts": "e1f5b1029eac6294380a9f501a3f0d8b399537ed394c2a01bd26ef437b5b805b",
+    "electron.vite.config.ts": "59de18e9de01da904cad56f121904704a4ebf25ccbfaffa902b39d2b74478e37",
     "installer-shared/on-demand/fixtures/issuer-resource.json": "c9bfe8b043d9c9b440c1b36af8fe8bdc113a09f61f5af673dad14ca068643750",
     "installer-shared/operation-details/OperationDetails.tsx": "e0d0aa7bcc3b5cfd21a7575fa8668f3c82353451e3d99facf50c36bfe0556569",
     "installer-shared/operation-details/styles.css": "ea0f0fec2e981f5061535662b250c4ed10ddfd1b9081dac80b1c73e94b56fc20",

@@ -67,7 +67,7 @@ describe('AI asset collection', () => {
     const { conversationId } = observe('received output')
     const usage = store.usage()
     store.recoverInterruptedStreams()
-    expect(store.details(conversationId)[0].status).toBe('stopped')
+    expect(store.details(conversationId)[0].status).toBe('failed')
     expect(store.usage()).toEqual(usage)
     observe('received output', 'complete')
     expect(store.usage()).toEqual(usage)

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell, webContents, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, webContents, type IpcMainInvokeEvent } from 'electron'
 import { copyFile } from 'node:fs/promises'
 import path from 'node:path'
 import { getChatStore } from '../store/chat-store.js'
@@ -9,6 +9,9 @@ import type { AssetAttachmentInput, AssetObservation } from '../shared/ai-assets
 import { OriginalVault } from './original-vault.js'
 import { acquireLinkedOriginal, stopLinkedOriginalTransfers } from './api-originals.js'
 import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
+import { getAssetSettings, updateAssetSettings } from './settings.js'
+import { previewAssetCode } from './code-preview.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
 
 let stopTransfers: (() => void) | undefined
 let transfersActive: () => boolean = () => false
@@ -22,7 +25,15 @@ export function broadcastAiAssetState(): void {
 }
 
 export function registerAiAssetIpc(): void {
-  observeModuleState(broadcastAiAssetState)
+  let assetEnabled = false
+  const syncCollection = () => {
+    const enabled = isModuleEnabled('prompt-library')
+    if (enabled && !assetEnabled) getChatStore().cleanupInvalidConversations()
+    assetEnabled = enabled
+    broadcastAiAssetState()
+  }
+  observeModuleState(syncCollection)
+  syncCollection()
   const vault = new OriginalVault(path.join(app.getPath('userData'), 'ai-assets'), path.join(app.getPath('userData'), '.ai-assets-pending'))
   const owners = new Map<string, number>()
   const controllers = new Map<string, AbortController>()
@@ -74,7 +85,7 @@ export function registerAiAssetIpc(): void {
   const local = (event: IpcMainInvokeEvent) => {
     const url = event.sender.getURL()
     const development = process.env.ELECTRON_RENDERER_URL
-    if (event.sender.getType() !== 'window' || (!url.startsWith('file:') && (!development || new URL(url).origin !== new URL(development).origin)))
+    if (event.senderFrame !== event.sender.mainFrame || event.sender.getType() !== 'window' || (!url.startsWith('file:') && (!development || new URL(url).origin !== new URL(development).origin)))
       throw new Error('AI asset viewer is not authorized')
   }
   ipcMain.handle(ipc.ASSET_AUTHORIZE, event => { try { source(event); return true } catch { return false } })
@@ -87,6 +98,16 @@ export function registerAiAssetIpc(): void {
         || !['user', 'assistant', 'system'].includes(message.role)
         || (message.reasoning !== undefined && typeof message.reasoning !== 'string')) throw new Error('Invalid AI asset message')
     }
+    if (observation.messages.length > 10000 || (observation.visitId !== undefined && typeof observation.visitId !== 'string')
+      || (observation.adapter !== undefined && typeof observation.adapter !== 'string')
+      || (observation.rejected !== undefined && (!Array.isArray(observation.rejected) || observation.rejected.length > 1000))) throw new Error('Invalid asset snapshot')
+    for (const message of observation.messages) {
+      if ((message.markdownContent !== undefined && typeof message.markdownContent !== 'string')
+        || (message.versionKey !== undefined && typeof message.versionKey !== 'string')
+        || (message.branchIndex !== undefined && (!Number.isSafeInteger(message.branchIndex) || message.branchIndex < 1))
+        || (message.branchCount !== undefined && (!Number.isSafeInteger(message.branchCount) || message.branchCount < 1))) throw new Error('Invalid asset branch')
+    }
+    for (const item of observation.rejected ?? []) if (typeof item.key !== 'string' || typeof item.reason !== 'string' || !/^[a-f0-9]{64}$/.test(item.signature)) throw new Error('Invalid rejection record')
     const result = getChatStore().assets.observe(profile, observation)
     broadcast(profile.id)
     return result
@@ -213,7 +234,34 @@ export function registerAiAssetIpc(): void {
         title: `${profile.name} · ${guest.getTitle()}`, url: guest.getURL() }]
     })
   })
-  ipcMain.handle(ipc.ASSET_USAGE, (event, sourceId?: string) => { local(event); return getChatStore().assets.usage(sourceId) })
+  ipcMain.handle(ipc.ASSET_USAGE, (event, sourceId?: string, conversationId?: string) => { local(event); return getChatStore().assets.usage(sourceId, conversationId) })
+  const graph = (id: string) => getChatStore().assets.graph.view(id, getChatStore().listMessages(id))
+  ipcMain.handle(ipc.ASSET_GRAPH, (event, id: string) => { local(event); return graph(id) })
+  ipcMain.handle(ipc.ASSET_SELECT_BRANCH, (event, id: string, nodeId: string) => { local(event); getChatStore().assets.graph.select(id, nodeId); return graph(id) })
+  ipcMain.handle(ipc.ASSET_SUMMARIES, event => { local(event); return getChatStore().assets.graph.summaries() })
+  ipcMain.handle(ipc.ASSET_VIEW, (event, id: string, eventId: string) => {
+    local(event)
+    if (typeof eventId !== 'string' || eventId.length > 200) throw new Error('Invalid view event')
+    getChatStore().assets.graph.viewEvent(id, `local:${eventId}`)
+  })
+  ipcMain.handle(ipc.ASSET_DELETE_CONVERSATION, (event, id: string) => { local(event); getChatStore().deleteConversation(id); broadcast('local') })
+  ipcMain.handle(ipc.ASSET_DELETE_MESSAGE, (event, id: string) => { local(event); getChatStore().deleteMessage(id); broadcast('local') })
+  ipcMain.handle(ipc.ASSET_RENAME_CONVERSATION, (event, id: string, title: string) => { local(event); getChatStore().assets.renameConversation(id, title); broadcast('local') })
+  ipcMain.handle(ipc.ASSET_CLEANUP_RECORDS, event => { local(event); return getChatStore().assets.cleanupRecords() })
+  ipcMain.handle(ipc.ASSET_SETTINGS, event => { local(event); return getAssetSettings() })
+  ipcMain.handle(ipc.ASSET_SETTINGS_UPDATE, (event, changes) => {
+    local(event)
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) throw new Error('Invalid asset settings')
+    const next = updateAssetSettings(changes)
+    broadcastToAllWindows(ipc.ASSET_SETTINGS_CHANGED, next, 'assets')
+    return next
+  })
+  ipcMain.handle(ipc.ASSET_COPY_TEXT, (event, content: string) => {
+    local(event)
+    if (typeof content !== 'string' || content.length > 16 * 1024 * 1024) throw new Error('Invalid clipboard text')
+    clipboard.writeText(content)
+  })
+  ipcMain.handle(ipc.ASSET_PREVIEW_CODE, (event, content: string, language: 'html' | 'css' | 'javascript') => { local(event); return previewAssetCode(content, language) })
   ipcMain.handle(ipc.ASSET_ATTACHMENTS, (event, id?: string) => { local(event); return getChatStore().assets.attachments(id) })
   ipcMain.handle(ipc.ASSET_SUGGESTIONS, event => { local(event); return getChatStore().assets.suggestions() })
   ipcMain.handle(ipc.ASSET_SEARCH, (event, query: string) => { local(event); return getChatStore().assets.searchConversations(query) })

@@ -1,0 +1,9 @@
+ .asset-settings { display: flex; flex-direction: column; gap: 12px; color: var(--foreground); font-size: 13px; }
+.asset-settings label { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.asset-settings input:not([type=checkbox]), .asset-settings select { border: 1px solid var(--border); background: var(--card); color: var(--foreground); border-radius: var(--radius-md); padding: 7px; max-width: 100%; }
+.asset-settings fieldset { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 0; }
+.asset-settings legend { font-weight: 600; }
+.asset-settings details p { overflow-wrap: anywhere; font-size: 12px; color: var(--muted-foreground); }
+.asset-settings .asset-freeze-control { padding: 8px 0; }
+
+.asset-settings label:has(input[type=checkbox]) { justify-content: flex-start; gap: 8px; }

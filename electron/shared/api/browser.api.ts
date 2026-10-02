@@ -149,6 +149,7 @@ export type HotkeyAction =
   | 'toggleDetachedWindows'
   | 'backgroundVoice'
   | 'toggleVoice'
+  | 'toggleAiAssets'
 
 /** 热键配置（UI 展示与持久化） */
 export interface HotkeyConfig {
@@ -183,5 +184,6 @@ export interface HotkeyAPI {
   /** 订阅热键录制实时反馈（主进程 → 渲染层：每次按键时推送当前组合，用于 UI 实时显示） */
   onRecordingPartial(callback: (partial: { modifiers: string[]; key: string | null }) => void): () => void
   /** 订阅热键管理器状态变化（主进程推送：uiohook/voiceHotkey/voiceKeyPressed/polling） */
+  onChanged(callback: (config: HotkeyConfig[]) => void): () => void
   onStatus(callback: (status: unknown) => void): () => void
 }

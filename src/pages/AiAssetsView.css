@@ -6,15 +6,14 @@
 .asset-usage { font-size: 12px; color: var(--muted-foreground); }
 .asset-usage strong { color: var(--foreground); }
 .asset-conversation-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(180px, 26%) minmax(0, 1fr); }
-.asset-conversations { overflow-y: auto; padding: 12px; border-right: 1px solid var(--border); }
+.asset-conversations { display: flex; flex-direction: column; overflow: hidden; min-height: 0; padding: 12px; border-right: 1px solid var(--border); }
 .asset-conversation { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-top: 8px; background: var(--card); color: var(--foreground); cursor: pointer; overflow-wrap: anywhere; }
 .asset-conversation.active { border-color: var(--accent-50); background: var(--accent-10); }
-.asset-conversation span { font-size: 11px; color: var(--muted-foreground); }
-.asset-conversation-detail, .asset-file-list, .asset-prompt-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
-.asset-detail-heading h2 { margin: 0 0 10px; font-size: 18px; overflow-wrap: anywhere; }
+.asset-conversation span, .asset-conversation time { font-size: 11px; color: var(--muted-foreground); }
+.asset-file-list, .asset-prompt-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
 .asset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
 .asset-actions select { background: var(--card); color: var(--foreground); border: 1px solid var(--border); padding: 6px; border-radius: var(--radius-md); }
-.asset-message, .asset-file, .asset-suggestions article { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); padding: 14px; margin: 12px 0; overflow-wrap: anywhere; }
+.asset-file, .asset-suggestions article { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); padding: 14px; margin: 12px 0; overflow-wrap: anywhere; }
 .asset-message header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted-foreground); }
 .asset-message header strong { color: var(--foreground); }
 .assets-view pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.7; margin: 12px 0; }
@@ -33,7 +32,59 @@
 .asset-prompt-body .prompt-view-body { overflow: visible; }
 @media (max-width: 600px) {
   .asset-conversation-body { grid-template-columns: minmax(130px, 32%) minmax(0, 1fr); }
-  .asset-conversations, .asset-conversation-detail { padding: 8px; }
+  .asset-conversations { padding: 8px; }
   .asset-message, .asset-file { padding: 10px; }
   .asset-usage, .assets-tools, .asset-categories { padding: 8px 10px; gap: 6px; }
+}
+
+.asset-window-title { padding: 0 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.assets-view .asset-categories { -webkit-app-region: no-drag; padding: 0; border: 0; gap: 4px; flex-wrap: nowrap; }
+.asset-conversation-list { flex: 1; min-height: 0; overflow-y: auto; }
+.asset-total-usage { display: flex; flex-direction: column; gap: 6px; padding: 14px 4px 2px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); margin-top: 12px; }
+.asset-total-usage span { color: var(--foreground); font-size: 16px; }
+.asset-conversation-detail { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.asset-detail-heading { padding: 14px 18px 10px; border-bottom: 1px solid var(--border); flex: none; }
+.asset-detail-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.asset-detail-title h2 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+.asset-detail-heading .asset-usage { padding: 8px 0 0; border: 0; }
+.asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 12px 20px; }
+.asset-operation-menu { position: relative; flex: none; }
+.asset-operation-menu summary { list-style: none; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.asset-operation-menu > div { position: absolute; right: 0; top: 34px; min-width: 140px; display: flex; flex-direction: column; padding: 8px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 6px 18px #0002; z-index: 5; }
+.asset-message { border: 0; border-radius: var(--radius-lg); background: transparent; padding: 12px 0; margin: 12px 0; overflow-wrap: anywhere; }
+.asset-message-user { margin-left: 8%; background: var(--accent-10); border: 1px solid var(--border); padding: 14px; }
+.asset-message > header { margin-bottom: 12px; }
+.asset-message time { margin-left: auto; font-size: 10px; }
+.asset-message-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.asset-message .asset-actions { gap: 4px; }
+.asset-message .asset-actions button { font-size: 11px; padding: 4px 7px; }
+.asset-branch { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 12px; }
+.asset-branch button { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); color: var(--foreground); cursor: pointer; width: 24px; height: 24px; font-size: 19px; }
+.asset-branch button:disabled { opacity: .35; cursor: default; }
+.asset-branch-missing { font-size: 11px; color: var(--muted-foreground); }
+.asset-markdown { line-height: 1.7; font-size: 14px; overflow-wrap: anywhere; }
+.asset-markdown p { margin: 10px 0; }
+.asset-markdown a { color: var(--primary); }
+.asset-markdown table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.asset-markdown th, .asset-markdown td { border: 1px solid var(--border); padding: 6px; }
+.asset-markdown blockquote { border-left: 3px solid var(--accent-50); margin: 10px 0; padding-left: 12px; color: var(--muted-foreground); }
+.asset-code { background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-md); margin: 10px 0; overflow: hidden; }
+.asset-code-actions { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 11px; border-bottom: 1px solid var(--border); }
+.asset-code-actions > span { flex: 1; }
+.assets-view .asset-code pre { margin: 0; padding: 12px; overflow-x: auto; white-space: pre; overflow-wrap: normal; }
+.asset-code .hljs { background: transparent; color: var(--foreground); padding: 0; }
+.asset-diff del { background: #df524729; color: var(--foreground); text-decoration: line-through; }
+.asset-diff ins { background: #38964c29; color: var(--foreground); text-decoration: none; }
+.asset-selection-actions { position: sticky; top: 0; display: flex; gap: 8px; z-index: 3; padding: 8px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.asset-settings-modal { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.asset-settings-modal .modal-body { overflow-y: auto; }
+.module-asset-settings { margin-top: 12px; }
+.module-asset-settings > summary { font-size: 12px; cursor: pointer; }
+.module-asset-settings > .asset-settings { margin-top: 12px; }
+@media (max-width: 600px) {
+  .assets-view .asset-categories button { padding: 5px 8px; font-size: 12px; }
+  .asset-detail-heading { padding: 10px; }
+  .asset-chat-scroll { padding: 8px 10px; }
+  .asset-message-user { margin-left: 0; padding: 10px; }
+  .asset-total-usage { font-size: 11px; }
 }

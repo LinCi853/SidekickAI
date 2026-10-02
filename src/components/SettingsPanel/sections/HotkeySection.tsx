@@ -49,6 +49,7 @@ export default function HotkeySection({
     enabledModuleIds.includes('notes');
   const visibleHotkeys = hotkeys.filter((h) => {
     if (h.action === 'backgroundVoice' || h.action === 'toggleVoice') return enabledModuleIds.includes('voice');
+    if (h.action === 'toggleAiAssets') return enabledModuleIds.includes('prompt-library');
     if (h.action === 'toggleDetachedWindows') return advancedPanelAvailable;
     return true;
   });

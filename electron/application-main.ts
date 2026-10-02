@@ -5,6 +5,7 @@ import { finishPendingRestore, requestRestoreRollback } from '../packages/backup
 import { parseBackupManifest } from '../packages/backup-core/format.js';
 import { readFileSync } from 'node:fs';
 import { app, BrowserWindow, Menu, ipcMain, protocol, screen, session, systemPreferences, dialog } from 'electron';
+import { allowWhiteboardClipboard } from './assets/whiteboard-clipboard.js';
 import path from 'path';
 import { registerProfileIPC, ensureDefaultProfiles, } from './store/profile-store.js';
 import { registerBlockRulesIPC, ensureDefaultBlockRules, } from './store/block-rules-store.js';
@@ -118,7 +119,7 @@ app.whenReady().then(async () => {
     const showGuideRequested = process.argv.includes('--show-guide');
     const skipGuideRequested = process.argv.includes('--skip-guide');
     initAppFocusTracker();
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
         if (permission === 'media') {
             if (process.platform === 'darwin') {
                 try {
@@ -132,6 +133,11 @@ app.whenReady().then(async () => {
             else {
                 callback(true);
             }
+        }
+        else if (allowWhiteboardClipboard({ permission, senderId: _wc?.id, hostId: windowState.advancedPanelWindow?.webContents.id,
+            hostUrl: _wc?.getURL() ?? '', requestingUrl: details.requestingUrl, isMainFrame: details.isMainFrame,
+            enabled: isModuleEnabled('whiteboard') })) {
+            callback(true);
         }
         else {
             callback(false);
