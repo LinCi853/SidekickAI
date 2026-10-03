@@ -18,6 +18,11 @@ const fallback: [string, string] = [
   '[data-message-author-role="assistant"], [data-testid="assistant-message"], [data-role="assistant"], .assistant-message',
 ]
 const thinkingSelector = '[data-testid*="thinking"], [data-testid*="reasoning"], [data-thinking], .thinking-content, [class*="reasoning-content"]'
+const deepseekUserSelector = '.ds-message.d29f3d7d'
+const deepseekUserContentSelector = '.fbb737a4'
+const deepseekAnswerSelector = '.ds-assistant-message-main-content'
+const deepseekThinkingSelector = '.ds-think-content'
+const deepseekAssistantSelector = `${deepseekAnswerSelector}, ${deepseekThinkingSelector}`
 const blocks = new Set(['P', 'DIV', 'PRE', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TR'])
 
 function nodeText(node: Node): string {
@@ -94,11 +99,22 @@ function branchIdentity(element: Element): { branchIndex?: number; branchCount?:
     : { versionKey }
 }
 export function readDomConversation(document: Document, hostname: string): DomConversation {
+  const deepseek = hostname === 'chat.deepseek.com'
+  const messageThinkingSelector = deepseek ? `${thinkingSelector}, ${deepseekThinkingSelector}` : thinkingSelector
   const selectors = platforms[hostname] ?? fallback
   const candidates = selectors.map((selector, role) => {
     let nodes = Array.from(document.querySelectorAll(selector))
     if (!nodes.length) nodes = Array.from(document.querySelectorAll(fallback[role]))
+    if (deepseek) {
+      const current = role === 0
+        ? Array.from(document.querySelectorAll(deepseekUserSelector)).filter(node =>
+          node.querySelector(deepseekUserContentSelector) && !node.querySelector(deepseekAssistantSelector))
+        : Array.from(document.querySelectorAll(deepseekAssistantSelector))
+          .map(node => node.closest('.ds-message')).filter((node): node is Element => !!node)
+      nodes = Array.from(new Set([...nodes, ...current]))
+    }
     return nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)))
+      .sort((a, b) => a.compareDocumentPosition(b) & 2 ? 1 : -1)
   })
   const messages: DomMessage[] = []
   const rejected: DomConversation['rejected'] = []
@@ -106,24 +122,34 @@ export function readDomConversation(document: Document, hostname: string): DomCo
     const role = roleIndex === 0 ? 'user' : 'assistant'
     nodes.forEach((element, index) => {
       const external = element.getAttribute('data-message-id') || element.getAttribute('data-id') || element.id
+        || (deepseek ? element.closest('[data-virtual-list-item-key]')?.getAttribute('data-virtual-list-item-key') : undefined)
       const key = `${role}:${external || index}`
       const excluded = element.closest(interfaceSelector)
       const loginForm = element.closest('form')?.querySelector('input[type="password"], input[autocomplete="one-time-code"]')
       if (excluded || loginForm) {
         rejected.push({ key, reason: loginForm ? 'login-interface' : 'interface-container', content: nodeText(element) }); return
       }
-      const thinking = Array.from(element.querySelectorAll(thinkingSelector))
-        .filter(node => !node.parentElement?.closest(thinkingSelector))
+      const thinking = Array.from(element.querySelectorAll(messageThinkingSelector))
+        .filter(node => !node.parentElement?.closest(messageThinkingSelector))
       for (const fragment of Array.from(element.querySelectorAll(interfaceSelector))) {
         if (fragment.parentElement?.closest(interfaceSelector)) continue
         rejected.push({ key: `${key}:interface`, reason: 'interface-container', content: nodeText(fragment) })
       }
-      const clone = element.cloneNode(true) as Element
-      clone.querySelectorAll(`${thinkingSelector}, ${chromeSelector}`).forEach(node => node.remove())
+      const currentAssistant = deepseek && role === 'assistant' && element.querySelector(deepseekAssistantSelector)
+      const contentElement = currentAssistant ? element.querySelector(deepseekAnswerSelector)
+        : deepseek && role === 'user' && element.matches(deepseekUserSelector)
+          ? element.querySelector(deepseekUserContentSelector) ?? element : element
+      const clone = (contentElement?.cloneNode(true) as Element | undefined) ?? document.createElement('div')
+      clone.querySelectorAll(`${messageThinkingSelector}, ${chromeSelector}`).forEach(node => node.remove())
       const content = nodeText(clone).replace(/\n$/, '')
       const noise = classifyCapturedNoise(content)
       if (noise && noise !== 'empty-capture') { rejected.push({ key, reason: noise, content }); return }
-      const reasoning = thinking.map(node => nodeText(node).replace(/\n$/, '')).join('\n')
+      const reasoning = thinking.flatMap(node => {
+        if (!deepseek || !node.matches(deepseekThinkingSelector)) return [nodeText(node).replace(/\n$/, '')]
+        const fragments = Array.from(node.querySelectorAll('.ds-markdown'))
+        return fragments.filter(fragment => !fragments.some(other => other !== fragment && other.contains(fragment)))
+          .map(fragment => nodeText(fragment).replace(/\n$/, '')).filter(text => text.trim())
+      }).join('\n')
       const explicitStatus = element.getAttribute('data-status')
       const streaming = element.matches('[aria-busy="true"], [data-streaming="true"], [data-is-streaming="true"]')
         || !!element.querySelector('[aria-busy="true"], [data-streaming="true"]')
@@ -139,6 +165,7 @@ export function readDomConversation(document: Document, hostname: string): DomCo
   messages.sort((a, b) => a.element.compareDocumentPosition(b.element) & 2 ? 1 : -1)
   const first = messages[0]?.element
   const completePath = !document.querySelector('[data-virtualized="true"], [data-messages-partial="true"]')
+    && !(deepseek && document.querySelector('.ds-virtual-list, .ds-virtual-list-items, .ds-virtual-list-visible-items, [data-virtual-list-item-key]'))
     && !(first && Number(first.getAttribute('aria-posinset')) > 1)
   return { messages, rejected, completePath }
 }
