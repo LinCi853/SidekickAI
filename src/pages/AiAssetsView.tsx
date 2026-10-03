@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
-import { Button, EmptyState } from '../components/ui';
+import { Button, EmptyState, IconButton } from '../components/ui';
 import PromptLibraryView from './PromptLibraryView';
 import AssetConversation from './ai-assets/AssetConversation';
 import AssetFileCard from './ai-assets/AssetFileCard';
@@ -12,21 +13,36 @@ import { useAssetSettings } from '../hooks/useAssetSettings';
 import { normalizeAssetAccelerator } from '../../electron/shared/asset-settings';
 import { listConversations, importConversation, onConversationPersisted } from '../lib/electron-api';
 import { requireElectron } from '../lib/electron-api/core';
-import type { Conversation } from '../lib/electron-api';
-import type { AssetAttachment, AssetPromptSuggestion, AssetTextUsage } from '../../electron/shared/ai-assets.types';
-import { usePromptStore } from '../store/usePromptStore';
+import type { Conversation, PromptExample } from '../lib/electron-api';
+import type { AssetAttachment, AssetPromptSuggestion } from '../../electron/shared/ai-assets.types';
 import { useEscToCloseWindow, hasOverlay } from '../hooks/useEscToCloseWindow';
 import './AiAssetsView.css';
 
 type Category = 'conversations' | 'prompts' | 'files';
+type ConversationTarget = { messageId?: string; attachmentId?: string };
+const categories = [
+  { id: 'conversations', label: '对话', Icon: MessageSquare },
+  { id: 'prompts', label: '提示词', Icon: SquareLibrary },
+  { id: 'files', label: '资料', Icon: Files },
+] as const;
+
+function conversationPlatform(conversation: Conversation) {
+  if (conversation.sourceType === 'api') return 'API';
+  try { return conversation.url ? new URL(conversation.url).hostname.replace(/^www\./, '') : '网页'; }
+  catch { return '网页'; }
+}
+
 export default function AiAssetsView() {
   const api = requireElectron().aiAssets;
   const promptApi = requireElectron().prompt;
   const searchRef = useRef<HTMLInputElement>(null);
   const navigationRevision = useRef(-1);
+  const sourceRevision = useRef(0);
+  const importMenuRef = useRef<HTMLDetailsElement>(null);
   const [freezeTarget, setFreezeTarget] = useState<{ tabId: string; revision: number }>();
   const { settings, error: settingsError } = useAssetSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   const [views, setViews] = useState<Record<string, number>>({});
   const [branchRequest, setBranchRequest] = useState<{ direction: number; revision: number }>();
   const [category, setCategory] = useState<Category>('conversations');
@@ -36,19 +52,18 @@ export default function AiAssetsView() {
   const [attachments, setAttachments] = useState<AssetAttachment[]>([]);
   const [suggestions, setSuggestions] = useState<AssetPromptSuggestion[]>([]);
   const [matches, setMatches] = useState<string[]>([]);
-  const [usage, setUsage] = useState<AssetTextUsage | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
-  const [importFormat, setImportFormat] = useState<'json' | 'md' | 'deepseek'>('json');
-  const savePrompt = usePromptStore(state => state.save);
-  useEscToCloseWindow({ onEsc: () => category === 'prompts', ctrlW: category !== 'prompts' });
+  const [promptDraft, setPromptDraft] = useState<{ revision: number; example: PromptExample; title?: string }>();
+  const [conversationTarget, setConversationTarget] = useState<ConversationTarget & { revision: number }>();
+  useEscToCloseWindow({ onEsc: () => { if (listOpen) { setListOpen(false); return true; } return false; } });
 
   useEffect(() => {
     const navigate = (request: import('../../electron/shared/ai-assets.types').AssetNavigationEvent) => {
       if (request.revision <= navigationRevision.current) return;
       navigationRevision.current = request.revision;
-      if (request.category) { setCategory(request.category); setQuery(''); }
+      if (request.category) { setCategory(request.category); setQuery(''); setListOpen(false); }
       if (request.focusSearch) searchRef.current?.focus();
       if (request.freezeTabId) { setFreezeTarget({ tabId: request.freezeTabId, revision: request.revision }); setSettingsOpen(true); }
       if (request.openSettings) setSettingsOpen(true);
@@ -59,9 +74,9 @@ export default function AiAssetsView() {
   }, [promptApi]);
 
   const refresh = useCallback(async () => {
-    const [list, files, text, extracted, summaries] = await Promise.all([listConversations(), api.attachments(), api.usage(), api.suggestions(), api.summaries()]);
+    const [list, files, extracted, summaries] = await Promise.all([listConversations(), api.attachments(), api.suggestions(), api.summaries()]);
     setViews(Object.fromEntries(summaries.map(item => [item.conversationId, item.views])));
-    setConversations(list); setAttachments(files); setUsage(text); setSuggestions(extracted);
+    setConversations(list); setAttachments(files); setSuggestions(extracted);
     setSelected(current => current && list.some(item => item.id === current) ? current : list[0]?.id ?? null);
     setRevision(value => value + 1);
   }, [api]);
@@ -93,7 +108,12 @@ export default function AiAssetsView() {
     setViews(Object.fromEntries(summaries.map(item => [item.conversationId, item.views])));
   }, [api]);
   useEffect(() => { if (selected && category === 'conversations') void recordView(selected).catch(failure => setError(String(failure))); }, [selected, category, recordView]);
-  const openConversation = (id: string) => { if (selected === id && category === 'conversations') void recordView(id).catch(failure => setError(String(failure))); setSelected(id); setCategory('conversations'); };
+  const openConversation = (id: string, target?: ConversationTarget) => {
+    if (!conversations.some(item => item.id === id)) { setNotice('原对话已不可用，已保存的内容仍保留'); return; }
+    if (selected === id && category === 'conversations') void recordView(id).catch(failure => setError(String(failure)));
+    setSelected(id); setCategory('conversations'); setListOpen(false);
+    setConversationTarget(target ? { ...target, revision: ++sourceRevision.current } : undefined);
+  };
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (hasOverlay() || event.defaultPrevented || event.repeat || event.isComposing) return;
@@ -105,23 +125,25 @@ export default function AiAssetsView() {
       if (action === 'search') searchRef.current?.focus();
       else if (action === 'freeze') setSettingsOpen(true);
       else if (action === 'previousBranch' || action === 'nextBranch') { if (category === 'conversations') setBranchRequest({ direction: action === 'previousBranch' ? -1 : 1, revision: Date.now() }); }
-      else { setCategory(action); setQuery(''); }
+      else { setCategory(action); setQuery(''); setListOpen(false); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [settings.localShortcuts, category]);
 
-  const makePrompt = async (content: string) => {
-    const now = Date.now();
-    await savePrompt({ id: '', title: Array.from(content.trim().split('\n')[0]).slice(0, 48).join('') || '对话提示词',
-      content, category: '来自对话', createdAt: now, updatedAt: now });
-    setNotice('已保存为提示词，可在提示词分类中编辑和调用');
+  const makePrompt = async (content: string, source?: { conversationId: string; messageId?: string }) => {
+    setPromptDraft({ revision: ++sourceRevision.current, example: { content, ...source },
+      title: Array.from(content.trim().split('\n')[0]).slice(0, 48).join('') || '对话提示词' });
+    setCategory('prompts'); setQuery(''); setListOpen(false);
   };
   return <><WindowResizeHandles /><div className="assets-view app-shell app-view-root" data-name="assets.container">
-    <StandaloneWindowHeader title="AI资产" dataNamePrefix="assets.topbar" leading={<span className="asset-window-title">AI资产</span>} onOpenSettings={() => setSettingsOpen(true)} center={<nav className="asset-categories" aria-label="AI资产分类">
-      {([['conversations', '对话'], ['prompts', '提示词'], ['files', '资料']] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={category === id} className={category === id ? 'active' : ''} onClick={() => { setCategory(id); setQuery(''); }}>{label}</button>)}
-    </nav>} />
-    <div className="assets-tools"><input ref={searchRef} className="asset-search" aria-label="搜索 AI资产" placeholder="搜索对话、提示词和资料" value={query} onChange={event => setQuery(event.target.value)} /><Button variant="outline" onClick={() => void run(refresh)}>刷新</Button></div>
+    <StandaloneWindowHeader title="AI资产" className="asset-topbar" dataNamePrefix="assets.topbar" leading={<>
+      {category === 'conversations' && <IconButton className="asset-list-toggle asset-icon-button" aria-label="打开对话列表" aria-expanded={listOpen} aria-controls="asset-conversations" onClick={() => setListOpen(value => !value)}><List size={16} /></IconButton>}
+      <span className="asset-window-title">AI资产</span></>} onOpenSettings={() => setSettingsOpen(true)}
+      actions={<IconButton className="asset-icon-button" aria-label="刷新" onClick={() => void run(refresh)}><RefreshCw size={16} /></IconButton>}
+      center={<><nav className="asset-categories" aria-label="AI资产分类">
+        {categories.map(({ id, label, Icon }) => <button key={id} type="button" aria-label={label} title={label} aria-pressed={category === id} className={category === id ? 'active' : ''} onClick={() => { setCategory(id); setQuery(''); setListOpen(false); }}><Icon size={15} /><span>{label}</span></button>)}
+      </nav><label className="asset-search-field"><Search size={15} aria-hidden="true" /><input ref={searchRef} className="asset-search" aria-label="搜索 AI资产" placeholder="搜索资产" value={query} onChange={event => setQuery(event.target.value)} /></label></>} />
     {settingsError && <p className="asset-feedback asset-error" role="alert">{settingsError}</p>}
     {error && <p className="asset-feedback asset-error" role="alert">{error}</p>}
     {notice && <p className="asset-feedback" role="status">{notice}</p>}
@@ -130,21 +152,25 @@ export default function AiAssetsView() {
       {!!suggestions.length && <details className="asset-suggestions" open><summary>自动提取的重点提示词</summary>
         {suggestions.filter(item => !query || item.content.toLowerCase().includes(query.toLowerCase())).map(item => <article key={item.messageId}>
           <strong>{item.title}</strong><p title="统计最近 500 条用户输入">近期使用 {item.uses} 次 · 本地整理</p><pre>{item.content}</pre><div className="asset-actions">
-            <Button variant="outline" onClick={() => void run(() => makePrompt(item.content))}>保存为模板</Button>
-            <Button variant="ghost" onClick={() => openConversation(item.conversationId)}>原始对话</Button></div></article>)}
-      </details>}<PromptLibraryView embedded query={query} />
+            <Button variant="outline" onClick={() => void run(() => makePrompt(item.content, { conversationId: item.conversationId, messageId: item.messageId }))}>保存为模板</Button>
+            <Button variant="ghost" onClick={() => openConversation(item.conversationId, { messageId: item.messageId })}>原始对话</Button></div></article>)}
+      </details>}<PromptLibraryView embedded query={query} draft={promptDraft} sourceConversationIds={conversations.map(item => item.id)}
+        onDraftConsumed={consumed => setPromptDraft(current => current?.revision === consumed ? undefined : current)}
+        onOpenSource={example => { if (example.conversationId) openConversation(example.conversationId, { messageId: example.messageId }); }} />
     </div> : category === 'files' ? <main className="asset-file-list">{visibleFiles.length ? visibleFiles.map(item =>
       <AssetFileCard key={item.id} item={item} onConversation={openConversation} onAction={operation => void run(operation)} />) : <EmptyState message="暂无收纳资料" />}</main>
-      : <div className="asset-conversation-body"><aside className="asset-conversations" aria-label="对话列表">
-        <div className="asset-actions"><select aria-label="对话导入格式" value={importFormat} onChange={event => setImportFormat(event.target.value as typeof importFormat)}>
-          <option value="json">JSON</option><option value="md">Markdown</option><option value="deepseek">DeepSeek</option></select>
-          <Button variant="outline" onClick={() => void run(async () => { const result = await importConversation(importFormat, 'imported'); if (result.ok) await refresh(); })}>导入对话</Button></div>
+      : <div className="asset-conversation-body">
+        {listOpen && <button className="asset-list-scrim" aria-label="关闭对话列表" onClick={() => setListOpen(false)} />}
+        <aside id="asset-conversations" className={`asset-conversations${listOpen ? ' is-open' : ''}`} aria-label="对话列表">
+        <div className="asset-list-heading"><span>{visibleConversations.length} 个对话</span><details ref={importMenuRef} className="asset-operation-menu asset-import-menu"><summary aria-label="导入对话" title="导入对话"><Upload size={15} /></summary><div>
+          {([['json', 'JSON'], ['md', 'Markdown'], ['deepseek', 'DeepSeek']] as const).map(([format, label]) => <Button key={format} variant="ghost" onClick={() => { if (importMenuRef.current) importMenuRef.current.open = false; void run(async () => { const result = await importConversation(format, 'imported'); if (result.ok) await refresh(); else if (!result.canceled) throw new Error('导入失败'); }); }}>导入 {label}</Button>)}
+        </div></details><IconButton className="asset-list-close asset-icon-button" aria-label="关闭对话列表" onClick={() => setListOpen(false)}><X size={15} /></IconButton></div>
         <div className="asset-conversation-list">{!visibleConversations.length && <EmptyState message={query ? '没有匹配的对话' : '交流记录会自动保存在这里'} />}
-        {visibleConversations.map(item => <button key={item.id} className={`asset-conversation ${selected === item.id ? 'active' : ''}`} onClick={() => openConversation(item.id)}>
-          <strong>{item.title || '未命名对话'}</strong><span>{item.sourceType === 'api' ? 'API 对话' : '网页对话'} · 浏览 {views[item.id] ?? 0} 次</span><time>{new Date(item.updatedAt).toLocaleString()}</time></button>)}
-        </div>{usage && <footer className="asset-total-usage" data-name="assets.text-usage" title="全部对话累计 Unicode 字符，包含空白与标点"><strong>全部文本总计</strong><span>{usage.totalCharacters.toLocaleString()} 字符</span></footer>}
+        {visibleConversations.map(item => <button key={item.id} className={`asset-conversation ${selected === item.id ? 'active' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'} onClick={() => openConversation(item.id)}>
+          <strong>{item.title || '未命名对话'}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button>)}
+        </div>
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
-        attachments={attachments} settings={settings} branchRequest={branchRequest} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
+        attachments={attachments} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
     <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="AI资产设置" className="asset-settings-modal" portal><AssetSettingsPanel freezeTarget={freezeTarget} /></Modal>
   </div></>;
 }

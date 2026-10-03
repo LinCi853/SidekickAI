@@ -6,6 +6,7 @@
    ===================================================================== */
 
 import type { HotkeyConfig, PromptTemplate } from './electron-api';
+import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
 
 /**
  * 将 KeyboardEvent 归一化为 Electron accelerator 字符串（如 "Ctrl+Shift+1"）。
@@ -77,7 +78,7 @@ export function buildOtherHotkeysForPrompt(
       .filter((h) => h.enabled && h.accelerator)
       .map((h) => ({ label: h.label, accelerator: h.accelerator })),
     ...allPrompts
-      .filter((p) => p.id !== currentPromptId && p.hotkey)
+      .filter((p) => p.id !== currentPromptId && p.hotkey && hasUsablePromptContent(p))
       .map((p) => ({ label: `提示词「${p.title}」`, accelerator: p.hotkey as string })),
   ];
   return result;
@@ -108,7 +109,7 @@ export function detectPromptHotkeyConflicts(
   const promptOccupied = new Map<string, string>(); // accelerator → promptTitle（用于 prompt 之间冲突）
 
   for (const p of prompts) {
-    if (!p.hotkey) continue;
+    if (!p.hotkey || !hasUsablePromptContent(p)) continue;
     const acc = p.hotkey;
     // 与应用快捷键冲突
     const appConflict = occupied.get(acc);

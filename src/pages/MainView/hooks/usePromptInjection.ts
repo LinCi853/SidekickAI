@@ -4,6 +4,7 @@ import { findSimilarInjection, logInjection, onPromptInjectRequest, sendPromptIn
 import { composeFinalText } from '../../../lib/prompt-placeholders';
 import { usePromptHotkeys } from '../../../hooks/usePromptHotkeys';
 import type { AIPlatform, Profile, PromptTemplate, SimilarInjectionResult } from '../../../lib/electron-api';
+import { hasUsablePromptContent } from '../../../../electron/shared/prompt-template';
 
 interface Tab {
   id: string;
@@ -40,6 +41,10 @@ export function usePromptInjection(
       source: 'inline' | 'detached' = 'inline',
       skipPreview = false,
     ): Promise<{ success: boolean; platformName?: string }> => {
+      if (!hasUsablePromptContent(template)) {
+        if (source === 'detached') sendPromptInjectResult({ success: false });
+        return { success: false };
+      }
       if (!activeTab) return { success: false };
       const profile = getProfile(activeTab.profileId);
       const platform = profile?.aiPlatformUrl

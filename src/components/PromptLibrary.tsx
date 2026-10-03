@@ -5,6 +5,7 @@ import { usePromptStore } from '../store/usePromptStore';
 import { useTabStore } from '../store/useTabStore';
 import Button from './ui/Button';
 import './PromptLibrary.css';
+import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
 
 export interface PromptLibraryProps {
   onInject?: (template: PromptTemplate) => Promise<{ success: boolean; platformName?: string }>;
@@ -17,6 +18,7 @@ export default function PromptLibrary({ onInject }: PromptLibraryProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const inject = async (template: PromptTemplate) => {
+    if (!hasUsablePromptContent(template)) { setNotice('请先编写通用提示词'); return; }
     try {
       if (!onInject) { setNotice('暂无可用的注入目标'); return; }
       const result = await onInject(template);
@@ -34,7 +36,7 @@ export default function PromptLibrary({ onInject }: PromptLibraryProps) {
       {!prompts.length && <span className="prompt-empty">暂无模板，可在 AI资产中添加</span>}
       {prompts.map((template, index) => <button key={template.id} type="button"
         className={`prompt-chip${injectedId === template.id ? ' injected' : ''}`}
-        title={template.content} data-name={`component.prompt-library.chip-${index + 1}`}
+        title={hasUsablePromptContent(template) ? template.content : '待编写通用提示词'} disabled={!hasUsablePromptContent(template)} data-name={`component.prompt-library.chip-${index + 1}`}
         onClick={() => void inject(template)}><span className="prompt-chip-title">{template.title}</span></button>)}
       <Button variant="outline" data-name="component.prompt-library.manage-button"
         onClick={() => void openPromptWindow({ category: 'prompts' }).catch(error => setNotice(String(error)))}>管理提示词</Button>

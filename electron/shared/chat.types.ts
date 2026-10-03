@@ -5,6 +5,12 @@
 // 提示词模板（明输入明注入）
 // ============================================================================
 
+export interface PromptExample {
+  content: string
+  conversationId?: string
+  messageId?: string
+}
+
 /** 提示词模板：可注入到 AI 平台输入框的预设文本 */
 export interface PromptTemplate {
   /** 唯一标识（UUID） */
@@ -16,6 +22,7 @@ export interface PromptTemplate {
    * {{body}} 在内容中的位置决定了输入内容的注入位置。
    */
   content: string
+  example?: PromptExample
   /** 分类（可选，用于分组展示） */
   category?: string
   /** 创建时间戳 */

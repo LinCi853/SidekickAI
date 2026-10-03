@@ -25,6 +25,11 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('prompt list ownership', () => {
+  it('exposes a current read failure while preserving templates and clears it on retry', async () => {
+    await store.getState().init(); api.listPrompts.mockRejectedValueOnce(new Error('Read unavailable'));
+    await store.getState().init(); expect(store.getState().loadError).toBe(true); expect(store.getState().prompts).toEqual([template]);
+    await store.getState().init(); expect(store.getState().loadError).toBe(false); expect(store.getState().prompts).toEqual([template]);
+  });
   it('keeps the newest broadcast read when an older list completes later', async () => {
     const older = deferred<PromptTemplate[]>();
     api.listPrompts.mockReturnValueOnce(older.promise).mockResolvedValueOnce([]);
@@ -39,6 +44,7 @@ describe('prompt list ownership', () => {
     api.listPrompts.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
     const initial = store.getState().init(); changed(); older.reject(new Error('Old read failed')); await initial;
     expect(store.getState().initialized).toBe(false);
+    expect(store.getState().loadError).toBe(false);
     newer.resolve([template]); await settleHooks();
     expect(store.getState().initialized).toBe(true);
   });

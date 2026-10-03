@@ -17,6 +17,7 @@ import { createSqliteJsonStore, getModuleState } from './module-state-store.js'
 import { PROMPTS, getDefault } from './default-config.js'
 import { runAssetImport } from '../assets/import-activity.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
+import { validatePromptTemplate } from '../shared/prompt-template.js'
 
 let changeScheduled = false
 function notifyPromptChanges(): void {
@@ -58,8 +59,14 @@ export class PromptStore {
    * 按 id 查找：存在则更新（保留 createdAt，刷新 updatedAt）；不存在则新增（补全 id 与时间戳）。
    */
   save(template: PromptTemplate): PromptTemplate {
+    validatePromptTemplate(template)
+    return this.persist(template)
+  }
+
+  private persist(template: PromptTemplate): PromptTemplate {
     const id = template.id || randomUUID()
-    const toSave: PromptTemplate = { ...template, id, updatedAt: Date.now() }
+    const previous = this.crud.get(id)
+    const toSave: PromptTemplate = { ...previous, ...template, id, createdAt: previous?.createdAt ?? template.createdAt ?? Date.now(), updatedAt: Date.now() }
     this.crud.save(toSave)
     notifyPromptChanges()
     return toSave
@@ -73,7 +80,9 @@ export class PromptStore {
 
   /** 导出全部提示词为 JSON 字符串 */
   exportPrompts(): string {
-    return JSON.stringify({ version: 1, prompts: this.list() }, null, 2)
+    const prompts = this.list()
+    for (const template of prompts) validatePromptTemplate(template, true)
+    return JSON.stringify({ version: 1, prompts }, null, 2)
   }
 
   /**
@@ -81,16 +90,19 @@ export class PromptStore {
    * @returns 新增数与更新数
    */
   importPrompts(json: string): { added: number; updated: number } {
-    const data = JSON.parse(json) as { prompts?: PromptTemplate[] }
-    const incoming = Array.isArray(data?.prompts) ? data.prompts : []
+    const data = JSON.parse(json) as { prompts?: unknown[] }
+    if (!data || !Array.isArray(data.prompts)) throw new Error('Invalid prompt import')
+    const incoming = data.prompts
+    for (const template of incoming) validatePromptTemplate(template, true)
     const existing = new Map(this.list().map((p) => [p.id, p]))
     let added = 0
     let updated = 0
-    for (const p of incoming) {
-      if (!p || typeof p !== 'object' || !p.title || typeof p.content !== 'string') continue
+    for (const value of incoming) {
+      const p = value as PromptTemplate
       if (existing.has(p.id)) updated++
       else added++
-      this.save(p)
+      const saved = this.persist(p)
+      existing.set(saved.id, saved)
     }
     return { added, updated }
   }

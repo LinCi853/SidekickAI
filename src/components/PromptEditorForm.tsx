@@ -1,12 +1,6 @@
-/* =====================================================================
-   components/PromptEditorForm.tsx —— 提示词编辑器表单（共享组件）
-   三方复用：提示词库独立窗口 / 主窗口底栏 / 笔记存为提示词
-   包含：标题 / 分类(Chips+input) / 内容 / {{body}}占位符提示 / 局内快捷键
-   不包含外壳(overlay/modal/header/footer)，由调用方各自渲染。
-   ===================================================================== */
-
 import { useEffect, useMemo, useState } from 'react';
-import type { PromptTemplate, HotkeyConfig } from '../lib/electron-api';
+import { Copy } from 'lucide-react';
+import type { PromptExample, HotkeyConfig } from '../lib/electron-api';
 import { usePromptStore } from '../store/usePromptStore';
 import {
   getHotkeys,
@@ -18,6 +12,7 @@ import {
 import { buildOtherHotkeysForPrompt } from '../lib/prompt-hotkey';
 import Chip from './ui/Chip';
 import HotkeyRecorder from './ui/HotkeyRecorder';
+import IconButton from './ui/IconButton';
 import '../pages/PromptLibraryView.css';
 
 export interface PromptEditorFormProps {
@@ -25,13 +20,15 @@ export interface PromptEditorFormProps {
   content: string;
   category: string;
   hotkey: string;
-  /** 当前编辑的模板 id（用于排除自身的热键冲突检测），新增时为 null */
+  example?: PromptExample;
   editingId: string | null;
   onTitleChange: (v: string) => void;
   onContentChange: (v: string) => void;
   onCategoryChange: (v: string) => void;
   onHotkeyChange: (v: string) => void;
-  /** data-name 前缀（可选） */
+  onExampleContentChange?: (v: string) => void;
+  sourceAvailable?: boolean;
+  disabled?: boolean;
   dataNamePrefix?: string;
 }
 
@@ -40,21 +37,24 @@ export default function PromptEditorForm({
   content,
   category,
   hotkey,
+  example,
   editingId,
   onTitleChange,
   onContentChange,
   onCategoryChange,
   onHotkeyChange,
+  onExampleContentChange,
+  sourceAvailable = false,
+  disabled = false,
   dataNamePrefix = 'prompt-editor',
 }: PromptEditorFormProps) {
   const prompts = usePromptStore((s) => s.prompts);
   const [appHotkeys, setAppHotkeys] = useState<HotkeyConfig[]>([]);
 
-  // 加载全局热键列表，用于冲突检测
   useEffect(() => {
     getHotkeys()
       .then(setAppHotkeys)
-      .catch((e) => console.warn('[PromptEditorForm] 加载全局热键失败:', e));
+      .catch((error) => console.warn('[PromptEditorForm] Failed to load global shortcuts:', error));
   }, []);
 
   const allCategories = useMemo(() => {
@@ -70,8 +70,10 @@ export default function PromptEditorForm({
   return (
     <div className="prompt-editor-body" data-name={dn('body')}>
       <div className="prompt-field" data-name={dn('field-title')}>
-        <label data-name={dn('title-label')}>标题</label>
+        <label htmlFor={dn('title-input')} data-name={dn('title-label')}>标题</label>
         <input
+          id={dn('title-input')}
+          disabled={disabled}
           value={title}
           autoFocus
           spellCheck={false}
@@ -81,12 +83,13 @@ export default function PromptEditorForm({
         />
       </div>
       <div className="prompt-field" data-name={dn('field-category')}>
-        <label data-name={dn('category-label')}>分类（可选）</label>
+        <label htmlFor={dn('category-input')} data-name={dn('category-label')}>分类（可选）</label>
         <div className="prompt-category-chips">
           {allCategories.map((cat) => (
             <Chip
               key={cat}
               selected={category === cat}
+              disabled={disabled}
               onClick={() => onCategoryChange(category === cat ? '' : cat)}
               data-name={dn('category-chip')}
             >
@@ -94,6 +97,8 @@ export default function PromptEditorForm({
             </Chip>
           ))}
           <input
+            id={dn('category-input')}
+            disabled={disabled}
             value={category}
             spellCheck={false}
             placeholder="新增分类..."
@@ -103,32 +108,30 @@ export default function PromptEditorForm({
         </div>
       </div>
       <div className="prompt-field" data-name={dn('field-content')}>
-        <label data-name={dn('content-label')}>内容</label>
+        <label htmlFor={dn('content-textarea')} data-name={dn('content-label')}>{onExampleContentChange ? '通用提示词（可选）' : '通用提示词'}</label>
         <textarea
+          id={dn('content-textarea')}
+          disabled={disabled}
           value={content}
           spellCheck={false}
-          placeholder="输入提示词内容，使用 {{body}} 作为当前输入框内容的占位符（点击上方提示可复制）"
+          placeholder="输入通用提示词"
           data-name={dn('content-textarea')}
           onChange={(e) => onContentChange(e.target.value)}
         />
+        <div className="prompt-placeholder-action"><code>{'{{body}}'}</code><IconButton type="button" aria-label="复制当前输入框占位符" title="复制当前输入框占位符" disabled={disabled} onClick={() => void navigator.clipboard.writeText('{{body}}')} data-name={dn('placeholder-copy')}><Copy size={14} /></IconButton></div>
       </div>
-      <div className="prompt-field-hint" data-name={dn('placeholder-hint')}>
-        占位符：
-        <code
-          style={{ cursor: 'pointer', userSelect: 'all' }}
-          onClick={() => navigator.clipboard.writeText('{{body}}')}
-          title="点击复制"
-          data-name={dn('placeholder-copy')}
-        >
-          {'{{body}}'}
-        </code>
-        当前输入框内容（点击复制）
-      </div>
-      {/* 需求 2.5：局内快捷键录入 */}
+      {onExampleContentChange && <div className="prompt-field" data-name={dn('field-example')}>
+        <label htmlFor={dn('example-textarea')}>案例（可选）</label>
+        <textarea id={dn('example-textarea')} disabled={disabled} value={example?.content ?? ''} spellCheck={false} placeholder="案例文本" data-name={dn('example-textarea')} onChange={event => onExampleContentChange(event.target.value)} />
+        {example?.conversationId && <div className="prompt-example-source" data-name={dn('example-source')}>
+          <span>{sourceAvailable ? (example.messageId ? '已关联原对话及消息' : '已关联原对话') : '原对话不可用'}</span>
+        </div>}
+      </div>}
       <div className="prompt-field" data-name={dn('field-hotkey')}>
         <label data-name={dn('hotkey-label')}>局内快捷键（可选）</label>
         <HotkeyRecorder
           value={hotkey}
+          disabled={disabled}
           placeholder="点击录入（如 Ctrl+Shift+1）"
           className="prompt-hotkey-input"
           onRecord={(acc) => onHotkeyChange(acc)}
@@ -138,9 +141,6 @@ export default function PromptEditorForm({
           onRecordingResult={onHotkeyRecordingResult}
           onRecordingPartial={onHotkeyRecordingPartial}
         />
-        <div className="prompt-field-hint" data-name={dn('hotkey-hint')}>
-          在主窗口聚焦时按下快捷键即注入该模板；与全局热键冲突的将自动跳过
-        </div>
       </div>
     </div>
   );

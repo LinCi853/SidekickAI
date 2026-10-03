@@ -13,6 +13,7 @@ export interface PromptStoreState {
   /** 是否已初始化 */
   initialized: boolean;
   subscribed: boolean;
+  loadError: boolean;
 
   /** 初始化：从主进程加载模板列表 */
   init: () => Promise<void>;
@@ -30,7 +31,7 @@ export const usePromptStore = create<PromptStoreState>((set, get) => {
     window.electron.onAiAssetsCleared(() => {
       readRevision += 1;
       clearRevision += 1;
-      set({ prompts: [], initialized: true });
+      set({ prompts: [], initialized: true, loadError: false });
     });
     window.electron.onPromptsChanged(() => { void get().init(); });
     set({ subscribed: true });
@@ -52,17 +53,19 @@ export const usePromptStore = create<PromptStoreState>((set, get) => {
     prompts: [],
     initialized: false,
     subscribed: false,
+    loadError: false,
 
     init: async () => {
       subscribe();
       const operation = ++readRevision;
+      set({ loadError: false });
       try {
         const prompts = await listPrompts();
-        if (operation === readRevision) set({ prompts, initialized: true });
+        if (operation === readRevision) set({ prompts, initialized: true, loadError: false });
       } catch (e) {
         if (operation === readRevision) {
           console.error('[usePromptStore.init] Failed to load templates:', e);
-          set({ initialized: true });
+          set({ initialized: true, loadError: true });
         }
       }
     },

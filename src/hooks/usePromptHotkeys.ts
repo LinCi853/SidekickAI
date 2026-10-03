@@ -13,6 +13,7 @@ import { getHotkeys } from '../lib/electron-api';
 import { keyEventToAccelerator, detectPromptHotkeyConflicts } from '../lib/prompt-hotkey';
 import { isTypingTarget } from '../lib/shared-utils';
 import type { PromptTemplate } from '../lib/electron-api';
+import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
 
 export interface UsePromptHotkeysOptions {
   /** 命中快捷键时调用（传入匹配的 prompt 模板）
@@ -42,9 +43,10 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
 
   useEffect(() => {
     let cancelled = false;
+    let requestRevision = 0;
 
     const rebuildMap = async () => {
-      const prompts = usePromptStore.getState().prompts;
+      const revision = ++requestRevision;
       // 拉取主进程全局热键用于冲突检测
       let appHotkeys: Awaited<ReturnType<typeof getHotkeys>> = [];
       try {
@@ -52,7 +54,8 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
       } catch (e) {
         console.warn('[usePromptHotkeys] 加载全局热键失败，跳过冲突检测:', e);
       }
-      if (cancelled) return;
+      if (cancelled || revision !== requestRevision) return;
+      const prompts = usePromptStore.getState().prompts.filter(hasUsablePromptContent);
 
       const conflicts = detectPromptHotkeyConflicts(prompts, appHotkeys);
       for (const [, msg] of conflicts) {
@@ -87,7 +90,8 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
       if (isTypingTarget(e.target)) return;
       const acc = keyEventToAccelerator(e);
       if (!acc) return;
-      const matched = hotkeyMapRef.current.get(acc);
+      const mapped = hotkeyMapRef.current.get(acc);
+      const matched = mapped && usePromptStore.getState().prompts.find(prompt => prompt.id === mapped.id && prompt.hotkey === acc && hasUsablePromptContent(prompt));
       if (matched) {
         e.preventDefault();
         e.stopPropagation();

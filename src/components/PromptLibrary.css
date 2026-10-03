@@ -13,9 +13,10 @@
               transform var(--duration-fast) var(--ease-out);
   user-select: none; max-width: 100%;
 }
-.prompt-chip:hover { background: var(--accent-10); color: var(--accent-bright); border-color: var(--accent-50); }
+.prompt-chip:hover:not(:disabled) { background: var(--muted); color: var(--foreground); }
+.prompt-chip:disabled { cursor: default; color: var(--muted-foreground); }
 .prompt-chip:active { transform: scale(0.96); }
-.prompt-chip.injected { background: var(--accent-dim); color: var(--foreground-inverse); border-color: var(--accent-dim); }
+.prompt-chip.injected { background: var(--muted); color: var(--foreground); }
 .prompt-chip-title {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
 }
@@ -25,12 +26,13 @@
 
 /* 需求 2.5：HotkeyRecorder 录制中/错误状态 */
 .prompt-hotkey-input.is-recording {
-  border-color: var(--accent-bright);
-  background: var(--accent-10);
+  border-color: var(--border);
+  background: var(--muted);
   cursor: pointer;
 }
 .prompt-hotkey-input.has-error {
-  border-color: var(--danger);
+  border-color: var(--border);
+  background: var(--muted);
 }
 .prompt-hotkey-input::placeholder { color: var(--text-muted); }
 .prompt-editor-footer {
