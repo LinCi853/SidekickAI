@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "6a025dcacc6f0e48bbe937c90b74b7150b06e4a2c10e3e071f88c325eac293b6",
+  "revision": "de3f64153455679104c2f349fbe0031f69a2bf7b40ee8a1d634b83f4b1de2b84",
   "files": {
     "electron.vite.config.ts": "59de18e9de01da904cad56f121904704a4ebf25ccbfaffa902b39d2b74478e37",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
@@ -84,7 +84,7 @@
     "installer-tauri/src-tauri/icons/32x32.png": "467245f940e82a057d4d09d030a551c20ec1f579e131201425f2f3b3eb94c10c",
     "installer-tauri/src-tauri/icons/icon.ico": "839c35c7a49fc811d7b7e8db7caa32fefd778c22aedf0c3a2d447bf12f3a4087",
     "installer-tauri/src-tauri/icons/icon.png": "76fac302be755e55779a1a2f1c34822988057139d7fba0c4c089f91e52a51b68",
-    "installer-tauri/src-tauri/src/application-launch.ps1": "d7b65dcd43146e0363dc7904246f98ba2509438664ddbaa1151f3d3d2da7bd3f",
+    "installer-tauri/src-tauri/src/application-launch.ps1": "0316c015c1892d2bbcdf5c9a0d11fd1394967804069d4bc65e54bf56d1372ae8",
     "installer-tauri/src-tauri/src/application_completion_ui_tests.rs": "ff4affbbcd0ac7bbf25b4e47b084d8e870486ca01fc5e0493de75da67baf3102",
     "installer-tauri/src-tauri/src/application_launch.rs": "a22257fc0ccd760305c575797def0816ade7bd925e1b5125b2d4330a443f2908",
     "installer-tauri/src-tauri/src/application_launch_tests.rs": "a0b3f1394b1e5f39421a616930f9e691013bdfbbf95df7273745926423148bb7",
@@ -167,7 +167,7 @@
     "packages/backup-core/transfer.ts": "7e3bc42b1844077d1becb5331effe00a5bfadaa18aa9e4c3e632f77ed9efe4db",
     "packages/backup-core/types.ts": "af819d249831456f0b4879d92d678a16cfc36c3fb97dafa7e0aef1b8d6378df6",
     "packages/desktop-common/application-process.ts": "fd3eee6c54f3999b3e501efd4bbed1d8209110bced7f9c7c361416227de9db7e",
-    "packages/desktop-common/edition-session.ts": "9172baa2e41bdae043c08418cf50321f8c420a842c502064e71e506c84360416",
+    "packages/desktop-common/edition-session.ts": "2c0ca95b6d418c47f51120c8e6f942c04c7f7a1f31d529490e8595e9af14e891",
     "packages/desktop-common/hotkey-ownership.ts": "4cb2df3930ac90c4c411f83782a00128fc325d287bdd2161194bf108c14aba9b",
     "packages/desktop-common/installation-reservation.ts": "a150a992384a3fa3c5c380e4761b4845028293c2029f6afdbca00d70e32fb3d8",
     "packages/desktop-common/running-application.ts": "a3f153087d6daa120737be20bcd693f2b33b1b13634fa1990dfaf3dffaa38879",
