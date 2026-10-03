@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { LogExportOptions } from '../shared/log-export.js'
 import { IPC_CHANNELS, type AppSettings } from '../shared/types.js'
 
 export const appSettingsApi = {
@@ -46,7 +47,7 @@ export const appSettingsApi = {
     selectDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_DOWNLOAD_DIR),
     // 下载：在系统文件管理器中打开下载目录
     openDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR),
-    openLogsFolder: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER),
+    openLogsFolder: (options?: LogExportOptions) => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, options),
     // 文件拖拽导入：读取文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容）
     dropFiles: (filePaths: string[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.WEBVIEW_FILE_DROP, filePaths),

@@ -15,6 +15,7 @@ vi.mock('../hotkey/manager.js', () => ({ getHotkeyManagerInstance: vi.fn() }))
 vi.mock('./default-config.js', () => ({ getDefaultAppSettings: () => ({}) }))
 vi.mock('./chat-store.js', () => ({ getChatStore: () => ({ activityLogRecords: fixture.read }) }))
 vi.mock('./activity-log-export.js', () => ({ openActivityLogFolder: fixture.export }))
+vi.mock('../diagnostics/log-sources.js', () => ({ applicationLogSources: () => [] }))
 import { registerAppSettingsIPC } from './app-settings-store'
 import { appSettingsApi } from '../preload/appSettings'
 import { openLogsFolder } from '../../src/lib/electron-api/settings'
@@ -35,17 +36,17 @@ afterEach(() => { vi.unstubAllGlobals() })
 
 it('passes the folder command through the actual renderer and preload bridge without a directory payload', async () => {
   await openLogsFolder()
-  expect(fixture.invoke.mock.calls).toEqual([[IPC_CHANNELS.APP_OPEN_LOGS_FOLDER]])
+  expect(fixture.invoke.mock.calls).toEqual([[IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, undefined]])
   expect(fixture.export).toHaveBeenCalledTimes(1)
-  expect(fixture.export).toHaveBeenCalledWith(fixture.directory, expect.any(Function), expect.any(Function))
+  expect(fixture.export).toHaveBeenCalledWith(fixture.directory, expect.any(Function), expect.any(Function), undefined, [])
   expect(fixture.read).toHaveBeenCalledTimes(1)
   expect(fixture.open.mock.calls).toEqual([[`${fixture.directory}/logs`]])
 })
 
-it('ignores renderer-supplied paths at the main-process handler', async () => {
-  await fixture.handlers.get(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER)!({}, 'E:/unrelated-directory')
-  expect(fixture.export).toHaveBeenCalledWith(fixture.directory, expect.any(Function), expect.any(Function))
-  expect(fixture.open.mock.calls).toEqual([[`${fixture.directory}/logs`]])
+it('passes date options without accepting an output directory from the renderer', async () => {
+  const options = { startDate: '2026-10-03', endDate: '2026-10-04' }
+  await openLogsFolder(options)
+  expect(fixture.export).toHaveBeenCalledWith(fixture.directory, expect.any(Function), expect.any(Function), options, [])
 })
 
 it('preserves backend rejection across the real bridge', async () => {

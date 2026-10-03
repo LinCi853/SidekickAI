@@ -1,4 +1,3 @@
-import { isAssetInterfaceImage } from '../shared/asset-presentation.js'
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetObservedMessage } from '../shared/ai-assets.types.js'
@@ -38,7 +37,6 @@ function collectAiAssets(): () => void {
   let announcedLocation = ''
   let visitId = crypto.randomUUID()
   let lastSnapshot = ''
-  let lastMessageIds: Record<string, string> | undefined
   let scheduledSnapshot: { fingerprint: string; sequence: number } | undefined
   let sequence = 0
   const suppressed = new Set<string>()
@@ -48,9 +46,9 @@ function collectAiAssets(): () => void {
   const aliases = new Map<string, string>()
   type Original = {
     input: AssetAttachmentInput; url?: string; blob?: Blob; id?: string; ready?: Promise<void>
-    inputUsers?: Map<string, string>; associating?: boolean
+    inputUsers?: Map<string, string>; associating?: boolean; retired?: boolean
   }
-  type StartedOriginal = { id: string; saved?: boolean; busy?: boolean }
+  type StartedOriginal = { id?: string; saved?: boolean; busy?: boolean; suppressed?: boolean }
   const originals = new Map<string, Original>()
   const pendingInputs = new Set<string>()
   const retryWaits = new Set<() => void>()
@@ -65,7 +63,7 @@ function collectAiAssets(): () => void {
       title: document.title, url }
   }
   const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
-  const active = (entry: Original) => !stopped && !suppressed.has(entry.input.conversationKey)
+  const active = (entry: Original) => !stopped && !entry.retired && !suppressed.has(entry.input.conversationKey)
   const userSignature = (message: AssetObservedMessage) => JSON.stringify([message.versionKey, message.content])
   const waitForRetry = (delay: number) => new Promise<void>(resolve => {
     const finish = () => { clearTimeout(timer); retryWaits.delete(finish); resolve() }
@@ -92,6 +90,7 @@ function collectAiAssets(): () => void {
     if (!active(entry)) return
     const started = initial ?? await invoke(ipc.ASSET_ATTACHMENT_BEGIN, entry.input)
     if (!active(entry)) return
+    if (started.suppressed || !started.id) { entry.retired = true; entry.blob = undefined; return }
     entry.id = started.id
     if (started.saved) { entry.blob = undefined; return }
     if (started.busy) return
@@ -139,17 +138,11 @@ function collectAiAssets(): () => void {
       return retryInvoke<StartedOriginal>(ipc.ASSET_ATTACHMENT_BEGIN, [metadata], () => active(entry))
     }).then(started => {
       if (!started) return
+      if (started.value.suppressed || !started.value.id) { entry.retired = true; entry.blob = undefined; pendingInputs.delete(key); return }
       entry.id = started.value.id
       originalQueue = originalQueue.then(() => transfer(entry, started.value)).catch(error => console.warn('[ai-assets] Original transfer failed:', error))
     }).catch(error => console.warn('[ai-assets] Original metadata failed:', error))
     if (input.direction === 'input') pendingInputs.add(key)
-  }
-  const acquireOutputs = (outputs: AssetAttachmentInput[], messageIds?: Record<string, string>) => {
-    for (const input of outputs) {
-      const messageId = input.messageKey ? messageIds?.[input.messageKey] : undefined
-      if (messageIds && !messageId) continue
-      acquire({ ...input, messageId })
-    }
   }
   const associate = (source: ReturnType<typeof context>, inputs: Array<{ key: string; messageKey: string; messageId?: string }>) => {
     const groups = new Map<string, { messageId?: string; entries: Array<{ key: string; entry: Original }> }>()
@@ -178,7 +171,7 @@ function collectAiAssets(): () => void {
       draftTransition = lastLocation.startsWith('document:') && !source.conversationKey.startsWith('document:')
         ? { key: lastLocation, messages: documentMessages } : undefined
       lastLocation = source.conversationKey
-      visitId = crypto.randomUUID(); lastSnapshot = ''; lastMessageIds = undefined; scheduledSnapshot = undefined
+      visitId = crypto.randomUUID(); lastSnapshot = ''; scheduledSnapshot = undefined
     }
     if (suppressed.has(source.conversationKey)) return
     const snapshot = readDomConversation(document, location.hostname)
@@ -196,27 +189,10 @@ function collectAiAssets(): () => void {
       const nextUser = found.find(({ observed }) => observed.role === 'user' && entry.inputUsers?.get(observed.key) !== userSignature(observed))
       return nextUser ? [{ key, messageKey: nextUser.observed.key }] : []
     })
-    const outputs: AssetAttachmentInput[] = []
-    for (const [index, message] of found.entries()) {
-      if (message.observed.role !== 'assistant') continue
-      for (const element of message.element.querySelectorAll('img, a[download], a[data-attachment]')) {
-        const image = element instanceof HTMLImageElement
-        if (image && element.closest('[data-avatar], .avatar, [data-testid="avatar"], [aria-hidden="true"], button, [role="button"]')) continue
-        const url = image ? element.currentSrc || element.src : (element as HTMLAnchorElement).href
-        if (!url || !/^(https?:|data:|blob:)/.test(url)) continue
-        if (image && isAssetInterfaceImage({ direction: 'output', mimeType: 'image/*', sourceUrl: url })) continue
-        let name = image ? '图片' : element.getAttribute('download') || element.textContent?.trim() || '文件'
-        try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || name) } catch {}
-        if (name.length > 255 || /^data:/.test(url)) name = image ? '图片' : '文件'
-        outputs.push({ ...source, messageKey: message.observed.key, name, mimeType: image ? 'image/*' : 'application/octet-stream',
-          direction: 'output', sourceUrl: url, externalKey: `${JSON.stringify(found.slice(0, index + 1).map(item => [item.observed.key, item.observed.versionKey ?? '']))}:${url}` })
-      }
-    }
     const eventId = visitId
     if (!found.length && !snapshot.rejected.length) return
     if (fingerprint === (scheduledSnapshot?.fingerprint ?? lastSnapshot)
       && (!found.length || announcedLocation === source.conversationKey || scheduledSnapshot)) {
-      if (!scheduledSnapshot) acquireOutputs(outputs, lastMessageIds)
       return
     }
     const observationSequence = ++sequence
@@ -244,7 +220,6 @@ function collectAiAssets(): () => void {
       if (eventId === visitId) {
         if (found.length) announcedLocation = source.conversationKey
         lastSnapshot = fingerprint
-        lastMessageIds = result.value.messageIds
         if (scheduledSnapshot?.sequence === observationSequence) scheduledSnapshot = undefined
         if (found.length && draftTransition === transition) draftTransition = undefined
       }
@@ -252,7 +227,6 @@ function collectAiAssets(): () => void {
         const messageId = result.value.messageIds?.[input.messageKey]
         return result.value.messageIds && !messageId ? [] : [{ ...input, messageId }]
       }))
-      acquireOutputs(outputs, result.value.messageIds)
     })
   }
   const files = (values: FileList | File[] | null) => {

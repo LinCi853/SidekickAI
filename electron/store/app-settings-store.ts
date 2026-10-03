@@ -18,6 +18,9 @@ import { getAppSettingsTable } from './module-state-store.js'
 import { getHotkeyManagerInstance } from '../hotkey/manager.js'
 import { getDefaultAppSettings, type DefaultAppSettings } from './default-config.js'
 import { openActivityLogFolder } from './activity-log-export.js'
+import { applicationLogSources } from '../diagnostics/log-sources.js'
+import type { LogExportOptions } from '../shared/log-export.js'
+import { setRuntimeLogLevel } from '../diagnostics/application-log.js'
 
 // ===== SQLite 持久化（settings.db / app_settings 表） =====
 
@@ -345,6 +348,7 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
     next.silentStart = false
   }
   writeSettingsRaw(next)
+  if (patch.logLevel !== undefined) setRuntimeLogLevel(next.logLevel)
   // autoLaunch 或 silentStart 变化时立即同步系统注册项（避免必须重启应用才生效）
   if (patch.autoLaunch !== undefined || patch.silentStart !== undefined) {
     const ok = applyAutoLaunchSetting(next.autoLaunch, next.silentStart)
@@ -559,10 +563,10 @@ export function registerAppSettingsIPC(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, async () => {
+  ipcMain.handle(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, async (_event, options?: LogExportOptions) => {
     const { getChatStore } = await import('./chat-store.js')
-    await openActivityLogFolder(app.getPath('userData'), () => getChatStore().activityLogRecords(),
-      directory => shell.openPath(directory))
+    return openActivityLogFolder(app.getPath('userData'), () => getChatStore().activityLogRecords(),
+      directory => shell.openPath(directory), options, applicationLogSources())
   })
 
   // 文件拖拽导入：读取文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容）

@@ -93,6 +93,9 @@ export default function Modal({
     >
       <div
         className={['modal-container', className].filter(Boolean).join(' ')}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
         {...rest}
       >
         {(title || showCloseButton) && (

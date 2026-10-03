@@ -15,7 +15,7 @@ vi.mock('../store/chat-store.js', () => ({ getChatStore: () => ({ assets: {
     Object.assign(state.record, { status: reused ? 'reused' : 'saved', sha256, size, error: undefined })
   },
 } }) }))
-import { acquireLinkedOriginal, collectApiOriginals, hasLinkedOriginalTransfers, stopLinkedOriginalTransfers } from './api-originals'
+import { acquireLinkedOriginal, hasLinkedOriginalTransfers, stopLinkedOriginalTransfers } from './api-originals'
 import { OriginalVault } from './original-vault'
 
 const bytes = Buffer.from('linked original')
@@ -38,11 +38,11 @@ afterEach(async () => {
   await rm(state.root, { recursive: true, force: true })
 })
 describe('linked original recovery', () => {
-  it('verifies saved API references on repeated collection', async () => {
+  it('verifies a historical reference when explicitly retried', async () => {
     await unlink(vault.pathFor(state.record.sha256!))
     const { net } = await import('electron')
     vi.mocked(net.fetch).mockResolvedValueOnce(new Response(bytes))
-    await collectApiOriginals('profile-a', 'conversation-a', 'message-a', '[file](https://fixture.test/file.pdf)')
+    await acquireLinkedOriginal(state.record)
     expect(state.record.status).toBe('saved')
     expect(await vault.verify(state.record.sha256!, bytes.length)).toBeTruthy()
   })

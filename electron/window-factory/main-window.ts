@@ -197,11 +197,6 @@ export function createMainWindow(): void {
     }
   })
 
-  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
-    const tag = ['LOG', 'WARN', 'ERROR'][level] ?? 'LOG'
-    console.log(`[renderer:${tag}] ${message} (${sourceId}:${line})`)
-  })
-
   // bounds 持久化
   setupBoundsTracking(win, MAIN_WINDOW_ID)
 

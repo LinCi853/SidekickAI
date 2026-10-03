@@ -138,6 +138,7 @@ export interface AiAssetsAPI {
   recordView(conversationId: string, eventId: string): Promise<void>
   deleteConversation(conversationId: string): Promise<void>
   deleteMessage(messageId: string): Promise<void>
+  deleteSelection(kind: 'files' | 'conversations', ids: string[]): Promise<{ deleted: number; cleanupPending: boolean }>
   renameConversation(conversationId: string, title: string): Promise<void>
   cleanupRecords(): Promise<AssetCleanupRecord[]>
   settings(): Promise<AssetSettings>

@@ -224,6 +224,15 @@ export class UsageTraceStore {
     return rows.map(rowToClickLog)
   }
 
+  exportRecords(): { startupRecords: AppStart[]; clickRecords: Array<Omit<ClickLog, 'detail'>> } {
+    const starts = this.db.prepare('SELECT * FROM app_starts ORDER BY start_time DESC').all() as AppStartRow[]
+    const clicks = this.db.prepare('SELECT id, timestamp, element_name, window_type FROM click_logs ORDER BY timestamp DESC').all() as ClickLogRow[]
+    return {
+      startupRecords: starts.map(rowToAppStart),
+      clickRecords: clicks.map(row => ({ id: row.id, timestamp: row.timestamp, elementName: row.element_name, windowType: row.window_type })),
+    }
+  }
+
   /**
    * 清空所有使用统计数据（app_starts + click_logs）。
    * @returns 删除的总行数

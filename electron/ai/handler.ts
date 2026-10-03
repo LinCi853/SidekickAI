@@ -27,7 +27,6 @@ import { streamChat, testProvider, listModels } from './client.js'
 import { showNotification } from '../notify.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { registerAiAssetIpc } from '../assets/asset-ipc.js'
-import { collectApiOriginals } from '../assets/api-originals.js'
 import { runAssetImport } from '../assets/import-activity.js'
 import type {
   CustomAIProvider,
@@ -204,8 +203,6 @@ async function runStream(
     }, assistantMessageId)
     assistantMessageStored = !!captured
     if (!captured) return
-    if (value.status !== 'streaming') void collectApiOriginals(provider.id, conversationId, assistantMessageId, value.content)
-      .catch(error => console.warn('[ai-assets] Linked original collection failed:', error))
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.CHAT_CONVERSATION_PERSISTED, { sourceId: provider.id })
     }

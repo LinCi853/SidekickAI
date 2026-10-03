@@ -21,6 +21,7 @@ export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
     recordView: (id, eventId) => ipcRenderer.invoke(ipc.ASSET_VIEW, id, eventId),
     deleteConversation: id => ipcRenderer.invoke(ipc.ASSET_DELETE_CONVERSATION, id),
     deleteMessage: id => ipcRenderer.invoke(ipc.ASSET_DELETE_MESSAGE, id),
+    deleteSelection: (kind, ids) => ipcRenderer.invoke(ipc.ASSET_DELETE_SELECTION, kind, ids),
     renameConversation: (id, title) => ipcRenderer.invoke(ipc.ASSET_RENAME_CONVERSATION, id, title),
     cleanupRecords: () => ipcRenderer.invoke(ipc.ASSET_CLEANUP_RECORDS),
     settings: () => ipcRenderer.invoke(ipc.ASSET_SETTINGS),

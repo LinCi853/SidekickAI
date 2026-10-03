@@ -19,9 +19,10 @@ import { getDataDir } from './paths.js'
 import { collectSelectedExportEntries } from './collect.js'
 import { verifyQuiescentSnapshot } from './verify.js'
 import type { ExportOptions, ExportStrictOptions } from './types.js'
+import { runBackupExport } from '../backup-activity.js'
 
 export async function exportAllData(target: string, options: ExportOptions, encrypt?: { password: string }, strict?: ExportStrictOptions) {
-  return exportBackup({
+  return runBackupExport(() => exportBackup({
     edition: 'concept', root: getDataDir, version: () => app.getVersion(), deviceId: getDeviceId,
     closeDatabases: async () => {
       const { closeAllModuleDbs } = await import('../../modules/registry.js')
@@ -43,5 +44,5 @@ export async function exportAllData(target: string, options: ExportOptions, encr
     },
     treeDigest: exportTreeDigest, verifySources: verifyQuiescentSnapshot,
     writeStrict: writeStrictArchive, writeLive: writePartialArchive,
-  }, target, options, encrypt, strict)
+  }, target, options, encrypt, strict))
 }

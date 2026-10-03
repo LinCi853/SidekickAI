@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   ASSET_VIEW: 'ai-assets:view',
   ASSET_DELETE_CONVERSATION: 'ai-assets:delete-conversation',
   ASSET_DELETE_MESSAGE: 'ai-assets:delete-message',
+  ASSET_DELETE_SELECTION: 'ai-assets:delete-selection',
   ASSET_RENAME_CONVERSATION: 'ai-assets:rename-conversation',
   ASSET_CLEANUP_RECORDS: 'ai-assets:cleanup-records',
   ASSET_SETTINGS: 'ai-assets:settings',

@@ -11,10 +11,11 @@ function fileSize(size?: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export default function AssetFileCard({ item, onConversation, onAction, showConversation = true }: {
+export default function AssetFileCard({ item, onConversation, onAction, showConversation = true, selected, onSelect }: {
   item: AssetAttachment; onConversation: (id: string, target?: { messageId?: string; attachmentId?: string }) => void;
   onAction: (operation: () => Promise<void>) => void;
   showConversation?: boolean;
+  selected?: boolean; onSelect?: () => void;
 }) {
   const api = requireElectron().aiAssets;
   let source = '';
@@ -22,7 +23,7 @@ export default function AssetFileCard({ item, onConversation, onAction, showConv
   const kind = item.mimeType.startsWith('image/') ? '图片' : item.mimeType.startsWith('text/') ? '文本' : item.mimeType === 'application/pdf' ? 'PDF 文档' : '文件';
   const Icon = item.mimeType.startsWith('image/') ? FileImage : item.mimeType.startsWith('text/') ? FileText : File;
   return <article className={`asset-file asset-file-${item.status}`} data-name="assets.file" data-id={item.id}>
-    <div className="asset-file-heading"><Icon size={20} aria-hidden="true" /><div><strong title={item.name}>{item.name}</strong>
+    <div className="asset-file-heading">{onSelect && <input type="checkbox" aria-label={`选择资料 ${item.name}`} checked={selected ?? false} onChange={onSelect} />}<Icon size={20} aria-hidden="true" /><div><strong title={item.name}>{item.name}</strong>
       <span className="asset-file-metadata"><span title={item.mimeType}>{kind}</span><span title={item.size === undefined ? undefined : `${item.size.toLocaleString()} 字节`}>{fileSize(item.size)}</span></span></div></div>
     <div className="asset-file-status"><span className={`asset-status ${item.status}`}>{statuses[item.status]}</span><span>{item.direction === 'input' ? '用户发送' : 'AI 返回'}</span></div>
     {source && <p className="asset-file-source" title={source}>{source}</p>}

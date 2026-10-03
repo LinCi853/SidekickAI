@@ -92,7 +92,7 @@ describe('settings log folder entry', () => {
     const button = () => nodes(view.current).find(node => node.props?.['data-name'] === 'settings.advanced.logs.open-folder')!;
     button().props.onClick(); await settleHooks();
     const error = nodes(view.current).find(node => node.props?.role === 'alert');
-    expect(error?.props.children).toBe('\u65e0\u6cd5\u6253\u5f00\u65e5\u5fd7\u6587\u4ef6\u5939\uff0c\u8bf7\u91cd\u8bd5');
+    expect(error?.props.children).toContain('日志导出或打开失败');
     expect(button().props.disabled).toBe(false);
     const pending = deferred<void>(); fixture.openLogsFolder.mockReturnValue(pending.promise);
     button().props.onClick(); await settleHooks();

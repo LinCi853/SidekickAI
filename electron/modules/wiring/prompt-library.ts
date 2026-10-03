@@ -7,6 +7,8 @@ import { hasActiveAssetStreams } from '../../ai/handler.js'
 import { hasLinkedOriginalTransfers } from '../../assets/api-originals.js'
 import { hasWebOriginalTransfers } from '../../assets/asset-ipc.js'
 import { hasActiveAssetImports } from '../../assets/import-activity.js'
+import { hasActiveBackupExports } from '../../store/backup-activity.js'
+import { isImportingData } from '../../store/import-guard.js'
 import { assertAssetClearAllowed, clearAssetDirectories } from '../../assets/clear-data.js'
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { EffectScope } from '../effect-scope.js'
@@ -47,7 +49,7 @@ export async function teardownPromptLibraryModule(): Promise<void> {
 }
 
 export function clearPromptLibraryData(): void {
-  assertAssetClearAllowed(isModuleEnabled('prompt-library'), hasActiveAssetStreams() || hasLinkedOriginalTransfers() || hasWebOriginalTransfers() || hasActiveAssetImports())
+  assertAssetClearAllowed(isModuleEnabled('prompt-library'), hasActiveAssetStreams() || hasLinkedOriginalTransfers() || hasWebOriginalTransfers() || hasActiveAssetImports() || hasActiveBackupExports() || isImportingData)
   promptStore.list()
   injectionHistoryStore.listRecent()
   let cleared = false

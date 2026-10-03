@@ -8,7 +8,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useModuleStore } from '../../../store/useModuleStore';
 import type { ModuleInfo } from '../../../lib/electron-api';
-import AssetSettingsPanel from '../../AssetSettingsPanel';
 import Toggle from '../../ui/Toggle';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import SectionTitle from '../../ui/SectionTitle';
@@ -72,7 +71,6 @@ export default function ModuleManagementSection() {
           {m.testBadge && (
             <span className="module-test-badge" data-name="settings.modules.test-badge">测试</span>
           )}
-          {m.id === 'prompt-library' && m.installed && <details className="module-asset-settings"><summary>AI资产设置</summary><AssetSettingsPanel /></details>}
       {!m.installed && (
             <span className="module-missing-badge" data-name="settings.modules.missing-badge">未安装</span>
           )}

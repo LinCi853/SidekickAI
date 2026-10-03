@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   observers: [] as Array<() => void>, session: {}, record: undefined as any,
   observeError: undefined as Error | undefined, messages: [] as Array<[string, unknown]>,
   destination: undefined as string | undefined,
+  excluded: false, busy: false,
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => state.root },
@@ -23,6 +24,7 @@ vi.mock('../store/chat-store.js', () => ({
     assets: {
       observe: () => { if (state.observeError) throw state.observeError; return { conversationId: 'conversation-a' } },
       beginAttachment: () => state.record,
+      attachmentExcluded: () => state.excluded,
       getAttachment: () => state.record,
       attachmentFailed: (_id: string, error: string) => { state.record.status = 'failed'; state.record.error = error },
       attachmentPending: () => { state.record.status = 'pending'; state.record.error = undefined },
@@ -37,13 +39,14 @@ vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => state.enabled,
 vi.mock('../freeze/webview-registry.js', () => ({ getRecordByWebContentsId: () => undefined }))
 vi.mock('./settings.js', () => ({ getAssetSettings: () => ({}), updateAssetSettings: () => ({}) }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))
+vi.mock('../ai/handler.js', () => ({ hasActiveAssetStreams: () => state.busy }))
 
 import { OriginalVault } from './original-vault'
 import { registerAiAssetIpc, hasWebOriginalTransfers } from './asset-ipc'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
 
 const bytes = Buffer.from('verified original')
-const input = { externalKey: 'message:file', conversationKey: 'https://fixture.test/chat/a', direction: 'output', name: 'original.bin' }
+const input = { externalKey: 'message:file', conversationKey: 'https://fixture.test/chat/a', direction: 'input', name: 'original.bin' }
 const observation = { conversationKey: input.conversationKey, messages: [{ key: 'u1', role: 'user', content: 'Fixture message' }] }
 let guest: EventEmitter & { id: number; mainFrame: object; session: object }
 let guestEvent: any
@@ -55,6 +58,7 @@ beforeEach(async () => {
   await mkdir(path.resolve('build'), { recursive: true })
   state.root = await mkdtemp(path.resolve('build/asset-ipc-test-'))
   state.enabled = true; state.observeError = undefined; state.messages = []; state.destination = undefined
+  state.excluded = false; state.busy = false
   state.handlers.clear(); state.observers = []
   guest = Object.assign(new EventEmitter(), { id: 8, mainFrame: {}, session: state.session })
   guestEvent = { sender: guest, senderFrame: guest.mainFrame }
@@ -74,6 +78,24 @@ afterEach(async () => {
 })
 
 describe('asset original admission and recovery', () => {
+  it('does not retry originals excluded by selected cleanup', async () => {
+    state.excluded = true
+    expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ suppressed: true })
+    expect(hasWebOriginalTransfers()).toBe(false)
+  })
+  it('rejects guest deletion, malformed selections and deletion during recording', async () => {
+    await expect(call(ipc.ASSET_DELETE_SELECTION, guestEvent, 'files', ['file-a'])).rejects.toThrow()
+    for (const ids of [[], ['file-a', 'file-a'], ['file-a', 1], ['']])
+      await expect(call(ipc.ASSET_DELETE_SELECTION, viewerEvent, 'files', ids)).rejects.toThrow('Invalid asset selection')
+    state.busy = true
+    await expect(call(ipc.ASSET_DELETE_SELECTION, viewerEvent, 'files', ['file-a'])).rejects.toThrow()
+    expect(state.record.status).toBe('saved')
+  })
+  it('suppresses automatic output originals without starting a transfer', async () => {
+    expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, { ...input, direction: 'output' })).toEqual({ suppressed: true })
+    expect(hasWebOriginalTransfers()).toBe(false)
+    expect(state.record.status).toBe('saved')
+  })
   it('reuses only an existing verified object', async () => {
     expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ id: 'file-a', saved: true })
     expect(hasWebOriginalTransfers()).toBe(false)

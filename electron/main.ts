@@ -2,6 +2,7 @@ import { app, protocol } from 'electron'
 import { initializeApplication } from './application-admission.js'
 import { product, edition } from '../packages/product-contract'
 import { cookieHelperRequestPath, initializeCookieHelper, runCookieSnapshotHelper } from '../packages/backup-core/sessions.js'
+import { initializeApplicationLog } from './diagnostics/application-log.js'
 
 app.setName(product.name)
 if (process.platform === 'win32') app.setAppUserModelId(edition.appId)
@@ -15,6 +16,7 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'sidekick-pdf', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ])
 
+initializeApplicationLog()
 if (cookieHelperRequestPath) {
   initializeCookieHelper()
   void app.whenReady().then(async () => app.exit(await runCookieSnapshotHelper())).catch(error => { console.error('[backup] Cookie helper failed', error); app.exit(1) })

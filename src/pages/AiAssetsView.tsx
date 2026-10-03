@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
-import { Button, EmptyState, IconButton } from '../components/ui';
+import { Button, ConfirmDialog, EmptyState, IconButton } from '../components/ui';
 import PromptLibraryView from './PromptLibraryView';
 import AssetConversation from './ai-assets/AssetConversation';
 import AssetFileCard from './ai-assets/AssetFileCard';
@@ -55,6 +55,12 @@ export default function AiAssetsView() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AssetAttachment[]>([]);
+  const [fileDirection, setFileDirection] = useState<'all' | 'input' | 'output'>('input');
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [pendingCleanup, setPendingCleanup] = useState<{ kind: 'files' | 'conversations'; ids: string[]; names: string[] }>();
+  const [cleanupError, setCleanupError] = useState('');
+  const cleaning = useRef(false);
   const [suggestions, setSuggestions] = useState<AssetPromptSuggestion[]>([]);
   const [matches, setMatches] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -64,6 +70,7 @@ export default function AiAssetsView() {
   const [conversationTarget, setConversationTarget] = useState<ConversationTarget & { revision: number }>();
   useEscToCloseWindow({ onEsc: () => {
     if (rootRef.current?.querySelector('.asset-selection-actions')) { window.getSelection()?.removeAllRanges(); return true; }
+    if (selecting) { setSelecting(false); setSelectedIds([]); return true; }
     if (listOpen) { setListOpen(false); return true; }
     return false;
   } });
@@ -86,7 +93,7 @@ export default function AiAssetsView() {
     const [list, files, summaries, usage] = await Promise.all([listConversations(), api.attachments(), api.summaries(), api.usage()]);
     setViews(Object.fromEntries(summaries.map(item => [item.conversationId, item.views])));
     setTotalUsage(usage);
-    setConversations(list); setAttachments(files.filter(item => !isAssetInterfaceImage(item)));
+    setConversations(list); setAttachments(files);
     setSelected(current => current && list.some(item => item.id === current) ? current : list[0]?.id ?? null);
     setRevision(value => value + 1);
   }, [api]);
@@ -117,7 +124,27 @@ export default function AiAssetsView() {
   }, [api, query, revision]);
   const visibleConversations = useMemo(() => conversations.filter(item => !query || matches.includes(item.id))
     .sort((a, b) => settings.sort === 'views' ? (views[b.id] ?? 0) - (views[a.id] ?? 0) || b.updatedAt - a.updatedAt : b.updatedAt - a.updatedAt), [conversations, matches, query, settings.sort, views]);
-  const visibleFiles = useMemo(() => attachments.filter(item => !query || `${item.name} ${item.sourceUrl ?? ''}`.toLowerCase().includes(query.toLowerCase())), [attachments, query]);
+  const visibleFiles = useMemo(() => attachments.filter(item => (fileDirection === 'all' || item.direction === fileDirection)
+    && (!query || `${item.name} ${item.sourceUrl ?? ''}`.toLowerCase().includes(query.toLowerCase()))), [attachments, query, fileDirection]);
+  useEffect(() => { setSelectedIds([]); setSelecting(false); }, [category, query, fileDirection]);
+  const selectionItems = useMemo(() => category === 'files' ? visibleFiles.map(item => ({ id: item.id, name: item.name }))
+    : category === 'conversations' ? visibleConversations.map(item => ({ id: item.id, name: item.title || '未命名对话' })) : [], [category, visibleFiles, visibleConversations]);
+  useEffect(() => { setSelectedIds(current => current.filter(id => selectionItems.some(item => item.id === id))); }, [selectionItems]);
+  const toggleSelection = (id: string) => setSelectedIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+  useEffect(() => { setCleanupError(''); }, [pendingCleanup]);
+  const clearSelection = async () => {
+    if (!pendingCleanup || cleaning.current) return;
+    cleaning.current = true;
+    setCleanupError(''); setError(''); setNotice('');
+    try {
+      const result = await api.deleteSelection(pendingCleanup.kind, pendingCleanup.ids);
+      setPendingCleanup(undefined); setSelectedIds([]); setSelecting(false);
+      setNotice(result.cleanupPending ? `已清理 ${result.deleted} 项记录，部分原件文件清理未完成，将在重启时重试` : `已清理 ${result.deleted} 项`);
+      await refresh().catch(() => setError('清理已完成，但列表刷新失败，请手动刷新'));
+    } catch (failure) {
+      setCleanupError(String(failure));
+    } finally { cleaning.current = false; }
+  };
   const recordView = useCallback(async (id: string) => {
     await api.recordView(id, crypto.randomUUID());
     const summaries = await api.summaries();
@@ -164,6 +191,14 @@ export default function AiAssetsView() {
     {error && <p className="asset-feedback asset-error" role="alert">{error}</p>}
     {notice && <p className="asset-feedback" role="status">{notice}</p>}
     <AssetCollectionStatus onAction={operation => void run(operation)} />
+    {category !== 'prompts' && <div className="asset-bulk-toolbar">
+      {category === 'files' && <label>来源 <select aria-label="资料来源" value={fileDirection} onChange={event => setFileDirection(event.target.value as typeof fileDirection)}><option value="input">用户发送</option><option value="output">AI 返回（历史）</option><option value="all">全部资料</option></select></label>}
+      <span>{selectionItems.length} 项{selecting ? ` · 已选 ${selectedIds.length} 项` : ''}</span>
+      {selecting ? <><Button variant="ghost" onClick={() => setSelectedIds(selectedIds.length === selectionItems.length ? [] : selectionItems.map(item => item.id))}>{selectedIds.length === selectionItems.length ? '取消全选' : '全选当前结果'}</Button>
+        <Button variant="danger" disabled={!selectedIds.length} onClick={() => setPendingCleanup({ kind: category, ids: [...selectedIds], names: selectionItems.filter(item => selectedIds.includes(item.id)).map(item => item.name) })}>清理所选</Button>
+        <Button variant="ghost" onClick={() => { setSelecting(false); setSelectedIds([]); }}>取消多选</Button></> : <Button variant="outline" disabled={!selectionItems.length} onClick={() => setSelecting(true)}>多选清理</Button>}
+      {category === 'files' && <small>仅自动收纳用户上传、粘贴或拖入的附件</small>}
+    </div>}
     {category === 'prompts' ? <div className="asset-prompt-body">
       {!!suggestions.length && <details className="asset-suggestions" open><summary>自动提取的重点提示词</summary>
         {suggestions.filter(item => !query || item.content.toLowerCase().includes(query.toLowerCase())).map(item => <article key={item.messageId}>
@@ -174,7 +209,7 @@ export default function AiAssetsView() {
         onDraftConsumed={consumed => setPromptDraft(current => current?.revision === consumed ? undefined : current)}
         onOpenSource={example => { if (example.conversationId) openConversation(example.conversationId, { messageId: example.messageId }); }} />
     </div> : category === 'files' ? <main className="asset-file-list">{visibleFiles.length ? visibleFiles.map(item =>
-      <AssetFileCard key={item.id} item={item} onConversation={openConversation} onAction={operation => void run(operation)} />) : <EmptyState message="暂无收纳资料" />}</main>
+      <AssetFileCard key={item.id} item={item} selected={selectedIds.includes(item.id)} onSelect={selecting ? () => toggleSelection(item.id) : undefined} onConversation={openConversation} onAction={operation => void run(operation)} />) : <EmptyState message="当前范围暂无资料" />}</main>
       : <div className="asset-conversation-body">
         {listOpen && <button className="asset-list-scrim" aria-label="关闭对话列表" onClick={() => setListOpen(false)} />}
         <aside id="asset-conversations" className={`asset-conversations${listOpen ? ' is-open' : ''}`} aria-label="对话列表">
@@ -182,12 +217,17 @@ export default function AiAssetsView() {
           {([['json', 'JSON'], ['md', 'Markdown'], ['deepseek', 'DeepSeek']] as const).map(([format, label]) => <Button key={format} variant="ghost" onClick={() => { if (importMenuRef.current) importMenuRef.current.open = false; void run(async () => { const result = await importConversation(format, 'imported'); if (result.ok) await refresh(); else if (!result.canceled) throw new Error('导入失败'); }); }}>导入 {label}</Button>)}
         </div></details><IconButton className="asset-list-close asset-icon-button" aria-label="关闭对话列表" onClick={() => setListOpen(false)}><X size={15} /></IconButton></div>
         <div className="asset-conversation-list">{!visibleConversations.length && <EmptyState message={query ? '没有匹配的对话' : '交流记录会自动保存在这里'} />}
-        {visibleConversations.map(item => <button key={item.id} className={`asset-conversation ${selected === item.id ? 'active' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'} onClick={() => openConversation(item.id)}>
-          <strong>{item.title || '未命名对话'}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button>)}
+        {visibleConversations.map(item => <div key={item.id} className="asset-conversation-row">{selecting && <input type="checkbox" aria-label={`选择对话 ${item.title || '未命名对话'}`} checked={selectedIds.includes(item.id)} onChange={() => toggleSelection(item.id)} />}<button className={`asset-conversation ${selected === item.id ? 'active' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'} onClick={() => selecting ? toggleSelection(item.id) : openConversation(item.id)}>
+          <strong>{item.title || '未命名对话'}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button></div>)}
         </div>
         {totalUsage && <div className="asset-total-usage" data-name="assets.total-usage" title={`全部对话累计 Unicode 字符（含空白与标点）：输入 ${totalUsage.inputCharacters.toLocaleString()} · 思考 ${totalUsage.reasoningCharacters.toLocaleString()} · 输出 ${totalUsage.outputCharacters.toLocaleString()}`}><span>总字符</span><strong>{totalUsage.totalCharacters.toLocaleString()}</strong></div>}
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
-        attachments={attachments} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
+        attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
     <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="AI资产设置" className="asset-settings-modal" portal><AssetSettingsPanel freezeTarget={freezeTarget} /></Modal>
+    <ConfirmDialog open={!!pendingCleanup} title={`清理所选${pendingCleanup?.kind === 'files' ? '资料' : '对话'}`} variant="danger" confirmLabel="确认清理"
+      onCancel={() => { if (!cleaning.current) setPendingCleanup(undefined); }} onConfirm={clearSelection}
+      message={<>{pendingCleanup?.ids.length} 项：{pendingCleanup?.names.slice(0, 4).join('、')}{(pendingCleanup?.names.length ?? 0) > 4 ? '…' : ''}。{pendingCleanup?.kind === 'files'
+        ? '将删除这些资料记录和不再被其他资料引用的原件，无法撤销；保留对话、模板及共享原件。已清理的资料不会自动重新收纳。'
+        : '将删除这些对话及消息，无法撤销；保留已保存的模板和本机原件，原网页再次出现时不自动收回。'}{cleanupError && <><br /><span role="alert" className="asset-error">{cleanupError}</span></>}</>} />
   </div></>;
 }

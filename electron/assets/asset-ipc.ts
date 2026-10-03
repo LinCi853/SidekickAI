@@ -7,11 +7,15 @@ import { isModuleEnabled, observeModuleState } from '../modules/registry.js'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetCollectionIssue, AssetObservation } from '../shared/ai-assets.types.js'
 import { OriginalVault } from './original-vault.js'
-import { acquireLinkedOriginal, stopLinkedOriginalTransfers } from './api-originals.js'
+import { acquireLinkedOriginal, stopLinkedOriginalTransfers, hasLinkedOriginalTransfers } from './api-originals.js'
 import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
 import { getAssetSettings, updateAssetSettings } from './settings.js'
 import { previewAssetCode } from './code-preview.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
+import { cleanSelectedAttachments, recoverSelectedCleanup } from './selected-cleanup.js'
+import { hasActiveAssetImports } from './import-activity.js'
+import { hasActiveBackupExports } from '../store/backup-activity.js'
+import { isImportingData } from '../store/import-guard.js'
 
 let stopTransfers: (() => void) | undefined
 let transfersActive: () => boolean = () => false
@@ -42,6 +46,8 @@ export function registerAiAssetIpc(): void {
   observeModuleState(syncCollection)
   syncCollection()
   const vault = new OriginalVault(path.join(app.getPath('userData'), 'ai-assets'), path.join(app.getPath('userData'), '.ai-assets-pending'))
+  try { recoverSelectedCleanup(app.getPath('userData'), getChatStore().assets) }
+  catch (error) { console.warn('[ai-assets] Pending original cleanup needs attention:', error) }
   const owners = new Map<string, number>()
   const controllers = new Map<string, AbortController>()
   transfersActive = () => owners.size > 0
@@ -133,6 +139,7 @@ export function registerAiAssetIpc(): void {
     if (!input || typeof input.name !== 'string' || typeof input.externalKey !== 'string'
       || typeof input.conversationKey !== 'string' || !['input', 'output'].includes(input.direction)
       || (input.messageId !== undefined && (typeof input.messageId !== 'string' || typeof input.messageKey !== 'string'))) throw new Error('Invalid original metadata')
+    if (input.direction !== 'input' || getChatStore().assets.attachmentExcluded(profile.id, input.externalKey)) return { suppressed: true }
     const reference = getChatStore().assets.beginAttachment(profile, input)
     if (owners.has(reference.id)) return { id: reference.id, busy: true }
     owners.set(reference.id, event.sender.id)
@@ -293,6 +300,19 @@ export function registerAiAssetIpc(): void {
   })
   ipcMain.handle(ipc.ASSET_DELETE_CONVERSATION, (event, id: string) => { local(event); getChatStore().deleteConversation(id); broadcast('local') })
   ipcMain.handle(ipc.ASSET_DELETE_MESSAGE, (event, id: string) => { local(event); getChatStore().deleteMessage(id); broadcast('local') })
+  ipcMain.handle(ipc.ASSET_DELETE_SELECTION, async (event, kind: string, ids: string[]) => {
+    local(event)
+    if (!['files', 'conversations'].includes(kind) || !Array.isArray(ids) || !ids.length || ids.length > 10000
+      || ids.some(id => typeof id !== 'string' || !id || id.length > 200) || new Set(ids).size !== ids.length) throw new Error('Invalid asset selection')
+    const { hasActiveAssetStreams } = await import('../ai/handler.js')
+    if (hasActiveAssetStreams() || hasWebOriginalTransfers() || hasLinkedOriginalTransfers() || hasActiveAssetImports() || hasActiveBackupExports() || isImportingData)
+      throw new Error('请等待响应、导入、备份和原件传输完成后再清理')
+    const assets = getChatStore().assets
+    const result = kind === 'files' ? cleanSelectedAttachments(app.getPath('userData'), assets, ids)
+      : { deleted: assets.deleteConversations(ids), cleanupPending: false }
+    broadcast('local')
+    return result
+  })
   ipcMain.handle(ipc.ASSET_RENAME_CONVERSATION, (event, id: string, title: string) => { local(event); getChatStore().assets.renameConversation(id, title); broadcast('local') })
   ipcMain.handle(ipc.ASSET_CLEANUP_RECORDS, event => { local(event); return getChatStore().assets.cleanupRecords() })
   ipcMain.handle(ipc.ASSET_SETTINGS, event => { local(event); return getAssetSettings() })

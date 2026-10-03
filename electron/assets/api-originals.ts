@@ -1,12 +1,10 @@
 import { app, BrowserWindow, net } from 'electron'
-import { createHash } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getChatStore } from '../store/chat-store.js'
 import type { AssetAttachment } from '../shared/ai-assets.types.js'
 import { OriginalVault } from './original-vault.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { isModuleEnabled } from '../modules/registry.js'
 
 const active = new Set<string>()
 const controllers = new Map<string, AbortController>()
@@ -54,24 +52,5 @@ export async function acquireLinkedOriginal(item: AssetAttachment, fetcher: type
     controllers.delete(item.id)
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed())
       window.webContents.send(IPC_CHANNELS.CHAT_CONVERSATION_PERSISTED, { sourceId: item.sourceId })
-  }
-}
-
-export async function collectApiOriginals(sourceId: string, conversationId: string, messageId: string, content: string): Promise<void> {
-  for (const match of content.matchAll(/(!?)\[[^\]]*\]\((https?:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/g)) {
-    if (!isModuleEnabled('prompt-library')) return
-    let url: URL
-    try { url = new URL(match[2]) } catch { continue }
-    let name = url.pathname.split('/').pop() || '资料'
-    try { name = decodeURIComponent(name) } catch {}
-    if (!match[1] && !/\.(?:pdf|zip|txt|csv|json|docx?|xlsx?|pptx?|png|jpe?g|webp|gif|svg|mp3|wav|mp4)(?:$|\?)/i.test(url.pathname)) continue
-    const store = getChatStore().assets
-    const reference = store.beginAttachment({ id: sourceId, type: 'api' }, {
-      conversationKey: `api:${conversationId}`, title: '', messageKey: messageId,
-      externalKey: `${messageId}:${createHash('sha256').update(url.href).digest('hex')}`,
-      name, mimeType: match[1] ? 'image/*' : 'application/octet-stream',
-      sourceUrl: url.href, direction: 'output',
-    }, conversationId)
-    await acquireLinkedOriginal(reference)
   }
 }

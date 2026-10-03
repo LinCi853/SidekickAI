@@ -417,6 +417,7 @@ export class ChatStore {
       windowRecords: this.windowTraces.listAllWindowTraces().map(record => ({
         id: record.id, windowId: record.windowId, action: record.action, timestamp: record.timestamp,
       })),
+      ...this.usageTraces.exportRecords(),
     }))()
   }
 

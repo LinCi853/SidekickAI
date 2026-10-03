@@ -105,9 +105,6 @@
 .asset-prompt-body .prompt-view-body { overflow: visible; }
 .asset-settings-modal { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
 .asset-settings-modal .modal-body { overflow-y: auto; }
-.module-asset-settings { margin-top: 12px; }
-.module-asset-settings > summary { font-size: 12px; cursor: pointer; }
-.module-asset-settings > .asset-settings { margin-top: 12px; }
 .asset-freeze-control { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .asset-freeze-control select { max-width: 280px; padding: 5px; color: var(--foreground); background: var(--card); border: 1px solid var(--border); }
 @media (max-width: 850px) {
@@ -144,3 +141,11 @@
 .asset-total-usage { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 10px 12px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted-foreground); }
 .asset-total-usage strong { color: var(--foreground); font-weight: 500; font-variant-numeric: tabular-nums; }
 .asset-file-source { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted-foreground); }
+.asset-bulk-toolbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 7px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.asset-bulk-toolbar label { display: flex; align-items: center; gap: 6px; }
+.asset-bulk-toolbar select { color: var(--foreground); background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: 5px; }
+.asset-bulk-toolbar > span { margin-right: auto; color: var(--muted-foreground); }
+.asset-bulk-toolbar small { flex-basis: 100%; color: var(--muted-foreground); font-size: 11px; }
+.asset-conversation-row { display: flex; align-items: center; gap: 4px; }
+.asset-conversation-row > .asset-conversation { min-width: 0; }
+.asset-conversation-row > input, .asset-file-heading > input { flex: none; accent-color: var(--accent-bright); }

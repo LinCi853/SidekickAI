@@ -4,7 +4,6 @@ const fixture = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
   store: undefined as any,
   stream: vi.fn(),
-  originals: vi.fn(async () => {}),
   callbacks: undefined as any,
   resolveStream: undefined as undefined | (() => void),
 }))
@@ -20,7 +19,6 @@ vi.mock('../store/app-settings-store.js', () => ({ getAppSettings: () => ({}) })
 vi.mock('../store/injection-history-store.js', () => ({ injectionHistoryStore: {} }))
 vi.mock('../notify.js', () => ({ showNotification: vi.fn() }))
 vi.mock('../assets/asset-ipc.js', () => ({ registerAiAssetIpc: vi.fn() }))
-vi.mock('../assets/api-originals.js', () => ({ collectApiOriginals: fixture.originals }))
 vi.mock('../assets/import-activity.js', () => ({ runAssetImport: vi.fn() }))
 vi.mock('./client.js', () => ({ streamChat: fixture.stream, testProvider: vi.fn(), listModels: vi.fn() }))
 import { ChatStore } from '../store/chat-store'
@@ -43,6 +41,16 @@ afterEach(async () => {
 })
 
 describe('API asset deletion during recording', () => {
+  it('records API output text without automatically downloading returned attachments', async () => {
+    const conversation = fixture.store.createConversation('provider', 'api', 'Fixture')
+    await fixture.handlers.get(ipc.CHAT_SEND)!({ sender: { isDestroyed: () => false, send: vi.fn() } }, {
+      providerId: 'provider', conversationId: conversation.id, message: 'Question',
+    })
+    const output = '![image](https://fixture.test/result.png) [document](https://fixture.test/result.pdf)'
+    fixture.callbacks.onDelta(output); fixture.callbacks.onDone(output)
+    expect(fixture.store.listMessages(conversation.id).some((message: any) => message.content === output)).toBe(true)
+    expect(fixture.store.assets.attachments()).toEqual([])
+  })
   it.each(['message', 'conversation'] as const)('keeps a deleted %s absent across partial flush and completion', async target => {
     const conversation = fixture.store.createConversation('provider', 'api', 'Fixture')
     const sender = { isDestroyed: () => false, send: vi.fn() }
@@ -51,12 +59,11 @@ describe('API asset deletion during recording', () => {
     const output = fixture.store.listMessages(conversation.id).find((message: any) => message.role === 'assistant')!
     if (target === 'message') fixture.store.deleteMessage(output.id)
     else fixture.store.deleteConversation(conversation.id)
-    fixture.originals.mockClear()
     fixture.callbacks.onDelta(' second'); vi.advanceTimersByTime(100)
     expect(fixture.store.listMessages(conversation.id).some((message: any) => message.role === 'assistant')).toBe(false)
     expect(() => fixture.callbacks.onDone('First second')).not.toThrow()
     expect(fixture.store.listMessages(conversation.id).some((message: any) => message.role === 'assistant')).toBe(false)
-    expect(fixture.originals).not.toHaveBeenCalled()
+    expect(fixture.store.assets.attachments()).toEqual([])
     expect(sender.send).toHaveBeenLastCalledWith(ipc.CHAT_STREAM_END, expect.objectContaining({ assistantMessageId: undefined }))
     if (target === 'conversation') expect(fixture.store.listConversations()).toEqual([])
   })

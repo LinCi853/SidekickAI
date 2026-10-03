@@ -3,7 +3,7 @@ import path from 'node:path'
 
 export function assertAssetClearAllowed(enabled: boolean, busy: boolean): void {
   if (enabled) throw new Error('请先关闭 AI资产组件，再清除数据')
-  if (busy) throw new Error('请先结束 API 响应、文件导入和原件传输，再清除数据')
+  if (busy) throw new Error('请先结束 API 响应、备份、文件导入和原件传输，再清除数据')
 }
 
 /** Moves only owned directories; SQL failure restores the original vault. */

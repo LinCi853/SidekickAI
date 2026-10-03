@@ -55,6 +55,7 @@ import { extractCapabilities } from './modules/capability.js';
 import { registerVoiceConfigIPC } from './store/voice-store.js';
 import { registerAIProviderIPC } from './store/ai-provider-store.js';
 import { registerPromptIPC } from './store/prompt-store.js';
+import { setRuntimeLogLevel } from './diagnostics/application-log.js';
 const DEFAULT_MAIN_WINDOW_WIDTH = 420;
 const DEFAULT_MAIN_WINDOW_HEIGHT = 820;
 const __dirname = path.dirname(__filename);
@@ -100,6 +101,7 @@ app.whenReady().then(async () => {
         return;
     Menu.setApplicationMenu(null);
     seedFromInstallConfig();
+    setRuntimeLogLevel(getAppSettings().logLevel);
     const autoOpenDevTools = process.argv.includes('--dev-tools') || process.env.DEV_TOOLS === '1';
     if (autoOpenDevTools) {
         console.log('[main] DevTools 调试模式：新窗口将自动打开 DevTools');

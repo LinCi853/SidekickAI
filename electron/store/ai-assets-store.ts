@@ -90,6 +90,9 @@ export class AiAssetsStore {
         FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
         FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE SET NULL
       );
+      CREATE TABLE IF NOT EXISTS asset_attachment_exclusions (
+        source_id TEXT NOT NULL, external_key TEXT NOT NULL, PRIMARY KEY(source_id, external_key)
+      );
     `)
     this.graph = new AssetGraphStore(db)
     const seed = db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
@@ -105,6 +108,7 @@ export class AiAssetsStore {
         this.db.prepare('DELETE FROM conversations').run()
         this.db.prepare('DELETE FROM asset_exclusions').run()
         this.db.prepare('DELETE FROM asset_cleanup_events').run()
+        this.db.prepare('DELETE FROM asset_attachment_exclusions').run()
         this.db.prepare("UPDATE asset_settings.prompts SET value = json_set(value, '$.prompts', json('[]')) WHERE key = '__data__'").run()
         this.db.prepare("UPDATE asset_settings.injection_history SET value = json_set(value, '$.records', json('[]')) WHERE key = '__data__'").run()
       })()
@@ -381,6 +385,7 @@ export class AiAssetsStore {
   }
 
   beginAttachment(source: AssetSource, input: AssetAttachmentInput, knownConversationId?: string): AssetAttachment {
+    if (this.attachmentExcluded(source.id, input.externalKey)) throw new Error('这份资料已从本地记录中排除')
     const conversationId = knownConversationId ?? this.conversation(source, input)
     const message = input.messageKey ? this.sourceMessage(conversationId, input.messageKey, input.messageId) : undefined
     if (input.messageId !== undefined && !message) throw new Error('Original message identity is unavailable')
@@ -404,6 +409,36 @@ export class AiAssetsStore {
   getAttachment(id: string): AssetAttachment | undefined {
     const row = this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as AttachmentRow | undefined
     return row && attachment(row)
+  }
+  attachmentExcluded(sourceId: string, externalKey: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM asset_attachment_exclusions WHERE source_id = ? AND external_key = ?').get(sourceId, externalKey)
+  }
+  referencesOriginal(sha256: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM asset_attachments WHERE sha256 = ? LIMIT 1').get(sha256)
+  }
+  deleteAttachments(ids: string[], stage: (hashes: string[]) => void): number {
+    return this.db.transaction(() => {
+      const records = ids.map(id => this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as (AttachmentRow & { external_key: string }) | undefined)
+      if (records.some(row => !row)) throw new Error('所选资料已发生变化，请刷新后重新选择')
+      const selected = new Set(ids)
+      const hashes = [...new Set(records.flatMap(row => row?.sha256 ? [row.sha256] : []))]
+        .filter(hash => (this.db.prepare('SELECT id FROM asset_attachments WHERE sha256 = ?').all(hash) as Array<{ id: string }>).every(row => selected.has(row.id)))
+      stage(hashes)
+      for (const record of records) {
+        this.db.prepare('INSERT OR IGNORE INTO asset_attachment_exclusions VALUES (?, ?)').run(record!.source_id, record!.external_key)
+        this.db.prepare('DELETE FROM asset_attachments WHERE id = ?').run(record!.id)
+      }
+      return records.length
+    })()
+  }
+  deleteConversations(ids: string[]): number {
+    return this.db.transaction(() => {
+      for (const id of ids) {
+        if (!this.db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(id)) throw new Error('所选对话已发生变化，请刷新后重新选择')
+        this.deleteConversation(id)
+      }
+      return ids.length
+    })()
   }
   attachments(conversationId?: string): AssetAttachment[] {
     const rows = conversationId

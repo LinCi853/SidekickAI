@@ -1,4 +1,5 @@
 import type { BackupInspection } from '../../../packages/backup-core/types.js'
+import type { LogExportOptions, LogExportResult } from '../../../electron/shared/log-export.js'
 /* =====================================================================
    lib/electron-api/settings.ts —— 应用全局设置 / 预览窗事件 / 自定义 AI 提供商
    ===================================================================== */
@@ -178,8 +179,8 @@ export async function openDownloadDir(): Promise<void> {
   return api.appSettings.openDownloadDir();
 }
 
-export async function openLogsFolder(): Promise<void> {
-  return requireElectron().appSettings.openLogsFolder();
+export async function openLogsFolder(options?: LogExportOptions): Promise<LogExportResult> {
+  return requireElectron().appSettings.openLogsFolder(options);
 }
 
 /** 读取拖拽文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容） */
