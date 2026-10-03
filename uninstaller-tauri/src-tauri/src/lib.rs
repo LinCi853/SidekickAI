@@ -5,13 +5,16 @@ use sidekickai_uninstall_host::Host;
 use std::path::Path;
 
 fn launch(host: Host) -> Result<(), String> {
-    let _wizard = match sidekickai_uninstall_host::wizard_instance::WizardInstance::acquire() {
-        Ok(instance) => instance,
-        Err(message) => { sidekickai_uninstall_host::wizard_instance::show_notice(&message); return Ok(()); }
+    use sidekickai_uninstall_host::wizard_instance::{WizardAcquisition, WizardInstance};
+    let _wizard = match WizardInstance::acquire_entry(&host.maintenance_entry())? {
+        WizardAcquisition::Owned(instance) => instance,
+        WizardAcquisition::Activated => return Ok(()),
     };
+    let binding = _wizard.binding();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(host)
+        .setup(move |app| { sidekickai_uninstall_host::bind_wizard(&binding, app.handle(), || {}); Ok(()) })
         .on_window_event(sidekickai_uninstall_host::prevent_close_while_running)
         .invoke_handler(tauri::generate_handler![
             sidekickai_uninstall_host::diagnostics::open_operation_log,
@@ -22,8 +25,10 @@ fn launch(host: Host) -> Result<(), String> {
             sidekickai_uninstall_host::commands::uninstall_close,
             sidekickai_uninstall_host::commands::uninstall_choose_backup_path
         ])
-        .run(tauri::generate_context!())
-        .map_err(|error| error.to_string())
+        .build(tauri::generate_context!())
+        .map_err(|error| error.to_string())?
+        .run_return(|_, _| {});
+    Ok(())
 }
 
 /// Normal UI entry. The window is opened from a relocated copy so that deleting

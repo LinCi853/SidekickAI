@@ -43,6 +43,34 @@ pub fn close_confirmed_window(window: &Window) -> Result<(), tauri::Error> {
     })
 }
 
+pub fn bind_wizard(binding: &wizard_instance::WizardBinding, app: &AppHandle, before_release: impl Fn() + Send + Sync + 'static) {
+    let activate_app = app.clone();
+    let release_app = app.clone();
+    let recover_release = binding.release_failure_callback();
+    binding.bind(Arc::new(move || {
+        let app = activate_app.clone();
+        let _ = activate_app.run_on_main_thread(move || {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        });
+    }), Arc::new(move || {
+        before_release();
+        let app = release_app.clone();
+        let recover = recover_release.clone();
+        if release_app.run_on_main_thread(move || {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = close_confirmed_window(&window.as_ref().window()) {
+                    eprintln!("Maintenance window release failed: {error}");
+                    recover();
+                }
+            } else { recover(); }
+        }).is_err() { recover_release(); }
+    }));
+}
+
 pub struct Host {
     entry: UninstallEntryMode,
     source: Option<PathBuf>,
@@ -115,6 +143,11 @@ pub(crate) fn decide_cancel(active: &Mutex<Option<ActiveOperation>>, operation_i
 }
 
 impl Host {
+    pub fn maintenance_entry(&self) -> String {
+        let source = self.source.clone().or_else(|| std::env::current_exe().ok().and_then(|path| path.parent().map(Path::to_owned)));
+        let path = source.map(|path| std::fs::canonicalize(&path).unwrap_or(path)).unwrap_or_default();
+        format!("uninstall:{}", path.to_string_lossy().replace('/', "\\").to_lowercase())
+    }
     pub fn is_running(&self) -> bool {
         self.active.lock().map(|active| active.is_some()).unwrap_or(true)
     }
@@ -196,7 +229,8 @@ pub async fn uninstall_scan(host: State<'_, Host>, request: Option<UninstallScan
 }
 
 #[tauri::command]
-pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: UninstallRequest) -> Result<UninstallAccepted, UninstallError> {
+pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: UninstallRequest) -> Result<Option<UninstallAccepted>, UninstallError> {
+    let Some(wizard_operation) = wizard_instance::WizardInstance::try_begin_operation().map_err(|_| busy())? else { return Ok(None) };
     // Serialize validation and admission of one operation.
     let guard = host.gate.try_lock().map_err(|_| busy())?;
     let request_id = request.request_id.clone();
@@ -207,7 +241,7 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
     // exists, so the caller must receive its original identity, not a new plan.
     if let Some(existing) = host.requests.lock().map_err(|_| busy())?.get(&request_id).cloned() {
         drop(guard);
-        return Ok(UninstallAccepted::new(request_id, existing));
+        return Ok(Some(UninstallAccepted::new(request_id, existing)));
     }
     let plan = plan::prepare(&request)?;
     let admitted = {
@@ -219,7 +253,7 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
         Admission::Accepted(id) => id,
         Admission::Replay(existing) => {
             drop(guard);
-            return Ok(UninstallAccepted::new(request_id, existing));
+            return Ok(Some(UninstallAccepted::new(request_id, existing)));
         }
         Admission::AlreadyRunning => return Err(busy()),
     };
@@ -241,6 +275,7 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
                     *active = None;
                 }
             }
+            wizard_operation.finish();
         }
     };
 
@@ -272,7 +307,7 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
         finish_operation(&app_handle);
         sink.event(phase, if result.state == UninstallTerminal::Completed { 100 } else { 0 }, message, true, Some(result));
     });
-    Ok(accepted)
+    Ok(Some(accepted))
 }
 
 #[tauri::command]
@@ -287,7 +322,7 @@ pub fn uninstall_cancel(host: State<'_, Host>, operation_id: String) -> Result<C
 
 #[tauri::command]
 pub fn uninstall_close(window: Window) -> Result<(), UninstallError> {
-    if window.state::<Host>().active.lock().map_err(|_| busy())?.is_some() { return Err(busy()); }
+    if wizard_instance::WizardInstance::is_occupied() || window.state::<Host>().active.lock().map_err(|_| busy())?.is_some() { return Err(busy()); }
     close_confirmed_window(&window).map_err(|e| UninstallError::new(UninstallErrorCode::Internal, e.to_string(), UninstallPhase::Failed, true, ""))
 }
 

@@ -31,7 +31,7 @@ function parseArguments(args, identity = productIdentity()) {
 }
 
 function captureInputs(root = ROOT) {
-  const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'installer-tauri', 'uninstaller-tauri', 'installer-shared',
+  const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'tools/startup-helper', 'installer-tauri', 'uninstaller-tauri', 'installer-shared',
     'package.json', 'package-lock.json', 'electron-builder.yml', 'electron-builder.portable.yml', 'electron.vite.config.ts', 'tsconfig.json', 'tsconfig.node.json',
     'LICENSE', 'product-edition.json', 'maintenance/shared-source.json', 'maintenance/component-contract.json', 'build/License.txt',
     '.cargo/config.toml', '.cargo/config', 'rust-toolchain.toml', 'rust-toolchain']
@@ -66,6 +66,7 @@ function preflightPortable(architectures) {
 
 const defaults = {
   captureInputs,
+  prepareResources: () => require('./build-startup-helper.cjs').build({ resources: true }),
   preflight: (architectures, output, mode) => mode === 'portable' ? preflightPortable(architectures) : native.preflight(architectures, true, output),
   buildPlugins: options => fs.existsSync(path.join(ROOT, 'scripts/build-plugins.cjs')) ? require('./build-plugins.cjs').main(options) : [],
   buildApplications: (output, architectures) => native.buildApplications(output, architectures, { reuse: true }),
@@ -76,6 +77,7 @@ const defaults = {
 async function buildCandidates(options, output, dependencies = defaults) {
   parseArguments(['--mode', options.mode], options)
   if (options.architectures?.length !== 2 || !['x64', 'arm64'].every(arch => options.architectures.includes(arch))) throw new Error('Distribution requires both x64 and arm64')
+  if (!options.preflightOnly) await dependencies.prepareResources?.()
   const before = dependencies.captureInputs()
   const guard = () => utilities.assertUnchanged(before, dependencies.captureInputs())
   const toolchain = await dependencies.preflight(options.architectures, path.join(output, 'preflight'), options.mode)

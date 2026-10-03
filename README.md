@@ -33,7 +33,11 @@
 下载 [0.1.5 正式版](https://github.com/LinCi853/SidekickAI/releases/tag/v0.1.5)，支持 Windows x64 和 ARM64。
 
 - [安装版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Setup-0.1.5.exe)：安装后，从开始菜单或桌面快捷方式打开工百窗。
-- [绿色版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Portable-0.1.5-win.zip)：完整解压后，双击文件夹中的 `Start-SidekickAI.cmd`。
+- [绿色版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Portable-0.1.5-win.zip)：完整解压后，直接运行对应架构目录中的 `SidekickAI.exe`。
+
+## 开发
+
+开发建议使用项目根目录的 `launch.bat`，按菜单提示操作。
 
 ## 反馈与参与
 

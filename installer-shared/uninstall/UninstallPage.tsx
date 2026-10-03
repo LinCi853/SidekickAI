@@ -355,6 +355,14 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
     try {
       const accepted = await api.start(request)
       if (!mountedRef.current) return
+      if (!accepted) {
+        startInFlightRef.current = false
+        activeRequestIdRef.current = null
+        setStep('policy')
+        setOperationError('')
+        setStatusText('正在切换维护窗口…')
+        return
+      }
       if (accepted.state !== 'accepted' || accepted.requestId !== id || !accepted.operationId) {
         throw new Error('卸载器返回了无效的 accepted 响应。')
       }

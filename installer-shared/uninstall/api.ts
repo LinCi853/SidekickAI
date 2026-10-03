@@ -65,7 +65,7 @@ export function createUninstallApi(transport: UninstallTransport = { invoke, lis
     scan: (request) => transport.invoke('uninstall_scan', request === undefined ? undefined : { request }),
     start: async (request) => {
       await whenReady()
-      return transport.invoke<UninstallAccepted>('uninstall_start', { request })
+      return transport.invoke<UninstallAccepted | null>('uninstall_start', { request })
     },
     cancel: (operationId) => transport.invoke('uninstall_cancel', { operationId }),
     close: () => transport.invoke('uninstall_close'),

@@ -32,6 +32,11 @@ build/incremental-native-acceptance/
 build/setup-metadata.json
 build/native-test-artifacts/
 build/native-test-evidence.json
+/build/*
+!/build/License.txt
+!/build/tools/
+/build/tools/*
+!/build/tools/7zr.exe
 
 # ============================================================
 # Electron Cache

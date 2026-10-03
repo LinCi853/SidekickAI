@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use crate::manifest::{self, InstallLocation, ScanResult};
 use sidekickai_uninstall_core::path::NormalizedAbsolutePath;
-use sidekickai_uninstall_host::stop_target_processes;
 
 use super::registry::{read_install_registration, read_registry_string, uninstall_registration_key};
 use super::write_log;
@@ -79,24 +78,9 @@ fn is_registered_repair_target(dir: &Path) -> bool {
     })
 }
 
-/// Stop only the processes whose executable lives inside one of the confirmed
-/// target directories, using the shared host implementation. Another
-/// installation that merely shares the image name is left alone, a process whose
-/// path cannot be resolved is skipped instead of killed, and a survivor is
-/// reported as a failure rather than a clean stop. No `taskkill /T` is used: a
-/// tree kill could reach children that live outside the target.
+/// Coordinate verified application owners before replacing selected installations.
 pub(crate) fn stop_processes_in_targets(targets: &[PathBuf]) -> Result<(), String> {
-    let normalized: Vec<NormalizedAbsolutePath> = targets
-        .iter()
-        .map(|target| {
-            NormalizedAbsolutePath::parse_target(target)
-                .map_err(|e| format!("无法确认目标目录 {}：{}", target.display(), e.message))
-        })
-        .collect::<Result<_, _>>()?;
-    let operation_id = format!("installer-{}", std::process::id());
-    stop_target_processes(&normalized, &operation_id)
-        .map(|_| ())
-        .map_err(|error| error.message)
+    crate::application_launch::stop_installations(targets)
 }
 
 pub fn scan_installations() -> ScanResult {

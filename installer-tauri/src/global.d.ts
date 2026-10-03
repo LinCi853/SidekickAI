@@ -123,6 +123,10 @@ declare global {
       /** 保存文件对话框（导出加密备份用）；取消返回空字符串 */
       saveBackupDialog(defaultName: string): Promise<string>
       start(opts: InstallOptions): Promise<boolean>
+      beginPreparation(): Promise<boolean>
+      endPreparation(): Promise<void>
+      beginCompletion(): Promise<boolean>
+      endCompletion(): Promise<void>
       /** 读取已安装位置的 install-config.json（覆盖安装/修复时预读作初始值） */
       readInstallConfig(dir: string): Promise<InstalledConfig | null>
       /** 用户完成/关闭向导时写入最终 install-config.json */

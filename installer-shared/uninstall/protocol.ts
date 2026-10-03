@@ -212,7 +212,7 @@ export interface UninstallApi {
   openLog?(logPath: string): Promise<void>
   getInfo(): Promise<UninstallInfo>
   scan(request?: UninstallScanRequest): Promise<UninstallScanResponse>
-  start(request: UninstallRequest): Promise<UninstallAccepted>
+  start(request: UninstallRequest): Promise<UninstallAccepted | null>
   cancel(operationId: string): Promise<CancelResponse>
   close(): Promise<void>
   chooseBackupPath(format: BackupFormat, suggestedName: string): Promise<string>

@@ -1,3 +1,33 @@
+import type { Profile } from '../../lib/electron-api';
+
+export interface ProfileEditorFields {
+  name: string;
+  aiPlatformUrl: string;
+  browserHomePage: string;
+  aiDesktopPreset: string;
+  aiMobilePreset: string;
+  aiInputSelector: string;
+  aiSendSelector: string;
+  aiThemeColor: string;
+  aiPlatformRegion: 'cn' | 'global';
+  popupWhitelist: string[];
+}
+
+export function buildProfilePatch(fields: ProfileEditorFields): Partial<Profile> {
+  return {
+    name: fields.name,
+    aiPlatformUrl: fields.aiPlatformUrl.trim(),
+    browserHomePage: fields.browserHomePage.trim() || undefined,
+    aiDesktopPreset: fields.aiDesktopPreset || undefined,
+    aiMobilePreset: fields.aiMobilePreset || undefined,
+    aiInputSelector: fields.aiInputSelector.trim() || undefined,
+    aiSendSelector: fields.aiSendSelector.trim() || undefined,
+    aiThemeColor: fields.aiThemeColor.trim() || undefined,
+    aiPlatformRegion: fields.aiPlatformRegion,
+    popupWhitelist: fields.popupWhitelist.length > 0 ? fields.popupWhitelist : undefined,
+  };
+}
+
 /** 从 URL 提取 hostname（用于屏蔽规则域名匹配） */
 export function hostnameFromUrl(url: string): string {
   try {

@@ -20,7 +20,7 @@ describe('community-priority exclusive application ownership', () => {
   it('refuses a verified historical process that does not implement the shared endpoint', async () => {
     const current = options('community')
     current.legacyApplications = () => [{ pid: 123, executable: 'E:/old/SidekickAI.exe', edition: 'community', version: '0.1.0-beta.4' }]
-    expect(await acquire(current)).toMatchObject({ acquired: false, reason: expect.stringContaining('先保存并退出') })
+    expect(await acquire(current)).toMatchObject({ acquired: false, outcome: 'unavailable' })
     expect((await acquire({ ...current, legacyApplications: () => [] })).acquired).toBe(true)
   })
   it('activates community when concept is opened, including a different portable profile', async () => {
@@ -77,13 +77,15 @@ describe('community-priority exclusive application ownership', () => {
     expect((await acquire(options('community', namespace))).acquired).toBe(true)
     expect(concept.onQuit).toHaveBeenCalledOnce()
   })
-  it('does not interrupt an import or recovery for a community takeover', async () => {
+  it('asks a busy owner to complete bounded saving for a community takeover', async () => {
     const namespace = randomUUID()
     const concept = options('concept', namespace)
     concept.state = () => 'busy'
-    await acquire(concept)
-    expect((await acquire(options('community', namespace))).acquired).toBe(false)
-    expect(concept.onQuit).not.toHaveBeenCalled()
+    const owner = await acquire(concept)
+    if (!owner.acquired) throw new Error('Missing concept owner')
+    concept.onQuit = vi.fn(async () => { await new Promise<void>(resolve => owner.server.close(() => resolve())); return true })
+    expect((await acquire(options('community', namespace))).acquired).toBe(true)
+    expect(concept.onQuit).toHaveBeenCalledOnce()
   })
   it('activates the existing same-edition instance across different data roots', async () => {
     const namespace = randomUUID()
@@ -93,14 +95,16 @@ describe('community-priority exclusive application ownership', () => {
     expect(first.onActivate).toHaveBeenCalledOnce()
     expect(first.onQuit).not.toHaveBeenCalled()
   })
-  it('refuses another product version without activation or shutdown', async () => {
+  it('hands over a different concept version without a policy rejection', async () => {
     const namespace = randomUUID()
     const first = { ...options('concept', namespace), version: '0.1.0-beta.4' }
-    await acquire(first)
+    const owner = await acquire(first)
+    if (!owner.acquired) throw new Error('Missing concept owner')
+    first.onQuit = vi.fn(async () => { await new Promise<void>(resolve => owner.server.close(() => resolve())); return true })
     const result = await acquire(options('community', namespace))
-    expect(result).toMatchObject({ acquired: false, reason: expect.stringContaining('先保存并退出') })
+    expect(result.acquired).toBe(true)
     expect(first.onActivate).not.toHaveBeenCalled()
-    expect(first.onQuit).not.toHaveBeenCalled()
+    expect(first.onQuit).toHaveBeenCalledOnce()
   })
   it('does not let concept shut down community', async () => {
     const community = options('community')

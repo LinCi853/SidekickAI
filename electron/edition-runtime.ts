@@ -1,38 +1,108 @@
-import { app, BrowserWindow, dialog, webContents } from 'electron'
-import { acquireEditionSession, editionSessionEndpoint, type Edition } from './edition-session.js'
+import { app, BrowserWindow, webContents } from 'electron'
+import type { Edition } from './edition-session.js'
+import { bindApplicationSession } from './application-admission.js'
+import { beginApplicationHandoff } from './application-handoff-state.js'
 
+
+
+const SAVE_BUDGET_MS = 10000
+const QUIT_BUDGET_MS = 20000
 let ready = false
+let isBusy: () => boolean = () => true
+let activation: (() => void | boolean | Promise<void | boolean>) | undefined
+let isStarting = () => false
+let pendingHandoff: Promise<boolean> | undefined
+let pendingQuit: Promise<boolean> | undefined
 
-async function flushBeforeHandoff(): Promise<boolean> {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (window.isDestroyed() || window.webContents.isDestroyed()) continue
-    let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      const saved = await Promise.race([
-        window.webContents.executeJavaScript("window.dispatchEvent(new Event('sidekick:before-handoff', { cancelable: true }))", true),
-        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('保存窗口响应超时')), 10000) }),
-      ])
-      if (!saved) throw new Error('窗口中的更改未能保存')
-    } catch (error) {
-      await dialog.showMessageBox({ type: 'warning', title: '暂时无法切换版本', message: '请先处理当前窗口的保存问题，再继续操作。', detail: String(error), buttons: ['继续编辑'] })
-      return false
-    } finally { clearTimeout(timer) }
-  }
-  return true
+const HANDOFF_SAVE_SCRIPT = `(() => {
+  const waiting = [];
+  const event = new CustomEvent('sidekick:before-handoff', {
+    cancelable: true,
+    detail: { waitUntil: promise => waiting.push(Promise.resolve(promise)), suppressPrompts: true },
+  });
+  const accepted = window.dispatchEvent(event);
+  return Promise.allSettled(waiting).then(results => accepted && results.every(result => result.status === 'fulfilled'));
+})()`
+
+async function withinBudget<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), milliseconds); timer.unref?.() }),
+    ])
+  } finally { clearTimeout(timer) }
 }
 
-function quitAfterHandoff(): Promise<boolean> {
-  return new Promise((resolve, reject) => {
+async function saveWindows(): Promise<boolean> {
+  const windows = BrowserWindow.getAllWindows().filter(window => !window.isDestroyed() && !window.webContents.isDestroyed() && !!window.webContents.getURL())
+  const saved = await Promise.allSettled(windows.map(async window => {
+    const accepted = await window.webContents.executeJavaScript(HANDOFF_SAVE_SCRIPT, true)
+    if (!accepted) throw new Error('Window handoff save was not accepted')
+  }))
+  for (const result of saved) if (result.status === 'rejected') console.warn('[EditionSession] Window save failed', result.reason)
+  return saved.every(result => result.status === 'fulfilled')
+}
+
+function cancelWindowHandoff(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed() || window.webContents.isDestroyed() || !window.webContents.getURL()) continue
+    void window.webContents.executeJavaScript("window.dispatchEvent(new Event('sidekick:cancel-handoff'))", true)
+      .catch(error => console.warn('[EditionSession] Window save cancellation failed', error))
+  }
+}
+
+export async function preparePermissionHandoff(): Promise<boolean> {
+  if (!ready || isBusy()) return false
+  const release = beginApplicationHandoff()
+  try {
+    return await withinBudget(saveWindows(), SAVE_BUDGET_MS, 'Window handoff save timed out') && !isBusy()
+  } catch (error) {
+    console.warn('[EditionSession] Permission handoff preparation failed', error)
+    return false
+  } finally { cancelWindowHandoff(); release() }
+}
+
+export function quitPermissionHandoff(canQuit: () => boolean = () => true): Promise<boolean> {
+  if (!ready || isBusy() || !canQuit()) return Promise.resolve(false)
+  return performHandoff(canQuit)
+}
+
+function performHandoff(canQuit: () => boolean = () => true): Promise<boolean> {
+  if (pendingHandoff) return pendingHandoff
+  const task = (async () => {
+    const release = beginApplicationHandoff()
+    let accepted = false
+    try {
+      if (isBusy() || !canQuit()) return false
+      if (!await withinBudget(saveWindows(), SAVE_BUDGET_MS, 'Application handoff save timed out')) return false
+      if (isBusy() || !canQuit()) return false
+      accepted = await quitAfterHandoff()
+      return accepted
+    } finally {
+      if (!accepted) {
+        cancelWindowHandoff()
+      }
+      release()
+    }
+  })()
+  pendingHandoff = task
+  void task.finally(() => { if (pendingHandoff === task) pendingHandoff = undefined }).catch(() => {})
+  return task
+}
+
+/** Await completed shutdown; prevented quit events may be asynchronous preparation. */
+export function quitAfterHandoff(): Promise<boolean> {
+  if (pendingQuit) return pendingQuit
+  const task = new Promise<boolean>((resolve, reject) => {
     const observed = new Set<Electron.WebContents>()
-    const windows = BrowserWindow.getAllWindows()
     let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     const cleanup = () => {
+      clearTimeout(timer)
       app.removeListener('web-contents-created', onCreated)
-      app.removeListener('before-quit', onPreventableQuit)
-      app.removeListener('will-quit', onPreventableQuit)
       app.removeListener('quit', onQuit)
       for (const contents of observed) contents.removeListener('will-prevent-unload', onUnload)
-      for (const window of windows) window.removeListener('close', onPreventableQuit)
     }
     const finish = (accepted: boolean) => {
       if (settled) return
@@ -41,14 +111,7 @@ function quitAfterHandoff(): Promise<boolean> {
       if (!accepted) (app as unknown as { isQuitting: boolean }).isQuitting = false
       resolve(accepted)
     }
-    const onPreventableQuit = (event: Electron.Event) => {
-      // Inspect the final decision after all listeners have run.
-      queueMicrotask(() => { if (event.defaultPrevented) finish(false) })
-    }
-    const onUnload = (event: Electron.Event) => {
-      // Unlike close, preventing this event allows unloading. Never override a veto.
-      queueMicrotask(() => { if (!event.defaultPrevented) finish(false) })
-    }
+    const onUnload = (event: Electron.Event) => event.preventDefault()
     const observe = (contents: Electron.WebContents) => {
       if (observed.has(contents)) return
       observed.add(contents)
@@ -57,37 +120,35 @@ function quitAfterHandoff(): Promise<boolean> {
     const onCreated = (_event: Electron.Event, contents: Electron.WebContents) => observe(contents)
     const onQuit = () => finish(true)
     app.on('web-contents-created', onCreated)
-    app.on('before-quit', onPreventableQuit)
-    app.on('will-quit', onPreventableQuit)
     app.once('quit', onQuit)
     for (const contents of webContents.getAllWebContents()) observe(contents)
-    for (const window of windows) window.on('close', onPreventableQuit)
+    timer = setTimeout(() => finish(false), QUIT_BUDGET_MS)
+    timer.unref?.()
     try { app.quit() }
-    catch (error) { cleanup(); reject(error) }
+    catch (error) { settled = true; cleanup(); reject(error) }
   })
+  pendingQuit = task
+  void task.finally(() => { if (pendingQuit === task) pendingQuit = undefined }).catch(() => {})
+  return task
 }
 
+export function bindEditionActivation(callback: () => void | boolean | Promise<void | boolean>, starting: () => boolean = () => false): void { activation = callback; isStarting = starting }
 export function markEditionReady(): void { ready = true }
 
 export async function startEditionSession(edition: Edition, busy: () => boolean): Promise<boolean> {
-  const result = await acquireEditionSession({
-    edition,
-    endpoint: editionSessionEndpoint(process.env.SIDEKICK_TEST_SESSION, edition, app.getPath('userData')),
-    executable: app.getPath('exe'),
-    state: () => busy() ? 'busy' : ready ? 'ready' : 'starting',
-    onActivate: () => {
+  isBusy = busy
+  return bindApplicationSession(edition, {
+    state: () => !ready || isStarting() ? 'starting' : busy() ? 'busy' : 'ready',
+    onActivate: async () => {
+      if (activation) return activation()
       const window = BrowserWindow.getAllWindows().find(window => !window.isDestroyed())
-      if (window) { window.show(); window.focus() }
+      if (!window) return !ready
+      window.show(); window.focus()
+      return true
     },
     onQuit: async () => {
-      if (busy() || !await flushBeforeHandoff() || busy()) return false
-      return quitAfterHandoff()
+      try { return await performHandoff() }
+      catch (error) { console.warn('[EditionSession] Cooperative handoff did not finish', error); return false }
     },
   })
-  if (!result.acquired) {
-    if (!result.reason.includes('已切换到现有窗口')) dialog.showErrorBox('当前版本未启动', result.reason)
-    app.exit(0)
-    return false
-  }
-  return true
 }

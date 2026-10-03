@@ -28,8 +28,6 @@ export interface StepLocationProps {
   cloudAssets: CloudAssetWire[]
   optionsTab: OptionsTabId
   setOptionsTab: (tab: OptionsTabId) => void
-  launchAfterInstall: boolean
-  setLaunchAfterInstall: (value: boolean) => void
   showGuideAfterInstall: boolean
   setShowGuideAfterInstall: (value: boolean) => void
   options: Record<string, boolean | string>
@@ -55,8 +53,6 @@ export default function StepLocation({
   cloudAssets,
   optionsTab,
   setOptionsTab,
-  launchAfterInstall,
-  setLaunchAfterInstall,
   showGuideAfterInstall,
   setShowGuideAfterInstall,
   options,
@@ -154,8 +150,6 @@ export default function StepLocation({
             info={info}
             optionsTab={optionsTab}
             setOptionsTab={setOptionsTab}
-            launchAfterInstall={launchAfterInstall}
-            setLaunchAfterInstall={setLaunchAfterInstall}
             showGuideAfterInstall={showGuideAfterInstall}
             setShowGuideAfterInstall={setShowGuideAfterInstall}
             options={options}

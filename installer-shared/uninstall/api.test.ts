@@ -15,6 +15,14 @@ const request: UninstallRequest = {
 beforeEach(() => vi.resetAllMocks())
 
 describe('uninstall bridge lifecycle', () => {
+  it('treats a switching admission as a quiet response without an operation', async () => {
+    vi.mocked(listen).mockResolvedValue(() => {})
+    vi.mocked(invoke).mockResolvedValue(null)
+    const api = createUninstallApi()
+    const off = api.onEvent(() => {})
+    expect(await api.start(request)).toBeNull()
+    off()
+  })
   it('does not submit before the event listener is established', async () => {
     let establish!: (off: () => void) => void
     vi.mocked(listen).mockImplementation(() => new Promise((resolve) => { establish = resolve }))

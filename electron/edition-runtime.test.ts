@@ -1,172 +1,185 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { randomUUID } from 'node:crypto'
-import type net from 'node:net'
-import { editionSessionEndpoint, requestEdition } from './edition-session.js'
 
-const electron = vi.hoisted(() => ({ app: null as any, windows: [] as any[], contents: [] as any[] }))
-const servers: net.Server[] = []
-vi.mock('electron', () => ({
-  get app() { return electron.app },
-  BrowserWindow: { getAllWindows: () => electron.windows },
-  webContents: { getAllWebContents: () => electron.contents },
-  dialog: { showMessageBox: vi.fn(), showErrorBox: vi.fn() },
+const fixture = vi.hoisted(() => ({
+  app: null as any, windows: [] as any[], contents: [] as any[], callbacks: null as any,
+  bind: vi.fn(), show: vi.fn(), warning: vi.fn(), error: vi.fn(),
 }))
-vi.mock('./edition-session.js', async importOriginal => {
-  const original = await importOriginal<typeof import('./edition-session.js')>()
-  return { ...original, acquireEditionSession: async (options: Parameters<typeof original.acquireEditionSession>[0]) => {
-    const result = await original.acquireEditionSession(options)
-    if (result.acquired) servers.push(result.server)
-    return result
-  } }
-})
-
-function event() {
-  return { defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+vi.mock('electron', () => ({
+  get app() { return fixture.app },
+  BrowserWindow: { getAllWindows: () => fixture.windows },
+  webContents: { getAllWebContents: () => fixture.contents },
+  dialog: { showMessageBox: fixture.warning, showErrorBox: fixture.error },
+}))
+vi.mock('./application-admission.js', () => ({ bindApplicationSession: fixture.bind }))
+vi.mock('./utils/focus-manager.js', () => ({ show: fixture.show }))
+const event = () => ({ defaultPrevented: false, preventDefault() { this.defaultPrevented = true } })
+const settle = async () => { for (let index = 0; index < 40; index++) await Promise.resolve() }
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
+  return { promise, resolve, reject }
 }
-function emitVeto() {
-  const veto = event()
-  electron.windows[0].webContents.emit('will-prevent-unload', veto)
-  return veto
+function window() {
+  const contents = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: (): string => 'file:///application/index.html', executeJavaScript: vi.fn().mockResolvedValue(true) })
+  fixture.contents.push(contents)
+  const current = Object.assign(new EventEmitter(), { isDestroyed: () => false, webContents: contents, show: vi.fn(), focus: vi.fn() })
+  fixture.windows.push(current)
+  return current
 }
-const send = (action: 'activate' | 'status' | 'shutdown' = 'status') => requestEdition(
-  editionSessionEndpoint(process.env.SIDEKICK_TEST_SESSION, 'concept', 'E:/fixture/SidekickAI-OpenSource.exe'),
-  { protocol: 1, edition: 'concept', action, executable: 'E:/fixture/SidekickAI-OpenSource.exe' },
-)
-
 beforeEach(() => {
-  vi.resetModules()
-  vi.stubEnv('SIDEKICK_TEST_SESSION', randomUUID())
-  const contents = Object.assign(new EventEmitter(), {
-    isDestroyed: () => false,
-    executeJavaScript: vi.fn().mockResolvedValue(true),
-  })
-  electron.contents = [contents]
-  electron.windows = [Object.assign(new EventEmitter(), { isDestroyed: () => false, webContents: contents })]
-  electron.app = Object.assign(new EventEmitter(), {
-    getPath: () => 'E:/fixture/SidekickAI-OpenSource.exe', exit: vi.fn(),
-    quit: vi.fn(() => {
-      const before = event()
-      electron.app.emit('before-quit', before)
-      if (!before.defaultPrevented) setImmediate(emitVeto)
-    }),
-  })
+  vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  fixture.windows = []; fixture.contents = []
+  window()
+  fixture.app = Object.assign(new EventEmitter(), { quit: vi.fn(() => fixture.app.emit('quit')) })
+  fixture.bind.mockImplementation(async (_edition: string, callbacks: unknown) => { fixture.callbacks = callbacks; return true })
 })
-afterEach(async () => {
-  await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve()))))
-  vi.unstubAllEnvs()
-})
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+async function start(busy: () => boolean = () => false) {
+  const runtime = await import('./edition-runtime.js')
+  await runtime.startEditionSession('community', busy)
+  runtime.markEditionReady()
+  return runtime
+}
 
-describe('edition runtime quit cancellation', () => {
-  it.each(['shutdown'] as const)('retries %s after an asynchronous beforeunload veto', async action => {
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => false)
-    runtime.markEditionReady()
-    expect((await send(action)).status).toBe('yielding')
-    await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce())
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
-    expect((await send(action)).status).toBe('yielding')
-    await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledTimes(2))
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
+describe('awaited application handoff', () => {
+  it('leaves windows without a document outside renderer saving and cancellation', async () => {
+    const auxiliary = window()
+    auxiliary.webContents.getURL = () => ''
+    auxiliary.webContents.executeJavaScript.mockReturnValue(new Promise(() => {}))
+    const runtime = await start()
+    expect(await runtime.preparePermissionHandoff()).toBe(true)
+    expect(auxiliary.webContents.executeJavaScript).not.toHaveBeenCalled()
+    expect(await fixture.callbacks.onQuit()).toBe(true)
+    expect(auxiliary.webContents.executeJavaScript).not.toHaveBeenCalled()
+    expect(fixture.app.quit).toHaveBeenCalledOnce()
   })
 
-  it.each(['before-quit', 'will-quit', 'close'] as const)('recovers from a canceled %s after all listeners decide', async name => {
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => false)
-    runtime.markEditionReady()
-    electron.app.quit.mockImplementation(() => {
-      const target = name === 'close' ? electron.windows[0] : electron.app
-      target.once(name, (value: ReturnType<typeof event>) => value.preventDefault())
-      target.emit(name, event())
+  it('saves windows concurrently and waits for every window even if another fails', async () => {
+    const first = deferred<boolean>(); const second = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(first.promise)
+    const other = window(); other.webContents.executeJavaScript.mockReturnValueOnce(second.promise)
+    await start()
+    let completed = false
+    const handoff = fixture.callbacks.onQuit().then((value: boolean) => { completed = true; return value })
+    await settle()
+    expect(fixture.windows[0].webContents.executeJavaScript).toHaveBeenCalledOnce()
+    expect(other.webContents.executeJavaScript).toHaveBeenCalledOnce()
+    first.reject(new Error('Disk unavailable')); await settle()
+    expect(completed).toBe(false)
+    second.resolve(true)
+    expect(await handoff).toBe(false)
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+    expect(fixture.warning).not.toHaveBeenCalled(); expect(fixture.error).not.toHaveBeenCalled()
+  })
+
+  it('uses one ten-second budget across hung windows', async () => {
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(new Promise(() => {}))
+    window().webContents.executeJavaScript.mockReturnValueOnce(new Promise(() => {}))
+    await start()
+    const handoff = fixture.callbacks.onQuit()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(await handoff).toBe(false)
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+    expect(fixture.warning).not.toHaveBeenCalled()
+  })
+
+  it('keeps awaiting an asynchronous before-quit preparation instead of reporting a veto', async () => {
+    const runtime = await start()
+    fixture.app.quit.mockImplementation(() => {
+      const preparing = event(); preparing.preventDefault(); fixture.app.emit('before-quit', preparing)
+      setTimeout(() => fixture.app.emit('quit'), 100)
     })
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
-    expect(electron.app.isQuitting).toBe(false)
-    expect(electron.app.listenerCount('before-quit')).toBe(0)
-    expect(electron.app.listenerCount('will-quit')).toBe(0)
-    expect(electron.contents[0].listenerCount('will-prevent-unload')).toBe(0)
-    expect(electron.windows[0].listenerCount('close')).toBe(0)
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledTimes(2))
+    let completed = false
+    const handoff = runtime.quitAfterHandoff().then(value => { completed = true; return value })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(completed).toBe(false)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(await handoff).toBe(true)
+    expect(fixture.app.listenerCount('quit')).toBe(0)
   })
 
-  it.each([false, true])('observes a guest veto (created during quit: %s)', async createdDuringQuit => {
+  it('bounds an unresolved quit and removes observers before a retry', async () => {
+    const runtime = await start(); fixture.app.quit.mockImplementation(() => {})
+    const handoff = runtime.quitAfterHandoff()
+    await vi.advanceTimersByTimeAsync(20000)
+    expect(await handoff).toBe(false)
+    expect(fixture.app.listenerCount('web-contents-created')).toBe(0)
+    expect(fixture.contents[0].listenerCount('will-prevent-unload')).toBe(0)
+    fixture.app.quit.mockImplementation(() => fixture.app.emit('quit'))
+    expect(await runtime.quitAfterHandoff()).toBe(true)
+  })
+
+  it('suppresses guest unload prompts during a verified application handoff', async () => {
+    const runtime = await start()
     const guest = new EventEmitter()
-    if (!createdDuringQuit) electron.contents.push(guest)
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => false)
-    runtime.markEditionReady()
-    electron.app.quit.mockImplementation(() => {
-      if (createdDuringQuit) electron.app.emit('web-contents-created', event(), guest)
-      setImmediate(() => guest.emit('will-prevent-unload', event()))
+    const unload = event()
+    fixture.app.quit.mockImplementation(() => {
+      fixture.app.emit('web-contents-created', event(), guest)
+      guest.emit('will-prevent-unload', unload)
+      fixture.app.emit('quit')
     })
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
+    expect(await runtime.quitAfterHandoff()).toBe(true)
+    expect(unload.defaultPrevented).toBe(true)
     expect(guest.listenerCount('will-prevent-unload')).toBe(0)
-    expect(electron.app.listenerCount('web-contents-created')).toBe(0)
   })
 
-  it('keeps yielding when another listener permits unload or shutdown is merely slow', async () => {
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => false)
-    runtime.markEditionReady()
-    electron.app.quit.mockImplementation(() => {
-      electron.contents[0].once('will-prevent-unload', (value: ReturnType<typeof event>) => value.preventDefault())
-      emitVeto()
-    })
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce())
-    expect((await send()).status).toBe('yielding')
-    expect((await send('shutdown')).status).toBe('yielding')
-    expect(electron.app.quit).toHaveBeenCalledOnce()
-    electron.app.emit('quit')
-    expect((await send()).status).toBe('yielding')
-    expect(electron.app.listenerCount('will-quit')).toBe(0)
-    expect(electron.contents[0].listenerCount('will-prevent-unload')).toBe(0)
+  it('merges repeated shutdown requests while saving', async () => {
+    const save = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(save.promise)
+    await start()
+    const first = fixture.callbacks.onQuit(); const second = fixture.callbacks.onQuit()
+    await settle()
+    expect(fixture.windows[0].webContents.executeJavaScript).toHaveBeenCalledOnce()
+    save.resolve(true)
+    expect(await first).toBe(true); expect(await second).toBe(true)
+    expect(fixture.app.quit).toHaveBeenCalledOnce()
   })
 
-  it('preserves ownership and permits a retry after a save rejects', async () => {
-    electron.contents[0].executeJavaScript.mockResolvedValue(false)
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => false)
-    runtime.markEditionReady()
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
-    expect(electron.app.quit).not.toHaveBeenCalled()
-    electron.contents[0].executeJavaScript.mockResolvedValue(true)
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce())
-  })
-
-  it('does not repeat a save while a previous handoff is pending', async () => {
-    let finishSave!: (saved: boolean) => void
-    electron.contents[0].executeJavaScript.mockImplementation(() => new Promise(resolve => { finishSave = resolve }))
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => false)
-    runtime.markEditionReady()
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(() => expect(finishSave).toBeTypeOf('function'))
-    expect((await send('shutdown')).status).toBe('yielding')
-    expect(electron.contents[0].executeJavaScript).toHaveBeenCalledOnce()
-    expect(electron.app.quit).not.toHaveBeenCalled()
-    finishSave(false)
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
-  })
-
-  it('rechecks restore state after an asynchronous save', async () => {
+  it('rechecks the busy state and permission request validity after asynchronous saving', async () => {
     let busy = false
-    let finishSave!: (saved: boolean) => void
-    electron.windows[0].webContents.executeJavaScript.mockImplementation(() => new Promise(resolve => { finishSave = resolve }))
-    const runtime = await import('./edition-runtime.js')
-    await runtime.startEditionSession('concept', () => busy)
-    runtime.markEditionReady()
-    expect((await send('shutdown')).status).toBe('yielding')
-    await vi.waitFor(() => expect(finishSave).toBeTypeOf('function'))
-    busy = true
-    finishSave(true)
-    await vi.waitFor(async () => expect((await send()).status).toBe('busy'))
-    expect(electron.app.quit).not.toHaveBeenCalled()
-    expect((await send('shutdown')).status).toBe('busy')
-    expect((await send()).status).toBe('busy')
+    const runtime = await start(() => busy)
+    const save = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(save.promise)
+    const preparing = runtime.preparePermissionHandoff()
+    busy = true; save.resolve(true)
+    expect(await preparing).toBe(false)
+    busy = false
+    let valid = true
+    const retry = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(retry.promise)
+    const quitting = runtime.quitPermissionHandoff(() => valid)
+    await settle(); valid = false; retry.resolve(true)
+    expect(await quitting).toBe(false)
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+    expect(fixture.warning).not.toHaveBeenCalled()
+  })
+
+  it('uses awaited renderer contributions with synchronous compatibility', async () => {
+    const runtime = await start()
+    let script = ''
+    fixture.windows[0].webContents.executeJavaScript.mockImplementation(async (source: string) => {
+      script = source
+      const renderer = new EventTarget()
+      renderer.addEventListener('sidekick:before-handoff', value => {
+        const custom = value as Event & { detail: { waitUntil(promise: Promise<void>): void } }
+        custom.detail.waitUntil(Promise.resolve())
+      })
+      class SaveEvent extends Event { constructor(type: string, public options: any) { super(type, options) } get detail() { return this.options.detail } }
+      return new Function('window', 'CustomEvent', `return ${source}`)(renderer, SaveEvent)
+    })
+    expect(await runtime.preparePermissionHandoff()).toBe(true)
+    expect(script).toContain('sidekick:cancel-handoff')
+    expect(fixture.windows[0].webContents.executeJavaScript.mock.calls[0][0]).toContain('Promise.allSettled')
+  })
+
+  it('delegates retired-window activation to the application UI binding', async () => {
+    const runtime = await start(); fixture.windows = []
+    const recreate = vi.fn().mockResolvedValue(true)
+    runtime.bindEditionActivation(recreate)
+    expect(await fixture.callbacks.onActivate()).toBe(true)
+    expect(recreate).toHaveBeenCalledOnce()
   })
 })

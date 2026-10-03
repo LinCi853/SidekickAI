@@ -22,12 +22,13 @@ it('surfaces incomplete cross-edition discovery', () => {
   expect(html).toContain('无法完整检查已有安装')
 })
 
-it.each([true, false])('shows the installed edition and launch choice %s', launch => {
-  const props = { actionName: '安装', mode: 'install' as const, finalDir: 'E:/Apps/actual', installDir: 'E:/Apps/requested', residualNote: '', closeBanner: '', info: { editionLabel: '概念版', version: '0.1.0-beta.5' } as InstallerInfo, launchAfterInstall: launch, setLaunchAfterInstall: vi.fn() }
+it.each(['概念版', '社区版'])('shows the installed %s without an automatic launch choice', editionLabel => {
+  const props = { actionName: '安装', mode: 'install' as const, finalDir: 'E:/Apps/actual', installDir: 'E:/Apps/requested', residualNote: '', closeBanner: '', info: { editionLabel, version: '0.1.0-beta.5' } as InstallerInfo, completionIntent: 'close' as const }
   const html = renderToStaticMarkup(React.createElement(StepDone, props))
-  expect(html).toContain('概念版')
+  expect(html).toContain(editionLabel)
   expect(html).toContain('0.1.0-beta.5')
   expect(html).toContain('E:/Apps/actual')
   expect(html).not.toContain('E:/Apps/requested')
-  expect(html.includes('checked=')).toBe(launch)
+  expect(html).not.toContain('type="checkbox"')
+  expect(html).not.toContain('完成后打开')
 })

@@ -47,7 +47,7 @@ import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import Button from '../../components/ui/Button';
 import '../PromptLibraryView.css';
 import { parseEditorOpts } from './editorOpts.js';
-import { hostnameFromUrl, matchDomain, isValidHexColor } from './domain.js';
+import { hostnameFromUrl, matchDomain, isValidHexColor, buildProfilePatch } from './domain.js';
 import { EMPTY_RULE_DRAFT } from './constants.js';
 import { AiAppEditorTitleBar } from './components/TitleBar.js';
 import { BasicInfoFields } from './components/BasicInfoFields.js';
@@ -278,18 +278,18 @@ export default function AiAppEditor() {
     }
     setSaving(true);
     try {
-      const patch: Partial<Profile> = {
+      const patch = buildProfilePatch({
         name: finalName,
-        aiPlatformUrl: aiPlatformUrl.trim(),
-        browserHomePage: browserHomePage.trim() || undefined,
-        aiDesktopPreset: aiDesktopPreset || undefined,
-        aiMobilePreset: aiMobilePreset || undefined,
-        aiInputSelector: aiInputSelector.trim() || undefined,
-        aiSendSelector: aiSendSelector.trim() || undefined,
-        aiThemeColor: aiThemeColor.trim() || undefined,
+        aiPlatformUrl,
+        browserHomePage,
+        aiDesktopPreset,
+        aiMobilePreset,
+        aiInputSelector,
+        aiSendSelector,
+        aiThemeColor,
         aiPlatformRegion,
-        popupWhitelist: popupWhitelist.length > 0 ? popupWhitelist : undefined,
-      };
+        popupWhitelist,
+      });
 
       if (isCreateMode) {
         // 新建模式：调用 createProfile 创建新 Profile
@@ -574,4 +574,3 @@ export default function AiAppEditor() {
     </>
   );
 }
-

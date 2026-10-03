@@ -38,4 +38,14 @@ describe('historic running application detection', () => {
     expect(identifyRunningApplications([{ ...base, ProcessId: 1 }, { ...base, ProcessId: 2, CommandLine: base.CommandLine + ' --type=renderer' }, { ...base, ProcessId: 3, CommandLine: base.CommandLine + ' --export-user-data request.json' }], 1, read)).toEqual([])
     expect(identifyRunningApplications([{ ...base, ProcessId: 50 }], 1, () => ({ ...read(), editionSessionProtocol: 2 }))).toEqual([])
   })
+  it('uses native identity when CIM command-line access is unavailable', () => {
+    const rows = [{ ProcessId: 50, ExecutablePath: 'E:/custom/SidekickAI.exe', Started: '123', Sid: 'fixture-user', Session: 1 }]
+    expect(identifyRunningApplications(rows, 1, () => ({ name: 'sidekick-ai', version: '0.1.6' }))).toMatchObject([{ pid: 50, version: '0.1.6', started: '123', sid: 'fixture-user', session: 1 }])
+    expect(identifyRunningApplications([{ ProcessId: 51, ExecutablePath: rows[0].ExecutablePath }], 1, () => ({ name: 'sidekick-ai', version: '0.1.6' }))).toEqual([])
+  })
+  it('excludes same-image children by parentage when their command line is unavailable', () => {
+    const owner = { ProcessId: 50, ExecutablePath: 'E:/custom/SidekickAI.exe', Started: '123', Sid: 'fixture-user', Session: 1 }
+    const rows = [owner, { ...owner, ProcessId: 51, ParentProcessId: 50 }]
+    expect(identifyRunningApplications(rows, 1, () => ({ name: 'sidekick-ai', version: '0.1.6' }))).toHaveLength(1)
+  })
 })

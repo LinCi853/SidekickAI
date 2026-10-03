@@ -1,24 +1,19 @@
 $ErrorActionPreference = "Stop"
+$env:LIB = ""
+$env:LIBPATH = ""
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 try {
     switch ($env:SIDEKICK_LAUNCH_ACTION) {
-        "inventory" {
+        "descendants" {
             $session = (Get-Process -Id $PID).SessionId
-            $records = @(Get-CimInstance Win32_Process -OperationTimeoutSec 5 -Filter "Name='SidekickAI.exe' OR Name='SidekickAI-OpenSource.exe'" | Where-Object { $_.SessionId -eq $session } | Select-Object ProcessId, ExecutablePath, CommandLine)
-            @{ session = $session; home = $env:USERPROFILE; processes = $records } | ConvertTo-Json -Depth 4 -Compress
-        }
-        "request" {
-            $pipe = [IO.Pipes.NamedPipeClientStream]::new(".", $env:SIDEKICK_LAUNCH_PIPE, [IO.Pipes.PipeDirection]::InOut, [IO.Pipes.PipeOptions]::Asynchronous)
-            try {
-                $pipe.Connect(1000)
-                $writer = [IO.StreamWriter]::new($pipe, [Text.UTF8Encoding]::new($false), 1024, $true)
-                $writer.AutoFlush = $true
-                $writer.WriteLine($env:SIDEKICK_LAUNCH_REQUEST)
-                $reader = [IO.StreamReader]::new($pipe, [Text.UTF8Encoding]::new($false), $false, 1024, $true)
-                $pending = $reader.ReadLineAsync()
-                if (-not $pending.Wait(1500)) { throw "Application response timed out" }
-                $pending.Result
-            } finally { $pipe.Dispose() }
+            $records = @(Get-CimInstance Win32_Process -OperationTimeoutSec 5 | Where-Object { $_.SessionId -eq $session })
+            $owners = [Collections.Generic.HashSet[int]]::new()
+            $null = $owners.Add([int]$env:SIDEKICK_LAUNCH_PID)
+            do { $changed = $false; foreach ($record in $records) { if ($owners.Contains([int]$record.ParentProcessId) -and $owners.Add([int]$record.ProcessId)) { $changed = $true } } } while ($changed)
+            $children = @($records | Where-Object { $owners.Contains([int]$_.ProcessId) } | ForEach-Object {
+                @{ ProcessId = $_.ProcessId; ParentProcessId = $_.ParentProcessId; ExecutablePath = $_.ExecutablePath; CommandLine = $_.CommandLine; Created = if ($_.CreationDate -is [DateTime]) { [long]$_.CreationDate.ToFileTimeUtc() } else { $null } }
+            })
+            ConvertTo-Json -InputObject $children -Depth 4 -Compress
         }
         "close" {
             $target = Get-Process -Id ([int]$env:SIDEKICK_LAUNCH_PID) -ErrorAction SilentlyContinue

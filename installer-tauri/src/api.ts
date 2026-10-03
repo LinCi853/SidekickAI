@@ -26,6 +26,10 @@ const api = {
   needsAdmin: (dir: string, forAllUsers: boolean): Promise<boolean> =>
     invoke<boolean>('needs_admin', { dir, forAllUsers }),
   start: (opts: InstallOptions): Promise<boolean> => invoke<boolean>('start', { opts }),
+  beginPreparation: (): Promise<boolean> => invoke<boolean>('begin_preparation'),
+  endPreparation: (): Promise<void> => invoke<void>('end_preparation'),
+  beginCompletion: (): Promise<boolean> => invoke<boolean>('begin_completion'),
+  endCompletion: (): Promise<void> => invoke<void>('end_completion'),
   stageCloudDownload: (assetId: string, bytes: number[]): Promise<string> =>
     invoke<string>('stage_cloud_download', { assetId, bytes }),
   readInstallConfig: (dir: string): Promise<InstalledConfig | null> =>

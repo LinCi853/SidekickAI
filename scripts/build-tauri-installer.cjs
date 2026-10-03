@@ -357,7 +357,8 @@ function applicationPackageInputs() {
     .filter(([name, entry]) => name.startsWith('node_modules/') && !entry.dev && fs.existsSync(path.join(ROOT, name)))
     .map(([name]) => path.join(ROOT, name))
   return ['out', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'product-edition.json', 'electron-builder.yml', 'package.json', 'package-lock.json',
-    'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs', 'build/License.txt', 'LICENSE',
+    'scripts/verify-packaged-ui.cjs', 'scripts/check-node-version.cjs', 'scripts/verify-packaged-native.cjs',
+    'scripts/build-startup-helper.cjs', 'scripts/prepare-startup-helper.cjs', 'scripts/verify-startup-helper.cjs', 'tools/startup-helper', 'build/License.txt', 'LICENSE',
     'node_modules/electron/package.json', 'node_modules/electron-builder', 'node_modules/app-builder-lib']
     .map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file)).concat(packages, process.env.SIDEKICK_ELECTRON_DIST ? [path.resolve(process.env.SIDEKICK_ELECTRON_DIST)] : [], [__filename])
     .flatMap(file => fs.statSync(file).isDirectory() ? u.listFiles(file, new Set(['.git'])) : [file])
@@ -366,6 +367,7 @@ function applicationPackageInputs() {
 function buildApplications(output, architectures, options = {}) {
   require('./check-node-version.cjs').assertNodeVersion()
   validateArchitectures(architectures)
+  require('./build-startup-helper.cjs').build({ resources: true })
   const appOutput = path.join(output, 'application-build')
   if (fs.existsSync(appOutput)) throw new Error(`Application build directory already exists: ${appOutput}`)
   fs.mkdirSync(appOutput, { recursive: true })
@@ -428,7 +430,8 @@ function verifyApplication(directory, arch) {
   const product = require('../packages/product-contract/manifest.json')
   if (packaged.name !== product.editions[EDITION].packageName || packaged.version !== VERSION) throw new Error('Application payload edition/version mismatch')
   const native = require('./verify-packaged-native.cjs').verifyPackagedNative(directory, arch)
-  return { directory, arch, native, inputs: applicationFingerprint(directory) }
+  const startup = require('./build-startup-helper.cjs').verifyResources(path.join(directory, 'resources/windows'), { root: ROOT })
+  return { directory, arch, native, startup, inputs: applicationFingerprint(directory) }
 }
 
 function applicationFingerprint(directory) {
@@ -751,7 +754,8 @@ async function buildFromArguments(args) {
 }
 
 const nativeDependencies = {
-  captureInputs: () => EDITION === 'community' ? require('./build-release.cjs').captureReleaseInputs() : u.fingerprint(ROOT, ['electron', 'src', 'packages', 'product-edition.json', 'package.json', 'electron.vite.config.ts'].map(file => path.join(ROOT, file))),
+  prepareResources: () => require('./build-startup-helper.cjs').build({ resources: true }),
+  captureInputs: () => EDITION === 'community' ? require('./build-release.cjs').captureReleaseInputs() : require('./build-distribution.cjs').captureInputs(ROOT),
   buildPlugins: options => EDITION === 'community' ? require('./build-plugins.cjs').main(options) : Promise.resolve(),
   buildApplications: (output, architectures) => buildApplications(output, architectures, { reuse: true }),
   buildInstallerArtifacts: (output, applications, architectures, toolchain) => buildInstallerArtifacts(output, applications, architectures, toolchain, { reuse: true, compression: 5 }),
@@ -765,6 +769,7 @@ const nativeDependencies = {
  * verified without a real build.
  */
 async function buildProducts(output, architectures, toolchain, dependencies = nativeDependencies) {
+  await dependencies.prepareResources?.()
   const captureInputs = dependencies.captureInputs
   const before = captureInputs?.()
   await dependencies.buildPlugins({

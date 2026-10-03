@@ -603,7 +603,7 @@ async function probeNativeUi(exe, options = {}) {
     }
 
     let target
-    for (let attempt = 0; attempt < timeoutSeconds && !target; attempt++) {
+    for (let attempt = 0; attempt < timeoutSeconds && !report.ok; attempt++) {
       if (spawnFailure) break
       await dependencies.sleep(1000)
       if (spawnFailure) break
@@ -612,7 +612,27 @@ async function probeNativeUi(exe, options = {}) {
         const pages = list.filter(entry => entry.type === 'page')
         report.pageTargets = pages.length
         target = pages[0]
-      } catch { /* the webview is still starting, or the UI relocated itself */ }
+      } catch { continue }
+      if (!target) continue
+      report.url = target.url
+      report.title = target.title
+      try {
+        delete report.evaluateError
+        delete report.rootHtmlLength
+        delete report.bodyText
+        report.rootHtmlLength = await dependencies.evaluate(target.webSocketDebuggerUrl, 'document.getElementById("root") ? document.getElementById("root").innerHTML.length : -1')
+        report.bodyText = String(await dependencies.evaluate(target.webSocketDebuggerUrl, 'document.body.innerText.slice(0, 120)')).replace(/\s+/g, ' ')
+      } catch (error) {
+        report.evaluateError = error.message
+      }
+      const title = String(report.title)
+      report.embeddedUrl = isEmbeddedAppUrl(report.url)
+      report.mountedRoot = Number.isFinite(Number(report.rootHtmlLength)) && Number(report.rootHtmlLength) > 0
+      report.ok = report.embeddedUrl
+        && report.mountedRoot
+        && !report.evaluateError
+        && matchesTitle(expectedTitle, title)
+        && !/的索引|未找到文件|Index of/i.test(title)
     }
     if (!target) {
       report.ok = false
@@ -625,24 +645,6 @@ async function probeNativeUi(exe, options = {}) {
       return report
     }
 
-    report.url = target.url
-    report.title = target.title
-    try {
-      report.rootHtmlLength = await dependencies.evaluate(target.webSocketDebuggerUrl, 'document.getElementById("root") ? document.getElementById("root").innerHTML.length : -1')
-      report.bodyText = String(await dependencies.evaluate(target.webSocketDebuggerUrl, 'document.body.innerText.slice(0, 120)')).replace(/\s+/g, ' ')
-    } catch (error) {
-      report.evaluateError = error.message
-    }
-    // The page must come from the production custom protocol AND mount content into
-    // the app root. A disk-loaded build shows either "<drive>:\...\dist\ 的索引"
-    // (directory index) or "未找到文件" (file not found) and never mounts the root.
-    const title = String(report.title)
-    report.embeddedUrl = isEmbeddedAppUrl(report.url)
-    report.mountedRoot = Number.isFinite(Number(report.rootHtmlLength)) && Number(report.rootHtmlLength) > 0
-    report.ok = report.embeddedUrl
-      && report.mountedRoot
-      && matchesTitle(expectedTitle, title)
-      && !/的索引|未找到文件|Index of/i.test(title)
     if (!report.ok) report.reason = 'the webview did not load the embedded UI document'
     return report
   } finally {

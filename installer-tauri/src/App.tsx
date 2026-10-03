@@ -15,7 +15,8 @@ import { hostContext, prepareCloudAssets } from './cloud'
 import type { CloudAssetWire, InstallationResourceStatus, InstallerInfo, InstallMode, ScanResult } from './global'
 import { MODE_STEPS, type OptionsTab, type StepId } from './types'
 import { WizardShell, CloseConfirmation } from '../../installer-shared/presentation/Wizard'
-import { finalizeWizard } from '../../installer-shared/presentation/finalize'
+import { completionLaunch, finalizeWizard, type CompletionIntent } from '../../installer-shared/presentation/finalize'
+import { completionErrorText } from './completion-error'
 import StepWelcome from './steps/StepWelcome'
 import StepLicense from './steps/StepLicense'
 import StepLocation from './steps/StepLocation'
@@ -41,7 +42,7 @@ export default function App() {
   const [forAllUsers, setForAllUsers] = useState(false)
   const [features, setFeatures] = useState<Record<string, boolean>>({})
   const [options, setOptions] = useState<Record<string, boolean | string>>({})
-  const [launchAfterInstall, setLaunchAfterInstall] = useState(true)
+  const [completionIntent, setCompletionIntent] = useState<CompletionIntent>('close')
   // 安装完成后是否打开使用指南（首次启动引导窗）；默认不勾选
   const [showGuideAfterInstall, setShowGuideAfterInstall] = useState(false)
   const [cloudNotice, setCloudNotice] = useState('')
@@ -196,7 +197,14 @@ export default function App() {
     setPreparationLines([`开始${actionName}：${selectedLocation?.version || '未安装'} → ${info?.version || ''}`])
     setStatusText(`正在准备${actionName}…`)
     setStep('installing')
+    let preparationHeld = false
     try {
+      if (!await window.installer.beginPreparation()) {
+        installingRef.current = false
+        setStatusText('正在等待当前维护向导…')
+        return
+      }
+      preparationHeld = true
       // Normal installs always attempt defaults before deploying the program.
       let preparedAssets: CloudAssetWire[] = []
       let resources: InstallationResourceStatus[] = []
@@ -220,7 +228,7 @@ export default function App() {
         installDir,
         forAllUsers,
         createDesktopShortcut: true,
-        launchAfterInstall,
+        launchAfterInstall: false,
         showGuideAfterInstall,
         features,
         options,
@@ -237,30 +245,38 @@ export default function App() {
       setErrorMsg(detail)
       setStatusText('操作失败')
       installingRef.current = false
+    } finally {
+      if (preparationHeld) await window.installer.endPreparation().catch(() => {})
     }
-  }, [installDir, forAllUsers, features, options, launchAfterInstall, showGuideAfterInstall, mode, cleanupPaths, acceptedLicenses, info, actionName, selectedLocation?.version])
+  }, [installDir, forAllUsers, features, options, showGuideAfterInstall, mode, cleanupPaths, acceptedLicenses, info, actionName, selectedLocation?.version])
 
-  const finalizeAndClose = useCallback(async () => {
+  const finalizeAndClose = useCallback(async (intent: CompletionIntent) => {
     if (finalizingRef.current) return
     finalizingRef.current = true
+    setCompletionIntent(intent)
     setFinalizing(true)
+    setStatusText(intent === 'open' ? '正在核对启动条件…' : '正在关闭向导…')
     setCloseBanner('')
     try {
       const completedDir = finalDir || installDir
+      const requestedLaunch = completionLaunch(intent)
       const saveRequired = installDone && mode === 'install' && Boolean(completedDir)
       await finalizeWizard({
+        begin: () => window.installer.beginCompletion(),
+        release: () => window.installer.endCompletion(),
         save: saveRequired ? () => window.installer.flushConfig({
-          installDir: completedDir, forAllUsers, createDesktopShortcut: true, launchAfterInstall, showGuideAfterInstall, features, options, mode
+          installDir: completedDir, forAllUsers, createDesktopShortcut: true, launchAfterInstall: requestedLaunch, showGuideAfterInstall, features, options, mode
         }) : undefined,
         prepareLaunch: installDone && mode !== 'uninstall' && Boolean(completedDir)
-          ? () => window.installer.setPendingLaunch(completedDir, launchAfterInstall, showGuideAfterInstall) : undefined,
+          ? () => window.installer.setPendingLaunch(completedDir, requestedLaunch, showGuideAfterInstall) : undefined,
         close: () => window.installer.closeWindow(),
       })
     } catch (error) {
+      console.warn('Application completion is pending', error)
       await window.installer.setPendingLaunch(installDir, false, false).catch(() => {})
-      setCloseBanner('完成操作尚未成功：' + String(error) + '。可处理后重试，或取消打开程序再完成。')
+      setCloseBanner(completionErrorText(error))
     } finally { finalizingRef.current = false; setFinalizing(false) }
-  }, [installDone, mode, installDir, finalDir, forAllUsers, launchAfterInstall, showGuideAfterInstall, features, options])
+  }, [installDone, mode, installDir, finalDir, forAllUsers, showGuideAfterInstall, features, options])
   // ---- 关闭窗口（二次确认；完成页直接写配置并关闭）----
   const handleClose = useCallback(() => {
     if (step === 'installing') {
@@ -268,7 +284,7 @@ export default function App() {
       return
     }
     if (step === 'done') {
-      finalizeAndClose()
+      finalizeAndClose('close')
       return
     }
     setShowCloseConfirm(true)
@@ -362,8 +378,9 @@ export default function App() {
         <div className="content__footer">
           <div className="footer__spacer" />
           <div className="footer__actions">
-            <button className="btn btn--primary" disabled={finalizing} onClick={finalizeAndClose}>
-              {finalizing ? (launchAfterInstall ? '正在切换到本次安装…' : '正在完成…') : launchAfterInstall ? '完成并打开' : '完成'}
+            <button className="btn" disabled={finalizing} onClick={() => finalizeAndClose('close')}>关闭向导</button>
+            <button className="btn btn--primary" disabled={finalizing} onClick={() => finalizeAndClose('open')}>
+              {finalizing ? (completionIntent === 'open' ? '正在打开程序…' : '正在关闭向导…') : '打开本次安装的程序'}
             </button>
           </div>
         </div>
@@ -485,8 +502,6 @@ export default function App() {
                     cloudAssets={cloudAssets}
                     optionsTab={optionsTab}
                     setOptionsTab={setOptionsTab}
-                    launchAfterInstall={launchAfterInstall}
-                    setLaunchAfterInstall={setLaunchAfterInstall}
                     showGuideAfterInstall={showGuideAfterInstall}
                     setShowGuideAfterInstall={setShowGuideAfterInstall}
                     options={options}
@@ -509,8 +524,8 @@ export default function App() {
                 {step === 'done' && (
                   <StepDone
                     info={info}
-                    launchAfterInstall={launchAfterInstall}
-                    setLaunchAfterInstall={setLaunchAfterInstall}
+                    completionIntent={completionIntent}
+                    completionStatus={statusText}
                     finalizing={finalizing}
                     actionName={actionName}
                     mode={mode}

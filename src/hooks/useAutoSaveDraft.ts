@@ -1,55 +1,39 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-/**
- * 自动保存草稿 hook
- *
- * 封装「防抖保存 + beforeunload 同步兜底 + 卸载前 flush」三段耦合逻辑。
- *
- * 设计要点：
- * - save / saveSync 通过 ref 持有最新引用，避免闭包陷阱；组件可将其闭包内
- *   的 ref（如 draftRef / editorRef）在调用时读取，保证拿到最新数据。
- * - schedule()：触发防抖保存（清除旧定时器、设置新定时器），供编辑器内容
- *   变化 / store.listen 等场景手动调用。
- * - flushNow()：立即保存（清除定时器 + 同步调用 save），返回 Promise 供
- *   调用方 await（如切换笔记前等待保存完成）。
- * - beforeunload：注册 window 事件，调用 saveSync 做同步 IPC 兜底。
- * - 组件卸载：清除定时器 + 调用 save（fire-and-forget）。
- *
- * @param opts.data       待保存的数据（ref 内保存，供 save/saveSync 使用）
- * @param opts.save       异步保存
- * @param opts.saveSync   同步保存（beforeunload 兜底）
- * @param opts.debounceMs 防抖时间，默认 800
- * @param opts.enabled    是否启用自动保存，默认 true
- */
 interface UseAutoSaveDraftOptions<T> {
   data: T;
   save: (data: T) => Promise<void> | void;
   saveSync?: (data: T) => void;
-  /** Reports failed saves; explicit flushNow calls still reject. */
+  /** Explicit flush calls reject; background saves report failures. */
   onError?: (error: unknown) => void;
   debounceMs?: number;
   enabled?: boolean;
 }
 
 interface UseAutoSaveDraftResult {
-  /** 触发防抖保存（清除旧定时器、设置新定时器） */
   schedule: () => void;
-  /** 立即保存（清除定时器 + 调用 save），返回 Promise 供 await */
   flushNow: () => Promise<void>;
 }
 
-export function useAutoSaveDraft<T>(
-  opts: UseAutoSaveDraftOptions<T>
-): UseAutoSaveDraftResult {
-  const { data, save, saveSync, onError, debounceMs = 800, enabled = true } = opts;
+interface HandoffSaveDetail {
+  waitUntil(promise: Promise<unknown>): void;
+  suppressPrompts?: boolean;
+}
 
-  // 通过 ref 持有最新值，避免闭包陷阱
+/** Serialize draft persistence and contribute awaited saves to application handoff. */
+export function useAutoSaveDraft<T>(opts: UseAutoSaveDraftOptions<T>): UseAutoSaveDraftResult {
+  const { data, save, saveSync, onError, debounceMs = 800, enabled = true } = opts;
   const dataRef = useRef(data);
   const saveRef = useRef(save);
   const saveSyncRef = useRef(saveSync);
   const onErrorRef = useRef(onError);
   const enabledRef = useRef(enabled);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingRef = useRef(false);
+  const revisionRef = useRef(0);
+  const syncFenceRef = useRef<{ revision: number; data: T; save: (data: T) => void } | null>(null);
+  const handoffRef = useRef(false);
 
   dataRef.current = data;
   saveRef.current = save;
@@ -58,66 +42,94 @@ export function useAutoSaveDraft<T>(
   enabledRef.current = enabled;
 
   const clearTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = null;
   }, []);
 
-  const reportError = useCallback((error: unknown) => {
+  const reportError = useCallback((error: unknown, quiet = handoffRef.current) => {
     console.error('[AutoSave] Pending changes could not be saved', error);
+    if (quiet || handoffRef.current) return;
     try { onErrorRef.current?.(error); }
     catch (reportingError) { console.error('[AutoSave] Error notification failed', reportingError); }
   }, []);
 
-  const flushNow = useCallback(async (): Promise<void> => {
+  const flushNow = useCallback((): Promise<void> => {
     clearTimer();
-    if (!enabledRef.current) return;
-    try { await saveRef.current(dataRef.current); }
-    catch (error) {
-      reportError(error);
-      throw error;
-    }
+    if (!enabledRef.current) return Promise.resolve();
+    const revision = ++revisionRef.current;
+    const snapshot = dataRef.current;
+    const persist = saveRef.current;
+    const quiet = handoffRef.current;
+    const wasPending = pendingRef.current;
+    pendingRef.current = true;
+    const operation = async () => {
+      try {
+        await persist(snapshot);
+      } finally {
+        // Restore a synchronous unload snapshot after an older asynchronous writer finishes.
+        const fence = syncFenceRef.current;
+        if (fence && fence.revision > revision) fence.save(fence.data);
+      }
+    };
+    const write = wasPending ? queueRef.current.then(operation, async previousError => {
+      await operation();
+      if (!quiet) throw previousError;
+    }) : operation();
+    const reported = write.catch(error => { reportError(error, quiet); throw error; });
+    queueRef.current = reported;
+    void reported.finally(() => {
+      if (queueRef.current === reported) pendingRef.current = false;
+    }).catch(() => {});
+    return reported;
   }, [clearTimer, reportError]);
 
   const schedule = useCallback(() => {
-    if (!enabledRef.current) return;
+    if (!enabledRef.current || handoffRef.current) return;
     clearTimer();
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      // Background callers report failures without leaving an unhandled rejection.
       void flushNow().catch(() => {});
     }, debounceMs);
   }, [clearTimer, debounceMs, flushNow]);
 
-  // beforeunload 同步兜底
   useEffect(() => {
-    const handler = (event: Event) => {
+    const handoff = (event: Event) => {
+      if (!enabledRef.current) return;
+      const detail = (event as CustomEvent<HandoffSaveDetail>).detail;
+      if (!detail?.waitUntil) { unload(event); return; }
+      handoffRef.current = detail.suppressPrompts !== false;
+      detail.waitUntil(flushNow());
+    };
+    const cancelHandoff = () => { handoffRef.current = false; };
+    const unload = (event: Event) => {
       if (!enabledRef.current) return;
       clearTimer();
-      if (saveSyncRef.current) {
-        try { saveSyncRef.current(dataRef.current); }
-        catch (error) {
-          reportError(error);
-          event.preventDefault();
-          if (event.type === 'beforeunload') (event as BeforeUnloadEvent).returnValue = '';
-        }
+      if (handoffRef.current && event.type === 'beforeunload') return;
+      const persist = saveSyncRef.current;
+      if (!persist) return;
+      try {
+        const snapshot = dataRef.current;
+        persist(snapshot);
+        syncFenceRef.current = { revision: ++revisionRef.current, data: snapshot, save: persist };
+      } catch (error) {
+        reportError(error);
+        event.preventDefault();
+        if (event.type === 'beforeunload') (event as BeforeUnloadEvent).returnValue = '';
       }
     };
-    window.addEventListener('beforeunload', handler);
-    window.addEventListener('sidekick:before-handoff', handler);
+    window.addEventListener('beforeunload', unload);
+    window.addEventListener('sidekick:before-handoff', handoff);
+    window.addEventListener('sidekick:cancel-handoff', cancelHandoff);
     return () => {
-      window.removeEventListener('beforeunload', handler);
-      window.removeEventListener('sidekick:before-handoff', handler);
+      window.removeEventListener('beforeunload', unload);
+      window.removeEventListener('sidekick:before-handoff', handoff);
+      window.removeEventListener('sidekick:cancel-handoff', cancelHandoff);
     };
-  }, [clearTimer, reportError]);
+  }, [clearTimer, flushNow, reportError]);
 
-  // 组件卸载前 flush（fire-and-forget）
-  useEffect(() => {
-    return () => {
-      clearTimer();
-      void flushNow().catch(() => {});
-    };
+  useEffect(() => () => {
+    clearTimer();
+    if (!handoffRef.current) void flushNow().catch(() => {});
   }, [clearTimer, flushNow]);
 
   return { schedule, flushNow };

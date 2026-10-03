@@ -9,8 +9,6 @@ export interface OptionsTabProps {
   info: InstallerInfo | null
   optionsTab: OptionsTabId
   setOptionsTab: (tab: OptionsTabId) => void
-  launchAfterInstall: boolean
-  setLaunchAfterInstall: (value: boolean) => void
   showGuideAfterInstall: boolean
   setShowGuideAfterInstall: (value: boolean) => void
   options: Record<string, boolean | string>
@@ -23,8 +21,6 @@ export default function OptionsTab({
   info,
   optionsTab,
   setOptionsTab,
-  launchAfterInstall,
-  setLaunchAfterInstall,
   showGuideAfterInstall,
   setShowGuideAfterInstall,
   options,
@@ -46,15 +42,6 @@ export default function OptionsTab({
         <h1 className="content__title">安装选项</h1>
       )}
       <div style={{ marginTop: 12 }}>
-        <div className="check-row" onClick={() => setLaunchAfterInstall(!launchAfterInstall)}>
-          <div className={`checkbox ${launchAfterInstall ? 'checkbox--checked' : ''}`}>
-            {launchAfterInstall ? '✓' : ''}
-          </div>
-          <div className="check-row__text">
-            向导关闭后启动 SidekickAI
-            <div className="opt-desc">点击完成或关闭安装向导时自动打开 SidekickAI</div>
-          </div>
-        </div>
         <div className="check-row" onClick={() => setShowGuideAfterInstall(!showGuideAfterInstall)}>
           <div className={`checkbox ${showGuideAfterInstall ? 'checkbox--checked' : ''}`}>
             {showGuideAfterInstall ? '✓' : ''}

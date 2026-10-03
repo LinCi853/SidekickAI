@@ -1,6 +1,5 @@
 import { product, edition } from '../packages/product-contract'
 import { app, dialog } from 'electron'
-import { duplicateVersionNotice } from '../packages/desktop-common/running-application'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { resolveRuntimePaths } from './runtime-paths'
@@ -41,12 +40,6 @@ function initializeDataRoot(): RestoreOutcome {
     mkdirSync(instanceRoot, { recursive: true })
     app.setPath('userData', instanceRoot)
     if (!app.requestSingleInstanceLock()) {
-      if (app.isPackaged) {
-        try {
-          const notice = duplicateVersionNotice()
-          if (notice) dialog.showErrorBox('已有版本正在运行', notice)
-        } catch { dialog.showErrorBox('无法核对正在运行的版本', '请先保存并退出已有工百窗实例，再重新启动。') }
-      }
       app.exit(0)
     }
   }

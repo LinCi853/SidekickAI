@@ -28,7 +28,7 @@ import type {
 } from '../lib/electron-api';
 import type { BlockRule } from '../../electron/shared/block-rules.types';
 import { generateUniqueName } from '../../electron/shared/naming';
-import { hostnameFromUrl, matchDomain, isValidHexColor } from '../pages/AiAppEditor/domain';
+import { hostnameFromUrl, matchDomain, isValidHexColor, buildProfilePatch } from '../pages/AiAppEditor/domain';
 import { EMPTY_RULE_DRAFT } from '../pages/AiAppEditor/constants';
 import { useToast } from '../hooks/useToast';
 import Button from './ui/Button';
@@ -225,18 +225,18 @@ export default function AiAppEditorModal({
     }
     setSaving(true);
     try {
-      const patch: Partial<Profile> = {
+      const patch = buildProfilePatch({
         name: finalName,
-        aiPlatformUrl: aiPlatformUrl.trim(),
-        browserHomePage: browserHomePage.trim() || undefined,
-        aiDesktopPreset: aiDesktopPreset || undefined,
-        aiMobilePreset: aiMobilePreset || undefined,
-        aiInputSelector: aiInputSelector.trim() || undefined,
-        aiSendSelector: aiSendSelector.trim() || undefined,
-        aiThemeColor: aiThemeColor.trim() || undefined,
+        aiPlatformUrl,
+        browserHomePage,
+        aiDesktopPreset,
+        aiMobilePreset,
+        aiInputSelector,
+        aiSendSelector,
+        aiThemeColor,
         aiPlatformRegion,
-        popupWhitelist: popupWhitelist.length > 0 ? popupWhitelist : undefined,
-      };
+        popupWhitelist,
+      });
 
       if (isCreateMode) {
         const created = await createProfile({

@@ -150,6 +150,23 @@ test('the native packaging path waits for a delayed plugin build and stops on fa
   assert.deepEqual(calls.slice(-1), ['failed-plugins'], 'a rejected plugin build must stop the native packaging path')
 })
 
+test('direct native packaging captures prepared resources and rejects drift after assembly', async () => {
+  const calls = []
+  let fingerprint = 'unprepared'
+  const dependencies = {
+    prepareResources() { fingerprint = 'prepared'; calls.push('resources') },
+    captureInputs() { assert.equal(fingerprint, 'prepared'); calls.push('capture'); return { fingerprint } },
+    buildPlugins() { calls.push('plugins') },
+    buildApplications() { calls.push('applications'); return 'runtime' },
+    buildInstallerArtifacts() { calls.push('installers'); return {} },
+  }
+  await build.buildProducts('output', ['x64'], {}, dependencies)
+  assert.deepEqual(calls.slice(0, 3), ['resources', 'capture', 'plugins'])
+  dependencies.captureInputs = () => ({ fingerprint })
+  dependencies.buildInstallerArtifacts = () => { fingerprint = 'changed-helper'; return {} }
+  await assert.rejects(() => build.buildProducts('output', ['x64'], {}, dependencies), /inputs changed/)
+})
+
 test('native identity captures esbuild/rollup CLI versions and their native binary bytes', t => {
   const root = fixture(t)
   const write = (relative, contents) => {

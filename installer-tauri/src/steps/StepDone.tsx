@@ -1,13 +1,13 @@
-// installer-tauri/src/steps/StepDone.tsx
-// 完成页：完成信息；配置已在安装前决策
+// Completed deployment with a separate application opening state.
 
 import type { InstallerInfo, InstallMode } from '../global'
+import type { CompletionIntent } from '../../../installer-shared/presentation/finalize'
 
 export interface StepDoneProps {
   info: InstallerInfo | null
   finalizing?: boolean
-  launchAfterInstall: boolean
-  setLaunchAfterInstall: (value: boolean) => void
+  completionIntent: CompletionIntent
+  completionStatus?: string
   actionName: string
   mode: InstallMode
   finalDir: string
@@ -17,7 +17,7 @@ export interface StepDoneProps {
 }
 
 export default function StepDone({
-  info, launchAfterInstall, setLaunchAfterInstall, finalizing,
+  info, completionIntent, completionStatus, finalizing,
   actionName,
   mode,
   finalDir,
@@ -37,11 +37,7 @@ export default function StepDone({
             ? `已${actionName}：${finalDir || installDir}`
             : `SidekickAI 已安装到：${finalDir || installDir}`}
         </div>
-        <label style={{ display: 'block', marginTop: 18 }}>
-          <input type="checkbox" disabled={finalizing} checked={launchAfterInstall} onChange={event => setLaunchAfterInstall(event.target.checked)} />
-          {` 完成后打开本次安装的工百窗${info?.editionLabel ? ` · ${info.editionLabel}` : ''}`}
-        </label>
-        {finalizing && <p role="status">{launchAfterInstall ? '正在等待已有程序保存退出，并确认本次安装的窗口打开。' : '正在完成安装设置。'}</p>}
+        {finalizing && <p role="status">{completionStatus || (completionIntent === 'open' ? '正在核对启动条件…' : '正在完成安装设置并关闭向导。')}</p>}
         {residualNote && (
           <div className="hint hint--warning" style={{ marginTop: 10, textAlign: 'left' }}>
             <span className="hint__icon">!</span>
@@ -49,8 +45,8 @@ export default function StepDone({
           </div>
         )}
         {closeBanner && (
-          <div className="hint hint--warning" style={{ marginTop: 10, textAlign: 'left' }}>
-            <span className="hint__icon">!</span>
+          <div role="status" className="hint" style={{ marginTop: 10, textAlign: 'left' }}>
+            <span className="hint__icon">…</span>
             <span>{closeBanner}</span>
           </div>
         )}

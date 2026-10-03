@@ -89,11 +89,13 @@ pub(super) fn reset_operation_state() {
 pub struct Admission {
     generation: u64,
     released: Cell<bool>,
+    wizard: sidekickai_uninstall_host::wizard_instance::WizardOperation,
 }
 
 impl Admission {
     /// Admit one operation, or `None` when another one is already running.
     pub fn acquire() -> Option<Self> {
+        let wizard = sidekickai_uninstall_host::wizard_instance::WizardInstance::try_begin_operation().ok()??;
         RUNNING
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .ok()?;
@@ -102,6 +104,7 @@ impl Admission {
         Some(Admission {
             generation,
             released: Cell::new(false),
+            wizard,
         })
     }
 
@@ -130,6 +133,7 @@ impl Admission {
             OPERATION_STATE.store(OPERATION_IDLE, Ordering::SeqCst);
             RUNNING.store(false, Ordering::SeqCst);
         }
+        self.wizard.finish();
     }
 }
 

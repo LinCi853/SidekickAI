@@ -13,7 +13,8 @@ const ROOT = path.resolve(__dirname, '..')
 function inputs(root = ROOT, complete = false) {
   const source = ['electron', 'src', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core',
     'resources', 'product-edition.json', 'package.json', 'package-lock.json', 'electron.vite.config.ts',
-    'scripts/compilation-inputs.ts', 'scripts/excalidraw-clipboard-feedback.ts', 'tsconfig.json', 'tsconfig.node.json']
+    'scripts/compilation-inputs.ts', 'scripts/excalidraw-clipboard-feedback.ts', 'tsconfig.json', 'tsconfig.node.json',
+    'scripts/build-startup-helper.cjs', 'tools/startup-helper']
   const list = source.flatMap(relative => {
     const location = path.join(root, relative)
     if (!fs.existsSync(location)) throw new Error(`Application compilation input is missing: ${relative}`)

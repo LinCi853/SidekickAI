@@ -1,7 +1,7 @@
 // elevate.rs —— 智能提权：判断是否需要管理员 + ShellExecuteExW(runas) 重启自身
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED, HWND};
-use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
 use windows::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW, SEE_MASK_NOCLOSEPROCESS};
 
 /// 当前进程是否已以管理员身份运行（TokenElevation）。
@@ -72,9 +72,40 @@ pub(crate) fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// 以管理员身份（UAC runas）启动 exe 并等待其退出。
-/// 返回：Ok(0)=成功；Ok(1223)=用户取消 UAC；Ok(code)=子进程退出码；Err=启动失败。
-pub fn shell_execute_runas(exe: &str, args: &str) -> Result<i32, String> {
+/// Retain the authorized worker's live process handle for completion requests.
+pub(crate) struct AuthorizedProcess { handle: usize }
+
+impl Drop for AuthorizedProcess {
+    fn drop(&mut self) { let _ = unsafe { CloseHandle(windows::Win32::Foundation::HANDLE(self.handle as _)) }; }
+}
+
+impl AuthorizedProcess {
+    #[cfg(test)]
+    pub(crate) fn from_test_child(child: &std::process::Child) -> Result<Self, String> {
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Foundation::{DuplicateHandle, HANDLE, DUPLICATE_SAME_ACCESS};
+        use windows::Win32::System::Threading::GetCurrentProcess;
+        let mut handle = HANDLE::default();
+        unsafe { DuplicateHandle(GetCurrentProcess(), HANDLE(child.as_raw_handle()), GetCurrentProcess(), &mut handle, 0, false, DUPLICATE_SAME_ACCESS) }
+            .map_err(|error| error.to_string())?;
+        Ok(Self { handle: handle.0 as usize })
+    }
+
+    pub(crate) fn exit_code(&self) -> Result<Option<i32>, String> {
+        let handle = windows::Win32::Foundation::HANDLE(self.handle as _);
+        match unsafe { WaitForSingleObject(handle, 0) } {
+            windows::Win32::Foundation::WAIT_TIMEOUT => Ok(None),
+            windows::Win32::Foundation::WAIT_OBJECT_0 => {
+                let mut code = 0;
+                unsafe { GetExitCodeProcess(handle, &mut code) }.map_err(|error| error.to_string())?;
+                Ok(Some(code as i32))
+            }
+            _ => Err("无法确认授权执行器状态。".into()),
+        }
+    }
+}
+
+fn spawn_runas(exe: &str, args: &str) -> Result<AuthorizedProcess, String> {
     let op = wide("runas");
     let file = wide(exe);
     let params = wide(args);
@@ -91,21 +122,32 @@ pub fn shell_execute_runas(exe: &str, args: &str) -> Result<i32, String> {
     };
     unsafe {
         if ShellExecuteExW(&mut sei).is_ok() {
-            let h = sei.hProcess;
-            if !h.is_invalid() {
-                WaitForSingleObject(h, INFINITE);
-                let mut code = 0u32;
-                let _ = GetExitCodeProcess(h, &mut code);
-                let _ = CloseHandle(h);
-                return Ok(code as i32);
-            }
-            return Ok(0);
+            if !sei.hProcess.is_invalid() { return Ok(AuthorizedProcess { handle: sei.hProcess.0 as usize }); }
+            return Err("系统未返回授权执行器的进程句柄。".into());
         }
         let err = GetLastError();
         if err == ERROR_CANCELLED {
-            return Ok(1223);
+            return Err("已取消：未授予管理员权限".into());
         }
         Err(format!("提权失败（错误码 {}）", err.0))
+    }
+}
+
+pub(crate) fn spawn_elevated(request_path: &std::path::Path) -> Result<AuthorizedProcess, String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    spawn_runas(&exe.to_string_lossy(), &format!("--elevated \"{}\"", request_path.display()))
+}
+
+fn shell_execute_runas_with_callback(exe: &str, args: &str, mut callback: impl FnMut() -> Result<(), String>) -> Result<i32, String> {
+    let process = spawn_runas(exe, args)?;
+    let mut callback_error = None;
+    loop {
+        if let Some(code) = process.exit_code()? {
+            if let Some(error) = callback_error { return Err(error); }
+            return Ok(code);
+        }
+        if callback_error.is_none() { callback_error = callback().err(); }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
 
@@ -119,12 +161,22 @@ pub fn run_elevated(
     operation_id: &str,
     nonce: &str,
 ) -> Result<(), String> {
+    run_elevated_with_callback(req_path, result_path, operation_id, nonce, || Ok(()))
+}
+
+pub fn run_elevated_with_callback(
+    req_path: &std::path::Path,
+    result_path: &std::path::Path,
+    operation_id: &str,
+    nonce: &str,
+    callback: impl FnMut() -> Result<(), String>,
+) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_str = exe.to_string_lossy().into_owned();
     // 删除旧结果，避免子进程异常退出时误读上一次安装结果。
     let _ = std::fs::remove_file(result_path);
     let args = format!("--elevated \"{}\"", req_path.display());
-    let code = shell_execute_runas(&exe_str, &args)?;
+    let code = shell_execute_runas_with_callback(&exe_str, &args, callback)?;
 
     // 无论退出码是否为 0，都优先读取提权子进程写出的结构化错误。
     // 否则 code=1 会掩盖真正的文件系统、解压或注册表错误。

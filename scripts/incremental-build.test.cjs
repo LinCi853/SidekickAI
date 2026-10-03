@@ -68,6 +68,8 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('node_modules/esbuild/dist/tool.js', 'first tool')
   write('electron/shared/used.mjs', 'first shared source')
   write('scripts/excalidraw-clipboard-feedback.ts', 'first clipboard adapter')
+  write('scripts/build-startup-helper.cjs', 'startup recipe')
+  write('tools/startup-helper/StartupHelper.cs', 'startup driver')
   let builds = 0
   const run = () => {
     builds++
@@ -121,6 +123,10 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('scripts/excalidraw-clipboard-feedback.ts', 'second clipboard adapter')
   assert.notEqual(compile().key, beforeClipboard)
   assert.equal(builds, 10)
+  const beforeStartup = compile().key
+  write('tools/startup-helper/StartupHelper.cs', 'changed startup driver')
+  assert.notEqual(compile().key, beforeStartup)
+  assert.equal(builds, 11)
 })
 
 test('unsupported Rust flags are rejected before any native cache lookup', () => {

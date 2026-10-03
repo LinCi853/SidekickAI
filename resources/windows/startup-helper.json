@@ -1,0 +1,31 @@
+{
+  "protocol": 1,
+  "runtime": "net-framework-4",
+  "architecture": "anycpu",
+  "executable": "SidekickStartup.exe",
+  "sha256": "43d2a065651fdb094c4b2937748f60c3a99d9031ae7006fa24cfd5380cb85301",
+  "configSha256": "894fbbdeb71840ee5de8685c45b71865fbeeac25525a6da4d4af2121e540780d",
+  "compilerSha256": "46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00",
+  "sourceSha256": "a09a313b634bdaf18b5b0122e51372a32e7674926c5adddb7a77bc857081b65f",
+  "sources": [
+    {
+      "path": "resources/windows/application-process.ps1",
+      "sha256": "b8959774a7545886922bd880918eb8cb04c01d30a63a1192acf7f7b46917edea"
+    },
+    {
+      "path": "tools/startup-helper/StartupHelper.cs",
+      "sha256": "add7b187ca255d795c13fc633e67b44a68300f3eba64e44cfab0a9e68982b52e"
+    },
+    {
+      "path": "tools/startup-helper/NativeInventory.cs",
+      "sha256": "eab984da2c282915ca0f7c244ff35670ca6d2ac7e81e58e6f180e1997bd79cf3"
+    },
+    {
+      "path": "scripts/build-startup-helper.cjs",
+      "sha256": "e9a967707aeefebd929fc4177787f3c6e7349a5cb9e700d0bda4548b6b8a0339"
+    }
+  ],
+  "scripts": {
+    "application-process.ps1": "b8959774a7545886922bd880918eb8cb04c01d30a63a1192acf7f7b46917edea"
+  }
+}

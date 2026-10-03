@@ -22,8 +22,11 @@ mod directory;
 mod envelope;
 mod run;
 mod state;
+pub(crate) mod completion;
 
 pub use directory::{prepare_operation, OperationDirectory};
+pub(crate) use directory::PreparedOperation;
+pub(crate) use envelope::OperationRequest;
 pub use run::{
     bound_log_path, interpret_child_result, run_elevated_operation, with_operation_context,
 };
@@ -34,7 +37,9 @@ pub use state::{begin_engine, cancel_operation, generation, Admission, RUNNING};
 pub const OPERATION_PROTOCOL_VERSION: u32 = 1;
 
 pub const ACTION_INSTALL: &str = "install";
+pub(crate) const ACTION_INSTALL_SESSION: &str = "install-session";
 pub const ACTION_FLUSH_CONFIG: &str = "flush-config";
+pub const ACTION_OPEN_APPLICATION: &str = "open-application";
 
 pub(crate) const OPERATION_ROOT_NAME: &str = "SidekickAI-Installer";
 pub(crate) const REQUEST_FILE: &str = "request.json";

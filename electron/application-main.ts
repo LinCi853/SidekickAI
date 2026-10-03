@@ -1,4 +1,6 @@
-import { startEditionSession, markEditionReady } from './edition-runtime.js';
+import { startEditionSession, markEditionReady, bindEditionActivation } from './edition-runtime.js';
+import { activateApplicationWindow, isApplicationWindowLoading } from './application-activation.js';
+import * as applicationFocus from './utils/focus-manager.js';
 import { exportCliRequestPath, startupRestore } from './runtime-environment.js';
 import { restoreBackupCookies } from '../packages/backup-core/sessions.js';
 import { finishPendingRestore, requestRestoreRollback } from '../packages/backup-core/transaction.js';
@@ -62,17 +64,6 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (err) => {
     console.error('[main] Uncaught Exception:', err);
 });
-app.commandLine.appendSwitch('disable-crashpad');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-app.commandLine.appendSwitch('disable-features', 'RestrictGamepadAccess');
-if (process.platform === 'linux') {
-    app.commandLine.appendSwitch('force-device-scale-factor', '1');
-}
-protocol.registerSchemesAsPrivileged([
-    { scheme: 'whiteboard-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
-    { scheme: 'notes-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
-    { scheme: 'sidekick-pdf', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
-]);
 let fingerprintEngine: FingerprintEngine;
 let hotkeyManager: HotkeyManager;
 app.whenReady().then(async () => {
@@ -381,6 +372,7 @@ app.whenReady().then(async () => {
         toggleVoiceRecording: toggleVoiceRecordingGated,
     });
     runUiohookHealthCheck(hotkeyManager);
+    bindEditionActivation(() => activateApplicationWindow({ current: () => windowState.mainWindow, create: createMainWindow, show: applicationFocus.show }), () => isApplicationWindowLoading(windowState.mainWindow));
     markEditionReady();
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

@@ -8,10 +8,10 @@
 // never shows a false "closed" or "cancelled" state while work is still running.
 
 /** Shown when the engine already started, so cancellation is no longer real. */
-export const CANCEL_TOO_LATE = '操作已经开始，无法取消。请等待当前操作完成。'
+export const CANCEL_TOO_LATE = '正在完成当前操作，完成后即可关闭向导。'
 
 /** Shown when a close request was refused because an operation is still busy. */
-export const CLOSE_BLOCKED = '当前操作仍在进行，窗口暂时无法关闭。请等待完成后再试。'
+export const CLOSE_BLOCKED = '正在完成当前操作，请稍候。'
 
 export type CloseOutcome =
   /** The window is gone / may be closed now. */

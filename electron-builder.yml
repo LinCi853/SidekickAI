@@ -38,7 +38,17 @@ asarUnpack:
   - node_modules/better-sqlite3/prebuilds/*.node
   # 仅解包 Windows 平台的原生模块
   - node_modules/uiohook-napi/prebuilds/win32-*/**/*.node
+beforePack: scripts/prepare-startup-helper.cjs
+afterPack: scripts/verify-startup-helper.cjs
 extraResources:
+  - from: resources/windows/application-process.ps1
+    to: windows/application-process.ps1
+  - from: resources/windows/SidekickStartup.exe
+    to: windows/SidekickStartup.exe
+  - from: resources/windows/SidekickStartup.exe.config
+    to: windows/SidekickStartup.exe.config
+  - from: resources/windows/startup-helper.json
+    to: windows/startup-helper.json
   - from: LICENSE
     to: LICENSE.application.txt
   - from: build/License.txt

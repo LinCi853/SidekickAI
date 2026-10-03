@@ -57,6 +57,19 @@ test('preflight does not compile, and failed or drifting sources stop all depend
   assert.equal(failure.calls.includes('applications'), false)
 })
 
+test('native resources are prepared before candidate source capture and stay outside preflight', async () => {
+  const deps = dependencies()
+  let prepared = false
+  deps.prepareResources = () => { prepared = true; deps.calls.push('resources') }
+  const capture = deps.captureInputs
+  deps.captureInputs = () => { assert(prepared); return capture() }
+  await build.buildCandidates(build.parseArguments([], concept), 'output', deps)
+  assert.equal(deps.calls[0], 'resources')
+  const preflight = dependencies()
+  preflight.prepareResources = () => { throw new Error('Preflight must not prepare generated resources') }
+  await build.buildCandidates(build.parseArguments(['--preflight'], concept), 'output', preflight)
+})
+
 test('same-name candidates are isolated by edition, hashed and never overwrite history', t => {
   const root = temporary(t)
   fs.mkdirSync(path.join(root, 'maintenance'))
@@ -109,4 +122,14 @@ test('compiler configuration changes invalidate the candidate source baseline', 
     fs.writeFileSync(path.join(root, name), '{}')
     assert.equal(build.captureInputs(root).fingerprint, baseline.fingerprint)
   }
+})
+
+test('startup helper source changes invalidate the candidate source baseline', t => {
+  const root = temporary(t)
+  fs.mkdirSync(path.join(root, 'tools/startup-helper'), { recursive: true })
+  const file = path.join(root, 'tools/startup-helper/StartupHelper.cs')
+  fs.writeFileSync(file, 'original')
+  const before = build.captureInputs(root)
+  fs.writeFileSync(file, 'changed')
+  assert.notEqual(build.captureInputs(root).fingerprint, before.fingerprint)
 })

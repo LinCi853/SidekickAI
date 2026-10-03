@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use super::envelope::{load_request, verify_request, OperationRequest, OperationResult};
-use super::{ACTION_FLUSH_CONFIG, ACTION_INSTALL, OPERATION_PROTOCOL_VERSION, RESULT_FILE};
+use super::{ACTION_FLUSH_CONFIG, ACTION_INSTALL, ACTION_INSTALL_SESSION, ACTION_OPEN_APPLICATION, OPERATION_PROTOCOL_VERSION, RESULT_FILE};
 
 // ---------------------------------------------------------------------------
 // Per-operation log context
@@ -71,12 +71,26 @@ pub fn run_elevated_operation(request_path: &str) -> i32 {
     if let Err(error) = verify_request(&envelope, &worker) {
         return finish_operation(path, &envelope, Err(error));
     }
+    let completion = if envelope.action == ACTION_INSTALL_SESSION {
+        match super::completion::Worker::bind(&envelope, path) {
+            Ok(worker) => Some(worker),
+            Err(error) => return finish_operation(path, &envelope, Err(error)),
+        }
+    } else { None };
     let outcome = with_operation_context(log_path_for(path), || match envelope.action.as_str() {
-        ACTION_INSTALL => crate::engine::run(&envelope.request),
+        ACTION_INSTALL | ACTION_INSTALL_SESSION => crate::engine::run(&envelope.request),
         ACTION_FLUSH_CONFIG => crate::engine::flush_install_config(&envelope.request),
+        ACTION_OPEN_APPLICATION => crate::application_user::launch_as_caller(&envelope, path),
         other => Err(format!("未知的安装操作类型：{other}")),
     });
-    finish_operation(path, &envelope, outcome)
+    let code = finish_operation(path, &envelope, outcome);
+    if let Some(completion) = completion.filter(|_| code == 0) {
+        return with_operation_context(log_path_for(path), || match completion.serve(&envelope, path) {
+            Ok(()) => 0,
+            Err(error) => { crate::engine::write_log(&format!("E|安装授权会话结束：{error}")); 1 },
+        });
+    }
+    code
 }
 
 /// Persist one structured result into the operation directory and map it to the
