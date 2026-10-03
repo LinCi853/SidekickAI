@@ -14,9 +14,11 @@ import { normalizeAssetAccelerator } from '../../electron/shared/asset-settings'
 import { listConversations, importConversation, onConversationPersisted } from '../lib/electron-api';
 import { requireElectron } from '../lib/electron-api/core';
 import type { Conversation, PromptExample } from '../lib/electron-api';
-import type { AssetAttachment, AssetPromptSuggestion } from '../../electron/shared/ai-assets.types';
+import type { AssetAttachment, AssetPromptSuggestion, AssetTextUsage } from '../../electron/shared/ai-assets.types';
 import { useEscToCloseWindow, hasOverlay } from '../hooks/useEscToCloseWindow';
 import './AiAssetsView.css';
+import { isAssetInterfaceImage } from '../../electron/shared/asset-presentation';
+import { useAssetMenuDismissal } from './ai-assets/useAssetMenuDismissal';
 
 type Category = 'conversations' | 'prompts' | 'files';
 type ConversationTarget = { messageId?: string; attachmentId?: string };
@@ -33,6 +35,9 @@ function conversationPlatform(conversation: Conversation) {
 }
 
 export default function AiAssetsView() {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useAssetMenuDismissal(rootRef);
+  const [totalUsage, setTotalUsage] = useState<AssetTextUsage>();
   const api = requireElectron().aiAssets;
   const promptApi = requireElectron().prompt;
   const searchRef = useRef<HTMLInputElement>(null);
@@ -57,7 +62,11 @@ export default function AiAssetsView() {
   const [revision, setRevision] = useState(0);
   const [promptDraft, setPromptDraft] = useState<{ revision: number; example: PromptExample; title?: string }>();
   const [conversationTarget, setConversationTarget] = useState<ConversationTarget & { revision: number }>();
-  useEscToCloseWindow({ onEsc: () => { if (listOpen) { setListOpen(false); return true; } return false; } });
+  useEscToCloseWindow({ onEsc: () => {
+    if (rootRef.current?.querySelector('.asset-selection-actions')) { window.getSelection()?.removeAllRanges(); return true; }
+    if (listOpen) { setListOpen(false); return true; }
+    return false;
+  } });
 
   useEffect(() => {
     const navigate = (request: import('../../electron/shared/ai-assets.types').AssetNavigationEvent) => {
@@ -74,9 +83,10 @@ export default function AiAssetsView() {
   }, [promptApi]);
 
   const refresh = useCallback(async () => {
-    const [list, files, extracted, summaries] = await Promise.all([listConversations(), api.attachments(), api.suggestions(), api.summaries()]);
+    const [list, files, extracted, summaries, usage] = await Promise.all([listConversations(), api.attachments(), api.suggestions(), api.summaries(), api.usage()]);
     setViews(Object.fromEntries(summaries.map(item => [item.conversationId, item.views])));
-    setConversations(list); setAttachments(files); setSuggestions(extracted);
+    setTotalUsage(usage);
+    setConversations(list); setAttachments(files.filter(item => !isAssetInterfaceImage(item))); setSuggestions(extracted);
     setSelected(current => current && list.some(item => item.id === current) ? current : list[0]?.id ?? null);
     setRevision(value => value + 1);
   }, [api]);
@@ -136,7 +146,7 @@ export default function AiAssetsView() {
       title: Array.from(content.trim().split('\n')[0]).slice(0, 48).join('') || '对话提示词' });
     setCategory('prompts'); setQuery(''); setListOpen(false);
   };
-  return <><WindowResizeHandles /><div className="assets-view app-shell app-view-root" data-name="assets.container">
+  return <><WindowResizeHandles /><div ref={rootRef} className="assets-view app-shell app-view-root" data-name="assets.container">
     <StandaloneWindowHeader title="AI资产" className="asset-topbar" dataNamePrefix="assets.topbar" leading={<>
       {category === 'conversations' && <IconButton className="asset-list-toggle asset-icon-button" aria-label="打开对话列表" aria-expanded={listOpen} aria-controls="asset-conversations" onClick={() => setListOpen(value => !value)}><List size={16} /></IconButton>}
       <span className="asset-window-title">AI资产</span></>} onOpenSettings={() => setSettingsOpen(true)}
@@ -151,7 +161,7 @@ export default function AiAssetsView() {
     {category === 'prompts' ? <div className="asset-prompt-body">
       {!!suggestions.length && <details className="asset-suggestions" open><summary>自动提取的重点提示词</summary>
         {suggestions.filter(item => !query || item.content.toLowerCase().includes(query.toLowerCase())).map(item => <article key={item.messageId}>
-          <strong>{item.title}</strong><p title="统计最近 500 条用户输入">近期使用 {item.uses} 次 · 本地整理</p><pre>{item.content}</pre><div className="asset-actions">
+          <strong>{item.title}</strong><p title="最近 500 条用户输入中，至少 3 个不同对话的输入与相邻上下文首尾各 10% 达到 80% 相似度；同一对话只计一次">{item.uses} 个对话使用 · 相似内容</p><pre>{item.content}</pre><div className="asset-actions">
             <Button variant="outline" onClick={() => void run(() => makePrompt(item.content, { conversationId: item.conversationId, messageId: item.messageId }))}>保存为模板</Button>
             <Button variant="ghost" onClick={() => openConversation(item.conversationId, { messageId: item.messageId })}>原始对话</Button></div></article>)}
       </details>}<PromptLibraryView embedded query={query} draft={promptDraft} sourceConversationIds={conversations.map(item => item.id)}
@@ -169,6 +179,7 @@ export default function AiAssetsView() {
         {visibleConversations.map(item => <button key={item.id} className={`asset-conversation ${selected === item.id ? 'active' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'} onClick={() => openConversation(item.id)}>
           <strong>{item.title || '未命名对话'}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button>)}
         </div>
+        {totalUsage && <div className="asset-total-usage" data-name="assets.total-usage" title={`全部对话累计 Unicode 字符（含空白与标点）：输入 ${totalUsage.inputCharacters.toLocaleString()} · 思考 ${totalUsage.reasoningCharacters.toLocaleString()} · 输出 ${totalUsage.outputCharacters.toLocaleString()}`}><span>总字符</span><strong>{totalUsage.totalCharacters.toLocaleString()}</strong></div>}
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
         attachments={attachments} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
     <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="AI资产设置" className="asset-settings-modal" portal><AssetSettingsPanel freezeTarget={freezeTarget} /></Modal>

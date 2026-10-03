@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookPlus, Brain, Copy, GitBranch, History, MoreHorizontal, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { Button, EmptyState, IconButton } from '../../components/ui';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { exportConversation, updateMessage, openExternal } from '../../lib/electron-api';
+import { exportConversation, updateMessage } from '../../lib/electron-api';
 import { requireElectron } from '../../lib/electron-api/core';
 import type { Conversation } from '../../lib/electron-api';
 import type { AssetAttachment, AssetConversationGraph, AssetGraphNode, AssetMessageDetail, AssetSettings, AssetTextUsage } from '../../../electron/shared/ai-assets.types';
 import AssetFileCard from './AssetFileCard';
 import AssetMarkdown from './AssetMarkdown';
+import { cleanCapturedCodeToolbar } from '../../../electron/shared/asset-presentation';
 
 const statuses: Record<string, string> = { streaming: '接收中', complete: '已记录', withdrawn: '已撤回，原文保留', retained: '原文保留', stopped: '主动停止', failed: '异常中断' };
 function RevisionDifference({ before, after }: { before: string; after: string }) {
@@ -43,8 +44,39 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
   const [pendingDelete, setPendingDelete] = useState<'conversation' | string>();
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [rename, setRename] = useState<string>();
-  const [selection, setSelection] = useState<{ content: string; messageId?: string }>();
+  const [selection, setSelection] = useState<{ content: string; messageId?: string; left: number; top: number }>();
   const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!selection) return;
+    const clear = () => { if (!window.getSelection()?.toString()) setSelection(undefined); };
+    const outside = (event: PointerEvent) => { if (!(event.target as Element).closest('.asset-selection-actions')) setSelection(undefined); };
+    document.addEventListener('selectionchange', clear);
+    window.addEventListener('pointerdown', outside);
+    window.addEventListener('resize', clearSelection);
+    function clearSelection() { setSelection(undefined); }
+    return () => {
+      document.removeEventListener('selectionchange', clear);
+      window.removeEventListener('pointerdown', outside);
+      window.removeEventListener('resize', clearSelection);
+    };
+  }, [selection]);
+  useEffect(() => { setSelection(undefined); }, [graph]);
+  const readSelection = () => {
+    const value = window.getSelection();
+    if (!value?.anchorNode || !value.focusNode || !value.rangeCount || !bodyRef.current?.contains(value.anchorNode) || !bodyRef.current.contains(value.focusNode) || !value.toString()) { setSelection(undefined); return; }
+    const sourceMessage = (node: Node) => (node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement)?.closest<HTMLElement>('[data-name="assets.message"]')?.dataset.id;
+    const anchor = sourceMessage(value.anchorNode), focus = sourceMessage(value.focusNode);
+    if (!anchor || !focus || (value.focusNode.parentElement?.closest('textarea, input'))) { setSelection(undefined); return; }
+    const range = value.getRangeAt(0);
+    const rects = Array.from(range.getClientRects());
+    const reversed = value.focusNode === range.startContainer && value.focusOffset === range.startOffset;
+    const rect = (reversed ? rects[0] : rects.at(-1)) ?? range.getBoundingClientRect();
+    const bounds = bodyRef.current.getBoundingClientRect();
+    if (rect.bottom < bounds.top || rect.top > bounds.bottom) { setSelection(undefined); return; }
+    const left = Math.max(bounds.left + 4, Math.min(rect.right - 38, bounds.right - 80, window.innerWidth - 80));
+    const top = rect.bottom + 44 < Math.min(bounds.bottom, window.innerHeight) ? rect.bottom + 6 : Math.max(bounds.top + 4, rect.top - 42);
+    setSelection({ content: value.toString(), messageId: anchor === focus ? anchor : undefined, left, top });
+  };
   const targetRevision = useRef(-1);
   const pendingScroll = useRef<{ revision: number; messageId?: string; attachmentId?: string }>();
   useEffect(() => {
@@ -132,7 +164,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       <details className="asset-operation-menu"><summary aria-label="对话操作" title="对话操作"><MoreHorizontal size={18} /></summary><div>
         <Button variant="ghost" onClick={() => setRename(conversation.title)}>本地重命名</Button>
         {(['md', 'json'] as const).map(format => <Button key={format} variant="ghost" onClick={() => onAction(async () => { const result = await exportConversation(conversation.id, format); if (!result.ok && !result.canceled) throw new Error('导出失败'); })}>导出 {format.toUpperCase()}</Button>)}
-        {conversation.url && <Button variant="ghost" onClick={() => onAction(() => openExternal(conversation.url!))}>打开原网页</Button>}
+        {conversation.url && <Button variant="ghost" onClick={() => onAction(() => api.openExternal(conversation.url!))}>打开原网页</Button>}
         <Button variant="danger" onClick={() => setPendingDelete('conversation')}>删除对话</Button></div></details>
     </div>
     {usage && <div className="asset-usage" data-name="assets.conversation-usage" title="此对话累计的 Unicode 字符，包含空白与标点；已知版本不会重复计数">
@@ -140,21 +172,19 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
   </div>
   {error && <p className="asset-error" role="alert">{error}</p>}
   {notice && <p className="asset-feedback" role="status">{notice}</p>}
-  <div className="asset-chat-scroll" ref={bodyRef} onMouseUp={event => {
-    if ((event.target as Element).closest('.asset-selection-actions')) return;
-    const value = window.getSelection();
-    if (!value?.anchorNode || !value.focusNode || !bodyRef.current?.contains(value.anchorNode) || !bodyRef.current.contains(value.focusNode) || !value.toString()) { setSelection(undefined); return; }
-    const sourceMessage = (node: Node) => (node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement)?.closest<HTMLElement>('[data-name="assets.message"]')?.dataset.id;
-    const anchor = sourceMessage(value.anchorNode), focus = sourceMessage(value.focusNode);
-    setSelection({ content: value.toString(), messageId: anchor && anchor === focus ? anchor : undefined });
-  }}>
-    {selection && <div className="asset-selection-actions" role="toolbar" aria-label="选中文字操作" onMouseDown={event => event.preventDefault()}>
+  <div className="asset-chat-scroll" ref={bodyRef} onScroll={() => setSelection(undefined)} onMouseUp={event => {
+    if (!(event.target as Element).closest('.asset-selection-actions')) readSelection();
+  }} onKeyUp={event => { if (event.key.startsWith('Arrow') && event.shiftKey) readSelection(); }}>
+    {selection && <div className="asset-selection-actions" style={{ left: selection.left, top: selection.top }} role="toolbar" aria-label="选中文字操作" onMouseDown={event => event.preventDefault()}>
       <IconButton className="asset-icon-button" aria-label="复制选中内容" onClick={() => onAction(() => api.copyText(selection.content))}><Copy size={16} /></IconButton>
       <IconButton className="asset-icon-button" aria-label="选中内容存为提示词" onClick={() => onAction(() => onPrompt(selection.content, { conversationId: conversation.id, messageId: selection.messageId }))}><BookPlus size={16} /></IconButton>
     </div>}
     {!messages.length && <EmptyState message="尚未取得对话文本，等待交流内容出现" />}
     {messages.map(message => {
       const detail = details.find(item => item.messageId === message.id);
+      const captured = !message.locallyEdited && detail?.markdownContent;
+      const content = captured && message.role === 'assistant' && /^https:\/\/chat\.deepseek\.com(?:\/|$)/i.test(conversation.url ?? '')
+        ? cleanCapturedCodeToolbar(captured) : captured || message.content;
       const known = siblings(message);
       const branchCount = Math.max(message.branchCount ?? 1, known.length);
       const branchIndex = message.branchIndex ?? known.findIndex(node => node.id === message.id) + 1;
@@ -163,7 +193,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
           {branchCount > 1 && <div className="asset-branch" aria-label="消息分支"><GitBranch size={14} aria-hidden="true" /><IconButton className="asset-icon-button" aria-label="上一个分支" disabled={branchIndex <= 1} onClick={() => onAction(() => switchBranch(message, -1))}><ArrowLeft size={14} /></IconButton><span>{branchIndex}/{branchCount}</span><IconButton className="asset-icon-button" aria-label="下一个分支" disabled={branchIndex >= branchCount} onClick={() => onAction(() => switchBranch(message, 1))}><ArrowRight size={14} /></IconButton>{known.length < branchCount && <span className="asset-branch-missing">部分分支尚未收纳</span>}</div>}
           <time title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></header>
         {message.role === 'assistant' && !!detail?.reasoning && <details key={`${message.id}:${settings.expandReasoning}`} className="asset-thinking" open={settings.expandReasoning || undefined}><summary><Brain size={14} aria-hidden="true" />思考 · {detail.reasoningCharacters.toLocaleString()} 字符</summary><AssetMarkdown content={detail.reasoning} onAction={onAction} /></details>}
-        {editing?.id === message.id ? <><textarea className="asset-message-editor" aria-label="编辑消息" value={editing.content} onChange={event => setEditing({ id: message.id, content: event.target.value })} /><div className="asset-actions"><Button variant="primary" onClick={() => onAction(async () => { await updateMessage(message.id, { content: editing.content }); setEditing(null); await onRefresh(); })}>保存本地编辑</Button><Button variant="outline" onClick={() => setEditing(null)}>取消</Button></div></> : <AssetMarkdown content={!message.locallyEdited && detail?.markdownContent ? detail.markdownContent : message.content} onAction={onAction} />}
+        {editing?.id === message.id ? <><textarea className="asset-message-editor" aria-label="编辑消息" value={editing.content} onChange={event => setEditing({ id: message.id, content: event.target.value })} /><div className="asset-actions"><Button variant="primary" onClick={() => onAction(async () => { await updateMessage(message.id, { content: editing.content }); setEditing(null); await onRefresh(); })}>保存本地编辑</Button><Button variant="outline" onClick={() => setEditing(null)}>取消</Button></div></> : <AssetMarkdown content={content} onAction={onAction} />}
         <div className="asset-message-footer"><div className="asset-actions">
           <IconButton className="asset-icon-button" aria-label="复制消息" onClick={() => onAction(() => api.copyText(message.content))}><Copy size={15} /></IconButton>
           <IconButton className="asset-icon-button" aria-label="编辑消息" onClick={() => setEditing({ id: message.id, content: message.content })}><Pencil size={15} /></IconButton>

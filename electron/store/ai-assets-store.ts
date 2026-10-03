@@ -6,10 +6,11 @@ import type {
   AssetObservation, AssetObservedMessage, AssetPromptSuggestion, AssetRevision,
   AssetSource, AssetTextUsage,
 } from '../shared/ai-assets.types.js'
+import { repeatedPromptSuggestions, type PromptSample } from '../assets/prompt-suggestions.js'
 import { canonicalWebConversationUrl } from '../assets/conversation-identity.js'
 import { AssetGraphStore } from './asset-graph-store.js'
 import { classifyCapturedNoise } from '../assets/noise.js'
-import { addedCharacters, countCharacters, promptWeight } from '../assets/text-usage.js'
+import { addedCharacters, countCharacters } from '../assets/text-usage.js'
 
 interface MessageState {
   message_id: string
@@ -484,16 +485,17 @@ export class AiAssetsStore {
     return candidates[0]
   }
   suggestions(): AssetPromptSuggestion[] {
-    const rows = this.db.prepare(`SELECT content, COUNT(*) AS uses, MAX(created_at) AS latest
-      FROM (SELECT content, created_at FROM messages WHERE role = 'user' AND content != '' ORDER BY created_at DESC LIMIT 500)
-      GROUP BY content ORDER BY latest DESC`).all() as Array<{ content: string; uses: number }>
-    return rows.map(row => {
-      const message = this.db.prepare("SELECT id, conversation_id FROM messages WHERE role = 'user' AND content = ? ORDER BY created_at DESC LIMIT 1")
-        .get(row.content) as { id: string; conversation_id: string }
-      return { content: row.content, title: Array.from(row.content.trim().split('\n')[0]).slice(0, 48).join(''),
-        weight: promptWeight(row.content, row.uses), uses: row.uses, conversationId: message.conversation_id, messageId: message.id }
-    }).filter(row => row.weight > 0).sort((a, b) => b.weight - a.weight).slice(0, 100)
+    const rows = this.db.prepare(`SELECT m.id, m.conversation_id AS conversationId, m.content,
+      COALESCE(CASE WHEN n.message_id IS NOT NULL THEN (SELECT content FROM messages WHERE id = n.parent_id)
+        ELSE (SELECT content FROM messages p WHERE p.conversation_id = m.conversation_id AND p.rowid < m.rowid ORDER BY p.rowid DESC LIMIT 1) END, '') AS before,
+      COALESCE(CASE WHEN n.message_id IS NOT NULL THEN (SELECT a.content FROM asset_nodes child JOIN messages a ON a.id = child.message_id
+          WHERE child.parent_id = m.id AND child.conversation_id = m.conversation_id ORDER BY a.created_at DESC, a.rowid DESC LIMIT 1)
+        ELSE (SELECT content FROM messages a WHERE a.conversation_id = m.conversation_id AND a.rowid > m.rowid ORDER BY a.rowid LIMIT 1) END, '') AS after
+      FROM messages m LEFT JOIN asset_nodes n ON n.message_id = m.id
+      WHERE m.role = 'user' AND trim(m.content) != '' ORDER BY m.created_at DESC, m.rowid DESC LIMIT 500`).all() as PromptSample[]
+    return repeatedPromptSuggestions(rows)
   }
+
   searchConversations(query: string): string[] {
     if (!query.trim()) return []
     const rows = this.db.prepare(`SELECT DISTINCT c.id FROM conversations c

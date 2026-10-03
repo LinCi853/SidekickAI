@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => state.root },
   BrowserWindow: { getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: (channel: string, data: unknown) => state.messages.push([channel, data]) } }], fromWebContents: () => ({}) },
   clipboard: {}, dialog: { showSaveDialog: async () => state.destination ? { canceled: false, filePath: state.destination } : { canceled: true } },
-  shell: { showItemInFolder: vi.fn() }, net: { fetch: vi.fn() },
+  shell: { showItemInFolder: vi.fn(), openExternal: vi.fn(async () => {}) }, net: { fetch: vi.fn() },
   ipcMain: { handle: (channel: string, callback: (...args: any[]) => any) => state.handlers.set(channel, callback) },
   session: { fromPartition: () => state.session }, webContents: { getAllWebContents: () => [] },
 }))
@@ -261,5 +261,18 @@ describe('collection failure visibility', () => {
     const child = { ...guestEvent, senderFrame: {} }
     expect(() => call(ipc.ASSET_OBSERVE, child, observation)).toThrow('not authorized')
     expect(() => call(ipc.ASSET_COLLECTION_ISSUES, guestEvent)).toThrow()
+  })
+})
+
+
+describe('asset external links', () => {
+  it('opens web links without registering the optional browser module', async () => {
+    await expect(call('ai-assets:openExternal', viewerEvent, 'https://example.test/path')).resolves.toBeUndefined()
+  })
+  it('rejects web guests and non-web schemes', () => {
+    expect(() => call('ai-assets:openExternal', guestEvent, 'https://example.test')).toThrow()
+    for (const url of ['file:///C:/private', 'javascript:alert(1)', 'data:text/html,hello', 'invalid']) {
+      expect(() => call('ai-assets:openExternal', viewerEvent, url)).toThrow()
+    }
   })
 })

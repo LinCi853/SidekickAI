@@ -4,7 +4,6 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { Button } from '../../components/ui';
 import { requireElectron } from '../../lib/electron-api/core';
-import { openExternal } from '../../lib/electron-api';
 import 'highlight.js/styles/github-dark.css';
 
 function Code({ className, children, onAction }: { className?: string; children?: React.ReactNode; onAction: (operation: () => Promise<void>) => void }) {
@@ -18,6 +17,6 @@ export default function AssetMarkdown({ content, onAction }: { content: string; 
   return <div className="asset-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{
     pre: ({ children }) => <>{children}</>,
     code: ({ className, children, node }) => node?.position && (className || String(children).endsWith('\n')) ? <Code className={className} onAction={onAction}>{children}</Code> : <code className={className}>{children}</code>,
-    a: ({ href, children }) => <a href={href} onClick={event => { event.preventDefault(); if (href && /^https?:/i.test(href)) onAction(() => openExternal(href)); }}>{children}</a>,
+    a: ({ href, children }) => <a href={href} onClick={event => { event.preventDefault(); if (href && /^https?:/i.test(href)) onAction(() => requireElectron().aiAssets.openExternal(href)); }}>{children}</a>,
   }}>{content}</ReactMarkdown></div>;
 }

@@ -25,6 +25,17 @@ const deepseekThinkingSelector = '.ds-think-content'
 const deepseekAssistantSelector = `${deepseekAnswerSelector}, ${deepseekThinkingSelector}`
 const blocks = new Set(['P', 'DIV', 'PRE', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TR'])
 
+function stripCodeToolbars(root: Element) {
+  for (const pre of root.querySelectorAll('pre')) {
+    const header = pre.previousElementSibling
+    if (!header || header.querySelector('pre, code, p, a')) continue
+    const words = (header.textContent ?? '').trim().match(/^([a-z][\w+#.-]{0,23})\s*(?:复制|Copy)\s*(?:下载|Download)\s*(?:运行|Run)?$/i)
+    if (!words) continue
+    pre.setAttribute('data-captured-language', words[1].toLowerCase())
+    header.remove()
+  }
+}
+
 function nodeText(node: Node): string {
   if (node.nodeType === 3) return node.textContent ?? ''
   if (!(node instanceof Element)) return ''
@@ -64,7 +75,7 @@ function markdown(node: Node): string {
   if (tag === 'BR') return '\n'
   if (tag === 'PRE') {
     const code = node.querySelector('code')
-    const language = code?.className.match(/language-([\w+-]+)/)?.[1] ?? ''
+    const language = code?.className.match(/language-([\w+-]+)/)?.[1] ?? node.getAttribute('data-captured-language') ?? ''
     const content = code?.textContent ?? node.textContent ?? ''
     const fence = '`'.repeat(Math.max(3, ...(content.match(/`+/g) ?? []).map(value => value.length + 1)))
     return `\n${fence}${language}\n${content}\n${fence}\n`
@@ -140,6 +151,7 @@ export function readDomConversation(document: Document, hostname: string): DomCo
         : deepseek && role === 'user' && element.matches(deepseekUserSelector)
           ? element.querySelector(deepseekUserContentSelector) ?? element : element
       const clone = (contentElement?.cloneNode(true) as Element | undefined) ?? document.createElement('div')
+      if (deepseek && role === 'assistant') stripCodeToolbars(clone)
       clone.querySelectorAll(`${messageThinkingSelector}, ${chromeSelector}`).forEach(node => node.remove())
       const content = nodeText(clone).replace(/\n$/, '')
       const noise = classifyCapturedNoise(content)

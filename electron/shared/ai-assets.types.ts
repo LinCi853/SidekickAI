@@ -143,6 +143,7 @@ export interface AiAssetsAPI {
   settings(): Promise<AssetSettings>
   updateSettings(changes: Partial<AssetSettings>): Promise<AssetSettings>
   onSettingsChanged(callback: (settings: AssetSettings) => void): () => void
+  openExternal(url: string): Promise<void>
   copyText(content: string): Promise<void>
   previewCode(content: string, language: 'html' | 'css' | 'javascript'): Promise<{ ok: boolean; error?: string }>
   attachments(conversationId?: string): Promise<AssetAttachment[]>

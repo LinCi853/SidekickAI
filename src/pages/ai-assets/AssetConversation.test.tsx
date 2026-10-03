@@ -128,10 +128,11 @@ describe('asset source navigation and prompt examples', () => {
   it.each([['A-message', 'A-message', 'A-message'], ['A-message', 'A-alternative', undefined]])('associates a text selection with the appropriate source: %s / %s', async (anchorId, focusId, messageId) => {
     const view = mount('A'); await settleHooks();
     const scroll = nodes(view.current).find(node => node.props?.className === 'asset-chat-scroll')!;
-    scroll.ref.current = { contains: () => true };
-    const endpoint = (id: string) => ({ nodeType: 3, parentElement: { closest: () => ({ dataset: { id } }) } });
+    scroll.ref.current = { contains: () => true, getBoundingClientRect: () => ({ left: 0, right: 600, top: 0, bottom: 600 }) };
+    const endpoint = (id: string) => ({ nodeType: 3, parentElement: { closest: (selector: string) => selector === '[data-name="assets.message"]' ? { dataset: { id } } : null } });
     vi.stubGlobal('Node', { ELEMENT_NODE: 1 });
-    Object.assign(window, { getSelection: () => ({ anchorNode: endpoint(anchorId), focusNode: endpoint(focusId), toString: () => 'Selected text' }) });
+    vi.stubGlobal('document', new EventTarget());
+    Object.assign(window, { getSelection: () => ({ anchorNode: endpoint(anchorId), focusNode: endpoint(focusId), toString: () => 'Selected text', rangeCount: 1, getRangeAt: () => ({ getClientRects: () => [{ left: 100, right: 200, top: 100, bottom: 120 }] }) }) });
     scroll.props.onMouseUp({ target: { closest: () => null } }); await settleHooks();
     nodes(view.current).find(node => node.props?.['aria-label'] === '选中内容存为提示词')!.props.onClick();
     await Promise.all(jobs);

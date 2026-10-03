@@ -30,6 +30,7 @@ export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
       ipcRenderer.on(ipc.ASSET_SETTINGS_CHANGED, handler)
       return () => ipcRenderer.removeListener(ipc.ASSET_SETTINGS_CHANGED, handler)
     },
+    openExternal: url => ipcRenderer.invoke(ipc.ASSET_OPEN_EXTERNAL, url),
     copyText: content => ipcRenderer.invoke(ipc.ASSET_COPY_TEXT, content),
     previewCode: (content, language) => ipcRenderer.invoke(ipc.ASSET_PREVIEW_CODE, content, language),
     attachments: id => ipcRenderer.invoke(ipc.ASSET_ATTACHMENTS, id),

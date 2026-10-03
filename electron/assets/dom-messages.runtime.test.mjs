@@ -12,7 +12,7 @@ const source = process.env.SIDEKICK_DOM_MESSAGE_SOURCE ?? path.join(root, 'elect
 const user = (id, content = 'Input') => `<div data-virtual-list-item-key="${id}"><div class="d29f3d7d ds-message _63c77b1"><div class="fbb737a4">${content}</div></div></div>`
 const thinking = content => `<div class="ds-think-content"><span class="ddd26891">Thinking status</span><div class="_9ecc93a"></div><div class="ds-markdown"><p>${content}</p></div></div>`
 const assistant = (id, content = '<p>Answer</p>', reasoning = thinking('Reasoning'), attributes = '') => `<div data-virtual-list-item-key="${id}"><div class="ds-message _63c77b1" ${attributes}><div class="_74c0879">${reasoning}</div>${content ? `<div class="ds-markdown ds-assistant-message-main-content">${content}</div>` : ''}<div class="dbe8cf4a">Toolbar label<button>Copy</button></div></div></div>`
-const shell = messages => `<!doctype html><title>DOM message contract</title><main>${messages}</main>`
+const shell = messages => `<!doctype html><meta charset="utf-8"><title>DOM message contract</title><main>${messages}</main>`
 let browser
 let parserBundle
 let collectorBundle
@@ -199,4 +199,20 @@ test('the unchanged collector submits a current DeepSeek observation after autho
   assert.equal(observations.length, 1)
   assert.deepEqual(observations[0].messages.map(message => message.key), ['user:1', 'assistant:2'])
   assert.equal(observations[0].completePath, false)
+})
+
+
+test('excludes a code toolbar while preserving its language and literal code text', async t => {
+  const f = await fixture(t, user('1') + assistant('2', '<div><div><span>html</span><div>复制</div><div>下载</div><div>运行</div></div><pre><code>&lt;p&gt;复制 下载 运行&lt;/p&gt;</code></pre></div>'))
+  const message = (await f.parse()).messages[1]
+  assert.equal(message.content, '<p>复制 下载 运行</p>')
+  assert.equal(message.markdownContent, '```html\n<p>复制 下载 运行</p>\n```')
+})
+
+test('preserves toolbar-like user examples and content on other platforms', async t => {
+  const markup = '<div><span>html</span><div>复制</div><div>下载</div><div>运行</div></div><pre><code>example</code></pre>'
+  const input = await fixture(t, user('1', markup))
+  assert((await input.parse()).messages[0].content.includes('复制'))
+  const other = await fixture(t, `<div data-message-author-role="assistant">${markup}</div>`, 'example.test')
+  assert((await other.parse()).messages[0].content.includes('复制'))
 })

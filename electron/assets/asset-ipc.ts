@@ -274,6 +274,13 @@ export function registerAiAssetIpc(): void {
         title: `${profile.name} · ${guest.getTitle()}`, url: guest.getURL() }]
     })
   })
+  ipcMain.handle(ipc.ASSET_OPEN_EXTERNAL, (event, value: string) => {
+    local(event)
+    if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) throw new Error('仅支持 HTTP 或 HTTPS 网页链接')
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('不支持此链接类型')
+    return shell.openExternal(url.href)
+  })
   ipcMain.handle(ipc.ASSET_USAGE, (event, sourceId?: string, conversationId?: string) => { local(event); return getChatStore().assets.usage(sourceId, conversationId) })
   const graph = (id: string) => getChatStore().assets.graph.view(id, getChatStore().listMessages(id))
   ipcMain.handle(ipc.ASSET_GRAPH, (event, id: string) => { local(event); return graph(id) })

@@ -16,6 +16,14 @@ describe('AI asset collection', () => {
     store = new AiAssetsStore(db)
   })
   afterEach(() => db.close())
+  it('requires three distinct conversations before suggesting a repeated instruction', () => {
+    const content = 'Please analyze the result and explain the output.'
+    store.observe(source, { conversationKey: '/repeat/one', title: 'One', messages: [1, 2, 3].map(index => ({ key: `u${index}`, role: 'user' as const, content })) })
+    expect(store.suggestions()).toEqual([])
+    for (const key of ['two', 'three', 'four']) store.observe(source, { conversationKey: `/repeat/${key}`, title: key, messages: [{ key: 'u', role: 'user', content }] })
+    expect(store.suggestions()).toMatchObject([{ content, uses: 3 }])
+  })
+
   it('keeps short and long replies, stream withdrawal and independent identical turns', () => {
     const { conversationId } = observe('好')
     observe('好'.repeat(12000)); observe('', 'withdrawn'); observe('', 'withdrawn')

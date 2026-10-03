@@ -379,3 +379,11 @@ test('legacy observation results without node mappings retain input association'
   assert.equal(associated[0].args[1], 'user:u2')
   assert.equal(associated[0].args[3], undefined)
 })
+
+
+test('ignores known site icons and decoration while retaining small output images', async t => {
+  const f = await fixture(t, { messages: '<div data-message-author-role="assistant" data-message-id="a1">Answer<img src="https://cdn.deepseek.com/site-icons/example.com"><span aria-hidden="true"><img src="https://fixture.test/chrome.png"></span><img width="12" height="12" src="https://fixture.test/real.png"></div>' })
+  await f.advance(1000)
+  const sources = (await f.calls('ai-assets:attachment-begin')).map(call => call.args[0].sourceUrl)
+  assert.deepEqual(sources, ['https://fixture.test/real.png'])
+})

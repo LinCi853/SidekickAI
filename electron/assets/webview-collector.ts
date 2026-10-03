@@ -1,3 +1,4 @@
+import { isAssetInterfaceImage } from '../shared/asset-presentation.js'
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetObservedMessage } from '../shared/ai-assets.types.js'
@@ -200,9 +201,10 @@ function collectAiAssets(): () => void {
       if (message.observed.role !== 'assistant') continue
       for (const element of message.element.querySelectorAll('img, a[download], a[data-attachment]')) {
         const image = element instanceof HTMLImageElement
-        if (image && element.closest('[data-avatar], .avatar, [data-testid="avatar"]')) continue
+        if (image && element.closest('[data-avatar], .avatar, [data-testid="avatar"], [aria-hidden="true"], button, [role="button"]')) continue
         const url = image ? element.currentSrc || element.src : (element as HTMLAnchorElement).href
         if (!url || !/^(https?:|data:|blob:)/.test(url)) continue
+        if (image && isAssetInterfaceImage({ direction: 'output', mimeType: 'image/*', sourceUrl: url })) continue
         let name = image ? '图片' : element.getAttribute('download') || element.textContent?.trim() || '文件'
         try { name = decodeURIComponent(new URL(url).pathname.split('/').pop() || name) } catch {}
         if (name.length > 255 || /^data:/.test(url)) name = image ? '图片' : '文件'

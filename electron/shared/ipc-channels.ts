@@ -12,6 +12,7 @@ export const IPC_CHANNELS = {
   ASSET_COLLECTION_ISSUES: 'ai-assets:collection-issues',
   ASSET_COLLECTION_ISSUES_CHANGED: 'ai-assets:collection-issues-changed',
   ASSET_DETAILS: 'ai-assets:details',
+  ASSET_OPEN_EXTERNAL: 'ai-assets:openExternal',
   ASSET_USAGE: 'ai-assets:usage',
   ASSET_GRAPH: 'ai-assets:graph',
   ASSET_SELECT_BRANCH: 'ai-assets:select-branch',

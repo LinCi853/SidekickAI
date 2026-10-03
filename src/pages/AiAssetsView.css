@@ -73,7 +73,7 @@
 .asset-code .hljs { background: transparent; color: var(--foreground); padding: 0; }
 .asset-diff del { background: #df524729; color: var(--foreground); text-decoration: line-through; }
 .asset-diff ins { background: #38964c29; color: var(--foreground); text-decoration: none; }
-.asset-selection-actions { position: sticky; top: 0; display: flex; gap: 4px; width: fit-content; z-index: 3; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
+.asset-selection-actions { position: fixed; display: flex; gap: 4px; width: fit-content; z-index: 20; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
 .asset-attachment-group { margin-top: 6px; padding: 0; }
 .asset-attachment-group > summary { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 7px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
 .asset-attachment-count, .asset-attachment-failure, .asset-attachment-pending { flex: none; white-space: nowrap; }
@@ -140,3 +140,7 @@
   .asset-topbar .btn-icon { width: 24px; min-width: 24px; height: 28px; padding: 0; }
   .asset-topbar .win-controls { gap: 0; }
 }
+
+.asset-total-usage { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 10px 12px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted-foreground); }
+.asset-total-usage strong { color: var(--foreground); font-weight: 500; font-variant-numeric: tabular-nums; }
+.asset-file-source { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted-foreground); }
