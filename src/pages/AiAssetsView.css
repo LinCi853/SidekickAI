@@ -1,15 +1,15 @@
-.assets-view { display: flex; flex-direction: column; height: 100vh; min-height: 0; background: var(--background); color: var(--foreground); }
+.assets-view { --border: #80808040; display: flex; flex-direction: column; height: 100vh; min-height: 0; background: var(--background); color: var(--foreground); }
 .asset-topbar { gap: 6px; height: 44px; min-height: 44px; }
 .asset-window-title { padding: 0 4px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .asset-topbar .titlebar-drag { gap: 10px; }
 .asset-categories { display: flex; align-items: center; gap: 2px; flex: none; -webkit-app-region: no-drag; }
 .asset-categories button { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border: 0; padding: 6px 9px; border-radius: 5px; background: transparent; color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
-.asset-categories button.active { background: var(--secondary); color: var(--foreground); }
+.asset-categories button.active { background: var(--muted); color: var(--foreground); }
 .asset-search-field { display: flex; align-items: center; gap: 6px; width: min(260px, 100%); min-width: 100px; margin-left: auto; padding: 5px 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); border-radius: 5px; -webkit-app-region: no-drag; }
 .asset-search { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: 12px; }
 .asset-search-field:focus-within { outline: 1px solid var(--foreground); outline-offset: 1px; }
 .assets-view .asset-icon-button { position: relative; width: 28px; height: 28px; min-width: 28px; flex: none; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted-foreground); }
-.assets-view .asset-icon-button:hover { background: var(--secondary); color: var(--foreground); }
+.assets-view .asset-icon-button:hover { background: var(--muted); color: var(--foreground); }
 .assets-view .asset-icon-button:focus-visible, .asset-categories button:focus-visible, .asset-conversation:focus-visible, .asset-operation-menu summary:focus-visible { outline: 1px solid var(--foreground); outline-offset: 1px; }
 .assets-view .asset-icon-button:disabled { opacity: .35; cursor: default; }
 .assets-view .asset-icon-button::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); z-index: 30; padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px; color: var(--foreground); background: var(--card); font-size: 11px; line-height: 1.3; white-space: nowrap; box-shadow: 0 3px 8px #0002; pointer-events: none; opacity: 0; }
@@ -21,7 +21,7 @@
 .asset-list-heading > span { flex: 1; }
 .asset-conversation-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px; }
 .asset-conversation { width: 100%; min-height: 60px; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 6px; border: 0; border-radius: 4px; padding: 9px 10px; background: transparent; color: var(--foreground); cursor: pointer; }
-.asset-conversation:hover { background: var(--secondary); }
+.asset-conversation:hover { background: var(--muted); }
 .asset-conversation.active { background: var(--accent-10); }
 .asset-conversation strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
 .asset-conversation-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-foreground); }
@@ -35,18 +35,18 @@
 .asset-operation-menu { position: relative; flex: none; }
 .asset-operation-menu summary { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; list-style: none; border: 0; border-radius: 5px; color: var(--muted-foreground); }
 .asset-operation-menu summary::-webkit-details-marker { display: none; }
-.asset-operation-menu summary:hover { background: var(--secondary); color: var(--foreground); }
+.asset-operation-menu summary:hover { background: var(--muted); color: var(--foreground); }
 .asset-operation-menu > div { position: absolute; right: 0; top: 32px; min-width: 145px; display: flex; flex-direction: column; padding: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; box-shadow: 0 6px 18px #0002; z-index: 15; }
 .asset-operation-menu > div button { justify-content: flex-start; font-size: 12px; white-space: nowrap; }
 .asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 4px 14px 16px; }
 .asset-message { min-width: 0; border: 0; border-radius: 6px; background: transparent; padding: 10px 12px; margin: 8px 0; overflow-wrap: anywhere; }
 .asset-message-user { background: var(--accent-10); }
-.asset-message-system { background: var(--secondary); }
+.asset-message-system { background: var(--muted); }
 .asset-message > header { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px; color: var(--muted-foreground); }
 .asset-message header strong { color: var(--foreground); }
 .asset-message time { margin-left: auto; font-size: 10px; }
 .asset-status { font-size: 11px; color: var(--muted-foreground); }
-.asset-status.failed, .asset-error { color: var(--destructive, #b64134); }
+.asset-status.failed, .asset-error { color: color-mix(in srgb, var(--destructive, #b64134) 60%, var(--foreground)); }
 .asset-message-footer { display: flex; align-items: center; gap: 8px; }
 .asset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
 .asset-message .asset-actions { gap: 2px; margin: 3px 0 0; }
@@ -58,10 +58,10 @@
 .asset-markdown a { color: var(--primary); }
 .asset-markdown table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .asset-markdown th, .asset-markdown td { border: 1px solid var(--border); padding: 6px; }
-.asset-markdown blockquote { margin: 8px 0; padding: 8px 12px; background: var(--secondary); border-radius: 4px; color: var(--muted-foreground); }
+.asset-markdown blockquote { margin: 8px 0; padding: 8px 12px; background: var(--muted); border-radius: 4px; color: var(--muted-foreground); }
 .assets-view pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.7; margin: 8px 0; }
 .asset-message-editor { box-sizing: border-box; width: 100%; min-height: 160px; padding: 10px; color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: 5px; resize: vertical; }
-.asset-thinking, .asset-revisions { padding: 7px 10px; margin: 7px 0; border-radius: 5px; background: var(--secondary); }
+.asset-thinking, .asset-revisions { padding: 7px 10px; margin: 7px 0; border-radius: 5px; background: var(--muted); }
 .assets-view summary { cursor: pointer; font-size: 12px; }
 .asset-thinking > summary, .asset-revisions > summary { display: flex; align-items: center; gap: 6px; }
 .asset-thinking[open] > summary, .asset-revisions[open] > summary { margin-bottom: 6px; }
@@ -75,7 +75,7 @@
 .asset-diff ins { background: #38964c29; color: var(--foreground); text-decoration: none; }
 .asset-selection-actions { position: sticky; top: 0; display: flex; gap: 4px; width: fit-content; z-index: 3; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
 .asset-attachment-group { margin-top: 6px; padding: 0; }
-.asset-attachment-group > summary { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 7px; border-radius: 4px; background: var(--secondary); color: var(--muted-foreground); }
+.asset-attachment-group > summary { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 7px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
 .asset-attachment-count, .asset-attachment-failure, .asset-attachment-pending { flex: none; white-space: nowrap; }
 .asset-attachment-names { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .asset-attachment-failure { margin-left: auto; }
@@ -83,7 +83,7 @@
 .asset-file-grid { margin-top: 8px; }
 .asset-file-list, .asset-prompt-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
 .asset-file { min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); }
-.asset-file-failed { background: var(--secondary); }
+.asset-file-failed { background: var(--muted); }
 .asset-file-heading { display: flex; align-items: flex-start; gap: 9px; }
 .asset-file-heading > svg { flex: none; margin-top: 2px; color: var(--muted-foreground); }
 .asset-file-heading > div { flex: 1; min-width: 0; }

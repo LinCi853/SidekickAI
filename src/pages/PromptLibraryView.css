@@ -47,6 +47,8 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+.prompt-view.is-embedded { background: transparent; }
+.prompt-view.is-embedded .prompt-view-body { padding: 0; }
 .prompt-view-add-row {
   flex: none;
   display: flex;
@@ -71,21 +73,6 @@
   opacity: 0.9;
 }
 
-.prompt-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.prompt-group-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-sans);
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  letter-spacing: 0;
-  padding-bottom: var(--space-1);
-}
 .prompt-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: var(--space-2); }
 .prompt-card {
   min-width: 0;
@@ -107,6 +94,7 @@ button.prompt-card-face:hover { background: var(--glass-bg-2); }
 .prompt-card-face:focus-visible, .prompt-card-actions button:focus-visible, .prompt-view-add-row button:focus-visible { outline: 2px solid var(--foreground); outline-offset: -3px; }
 .prompt-card-face-label { flex: none; font-size: var(--text-xs); color: var(--muted-foreground); }
 .prompt-card-meta { display: flex; align-items: center; gap: 8px; min-height: 18px; margin-top: auto; color: var(--muted-foreground); font-size: var(--text-xs); }
+.prompt-card-category { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .prompt-card-meta kbd { flex: 1; min-width: 0; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 11px; }
 .prompt-card-head {
   display: flex;

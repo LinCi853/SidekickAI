@@ -134,13 +134,9 @@ export default function PromptLibraryView({ embedded = false, query = '', draft,
     for (const template of dualPrompts) next.set(template.id, allTargetExample);
     return next;
   });
-  const grouped = prompts.reduce<Record<string, PromptTemplate[]>>((groups, template) => {
-    (groups[template.category || '未分类'] ??= []).push(template); return groups;
-  }, Object.create(null));
-
   return <>
     {!embedded && <WindowResizeHandles />}
-    <div className="prompt-view app-shell app-view-root" data-name="prompts.container">
+    <div className={`prompt-view app-view-root${embedded ? ' is-embedded' : ' app-shell'}`} data-name="prompts.container">
       {!embedded && <StandaloneWindowHeader title="AI资产" dataNamePrefix="prompts.topbar" />}
       <div className="prompt-view-body" data-name="prompts.body">
         <div className="prompt-view-add-row" data-name="prompts.add-row">
@@ -151,15 +147,13 @@ export default function PromptLibraryView({ embedded = false, query = '', draft,
         </div>
         {(loadFailed || storeLoadFailed) && <div className="prompt-load-error" role="status"><span>提示词加载失败</span><IconButton type="button" aria-label="重试加载提示词" title="重试加载提示词" onClick={() => void loadPrompts()} data-name="prompts.retry-load-button"><RefreshCw size={16} /></IconButton></div>}
         {!prompts.length && <EmptyState message={search ? '没有匹配的提示词' : '暂无提示词模板'} size="large" className="prompt-view-empty" data-name="prompts.empty-state" />}
-        {Object.keys(grouped).sort().map((category, groupIndex) => <div key={category} className="prompt-group" data-name={`prompts.group-item-${groupIndex + 1}`}>
-          <div className="prompt-group-title">{category} <span>{grouped[category].length}</span></div>
-          <div className="prompt-card-grid">{grouped[category].map((template, cardIndex) => {
+        <div className="prompt-card-grid">{prompts.map((template, cardIndex) => {
             const dual = isDual(template);
             const exampleFace = hasExample(template) && (!hasUsablePromptContent(template) || exampleFaces.get(template.id) !== false);
-            const prefix = `prompts.group-item-${groupIndex + 1}-card-item-${cardIndex + 1}`;
+            const prefix = `prompts.card-item-${cardIndex + 1}`;
             const body = <><span className="prompt-card-head"><span className="prompt-card-title" title={template.title}>{template.title}</span><span className="prompt-card-face-label">{exampleFace ? '案例' : '通用'}</span></span>
               <span className="prompt-card-content" data-name={`${prefix}-content`}>{exampleFace ? template.example!.content : template.content || '待编写通用提示词'}</span>
-              <span className="prompt-card-meta">{!hasUsablePromptContent(template) && <span>待编写通用</span>}{template.hotkey && <kbd>{template.hotkey}</kbd>}{dual && <FlipHorizontal2 size={14} aria-hidden="true" />}</span></>;
+              <span className="prompt-card-meta"><span className="prompt-card-category" title={template.category || '未分类'}>{template.category || '未分类'}</span>{!hasUsablePromptContent(template) && <span>待编写通用</span>}{template.hotkey && <kbd>{template.hotkey}</kbd>}{dual && <FlipHorizontal2 size={14} aria-hidden="true" />}</span></>;
             return <article key={template.id} className={`prompt-card${exampleFace ? ' is-example' : ''}${injectedId === template.id ? ' injected' : ''}`} data-id={template.id} data-face={exampleFace ? 'example' : 'general'} data-name={prefix}>
               {dual ? <button type="button" className="prompt-card-face" aria-label={`${template.title}，切到${exampleFace ? '通用' : '案例'}`} title={`切到${exampleFace ? '通用' : '案例'}`} onClick={() => setExampleFaces(previous => new Map(previous).set(template.id, !exampleFace))} data-name={`${prefix}-flip-button`}>{body}</button> : <div className="prompt-card-face">{body}</div>}
               <div className="prompt-card-actions">
@@ -169,7 +163,6 @@ export default function PromptLibraryView({ embedded = false, query = '', draft,
               </div>
             </article>;
           })}</div>
-        </div>)}
       </div>
     </div>
     <div className={`prompt-editor-overlay${editor.open ? ' is-open' : ''}`} data-name="prompts.editor-overlay" onClick={closeEditor} aria-hidden={!editor.open}>
