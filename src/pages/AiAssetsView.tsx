@@ -83,13 +83,19 @@ export default function AiAssetsView() {
   }, [promptApi]);
 
   const refresh = useCallback(async () => {
-    const [list, files, extracted, summaries, usage] = await Promise.all([listConversations(), api.attachments(), api.suggestions(), api.summaries(), api.usage()]);
+    const [list, files, summaries, usage] = await Promise.all([listConversations(), api.attachments(), api.summaries(), api.usage()]);
     setViews(Object.fromEntries(summaries.map(item => [item.conversationId, item.views])));
     setTotalUsage(usage);
-    setConversations(list); setAttachments(files.filter(item => !isAssetInterfaceImage(item))); setSuggestions(extracted);
+    setConversations(list); setAttachments(files.filter(item => !isAssetInterfaceImage(item)));
     setSelected(current => current && list.some(item => item.id === current) ? current : list[0]?.id ?? null);
     setRevision(value => value + 1);
   }, [api]);
+  useEffect(() => {
+    if (category !== 'prompts') return;
+    let active = true;
+    void api.suggestions().then(items => { if (active) setSuggestions(items); }).catch(failure => { if (active) setError(String(failure)); });
+    return () => { active = false; };
+  }, [api, category, revision]);
   const run = async (operation: () => Promise<void>) => {
     setError(''); setNotice('');
     try { await operation(); } catch (failure) { setError(String(failure)); }

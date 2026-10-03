@@ -6,6 +6,9 @@ const sample = (id: string, changes: Partial<PromptSample> = {}): PromptSample =
 })
 
 describe('repeated prompt candidates', () => {
+  it('does not suggest whitespace-only inputs', () => {
+    expect(repeatedPromptSuggestions(['a', 'b', 'c'].map(id => sample(id, { content: '\t\n　' })))).toEqual([])
+  })
   it('requires three conversations and preserves the newest representative identity', () => {
     expect(repeatedPromptSuggestions([sample('a'), sample('b')])).toEqual([])
     const rows = [sample('newest'), sample('b'), sample('c'), sample('duplicate', { conversationId: 'b' })]
