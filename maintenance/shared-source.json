@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "de3f64153455679104c2f349fbe0031f69a2bf7b40ee8a1d634b83f4b1de2b84",
+  "revision": "12f9f6262f87a8ab82b3ae794913d094f63db8c04273b712374c52832a70d540",
   "files": {
-    "electron.vite.config.ts": "59de18e9de01da904cad56f121904704a4ebf25ccbfaffa902b39d2b74478e37",
+    "electron.vite.config.ts": "2a760ee75da9987bbf74437bea2fe35ebe769062642ec396f43ba709e56e1142",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
     "electron/application-admission.ts": "d7c5ebc75455d19d93fb0374ce3856c9e2c73cf420345193654c6c39a0c8c5d3",
     "electron/application-handoff-state.ts": "93b49b7dcfb8ad918eb3452d3ea643fa709ac86f9988d1c26bf55d59a4d11d2c",

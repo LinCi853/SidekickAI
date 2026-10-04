@@ -70,7 +70,21 @@ export default defineConfig({
       },
     },
     plugins: [react(), excalidrawClipboardFeedback(), compilationInputs(__dirname, 'renderer')],
-    optimizeDeps: { exclude: ['@excalidraw/excalidraw'] },
+    optimizeDeps: {
+      // Keep the clipboard transform active and prebundle its nested CommonJS dependencies.
+      exclude: ['@excalidraw/excalidraw'],
+      include: [
+        '@braintree/sanitize-url',
+        'es6-promise-pool',
+        'fuzzy',
+        'lodash.debounce',
+        'lodash.throttle',
+        'pica',
+        'png-chunk-text',
+        'png-chunks-encode',
+        'png-chunks-extract',
+      ].map(dependency => `@excalidraw/excalidraw > ${dependency}`),
+    },
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
