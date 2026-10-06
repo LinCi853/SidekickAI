@@ -132,4 +132,3 @@ describe('recording registration restoration', () => {
     expect(manager.registrationStates.get('Alt+Q')).toBe('unavailable')
   })
 })
-

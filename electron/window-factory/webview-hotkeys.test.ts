@@ -147,4 +147,3 @@ describe('guest input behavior contract', () => {
     })
   })
 })
-
