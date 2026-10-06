@@ -37,6 +37,8 @@ export interface AppSettings {
   closeBehavior: 'close' | 'minimize'
   /** 开机自启动 */
   autoLaunch: boolean
+  autoUpdate: boolean
+  logLevel: 'error' | 'warn' | 'info' | 'debug'
   /** 静默启动（启动后隐藏到托盘，仅 autoLaunch=true 时有意义） */
   silentStart: boolean
   /** UI 比例：small=紧凑 / medium=中档（默认）/ large=大号 */
@@ -235,6 +237,7 @@ export interface BlockRulesAPI {
   save(rule: BlockRule): Promise<BlockRule>
   delete(id: string): Promise<void>
   update(id: string, patch: Partial<BlockRule>): Promise<BlockRule | null>
+  onChanged(callback: () => void): () => void
 }
 
 /** 平台能力查询接口（设置页显示权限状态） */
@@ -268,11 +271,23 @@ export type WebviewHotkeyAction =
 
 /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
 export type OnWebviewHotkeyCallback = (
-  callback: (payload: {
-    action: WebviewHotkeyAction
-    data?: unknown
-  }) => void,
+  callback: (payload: WebviewHotkeyPayload) => void,
 ) => () => void
+
+export interface WebviewHotkeyTarget {
+  webContentsId: number
+  documentGeneration: number
+  url: string
+  tabId?: string
+  profileId?: string
+  windowId?: string
+}
+
+export interface WebviewHotkeyPayload {
+  action: WebviewHotkeyAction
+  data?: unknown
+  target?: WebviewHotkeyTarget
+}
 
 /** 主→提示词库窗口渲染：注入结果回传 */
 export type OnPromptInjectResultCallback = (cb: (result: { success: boolean; platformName?: string }) => void) => () => void

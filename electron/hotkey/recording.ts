@@ -35,12 +35,11 @@ export interface RecordingHost {
   _recordingPartialCallback: HotkeyPartialCallback | null
   /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等） */
   _recordingSuppressors: string[]
-  /** 录制前已注册的热键备份（用于录制结束后恢复） */
-  _recordingBackup: Array<{ accelerator: string; callback: () => void }>
   /** 释放语音热键按下态（跨簇协作，见 voice-hotkey.ts） */
   releaseVoiceHold(): void
   /** Start the input hook once. */
   ensureUiohookStarted(): void
+  restoreShortcutRegistrations(): void
 }
 
 /** uiohook keycode → Electron accelerator 主键名的反向映射 */
@@ -105,6 +104,7 @@ export async function startRecording(
   host.ensureUiohookStarted()
   if (!host.uiohookStarted) {
     host._recordingCallback = null
+    host._recordingPartialCallback = null
     return false
   }
 
@@ -118,7 +118,6 @@ export async function startRecording(
         globalShortcut.unregister(acc)
         const ok = globalShortcut.register(acc, () => {})
         if (ok) {
-          host._recordingBackup.push({ accelerator: acc, callback: cb })
           host._recordingSuppressors.push(acc)
           host.recordingLeases.set(acc, lease)
         } else {
@@ -262,23 +261,16 @@ export function finishRecording(host: RecordingHost, accelerator: string, reason
 
 /** 录制结束后恢复：注销所有抑制器，恢复原有热键回调 */
 export function restoreAfterRecording(host: RecordingHost): void {
+  if (!host._recordingCallback && host._recordingSuppressors.length === 0) return
   host.inputState.suspend()
   // 注销所有抑制器
   for (const supAcc of host._recordingSuppressors) {
     try { globalShortcut.unregister(supAcc) } catch { /* ignore */ }
   }
-  // 恢复原有热键回调
-  for (const { accelerator, callback } of host._recordingBackup) {
-    try {
-      if (!host._paused && (host.registered.get(accelerator) === callback || host.browserShortcuts.get(accelerator) === callback)) globalShortcut.register(accelerator, callback)
-    } catch {
-      // ignore
-    }
-  }
   for (const lease of host.recordingLeases.values()) lease.release()
   host.recordingLeases.clear()
   host._recordingSuppressors = []
-  host._recordingBackup = []
   host._recordingCallback = null
   host._recordingPartialCallback = null
+  host.restoreShortcutRegistrations()
 }

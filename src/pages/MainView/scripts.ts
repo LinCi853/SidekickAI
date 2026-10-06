@@ -168,15 +168,20 @@ export function buildEnterToSendScript(opts: {
 }): string {
   return `(function() {
     if (window.__ai_enter_send_injected__) {
-      // 已注入，仅更新标志位
-      window.__ai_enter_send_enabled__ = ${opts.enabled};
-      return;
+      if (window.__ai_enter_send__) window.__ai_enter_send__.dispose();
     }
+    if (!${opts.enabled}) return;
     window.__ai_enter_send_injected__ = true;
     window.__ai_enter_send_enabled__ = ${opts.enabled};
     var inputSel = ${JSON.stringify(opts.inputSelector ?? null)};
     var sendSel = ${JSON.stringify(opts.sendSelector ?? null)};
     console.log('[EnterSend] 注入监听器, inputSel=', inputSel, 'sendSel=', sendSel, 'enabled=', window.__ai_enter_send_enabled__);
+
+    function isShown(element) {
+      var rect = element.getBoundingClientRect();
+      var style = window.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    }
 
     function findSendButton(inputEl) {
       console.log('[EnterSend] findSendButton 开始, inputEl=', inputEl.tagName, 'sendSel=', sendSel);
@@ -186,8 +191,7 @@ export function buildEnterToSendScript(opts: {
         console.log('[EnterSend] sendSel 匹配数量:', btns.length);
         for (var i = 0; i < btns.length; i++) {
           var b = btns[i];
-          var s = window.getComputedStyle(b);
-          var visible = s.display !== 'none' && s.visibility !== 'hidden' && b.offsetParent !== null;
+          var visible = isShown(b);
           console.log('[EnterSend] sendSel 候选[' + i + ']:', b.tagName, 'class=', b.className, 'visible=', visible);
           if (visible) {
             console.log('[EnterSend] 找到发送按钮(sendSel):', b);
@@ -199,7 +203,7 @@ export function buildEnterToSendScript(opts: {
       var form = inputEl && inputEl.closest && inputEl.closest('form');
       if (form) {
         var submitBtn = form.querySelector('button[type=submit]');
-        if (submitBtn) {
+        if (submitBtn && isShown(submitBtn)) {
           console.log('[EnterSend] 找到 form submit 按钮');
           return submitBtn;
         }
@@ -214,8 +218,7 @@ export function buildEnterToSendScript(opts: {
       console.log('[EnterSend] 通用候选按钮数量:', candidates.length);
       for (var i = 0; i < candidates.length; i++) {
         var c = candidates[i];
-        var style = window.getComputedStyle(c);
-        if (style.display !== 'none' && style.visibility !== 'hidden' && c.offsetParent !== null) {
+        if (isShown(c)) {
           console.log('[EnterSend] 找到通用发送按钮:', c);
           return c;
         }
@@ -234,8 +237,7 @@ export function buildEnterToSendScript(opts: {
         console.log('[EnterSend] DeepSeek --primary--circle 匹配数量:', primaryCircleBtns.length);
         for (var j = 0; j < primaryCircleBtns.length; j++) {
           var pcb = primaryCircleBtns[j];
-          var pcs = window.getComputedStyle(pcb);
-          var pcbVisible = pcs.display !== 'none' && pcs.visibility !== 'hidden' && pcb.offsetParent !== null;
+          var pcbVisible = isShown(pcb);
           console.log('[EnterSend] primary--circle 候选[' + j + ']:', pcb.tagName, 'class=', pcb.className, 'visible=', pcbVisible);
           if (pcbVisible) {
             console.log('[EnterSend] 找到 DeepSeek 发送按钮(--primary--circle):', pcb);
@@ -247,8 +249,7 @@ export function buildEnterToSendScript(opts: {
         console.log('[EnterSend] div[role="button"] 总数:', roleBtns.length);
         for (var k = 0; k < roleBtns.length; k++) {
           var rb = roleBtns[k];
-          var rs = window.getComputedStyle(rb);
-          if (rs.display === 'none' || rs.visibility === 'hidden' || !rb.offsetParent) continue;
+          if (!isShown(rb)) continue;
           var svg = rb.querySelector && rb.querySelector('svg');
           if (!svg) continue;
           var path = svg.querySelector && svg.querySelector('path');
@@ -271,8 +272,7 @@ export function buildEnterToSendScript(opts: {
         var lastBtn = null;
         for (var i = nearbyBtns.length - 1; i >= 0; i--) {
           var nb = nearbyBtns[i];
-          var ns = window.getComputedStyle(nb);
-          if (ns.display !== 'none' && ns.visibility !== 'hidden' && nb.offsetParent !== null) {
+          if (isShown(nb)) {
             lastBtn = nb;
             break;
           }
@@ -289,13 +289,14 @@ export function buildEnterToSendScript(opts: {
     function isEditable(el) {
       if (!el) return false;
       var tag = el.tagName;
-      if (tag === 'TEXTAREA' || (tag === 'INPUT' && (el.type === 'text' || el.type === ''))) return !el.disabled && !el.readOnly;
+      if (tag === 'TEXTAREA' || (tag === 'INPUT' && ['text', 'search', 'url', 'email', 'tel'].indexOf(el.type || 'text') !== -1)) return !el.disabled && !el.readOnly;
       if (el.isContentEditable) return true;
       return false;
     }
 
-    document.addEventListener('keydown', function(e) {
+    function onKeyDown(e) {
       if (e.key !== 'Enter') return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
       if (e.isComposing) { console.log('[EnterSend] Enter 跳过: 输入法组合中'); return; }
       // 运行时开关：由外部通过 window.__ai_enter_send_enabled__ 控制
       if (!window.__ai_enter_send_enabled__) { console.log('[EnterSend] Enter 跳过: 功能未启用'); return; }
@@ -341,7 +342,25 @@ export function buildEnterToSendScript(opts: {
       } catch (err) {
         console.error('[EnterSend] 点击发送按钮失败:', err);
       }
-    }, true);
+    }
+    document.addEventListener('keydown', onKeyDown, true);
+    var state = { dispose: function() {
+      document.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('pagehide', state.dispose);
+      if (window.__ai_enter_send__ === state) {
+        delete window.__ai_enter_send__;
+        delete window.__ai_enter_send_injected__;
+        delete window.__ai_enter_send_enabled__;
+      }
+    } };
+    window.__ai_enter_send__ = state;
+    window.addEventListener('pagehide', state.dispose, { once: true });
     console.log('[EnterSend] 监听器已注册');
   })()`;
+}
+
+export function buildEnterToSendCleanupScript(): string {
+  return `(function() {
+    if (window.__ai_enter_send__) window.__ai_enter_send__.dispose();
+  })();`
 }

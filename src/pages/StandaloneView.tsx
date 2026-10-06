@@ -25,16 +25,15 @@ import {
   isWindowMaximized,
   pinCurrentWindow,
   getHotkeys,
-  getAppSettings,
+  listAIPlatforms,
 } from '../lib/electron-api';
 import type { Profile, HotkeyConfig } from '../lib/electron-api';
 import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } from '../lib/webview';
 import { useShortcutsToggle } from '../hooks/useShortcutsToggle';
 import { useIsNarrow } from '../hooks/useIsNarrow';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { listBlockRules } from '../lib/electron-api/block-rules';
-import { buildBlockerScript, matchDomain } from '../lib/webview-blocker';
 import { injectionManager } from '../lib/injection-manager';
+import { leaseWebviewLifecycle } from '../lib/webview-lifecycle';
 import { formatWindowTitle } from '../lib/window-title';
 import './StandaloneView.css';
 
@@ -109,21 +108,37 @@ export default function StandaloneView() {
   useEffect(() => {
     const webview = webviewRef.current;
     if (!webview || !activeProfile) return;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    const injectionId = `standalone-${activeProfile.id}`;
+    const getInputContext = async () => {
+      if (!activeProfile.isAIPlatform) return {};
+      const platform = activeProfile.aiPlatformId ? (await listAIPlatforms()).find(item => item.id === activeProfile.aiPlatformId) : undefined;
+      return { manageEnterToSend: true, inputSelector: activeProfile.aiInputSelector || platform?.inputSelector || null,
+        sendSelector: activeProfile.aiSendSelector || platform?.sendSelector || null };
+    };
     const handleDomReady = async () => {
       if (!activeProfile) return;
+      const page = lifecycle.capture();
+      if (!page.isCurrent()) return;
       try {
         const script = await getFingerprintScript(activeProfile.id);
+        if (!page.isCurrent()) return;
         await webview.executeJavaScript(script);
+        if (!page.isCurrent()) return;
 
         // 强制移动端 viewport，防止横向滚动/阴影；兜底拦截 window.open 与 _blank
         await injectViewportAndPopupGuard(webview);
+        if (!page.isCurrent()) return;
 
         // 通过统一注入管理器注入可关闭功能（屏蔽规则、Cookie 处理、空间导航）
         try {
+          const inputContext = await getInputContext();
+          if (!page.isCurrent()) return;
           await injectionManager.injectAll(
-            `standalone-${activeProfile.id}`,
+            injectionId,
             webview,
-            webview.getURL(),
+            page.url,
+            { profileId: activeProfile.id, profile: activeProfile, tabId: activeTab?.id, pageGeneration: page.pageGeneration, isCurrent: page.isCurrent, ...inputContext },
           );
         } catch (e) {
           console.error('[StandaloneView] 统一注入失败:', e);
@@ -132,7 +147,19 @@ export default function StandaloneView() {
         console.error('[StandaloneView] 注入失败:', e);
       }
     };
+    const handleInPageNavigation = (event: Event) => {
+      if ((event as Event & { isMainFrame?: boolean }).isMainFrame === false) return;
+      const page = lifecycle.capture();
+      if (!page.isCurrent()) return;
+      void getInputContext().then(inputContext => {
+        if (!page.isCurrent()) return;
+        return injectionManager.injectAll(injectionId, webview, page.url,
+          { profileId: activeProfile.id, profile: activeProfile, tabId: activeTab?.id, pageGeneration: page.pageGeneration, isCurrent: page.isCurrent, ...inputContext });
+      }).catch(error => console.warn('[StandaloneView] Navigation enhancement update failed:', error));
+    };
     webview.addEventListener('dom-ready', handleDomReady as EventListener);
+    webview.addEventListener('did-navigate-in-page', handleInPageNavigation);
+    if (lifecycle.isReady()) void handleDomReady();
 
     // webview 内快捷键拦截（F12 置顶 / ` ~ ? 呼出快捷键窗口），webview 获得焦点时也生效
     const handleBeforeInput = (e: Event) => {
@@ -174,10 +201,15 @@ export default function StandaloneView() {
     webview.addEventListener('before-input-event', handleBeforeInput);
 
     return () => {
+      lifecycle.dispose();
+      void injectionManager.disposeWebview(injectionId, webview).catch(error => {
+        console.warn('[StandaloneView] Injection cleanup failed:', error);
+      });
       webview.removeEventListener('dom-ready', handleDomReady as EventListener);
+      webview.removeEventListener('did-navigate-in-page', handleInPageNavigation);
       webview.removeEventListener('before-input-event', handleBeforeInput);
     };
-  }, [activeProfile]);
+  }, [activeProfile, activeTab?.id]);
 
   // 窗口级 F12 快捷键（webview 未获得焦点时生效，与顶栏按钮同一路径）
   // 注：Ctrl+W / ESC 由下方 useEscToCloseWindow 统一处理

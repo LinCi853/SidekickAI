@@ -3,13 +3,14 @@
 import type { ProfileAPI, WindowAPI, WindowControlAPI, WindowStateAPI, TabAPI, PresetsAPI } from './profile-window.api.js'
 import type { ChatAPI, AIProviderAPI, AIPlatformAPI, PromptAPI, InjectionHistoryAPI } from './chat.api.js'
 import type { SttAPI, VoiceConfigAPI } from './voice.api.js'
-import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings, WebviewHotkeyAction } from './settings.api.js'
+import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings } from './settings.api.js'
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
 import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
 import type { FreezeAPI } from './freeze.api.js'
 import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
 import type { PromptTemplate } from '../chat.types.js'
 import type { AiAssetsAPI } from '../ai-assets.types.js'
+import type { WebviewHotkeyPayload, WebviewHotkeyTarget } from './settings.api.js'
 
 /** 模块管理 API（插件市场 / 开发者选项） */
 export interface ModulesAPI {
@@ -85,11 +86,9 @@ export interface ElectronAPI {
   onVoiceRecordStart: (cb: () => void) => () => void
   /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
   onWebviewHotkey: (
-    callback: (payload: {
-      action: WebviewHotkeyAction
-      data?: unknown
-    }) => void,
+    callback: (payload: WebviewHotkeyPayload) => void,
   ) => () => void
+  validateWebviewHotkeyTarget: (target: WebviewHotkeyTarget) => Promise<boolean>
   /** 主→预览窗渲染：停止录音并回传 PCM */
   onVoiceRecordStop: (cb: () => void) => () => void
   /** 预览窗渲染→主：回传 Float32 PCM 数据 */

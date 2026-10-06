@@ -67,6 +67,18 @@ afterEach(async () => {
 });
 
 describe('note draft persistence', () => {
+  it.each(['loaded', 'selected'] as const)('keeps an untouched %s note separate from a newer API-owned write', async origin => {
+    const hook = await mountNotes();
+    const note = origin === 'loaded' ? original : other;
+    if (origin === 'selected') { await hook.current.handleSelectNote(note); await settleHooks(); }
+    persist({ id: note.id, content: 'Newer API-owned content' });
+    api.saveNote.mockClear(); api.saveNoteSync.mockClear();
+    expect(handoff().defaultPrevented).toBe(false);
+    harness.unmount(); await settleHooks();
+    expect(rows.get(note.id)?.content).toBe('Newer API-owned content');
+    expect(api.saveNoteSync).not.toHaveBeenCalled(); expect(api.saveNote).not.toHaveBeenCalled();
+  });
+
   it('retains a failed autosave for a vetoed handoff and a later retry without new input', async () => {
     const hook = await mountNotes();
     api.saveNote.mockRejectedValue(new Error('Disk full'));

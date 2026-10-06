@@ -10,6 +10,19 @@
 export function buildSpatialNavScript(): string {
   return `(function() {
     if (window.__ai_spatial_nav__) return;
+    var resumeEnabled = !!window.__ai_spatial_nav_resume__;
+    delete window.__ai_spatial_nav_resume__;
+    var disposed = false;
+    var timers = new Set();
+    var frame = null;
+    function scheduleTimeout(callback, delay) {
+      var timer = setTimeout(function() {
+        timers.delete(timer);
+        if (!disposed) callback();
+      }, delay);
+      timers.add(timer);
+      return timer;
+    }
     var enabled = false;
     var currentEl = null;
     var outlineStyle = '3px solid #c25a4a';
@@ -78,7 +91,7 @@ export function buildSpatialNavScript(): string {
     function playClickAnim() {
       if (!cursorInner) return;
       cursorInner.style.transform = 'scale(0.7)';
-      setTimeout(function() {
+      scheduleTimeout(function() {
         if (cursorInner) cursorInner.style.transform = 'scale(1)';
       }, 120);
     }
@@ -199,7 +212,6 @@ export function buildSpatialNavScript(): string {
         target.dispatchEvent(new PointerEvent('pointerenter', opts));
         interactiveEl.dispatchEvent(new PointerEvent('pointerdown', opts));
         interactiveEl.dispatchEvent(new PointerEvent('pointerup', opts));
-        interactiveEl.dispatchEvent(new PointerEvent('click', opts));
       } catch (e) { /* webview 上下文错误已通过返回值上报 */ }
 
       // Mouse 事件序列
@@ -209,13 +221,14 @@ export function buildSpatialNavScript(): string {
       } catch (e) { /* webview 上下文错误已通过返回值上报 */ }
       interactiveEl.dispatchEvent(new MouseEvent('mousedown', opts));
       interactiveEl.dispatchEvent(new MouseEvent('mouseup', opts));
-      interactiveEl.dispatchEvent(new MouseEvent('click', opts));
 
       // 最后再尝试原生 click() 方法（对 button/a 等原生元素最可靠）
       if (typeof interactiveEl.click === 'function') {
-        setTimeout(function() {
+        scheduleTimeout(function() {
           try { interactiveEl.click(); } catch (e) { /* webview 上下文错误已通过返回值上报 */ }
         }, 0);
+      } else {
+        interactiveEl.dispatchEvent(new MouseEvent('click', opts));
       }
 
       return true;
@@ -268,8 +281,8 @@ export function buildSpatialNavScript(): string {
     }
 
     // 键盘方向键（仅在导航模式启用时拦截）
-    document.addEventListener('keydown', function(e) {
-      if (!enabled) return;
+    function onKeyDown(e) {
+      if (!enabled || disposed || e.isComposing || e.keyCode === 229) return;
       var map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
       if (map[e.key]) { e.preventDefault(); e.stopPropagation(); navigate(map[e.key]); return; }
       if (e.key === 'Enter' && currentEl) {
@@ -278,14 +291,16 @@ export function buildSpatialNavScript(): string {
         return;
       }
       if (e.key === 'Escape') { toggleNav(false); }
-    }, true);
+    }
+    document.addEventListener('keydown', onKeyDown, true);
 
     // 手柄轮询（60fps，250ms 节流避免摇杆抖动）
     var polling = false;
     var lastNavTime = 0, lastBtnTime = 0;
 
     function pollGamepad() {
-      if (!enabled) { polling = false; return; }
+      frame = null;
+      if (!enabled || disposed) { polling = false; return; }
       var pads = navigator.getGamepads ? navigator.getGamepads() : [];
       var gp = null;
       for (var i = 0; i < pads.length; i++) { if (pads[i]) { gp = pads[i]; break; } }
@@ -310,10 +325,11 @@ export function buildSpatialNavScript(): string {
           lastBtnTime = now;
         }
       }
-      requestAnimationFrame(pollGamepad);
+      if (enabled && !disposed) frame = requestAnimationFrame(pollGamepad);
     }
 
     function toggleNav(on) {
+      if (disposed) return;
       enabled = on;
       console.log('[spatial-nav] toggle', on);
       if (on) {
@@ -323,6 +339,9 @@ export function buildSpatialNavScript(): string {
         if (els.length) highlight(els[0]);
         if (!polling) { polling = true; pollGamepad(); }
       } else {
+        if (frame !== null) cancelAnimationFrame(frame);
+        frame = null;
+        polling = false;
         if (currentEl) {
           currentEl.style.outline = prevOutline;
           currentEl.style.boxShadow = prevShadow;
@@ -333,19 +352,43 @@ export function buildSpatialNavScript(): string {
     }
 
     // 手柄连接/断开事件监听（仅注册一次，用于 UX 提示）
-    if (!window.__ai_gamepad_listeners__) {
-      window.__ai_gamepad_listeners__ = true;
-      window.addEventListener('gamepadconnected', function(e) {
-        console.log('[SpatialNav] 手柄已连接:', e.gamepad.id);
-      });
-      window.addEventListener('gamepaddisconnected', function(e) {
-        console.log('[SpatialNav] 手柄已断开:', e.gamepad.id);
-      });
-    }
+    function onGamepadConnected(e) { console.log('[spatial-nav] Gamepad connected:', e.gamepad.id); }
+    function onGamepadDisconnected(e) { console.log('[spatial-nav] Gamepad disconnected:', e.gamepad.id); }
+    window.addEventListener('gamepadconnected', onGamepadConnected);
+    window.addEventListener('gamepaddisconnected', onGamepadDisconnected);
+    window.__ai_gamepad_listeners__ = true;
 
-    window.__ai_spatial_nav__ = {
+    var state = {
       toggle: toggleNav,
       isEnabled: function() { return enabled; },
+      dispose: function() {
+        if (disposed) return;
+        toggleNav(false);
+        disposed = true;
+        timers.forEach(clearTimeout);
+        timers.clear();
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('gamepadconnected', onGamepadConnected);
+        window.removeEventListener('gamepaddisconnected', onGamepadDisconnected);
+        window.removeEventListener('pagehide', state.dispose);
+        if (window.__ai_spatial_nav__ === state) {
+          delete window.__ai_spatial_nav__;
+          delete window.__ai_gamepad_listeners__;
+        }
+      },
     };
+    window.__ai_spatial_nav__ = state;
+    window.addEventListener('pagehide', state.dispose, { once: true });
+    if (resumeEnabled) toggleNav(true);
   })();`;
+}
+
+export function buildSpatialNavCleanupScript(replacing = false): string {
+  return `(function() {
+    var state = window.__ai_spatial_nav__;
+    var enabled = !!state && state.isEnabled();
+    if (state) state.dispose();
+    if (${replacing} && enabled) window.__ai_spatial_nav_resume__ = true;
+    else delete window.__ai_spatial_nav_resume__;
+  })();`
 }

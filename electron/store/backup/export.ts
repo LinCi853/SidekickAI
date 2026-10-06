@@ -7,6 +7,7 @@ import { extractBackupArchive } from '../../../packages/backup-core/format.js'
 import { getDeviceId } from '../device-id.js'
 import { validateRestoreDirectory } from '../restore-files.js'
 import { closeChatStore } from '../chat-store.js'
+import { closeAssetCollectionJournal, resumeAssetCollectionJournal } from '../../assets/collection-journal.js'
 import { closeWhiteboardDb } from '../whiteboard-db.js'
 import { closeNotesDb } from '../notes-db.js'
 import { closeBookmarkStore } from '../bookmark-store.js'
@@ -22,27 +23,33 @@ import type { ExportOptions, ExportStrictOptions } from './types.js'
 import { runBackupExport } from '../backup-activity.js'
 
 export async function exportAllData(target: string, options: ExportOptions, encrypt?: { password: string }, strict?: ExportStrictOptions) {
-  return runBackupExport(() => exportBackup({
-    edition: 'concept', root: getDataDir, version: () => app.getVersion(), deviceId: getDeviceId,
-    closeDatabases: async () => {
-      const { closeAllModuleDbs } = await import('../../modules/registry.js')
-      await closeAllModuleDbs()
-      for (const close of [closeChatStore, closeWhiteboardDb, closeNotesDb, closeBookmarkStore, closeModuleStateDb, closeSearchHistoryStore, closeBrowserDownloadStore, closeNavHistoryStore, () => accumulatedLinksStore.close()]) close()
-    },
-    collect: collectSelectedExportEntries,
-    validate: root => {
-      const identity = path.join(root, 'edition-identity.json')
-      if (fs.existsSync(identity)) {
-        const value = JSON.parse(fs.readFileSync(identity, 'utf8'))
-        if (value.schema !== 1 || value.edition !== 'sidekickai-opensource') throw new Error('Unrecognized user data ownership.')
-      }
-    },
-    verifyPayload: zip => {
-      const directory = fs.mkdtempSync(path.join(app.getPath('temp'), 'sidekick-backup-check-'))
-      try { extractBackupArchive(zip, directory); validateRestoreDirectory(directory) }
-      finally { fs.rmSync(directory, { recursive: true, force: true }) }
-    },
-    treeDigest: exportTreeDigest, verifySources: verifyQuiescentSnapshot,
-    writeStrict: writeStrictArchive, writeLive: writePartialArchive,
-  }, target, options, encrypt, strict))
+  try {
+    return await runBackupExport(() => exportBackup({
+      edition: 'concept', root: getDataDir, version: () => app.getVersion(), deviceId: getDeviceId,
+      closeDatabases: async () => {
+        const { closeAllModuleDbs } = await import('../../modules/registry.js')
+        await closeAllModuleDbs()
+        for (const close of [closeAssetCollectionJournal, closeChatStore, closeWhiteboardDb, closeNotesDb, closeBookmarkStore, closeModuleStateDb, closeSearchHistoryStore, closeBrowserDownloadStore, closeNavHistoryStore, () => accumulatedLinksStore.close()]) close()
+      },
+      collect: collectSelectedExportEntries,
+      validate: root => {
+        const identity = path.join(root, 'edition-identity.json')
+        if (fs.existsSync(identity)) {
+          const value = JSON.parse(fs.readFileSync(identity, 'utf8'))
+          if (value.schema !== 1 || value.edition !== 'sidekickai-opensource') throw new Error('Unrecognized user data ownership.')
+        }
+      },
+      verifyPayload: zip => {
+        const directory = fs.mkdtempSync(path.join(app.getPath('temp'), 'sidekick-backup-check-'))
+        try { extractBackupArchive(zip, directory); validateRestoreDirectory(directory) }
+        finally { fs.rmSync(directory, { recursive: true, force: true }) }
+      },
+      treeDigest: exportTreeDigest, verifySources: verifyQuiescentSnapshot,
+      writeStrict: writeStrictArchive, writeLive: writePartialArchive,
+    }, target, options, encrypt, strict))
+  }
+  finally {
+    try { resumeAssetCollectionJournal() }
+    catch (error) { console.warn('[ai-assets] Cannot resume collection after export:', error) }
+  }
 }

@@ -4,15 +4,15 @@
    + 初始 title/favicon/主题色兜底 + 云电脑缩放 + 文件拖放/右键坐标桥。
    ===================================================================== */
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { BrowserTabState, Profile } from '../../../lib/electron-api';
 import { getFingerprintScript, getPreset } from '../../../lib/electron-api';
 import { injectViewportAndPopupGuard, type WebviewElement } from '../../../lib/webview.js';
 import { injectionManager } from '../../../lib/injection-manager.js';
+import { leaseWebviewLifecycle, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
 import { useCloudPcStore } from '../../../store/useCloudPcStore.js';
 import { useGamepadStore } from '../../../store/useGamepadStore.js';
-import { buildSpatialNavScript } from '../../../lib/webview-spatial-nav.js';
 import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms.js';
 import { extractThemeColor } from '../utils/favicon-placeholder.js';
 import {
@@ -28,16 +28,51 @@ export interface UseWebviewDomReadyParams {
   domReadyRef: React.MutableRefObject<boolean>;
   tab: BrowserTabState;
   profile: Profile;
+  remountKey: number;
 }
 
 /** dom-ready：注入 fingerprint + viewport + blockers + cookie handler；
  * v0.0.9：+ UA 设置（基于 profile.aiPlatformId 的桌面端预设）。 */
-export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile }: UseWebviewDomReadyParams) {
+export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile, remountKey }: UseWebviewDomReadyParams) {
   const store = useBrowserTabStore();
+  const platform = profile.aiPlatformId ? AI_PLATFORMS.find(item => item.id === profile.aiPlatformId) : undefined;
+  const inputContext = profile.isAIPlatform ? {
+    manageEnterToSend: true,
+    inputSelector: profile.aiInputSelector || platform?.inputSelector || null,
+    sendSelector: profile.aiSendSelector || platform?.sendSelector || null,
+  } : {};
+  const lifecycleRef = useRef<WebviewLifecycleLease | null>(null);
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview) return;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    lifecycleRef.current = lifecycle;
+    const handleInPageNavigation = (event: Event) => {
+      if ((event as Event & { isMainFrame?: boolean }).isMainFrame === false) return;
+      const page = lifecycle.capture();
+      if (!page.isCurrent()) return;
+      void injectionManager.injectAll(`browser-${tab.id}`, webview, page.url,
+        { profileId: profile.id, profile, tabId: tab.id, pageGeneration: page.pageGeneration, isCurrent: page.isCurrent, ...inputContext })
+        .catch(error => console.warn('[BrowserWebviewTab] Navigation enhancement update failed:', error));
+    };
+    webview.addEventListener('did-navigate-in-page', handleInPageNavigation);
+    if (lifecycle.isReady()) void handleDomReady();
+    return () => {
+      lifecycle.dispose();
+      void injectionManager.disposeWebview(`browser-${tab.id}`, webview).catch(error => {
+        console.warn('[BrowserWebviewTab] Injection cleanup failed:', error);
+      });
+      lifecycleRef.current = null;
+      domReadyRef.current = false;
+      webview.removeEventListener('did-navigate-in-page', handleInPageNavigation);
+    };
+  }, [profile.id, profile.isAIPlatform, profile.aiPlatformId, profile.aiInputSelector, profile.aiSendSelector,
+    profile.userAgent, profile.devicePreset, tab.id, remountKey]);
 
   const handleDomReady = useCallback(async () => {
     const webview = webviewRef.current;
-    if (!webview) return;
+    const page = lifecycleRef.current?.capture();
+    if (!webview || !page?.isCurrent()) return;
     domReadyRef.current = true;
 
     // 浏览器窗口始终使用桌面端 UA（不受 profile 移动端设置影响）
@@ -47,6 +82,7 @@ export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile }: Us
         : undefined;
       const desktopPresetId = platform?.defaultDesktopPreset ?? 'win-chrome-125';
       const preset = await getPreset(desktopPresetId);
+      if (!page.isCurrent()) return;
       if (preset?.userAgent) {
         const wv = webview as unknown as { setUserAgent: (ua: string) => void };
         if (typeof wv.setUserAgent === 'function') {
@@ -54,67 +90,69 @@ export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile }: Us
         }
       }
     } catch { /* ignore UA errors */ }
+    if (!page.isCurrent()) return;
 
     try {
       // Fingerprint：云电脑模式下跳过——伪造的 screen 尺寸/DPR 会破坏
       // 远端对真实分辨率与窗口大小的识别（云电脑页面需要真实设备信息）
       if (!useCloudPcStore.getState().isActive) {
         const script = await getFingerprintScript(profile.id);
+        if (!page.isCurrent()) return;
         await webview.executeJavaScript(script);
+        if (!page.isCurrent()) return;
       }
 
       // Viewport + popup guard
       await injectViewportAndPopupGuard(webview);
-
-      // 手柄/键盘空间导航注入（等效主窗口 Ctrl+G）
-      // 云电脑模式 + 手柄已接入时自动开启，方便直接用手柄操作网页内容
-      try {
-        await webview.executeJavaScript(buildSpatialNavScript());
-        const autoEnable =
-          useCloudPcStore.getState().isActive &&
-          useGamepadStore.getState().connectedCount > 0;
-        if (autoEnable) {
-          await webview.executeJavaScript(SPATIAL_NAV_ENABLE_SCRIPT);
-        }
-      } catch (e) {
-        console.error('[BrowserWebviewTab] 空间导航注入失败:', e);
-      }
+      if (!page.isCurrent()) return;
 
       // 通过统一注入管理器注入可关闭功能（屏蔽规则、空间导航）
       try {
         await injectionManager.injectAll(
           `browser-${tab.id}`,
           webview,
-          webview.getURL(),
+          page.url,
+          { profileId: profile.id, profile, tabId: tab.id, pageGeneration: page.pageGeneration, isCurrent: page.isCurrent, ...inputContext },
         );
       } catch { /* ignore */ }
+      if (!page.isCurrent()) return;
+      if (useCloudPcStore.getState().isActive && useGamepadStore.getState().connectedCount > 0) {
+        try { await webview.executeJavaScript(SPATIAL_NAV_ENABLE_SCRIPT); } catch { /* ignore */ }
+      }
     } catch (e) {
       console.error('[BrowserWebviewTab] dom-ready injection failed:', e);
     }
+    if (!page.isCurrent()) return;
 
     // 兜底：dom-ready 后主动读取初始 title 和 favicon
     if (tab.source !== 'initial') {
       try {
         const title = await webview.executeJavaScript(GET_TITLE_SCRIPT);
+        if (!page.isCurrent()) return;
         if (title && typeof title === 'string') {
           store.updateTabTitle(tab.id, title);
         }
       } catch { /* ignore */ }
+      if (!page.isCurrent()) return;
       try {
         // 在 webview 内部将 favicon 转换为 data URL（base64），解决跨域/协议限制
         const faviconDataUrl = await webview.executeJavaScript(buildFaviconToDataUrlScript());
+        if (!page.isCurrent()) return;
         if (faviconDataUrl && typeof faviconDataUrl === 'string' && faviconDataUrl.length > 10) {
           store.updateTabFavicon(tab.id, faviconDataUrl);
         }
       } catch { /* ignore */ }
+      if (!page.isCurrent()) return;
       // P1-5：提取网站主题色（meta[name="theme-color"]），用于 favicon 占位背景
       try {
         const color = await extractThemeColor(webview);
+        if (!page.isCurrent()) return;
         if (color) {
           store.updateTabThemeColor(tab.id, color);
         }
       } catch { /* ignore */ }
     }
+    if (!page.isCurrent()) return;
 
     // 云电脑模式：dom-ready 后应用缩放因子（4K 屏跑 1080P 云电脑铺满屏幕；
     // 新 webview / reload 后都需要重新设置，缩放状态下页面 CSS 视口匹配远端分辨率，
@@ -132,6 +170,7 @@ export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile }: Us
     try {
       await webview.executeJavaScript(FILE_DROP_BRIDGE_SCRIPT);
     } catch { /* ignore */ }
+    if (!page.isCurrent()) return;
 
     // 注入右键坐标记录脚本：guest 的 contextmenu DOM 事件提供精确的
     // clientX/clientY（viewport CSS 坐标），供右键菜单定位、聚焦输入框、
@@ -139,7 +178,8 @@ export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile }: Us
     try {
       await webview.executeJavaScript(CONTEXT_COORD_HOOK_SCRIPT);
     } catch { /* ignore */ }
-  }, [profile.id, profile.devicePreset, profile.userAgent, tab.id, tab.source, store]);
+  }, [profile.id, profile.isAIPlatform, profile.aiPlatformId, profile.aiInputSelector, profile.aiSendSelector,
+    profile.devicePreset, profile.userAgent, tab.id, tab.source, store]);
 
   return handleDomReady;
 }

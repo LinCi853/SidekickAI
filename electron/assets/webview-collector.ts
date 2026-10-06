@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
-import type { AssetAttachmentInput, AssetObservedMessage } from '../shared/ai-assets.types.js'
+import type { AssetAttachmentInput, AssetObservedMessage, AssetObservationReceipt } from '../shared/ai-assets.types.js'
 import { canonicalWebConversationUrl } from './conversation-identity.js'
 import { readDomConversation } from './dom-messages.js'
 
@@ -46,9 +46,9 @@ function collectAiAssets(): () => void {
   const aliases = new Map<string, string>()
   type Original = {
     input: AssetAttachmentInput; url?: string; blob?: Blob; id?: string; ready?: Promise<void>
-    inputUsers?: Map<string, string>; associating?: boolean; retired?: boolean
+    inputUsers?: Map<string, string>; associating?: boolean; retired?: boolean; ownsTransfer?: boolean; transferId?: string
   }
-  type StartedOriginal = { id?: string; saved?: boolean; busy?: boolean; suppressed?: boolean }
+  type StartedOriginal = { id?: string; saved?: boolean; busy?: boolean; suppressed?: boolean; transferId?: string }
   const originals = new Map<string, Original>()
   const pendingInputs = new Set<string>()
   const retryWaits = new Set<() => void>()
@@ -56,6 +56,11 @@ function collectAiAssets(): () => void {
   let queue = Promise.resolve()
   let originalQueue = Promise.resolve()
   let stopped = false
+  let paused = false
+  let journalWaiting = false
+  let pendingObservations = 0
+  let pendingBytes = 0
+  const pendingBudget = 16 * 1024 * 1024
   const context = () => {
     const url = location.href
     const stable = location.pathname !== '/' && location.pathname !== '/chat' && location.pathname !== '/app'
@@ -70,14 +75,18 @@ function collectAiAssets(): () => void {
     const timer = setTimeout(finish, delay)
     retryWaits.add(finish)
   })
-  const retryInvoke = async <T>(channel: string, args: unknown[], enabled = () => !stopped): Promise<{ value: T } | undefined> => {
+  const retryInvoke = async <T>(channel: string, args: unknown[], enabled = () => !stopped,
+    retired?: (value: T) => Promise<void>): Promise<{ value: T } | undefined> => {
     let failures = 0
     while (enabled()) {
       try {
         const value = await invoke(channel, ...args) as T
-        return enabled() ? { value } : undefined
+        if (!enabled()) { await retired?.(value); return undefined }
+        if (enabled() && channel === ipc.ASSET_OBSERVE) journalWaiting = false
+        return { value }
       } catch (error) {
         if (!enabled()) return
+        if (channel === ipc.ASSET_OBSERVE) { journalWaiting = true; pauseCapture() }
         console.warn('[ai-assets] Collection retry:', channel, error)
         await waitForRetry(1000 * 2 ** Math.min(failures++, 3))
       }
@@ -86,17 +95,24 @@ function collectAiAssets(): () => void {
   const enqueue = (operation: () => Promise<void>) => {
     queue = queue.then(() => { if (!stopped) return operation() }).catch(error => console.warn('[ai-assets] Collection failed:', error))
   }
+  const cancelOriginal = async (started: StartedOriginal) => {
+    if (started.id && started.transferId && !started.saved && !started.busy)
+      await invoke(ipc.ASSET_ATTACHMENT_FAIL, started.id, '页面采集已结束，原件传输未完成', started.transferId).catch(() => {})
+  }
   const transfer = async (entry: Original, initial?: StartedOriginal) => {
     if (!active(entry)) return
     const started = initial ?? await invoke(ipc.ASSET_ATTACHMENT_BEGIN, entry.input)
-    if (!active(entry)) return
+    if (!active(entry)) { await cancelOriginal(started); return }
     if (started.suppressed || !started.id) { entry.retired = true; entry.blob = undefined; return }
     entry.id = started.id
+    entry.transferId = started.transferId
     if (started.saved) { entry.blob = undefined; return }
     if (started.busy) return
+    entry.ownsTransfer = true
     try {
       if (!entry.blob && /^https?:/.test(entry.input.sourceUrl ?? '')) {
         await invoke(ipc.ASSET_ATTACHMENT_FETCH, started.id)
+        entry.ownsTransfer = false
         return
       }
       const blob = entry.blob ?? await fetch(entry.url ?? entry.input.sourceUrl!, { credentials: 'include', signal: lifetime.signal }).then(response => {
@@ -112,9 +128,11 @@ function collectAiAssets(): () => void {
       }
       if (!active(entry)) return
       await invoke(ipc.ASSET_ATTACHMENT_FINISH, started.id, blob.size)
+      entry.ownsTransfer = false
       if (active(entry)) entry.blob = undefined
     } catch (error) {
-      if (active(entry)) await invoke(ipc.ASSET_ATTACHMENT_FAIL, started.id, String(error)).catch(() => {})
+      if (active(entry)) await invoke(ipc.ASSET_ATTACHMENT_FAIL, started.id, String(error), started.transferId).catch(() => {})
+      entry.ownsTransfer = false
     }
   }
   const acquire = (input: AssetAttachmentInput, blob?: Blob) => {
@@ -135,11 +153,14 @@ function collectAiAssets(): () => void {
       }
       if (!active(entry)) return
       entry.input = metadata
-      return retryInvoke<StartedOriginal>(ipc.ASSET_ATTACHMENT_BEGIN, [metadata], () => active(entry))
-    }).then(started => {
+      return retryInvoke<StartedOriginal>(ipc.ASSET_ATTACHMENT_BEGIN, [metadata], () => active(entry), cancelOriginal)
+    }).then(async started => {
       if (!started) return
+      if (!active(entry)) { await cancelOriginal(started.value); return }
       if (started.value.suppressed || !started.value.id) { entry.retired = true; entry.blob = undefined; pendingInputs.delete(key); return }
       entry.id = started.value.id
+      entry.transferId = started.value.transferId
+      entry.ownsTransfer = !started.value.saved && !started.value.busy
       originalQueue = originalQueue.then(() => transfer(entry, started.value)).catch(error => console.warn('[ai-assets] Original transfer failed:', error))
     }).catch(error => console.warn('[ai-assets] Original metadata failed:', error))
     if (input.direction === 'input') pendingInputs.add(key)
@@ -165,7 +186,7 @@ function collectAiAssets(): () => void {
     }
   }
   const scan = () => {
-    if (stopped) return
+    if (stopped || paused) return
     const source = context()
     if (lastLocation !== source.conversationKey) {
       draftTransition = lastLocation.startsWith('document:') && !source.conversationKey.startsWith('document:')
@@ -190,18 +211,33 @@ function collectAiAssets(): () => void {
       return nextUser ? [{ key, messageKey: nextUser.observed.key }] : []
     })
     const eventId = visitId
+    const observedMessages = found.map(message => message.observed)
+    const rejectedCapture = snapshot.rejected
+    const completePath = snapshot.completePath
     if (!found.length && !snapshot.rejected.length) return
     if (fingerprint === (scheduledSnapshot?.fingerprint ?? lastSnapshot)
       && (!found.length || announcedLocation === source.conversationKey || scheduledSnapshot)) {
       return
     }
     const observationSequence = ++sequence
+    const observationId = crypto.randomUUID()
+    const inputAttachments = inputs.flatMap(input => {
+      const entry = originals.get(input.key)
+      return entry ? [{ externalKey: entry.input.externalKey, messageKey: input.messageKey }] : []
+    })
     scheduledSnapshot = { fingerprint, sequence: observationSequence }
+    const retainedBytes = (fingerprint.length + JSON.stringify({ ...source, previousConversationKey, observationId,
+      messages: observedMessages, snapshot: true, completePath, inputAttachments,
+      visitId: eventId, adapter: 'dom-conversation/2', rejected: rejectedCapture }).length) * 2
+    pendingObservations += 1
+    pendingBytes += retainedBytes
+    if (pendingBytes >= pendingBudget) pauseCapture()
     enqueue(async () => {
+      try {
       if (suppressed.has(source.conversationKey)) return
       const rejected = []
       const signatures = []
-      for (const item of snapshot.rejected) {
+      for (const item of rejectedCapture) {
         const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(item.content))
         const signature = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
         const identity = `${source.conversationKey}:${item.key}:${signature}`
@@ -209,28 +245,41 @@ function collectAiAssets(): () => void {
         signatures.push(identity)
         rejected.push({ key: item.key, reason: item.reason, signature })
       }
-      if (!found.length && !rejected.length) return
-      const result = await retryInvoke<{ suppressed?: boolean; messageIds?: Record<string, string> }>(ipc.ASSET_OBSERVE, [{ ...source, previousConversationKey,
-        messages: found.map(message => message.observed), snapshot: true, completePath: snapshot.completePath,
+      if (!observedMessages.length && !rejected.length) return
+      const result = await retryInvoke<AssetObservationReceipt>(ipc.ASSET_OBSERVE, [{ ...source, previousConversationKey, observationId,
+        messages: observedMessages, snapshot: true, completePath,
+        inputAttachments,
         visitId: eventId, adapter: 'dom-conversation/2', rejected }], () => !stopped && !suppressed.has(source.conversationKey))
       if (!result) return
       if (result.value.suppressed) { suppressed.add(source.conversationKey); return }
       signatures.forEach(signature => rejectedSignatures.add(signature))
       if (previousConversationKey) aliases.set(source.conversationKey, previousConversationKey)
       if (eventId === visitId) {
-        if (found.length) announcedLocation = source.conversationKey
+        if (observedMessages.length) announcedLocation = source.conversationKey
         lastSnapshot = fingerprint
         if (scheduledSnapshot?.sequence === observationSequence) scheduledSnapshot = undefined
-        if (found.length && draftTransition === transition) draftTransition = undefined
+        if (observedMessages.length && draftTransition === transition) draftTransition = undefined
+      }
+      if (result.value.durable) {
+        inputs.forEach(input => pendingInputs.delete(input.key))
+        return
       }
       associate(source, inputs.flatMap(input => {
         const messageId = result.value.messageIds?.[input.messageKey]
         return result.value.messageIds && !messageId ? [] : [{ ...input, messageId }]
       }))
+      } finally {
+        pendingObservations -= 1
+        pendingBytes -= retainedBytes
+        if (paused && !stopped) {
+          if (!journalWaiting && pendingBytes < pendingBudget / 2) resumeCapture()
+          else reportCapture()
+        }
+      }
     })
   }
   const files = (values: FileList | File[] | null) => {
-    if (stopped || !values) return
+    if (stopped || paused || !values) return
     for (const file of Array.from(values)) acquire({ ...context(), name: file.name, mimeType: file.type,
       direction: 'input', externalKey: `selected:${crypto.randomUUID()}` }, file)
   }
@@ -244,18 +293,49 @@ function collectAiAssets(): () => void {
   observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true,
     attributeFilter: ['src', 'href', 'data-streaming', 'data-is-streaming', 'aria-busy', 'data-message-id', 'data-status', 'data-branch-index', 'data-branch-count', 'data-version-id'] })
   const navigation = () => scan()
-  const routeTimer = setInterval(scan, 1000)
+  let routeTimer: ReturnType<typeof setInterval> | undefined = setInterval(scan, 1000)
   window.addEventListener('popstate', navigation)
   window.addEventListener('hashchange', navigation)
+  function pauseCapture() {
+    if (paused || stopped) return
+    paused = true
+    observer.disconnect()
+    clearInterval(routeTimer)
+    routeTimer = undefined
+    document.removeEventListener('change', change, true)
+    document.removeEventListener('drop', drop, true)
+    document.removeEventListener('paste', paste, true)
+    reportCapture()
+  }
+  function resumeCapture() {
+    if (!paused || stopped || journalWaiting || pendingBytes >= pendingBudget / 2) return
+    paused = false
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true,
+      attributeFilter: ['src', 'href', 'data-streaming', 'data-is-streaming', 'aria-busy', 'data-message-id', 'data-status', 'data-branch-index', 'data-branch-count', 'data-version-id'] })
+    routeTimer = setInterval(scan, 1000)
+    document.addEventListener('change', change, true)
+    document.addEventListener('drop', drop, true)
+    document.addEventListener('paste', paste, true)
+    reportCapture()
+  }
+  function reportCapture() {
+    void invoke(ipc.ASSET_COLLECTOR_REPORT, { paused, pendingObservations, pendingBytes }).catch(() => {})
+  }
   const retry = (_event: unknown, payload: { id: string; sourceUrl?: string }) => {
     if (stopped) return
     const entry = [...originals.values()].find(item => item.id === payload.id)
     if (entry) originalQueue = originalQueue.then(() => transfer(entry)).catch(error => console.warn('[ai-assets] Original retry failed:', error))
-    else void invoke(ipc.ASSET_ATTACHMENT_FAIL, payload.id, '原页面中的临时资料已失效，请重新上传或重新打开资料链接').catch(() => {})
   }
   ipcRenderer.on(ipc.ASSET_RETRY_REQUEST, retry)
   const cleanup = () => {
     stopped = true; lifetime.abort(); observer.disconnect(); clearInterval(routeTimer)
+    for (const entry of originals.values()) {
+      entry.retired = true
+      entry.blob = undefined
+      if (entry.ownsTransfer) void cancelOriginal({ id: entry.id, transferId: entry.transferId })
+      entry.ownsTransfer = false
+    }
+    originals.clear(); pendingInputs.clear(); documentMessages.clear(); aliases.clear()
     for (const cancel of retryWaits) cancel()
     window.removeEventListener('popstate', navigation)
     window.removeEventListener('hashchange', navigation)

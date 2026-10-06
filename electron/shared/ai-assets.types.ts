@@ -13,6 +13,8 @@ export interface AssetObservedMessage {
   branchCount?: number
 }
 export interface AssetObservation {
+  observationId?: string
+  inputAttachments?: Array<{ externalKey: string; messageKey: string }>
   conversationKey: string
   previousConversationKey?: string
   title: string
@@ -25,12 +27,22 @@ export interface AssetObservation {
   rejected?: AssetRejectedCapture[]
 }
 export interface AssetRejectedCapture { key: string; reason: string; signature: string }
+export interface AssetObservationReceipt {
+  durable?: boolean
+  observationId?: string
+  conversationId?: string
+  suppressed?: boolean
+  messageIds?: Record<string, string>
+}
 export interface AssetCollectionIssue {
   webContentsId: number
   profileId: string
   profileName: string
   failures: number
   updatedAt: number
+  paused?: boolean
+  pendingObservations?: number
+  pendingBytes?: number
 }
 export interface AssetRevision {
   id: string
@@ -128,8 +140,8 @@ export interface AiAssetsAPI {
   collectionIssues(): Promise<AssetCollectionIssue[]>
   onCollectionIssuesChanged(callback: (issues: AssetCollectionIssue[]) => void): () => void
   freezeTargets(): Promise<Array<{ tabId: string; profileId: string; windowId: string; webContentsId: number; title: string; url: string }>>
-  focusPage(webContentsId: number): Promise<boolean>
-  observe(observation: AssetObservation): Promise<{ conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> }>
+  focusPage(webContentsId: number, expectedProfileId?: string): Promise<boolean>
+  observe(observation: AssetObservation): Promise<AssetObservationReceipt>
   details(conversationId: string): Promise<AssetMessageDetail[]>
   usage(sourceId?: string, conversationId?: string): Promise<AssetTextUsage>
   graph(conversationId: string): Promise<AssetConversationGraph>

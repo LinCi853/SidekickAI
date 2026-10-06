@@ -1,5 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, webContents, type IpcMainInvokeEvent } from 'electron'
 import { copyFile, stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { getChatStore } from '../store/chat-store.js'
 import { profileStore } from '../store/profile-store.js'
@@ -16,10 +17,21 @@ import { cleanSelectedAttachments, recoverSelectedCleanup } from './selected-cle
 import { hasActiveAssetImports } from './import-activity.js'
 import { hasActiveBackupExports } from '../store/backup-activity.js'
 import { isImportingData } from '../store/import-guard.js'
+import { AssetObservationJournal, setAssetCollectionJournal } from './collection-journal.js'
 
 let stopTransfers: (() => void) | undefined
 let transfersActive: () => boolean = () => false
+let observationJournal: AssetObservationJournal | undefined
 export function hasWebOriginalTransfers(): boolean { return transfersActive() }
+export { closeAssetCollectionJournal } from './collection-journal.js'
+export function clearAssetCollectionJournal(clearDatabase?: (filename: string) => void): void {
+  if (isModuleEnabled('prompt-library') || transfersActive() || hasLinkedOriginalTransfers()
+    || hasActiveAssetImports() || hasActiveBackupExports() || isImportingData)
+    throw new Error('Asset collection must be stopped before clearing its journal')
+  observationJournal?.pause()
+  if (clearDatabase && observationJournal) observationJournal.clearWith(clearDatabase)
+  else observationJournal?.clear()
+}
 
 export function broadcastAiAssetState(): void {
   if (!isModuleEnabled('prompt-library')) { stopTransfers?.(); stopLinkedOriginalTransfers() }
@@ -30,8 +42,32 @@ export function broadcastAiAssetState(): void {
 
 export function registerAiAssetIpc(): void {
   const collectionIssues = new Map<number, AssetCollectionIssue>()
+  const pausedGuests = new Set<number>()
+  const guests = new Map<number, { sender: IpcMainInvokeEvent['sender']; profileId: string }>()
+  const currentGuest = (id: number, profileId?: string) => {
+    const registered = guests.get(id)
+    const guest = webContents.fromId(id)
+    if (!registered || !guest || guest !== registered.sender || guest.isDestroyed()
+      || (profileId !== undefined && profileId !== registered.profileId)) return undefined
+    const profile = profileStore.list().find(profile => profile.id === registered.profileId && profile.isAIPlatform)
+    return profile && guest.session === session.fromPartition(`persist:${profile.id}`) ? guest : undefined
+  }
+  const currentIssues = () => {
+    const issues = new Map(observationJournal?.issues().map(issue => {
+      const current = [...guests.keys()].find(id => currentGuest(id, issue.profileId))
+      return [issue.profileId, { ...issue, webContentsId: current ?? 0 }] as const
+    }) ?? [])
+    for (const [id, issue] of collectionIssues) {
+      if (!currentGuest(id, issue.profileId)) continue
+      const stored = issues.get(issue.profileId)
+      issues.set(issue.profileId, { ...stored, ...issue, failures: (stored?.failures ?? 0) + issue.failures,
+        paused: stored?.paused || issue.paused, pendingObservations: (stored?.pendingObservations ?? 0) + (issue.pendingObservations ?? 0),
+        pendingBytes: (stored?.pendingBytes ?? 0) + (issue.pendingBytes ?? 0) })
+    }
+    return [...issues.values()]
+  }
   const publishCollectionIssues = () => {
-    const issues = [...collectionIssues.values()]
+    const issues = currentIssues()
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed())
       window.webContents.send(ipc.ASSET_COLLECTION_ISSUES_CHANGED, issues)
   }
@@ -39,8 +75,14 @@ export function registerAiAssetIpc(): void {
   const syncCollection = () => {
     const enabled = isModuleEnabled('prompt-library')
     if (enabled && !assetEnabled) getChatStore().cleanupInvalidConversations()
-    if (!enabled && collectionIssues.size) { collectionIssues.clear(); publishCollectionIssues() }
+    if (!enabled) {
+      pausedGuests.clear()
+      if (collectionIssues.size) { collectionIssues.clear(); publishCollectionIssues() }
+    }
     assetEnabled = enabled
+    if (enabled && !hasActiveBackupExports() && !isImportingData) {
+      try { observationJournal?.start() } catch (error) { console.warn('[ai-assets] Collection journal is unavailable:', error) }
+    } else observationJournal?.pause()
     broadcastAiAssetState()
   }
   observeModuleState(syncCollection)
@@ -50,6 +92,7 @@ export function registerAiAssetIpc(): void {
   catch (error) { console.warn('[ai-assets] Pending original cleanup needs attention:', error) }
   const owners = new Map<string, number>()
   const controllers = new Map<string, AbortController>()
+  const transferTokens = new WeakMap<AbortController, string>()
   transfersActive = () => owners.size > 0
   const abortTransfer = (id: string) => {
     const controller = controllers.get(id)
@@ -64,18 +107,27 @@ export function registerAiAssetIpc(): void {
       getChatStore().assets.attachmentFailed(id, 'AI资产已关闭，原件传输未完成')
     }
   }
-  const guests = new Set<number>()
-  const registerGuest = (event: IpcMainInvokeEvent) => {
-    if (guests.has(event.sender.id)) return
-    guests.add(event.sender.id)
+  const registerGuest = (event: IpcMainInvokeEvent, profileId: string) => {
+    if (guests.get(event.sender.id)?.sender === event.sender) return
+    guests.set(event.sender.id, { sender: event.sender, profileId })
     const guestId = event.sender.id
-    event.sender.once('destroyed', () => {
-      guests.delete(guestId)
+    const releaseDocument = (reason: string) => {
+      if (guests.get(guestId)?.sender !== event.sender) return
+      pausedGuests.delete(guestId)
       if (collectionIssues.delete(guestId)) publishCollectionIssues()
       for (const [id, owner] of owners) if (owner === guestId) {
         abortTransfer(id)
-        try { getChatStore().assets.attachmentFailed(id, '页面已关闭，原件传输未完成') } catch {}
+        try { getChatStore().assets.attachmentFailed(id, reason) } catch {}
       }
+    }
+    event.sender.on('did-start-navigation', (_navigation, _url, inPlace, mainFrame) => {
+      if (!inPlace && mainFrame) releaseDocument('页面已重新加载，原件传输未完成')
+    })
+    event.sender.once('destroyed', () => {
+      if (guests.get(guestId)?.sender !== event.sender) return
+      releaseDocument('页面已关闭，原件传输未完成')
+      guests.delete(guestId)
+      publishCollectionIssues()
     })
   }
   const broadcast = (sourceId: string) => {
@@ -86,7 +138,7 @@ export function registerAiAssetIpc(): void {
   const source = (event: IpcMainInvokeEvent) => {
     const profile = profileStore.list().find(p => p.isAIPlatform && session.fromPartition(`persist:${p.id}`) === event.sender.session)
     if (!profile || event.senderFrame !== event.sender.mainFrame) throw new Error('AI asset source is not authorized')
-    registerGuest(event)
+    registerGuest(event, profile.id)
     if (!isModuleEnabled('prompt-library')) throw new Error('AI assets are disabled')
     return { id: profile.id, type: 'webview' as const, name: profile.name }
   }
@@ -102,7 +154,42 @@ export function registerAiAssetIpc(): void {
     if (event.senderFrame !== event.sender.mainFrame || event.sender.getType() !== 'window' || (!url.startsWith('file:') && (!development || new URL(url).origin !== new URL(development).origin)))
       throw new Error('AI asset viewer is not authorized')
   }
-  ipcMain.handle(ipc.ASSET_AUTHORIZE, event => { try { source(event); return true } catch { return false } })
+  observationJournal?.close()
+  observationJournal = new AssetObservationJournal(path.join(app.getPath('userData'), 'asset-collection.db'), {
+    authorize: stored => stored.type === 'webview' && isModuleEnabled('prompt-library') && !hasActiveBackupExports() && !isImportingData
+      && profileStore.list().some(profile => profile.id === stored.id && profile.isAIPlatform),
+    observe: (stored, observation) => getChatStore().assets.observe(stored, observation),
+    associate: (stored, observation, externalKey, messageKey, messageId) =>
+      getChatStore().assets.associateCapturedInput(stored, observation, externalKey, messageKey, messageId),
+    changed: publishCollectionIssues,
+    committed: broadcast,
+  })
+  setAssetCollectionJournal(observationJournal)
+  if (assetEnabled && !hasActiveBackupExports() && !isImportingData) {
+    try { observationJournal.start() } catch (error) { console.warn('[ai-assets] Collection journal is unavailable:', error) }
+  }
+  ipcMain.handle(ipc.ASSET_AUTHORIZE, event => {
+    try {
+      source(event)
+      if (!hasActiveBackupExports() && !isImportingData) {
+        try { observationJournal?.start() } catch (error) { console.warn('[ai-assets] Collection journal is unavailable:', error) }
+      }
+      return true
+    } catch { return false }
+  })
+  ipcMain.handle(ipc.ASSET_COLLECTOR_REPORT, (event, state: { paused?: boolean; pendingObservations?: number; pendingBytes?: number }) => {
+    const profile = source(event)
+    if (!state || typeof state.paused !== 'boolean' || !Number.isSafeInteger(state.pendingObservations)
+      || !Number.isSafeInteger(state.pendingBytes) || state.pendingObservations! < 0 || state.pendingBytes! < 0)
+      throw new Error('Invalid collector capacity report')
+    if (state.paused) {
+      pausedGuests.add(event.sender.id)
+      collectionIssues.set(event.sender.id, { webContentsId: event.sender.id, profileId: profile.id, profileName: profile.name,
+        failures: collectionIssues.get(event.sender.id)?.failures ?? 0, updatedAt: Date.now(), paused: true,
+        pendingObservations: state.pendingObservations, pendingBytes: state.pendingBytes })
+    } else { pausedGuests.delete(event.sender.id); collectionIssues.delete(event.sender.id) }
+    publishCollectionIssues()
+  })
   ipcMain.handle(ipc.ASSET_OBSERVE, (event, observation: AssetObservation) => {
     const profile = source(event)
     if (!observation || typeof observation.conversationKey !== 'string' || !Array.isArray(observation.messages))
@@ -122,16 +209,24 @@ export function registerAiAssetIpc(): void {
         || (message.branchCount !== undefined && (!Number.isSafeInteger(message.branchCount) || message.branchCount < 1))) throw new Error('Invalid asset branch')
     }
     for (const item of observation.rejected ?? []) if (typeof item.key !== 'string' || typeof item.reason !== 'string' || !/^[a-f0-9]{64}$/.test(item.signature)) throw new Error('Invalid rejection record')
-    let result: { conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> }
-    try { result = getChatStore().assets.observe(profile, observation) }
+    if ((observation.observationId !== undefined && (typeof observation.observationId !== 'string' || !observation.observationId || observation.observationId.length > 128))
+      || (observation.inputAttachments !== undefined && (!Array.isArray(observation.inputAttachments) || observation.inputAttachments.length > 10000
+        || observation.inputAttachments.some(input => typeof input.externalKey !== 'string' || !input.externalKey
+          || typeof input.messageKey !== 'string' || !observation.messages.some(message => message.key === input.messageKey && message.role === 'user')))))
+      throw new Error('Invalid observation attachment ownership')
+    let result
+    try {
+      if (hasActiveBackupExports() || isImportingData) throw new Error('Asset collection is waiting for the data transfer')
+      observationJournal!.start()
+      result = observationJournal!.receive(profile, observation, event.sender.id, profile.name)
+    }
     catch (error) {
       collectionIssues.set(event.sender.id, { webContentsId: event.sender.id, profileId: profile.id, profileName: profile.name,
-        failures: (collectionIssues.get(event.sender.id)?.failures ?? 0) + 1, updatedAt: Date.now() })
+        failures: (collectionIssues.get(event.sender.id)?.failures ?? 0) + 1, updatedAt: Date.now(), paused: true })
       publishCollectionIssues()
       throw error
     }
-    if (collectionIssues.delete(event.sender.id)) publishCollectionIssues()
-    broadcast(profile.id)
+    if (!pausedGuests.has(event.sender.id) && collectionIssues.delete(event.sender.id)) publishCollectionIssues()
     return result
   })
   ipcMain.handle(ipc.ASSET_ATTACHMENT_BEGIN, async (event, input: AssetAttachmentInput) => {
@@ -145,6 +240,8 @@ export function registerAiAssetIpc(): void {
     owners.set(reference.id, event.sender.id)
     const controller = new AbortController()
     controllers.set(reference.id, controller)
+    const transferId = randomUUID()
+    transferTokens.set(controller, transferId)
     try {
       if (reference.sha256) {
         let verifiedSize: number | undefined
@@ -166,7 +263,7 @@ export function registerAiAssetIpc(): void {
       controller.signal.throwIfAborted()
       own(event, reference.id)
       getChatStore().assets.attachmentPending(reference.id)
-      return { id: reference.id, saved: false }
+      return { id: reference.id, saved: false, transferId }
     } catch (error) {
       if (controllers.get(reference.id) === controller) {
         await vault.abort(reference.id)
@@ -206,9 +303,11 @@ export function registerAiAssetIpc(): void {
       throw error
     } finally { if (controllers.get(id) === controller) { owners.delete(id); controllers.delete(id) } }
   })
-  ipcMain.handle(ipc.ASSET_ATTACHMENT_FAIL, async (event, id: string, error: string) => {
+  ipcMain.handle(ipc.ASSET_ATTACHMENT_FAIL, async (event, id: string, error: string, transferId?: string) => {
     const profile = own(event, id)
     const controller = controllers.get(id)!
+    if (transferId !== undefined && transferTokens.get(controller) !== transferId) return
+    controller.abort()
     await vault.abort(id)
     if (controllers.get(id) !== controller) return
     owners.delete(id); controllers.delete(id)
@@ -255,12 +354,13 @@ export function registerAiAssetIpc(): void {
     broadcast(profile.id)
   })
   ipcMain.handle(ipc.ASSET_DETAILS, (event, id: string) => { local(event); return getChatStore().assets.details(id) })
-  ipcMain.handle(ipc.ASSET_COLLECTION_ISSUES, event => { local(event); return [...collectionIssues.values()] })
-  ipcMain.handle(ipc.ASSET_FOCUS_PAGE, (event, id: number) => {
+  ipcMain.handle(ipc.ASSET_COLLECTION_ISSUES, event => { local(event); return currentIssues() })
+  ipcMain.handle(ipc.ASSET_FOCUS_PAGE, (event, id: number, expectedProfileId?: string) => {
     local(event)
-    if (!guests.has(id)) return false
-    const guest = webContents.fromId(id)
-    if (!guest || guest.isDestroyed()) return false
+    if (expectedProfileId !== undefined && (typeof expectedProfileId !== 'string' || !expectedProfileId || expectedProfileId.length > 128))
+      throw new Error('Invalid AI asset profile')
+    const guest = currentGuest(id, expectedProfileId)
+    if (!guest) return false
     const window = (guest as unknown as { getOwnerBrowserWindow(): BrowserWindow | null }).getOwnerBrowserWindow()
     if (!window || window.isDestroyed()) return false
     if (window.isMinimized()) window.restore()
@@ -269,8 +369,8 @@ export function registerAiAssetIpc(): void {
   })
   ipcMain.handle(ipc.ASSET_FREEZE_TARGETS, event => {
     local(event)
-    return [...guests].flatMap(id => {
-      const guest = webContents.fromId(id)
+    return [...guests.keys()].flatMap(id => {
+      const guest = currentGuest(id)
       if (!guest || guest.isDestroyed()) return []
       if (!/^https?:\/\//.test(guest.getURL())) return []
       const profile = profileStore.list().find(p => p.isAIPlatform && session.fromPartition(`persist:${p.id}`) === guest.session)
@@ -375,7 +475,7 @@ export function registerAiAssetIpc(): void {
       const result = getChatStore().assets.getAttachment(id)
       return { ok: result?.status === 'saved' || result?.status === 'reused', error: result?.error }
     }
-    const targets = [...guests].map(guest => webContents.fromId(guest)).filter(guest => guest && !guest.isDestroyed()
+    const targets = [...guests.keys()].map(guest => currentGuest(guest)).filter(guest => guest && !guest.isDestroyed()
       && guest.session === session.fromPartition(`persist:${profile?.id}`))
     if (!targets.length) return { ok: false, error: '请先打开资料所在的 AI 页面，再重试' }
     getChatStore().assets.attachmentFailed(id, '请在原页面重新上传资料；页面重载后临时文件可能已失效')

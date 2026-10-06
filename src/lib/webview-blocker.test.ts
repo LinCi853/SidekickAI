@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildBlockerScript, matchDomain } from './webview-blocker.js'
 import type { BlockRule } from '../../electron/shared/types'
+import { createContext, runInContext } from 'node:vm'
+import { buildBlockerCleanupScript } from './webview-blocker.js'
 
 describe('matchDomain', () => {
   it('should match wildcard pattern', () => {
@@ -79,5 +81,69 @@ describe('buildBlockerScript', () => {
     const script = buildBlockerScript(rules)
 
     expect(script).toContain('window.__ai_blocker_injected__')
+  })
+})
+
+function fixture() {
+  const styles: Array<{ id?: string; textContent?: string; remove: () => void }> = []
+  const listeners = new Map<string, () => void>()
+  const observers: Array<{ disconnected: boolean; callback: (changes: Array<{ addedNodes: number[] }>) => void }> = []
+  const context = createContext({
+    window: {}, console: { warn: () => {} },
+    document: {
+      head: { appendChild: (style: typeof styles[number]) => styles.push(style) }, body: {},
+      createElement: () => { const style = { remove: () => { styles.splice(styles.indexOf(style), 1) } }; return style },
+      querySelector: (selector: string) => { if (selector === '[') throw new Error('Invalid selector'); return null },
+    },
+    MutationObserver: class {
+      disconnected = false
+      constructor(readonly callback: typeof observers[number]['callback']) { observers.push(this) }
+      observe() {}
+      disconnect() { this.disconnected = true }
+    },
+  })
+  runInContext('window = globalThis', context)
+  context.addEventListener = (name: string, listener: () => void) => listeners.set(name, listener)
+  context.removeEventListener = (name: string) => listeners.delete(name)
+  return { context, styles, listeners, observers }
+}
+
+const cssRule = (selector: string): BlockRule => ({ id: 'css', label: 'CSS', type: 'css', selector,
+  domainPattern: '*', enabled: true, builtin: false })
+
+describe('blocker resource ownership', () => {
+  it('updates its own style and releases it without a CSS observer', () => {
+    const f = fixture()
+    runInContext(buildBlockerScript([cssRule('.original')]), f.context)
+    runInContext(buildBlockerScript([cssRule('.changed')]), f.context)
+    expect(f.styles).toHaveLength(1)
+    expect(f.styles[0].textContent).toContain('.changed')
+    expect(f.styles[0].textContent).not.toContain('.original')
+    expect(f.observers).toHaveLength(0)
+    runInContext(buildBlockerCleanupScript(), f.context)
+    expect(f.styles).toHaveLength(0)
+    expect(f.listeners.size).toBe(0)
+  })
+
+  it('disconnects its dynamic observer and reports custom script reload requirements', () => {
+    const f = fixture()
+    const rule: BlockRule = { ...cssRule(''), id: 'js', type: 'js', jsCode: 'window.customCount = (window.customCount || 0) + 1' }
+    runInContext(buildBlockerScript([rule]), f.context)
+    f.observers[0].callback([{ addedNodes: [1] }])
+    expect(f.context.customCount).toBe(2)
+    const result = runInContext(buildBlockerCleanupScript(), f.context)
+    expect(f.observers[0].disconnected).toBe(true)
+    expect(result.requiresReload).toBe(true)
+    expect(f.context.customCount).toBe(2)
+  })
+
+  it('isolates invalid selectors and bounds repeated script errors by rule', () => {
+    const f = fixture()
+    const rule: BlockRule = { ...cssRule(''), id: 'js', type: 'js', jsCode: 'throw new Error("Fixture script failure")' }
+    runInContext(buildBlockerScript([cssRule('['), { ...cssRule('.valid'), id: 'valid' }, rule]), f.context)
+    for (let index = 0; index < 10; index += 1) f.observers[0].callback([{ addedNodes: [1] }])
+    expect(f.styles[0].textContent).toContain('.valid')
+    expect(f.context.__ai_blocker_state__.errors).toHaveLength(2)
+    expect(f.context.__ai_blocker_state__.errors.map((error: { id: string }) => error.id)).toEqual(['css', 'js'])
   })
 })

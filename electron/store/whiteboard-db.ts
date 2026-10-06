@@ -164,7 +164,7 @@ export function closeWhiteboardDb(): void {
  */
 export function registerWhiteboardIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
-  const db = getWhiteboardDb()
+  getWhiteboardDb()
 
   // 辅助函数：根据是否有 scope 选择注册方式
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,7 +174,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
 
   handle(ipc.WHITEBOARD_LIST, () => {
     try {
-      return db.listWhiteboards()
+      return getWhiteboardDb().listWhiteboards()
     } catch (err) {
       console.error('[whiteboard-db] list 失败:', err)
       return []
@@ -182,7 +182,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   })
   handle(ipc.WHITEBOARD_CREATE, (_e: unknown, title?: string) => {
     try {
-      return db.createWhiteboard(title)
+      return getWhiteboardDb().createWhiteboard(title)
     } catch (err) {
       console.error('[whiteboard-db] create 失败:', err)
       throw err
@@ -191,7 +191,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.WHITEBOARD_RENAME,
     (_e, id: string, title: string) => {
-      db.renameWhiteboard(id, title)
+      getWhiteboardDb().renameWhiteboard(id, title)
       return { ok: true }
     },
     'whiteboard-db rename',
@@ -200,7 +200,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.WHITEBOARD_DELETE,
     (_e, id: string) => {
-      db.deleteWhiteboard(id)
+      getWhiteboardDb().deleteWhiteboard(id)
       return { ok: true }
     },
     'whiteboard-db delete',
@@ -209,7 +209,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.WHITEBOARD_REORDER,
     (_e, ids: string[]) => {
-      db.reorderWhiteboards(ids)
+      getWhiteboardDb().reorderWhiteboards(ids)
       return { ok: true }
     },
     'whiteboard-db reorder',
@@ -217,7 +217,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   )
   handle(ipc.WHITEBOARD_GET_ACTIVE, () => {
     try {
-      return db.getActiveWhiteboardId()
+      return getWhiteboardDb().getActiveWhiteboardId()
     } catch (err) {
       console.error('[whiteboard-db] getActive 失败:', err)
       return null
@@ -226,7 +226,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.WHITEBOARD_SET_ACTIVE,
     (_e, id: string | null) => {
-      db.setActiveWhiteboardId(id)
+      getWhiteboardDb().setActiveWhiteboardId(id)
       return { ok: true }
     },
     'whiteboard-db setActive',
@@ -234,7 +234,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   )
   handle(ipc.WHITEBOARD_GET_SNAPSHOT, (_e: unknown, id: string) => {
     try {
-      return db.loadSnapshot(id)
+      return getWhiteboardDb().loadSnapshot(id)
     } catch (err) {
       console.error('[whiteboard-db] getSnapshot 失败:', err)
       return null
@@ -243,7 +243,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.WHITEBOARD_SAVE_SNAPSHOT,
     (_e, id: string, snapshot: string) => {
-      db.saveSnapshot(id, snapshot)
+      getWhiteboardDb().saveSnapshot(id, snapshot)
       return { ok: true }
     },
     'whiteboard-db saveSnapshot',
@@ -253,7 +253,7 @@ export function registerWhiteboardIPC(scope?: EffectScope): void {
   registerSyncIpcHandler(
     ipc.WHITEBOARD_SAVE_SNAPSHOT_SYNC,
     (_e, id: string, snapshot: string) => {
-      db.saveSnapshot(id, snapshot)
+      getWhiteboardDb().saveSnapshot(id, snapshot)
     },
     'whiteboard-db saveSnapshotSync',
     scope,

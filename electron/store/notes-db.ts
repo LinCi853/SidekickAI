@@ -233,7 +233,7 @@ export function closeNotesDb(): void {
  */
 export function registerNotesIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
-  const db = getNotesDb()
+  getNotesDb()
 
   // 辅助函数：根据是否有 scope 选择注册方式
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -243,7 +243,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
 
   handle(ipc.NOTES_LIST, (_e: unknown, filter?: NoteListFilter) => {
     try {
-      return db.listNotes(filter)
+      return getNotesDb().listNotes(filter)
     } catch (err) {
       console.error('[notes-db] list 失败:', err)
       return []
@@ -251,7 +251,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   })
   handle(ipc.NOTES_SEARCH, (_e: unknown, keyword: string) => {
     try {
-      return db.listNotes({ keyword })
+      return getNotesDb().listNotes({ keyword })
     } catch (err) {
       console.error('[notes-db] search 失败:', err)
       return []
@@ -259,7 +259,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   })
   handle(ipc.NOTES_SAVE, (_e: unknown, input: NoteSaveInput) => {
     try {
-      return db.saveNote(input)
+      return getNotesDb().saveNote(input)
     } catch (err) {
       console.error('[notes-db] save 失败:', err)
       throw err
@@ -268,7 +268,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.NOTES_DELETE,
     (_e, id: string) => {
-      db.deleteNote(id)
+      getNotesDb().deleteNote(id)
       return { ok: true }
     },
     'notes-db deleteNote',
@@ -276,6 +276,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   )
   handle(ipc.NOTES_GET_ACTIVE, () => {
     try {
+      const db = getNotesDb()
       const id = db.getActiveNoteId()
       return id ? db.getNote(id) : null
     } catch (err) {
@@ -286,7 +287,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.NOTES_SET_ACTIVE,
     (_e, id: string | null) => {
-      db.setActiveNoteId(id)
+      getNotesDb().setActiveNoteId(id)
       return { ok: true }
     },
     'notes-db setActive',
@@ -295,7 +296,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.NOTES_SET_PINNED,
     (_e, id: string, pinned: boolean) => {
-      db.setNotePinned(id, pinned)
+      getNotesDb().setNotePinned(id, pinned)
       return { ok: true }
     },
     'notes-db setPinned',
@@ -304,7 +305,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   registerSafeIpcHandler(
     ipc.NOTES_SET_TAGS,
     (_e, id: string, tags: string[]) => {
-      db.setNoteTags(id, tags)
+      getNotesDb().setNoteTags(id, tags)
       return { ok: true }
     },
     'notes-db setTags',
@@ -312,7 +313,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   )
   handle(ipc.NOTES_LIST_TAGS, () => {
     try {
-      return db.listAllTags()
+      return getNotesDb().listAllTags()
     } catch (err) {
       console.error('[notes-db] listTags 失败:', err)
       return []
@@ -322,7 +323,7 @@ export function registerNotesIPC(scope?: EffectScope): void {
   registerSyncIpcHandler(
     ipc.NOTES_SAVE_SYNC,
     (_e, input: NoteSaveInput) => {
-      db.saveNote(input)
+      getNotesDb().saveNote(input)
     },
     'notes-db saveSync',
     scope,

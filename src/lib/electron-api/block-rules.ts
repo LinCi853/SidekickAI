@@ -10,6 +10,10 @@ export function listBlockRules(): Promise<BlockRule[]> {
   return requireElectron().blockRules.list();
 }
 
+export function onBlockRulesChanged(callback: () => void): () => void {
+  return requireElectron().blockRules.onChanged(callback);
+}
+
 /** 新增或更新屏蔽规则（upsert） */
 export function saveBlockRule(rule: BlockRule): Promise<BlockRule> {
   return requireElectron().blockRules.save(rule);

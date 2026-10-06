@@ -11,7 +11,7 @@ export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
       return () => ipcRenderer.removeListener(ipc.ASSET_COLLECTION_ISSUES_CHANGED, handler)
     },
     freezeTargets: () => ipcRenderer.invoke(ipc.ASSET_FREEZE_TARGETS),
-    focusPage: id => ipcRenderer.invoke(ipc.ASSET_FOCUS_PAGE, id),
+    focusPage: (id, expectedProfileId) => ipcRenderer.invoke(ipc.ASSET_FOCUS_PAGE, id, expectedProfileId),
     observe: observation => ipcRenderer.invoke(ipc.ASSET_OBSERVE, observation),
     details: id => ipcRenderer.invoke(ipc.ASSET_DETAILS, id),
     usage: (sourceId, conversationId) => ipcRenderer.invoke(ipc.ASSET_USAGE, sourceId, conversationId),

@@ -197,11 +197,14 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
   // partition 为 webview 的 session 分区（persist:profileId），与下载记录注册的 session 一致
   handle(IPC_CHANNELS.BROWSER_DOWNLOAD_AS, (_e, partition: string, url: string, _suggestedFilename?: string) => {
     if (!/^(https?:|data:|blob:)/i.test(url)) return { ok: false, error: 'invalid url' }
-    markAskSavePath()
+    let cancelSaveIntent: (() => void) | undefined
     try {
-      session.fromPartition(partition).downloadURL(url)
+      const initiatingSession = session.fromPartition(partition)
+      cancelSaveIntent = markAskSavePath(initiatingSession, url)
+      initiatingSession.downloadURL(url)
       return { ok: true }
     } catch (err) {
+      cancelSaveIntent?.()
       return { ok: false, error: String(err) }
     }
   })

@@ -11,6 +11,7 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import { createCrudStore } from './store-paths.js'
 import { createSqliteJsonStore } from './module-state-store.js'
 import { BLOCK_RULES } from './default-config.js'
+import { broadcastToAllWindows } from '../shared/broadcast.js'
 
 // 持久化存储实例（写入 block-rules.json）
 const store = createSqliteJsonStore<{ rules: BlockRule[]; version: number }>({
@@ -40,6 +41,7 @@ export class BlockRulesStore {
       ? { ...rule, id: existing.id }
       : { ...rule, id: rule.id || randomUUID() }
     this.crud.save(toSave)
+    broadcastToAllWindows(IPC_CHANNELS.BLOCK_RULES_CHANGED, undefined, 'block-rules')
     return toSave
   }
 
@@ -51,6 +53,7 @@ export class BlockRulesStore {
       return
     }
     this.crud.delete(id)
+    if (rule) broadcastToAllWindows(IPC_CHANNELS.BLOCK_RULES_CHANGED, undefined, 'block-rules')
   }
 
   /** 更新规则（部分字段） */
@@ -58,6 +61,7 @@ export class BlockRulesStore {
     const existing = this.crud.get(id)
     if (!existing) return null
     this.crud.update(id, patch)
+    broadcastToAllWindows(IPC_CHANNELS.BLOCK_RULES_CHANGED, undefined, 'block-rules')
     return { ...existing, ...patch, id }
   }
 }

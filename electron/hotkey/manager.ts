@@ -108,10 +108,12 @@ export class HotkeyManager {
   uiohookStarted = false
     /** 已注册 accelerator 的 uiohook 匹配条件缓存；@internal manager 拆分模块协作字段 */
   uiohookMatchers = new Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>()
-    /** 最近一次系统通路触发时间戳（accelerator → ms，长按连切仲裁用）；@internal manager 拆分模块协作字段 */
-  lastSystemTriggerAt = new Map<string, number>()
-    /** 钩子观察到的主键释放时间戳（keycode → ms，系统通路长按仲裁的"已释放"证据） */
-  lastPrimaryKeyUpAt = new Map<number, number>()
+  /** The current dispatch and its release evidence share one owned record. */
+  readonly systemDispatches = new Map<string, { triggeredAt: number; releaseCount: number }>()
+  /** Release observations rearm system dispatch independently of clock precision. */
+  private readonly primaryKeyReleaseCount = new Map<number, number>()
+  /** Recent primary-key observations distinguish a held key from stale hook state. */
+  private readonly primaryKeyObservations = new Map<number, { at: number; recovered: boolean }>()
     /** 钩子最近一次收到事件的时间戳（null = 启动后未观察到任何键盘事件） */
   lastHookEventAt: number | null = null
     /** 钩子不可用原因（模块缺失/启动失败/macOS 权限）；null = 可用 */
@@ -154,8 +156,6 @@ export class HotkeyManager {
   _recordingPartialCallback: HotkeyPartialCallback | null = null
     /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等）；@internal manager 拆分模块协作字段 */
   _recordingSuppressors: string[] = []
-    /** 录制前已注册的热键备份（用于录制结束后恢复）；@internal manager 拆分模块协作字段 */
-  _recordingBackup: Array<{ accelerator: string; callback: () => void }> = []
     /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时）；@internal manager 拆分模块协作字段 */
   _paused = false
   /** 云电脑模式按键监听（Win / Alt+Tab / Win+Tab / Win+D / Alt+F4 等系统级按键路由） */
@@ -310,7 +310,15 @@ export class HotkeyManager {
         console.log(`[HotkeyManager] 系统通路连切仲裁抑制: ${accelerator}`)
         return
       }
-      this.lastSystemTriggerAt.set(accelerator, Date.now())
+      const primary = parseAccelerator(accelerator).keycode
+      this.systemDispatches.set(accelerator, {
+        triggeredAt: Date.now(),
+        releaseCount: primary == null ? 0 : this.primaryKeyReleaseCount.get(primary) ?? 0,
+      })
+      if (primary != null) {
+        const observation = this.primaryKeyObservations.get(primary)
+        if (observation) observation.recovered = false
+      }
     }
     console.log(`[HotkeyManager] 触发(${source}): ${accelerator}`)
     try {
@@ -330,15 +338,18 @@ export class HotkeyManager {
    *   3. 钩子未观察到按下（不可用/事件缺失）→ 时间窗口兜底防连切。
    */
   private canDispatchSystem(accelerator: string): boolean {
-    const last = this.lastSystemTriggerAt.get(accelerator)
-    if (last == null) return true
+    const dispatched = this.systemDispatches.get(accelerator)
+    if (!dispatched) return true
+    const last = dispatched.triggeredAt
     const now = Date.now()
     const primary = parseAccelerator(accelerator).keycode
-    if (primary != null && (this.lastPrimaryKeyUpAt.get(primary) ?? 0) > last) {
+    if (primary != null && (this.primaryKeyReleaseCount.get(primary) ?? 0) > dispatched.releaseCount) {
       return true
     }
     if (primary != null && this.inputState.isKeyHeld(primary)) {
-      return now - last >= SYSTEM_HOLD_CAP_MS
+      if (now - last < SYSTEM_HOLD_CAP_MS) return false
+      const observation = this.primaryKeyObservations.get(primary)
+      return !!observation?.recovered || now - (observation?.at ?? last) >= SYSTEM_HOLD_CAP_MS
     }
     return now - last >= SYSTEM_REPEAT_FALLBACK_MS
   }
@@ -389,8 +400,13 @@ export class HotkeyManager {
   private attachUiohookListener(): void {
     uIOhook.on('keydown', (e) => {
       if (e.type !== EventType.EVENT_KEY_PRESSED) return
+      const now = Date.now()
+      const previous = this.primaryKeyObservations.get(e.keycode)
+      const recovered = !!previous?.recovered || this.inputState.isKeyHeld(e.keycode)
+        && previous != null && now - previous.at >= SYSTEM_HOLD_CAP_MS
+      this.primaryKeyObservations.set(e.keycode, { at: now, recovered })
       this.inputState.observe(e, true)
-      this.lastHookEventAt = Date.now()
+      this.lastHookEventAt = now
       this.syncModifierState()
       // 云电脑模式按键路由：系统级按键（Win/Alt+Tab/Win+Tab/Win+D/Alt+F4/Esc）
       // 必须在 _paused 检查之前处理（云电脑模式正是暂停状态）
@@ -469,7 +485,8 @@ export class HotkeyManager {
       }
       this.inputState.observe(e, false)
       this.lastHookEventAt = Date.now()
-      this.lastPrimaryKeyUpAt.set(e.keycode, Date.now())
+      this.primaryKeyReleaseCount.set(e.keycode, (this.primaryKeyReleaseCount.get(e.keycode) ?? 0) + 1)
+      this.primaryKeyObservations.delete(e.keycode)
       this.syncModifierState()
       // 语音热键 keyup：主键匹配就触发 onKeyUp
       // 1) voiceKeyPressed=true 时 → 标准路径（已记录按下态）
@@ -512,7 +529,7 @@ export class HotkeyManager {
     }
     this.registered.delete(accelerator)
     this.uiohookMatchers.delete(accelerator)
-    this.lastSystemTriggerAt.delete(accelerator)
+    this.systemDispatches.delete(accelerator)
     this.ownershipLeases.get(accelerator)?.release()
     this.ownershipLeases.delete(accelerator)
     this.registrationStates.delete(accelerator)
@@ -556,14 +573,14 @@ export class HotkeyManager {
     this.browserShortcuts.clear()
     this.actionAccelerators.clear()
     this.uiohookMatchers.clear()
-    this.lastSystemTriggerAt.clear()
-    this.lastPrimaryKeyUpAt.clear()
+    this.systemDispatches.clear()
+    this.primaryKeyReleaseCount.clear()
+    this.primaryKeyObservations.clear()
     this.ownership.close()
     this.ownershipLeases.clear()
     this.registrationStates.clear()
     this.recordingLeases.clear()
     this._recordingSuppressors = []
-    this._recordingBackup = []
     this._recordingCallback = null
     this._recordingPartialCallback = null
     this.voiceMatcher = null
@@ -760,9 +777,17 @@ export class HotkeyManager {
     this._paused = false
     this.inputState.suspend()
     if (this._recordingCallback) return
+    this.restoreShortcutRegistrations()
+    console.log('[HotkeyManager] 所有全局热键已恢复')
+  }
+
+  /** Reconcile the current owned bindings after pause or recording. */
+  restoreShortcutRegistrations(): void {
+    if (this._paused || this._recordingCallback) return
     for (const [acc, cb] of [...this.registered, ...this.browserShortcuts]) {
       if (!this.ownershipLeases.get(acc)?.active) continue
       try {
+        globalShortcut.unregister(acc)
         const registered = globalShortcut.register(acc, cb)
         if (registered || this.uiohookStarted && parseAccelerator(acc).keycode != null) {
           this.registrationStates.set(acc, registered ? 'registered' : 'fallback')
@@ -773,7 +798,6 @@ export class HotkeyManager {
       else this.unregisterBrowserShortcut(acc)
       this.registrationStates.set(acc, 'unavailable')
     }
-    console.log('[HotkeyManager] 所有全局热键已恢复')
     this.notifyStatus()
   }
 

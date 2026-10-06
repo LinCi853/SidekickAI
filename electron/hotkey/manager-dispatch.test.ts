@@ -152,6 +152,55 @@ describe('热键双通路分发解耦', () => {
     expect(action).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps one dispatch while primary-key repeats remain observable beyond the hold cap', async () => {
+    const action = vi.fn()
+    await manager.register('Alt+Space', action)
+    const keydown = hookHandlerOf('keydown')
+    const systemCallback = systemCallbackOf('Alt+Space')
+    keydown(keyEvent(56, true, false, true))
+    keydown(keyEvent(32, true, false, true))
+    systemCallback()
+    for (let repeat = 0; repeat < 40; repeat += 1) {
+      vi.advanceTimersByTime(100)
+      keydown(keyEvent(32, true, false, true))
+      systemCallback()
+    }
+    expect(action).toHaveBeenCalledOnce()
+  })
+
+  it('recovers a fresh observation after a silent lost release without rearming its duplicates', async () => {
+    const action = vi.fn()
+    await manager.register('Alt+Space', action)
+    const keydown = hookHandlerOf('keydown')
+    const systemCallback = systemCallbackOf('Alt+Space')
+    keydown(keyEvent(56, true, false, true))
+    keydown(keyEvent(32, true, false, true))
+    systemCallback()
+    vi.advanceTimersByTime(3100)
+    keydown(keyEvent(32, true, false, true))
+    systemCallback()
+    expect(action).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(50)
+    keydown(keyEvent(32, true, false, true))
+    systemCallback()
+    expect(action).toHaveBeenCalledTimes(2)
+  })
+
+  it('accepts a release and another press within the same clock millisecond', async () => {
+    const action = vi.fn()
+    await manager.register('Alt+Space', action)
+    const keydown = hookHandlerOf('keydown')
+    const keyup = hookHandlerOf('keyup')
+    const systemCallback = systemCallbackOf('Alt+Space')
+    keydown(keyEvent(56, true, false, true))
+    for (let press = 0; press < 3; press += 1) {
+      keydown(keyEvent(32, true, false, true))
+      systemCallback()
+      keyup(keyEvent(32, true, false, false))
+    }
+    expect(action).toHaveBeenCalledTimes(3)
+  })
+
   it('状态门禁：registered 状态下钩子事件不分发，避免双触发', async () => {
     const action = vi.fn()
     await manager.register('Alt+Space', action)

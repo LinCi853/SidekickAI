@@ -13,7 +13,6 @@
 //   2. 导出类型数组供各 Store import
 //   3. 如需便捷路由函数，在对应 Store 中添加
 
-import type { TopBarButtonGroup } from '../shared/types.js'
 import type { DevicePreset, PromptTemplate, Profile, FingerprintConfig } from '../shared/types.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { IPHONE_VIEWPORT } from '../presets/devices.js'
@@ -60,122 +59,8 @@ export const PREF_KEYS = {
 // AppSettings 默认值
 // =============================================================================
 
-/**
- * 应用设置完整接口（从 app-settings-store.ts 提取，保持类型一致性）
- */
-export interface DefaultAppSettings {
-  hideForeignModels: boolean
-  tabBarCollapsed: boolean
-  proxyMode: 'system' | 'direct' | 'custom'
-  customProxy: string
-  proxyUsername: string
-  proxyPassword: string
-  proxyBypass: string
-  hiddenPlatforms: string[]
-  enterToSend: boolean
-  defaultDesktopUaPreset: string
-  defaultMobileUaPreset: string
-  closeBehavior: 'close' | 'minimize'
-  autoLaunch: boolean
-  silentStart: boolean
-  autoUpdate: boolean
-  logLevel: 'error' | 'warn' | 'info' | 'debug'
-  uiScale: 'small' | 'medium' | 'large'
-  startupOpen: 'home' | 'lastConversation'
-  onboardingCompleted: boolean
-  topBarVisibleButtons: TopBarButtonGroup[]
-  appClickBehavior: 'switch' | 'close'
-  cacheAutoClean: 'never' | 'daily' | 'weekly' | 'monthly'
-  lastCacheCleanAt: number
-  downloadDir: string
-  downloadBehavior: 'ask' | 'auto'
-  altSpaceResetThreshold: number
-  proxyFallbackEnabled: boolean
-  proxyFallbackMode: 'direct' | 'system'
-  usageTrackingEnabled: boolean
-  cookieWhitelist: string[]
-  cookieBlacklist: string[]
-  cookiePopupCooldownMs: number
-  cookieHandlerEnabled: boolean
-  defaultAdvancedPanelTab: string
-  whiteboardSidebarVisible: boolean
-  disableAllBlockRules: boolean
-  notesSidebarWidth: number
-  notesSidebarCollapsed: boolean
-  notesRestoreCursor: boolean
-  chatSidebarWidth: number
-  chatSidebarCollapsed: boolean
-  chatInputCursorPos: number
-  advancedPanelTabSwitchShortcuts: boolean
-  whiteboardSidebarWidth: number
-  whiteboardSidebarCollapsed: boolean
-  popupWhitelist: string[]
-  browserTabPersistence: 'memory' | 'persistent'
-  defaultSearchEngine: {
-    name: string
-    urlTemplate: string
-  }
-}
-
-/**
- * 获取默认应用设置。
- * 唯一模式差异：closeBehavior —— 便携版默认直接关闭，安装版默认最小化到托盘。
- *
- * @param isPortable 是否为便携模式（由调用方传入，避免运行时依赖）
- */
-export function getDefaultAppSettings(isPortable: boolean): DefaultAppSettings {
-  return {
-    hideForeignModels: true,
-    tabBarCollapsed: true,
-    proxyMode: 'system',
-    customProxy: '',
-    proxyUsername: '',
-    proxyPassword: '',
-    proxyBypass: '',
-    hiddenPlatforms: [],
-    enterToSend: true,
-    defaultDesktopUaPreset: 'win-chrome-125',
-    defaultMobileUaPreset: 'iphone-15-pro-safari',
-    // 安装版默认最小化到托盘，便携版默认直接关闭
-    closeBehavior: isPortable ? 'close' : 'minimize',
-    autoLaunch: false,
-    silentStart: false,
-    autoUpdate: true,
-    logLevel: 'info',
-    uiScale: 'medium',
-    startupOpen: 'lastConversation',
-    onboardingCompleted: false,
-    topBarVisibleButtons: ['navBack', 'navForward', 'navHome', 'pinToggle'],
-    appClickBehavior: 'switch',
-    cacheAutoClean: 'never',
-    lastCacheCleanAt: 0,
-    downloadDir: '',
-    downloadBehavior: 'ask',
-    altSpaceResetThreshold: 6,
-    proxyFallbackEnabled: false,
-    proxyFallbackMode: 'direct',
-    usageTrackingEnabled: true,
-    cookieWhitelist: ['google.com', 'openai.com'],
-    cookieBlacklist: [],
-    cookiePopupCooldownMs: 60000,
-    cookieHandlerEnabled: true,
-    defaultAdvancedPanelTab: 'chat',
-    whiteboardSidebarVisible: false,
-    disableAllBlockRules: false,
-    notesSidebarWidth: 160,
-    notesSidebarCollapsed: false,
-    notesRestoreCursor: true,
-    chatSidebarWidth: 130,
-    chatSidebarCollapsed: false,
-    chatInputCursorPos: 0,
-    advancedPanelTabSwitchShortcuts: true,
-    whiteboardSidebarWidth: 130,
-    whiteboardSidebarCollapsed: false,
-    popupWhitelist: [],
-    browserTabPersistence: 'memory',
-    defaultSearchEngine: { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' },
-  }
-}
+export { getDefaultAppSettings } from './app-settings-defaults.js'
+export type { DefaultAppSettings } from './app-settings-defaults.js'
 
 // =============================================================================
 // 路由便捷函数：各 Store 调用这些函数获取默认值

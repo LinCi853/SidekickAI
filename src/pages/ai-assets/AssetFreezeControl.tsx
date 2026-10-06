@@ -30,7 +30,7 @@ export default function AssetFreezeControl({ target, onAction }: { target?: { ta
       if (!page) return;
       if (frozen) { await api.freeze.resume(page.tabId); setFrozen(false); return; }
       if (!await api.freeze.registerWebview(page)) throw new Error('页面已关闭，请刷新页面列表');
-      if (!await api.aiAssets.focusPage(page.webContentsId)) throw new Error('页面窗口不可用，请刷新页面列表');
+      if (!await api.aiAssets.focusPage(page.webContentsId, page.profileId)) throw new Error('页面窗口不可用，请刷新页面列表');
       const result = await api.freeze.freezeTab({ tabId: page.tabId, profileId: page.profileId });
       if (!frozen && !result.frozen) throw new Error('页面冻结未成功，请重试');
       setFrozen(result.frozen);

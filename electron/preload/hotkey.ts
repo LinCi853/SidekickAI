@@ -72,13 +72,12 @@ export const hotkeyApi = {
   },
   // 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）
   onWebviewHotkey: (
-    callback: (payload: {
-      action: import('../shared/types.js').WebviewHotkeyAction
-      data?: unknown
-    }) => void,
+    callback: (payload: import('../shared/types.js').WebviewHotkeyPayload) => void,
   ) => {
     const handler = (_e: unknown, payload: unknown) => callback(payload as Parameters<typeof callback>[0])
     ipcRenderer.on(IPC_CHANNELS.WEBVIEW_HOTKEY, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.WEBVIEW_HOTKEY, handler)
   },
+  validateWebviewHotkeyTarget: (target: import('../shared/types.js').WebviewHotkeyTarget) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBVIEW_VALIDATE_HOTKEY_TARGET, target),
 }

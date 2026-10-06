@@ -101,10 +101,21 @@ export class AiAssetsStore {
     db.transaction(() => { for (const item of versions) seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning]))) })()
   }
 
-  clearData(settingsPath: string): void {
+  clearData(settingsPath: string, collectionJournalPath?: string): void {
     this.db.prepare('ATTACH DATABASE ? AS asset_settings').run(settingsPath)
+    let journalAttached = false
     try {
+      if (collectionJournalPath) {
+        this.db.prepare('ATTACH DATABASE ? AS collection_journal').run(collectionJournalPath)
+        journalAttached = true
+      }
       this.db.transaction(() => {
+        if (journalAttached) {
+          this.db.prepare('DELETE FROM collection_journal.input_links').run()
+          this.db.prepare('DELETE FROM collection_journal.observations').run()
+          this.db.prepare('DELETE FROM collection_journal.receipts').run()
+          this.db.prepare('DELETE FROM collection_journal.conversation_aliases').run()
+        }
         this.db.prepare('DELETE FROM conversations').run()
         this.db.prepare('DELETE FROM asset_exclusions').run()
         this.db.prepare('DELETE FROM asset_cleanup_events').run()
@@ -112,7 +123,10 @@ export class AiAssetsStore {
         this.db.prepare("UPDATE asset_settings.prompts SET value = json_set(value, '$.prompts', json('[]')) WHERE key = '__data__'").run()
         this.db.prepare("UPDATE asset_settings.injection_history SET value = json_set(value, '$.records', json('[]')) WHERE key = '__data__'").run()
       })()
-    } finally { this.db.exec('DETACH DATABASE asset_settings') }
+    } finally {
+      if (journalAttached) this.db.exec('DETACH DATABASE collection_journal')
+      this.db.exec('DETACH DATABASE asset_settings')
+    }
   }
 
   conversation(source: AssetSource, observation: Omit<AssetObservation, 'messages'>): string {
@@ -503,6 +517,18 @@ export class AiAssetsStore {
       for (const id of ids) this.db.prepare('UPDATE asset_attachments SET conversation_id = ?, message_id = ? WHERE id = ? AND source_id = ?')
         .run(conversationId, message.id, id, sourceId)
     })()
+  }
+  associateCapturedInput(source: AssetSource, observation: Omit<AssetObservation, 'messages'>,
+    externalKey: string, messageKey: string, messageId: string): boolean {
+    if (this.graph.excluded(source.id, observation.conversationKey) || this.attachmentExcluded(source.id, externalKey)) return true
+    const known = this.db.prepare('SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?')
+      .get(source.id, observation.conversationKey) as { conversation_id: string } | undefined
+    if (!known || !this.sourceMessage(known.conversation_id, messageKey, messageId)) return true
+    const original = this.db.prepare('SELECT id FROM asset_attachments WHERE source_id = ? AND external_key = ? AND direction = ?')
+      .get(source.id, externalKey, 'input') as { id: string } | undefined
+    if (!original) return false
+    this.associateAttachments(source.id, observation, messageKey, [original.id], messageId)
+    return true
   }
   private sourceMessage(conversationId: string, key: string, messageId?: string): { id: string } | undefined {
     if (messageId !== undefined) return this.db.prepare(`SELECT m.id FROM messages m

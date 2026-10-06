@@ -36,3 +36,14 @@ it('reports an unreadable state and releases the event subscription on close', a
   expect(JSON.stringify(view.current)).not.toContain('Private filesystem');
   harness.unmount(); expect(state.off).toHaveBeenCalledTimes(1);
 });
+
+it('distinguishes paused acquisition from a durably accepted backlog', async () => {
+  const view = harness.mount(() => AssetCollectionStatus({ onAction: () => {} }));
+  state.listener!([{ ...issue, paused: true, pendingObservations: 2 }]);
+  await settleHooks();
+  expect(JSON.stringify(view.current)).toContain('新页面变化暂不记录');
+  state.listener!([{ ...issue, pendingObservations: 2 }]);
+  await settleHooks();
+  expect(JSON.stringify(view.current)).toContain('2 份记录');
+  expect(JSON.stringify(view.current)).not.toContain('请保留原页面');
+});

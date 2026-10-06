@@ -17,6 +17,7 @@ import { isBrowserWindowContents } from './renderer-loader.js'
 import { findWindowIdByWin } from './window-utils.js'
 import { windowStore } from '../store/window-store.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { captureWebviewHotkeyTarget, trackWebviewHotkeyTarget } from './webview-hotkey-target.js'
 import {
   setAlwaysOnTopForWindow,
   toggleMaximizeForWindow,
@@ -50,12 +51,10 @@ interface HotkeyDef {
   meta?: boolean
   /** 字母键大小写不敏感匹配（将 key 和 input.key 均转为小写比较） */
   toLower?: boolean
-  /**
-   * 原始 input.code 匹配模式：
-   * 'prefix' — code 以此值开头时匹配（如 'Digit' 匹配 Digit1~9, 'Numpad' 匹配 Numpad1~9）
-   * 'exact'  — code 精确匹配（如 'Backquote'）
-   */
-  matchByCode?: 'prefix' | 'exact'
+  /** Physical key code, independent of the keyboard layout. */
+  code?: string
+  /** Physical key families, such as Digit and Numpad. */
+  codePrefixes?: string[]
   /**
    * 浏览器窗口条件过滤：
    * 'only'   — 仅浏览器窗口生效（非浏览器窗口不匹配，按键穿透到页面）
@@ -105,7 +104,7 @@ const commonHotkeys: HotkeyDef[] = [
 
   // Alt+1~9：切换到第 N 个标签
   {
-    key: '', alt: true, matchByCode: 'prefix',
+    key: '', alt: true, codePrefixes: ['Digit', 'Numpad'],
     log: 'Alt+{0} → 切换标签 #{0}',
     action: (ctx) => {
       for (const prefix of ['Digit', 'Numpad']) {
@@ -121,7 +120,12 @@ const commonHotkeys: HotkeyDef[] = [
   {
     key: 'Tab', ctrl: true,
     log: `Ctrl+Tab → 循环切换标签`,
-    action: (ctx) => ({ action: 'cycleTab', data: { reverse: ctx.hasShift } }),
+    action: () => ({ action: 'cycleTab', data: { reverse: false } }),
+  },
+  {
+    key: 'Tab', ctrl: true, shift: true,
+    log: 'Ctrl+Shift+Tab → 反向切换标签',
+    action: () => ({ action: 'cycleTab', data: { reverse: true } }),
   },
 
   // Ctrl+T：当前窗口独立（脱离当前标签为新窗口）
@@ -170,7 +174,7 @@ const commonHotkeys: HotkeyDef[] = [
   { key: '0', ctrl: true, condition: 'only', log: 'Ctrl+0 → 重置缩放', action: () => ({ action: 'zoomReset' }) },
 
   // 反引号(`) 呼出快捷键说明窗口
-  { key: '`', keyAlt: '~', matchByCode: 'exact', log: '` → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
+  { key: '`', keyAlt: '~', code: 'Backquote', log: '` → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
 
   // Shift+? 呼出快捷键说明窗口
   { key: '?', shift: true, log: '? → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
@@ -209,14 +213,8 @@ function matchHotkey(def: HotkeyDef, ctx: HotkeyCtx): boolean {
   if (def.condition === 'only' && !ctx.isBrowser) return false
   if (def.condition === 'never' && ctx.isBrowser) return false
 
-  // matchByCode 模式：按 input.code 前缀/精确匹配（用于 Alt+1~9 / 反引号等）
-  if (def.matchByCode) {
-    if (def.matchByCode === 'prefix') {
-      const defKey = def.key || def.keyAlt || ''
-      return ctx.code.startsWith(defKey) || (def.keyAlt ? ctx.code.startsWith(def.keyAlt) : false)
-    }
-    return ctx.code === def.key
-  }
+  if (def.code) return ctx.code === def.code
+  if (def.codePrefixes) return def.codePrefixes.some(prefix => ctx.code.startsWith(prefix))
 
   // 标准 key 匹配
   const k = def.toLower ? def.key.toLowerCase() : def.key
@@ -253,6 +251,7 @@ export function attachWebviewHotkeyRouter(
   parentWebContents: Electron.WebContents,
   onCtrlKeyChange: (pressed: boolean) => void,
 ): void {
+  trackWebviewHotkeyTarget(wc, parentWebContents)
   // 云电脑模式三连击 Esc 检测（每次 webview attach 独立统计）
   let escPressTimes: number[] = []
   wc.on('before-input-event', (e, input) => {
@@ -263,9 +262,12 @@ export function attachWebviewHotkeyRouter(
       else if (input.type === 'keyUp') onCtrlKeyChange(false)
     }
     if (input.type !== 'keyDown') return
-    if (input.isAutoRepeat) return
+    if (input.isAutoRepeat || input.isComposing) return
+    if (wc.isDestroyed() || parentWebContents.isDestroyed()) return
     const win = BrowserWindow.fromWebContents(parentWebContents)
     if (!win || win.isDestroyed()) return
+    const target = captureWebviewHotkeyTarget(wc, parentWebContents)
+    if (!target) return
 
     const mods = input.modifiers || []
     const hasAlt = mods.includes('alt')
@@ -284,29 +286,11 @@ export function attachWebviewHotkeyRouter(
     // Ctrl+Alt+C：进入/退出云电脑模式（最高优先级，云电脑模式下同样可用——
     // 保证即使状态残留也能通过快捷键退出，避免死锁）
     if (hasCtrl && hasAlt && !hasShift && !hasMeta && key.toLowerCase() === 'c') {
-      if (isBrowser && tryForward('toggleCloudPc')) {
+      if (!isBrowser) return
+      e.preventDefault()
+      if (tryForward('toggleCloudPc', parentWebContents)) {
         console.log('[hotkey] Ctrl+Alt+C → 切换云电脑模式')
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleCloudPc' })
-      }
-      return
-    }
-
-    // ===== 描述符驱动的快捷键匹配 =====
-
-    // 优先匹配浏览器窗口专用快捷键（与通用快捷键冲突时浏览器专用优先）
-    let matched = findMatch(browserHotkeys, ctx)
-    if (!matched) matched = findMatch(commonHotkeys, ctx)
-
-    if (matched) {
-      const result = matched.action(ctx)
-      if (result) {
-        if (matched.tryFwd && !tryForward(result.action)) return
-        // 替换日志模板中的 {0} 占位符（用于 Alt+N 等动态键位）
-        const logKey = code.match(/^(Digit|Numpad)(\d)$/)?.[2] ?? key
-        console.log(`[hotkey] ${matched.log.replace(/\{0\}/g, logKey)}`)
-        e.preventDefault()
-        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, result)
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleCloudPc', target })
       }
       return
     }
@@ -342,17 +326,32 @@ export function attachWebviewHotkeyRouter(
       return
     }
 
+    // Browser actions take precedence over shared actions.
+    const matched = findMatch(browserHotkeys, ctx) ?? findMatch(commonHotkeys, ctx)
+    if (matched) {
+      const result = matched.action(ctx)
+      if (result) {
+        e.preventDefault()
+        if (matched.tryFwd && !tryForward(result.action, parentWebContents)) return
+        const logKey = code.match(/^(Digit|Numpad)(\d)$/)?.[2] ?? key
+        console.log(`[hotkey] ${matched.log.replace(/\{0\}/g, logKey)}`)
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { ...result, target })
+      }
+      return
+    }
+
     // ===== F11/F12/Escape：含窗口类型分支的特殊快捷键 =====
 
     // F11：切换全屏/最大化（按窗口类型区分）
     // - 浏览器窗口：切换原生全屏（沉浸式全屏，渲染层收到状态后隐藏标签/导航/书签栏）
     // - 其他窗口：切换最大化/还原（接入 WindowMaximizeManager）
-    if (key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
-      if (isBrowser && tryForward('toggleFullscreen')) {
+    if (key === 'F11' && !hasCtrl && !hasAlt && !hasShift && !hasMeta) {
+      e.preventDefault()
+      if (isBrowser) {
+        if (!tryForward('toggleFullscreen', parentWebContents)) return
         const wid = findWindowIdByWin(win)
         const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
         console.log('[hotkey] F11 → 浏览器窗口切换沉浸式全屏, wasFullScreen=', wasFs)
-        e.preventDefault()
         if (!wasFs) {
           // 进入全屏前保存 bounds
           if (wid) {
@@ -366,7 +365,6 @@ export function attachWebviewHotkeyRouter(
         return
       }
       console.log('[hotkey] F11 → 切换最大化')
-      e.preventDefault()
       toggleMaximizeForWindow(win, findWindowIdByWin(win))
       return
     }

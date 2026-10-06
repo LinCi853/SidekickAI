@@ -70,7 +70,7 @@ export function WebviewTab({
   } = useWebviewRemount({ tab, profile, onDomReadyChange });
 
   // enterToSend 运行时标志（供 dom-ready 闭包读取）+ webview 标志位更新
-  const { enterToSendRef } = useEnterToSendFlag({
+  useEnterToSendFlag({
     webviewRef: ref,
     domReadyRef,
     enterToSend,
@@ -87,7 +87,6 @@ export function WebviewTab({
     profile,
     inputSelector,
     sendSelector,
-    enterToSendRef,
     domReadyRef,
     onDomReadyChangeRef,
     onNavigationChangeRef,
@@ -117,6 +116,7 @@ export function WebviewTab({
     mobilePresetId,
     domReadyRef,
     scheduleReload,
+    remountKey,
   });
 
   // 主进程转发的 webview 弹窗 URL：页面内导航

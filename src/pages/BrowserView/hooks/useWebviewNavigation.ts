@@ -10,6 +10,7 @@ import { getPreset, onWebviewPopupUrl, recordNavHistory } from '../../../lib/ele
 import { safeLoadURLWebview, type WebviewElement } from '../../../lib/webview.js';
 import { matchCloudPcSite } from '../cloud-pc-sites.js';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
+import { leaseWebviewLifecycle, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle';
 import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms.js';
 import {
   GET_TITLE_SCRIPT,
@@ -26,6 +27,7 @@ export interface UseWebviewNavigationParams {
   navigateUrl?: string | null;
   /** 导航完成后清除 navigateUrl */
   onNavigateComplete?: () => void;
+  remountKey: number;
 }
 
 export function useWebviewNavigation({
@@ -35,8 +37,17 @@ export function useWebviewNavigation({
   profile,
   navigateUrl,
   onNavigateComplete,
+  remountKey,
 }: UseWebviewNavigationParams) {
   const store = useBrowserTabStore();
+  const lifecycleRef = useRef<WebviewLifecycleLease | null>(null);
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview) return;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    lifecycleRef.current = lifecycle;
+    return () => { lifecycle.dispose(); lifecycleRef.current = null; };
+  }, [profile.id, tab.id, remountKey]);
 
   // Navigate when navigateUrl changes (from address bar)
   useEffect(() => {
@@ -47,7 +58,8 @@ export function useWebviewNavigation({
 
   // Navigation events
   const handleNavigate = useCallback((e: Event) => {
-    const navEvent = e as unknown as { url?: string };
+    const navEvent = e as unknown as { url?: string; isMainFrame?: boolean };
+    if (navEvent.isMainFrame === false) return;
     const url = navEvent.url;
     if (url && url !== tab.url) {
       store.navigateTab(tab.id, url);
@@ -73,11 +85,13 @@ export function useWebviewNavigation({
 
     // 导航后延迟读取 title（部分页面 title 在 did-navigate 后才设置）
     if (tab.source !== 'initial') {
-      setTimeout(() => {
+      const wv = webviewRef.current;
+      const page = lifecycleRef.current?.capture();
+      lifecycleRef.current?.delay(() => {
         try {
-          const wv = webviewRef.current;
-          if (wv) {
+          if (wv && page?.isCurrent()) {
             void wv.executeJavaScript(GET_TITLE_SCRIPT).then((title) => {
+              if (!page.isCurrent()) return;
               if (title && typeof title === 'string') {
                 store.updateTabTitle(tab.id, title);
                 // 更新导航历史的 title（同 URL 连续记录会更新 title 而非新增）
@@ -122,9 +136,11 @@ export function useWebviewNavigation({
     }
     // 尝试在 webview 内部转换为 data URL
     const wv = webviewRef.current;
+    const page = lifecycleRef.current?.capture();
     if (wv && domReadyRef.current) {
       const urlStr = faviconUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       void wv.executeJavaScript(buildImageUrlToDataUrlScript(`'${urlStr}'`)).then((dataUrl) => {
+        if (!page?.isCurrent()) return;
         if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
           store.updateTabFavicon(tab.id, dataUrl);
         } else {
@@ -132,6 +148,7 @@ export function useWebviewNavigation({
           store.updateTabFavicon(tab.id, faviconUrl);
         }
       }).catch(() => {
+        if (!page?.isCurrent()) return;
         store.updateTabFavicon(tab.id, faviconUrl);
       });
     } else {
@@ -141,6 +158,7 @@ export function useWebviewNavigation({
 
   // 浏览器窗口始终锁定为桌面端 UA（不受 profile 的 uaLockMode 影响）
   const prevUaRef = useRef<string>('');
+  const previousUaWebviewRef = useRef<WebviewElement | null>(null);
   useEffect(() => {
     const webview = webviewRef.current;
     if (!webview) return;
@@ -149,21 +167,25 @@ export function useWebviewNavigation({
       ? AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)
       : undefined;
     const desktopPresetId = platform?.defaultDesktopPreset ?? 'win-chrome-125';
-    if (prevUaRef.current === desktopPresetId) return;
+    if (prevUaRef.current === desktopPresetId && previousUaWebviewRef.current === webview) return;
     prevUaRef.current = desktopPresetId;
+    previousUaWebviewRef.current = webview;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    const page = lifecycle.capture();
     void getPreset(desktopPresetId).then((preset) => {
-      if (!preset?.userAgent || !webviewRef.current) return;
+      if (!preset?.userAgent || !page.isCurrent()) return;
       try {
-        const wv = webviewRef.current as unknown as { setUserAgent: (ua: string) => void };
+        const wv = webview as unknown as { setUserAgent: (ua: string) => void };
         if (typeof wv.setUserAgent === 'function') {
           wv.setUserAgent(preset.userAgent);
           if (domReadyRef.current) {
-            webviewRef.current.reload();
+            webview.reload();
           }
         }
       } catch { /* ignore */ }
-    });
-  }, [profile.aiPlatformId]);
+    }).catch(error => console.warn('[BrowserWebviewTab] User agent lookup failed:', error));
+    return () => lifecycle.dispose();
+  }, [profile.aiPlatformId, remountKey]);
 
   // Listen for popup URL forwarding from main process
   useEffect(() => {

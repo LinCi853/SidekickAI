@@ -42,6 +42,7 @@ export const IPC_CHANNELS = {
   ASSET_SEARCH: 'ai-assets:search',
   ASSET_RETRY_REQUEST: 'ai-assets:retry-request',
   ASSET_COLLECTOR_STATE: 'ai-assets:collector-state',
+  ASSET_COLLECTOR_REPORT: 'ai-assets:collector-report',
   ASSET_ATTACHMENT_EXPORT: 'ai-assets:attachment-export',
   ASSET_FREEZE_TARGETS: 'ai-assets:freeze-targets',
   ASSET_FOCUS_PAGE: 'ai-assets:focus-page',
@@ -325,6 +326,7 @@ export const IPC_CHANNELS = {
   BLOCK_RULES_SAVE: 'blockRules:save',
   BLOCK_RULES_DELETE: 'blockRules:delete',
   BLOCK_RULES_UPDATE: 'blockRules:update',
+  BLOCK_RULES_CHANGED: 'blockRules:changed',
   // AI 应用编辑窗口
   AI_APP_EDITOR_OPEN: 'ai-app-editor:open',
   // 设置独立窗口（单例）
@@ -340,6 +342,7 @@ export const IPC_CHANNELS = {
   // 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）
   // 载荷：{ action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab', data?: unknown }
   WEBVIEW_HOTKEY: 'webview:hotkey',
+  WEBVIEW_VALIDATE_HOTKEY_TARGET: 'webview:validate-hotkey-target',
   // 主→渲染：webview 弹窗 URL 转发（主进程拦截 window.open / target="_blank" 后，
   // 将 URL 发回渲染层，由渲染层在当前 webview 内导航，避免弹出独立窗口）
   // 载荷：{ url: string, webContentsId: number }

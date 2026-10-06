@@ -46,6 +46,7 @@ export function BlockRulesSection({
         label={`屏蔽规则（按 ${platform ? hostnameFromUrl(platform.url) || '*' : '*'} 匹配）`}
       >
         <div className="ai-app-editor-rules" data-name="ai-app-editor.block-rules-container">
+          <p style={{ color: 'var(--muted-foreground)', fontSize: 'var(--text-xs)' }}>CSS 屏蔽会立即更新。JS 规则修改或关闭后，已运行脚本的效果可能需要刷新页面才能恢复。</p>
           {filteredRules.length === 0 && !showRuleForm && (
             <div className="ai-app-editor-empty" data-name="ai-app-editor.block-rules-empty">
               暂无匹配规则

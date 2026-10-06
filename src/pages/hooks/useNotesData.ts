@@ -166,12 +166,7 @@ export function useNotesData(): UseNotesDataResult {
         setNotes(list);
         if (active) {
           setActiveNoteState(active);
-          draftRef.current = {
-            id: active.id,
-            title: active.title,
-            content: active.content,
-            contentJson: active.contentJson,
-          };
+          draftRef.current = null;
           latestContentRef.current = active.content;
         } else if (list.length === 0) {
           // 无笔记时自动创建一个空白笔记
@@ -181,7 +176,7 @@ export function useNotesData(): UseNotesDataResult {
           if (saved?.id) {
             await setActiveNote(saved.id);
             setActiveNoteState(saved);
-            draftRef.current = { id: saved.id, title: null, content: '', contentJson: '' };
+            draftRef.current = null;
             latestContentRef.current = '';
           }
         } else {
@@ -190,7 +185,7 @@ export function useNotesData(): UseNotesDataResult {
           const newest = sorted[0];
           await setActiveNote(newest.id);
           setActiveNoteState(newest);
-          draftRef.current = { id: newest.id, title: newest.title, content: newest.content, contentJson: newest.contentJson };
+          draftRef.current = null;
           latestContentRef.current = newest.content;
         }
         await refreshTags();
@@ -299,7 +294,7 @@ export function useNotesData(): UseNotesDataResult {
     };
     activeNoteRef.current = emptyNote;
     setActiveNoteState(emptyNote);
-    draftRef.current = { id: null, title: null, content: '', contentJson: '' };
+    draftRef.current = null;
     latestContentRef.current = '';
   }, () => setActiveNote(null)), [navigate]);
 
@@ -308,9 +303,7 @@ export function useNotesData(): UseNotesDataResult {
     return navigate(() => {
       activeNoteRef.current = note;
       setActiveNoteState(note);
-      draftRef.current = {
-        id: note.id, title: note.title, content: note.content, contentJson: note.contentJson,
-      };
+      draftRef.current = null;
       latestContentRef.current = note.content;
     }, () => setActiveNote(note.id));
   }, [navigate]);

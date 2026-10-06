@@ -5,7 +5,7 @@ import { getChatStore } from '../../store/chat-store.js'
 import { isModuleEnabled } from '../registry.js'
 import { hasActiveAssetStreams } from '../../ai/handler.js'
 import { hasLinkedOriginalTransfers } from '../../assets/api-originals.js'
-import { hasWebOriginalTransfers } from '../../assets/asset-ipc.js'
+import { hasWebOriginalTransfers, clearAssetCollectionJournal } from '../../assets/asset-ipc.js'
 import { hasActiveAssetImports } from '../../assets/import-activity.js'
 import { hasActiveBackupExports } from '../../store/backup-activity.js'
 import { isImportingData } from '../../store/import-guard.js'
@@ -55,7 +55,7 @@ export function clearPromptLibraryData(): void {
   let cleared = false
   try {
     clearAssetDirectories(app.getPath('userData'), () => {
-      getChatStore().assets.clearData(getModuleStateDb().name)
+      clearAssetCollectionJournal(journalPath => getChatStore().assets.clearData(getModuleStateDb().name, journalPath))
       cleared = true
       promptStore.invalidate()
       injectionHistoryStore.invalidate()

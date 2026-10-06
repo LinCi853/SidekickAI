@@ -11,66 +11,18 @@
 import { ipcMain, BrowserWindow, app, session, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { IPC_CHANNELS, type TopBarButtonGroup } from '../shared/types.js'
+import { IPC_CHANNELS } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { isPortableMode, getStoreCwd } from './store-paths.js'
-import { getAppSettingsTable } from './module-state-store.js'
 import { getHotkeyManagerInstance } from '../hotkey/manager.js'
-import { getDefaultAppSettings, type DefaultAppSettings } from './default-config.js'
+import { readSettingsRaw, writeSettingsRaw, validateAppSettingsPatch, resetSettingsCacheForTest } from './app-settings-repository.js'
+import type { AppSettings } from '../shared/api/settings.api.js'
+export type { AppSettings } from '../shared/api/settings.api.js'
+export { resetSettingsCacheForTest } from './app-settings-repository.js'
 import { openActivityLogFolder } from './activity-log-export.js'
 import { applicationLogSources } from '../diagnostics/log-sources.js'
 import type { LogExportOptions } from '../shared/log-export.js'
 import { setRuntimeLogLevel } from '../diagnostics/application-log.js'
-
-// ===== SQLite 持久化（settings.db / app_settings 表） =====
-
-/** 内存缓存（进程内读写即时生效，writeSettingsRaw 同步落库） */
-let settingsCache: AppSettings | null = null
-
-/** 读原始设置（含默认值兜底） */
-function readSettingsRaw(): AppSettings {
-  if (!settingsCache) {
-    const raw = getAppSettingsTable().get('appSettings')
-    if (raw) {
-      try {
-        // 合并默认值：新增字段（如 autoUpdate / logLevel）对旧安装的 settings JSON
-        // 缺省时自动补齐默认值，避免读到 undefined。
-        settingsCache = { ...getDefaultSettings(), ...(JSON.parse(raw) as AppSettings) }
-        console.log('[app-settings] 从 settings.db 加载设置, onboardingCompleted=', settingsCache.onboardingCompleted)
-      } catch (err) {
-        console.error('[app-settings] 解析 settings.db 失败，回退默认值:', err)
-        settingsCache = getDefaultSettings()
-      }
-    } else {
-      settingsCache = getDefaultSettings()
-      console.log('[app-settings] 首次启动，使用默认设置, onboardingCompleted=', settingsCache.onboardingCompleted)
-      getAppSettingsTable().set('appSettings', JSON.stringify(settingsCache))
-    }
-  }
-  return settingsCache
-}
-
-/** 写回原始设置（缓存 + 落库） */
-function writeSettingsRaw(next: AppSettings): void {
-  settingsCache = next
-  getAppSettingsTable().set('appSettings', JSON.stringify(next))
-}
-
-/** 测试用：重置内存缓存（不落库） */
-export function resetSettingsCacheForTest(): void {
-  settingsCache = null
-}
-
-// 持久化存储实例（写入 app-settings.json）
-export interface AppSettings extends DefaultAppSettings {
-  // AppSettings 继承自 DefaultAppSettings，保持类型一致性
-  // 所有字段定义已在 default-config.ts 中统一管理
-}
-
-/** 获取默认设置（根据便携/安装模式） */
-function getDefaultSettings(): AppSettings {
-  return getDefaultAppSettings(isPortableMode()) as AppSettings
-}
 
 /** 读取应用设置 */
 export function getAppSettings(): AppSettings {
@@ -101,7 +53,7 @@ export async function clearAllData(): Promise<void> {
 
   console.log('[app-settings] 开始清理所有用户数据:', dataDir)
   console.log('[app-settings] 重置内存缓存 settingsCache=null')
-  settingsCache = null
+  resetSettingsCacheForTest()
 
   // 1. 设置 isQuitting 标记，绕过主窗口 closeBehavior='minimize' 拦截
   try {
@@ -123,6 +75,7 @@ export async function clearAllData(): Promise<void> {
     await closeAllModuleDbs()
   } catch { /* ignore */ }
   const sqliteClosures = [
+    () => import('../assets/collection-journal.js').then(m => m.closeAssetCollectionJournal()).catch(() => {}),
     () => import('./chat-store.js').then(m => m.closeChatStore()).catch(() => {}),
     () => import('./module-state-store.js').then(m => m.closeModuleStateDb()).catch(() => {}),
     () => import('./notes-db.js').then(m => m.closeNotesDb()).catch(() => {}),
@@ -340,6 +293,7 @@ export async function clearAllData(): Promise<void> {
 
 /** 更新应用设置（合并 patch） */
 export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
+  patch = validateAppSettingsPatch(patch)
   if (isPortableMode() && patch.autoLaunch) throw new Error('绿色便携版不注册开机自启动，请使用安装版。')
   const current = readSettingsRaw()
   const next: AppSettings = { ...current, ...patch }
@@ -348,7 +302,6 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
     next.silentStart = false
   }
   writeSettingsRaw(next)
-  if (patch.logLevel !== undefined) setRuntimeLogLevel(next.logLevel)
   // autoLaunch 或 silentStart 变化时立即同步系统注册项（避免必须重启应用才生效）
   if (patch.autoLaunch !== undefined || patch.silentStart !== undefined) {
     const ok = applyAutoLaunchSetting(next.autoLaunch, next.silentStart)
@@ -358,6 +311,7 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
       throw new Error('应用开机自启动设置失败（系统层拒绝）')
     }
   }
+  if (patch.logLevel !== undefined) setRuntimeLogLevel(next.logLevel)
   // UI 比例变化时广播到所有窗口，渲染层据此重新计算最小尺寸并调用 setMinimumSize
   if (patch.uiScale && patch.uiScale !== current.uiScale) {
     broadcastUiScaleChanged(next.uiScale)

@@ -2,7 +2,7 @@
    lib/electron-api/window.ts —— 窗口管理 / 窗口控制 / 窗口状态 / 标签 / 设备预设 / AI平台 / 新标签事件
    ===================================================================== */
 
-import type { WindowStateData, DevicePreset, AIPlatform, WebviewHotkeyAction } from '../../../electron/shared/types';
+import type { WindowStateData, DevicePreset, AIPlatform, WebviewHotkeyPayload, WebviewHotkeyTarget } from '../../../electron/shared/types';
 import { requireElectron } from './core';
 
 /* =====================================================================
@@ -335,13 +335,13 @@ export async function addToProfilePopupWhitelist(profileId: string, origin: stri
  * 统一拦截点：Alt+1~9 / Ctrl+Tab / Ctrl+G / ` / ? 等快捷键在 webview 焦点时也能生效。
  */
 export function onWebviewHotkey(
-  callback: (payload: {
-    action: WebviewHotkeyAction;
-    data?: unknown;
-  }) => void,
+  callback: (payload: WebviewHotkeyPayload) => void,
 ): () => void {
   const api = requireElectron();
   return api.onWebviewHotkey(callback);
 }
 
+export function validateWebviewHotkeyTarget(target: WebviewHotkeyTarget): Promise<boolean> {
+  return requireElectron().validateWebviewHotkeyTarget(target);
+}
 

@@ -9,6 +9,8 @@ import type { BrowserTabState, Profile } from '../../../lib/electron-api';
 import { registerFreezeWebview } from '../../../lib/electron-api';
 import type { WebviewElement } from '../../../lib/webview.js';
 import { useFreezeStore } from '../../../store/useFreezeStore.js';
+import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
+import { leaseWebviewLifecycle } from '../../../lib/webview-lifecycle';
 
 export interface UseWebviewLifecycleHandlers {
   handleDomReady: () => Promise<void>;
@@ -68,6 +70,14 @@ export function useWebviewLifecycle({
   useEffect(() => {
     const webview = webviewRef.current;
     if (!webview) return;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    let recovering = false;
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+    const recoverOnce = () => {
+      if (recovering) return;
+      recovering = true;
+      handleFatalFailure();
+    };
 
     webview.addEventListener('dom-ready', handleDomReady as EventListener);
     webview.addEventListener('did-navigate', handleNavigate as EventListener);
@@ -86,29 +96,35 @@ export function useWebviewLifecycle({
     ]);
     let proxyFallbackTriggered = (window as any).__proxyFallbackGlobal ?? false
     const handleFailLoadWithProxy = (e: Event) => {
-      handleFailLoad() // UI 更新（进度条、状态文本）
       const ev = e as unknown as { errorCode?: number; errorDescription?: string; validatedURL?: string; isMainFrame?: boolean }
       if (ev.errorCode === -3) return // ERR_ABORTED 忽略
+      handleFailLoad();
+      if (ev.errorCode === -2 && ev.isMainFrame && !recoveryTimer) {
+        recoveryTimer = lifecycle.delay(recoverOnce, 500);
+      }
       if (ev.isMainFrame && ev.errorCode != null && PROXY_ERROR_CODES.has(ev.errorCode) && !proxyFallbackTriggered) {
         proxyFallbackTriggered = true;
         (window as any).__proxyFallbackGlobal = true;
         const failedUrl = ev.validatedURL || ''
+        const page = lifecycle.capture();
         console.warn(`[proxy-fallback][BrowserView] 检测到网络错误 ${ev.errorCode}，1.5s 后检查页面...`)
-        setTimeout(() => {
+        lifecycle.delay(() => {
           void (webview as any).executeJavaScript(
             '(function(){try{var b=document.body;if(!b)return{textLen:0,childCount:0,htmlLen:0};return{textLen:(b.innerText||"").trim().length,childCount:b.children?b.children.length:0,htmlLen:(b.innerHTML||"").length}}catch(e){return{textLen:0,childCount:0,htmlLen:0}}})()'
           ).then((info: { textLen: number; childCount: number; htmlLen: number }) => {
+            if (!page.isCurrent()) return;
             console.warn(`[proxy-fallback][BrowserView] textLen=${info.textLen} childCount=${info.childCount} htmlLen=${info.htmlLen}`)
             if (info.textLen > 0 || info.childCount > 0 || info.htmlLen > 200) {
               console.warn('[proxy-fallback][BrowserView] 页面有内容/结构，不触发兜底')
               return
             }
             console.warn('[proxy-fallback][BrowserView] 确认白屏，执行兜底...')
-            return import('../../../lib/electron-api').then(api => api.applyProxyFallback())
+            return import('../../../lib/electron-api').then(api => page.isCurrent() ? api.applyProxyFallback() : undefined)
           }).then((result: { switched: boolean; mode: string | null } | undefined) => {
+            if (!page.isCurrent()) return;
             if (result?.switched) {
               console.warn(`[proxy-fallback][BrowserView] 切换到 ${result.mode}，200ms 后重载`)
-              setTimeout(() => {
+              lifecycle.delay(() => {
                 try { failedUrl ? (webview as any).loadURL(failedUrl) : webview.reload() } catch { /* ignore */ }
               }, 200)
             }
@@ -137,7 +153,8 @@ export function useWebviewLifecycle({
     };
     webview.addEventListener('console-message', handleConsoleMessage as EventListener);
 
-    webview.addEventListener('ai-webview-fatal-failure', handleFatalFailure);
+    webview.addEventListener('ai-webview-fatal-failure', recoverOnce);
+    webview.addEventListener('render-process-gone', recoverOnce);
 
     // F12 → DevTools
     const handleBeforeInput = (e: Event) => {
@@ -161,6 +178,7 @@ export function useWebviewLifecycle({
     webview.addEventListener('before-input-event', handleBeforeInput);
 
     return () => {
+      lifecycle.dispose();
       webview.removeEventListener('dom-ready', handleDomReady as EventListener);
       webview.removeEventListener('did-navigate', handleNavigate as EventListener);
       webview.removeEventListener('did-navigate-in-page', handleNavigate as EventListener);
@@ -174,7 +192,8 @@ export function useWebviewLifecycle({
       webview.removeEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
       webview.removeEventListener('media-paused', handleMediaPaused as EventListener);
       webview.removeEventListener('console-message', handleConsoleMessage as EventListener);
-      webview.removeEventListener('ai-webview-fatal-failure', handleFatalFailure);
+      webview.removeEventListener('ai-webview-fatal-failure', recoverOnce);
+      webview.removeEventListener('render-process-gone', recoverOnce);
       webview.removeEventListener('before-input-event', handleBeforeInput);
     };
   }, [handleDomReady, handleNavigate, handleTitleUpdate, handleFaviconUpdate, handleStartLoading, handleStopLoading, handleFinishNavigation, handleFinishLoad, handleFailLoad, handleFatalFailure, handleMediaStartedPlaying, handleMediaPaused, tab.id, remountKey]);
@@ -188,9 +207,11 @@ export function useWebviewLifecycle({
       try {
         const wcId = webview.getWebContentsId?.();
         if (wcId === undefined) return;
+        const windowId = useBrowserTabStore.getState().windowId;
+        if (!windowId) return;
         void registerFreezeWebview({
           tabId: tab.id,
-          windowId: 'browser', // 浏览器窗口的 windowId 由主进程按 profileId 索引，此处占位
+          windowId,
           profileId: profile.id,
           webContentsId: wcId,
         }).catch(() => { /* ignore */ });

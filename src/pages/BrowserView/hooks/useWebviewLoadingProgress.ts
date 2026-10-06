@@ -8,16 +8,26 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { BrowserTabState } from '../../../lib/electron-api';
 import type { WebviewElement } from '../../../lib/webview.js';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
+import { leaseWebviewLifecycle, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle';
 import { GET_TITLE_SCRIPT, buildFaviconToDataUrlScript } from '../webview-scripts.js';
 
 export interface UseWebviewLoadingProgressParams {
   webviewRef: React.MutableRefObject<WebviewElement | null>;
   domReadyRef: React.MutableRefObject<boolean>;
   tab: BrowserTabState;
+  remountKey: number;
 }
 
-export function useWebviewLoadingProgress({ webviewRef, domReadyRef, tab }: UseWebviewLoadingProgressParams) {
+export function useWebviewLoadingProgress({ webviewRef, domReadyRef, tab, remountKey }: UseWebviewLoadingProgressParams) {
   const store = useBrowserTabStore();
+  const lifecycleRef = useRef<WebviewLifecycleLease | null>(null);
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview) return;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    lifecycleRef.current = lifecycle;
+    return () => { lifecycle.dispose(); lifecycleRef.current = null; };
+  }, [tab.id, remountKey]);
   // B2: NavBar 加载进度条 —— 渐进模拟 interval 与隐藏定时器
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,10 +101,12 @@ export function useWebviewLoadingProgress({ webviewRef, domReadyRef, tab }: UseW
     // 兜底：页面加载完成后主动读取 title 和 favicon
     // 解决 page-title-updated / page-favicon-updated 事件可能不触发的问题
     const webview = webviewRef.current;
-    if (!webview || !domReadyRef.current) return;
+    const page = lifecycleRef.current?.capture();
+    if (!webview || !domReadyRef.current || !page?.isCurrent()) return;
     try {
       // 读取 document.title
       void webview.executeJavaScript(GET_TITLE_SCRIPT).then((title) => {
+        if (!page.isCurrent()) return;
         if (title && typeof title === 'string' && tab.source !== 'initial') {
           store.updateTabTitle(tab.id, title);
         }
@@ -102,6 +114,7 @@ export function useWebviewLoadingProgress({ webviewRef, domReadyRef, tab }: UseW
 
       // 读取 favicon 并转换为 data URL
       void webview.executeJavaScript(buildFaviconToDataUrlScript()).then((favicon) => {
+        if (!page.isCurrent()) return;
         if (favicon && typeof favicon === 'string' && favicon.length > 10) {
           store.updateTabFavicon(tab.id, favicon);
         }
@@ -138,7 +151,7 @@ export function useWebviewLoadingProgress({ webviewRef, domReadyRef, tab }: UseW
         progressHideTimerRef.current = null;
       }
     };
-  }, []);
+  }, [tab.id, remountKey]);
 
   return {
     handleStartLoading,

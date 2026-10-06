@@ -14,7 +14,7 @@ import { registerBlockRulesIPC, ensureDefaultBlockRules, } from './store/block-r
 import { registerPresetsIPC, ensureDefaultPresets, } from './store/preset-store.js';
 import { registerPdfProtocol } from './utils/pdf-protocol.js';
 import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js';
-import { setBrowserHotkeyFallback, tryForward, VK_F11, VK_C, VK_P } from './utils/browser-hotkey-fallback.js';
+import { setBrowserHotkeyFallback, tryForward, matchBrowserHotkeyFallback } from './utils/browser-hotkey-fallback.js';
 import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js';
 import { seedFromInstallConfig } from './store/install-config-seed.js';
 import { registerProxyAuthHandler } from './store/proxy-helper.js';
@@ -48,6 +48,7 @@ import { BUILTIN_MODULES } from './modules/manifests.js';
 import { initEnabledModules, registerModule, isModuleEnabled, listManifests } from './modules/registry.js';
 import { registerModuleIpc } from './ipc/module-ipc.js';
 import { closeModuleStateDb } from './store/module-state-store.js';
+import { closeAssetCollectionJournal } from './assets/collection-journal.js';
 import { capabilityRegistry } from './modules/capability-registry.js';
 import { injectionBroker } from './modules/injection-broker.js';
 import { allAdapters } from './modules/adapters/index.js';
@@ -142,6 +143,9 @@ app.whenReady().then(async () => {
     hotkeyManager = new HotkeyManager();
     setCloudPcHotkeyManager(hotkeyManager);
     setBrowserHotkeyFallback((e) => {
+        const action = matchBrowserHotkeyFallback(e);
+        if (!action)
+            return;
         let browserWin: Electron.BrowserWindow | null = null;
         for (const win of windowState.browserWindowsByProfile.values()) {
             if (win && !win.isDestroyed() && win.isFocused()) {
@@ -152,8 +156,8 @@ app.whenReady().then(async () => {
         if (!browserWin)
             return;
         const win = browserWin;
-        if (e.keycode === VK_C && e.ctrl && e.alt && !e.shift && !e.meta) {
-            if (tryForward('toggleCloudPc')) {
+        if (action === 'toggleCloudPc') {
+            if (tryForward('toggleCloudPc', win.webContents)) {
                 console.log('[hotkey-fallback] Ctrl+Alt+C → 切换云电脑模式 (uiohook)');
                 win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleCloudPc' });
             }
@@ -161,8 +165,8 @@ app.whenReady().then(async () => {
         }
         if (isCloudPc(win.webContents.id))
             return;
-        if (e.keycode === VK_F11 && !e.ctrl && !e.alt && !e.shift && !e.meta) {
-            if (tryForward('toggleFullscreen')) {
+        if (action === 'toggleFullscreen') {
+            if (tryForward('toggleFullscreen', win.webContents)) {
                 const wid = findWindowIdByWin(win);
                 const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen();
                 console.log('[hotkey-fallback] F11 → 切换沉浸式全屏 (uiohook), wasFullScreen=', wasFs);
@@ -180,8 +184,8 @@ app.whenReady().then(async () => {
             }
             return;
         }
-        if (e.keycode === VK_P && e.alt && !e.ctrl && !e.shift && !e.meta) {
-            if (tryForward('toggleFreeze')) {
+        if (action === 'toggleFreeze') {
+            if (tryForward('toggleFreeze', win.webContents)) {
                 console.log('[hotkey-fallback] Alt+P → 冻结切换 (uiohook)');
                 win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' });
             }
@@ -415,6 +419,7 @@ app.on('before-quit', (event) => {
 });
 app.on('will-quit', () => {
     cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() });
+    closeAssetCollectionJournal();
     closeChatStore();
     closeModuleStateDb();
 });

@@ -1,26 +1,43 @@
-// electron/utils/ask-save-path.ts — 「另存为」下载标记
-//
-// 右键「链接另存为... / 图片另存为...」时，渲染层通过 BROWSER_DOWNLOAD_AS IPC
-// 触发 session.downloadURL(url)，并在本模块登记一次「另存为」标记。
-// will-download（browser-window.ts）消费标记后弹出保存对话框，让用户选择路径，
-// 而不是静默保存到默认下载目录。
-//
-// 一次性语义：每次下载仅生效一次，避免影响后续普通下载。
+import type { Session } from 'electron'
 
-/** 待处理的「另存为」下载计数（session 级，与具体 webContents 解耦） */
-let pendingAskSavePath = 0
-
-/** 登记一次「另存为」下载 */
-export function markAskSavePath(): void {
-  pendingAskSavePath += 1
+interface SaveIntent {
+  url: string
+  expiresAt: number
+  cancel: () => void
 }
 
-/**
- * 消费一次「另存为」标记（will-download 中调用）。
- * @returns 是否为「另存为」下载（消费后计数减一，仅生效一次）
- */
-export function consumeAskSavePath(): boolean {
-  if (pendingAskSavePath <= 0) return false
-  pendingAskSavePath -= 1
-  return true
+const intentsBySession = new WeakMap<Session, Set<SaveIntent>>()
+const intentLifetime = 60000
+
+/** Requests one save dialog for an exact URL in its initiating session. */
+export function markAskSavePath(session: Session, url: string): () => void {
+  const intents = intentsBySession.get(session) ?? new Set<SaveIntent>()
+  intentsBySession.set(session, intents)
+  const intent: SaveIntent = { url, expiresAt: Date.now() + intentLifetime, cancel: () => {} }
+  let active = true
+  const cancel = () => {
+    if (!active) return
+    active = false
+    clearTimeout(timer)
+    intents.delete(intent)
+    if (!intents.size) intentsBySession.delete(session)
+  }
+  const timer = setTimeout(cancel, intentLifetime)
+  timer.unref?.()
+  intent.cancel = cancel
+  intents.add(intent)
+  return cancel
+}
+
+/** Consumes only a matching live request; unrelated downloads retain their normal path. */
+export function consumeAskSavePath(session: Session, requestedUrl: string): boolean {
+  const intents = intentsBySession.get(session)
+  if (!intents) return false
+  for (const intent of intents) {
+    if (Date.now() >= intent.expiresAt) { intent.cancel(); continue }
+    if (intent.url !== requestedUrl) continue
+    intent.cancel()
+    return true
+  }
+  return false
 }

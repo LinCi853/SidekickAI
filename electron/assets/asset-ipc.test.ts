@@ -8,7 +8,7 @@ const state = vi.hoisted(() => ({
   observers: [] as Array<() => void>, session: {}, record: undefined as any,
   observeError: undefined as Error | undefined, messages: [] as Array<[string, unknown]>,
   destination: undefined as string | undefined,
-  excluded: false, busy: false,
+  excluded: false, busy: false, guest: undefined as any,
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => state.root },
@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
   clipboard: {}, dialog: { showSaveDialog: async () => state.destination ? { canceled: false, filePath: state.destination } : { canceled: true } },
   shell: { showItemInFolder: vi.fn(), openExternal: vi.fn(async () => {}) }, net: { fetch: vi.fn() },
   ipcMain: { handle: (channel: string, callback: (...args: any[]) => any) => state.handlers.set(channel, callback) },
-  session: { fromPartition: () => state.session }, webContents: { getAllWebContents: () => [] },
+  session: { fromPartition: () => state.session }, webContents: { getAllWebContents: () => [], fromId: (id: number) => id === state.guest?.id ? state.guest : undefined },
 }))
 vi.mock('../store/chat-store.js', () => ({
   getChatStore: () => ({
@@ -42,7 +42,7 @@ vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))
 vi.mock('../ai/handler.js', () => ({ hasActiveAssetStreams: () => state.busy }))
 
 import { OriginalVault } from './original-vault'
-import { registerAiAssetIpc, hasWebOriginalTransfers } from './asset-ipc'
+import { registerAiAssetIpc, hasWebOriginalTransfers, closeAssetCollectionJournal } from './asset-ipc'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
 
 const bytes = Buffer.from('verified original')
@@ -60,7 +60,8 @@ beforeEach(async () => {
   state.enabled = true; state.observeError = undefined; state.messages = []; state.destination = undefined
   state.excluded = false; state.busy = false
   state.handlers.clear(); state.observers = []
-  guest = Object.assign(new EventEmitter(), { id: 8, mainFrame: {}, session: state.session })
+  guest = Object.assign(new EventEmitter(), { id: 8, mainFrame: {}, session: state.session, isDestroyed: () => false })
+  state.guest = guest
   guestEvent = { sender: guest, senderFrame: guest.mainFrame }
   const frame = {}
   viewerEvent = { sender: { mainFrame: frame, getType: () => 'window', getURL: () => 'file:///fixture/index.html' }, senderFrame: frame }
@@ -71,7 +72,9 @@ beforeEach(async () => {
   registerAiAssetIpc()
 })
 afterEach(async () => {
+  vi.useRealTimers()
   state.enabled = false; for (const observer of state.observers) observer()
+  closeAssetCollectionJournal()
   for (let attempt = 0; hasWebOriginalTransfers() && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 1))
   if (path.dirname(state.root) !== path.resolve('build') || !path.basename(state.root).startsWith('asset-ipc-test-')) throw new Error('Unexpected fixture path')
   await rm(state.root, { recursive: true, force: true })
@@ -120,6 +123,16 @@ describe('asset original admission and recovery', () => {
     expect(state.record.status).toBe('failed')
     expect(hasWebOriginalTransfers()).toBe(false)
   })
+  it('keeps an original during an in-page route and cancels it on document navigation', async () => {
+    await unlink(vault.pathFor(state.record.sha256))
+    await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)
+    guest.emit('did-start-navigation', {}, 'https://fixture.test/other', true, true)
+    expect(hasWebOriginalTransfers()).toBe(true)
+    guest.emit('did-start-navigation', {}, 'https://fixture.test/reloaded', false, true)
+    await vi.waitFor(() => expect(hasWebOriginalTransfers()).toBe(false))
+    expect(state.record.status).toBe('failed')
+    expect(await readdir(path.join(state.root, '.ai-assets-pending'))).toEqual([])
+  })
   it('does not cancel a replacement when retired admission completes late', async () => {
     await unlink(vault.pathFor(state.record.sha256))
     let entered!: () => void
@@ -138,7 +151,7 @@ describe('asset original admission and recovery', () => {
       state.enabled = false; for (const observer of state.observers) observer()
       await vi.waitFor(() => expect(hasWebOriginalTransfers()).toBe(false))
       state.enabled = true; for (const observer of state.observers) observer()
-      expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ id: 'file-a', saved: false })
+      expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toMatchObject({ id: 'file-a', saved: false })
       release()
       expect(await retired).toBe(true)
       expect(state.record.status).toBe('pending')
@@ -171,7 +184,7 @@ describe('asset original admission and recovery', () => {
       await vi.waitFor(() => expect(hasWebOriginalTransfers()).toBe(false))
       await unlink(vault.pathFor(state.record.sha256))
       state.enabled = true; for (const observer of state.observers) observer()
-      expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ id: 'file-a', saved: false })
+      expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toMatchObject({ id: 'file-a', saved: false })
       release()
       expect(await retired).toBe(true)
       expect(state.record.status).toBe('pending')
@@ -196,7 +209,7 @@ describe('asset original admission and recovery', () => {
       state.enabled = false; for (const observer of state.observers) observer()
       await vi.waitFor(() => expect(hasWebOriginalTransfers()).toBe(false))
       state.enabled = true; for (const observer of state.observers) observer()
-      expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ id: 'file-a', saved: false })
+      expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toMatchObject({ id: 'file-a', saved: false })
       stream.enqueue(bytes); stream.close()
       expect((await retired).ok).toBe(false)
       expect(state.record.status).toBe('pending')
@@ -213,7 +226,7 @@ describe('asset original admission and recovery', () => {
   })
   it('starts collection again when the saved object is missing', async () => {
     await unlink(vault.pathFor(state.record.sha256))
-    expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ id: 'file-a', saved: false })
+    expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toMatchObject({ id: 'file-a', saved: false })
     expect(state.record.status).toBe('pending')
     await call(ipc.ASSET_ATTACHMENT_CHUNK, guestEvent, 'file-a', 0, bytes)
     expect(await call(ipc.ASSET_ATTACHMENT_FINISH, guestEvent, 'file-a', bytes.length)).toEqual({ ok: true })
@@ -263,21 +276,31 @@ describe('asset original admission and recovery', () => {
 })
 
 describe('collection failure visibility', () => {
-  it('reports only the authorized account and clears its issue after success', () => {
+  it('does not focus a page when the requested profile differs from its actual session', () => {
+    expect(call(ipc.ASSET_AUTHORIZE, guestEvent)).toBe(true)
+    expect(call(ipc.ASSET_FOCUS_PAGE, viewerEvent, guest.id, 'different-profile')).toBe(false)
+    for (const profile of ['', 1, 'x'.repeat(129)])
+      expect(() => call(ipc.ASSET_FOCUS_PAGE, viewerEvent, guest.id, profile)).toThrow('Invalid AI asset profile')
+  })
+  it('durably accepts a failed store write and clears its issue after replay', async () => {
+    vi.useFakeTimers()
     state.observeError = new Error('Private database path')
-    expect(() => call(ipc.ASSET_OBSERVE, guestEvent, observation)).toThrow('Private database path')
+    expect(call(ipc.ASSET_OBSERVE, guestEvent, observation)).toMatchObject({ durable: true })
+    await vi.advanceTimersByTimeAsync(0)
     const issues = call(ipc.ASSET_COLLECTION_ISSUES, viewerEvent)
     expect(issues).toEqual([expect.objectContaining({ webContentsId: 8, profileId: 'profile-a', profileName: 'Account A', failures: 1 })])
     expect(JSON.stringify(issues)).not.toContain('Private database path')
     state.observeError = undefined
-    call(ipc.ASSET_OBSERVE, guestEvent, observation)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(call(ipc.ASSET_COLLECTION_ISSUES, viewerEvent)).toEqual([])
   })
-  it('removes pending issue state when the source closes', () => {
+  it('retains accepted pending observations after the source page closes', async () => {
+    vi.useFakeTimers()
     state.observeError = new Error('Temporary failure')
-    expect(() => call(ipc.ASSET_OBSERVE, guestEvent, observation)).toThrow()
+    expect(call(ipc.ASSET_OBSERVE, guestEvent, observation)).toMatchObject({ durable: true })
+    await vi.advanceTimersByTimeAsync(0)
     guest.emit('destroyed')
-    expect(call(ipc.ASSET_COLLECTION_ISSUES, viewerEvent)).toEqual([])
+    expect(call(ipc.ASSET_COLLECTION_ISSUES, viewerEvent)).toMatchObject([{ pendingObservations: 1 }])
   })
   it('does not expose issues or accept observations from an unrelated frame', () => {
     const child = { ...guestEvent, senderFrame: {} }

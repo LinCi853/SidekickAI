@@ -6,18 +6,14 @@
 //   - 使用独立 session（persist:${profileId}-browser）
 //   - 加载 mode='browser' 渲染进程
 
-import { BrowserWindow, ipcMain, nativeImage, screen, session, dialog, type DownloadItem } from 'electron'
+import { BrowserWindow, ipcMain, nativeImage, screen } from 'electron'
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../window-state.js'
-import { getAppSettings } from '../store/app-settings-store.js'
 import { isModuleEnabled } from '../modules/registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { randomUUID } from 'crypto'
-import path from 'path'
 import { app } from 'electron'
-import { browserDownloadStore } from '../store/browser-download-store.js'
 import {
   WINDOW_BACKGROUND_COLOR,
   getPreloadPath,
@@ -31,183 +27,13 @@ import {
 } from './helpers.js'
 import { isFrozen } from '../freeze/freeze-manager.js'
 import { getRecordByTabId } from '../freeze/webview-registry.js'
-import { consumeAskSavePath } from '../utils/ask-save-path.js'
 import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import { trackFullscreen, isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'
+import { registerBrowserDownloads } from './browser-downloads.js'
 import type { BrowserTabState, BrowserWindowState } from '../shared/browser.types.js'
-
-/** 广播下载状态更新给所有窗口（含浏览器窗口和历史下载管理窗口） */
-function broadcastDownloadUpdated(payload: {
-  id: string
-  windowId: string
-  profileId: string
-  url: string
-  filename: string
-  savePath: string
-  state: string
-  totalBytes: number
-  receivedBytes: number
-  startTime: number
-  endTime?: number
-}): void {
-  for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) {
-      try {
-        w.webContents.send(IPC_CHANNELS.BROWSER_DOWNLOAD_UPDATED, payload)
-      } catch { /* ignore */ }
-    }
-  }
-}
-
-/**
- * 为浏览器窗口的 session 注册下载处理。
- * v0.0.9：partition 统一为 persist:${profileId}（与 BrowserWebviewTab 对齐，修复下载不捕获 bug）
- * 下载文件保存到用户配置的下载目录，并通过 IPC 通知渲染层。
- */
-function registerBrowserDownloads(win: BrowserWindow, windowId: string, profileId: string): void {
-  // 修复：原来用 persist:${profileId}-browser，但 webview 用 persist:${profileId}，
-  // 导致 webview 下载无法被捕获。统一为 persist:${profileId}。
-  const partition = `persist:${profileId}`
-  const ses = session.fromPartition(partition)
-
-  // 避免重复挂载
-  if ((ses as unknown as { __browserDownloadAttached?: boolean }).__browserDownloadAttached) return
-  ;(ses as unknown as { __browserDownloadAttached?: boolean }).__browserDownloadAttached = true
-
-  // v0.0.9：挂载权限处理器（通知/下载等按 sitePermissions 过滤）
-  if (!(ses as unknown as { __permissionHandlerAttached?: boolean }).__permissionHandlerAttached) {
-    ;(ses as unknown as { __permissionHandlerAttached?: boolean }).__permissionHandlerAttached = true
-    ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-      // 默认放行常见权限；下载权限由 will-download + sitePermissions.blockDownload 控制
-      // 通知权限可被 sitePermissions.blockNotification 拦截（由渲染层在 setPermissionRequestHandler 时按 tab 过滤）
-      // pointerLock / keyboardLock：云游戏与网页游戏必需的鼠标捕获/键盘捕获权限
-      const allowed = new Set(['media', 'geolocation', 'fullscreen', 'clipboard-read', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock', 'speaker-selection'])
-      callback(allowed.has(permission))
-    })
-  }
-
-  ses.on('will-download', (_e, item: DownloadItem) => {
-    // 统一计算最终保存路径：
-    // - 「另存为」下载（右键链接/图片另存为）：弹保存对话框选择路径，取消则终止下载
-    // - 普通下载：静默保存到用户配置的下载目录
-    let filename: string
-    let savePath: string
-    const isAskSavePath = consumeAskSavePath()
-    if (isAskSavePath) {
-      const askFilename = (item.getFilename() || 'download').replace(/[\\/:*?"<>|]/g, '_')
-      // 使用注册下载处理时闭包的浏览器窗口作为对话框父窗口
-      const result = dialog.showSaveDialogSync(win, {
-        title: '另存为',
-        defaultPath: askFilename,
-        filters: [{ name: '所有文件', extensions: ['*'] }],
-      })
-      if (!result) {
-        item.cancel()
-        return
-      }
-      filename = item.getFilename() || 'download'
-      savePath = result
-    } else {
-      const settings = getAppSettings()
-      const dir = settings.downloadDir || app.getPath('downloads')
-      filename = item.getFilename() || 'download'
-      savePath = path.join(dir, filename)
-    }
-    item.setSavePath(savePath)
-
-    const downloadId = randomUUID()
-    const startTime = Date.now()
-
-    // 写入下载记录到存储
-    try {
-      browserDownloadStore.add({
-        id: downloadId,
-        windowId,
-        profileId,
-        url: item.getURL(),
-        filename,
-        savePath,
-        state: 'progressing',
-        totalBytes: item.getTotalBytes(),
-        receivedBytes: 0,
-        startTime,
-      })
-    } catch (err) {
-      console.error('[browser-window] 写入下载记录失败:', err)
-    }
-
-    // 广播下载开始事件给所有窗口（含历史下载管理窗口）
-    broadcastDownloadUpdated({
-      id: downloadId,
-      windowId,
-      profileId,
-      url: item.getURL(),
-      filename,
-      savePath,
-      state: 'progressing',
-      totalBytes: item.getTotalBytes(),
-      receivedBytes: 0,
-      startTime,
-    })
-
-    // 监听下载进度
-    item.on('updated', (_e2, state) => {
-      if (state === 'progressing') {
-        const received = item.getReceivedBytes()
-        const total = item.getTotalBytes()
-        // 更新存储
-        try {
-          browserDownloadStore.update(downloadId, { receivedBytes: received, totalBytes: total, state: 'progressing' })
-        } catch { /* ignore */ }
-        // 广播
-        broadcastDownloadUpdated({
-          id: downloadId,
-          windowId,
-          profileId,
-          url: item.getURL(),
-          filename,
-          savePath,
-          state: 'progressing',
-          totalBytes: total,
-          receivedBytes: received,
-          startTime,
-        })
-      }
-    })
-
-    // 监听下载完成
-    item.once('done', (_e2, state) => {
-      const endTime = Date.now()
-      const finalState = state === 'completed' ? 'completed' : state === 'interrupted' ? 'interrupted' : 'cancelled'
-      // 更新存储
-      try {
-        browserDownloadStore.update(downloadId, {
-          state: finalState,
-          receivedBytes: item.getReceivedBytes(),
-          totalBytes: item.getTotalBytes(),
-          endTime,
-        })
-      } catch { /* ignore */ }
-      // 广播
-      broadcastDownloadUpdated({
-        id: downloadId,
-        windowId,
-        profileId,
-        url: item.getURL(),
-        filename,
-        savePath,
-        state: finalState,
-        totalBytes: item.getTotalBytes(),
-        receivedBytes: item.getReceivedBytes(),
-        startTime,
-        endTime,
-      })
-    })
-  })
-}
 
 /** app 是否正在退出（云电脑模式 close 保护的放行条件） */
 let appQuitting = false
@@ -347,7 +173,7 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
   loadRenderer(win, windowId, 'browser', { profileId })
 
   // 注册下载处理
-  registerBrowserDownloads(win, windowId, profileId)
+  registerBrowserDownloads(profileId)
 
   win.once('ready-to-show', () => {
     win.show()
@@ -538,4 +364,3 @@ async function toggleBrowserWindowInner(profileId: string): Promise<void> {
   if (!tabId) return
   await detachProfileToBrowserWindow(MAIN_WINDOW_ID, tabId, { createBrowserWindow })
 }
-

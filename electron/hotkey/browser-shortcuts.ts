@@ -20,8 +20,7 @@ export interface BrowserShortcutsHost {
   registrationStates: Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>
   /** 已注册 accelerator 的 uiohook 匹配条件缓存 */
   uiohookMatchers: Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>
-  /** 最近一次系统通路触发时间戳（accelerator → ms，长按连切仲裁用） */
-  lastSystemTriggerAt: Map<string, number>
+  systemDispatches: Map<string, { triggeredAt: number; releaseCount: number }>
   /** uiohook 是否已启动 */
   uiohookStarted: boolean
   /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时） */
@@ -122,7 +121,7 @@ export function unregisterBrowserShortcut(host: BrowserShortcutsHost, accelerato
   if (!host.registered.has(accelerator)) {
     host.uiohookMatchers.delete(accelerator)
   }
-  host.lastSystemTriggerAt.delete(accelerator)
+  host.systemDispatches.delete(accelerator)
   host.ownershipLeases.get(accelerator)?.release()
   host.ownershipLeases.delete(accelerator)
   host.registrationStates.delete(accelerator)

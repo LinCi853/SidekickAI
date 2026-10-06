@@ -16,7 +16,10 @@ import { useEffect, useRef } from 'react';
 import { useShortcutRegistry } from '../../hooks/useShortcutRegistry';
 import { useBrowserTabStore } from '../../store/useBrowserTabStore';
 import { useRecentClosedStore } from './RecentClosedStore';
-import { onWebviewHotkey, clearAllNavHistory, clearAllDownloads } from '../../lib/electron-api';
+import { onWebviewHotkey, clearAllNavHistory, clearAllDownloads, validateWebviewHotkeyTarget } from '../../lib/electron-api';
+import type { WebviewHotkeyPayload } from '../../../electron/shared/types';
+import type { WebviewElement } from '../../lib/webview';
+import { leaseWebviewLifecycle, matchesWebviewHotkeyTarget, type WebviewLifecycleLease } from '../../lib/webview-lifecycle';
 
 export interface BrowserKeyboardOptions {
   /** 聚焦地址栏回调 */
@@ -229,7 +232,9 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
   // 按 action 查表执行同一 handler（toggleCloudPc 不受 enabled 限制，
   // 云电脑模式下 Ctrl+Alt+C 依然能退出，避免快捷键死锁）。
   useEffect(() => {
-    const offHotkey = onWebviewHotkey((payload: { action: string; data?: unknown }) => {
+    let active = true;
+    const pending = new Set<WebviewLifecycleLease>();
+    const dispatch = (payload: WebviewHotkeyPayload) => {
       const action = payload.action;
       if (action === 'toggleCloudPc') {
         optsRef.current.onToggleCloudPc?.();
@@ -243,7 +248,33 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
       } else {
         console.log('[browser-hotkey] 未注册的转发 action:', action);
       }
+    };
+    const offHotkey = onWebviewHotkey(payload => {
+      const target = payload.target;
+      if (!target) { dispatch(payload); return; }
+      const store = useBrowserTabStore.getState();
+      const tab = store.tabs.find(item => item.id === store.activeTabId);
+      if (!tab) return;
+      const expected = { tabId: tab.id, profileId: tab.profileId || store.profileId };
+      if (target.windowId !== undefined && target.windowId !== store.windowId) return;
+      const currentWebview = () => document.querySelector(`webview[data-tab-id="${tab.id}"]`) as WebviewElement | null;
+      const webview = currentWebview();
+      if (!webview || !matchesWebviewHotkeyTarget(webview, target, expected)) return;
+      const requestedTab = (payload.data as { tabId?: string } | undefined)?.tabId;
+      if (requestedTab && requestedTab !== tab.id) return;
+      const lifecycle = leaseWebviewLifecycle(webview, currentWebview);
+      const page = lifecycle.capture();
+      pending.add(lifecycle);
+      void Promise.resolve().then(() => validateWebviewHotkeyTarget(target)).then(valid => {
+        const current = useBrowserTabStore.getState();
+        if (!active || !valid || !page.isCurrent() || current.activeTabId !== tab.id
+          || current.profileId !== store.profileId) return;
+        dispatch(payload);
+      }).catch(error => console.warn('[BrowserView] Hotkey target validation failed:', error)).finally(() => {
+        pending.delete(lifecycle);
+        lifecycle.dispose();
+      });
     });
-    return () => { offHotkey(); };
+    return () => { active = false; offHotkey(); pending.forEach(lifecycle => lifecycle.dispose()); pending.clear(); };
   }, []);
 }

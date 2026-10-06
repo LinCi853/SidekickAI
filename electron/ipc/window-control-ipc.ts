@@ -23,6 +23,7 @@ import {
 import type { WindowManager } from '../window/manager.js'
 import type { FingerprintEngine } from '../fingerprint/engine.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { validateWebviewHotkeyTarget } from '../window-factory/webview-hotkey-target.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface WindowControlIpcDeps {
@@ -58,6 +59,9 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   const handle = scope
     ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(IPC_CHANNELS.WEBVIEW_VALIDATE_HOTKEY_TARGET, (event: IpcMainInvokeEvent, target: unknown) =>
+    validateWebviewHotkeyTarget(event.sender, target))
 
   // ===== 创建自定义对话窗口 IPC（旧单例） =====
   handle(IPC_CHANNELS.CHAT_OPEN_WINDOW, () => {

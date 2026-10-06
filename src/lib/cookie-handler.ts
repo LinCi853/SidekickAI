@@ -89,12 +89,22 @@ export function buildCookieHandlerScript(hostname: string, config: CookieHandler
     const hideCss = COOKIE_CONTAINER_SELECTORS.map((s) => `${s} { display: none !important; }`).join('\n')
     const hostnameJson = JSON.stringify(hostname)
     return `(function() {
-      if (window.__ai_cookie_handler_injected__) return;
+      if (window.__ai_cookie_handler__) window.__ai_cookie_handler__.dispose();
       window.__ai_cookie_handler_injected__ = true;
       var style = document.createElement('style');
       style.id = '__ai_cookie_hide__';
       style.textContent = ${JSON.stringify(hideCss)};
       (document.head || document.documentElement).appendChild(style);
+      var state = { dispose: function() {
+        style.remove();
+        window.removeEventListener('pagehide', state.dispose);
+        if (window.__ai_cookie_handler__ === state) {
+          delete window.__ai_cookie_handler__;
+          delete window.__ai_cookie_handler_injected__;
+        }
+      } };
+      window.__ai_cookie_handler__ = state;
+      window.addEventListener('pagehide', state.dispose, { once: true });
       console.log('[cookie-handler] 黑名单域名，已隐藏 cookie 弹窗: ' + ${hostnameJson});
     })();`
   }
@@ -104,8 +114,24 @@ export function buildCookieHandlerScript(hostname: string, config: CookieHandler
   const containerSelectors = JSON.stringify(COOKIE_CONTAINER_SELECTORS)
   const hostnameJson = JSON.stringify(hostname)
   return `(function() {
-    if (window.__ai_cookie_handler_injected__) return;
+    if (window.__ai_cookie_handler__) window.__ai_cookie_handler__.dispose();
     window.__ai_cookie_handler_injected__ = true;
+    var disposed = false;
+    var observer;
+    var timer;
+    var state = { dispose: function() {
+      if (disposed) return;
+      disposed = true;
+      if (observer) observer.disconnect();
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('pagehide', state.dispose);
+      if (window.__ai_cookie_handler__ === state) {
+        delete window.__ai_cookie_handler__;
+        delete window.__ai_cookie_handler_injected__;
+      }
+    } };
+    window.__ai_cookie_handler__ = state;
+    window.addEventListener('pagehide', state.dispose, { once: true });
 
     var COOLDOWN_MS = ${config.cooldownMs};
     var HOSTNAME = ${hostnameJson};
@@ -145,6 +171,7 @@ export function buildCookieHandlerScript(hostname: string, config: CookieHandler
     }
 
     function tryClick() {
+      if (disposed) return true;
       // 冷却期内不重复处理
       if (Date.now() - getLastHandled() < COOLDOWN_MS) {
         return true;
@@ -166,17 +193,24 @@ export function buildCookieHandlerScript(hostname: string, config: CookieHandler
     if (tryClick()) return;
 
     // MutationObserver：监听 cookie 容器动态渲染
-    var observer = new MutationObserver(function() {
+    observer = new MutationObserver(function() {
       if (tryClick()) {
         observer.disconnect();
+        if (timer) clearTimeout(timer);
       }
     });
     observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
 
     // 10 秒后停止监听（避免长期占用）
-    setTimeout(function() {
+    timer = setTimeout(function() {
       observer.disconnect();
     }, 10000);
+  })();`
+}
+
+export function buildCookieHandlerCleanupScript(): string {
+  return `(function() {
+    if (window.__ai_cookie_handler__) window.__ai_cookie_handler__.dispose();
   })();`
 }
 

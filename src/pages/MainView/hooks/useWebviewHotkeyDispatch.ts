@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
-import { onWebviewHotkey, openPromptWindow } from '../../../lib/electron-api';
+import { onWebviewHotkey, openPromptWindow, validateWebviewHotkeyTarget } from '../../../lib/electron-api';
+import type { WebviewHotkeyPayload } from '../../../../electron/shared/types';
 import { useTabStore } from '../../../store/useTabStore';
 import { useProfileStore } from '../../../store/useProfileStore';
 import { useThemeStore } from '../../../store/useThemeStore';
 import { safeReloadWebview, type WebviewElement } from '../../../lib/webview';
 import { focusInputInWebview } from '../../../hooks/useWebViewControl';
 import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms';
+import { leaseWebviewLifecycle, matchesWebviewHotkeyTarget, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle';
 
 /**
  * Dispatches webview hotkey events (forwarded from main process) to the appropriate handlers.
@@ -20,7 +22,9 @@ export function useWebviewHotkeyDispatch(
   activeTabDomReadyRef: React.MutableRefObject<boolean>,
 ) {
   useEffect(() => {
-    const off = onWebviewHotkey((payload) => {
+    let active = true;
+    const pending = new Set<WebviewLifecycleLease>();
+    const dispatch = (payload: WebviewHotkeyPayload) => {
       console.log('[MainView] 收到 webview 快捷键转发:', payload);
       const store = useTabStore.getState();
       if (payload.action === 'switchTab') {
@@ -106,7 +110,32 @@ export function useWebviewHotkeyDispatch(
         wv.focus?.();
         void focusInputInWebview(wv, selector);
       }
+    };
+    const off = onWebviewHotkey(payload => {
+      const target = payload.target;
+      if (!target) { dispatch(payload); return; }
+      const store = useTabStore.getState();
+      const tab = store.tabs.find(item => item.id === store.activeTabId);
+      if (!tab) return;
+      if (target.windowId !== undefined && target.windowId !== store.windowId) return;
+      const currentWebview = () => document.querySelector(`webview[data-tab-id="${tab.id}"]`) as WebviewElement | null;
+      const webview = currentWebview();
+      if (!webview || !matchesWebviewHotkeyTarget(webview, target, { tabId: tab.id, profileId: tab.profileId })) return;
+      const requestedTab = (payload.data as { tabId?: string } | undefined)?.tabId;
+      if (requestedTab && requestedTab !== tab.id) return;
+      const lifecycle = leaseWebviewLifecycle(webview, currentWebview);
+      const page = lifecycle.capture();
+      pending.add(lifecycle);
+      void Promise.resolve().then(() => validateWebviewHotkeyTarget(target)).then(valid => {
+        const current = useTabStore.getState();
+        if (!active || !valid || !page.isCurrent() || current.activeTabId !== tab.id
+          || !current.tabs.some(item => item.id === tab.id && item.profileId === tab.profileId)) return;
+        dispatch(payload);
+      }).catch(error => console.warn('[MainView] Hotkey target validation failed:', error)).finally(() => {
+        pending.delete(lifecycle);
+        lifecycle.dispose();
+      });
     });
-    return off;
+    return () => { active = false; off(); pending.forEach(lifecycle => lifecycle.dispose()); pending.clear(); };
   }, [addTab, closeTab, detachTab, setShortcutsOpen, activeTabDomReadyRef]);
 }

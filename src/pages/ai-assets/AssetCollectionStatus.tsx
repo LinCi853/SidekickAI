@@ -26,11 +26,16 @@ export default function AssetCollectionStatus({ onAction }: {
   if (error) return <p className="asset-feedback asset-error" role="alert">{error}</p>;
   if (!issues.length) return null;
   return <div className="asset-feedback" role="status" aria-label="等待补收的对话">
-    {issues.map(issue => <div key={issue.webContentsId} className="asset-actions">
-      <span>{issue.profileName} 的对话暂未保存，正在重试。请保留原页面。</span>
-      <Button variant="outline" onClick={() => onAction(async () => {
-        if (!await api.focusPage(issue.webContentsId)) throw new Error('原页面已关闭，请重新打开该对话');
-      })}>返回原页面</Button>
+    {issues.map(issue => <div key={issue.profileId} className="asset-actions">
+      <span>{issue.profileName}：{issue.paused
+        ? '采集已暂停，新页面变化暂不记录，已捕获内容等待恢复。请保留原页面。'
+        : issue.pendingObservations
+          ? `已捕获的 ${issue.pendingObservations} 份记录正在等待收纳，恢复后会继续写入。`
+          : '部分已捕获内容仍在等待收纳或关联，正在重试。请保留原页面。'}
+        {!issue.webContentsId && ' 请重新打开此账号页面。'}</span>
+      <Button variant="outline" disabled={!issue.webContentsId} onClick={() => onAction(async () => {
+        if (!await api.focusPage(issue.webContentsId, issue.profileId)) throw new Error('此账号页面已关闭，请重新打开');
+      })}>打开此账号页面</Button>
     </div>)}
   </div>;
 }

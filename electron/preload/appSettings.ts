@@ -74,6 +74,11 @@ export const appSettingsApi = {
     save: (rule: unknown) => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_SAVE, rule),
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_DELETE, id),
     update: (id: string, patch: unknown) => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_UPDATE, id, patch),
+    onChanged: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on(IPC_CHANNELS.BLOCK_RULES_CHANGED, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.BLOCK_RULES_CHANGED, handler)
+    },
   },
   /** 主→渲染：应用设置变更广播（任意窗口修改设置后通知所有窗口同步） */
   onAppSettingsChanged: (callback: (settings: AppSettings) => void) => {

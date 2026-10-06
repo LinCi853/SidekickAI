@@ -61,7 +61,7 @@ export default function BrowserWebviewTab({
   const [remountKey, setRemountKey] = useState(0);
   const domReadyRef = useRef(false);
 
-  const handleDomReady = useWebviewDomReady({ webviewRef, domReadyRef, tab, profile });
+  const handleDomReady = useWebviewDomReady({ webviewRef, domReadyRef, tab, profile, remountKey });
 
   const {
     handleNavigate,
@@ -74,6 +74,7 @@ export default function BrowserWebviewTab({
     profile,
     navigateUrl,
     onNavigateComplete,
+    remountKey,
   });
 
   const {
@@ -82,7 +83,7 @@ export default function BrowserWebviewTab({
     handleFinishLoad,
     handleStopLoading,
     handleFailLoad,
-  } = useWebviewLoadingProgress({ webviewRef, domReadyRef, tab });
+  } = useWebviewLoadingProgress({ webviewRef, domReadyRef, tab, remountKey });
 
   const {
     handleMediaStartedPlaying,

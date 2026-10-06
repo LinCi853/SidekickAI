@@ -6,6 +6,7 @@ import {
 import type { Profile } from '../../../lib/electron-api';
 import { safeLoadURLWebview, type WebviewElement } from '../../../lib/webview';
 import { useTabStore } from '../../../store/useTabStore';
+import { leaseWebviewLifecycle } from '../../../lib/webview-lifecycle';
 
 type NavigationChangeCallback = (canGoBack: boolean, canGoForward: boolean) => void;
 type ProcessGoneCallback = (reason: string) => void;
@@ -37,6 +38,8 @@ export function useWebviewLifecycleEvents({
   useEffect(() => {
     const webview = webviewRef.current;
     if (!webview) return;
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
+    const currentTabUrl = () => useTabStore.getState().tabs.find(item => item.id === tab.id)?.url || '';
 
     // webview 内长按 Tab 调出底栏（500ms+）。
     // 注：Alt+1~9 / Ctrl+Tab / F12 / Ctrl+G 等应用内快捷键
@@ -61,12 +64,12 @@ export function useWebviewLifecycleEvents({
             clearTimeout(longPressTabTimerRef.current);
           }
           longPressTabTriggeredRef.current = false;
-          longPressTabTimerRef.current = setTimeout(() => {
+          longPressTabTimerRef.current = lifecycle.delay(() => {
             longPressTabTriggeredRef.current = true;
             const store = useTabStore.getState();
             // 切换底栏（已展开则收起，已收起则展开）
             store.toggleBottomBar();
-          }, 500);
+          }, 500) ?? null;
           return;
         }
       }
@@ -82,10 +85,11 @@ export function useWebviewLifecycleEvents({
 
     // 导航事件：更新 tab.url（含 hash 变化的 in-page 导航），保证"设为AI首页"用当前URL
     const handleNavigate = (e: Event) => {
-      const navEvent = e as unknown as { url?: string; type?: string };
+      const navEvent = e as unknown as { url?: string; type?: string; isMainFrame?: boolean };
+      if (navEvent.isMainFrame === false) return;
       const newUrl = navEvent.url;
       console.log('[WebviewTab] did-navigate, type=', (e as Event).type, 'newUrl=', newUrl, 'oldTabUrl=', tab.url);
-      if (newUrl && newUrl !== tab.url) {
+      if (newUrl && newUrl !== currentTabUrl()) {
         void useTabStore.getState().updateTabUrl(tab.id, newUrl);
         // P1-1：记录导航历史到该 Profile 的独立历史中
         void recordNavHistory(profile.id, {
@@ -96,9 +100,11 @@ export function useWebviewLifecycleEvents({
           timestamp: Date.now(),
         }).catch(() => { /* ignore */ });
         // 延迟读取 title 并更新历史记录
-        setTimeout(() => {
+        const page = lifecycle.capture();
+        lifecycle.delay(() => {
           try {
             void webview.executeJavaScript('document.title').then((title) => {
+              if (!page.isCurrent()) return;
               if (title && typeof title === 'string') {
                 void recordNavHistory(profile.id, {
                   id: '',
@@ -128,7 +134,7 @@ export function useWebviewLifecycleEvents({
       console.error('[WebviewTab] guest 进程异常退出:', { tabId: tab.id, reason, exitCode: ev.exitCode });
       onProcessGoneRef.current?.(reason);
       // 崩溃 URL = 当前 tab.url（如为空则用 profile 首页）
-      const failUrl = tab.url || profile.aiPlatformUrl || '';
+      const failUrl = currentTabUrl() || profile.aiPlatformUrl || '';
       triggerRemount(failUrl, `render-process-gone(${reason})`, false);
     };
     webview.addEventListener('render-process-gone', handleProcessGone as EventListener);
@@ -169,10 +175,11 @@ export function useWebviewLifecycleEvents({
       ) {
         proxyFallbackTriggered = true;
         (window as any).__proxyFallbackGlobal = true;
-        const failedUrl = ev.validatedURL || tab.url || '';
+        const failedUrl = ev.validatedURL || currentTabUrl();
+        const page = lifecycle.capture();
         console.warn(`[proxy-fallback] 检测到网络错误 ${ev.errorCode}，1.5s 后检查页面是否有内容...`);
         // 等待 1.5s 让页面有机会恢复（重定向、SPA 渲染等），然后检查是否白屏
-        setTimeout(() => {
+        lifecycle.delay(() => {
           void (async () => {
             try {
               // 执行 JS 检查页面是否有可见内容（文本或 DOM 子元素）
@@ -180,6 +187,7 @@ export function useWebviewLifecycleEvents({
               const pageInfo: { textLen: number; childCount: number; htmlLen: number } = await (webview as any).executeJavaScript(
                 '(function(){try{var b=document.body;if(!b)return{textLen:0,childCount:0,htmlLen:0};return{textLen:(b.innerText||"").trim().length,childCount:b.children?b.children.length:0,htmlLen:(b.innerHTML||"").length}}catch(e){return{textLen:0,childCount:0,htmlLen:0}}})()'
               );
+              if (!page.isCurrent()) return;
               console.warn(`[proxy-fallback] 页面内容检查: textLen=${pageInfo.textLen} childCount=${pageInfo.childCount} htmlLen=${pageInfo.htmlLen} url="${failedUrl}"`);
               // 有文本内容 或 有 DOM 子元素 或 HTML 长度超过最小阈值 → 页面已渲染，不是白屏
               if (pageInfo.textLen > 0 || pageInfo.childCount > 0 || pageInfo.htmlLen > 200) {
@@ -189,10 +197,11 @@ export function useWebviewLifecycleEvents({
               // 确认白屏，执行兜底
               console.warn('[proxy-fallback] 确认白屏（无可见内容），执行代理兜底...');
               const result = await applyProxyFallback();
+              if (!page.isCurrent()) return;
               console.warn(`[proxy-fallback] ← switched=${result.switched} mode=${result.mode}`);
               if (result.switched) {
                 console.warn(`[proxy-fallback] 200ms 后重新加载: ${failedUrl}`);
-                setTimeout(() => {
+                lifecycle.delay(() => {
                   try {
                     if (failedUrl) {
                       void safeLoadURLWebview(webview, failedUrl);
@@ -218,11 +227,11 @@ export function useWebviewLifecycleEvents({
       // ERR_FAILED (-2) 且主帧：guest 可能已死亡，延迟触发 remount
       // （如果 render-process-gone 先到达并已触发 remount，这里的定时器会在 cleanup 中被清除）
       if (ev.errorCode === -2 && ev.isMainFrame && !remountTimer) {
-        const failUrl = ev.validatedURL || tab.url || '';
-        remountTimer = setTimeout(() => {
+        const failUrl = ev.validatedURL || currentTabUrl();
+        remountTimer = lifecycle.delay(() => {
           remountTimer = null;
           triggerRemount(failUrl, 'ERR_FAILED 持续', false);
-        }, 500);
+        }, 500) ?? null;
       }
     };
     webview.addEventListener('did-fail-load', handleFailLoad as EventListener);
@@ -241,7 +250,10 @@ export function useWebviewLifecycleEvents({
     webview.addEventListener('ai-webview-fatal-failure', handleFatalFailure as EventListener);
 
     return () => {
+      lifecycle.dispose();
       if (remountTimer) { clearTimeout(remountTimer); remountTimer = null; }
+      if (longPressTabTimerRef.current) { clearTimeout(longPressTabTimerRef.current); longPressTabTimerRef.current = null; }
+      longPressTabTriggeredRef.current = false;
       webview.removeEventListener('before-input-event', handleBeforeInput);
       webview.removeEventListener('did-navigate', handleNavigate as EventListener);
       webview.removeEventListener('did-navigate-in-page', handleNavigate as EventListener);
