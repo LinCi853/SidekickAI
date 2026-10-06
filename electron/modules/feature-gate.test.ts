@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock dependencies
-vi.mock('./registry.js', () => ({
+vi.mock('./runtime-state.js', () => ({
   isModuleEnabled: vi.fn(() => false),
   isModuleInstalled: vi.fn(() => true),
   assertModuleEnabled: vi.fn(),
@@ -21,7 +21,7 @@ describe('FeatureGate', () => {
 
   beforeEach(async () => {
     vi.resetModules()
-    mockRegistry = await import('./registry.js') as unknown as typeof mockRegistry
+    mockRegistry = await import('./runtime-state.js') as unknown as typeof mockRegistry
     mockCapRegistry = (await import('./capability-registry.js')).capabilityRegistry as unknown as typeof mockCapRegistry
     const mod = await import('./feature-gate.js')
     featureGate = mod.featureGate

@@ -24,11 +24,11 @@ import { syncAdvancedPanelHotkey, syncBrowserProfileShortcuts } from './wiring/h
 import { injectionBroker } from './injection-broker.js'
 import { targetRegistry } from './target-registry.js'
 import { capabilityRegistry } from './capability-registry.js'
+import { getModuleRuntime, setModuleRuntime, isModuleEnabled } from './runtime-state.js'
+export { isModuleEnabled, isModuleInstalled, assertModuleEnabled } from './runtime-state.js'
 
 /** 注册表：id → manifest */
 const manifests = new Map<string, ModuleManifest>()
-/** 运行时状态：id → { enabled, installed }（bootstrap 后与数据库一致） */
-const runtime = new Map<string, { enabled: boolean; installed: boolean }>()
 const stateObservers = new Set<() => void>()
 
 export function observeModuleState(observer: () => void): () => void {
@@ -50,27 +50,6 @@ export function getManifest(id: string): ModuleManifest | undefined {
 
 export function listManifests(): ModuleManifest[] {
   return [...manifests.values()]
-}
-
-/** 查询模块运行时启用状态（未注册的 id 一律视为禁用） */
-export function isModuleEnabled(id: string): boolean {
-  return runtime.get(id)?.enabled ?? false
-}
-
-/** 查询模块运行时安装状态（未注册的 id 一律视为未安装） */
-export function isModuleInstalled(id: string): boolean {
-  return runtime.get(id)?.installed ?? false
-}
-
-/**
- * 断言模块已启用；禁用时抛出错误（窗口创建/入口拦截统一使用，
- * 见 11.10「全路径封死」）。
- */
-export function assertModuleEnabled(id: string, actionLabel?: string): void {
-  if (!isModuleEnabled(id)) {
-    const label = actionLabel ? `（${actionLabel}）` : ''
-    throw new Error(`[modules] 模块已关闭: ${id}${label}`)
-  }
 }
 
 /** 模块专属窗口路由标记（残留扫描用） */
@@ -198,7 +177,7 @@ export function runResidualScan(): ResidualScanResult {
 /** 渲染层可见的模块信息列表 */
 export function listModuleInfos(): ModuleInfo[] {
   return listManifests().map((m) => {
-    const rt = runtime.get(m.id) ?? { enabled: false, installed: false }
+    const rt = getModuleRuntime(m.id) ?? { enabled: false, installed: false }
     return {
       id: m.id,
       name: m.name,
@@ -286,7 +265,7 @@ export async function initEnabledModules(): Promise<void> {
     let enabled = st.enabled && st.installed
     if (enabled) {
       for (const dep of m.dependencies) {
-        const depRt = runtime.get(dep)
+        const depRt = getModuleRuntime(dep)
         if (!depRt || !depRt.enabled || !depRt.installed) {
           console.warn(`[modules] 模块 ${m.id} 因依赖 ${dep} 未启用而级联禁用`)
           enabled = false
@@ -294,7 +273,7 @@ export async function initEnabledModules(): Promise<void> {
         }
       }
     }
-    runtime.set(m.id, { enabled, installed: st.installed })
+    setModuleRuntime(m.id, { enabled, installed: st.installed })
     if (enabled && m.init) {
       try {
         await m.init()
@@ -303,7 +282,7 @@ export async function initEnabledModules(): Promise<void> {
         // 运行期故障：仅本次会话回退为禁用，不持久化（用户选择保持，
         // 修复代码/环境后下次启动自动重试，避免一次故障永久关闭模块）。
         console.error(`[modules] 模块 init 失败，本次会话回退为禁用: ${m.id}`, err)
-        runtime.set(m.id, { enabled: false, installed: st.installed })
+        setModuleRuntime(m.id, { enabled: false, installed: st.installed })
       }
     }
   }
@@ -320,7 +299,7 @@ export async function initEnabledModules(): Promise<void> {
       st.enabled = true
       st.updatedAt = Date.now()
       saveModuleState(st)
-      runtime.set('custom-chat', { enabled: true, installed: true })
+      setModuleRuntime('custom-chat', { enabled: true, installed: true })
       const m = manifests.get('custom-chat')
       if (m?.init) {
         try {
@@ -346,7 +325,7 @@ export async function setModuleEnabled(
 ): Promise<{ ok: boolean; error?: string }> {
   const m = manifests.get(id)
   if (!m) return { ok: false, error: `未知模块: ${id}` }
-  const rt = runtime.get(id)
+  const rt = getModuleRuntime(id)
   if (!rt) return { ok: false, error: `模块未初始化: ${id}` }
   if (enabled && !rt.installed) {
     return { ok: false, error: '该模块未安装，请重新运行安装包补装' }
@@ -361,6 +340,7 @@ export async function setModuleEnabled(
     try {
       await m.init?.()
       rt.enabled = true
+      setModuleRuntime(id, rt)
     } catch (err) {
       console.error(`[modules] 启用失败: ${id}`, err)
       return { ok: false, error: String(err) }
@@ -373,9 +353,10 @@ export async function setModuleEnabled(
       console.error(`[modules] 禁用 teardown 异常（继续强制禁用）: ${id}`, err)
     }
     rt.enabled = false
+    setModuleRuntime(id, rt)
     // 硬依赖级联：依赖本模块的模块一并关闭（如关闭 custom-chat → 关闭 tts）
     for (const other of listManifests()) {
-      if (other.dependencies.includes(id) && runtime.get(other.id)?.enabled) {
+      if (other.dependencies.includes(id) && getModuleRuntime(other.id)?.enabled) {
         await setModuleEnabled(other.id, false)
       }
     }
@@ -406,7 +387,7 @@ export async function clearModuleData(
   if (!m.clearData) return { ok: false, error: '该模块暂不支持清除数据' }
   try {
     await m.clearData()
-    const rt = runtime.get(id)
+    const rt = getModuleRuntime(id)
     saveModuleState({
       id,
       enabled: rt?.enabled ?? false,

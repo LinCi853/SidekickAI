@@ -32,7 +32,7 @@
     "product:check": "node packages/product-contract/sync.cjs",
     "product:sync": "node packages/product-contract/sync.cjs --apply",
     "shared:check": "node scripts/shared-source.cjs",
-    "prebuild": "npm run product:check && npm run shared:check",
+    "prebuild": "npm run product:check && npm run shared:check && npm run architecture:check",
     "test:installers": "node scripts/test-installers.cjs",
     "build:release:installer": "node scripts/build-distribution.cjs --mode installer",
     "preflight:tauri-installer": "node scripts/build-tauri-installer.cjs --preflight",
@@ -45,7 +45,9 @@
     "preflight:release": "node scripts/build-distribution.cjs --preflight",
     "build:candidate:portable": "node scripts/build-distribution.cjs --mode portable",
     "build:candidate:all": "node scripts/build-distribution.cjs --mode all",
-    "build:release:portable": "node scripts/build-distribution.cjs --mode portable"
+    "build:release:portable": "node scripts/build-distribution.cjs --mode portable",
+    "architecture:check": "node scripts/architecture-check.mjs",
+    "test:architecture": "node --test scripts/architecture-check.test.mjs"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",

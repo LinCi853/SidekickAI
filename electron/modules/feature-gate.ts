@@ -12,7 +12,7 @@ import {
   isModuleEnabled as registryIsModuleEnabled,
   isModuleInstalled as registryIsModuleInstalled,
   assertModuleEnabled as registryAssertModuleEnabled,
-} from './registry.js'
+} from './runtime-state.js'
 import { capabilityRegistry } from './capability-registry.js'
 
 // ==================== 权限类型 ====================

@@ -38,5 +38,8 @@ jobs:
       - name: 单元回归
         run: npm test -- --maxWorkers=4 --minWorkers=1
 
+      - name: 依赖边界检查
+        run: npm run test:architecture && npm run architecture:check
+
       - name: 构建（主进程 / preload / 渲染层）
         run: npm run build
