@@ -29,7 +29,7 @@ export default function AssetFileCard({ item, onConversation, onAction, showConv
     {source && <p className="asset-file-source" title={source}>{source}</p>}
     <div className="asset-file-actions">
       {showConversation && <IconButton className="asset-icon-button" aria-label="查看来源对话" onClick={() => onConversation(item.conversationId, { messageId: item.messageId, attachmentId: item.id })}><MessageSquare size={16} /></IconButton>}
-      {['saved', 'reused'].includes(item.status) ? <IconButton className="asset-icon-button" aria-label="定位原件" onClick={() => onAction(async () => {
+      {['saved', 'reused'].includes(item.status) ? <IconButton className="asset-icon-button" aria-label="在文件夹中查看副本" onClick={() => onAction(async () => {
         const result = await api.openAttachment(item.id); if (!result.ok) throw new Error(result.error);
       })}><FolderOpen size={16} /></IconButton> : <IconButton className="asset-icon-button" aria-label="重试收纳" onClick={() => onAction(async () => {
         const result = await api.retryAttachment(item.id); if (!result.ok) throw new Error(result.error);

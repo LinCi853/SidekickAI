@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { mkdtemp, mkdir, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const state = vi.hoisted(() => ({
@@ -8,10 +8,11 @@ const state = vi.hoisted(() => ({
   observers: [] as Array<() => void>, session: {}, record: undefined as any,
   observeError: undefined as Error | undefined, messages: [] as Array<[string, unknown]>,
   destination: undefined as string | undefined,
+  temporaryRoot: undefined as string | undefined,
   excluded: false, busy: false, guest: undefined as any,
 }))
 vi.mock('electron', () => ({
-  app: { getPath: () => state.root },
+  app: { getPath: (name: string) => name === 'temp' ? state.temporaryRoot ?? state.root : state.root },
   BrowserWindow: { getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: (channel: string, data: unknown) => state.messages.push([channel, data]) } }], fromWebContents: () => ({}) },
   clipboard: {}, dialog: { showSaveDialog: async () => state.destination ? { canceled: false, filePath: state.destination } : { canceled: true } },
   shell: { showItemInFolder: vi.fn(), openExternal: vi.fn(async () => {}) }, net: { fetch: vi.fn() },
@@ -42,6 +43,7 @@ vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))
 vi.mock('../ai/handler.js', () => ({ hasActiveAssetStreams: () => state.busy }))
 
 import { OriginalVault } from './original-vault'
+import { dialog, shell } from 'electron'
 import { registerAiAssetIpc, hasWebOriginalTransfers, closeAssetCollectionJournal } from './asset-ipc'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
 
@@ -58,8 +60,10 @@ beforeEach(async () => {
   await mkdir(path.resolve('build'), { recursive: true })
   state.root = await mkdtemp(path.resolve('build/asset-ipc-test-'))
   state.enabled = true; state.observeError = undefined; state.messages = []; state.destination = undefined
+  state.temporaryRoot = undefined
   state.excluded = false; state.busy = false
   state.handlers.clear(); state.observers = []
+  vi.mocked(shell.showItemInFolder).mockClear()
   guest = Object.assign(new EventEmitter(), { id: 8, mainFrame: {}, session: state.session, isDestroyed: () => false })
   state.guest = guest
   guestEvent = { sender: guest, senderFrame: guest.mainFrame }
@@ -81,6 +85,48 @@ afterEach(async () => {
 })
 
 describe('asset original admission and recovery', () => {
+  it('reveals a named independent copy of a historical digest object', async () => {
+    state.record.name = 'report.pdf'
+    state.record.mimeType = 'application/pdf'
+    expect(await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).toEqual({ ok: true })
+    const revealed = vi.mocked(shell.showItemInFolder).mock.calls.at(-1)![0]
+    expect(path.basename(revealed)).toBe('report.pdf')
+    expect(revealed).not.toBe(vault.pathFor(state.record.sha256))
+    expect(await readFile(revealed)).toEqual(bytes)
+    await writeFile(revealed, 'edited copy')
+    await vault.verify(state.record.sha256, bytes.length)
+    expect(await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).toEqual({ ok: true })
+    const next = vi.mocked(shell.showItemInFolder).mock.calls.at(-1)![0]
+    expect(next).not.toBe(revealed)
+    expect(await readFile(next)).toEqual(bytes)
+    expect(await readFile(revealed, 'utf8')).toBe('edited copy')
+  })
+  it('keeps a healthy original when the temporary copy cannot be created', async () => {
+    state.temporaryRoot = path.join(state.root, 'missing')
+    expect(await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).toMatchObject({ ok: false, error: expect.stringContaining('副本') })
+    expect(state.record.status).toBe('saved')
+    expect(shell.showItemInFolder).not.toHaveBeenCalled()
+    await vault.verify(state.record.sha256, bytes.length)
+  })
+  it('uses the same safe extension for export and folder access without changing the saved name', async () => {
+    state.record.name = 'C:\\private\\report'
+    state.record.mimeType = 'application/pdf'
+    const save = vi.spyOn(dialog, 'showSaveDialog')
+    try {
+      expect(await call(ipc.ASSET_ATTACHMENT_EXPORT, viewerEvent, 'file-a')).toEqual({ ok: false, canceled: true })
+      expect(save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ defaultPath: 'report.pdf' }))
+      expect(await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).toEqual({ ok: true })
+      expect(path.basename(vi.mocked(shell.showItemInFolder).mock.calls.at(-1)![0])).toBe('report.pdf')
+      expect(state.record.name).toBe('C:\\private\\report')
+    } finally { save.mockRestore() }
+  })
+  it('rejects file access from a webpage or child frame', async () => {
+    for (const event of [guestEvent, { ...viewerEvent, senderFrame: {} }]) {
+      await expect(call(ipc.ASSET_ATTACHMENT_OPEN, event, 'file-a')).rejects.toThrow()
+      await expect(call(ipc.ASSET_ATTACHMENT_EXPORT, event, 'file-a')).rejects.toThrow()
+    }
+    expect(shell.showItemInFolder).not.toHaveBeenCalled()
+  })
   it('does not retry originals excluded by selected cleanup', async () => {
     state.excluded = true
     expect(await call(ipc.ASSET_ATTACHMENT_BEGIN, guestEvent, input)).toEqual({ suppressed: true })
@@ -236,6 +282,7 @@ describe('asset original admission and recovery', () => {
     await writeFile(vault.pathFor(state.record.sha256), Buffer.alloc(bytes.length, 120))
     expect((await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).ok).toBe(false)
     expect(state.record.status).toBe('failed')
+    expect(shell.showItemInFolder).not.toHaveBeenCalled()
     expect(state.messages.some(([channel]) => channel === ipc.CHAT_CONVERSATION_PERSISTED)).toBe(true)
   })
   it('marks a missing object as failed before offering export', async () => {

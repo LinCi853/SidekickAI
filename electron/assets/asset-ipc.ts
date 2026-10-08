@@ -8,6 +8,7 @@ import { isModuleEnabled, observeModuleState } from '../modules/registry.js'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetCollectionIssue, AssetObservation } from '../shared/ai-assets.types.js'
 import { OriginalVault } from './original-vault.js'
+import { attachmentFileName, createAttachmentCopy } from './attachment-file.js'
 import { acquireLinkedOriginal, stopLinkedOriginalTransfers, hasLinkedOriginalTransfers } from './api-originals.js'
 import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
 import { getAssetSettings, updateAssetSettings } from './settings.js'
@@ -446,8 +447,14 @@ export function registerAiAssetIpc(): void {
   ipcMain.handle(ipc.ASSET_ATTACHMENT_OPEN, async (event, id: string) => {
     local(event)
     try {
-      const { file } = await verifiedAttachment(id)
-      shell.showItemInFolder(file)
+      const { item, file } = await verifiedAttachment(id)
+      let copy: string
+      try { copy = await createAttachmentCopy(app.getPath('temp'), file, item) }
+      catch (error) {
+        console.warn('[ai-assets] Attachment copy failed:', error)
+        return { ok: false, error: '无法创建文件副本，请检查临时目录的空间和权限后重试，或导出到其他文件夹' }
+      }
+      shell.showItemInFolder(copy)
       return { ok: true }
     } catch (error) { return { ok: false, error: String(error) } }
   })
@@ -456,7 +463,7 @@ export function registerAiAssetIpc(): void {
     try {
       const { item, file } = await verifiedAttachment(id)
       const result = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender)!, {
-        title: '导出资料原件', defaultPath: path.basename(item.name).replace(/[<>:"/\\|?*]/g, '_'),
+        title: '导出资料原件', defaultPath: attachmentFileName(item),
       })
       if (result.canceled || !result.filePath) return { ok: false, canceled: true }
       await copyFile(file, result.filePath)
