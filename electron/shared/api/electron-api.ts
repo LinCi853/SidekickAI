@@ -7,6 +7,7 @@ import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, Plat
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
 import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
 import type { FreezeAPI } from './freeze.api.js'
+import type { UpdatesAPI } from '../../updates/types.js'
 import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
 import type { PromptTemplate } from '../chat.types.js'
 import type { AiAssetsAPI } from '../ai-assets.types.js'
@@ -22,6 +23,7 @@ export interface ModulesAPI {
 
 /** 通过 contextBridge 暴露到渲染进程的完整 API */
 export interface ElectronAPI {
+  updates: UpdatesAPI
   profile: ProfileAPI
   window: WindowAPI
   windowControl: WindowControlAPI

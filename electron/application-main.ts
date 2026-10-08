@@ -32,6 +32,7 @@ import { registerTabIpc } from './ipc/tab-ipc.js';
 import { registerAccumulatedLinksIpc } from './ipc/accumulated-links-ipc.js';
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js';
 import { registerSettingsIpc } from './ipc/settings-ipc.js';
+import { registerApplicationUpdates } from './updates/host.js';
 import { registerOnboardingIpc } from './ipc/onboarding-ipc.js';
 import { promptAccessibilityPermission } from './utils/permission-manager.js';
 import { registerPlatformInfoIPC } from './utils/platform-info.js';
@@ -368,6 +369,7 @@ app.whenReady().then(async () => {
     });
     registerAccumulatedLinksIpc();
     registerSettingsIpc();
+    registerApplicationUpdates();
     registerPlatformInfoIPC();
     registerHotkeyIpc({
         hotkeyManager,

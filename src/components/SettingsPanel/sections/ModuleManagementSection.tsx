@@ -1,11 +1,5 @@
-/* =====================================================================
-   SettingsPanel/sections/ModuleManagementSection.tsx —— 模块管理设置区
-   两个栏目：插件市场（稳定模块）/ 开发者选项（实验性模块，默认关闭 + 测试标签）。
-   每个模块条目：启用开关、功能描述、入口、热键、清除数据（二次确认）。
-   大模块（画板）未安装时置灰 + 提示重新运行安装包补装。
-   ===================================================================== */
-
 import { useEffect, useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useModuleStore } from '../../../store/useModuleStore';
 import type { ModuleInfo } from '../../../lib/electron-api';
 import Toggle from '../../ui/Toggle';
@@ -28,7 +22,6 @@ export default function ModuleManagementSection() {
     if (!initialized) void useModuleStore.getState().init();
   }, [initialized]);
 
-  // 插件市场只展示稳定模块；功能插件独立栏目；开发者模块与开发者设置见「开发者选项」独立栏目
   const stable = useMemo(() => modules.filter((m) => m.category === 'stable' && m.id !== 'freeze'), [modules]);
   const plugins = useMemo(() => modules.filter((m) => m.category === 'plugin'), [modules]);
   const hasMissingLarge = modules.some((m) => m.sizeLevel === 'large' && !m.installed);
@@ -71,20 +64,11 @@ export default function ModuleManagementSection() {
           {m.testBadge && (
             <span className="module-test-badge" data-name="settings.modules.test-badge">测试</span>
           )}
-      {!m.installed && (
+          {!m.installed && (
             <span className="module-missing-badge" data-name="settings.modules.missing-badge">未安装</span>
           )}
         </div>
         <div className="module-card-head-actions" data-name="settings.modules.card-actions">
-          <button
-            type="button"
-            className="module-clear-btn"
-            disabled={!m.installed}
-            onClick={() => setPendingClear(m)}
-            data-name="settings.modules.clear-data-button"
-          >
-            清除数据
-          </button>
           <Toggle
             checked={m.enabled}
             disabled={!m.installed}
@@ -94,27 +78,36 @@ export default function ModuleManagementSection() {
         </div>
       </div>
       <p className="module-card-desc" data-name="settings.modules.card-desc">{m.description}</p>
-      {/* 模块关闭时入口/快捷键已不存在，相关描述直接隐藏 */}
-      {m.enabled && m.entries.length > 0 && (
-        <p className="module-card-meta" data-name="settings.modules.card-entries">
-          入口：{m.entries.join('、')}
-        </p>
-      )}
-      {m.enabled && m.hotkeys.length > 0 && (
-        <p className="module-card-meta" data-name="settings.modules.card-hotkeys">
-          快捷键：{m.hotkeys.join('、')}
-        </p>
-      )}
       {!m.installed && (
         <p className="module-card-meta module-card-missing-hint" data-name="settings.modules.card-missing-hint">
           该模块未安装，请重新运行安装包补装。
         </p>
       )}
+      <div className="module-card-footer">
+        {m.enabled && (m.entries.length > 0 || m.hotkeys.length > 0) && (
+          <details className="module-entry-details">
+            <summary>入口与快捷键</summary>
+            {m.entries.length > 0 && <p className="module-card-meta" data-name="settings.modules.card-entries">入口：{m.entries.join('、')}</p>}
+            {m.hotkeys.length > 0 && <p className="module-card-meta" data-name="settings.modules.card-hotkeys">快捷键：{m.hotkeys.join('、')}</p>}
+          </details>
+        )}
+        <button
+          type="button"
+          className="btn-icon module-clear-icon"
+          disabled={!m.installed}
+          onClick={() => setPendingClear(m)}
+          aria-label={'清除 ' + m.name + ' 数据'}
+          title={'清除 ' + m.name + ' 数据'}
+          data-name="settings.modules.clear-data-button"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
   );
 
   return (
-    <>
+    <section className="module-management" data-name="settings.modules.section">
       <SectionTitle>模块管理</SectionTitle>
       {(errorMsg || okMsg) && (
         <p
@@ -125,20 +118,20 @@ export default function ModuleManagementSection() {
         </p>
       )}
 
-      <div className="module-column-title" data-name="settings.modules.market-title">插件市场</div>
-      <div className="module-column" data-name="settings.modules.market-list">
+      <div className="module-column-title" data-name="settings.modules.market-title">内置模块</div>
+      <div className="module-grid" data-name="settings.modules.market-list">
         {stable.map((m, i) => renderModule(m, i))}
-        {hasMissingLarge && (
-          <p className="module-market-hint" data-name="settings.modules.market-missing-hint">
-            可能存在未安装的大模块，如需使用请重新运行安装包补装。
-          </p>
-        )}
       </div>
+      {hasMissingLarge && (
+        <p className="module-market-hint" data-name="settings.modules.market-missing-hint">
+          可能存在未安装的大模块，如需使用请重新运行安装包补装。
+        </p>
+      )}
 
       {plugins.length > 0 && (
         <>
           <div className="module-column-title" data-name="settings.modules.plugins-title">功能插件</div>
-          <div className="module-column" data-name="settings.modules.plugins-list">
+          <div className="module-grid" data-name="settings.modules.plugins-list">
             {plugins.map((m, i) => renderModule(m, i))}
           </div>
         </>
@@ -155,6 +148,6 @@ export default function ModuleManagementSection() {
         onConfirm={() => void handleConfirmClear()}
         onCancel={() => setPendingClear(null)}
       />
-    </>
+    </section>
   );
 }

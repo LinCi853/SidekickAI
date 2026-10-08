@@ -19,8 +19,16 @@ import { whiteboardApi } from './preload/whiteboard.js'
 import { freezeApi } from './preload/freeze.js'
 import { bootstrapApi, setupDomSideEffects } from './preload/bootstrap.js'
 import { modulesApi } from './preload/modules.js'
+import { UPDATE_IPC } from './updates/types.js'
 
 const api: ElectronAPI = {
+  updates: {
+    getState: () => ipcRenderer.invoke(UPDATE_IPC.state),
+    check: () => ipcRenderer.invoke(UPDATE_IPC.check),
+    accept: offerId => ipcRenderer.invoke(UPDATE_IPC.accept, offerId),
+    cancel: () => ipcRenderer.invoke(UPDATE_IPC.cancel),
+    openReleases: () => ipcRenderer.invoke(UPDATE_IPC.releases),
+  },
   ...profileApi,
   ...windowApi,
   ...voiceApi,
