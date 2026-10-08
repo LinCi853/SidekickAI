@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter};
 pub(crate) fn emit(app: &AppHandle, operation_id: &str, request_id: &str, sequence: u64, phase: UninstallPhase, progress: u8, message: &str, terminal: bool, result: Option<UninstallResult>) {
     let summary = result.as_ref().map(|value| serde_json::json!({
         "state": value.state, "phase": value.phase, "removedInstallPaths": value.removed_install_paths,
-        "removedDataRoots": value.removed_data_roots, "backup": value.backup, "warnings": value.warnings,
+        "removedDataRoots": value.removed_data_roots, "backup": value.backup, "backups": value.backups, "warnings": value.warnings,
         "error": value.error.as_ref().map(|error| serde_json::json!({ "code": error.code, "message": error.message, "phase": error.phase })),
     }));
     let record = serde_json::json!({ "sequence": sequence, "phase": phase, "progress": progress,
@@ -76,6 +76,16 @@ pub(crate) fn run_operation(
     plan: plan::Plan,
     control: Arc<OperationControl>,
 ) -> Result<UninstallResult, UninstallError> {
+    run_operation_with_preparation(sink,source_exe,operation_id,request_id,strategy,backup,plan,control,
+        |targets,roots,elevate,control| execute::WorkerSession::start(source_exe,operation_id,request_id,
+            targets,strategy,roots,elevate,|| control.is_cancelled()))
+}
+
+fn run_operation_with_preparation(
+    sink: &dyn EventSink, source_exe: &Path, operation_id: &str, request_id: &str, strategy: &DataStrategy,
+    backup: Option<&BackupSelection>, plan: plan::Plan, control: Arc<OperationControl>,
+    prepare: impl FnOnce(&[WorkerTarget],&[String],bool,&OperationControl) -> Result<execute::WorkerSession,UninstallError>,
+) -> Result<UninstallResult,UninstallError> {
     let target_ids: Vec<UninstallTargetId> = plan.targets.iter().map(|t| t.id.clone()).collect();
     let scopes: Vec<NormalizedAbsolutePath> = plan.targets.iter().map(|t| t.identity.path.clone()).collect();
     let worker_targets: Vec<WorkerTarget> = plan.targets.iter().map(|target| WorkerTarget {
@@ -95,7 +105,7 @@ pub(crate) fn run_operation(
     sink.event(UninstallPhase::Validating, 5, &format!("数据策略：{policy}"), false, None);
 
     let lock_paths = scopes.iter().map(|scope| scope.as_path().to_owned())
-        .chain(plan.data_roots.iter().map(|root| PathBuf::from(&root.path))).collect::<Vec<_>>();
+        .collect::<Vec<_>>();
     let _controller_locks = sidekickai_uninstall_core::lock::PathLocks::acquire(&lock_paths, "controller")?;
     drop(sidekickai_uninstall_core::lock::PathLocks::acquire(&lock_paths, "worker")?);
     if control.is_cancelled() { return Ok(cancelled(request_id, operation_id, target_ids)); }
@@ -104,12 +114,14 @@ pub(crate) fn run_operation(
     }
 
     let data_roots: Vec<String> = if *strategy == DataStrategy::Keep { Vec::new() } else { plan.data_roots.iter().map(|r| r.path.clone()).collect() };
+    let task_cleanup_requires_elevation = crate::startup_tasks::removal_requires_elevation(
+        &scopes.iter().map(|scope| scope.as_path().to_owned()).collect::<Vec<_>>()
+    ).map_err(|error| validation(UninstallErrorCode::RegistryFailed, &error))?;
     let needs_elevation = !execute::is_process_elevated()
         && (worker_targets.iter().any(|t| t.scope == InstallScope::AllUsers || t.registered_roots.iter().any(|root| root == "HKLM"))
-            || execute::processes_require_elevation(&scopes)?);
+            || execute::processes_require_elevation(&scopes)? || task_cleanup_requires_elevation);
     sink.event(UninstallPhase::Stopping, 10, "正在关闭 SidekickAI", false, None);
-    let worker = match execute::WorkerSession::start(source_exe, operation_id, request_id,
-        &worker_targets, strategy, &data_roots, needs_elevation, || control.is_cancelled()) {
+    let worker = match prepare(&worker_targets,&data_roots,needs_elevation,&control) {
         Ok(worker) => worker,
         Err(_) if control.is_cancelled() => return Ok(cancelled(request_id, operation_id, target_ids)),
         Err(error) => return Err(error),
@@ -118,35 +130,47 @@ pub(crate) fn run_operation(
         return Ok(cancelled(request_id, operation_id, target_ids));
     }
 
+    let data_lock_paths = plan.data_roots.iter().map(|root| PathBuf::from(&root.path)).collect::<Vec<_>>();
+    let _data_controller_locks = sidekickai_uninstall_core::lock::PathLocks::acquire(&data_lock_paths, "controller")?;
+    drop(sidekickai_uninstall_core::lock::PathLocks::acquire(&data_lock_paths, "worker")?);
+
     // Export is completed and verified before the worker may delete anything.
     let verified_export = if *strategy == DataStrategy::Export {
         sink.event(UninstallPhase::BackingUp, 30, "正在导出并校验备份", false, None);
         let selection = backup.ok_or_else(|| validation(UninstallErrorCode::BackupPathInvalid, "导出需要备份设置。"))?;
-        Some(export_and_verify(&plan, selection, operation_id)?)
+        match export_and_verify(&plan, selection, operation_id, request_id) {
+            Ok(export) => Some(export),
+            Err(error) => {
+                let backups = error.details.as_ref().and_then(|details| details.get("verifiedBackups")).and_then(|value| {
+                    if let DetailValue::String(value) = value { serde_json::from_str::<Vec<BackupResult>>(value).ok() } else { None }
+                }).unwrap_or_default();
+                if backups.is_empty() { return Err(error); }
+                return Ok(UninstallResult { request_id: request_id.into(), operation_id: operation_id.into(), state: UninstallTerminal::Failed,
+                    phase: UninstallPhase::BackingUp, target_ids, removed_install_paths: Vec::new(), removed_data_roots: Vec::new(),
+                    backup: backups.first().cloned(), backups, warnings: Vec::new(), error: Some(error) });
+            }
+        }
     } else { None };
-    let backup_result = verified_export.as_ref().map(|export| export.result.clone());
+    let backup_results = verified_export.as_ref().map(|export| export.results.clone()).unwrap_or_default();
+    let backup_result = backup_results.first().cloned();
 
-    let backup_path = plan.backup.as_ref().map(|b| b.path.as_string());
+    let proofs = verified_export.as_ref().map(|export| export.proofs.clone()).unwrap_or_default();
 
     if !control.begin_commit() {
         let mut result = cancelled(request_id, operation_id, target_ids);
         result.backup = backup_result;
+        result.backups = backup_results;
         return Ok(result);
     }
     sink.event(UninstallPhase::Commit, 50, "正在移除安装文件", false, None);
     // Reuse the authorized worker after the caller has verified its export.
-    let outcome = match worker.commit(
-        strategy,
-        &data_roots,
-        backup_path.as_deref(),
-        verified_export.as_ref().map(|export| &export.proof),
-    ) {
+    let outcome = match worker.commit_all(strategy, &data_roots, &proofs) {
         Ok(outcome) => outcome,
         Err(error) => return Ok(UninstallResult {
             request_id: request_id.to_string(), operation_id: operation_id.to_string(),
             state: UninstallTerminal::Failed, phase: error.phase.clone(), target_ids,
             removed_install_paths: Vec::new(), removed_data_roots: Vec::new(),
-            backup: backup_result, warnings: vec!["WORKER_DID_NOT_CONFIRM_COMPLETION: 请先检查已报告路径再重试。".into()], error: Some(error),
+            backup: backup_result, backups: backup_results, warnings: vec!["WORKER_DID_NOT_CONFIRM_COMPLETION: 请先检查已报告路径再重试。".into()], error: Some(error),
         }),
     };
     if let Some(error) = outcome.error {
@@ -154,7 +178,7 @@ pub(crate) fn run_operation(
             request_id: request_id.to_string(), operation_id: operation_id.to_string(),
             state: UninstallTerminal::Failed, phase: error.phase.clone(), target_ids,
             removed_install_paths: outcome.removed_install_paths, removed_data_roots: outcome.removed_data_roots,
-            backup: backup_result, warnings: outcome.warnings, error: Some(error),
+            backup: backup_result, backups: backup_results, warnings: outcome.warnings, error: Some(error),
         });
     }
     for path in &outcome.removed_install_paths {
@@ -171,7 +195,7 @@ pub(crate) fn run_operation(
         request_id: request_id.to_string(), operation_id: operation_id.to_string(),
         state: UninstallTerminal::Completed, phase: UninstallPhase::Completed, target_ids,
         removed_install_paths: outcome.removed_install_paths, removed_data_roots: outcome.removed_data_roots,
-        backup: backup_result, warnings: outcome.warnings, error: None,
+        backup: backup_result, backups: backup_results, warnings: outcome.warnings, error: None,
     })
 }
 
@@ -188,7 +212,7 @@ fn cancelled(request_id: &str, operation_id: &str, target_ids: Vec<UninstallTarg
     UninstallResult {
         request_id: request_id.to_string(), operation_id: operation_id.to_string(),
         state: UninstallTerminal::Cancelled, phase: UninstallPhase::Cancelled, target_ids,
-        removed_install_paths: Vec::new(), removed_data_roots: Vec::new(), backup: None, warnings: Vec::new(), error: None,
+        removed_install_paths: Vec::new(), removed_data_roots: Vec::new(), backup: None, backups: Vec::new(), warnings: Vec::new(), error: None,
     }
 }
 
@@ -228,6 +252,42 @@ mod tests {
         phases: Mutex<Vec<UninstallPhase>>,
         terminal: Mutex<Option<UninstallResult>>,
     }
+
+    struct DataLockSink { data: PathBuf, observed: Mutex<(bool,bool)> }
+    impl EventSink for DataLockSink {
+        fn event(&self, phase: UninstallPhase, _progress: u8, _message: &str, _terminal: bool, _result: Option<UninstallResult>) {
+            use sidekickai_uninstall_core::lock::PathLocks;
+            if phase == UninstallPhase::Stopping {
+                for role in ["controller","worker"] { drop(PathLocks::acquire(&[self.data.clone()],role).expect("saving must precede data locks")); }
+                self.observed.lock().unwrap().0 = true;
+            }
+            if phase == UninstallPhase::Commit {
+                assert!(PathLocks::acquire(&[self.data.clone()],"controller").is_err(),"ready preparation must retain its data scope");
+                self.observed.lock().unwrap().1 = true;
+            }
+        }
+    }
+
+    #[test]
+    fn data_controller_locks_begin_after_the_authorized_worker_preparation() {
+        let source = standalone_artifact();
+        if source.as_os_str().is_empty() { return; }
+        let fixture = Fixture::new("data-lock-order");
+        let roots = vec![DataRoot { path:fixture.data.to_string_lossy().into_owned(),source:"fixture".into(),removable:true,
+            associated_target_ids:vec![UninstallTargetId{token:"fixture-token".into()}] }];
+        let sink = DataLockSink {data:fixture.data.clone(),observed:Mutex::new((false,false))};
+        let result = run_operation_with_preparation(&sink,&source,"lib-lock-order","lib-lock-order-request",&DataStrategy::Keep,None,
+            fixture.plan(roots,None),Arc::new(OperationControl::default()),|targets,roots,elevate,control| {
+                execute::assert_save_without_data_locks(&fixture.data);
+                execute::WorkerSession::start(&source,"lib-lock-order","lib-lock-order-request",targets,&DataStrategy::Keep,
+                    roots,elevate,||control.is_cancelled())
+            }).unwrap();
+        assert_eq!(result.state,UninstallTerminal::Completed);
+        assert_eq!(*sink.observed.lock().unwrap(),(true,true));
+        assert!(fixture.data.join("settings.db").is_file());
+        fs::remove_dir_all(fixture.root).unwrap();
+    }
+
 
     impl EventSink for RecordingSink {
         fn event(&self, phase: UninstallPhase, _progress: u8, _message: &str, terminal: bool, result: Option<UninstallResult>) {
@@ -275,6 +335,7 @@ mod tests {
             fs::write(install.join("SidekickAI.exe"), b"fixture executable").unwrap();
             fs::write(install.join("resources").join("app.asar"), app_archive(b"fixture asar")).unwrap();
             fs::write(install.join("uninstall.exe"), b"fixture uninstaller").unwrap();
+            edition_fixtures::seal_installation(&install);
             fs::create_dir_all(&data).unwrap();
             fs::write(data.join("settings.db"), b"fixture settings database").unwrap();
             assert!(root.is_absolute() && install.starts_with(&root) && data.starts_with(&root));
@@ -477,6 +538,7 @@ mod tests {
 
         let backup_path = fixture.root.join("backup.zip");
         let selection = BackupSelection {
+            staging_path: Some(fixture.root.join("jobs").to_string_lossy().into_owned()),
             format: BackupFormat::Zip,
             output_path: backup_path.to_string_lossy().into_owned(),
             encrypt: false,

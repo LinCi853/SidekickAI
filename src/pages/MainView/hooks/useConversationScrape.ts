@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
-import { logLoginTrace, registerFreezeWebview } from '../../../lib/electron-api';
+import { logLoginTrace, registerWebview } from '../../../lib/electron-api';
 import type { Profile } from '../../../lib/electron-api';
 import type { WebviewElement } from '../../../lib/webview';
 import { DETECT_LOGIN_SCRIPT } from '../scripts';
-import { useModuleStore } from '../../../store/useModuleStore';
 
 export function useConversationScrape({ webviewRef, profile, tab, remountKey, domReadyRef,
   loggedLoginUrlsRef, lastLoginCheckedUrlRef }: {
@@ -15,16 +14,16 @@ export function useConversationScrape({ webviewRef, profile, tab, remountKey, do
   loggedLoginUrlsRef: React.MutableRefObject<Set<string>>;
   lastLoginCheckedUrlRef: React.MutableRefObject<string>;
 }) {
-  const freezeEnabled = useModuleStore(state => state.isEnabled('freeze'));
   useEffect(() => {
-    if (!profile.isAIPlatform) return;
     const webview = webviewRef.current;
     if (!webview) return;
     const register = () => {
-      if (freezeEnabled) void registerFreezeWebview({ tabId: tab.id, windowId: 'main', webContentsId: webview.getWebContentsId(), profileId: profile.id }).catch(() => {});
+      try {
+        void registerWebview({ tabId: tab.id, windowId: 'main', webContentsId: webview.getWebContentsId(), profileId: profile.id }).catch(() => {});
+      } catch {}
     };
     const login = async () => {
-      if (!domReadyRef.current) return;
+      if (!profile.isAIPlatform || !domReadyRef.current) return;
       try {
         const value = JSON.parse(String(await webview.executeJavaScript(DETECT_LOGIN_SCRIPT))) as {
           url?: string; cookie?: string; isLoggedIn?: boolean;
@@ -43,5 +42,5 @@ export function useConversationScrape({ webviewRef, profile, tab, remountKey, do
       webview.removeEventListener('dom-ready', register);
       webview.removeEventListener('did-navigate-in-page', login);
     };
-  }, [profile.id, profile.isAIPlatform, profile.aiPlatformId, tab.id, remountKey, freezeEnabled]);
+  }, [profile.id, profile.isAIPlatform, profile.aiPlatformId, tab.id, remountKey]);
 }

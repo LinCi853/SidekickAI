@@ -18,7 +18,6 @@ import { useBookmarkStore } from '../../../store/useBookmarkStore.js';
 import { useGamepadStore } from '../../../store/useGamepadStore.js';
 import { useCloudPcStore } from '../../../store/useCloudPcStore.js';
 import { useZoomStore } from '../../../store/useZoomStore.js';
-import { useFreezeStore } from '../../../store/useFreezeStore.js';
 import {
   toggleFullscreenWindow,
   exitFullscreenWindow,
@@ -238,12 +237,11 @@ export function useBrowserWebview({
   /* ===== 快捷键 ===== */
 
   const handleToggleDevTools = useCallback(() => {
-    if (activeTabId && useFreezeStore.getState().states[activeTabId] === 'frozen') return;
     const webview = getActiveWebview();
     if (!webview) return;
     if (webview.isDevToolsOpened()) webview.closeDevTools();
     else webview.openDevTools();
-  }, [activeTabId, getActiveWebview]);
+  }, [getActiveWebview]);
 
   /* ===== Ctrl+S 另存为 / Ctrl+U 查看源码（webview 级，含右键菜单复用） ===== */
 

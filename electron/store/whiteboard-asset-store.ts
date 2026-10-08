@@ -8,11 +8,12 @@
 // 改用 whiteboard-asset:// 自定义协议（registerSchemesAsPrivileged + protocol.handle），
 // dev/prod 行为一致，且路径不含绝对路径（利于跨设备迁移）。
 
-import { app, protocol, ipcMain } from 'electron'
+import { app, protocol } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import type { EffectScope } from '../modules/effect-scope.js'
 
 const ASSETS_DIR_NAME = 'whiteboard-assets'
 
@@ -74,12 +75,11 @@ export function registerWhiteboardAssetProtocol(): void {
   })
 }
 
-/** 注册白板图片磁盘存储 IPC + 自定义协议 */
-export function registerWhiteboardAssetIPC(): void {
+/** Keeps image reads available while write IPC belongs to the module scope. */
+export function registerWhiteboardAssetIPC(scope: EffectScope): void {
   registerWhiteboardAssetProtocol()
 
-  // 需求 12：截图到白板 —— 保存 dataURL 到磁盘，返回 whiteboard-asset:// 路径
-  ipcMain.handle(IPC_CHANNELS.WHITEBOARD_SAVE_IMAGE, (_e, dataUrl: string): string => {
+  scope.ipcHandle(IPC_CHANNELS.WHITEBOARD_SAVE_IMAGE, (_e, dataUrl: string): string => {
     return saveImageAsset(dataUrl)
   })
 }

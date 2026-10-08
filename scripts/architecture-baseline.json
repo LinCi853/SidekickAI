@@ -43,28 +43,8 @@
       "kind": "value"
     },
     {
-      "from": "electron/modules/feature-gate.ts",
-      "to": "electron/modules/registry.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/modules/injection-broker.ts",
-      "to": "electron/modules/feature-gate.ts",
-      "kind": "value"
-    },
-    {
       "from": "electron/modules/registry.ts",
       "to": "electron/modules/wiring/hotkey-sync.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/modules/registry.ts",
-      "to": "electron/modules/injection-broker.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/modules/registry.ts",
-      "to": "electron/modules/feature-gate.ts",
       "kind": "value"
     },
     {

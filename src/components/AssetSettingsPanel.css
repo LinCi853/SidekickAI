@@ -4,6 +4,6 @@
 .asset-settings fieldset { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 0; }
 .asset-settings legend { font-weight: 600; }
 .asset-settings details p { overflow-wrap: anywhere; font-size: 12px; color: var(--muted-foreground); }
-.asset-settings .asset-freeze-control { padding: 8px 0; }
+.asset-settings .asset-retention-status { font-size: 12px; line-height: 1.6; color: var(--muted-foreground); overflow-wrap: anywhere; }
 
 .asset-settings label:has(input[type=checkbox]) { justify-content: flex-start; gap: 8px; }

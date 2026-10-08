@@ -10,7 +10,6 @@ export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
       ipcRenderer.on(ipc.ASSET_COLLECTION_ISSUES_CHANGED, handler)
       return () => ipcRenderer.removeListener(ipc.ASSET_COLLECTION_ISSUES_CHANGED, handler)
     },
-    freezeTargets: () => ipcRenderer.invoke(ipc.ASSET_FREEZE_TARGETS),
     focusPage: (id, expectedProfileId) => ipcRenderer.invoke(ipc.ASSET_FOCUS_PAGE, id, expectedProfileId),
     observe: observation => ipcRenderer.invoke(ipc.ASSET_OBSERVE, observation),
     details: id => ipcRenderer.invoke(ipc.ASSET_DETAILS, id),
@@ -26,6 +25,12 @@ export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
     cleanupRecords: () => ipcRenderer.invoke(ipc.ASSET_CLEANUP_RECORDS),
     settings: () => ipcRenderer.invoke(ipc.ASSET_SETTINGS),
     updateSettings: changes => ipcRenderer.invoke(ipc.ASSET_SETTINGS_UPDATE, changes),
+    retentionStatus: () => ipcRenderer.invoke(ipc.ASSET_RETENTION_STATUS),
+    onRetentionStatusChanged: callback => {
+      const handler = (_event: unknown, status: import('../shared/ai-assets.types.js').AssetRetentionStatus) => callback(status)
+      ipcRenderer.on(ipc.ASSET_RETENTION_STATUS_CHANGED, handler)
+      return () => ipcRenderer.removeListener(ipc.ASSET_RETENTION_STATUS_CHANGED, handler)
+    },
     onSettingsChanged: callback => {
       const handler = (_event: unknown, settings: import('../shared/ai-assets.types.js').AssetSettings) => callback(settings)
       ipcRenderer.on(ipc.ASSET_SETTINGS_CHANGED, handler)
@@ -36,6 +41,7 @@ export const aiAssetsApi: { aiAssets: AiAssetsAPI } = {
     previewCode: (content, language) => ipcRenderer.invoke(ipc.ASSET_PREVIEW_CODE, content, language),
     attachments: id => ipcRenderer.invoke(ipc.ASSET_ATTACHMENTS, id),
     openAttachment: id => ipcRenderer.invoke(ipc.ASSET_ATTACHMENT_OPEN, id),
+    previewAttachment: id => ipcRenderer.invoke(ipc.ASSET_ATTACHMENT_PREVIEW, id),
     exportAttachment: id => ipcRenderer.invoke(ipc.ASSET_ATTACHMENT_EXPORT, id),
     retryAttachment: id => ipcRenderer.invoke(ipc.ASSET_ATTACHMENT_RETRY, id),
     suggestions: () => ipcRenderer.invoke(ipc.ASSET_SUGGESTIONS),

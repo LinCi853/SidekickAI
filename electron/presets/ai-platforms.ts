@@ -6,6 +6,14 @@
 import type { AIPlatform } from '../shared/types.js'
 import { IPHONE_UA, IPHONE_VIEWPORT, WIN_CHROME_UA } from './devices.js'
 
+const semanticEdit = (rootSelector: string) => ({
+  rootSelector,
+  sendSelector: 'button, [role="button"], input[type="submit"]',
+  cancelSelector: 'button, [role="button"]',
+  sendLabels: ['Send', 'Save', 'Save & Submit', 'Save and Submit', 'Submit', 'Confirm', '\u53d1\u9001', '\u91cd\u65b0\u53d1\u9001', '\u4fdd\u5b58', '\u4fdd\u5b58\u5e76\u63d0\u4ea4', '\u786e\u8ba4', '\u63d0\u4ea4'],
+  cancelLabels: ['Cancel', '\u53d6\u6d88'],
+})
+
 export const AI_PLATFORMS: AIPlatform[] = [
   {
     id: 'chatgpt',
@@ -17,8 +25,10 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultUA: IPHONE_UA,
     defaultResolution: IPHONE_VIEWPORT,
     defaultLanguage: 'zh-CN',
-    inputSelector: 'textarea#prompt-textarea, textarea[data-id]',
+    inputSelector: '#prompt-textarea, textarea[data-id]',
     sendSelector: 'button[data-testid="send-button"], button[aria-label="发送"]',
+    pageAdapter: { version: 1, hosts: ['chatgpt.com', 'chat.openai.com'],
+      messageEdit: semanticEdit('article[data-testid^="conversation-turn-"], [data-message-author-role="user"]') },
     themeColor: '#10a37f',
     gradientColor: '#1a7f64',
     // chat.openai.com 与 chatgpt.com 同账户体系；auth.openai.com 为登录域
@@ -43,6 +53,8 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultLanguage: 'zh-CN',
     inputSelector: 'div[contenteditable=true][role=textbox]',
     sendSelector: 'button[aria-label="Send Message"], button[type="submit"]',
+    pageAdapter: { version: 1, hosts: ['claude.ai'],
+      messageEdit: semanticEdit('[data-testid="user-message"], [data-message-author-role="user"]') },
     themeColor: '#cc785c',
     gradientColor: '#a65539',
     // claude.ai 为主域；anthropic.com 为登录/账户域
@@ -66,6 +78,8 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultLanguage: 'zh-CN',
     inputSelector: 'rich-textarea textarea, div[contenteditable=true]',
     sendSelector: 'button[aria-label="发送"], button.send-button',
+    pageAdapter: { version: 1, hosts: ['gemini.google.com'],
+      messageEdit: semanticEdit('user-query, .query-content, [data-test-id="user-query"]') },
     themeColor: '#4285f4',
     gradientColor: '#1e63d6',
     // gemini.google.com 为主域；accounts.google.com 为登录；aistudio.google.com 为关联产品
@@ -87,10 +101,15 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultUA: IPHONE_UA,
     defaultResolution: IPHONE_VIEWPORT,
     defaultLanguage: 'zh-CN',
-    inputSelector: 'textarea[data-testid=chat_input]',
-    sendSelector: 'button[data-testid="send_button"]',
-    themeColor: '#3370ff',
-    gradientColor: '#1a56db',
+    inputSelector: 'textarea[data-testid=chat_input], .tiptap.ProseMirror[contenteditable="true"]',
+    sendSelector: 'button[data-testid="chat_input_send_button"], button[data-testid="send_button"]',
+    pageAdapter: { version: 1, hosts: ['www.doubao.com', 'doubao.com'], messageEdit: {
+      rootSelector: '[data-testid="editing_message_content"]',
+      sendSelector: '[data-testid="editing_message_content_confirm"]',
+      cancelSelector: '[data-testid="editing_message_content_cancel"]',
+    } },
+    themeColor: '#d64f68',
+    gradientColor: '#ab3f53',
     // www.doubao.com 为主域；passport.volcengine.com / volces.com 为登录
     allowedOrigins: [
       'https://www.doubao.com/',
@@ -111,10 +130,12 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultResolution: IPHONE_VIEWPORT,
     defaultLanguage: 'zh-CN',
     inputSelector: 'textarea, div[contenteditable=true]',
-  sendSelector: 'button[class*="send"], button[class*="Send"], button[aria-label*="发送"], div[role="button"][aria-label*="发送"]',
+    sendSelector: '#search-input-box .enter:not(.searching) .enter-icon-container:not(.empty):not(.disable)',
+    pageAdapter: { version: 1, hosts: ['chatglm.cn', 'www.chatglm.cn'], sendEvent: 'mousedown', disabledSelector: '.disable',
+      messageEdit: semanticEdit('.conversation.question, .chat-item-user, [class*="user-message"]') },
   fileInputSelector: 'input[type=file][accept*="image" i], input[type=file]',
-  themeColor: '#316cfc',
-    gradientColor: '#1e4fd6',
+  themeColor: '#008a94',
+    gradientColor: '#006e76',
     // chatglm.cn 为主域；bigmodel.cn 为开放平台；accounts 通用登录
     allowedOrigins: [
       'https://chatglm.cn/',
@@ -138,6 +159,11 @@ export const AI_PLATFORMS: AIPlatform[] = [
     // 用户提供的真实发送按钮 HTML：<div role="button" class="ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--m ...">
     // 必须精确匹配 class（包含 --primary --filled --circle --m），避免误中输入区域其他按钮
     sendSelector: 'div[role="button"].ds-button.ds-button--primary.ds-button--filled.ds-button--circle, div[role="button"][aria-label="发送"], button.ds-icon-button[type="button"]:last-child',
+    pageAdapter: { version: 1, hosts: ['chat.deepseek.com'], disabledSelector: '.ds-button--disabled', messageEdit: {
+      sendSelector: 'div[role="button"].ds-button.ds-button--capsule.ds-button--primary.ds-button--filled',
+      cancelSelector: 'div[role="button"].ds-button.ds-button--capsule.ds-button--outlinedNeutral.ds-button--outlined',
+      sendLabels: ['Send', '\u53d1\u9001'], cancelLabels: ['Cancel', '\u53d6\u6d88'],
+    } },
     themeColor: '#4d6bfe',
     gradientColor: '#2e4fd9',
     allowedOrigins: [
@@ -158,11 +184,17 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultResolution: IPHONE_VIEWPORT,
     defaultLanguage: 'zh-CN',
     inputSelector: 'textarea.textarea, textarea[placeholder], div[contenteditable=true]',
-    sendSelector: 'button[class*="send"], button[class*="Send"], button[aria-label*="发送"], div[role="button"][aria-label*="发送"], .send-button',
+    sendSelector: '.send-button-container:not(.stop):not(.loading):not(.disabled), button.send-button:not(.disabled), button[aria-label="发送"]',
+    pageAdapter: { version: 1, hosts: ['kimi.moonshot.cn', 'kimi.com', 'www.kimi.com'], disabledSelector: '.disabled, .stop, .loading', messageEdit: {
+      rootSelector: '.editable-segment', sendSelector: '.button-container .confirm.button',
+      cancelSelector: '.button-container .cancel.button',
+    } },
     themeColor: '#12161d',
     gradientColor: '#2d3748',
     allowedOrigins: [
       'https://kimi.moonshot.cn/',
+      'https://kimi.com/',
+      'https://www.kimi.com/',
       'https://www.moonshot.cn/',
       'https://platform.moonshot.cn/',
     ],
@@ -178,23 +210,26 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultUA: IPHONE_UA,
     defaultResolution: IPHONE_VIEWPORT,
     defaultLanguage: 'zh-CN',
-    inputSelector: 'textarea#chat-input',
-    sendSelector: 'button[class*="send"], #sendBtn',
-    themeColor: '#1c7fff',
-    gradientColor: '#0e5fcc',
+    inputSelector: 'textarea#chat-textarea, textarea#chat-input',
+    sendSelector: '#ci-submit-button-ai.ci-submit-button-ai-active, button#ci-submit-button, #sendBtn',
+    pageAdapter: { version: 1, hosts: ['yiyan.baidu.com', 'wenxin.baidu.com'],
+      messageEdit: semanticEdit('.cs-rank[data-query][rank], .user-question, .user-msg') },
+    themeColor: '#3a8b4a',
+    gradientColor: '#2e6f3b',
     // yiyan.baidu.com 为主域；passport.baidu.com 为登录；chat.baidu.com 为关联产品
     allowedOrigins: [
       'https://yiyan.baidu.com/',
+      'https://wenxin.baidu.com/',
       'https://passport.baidu.com/',
       'https://chat.baidu.com/',
       'https://aip.baidubce.com/',
     ],
-    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/', '/dialog/'],
+    conversationUrlPatterns: ['/chat/', '/c/', '/conversation/', '/dialog/', '/search/'],
   },
   {
     id: 'mimo',
-    name: '小米 Mimo',
-    url: 'https://mimo.xiaomi.com',
+    name: '小米 MiMo',
+    url: 'https://aistudio.xiaomimimo.com/#/c',
     region: 'cn',
     defaultDesktopPreset: 'win-chrome-125',
     defaultMobilePreset: 'iphone-15-pro-safari',
@@ -203,6 +238,8 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultLanguage: 'zh-CN',
     inputSelector: 'textarea, div[contenteditable=true]',
     sendSelector: 'button[class*="send"], button[class*="Send"], button[aria-label*="发送"], div[role="button"][aria-label*="发送"]',
+    pageAdapter: { version: 1, hosts: ['aistudio.xiaomimimo.com', 'mimo.xiaomi.com'],
+      nativeComposerSelector: '.dialogue-container', messageEdit: semanticEdit('.user-msg, .user-message') },
     themeColor: '#ff6b35',
     gradientColor: '#e04e1f',
     // mimo.xiaomi.com 为主域；aistudio.xiaomimimo.com / platform.xiaomimimo.com 为关联产品域，
@@ -215,5 +252,27 @@ export const AI_PLATFORMS: AIPlatform[] = [
       'https://auth.mi.com/',
     ],
     conversationUrlPatterns: ['/chat/', '/c/', '/conversation/', '/dialogue/'],
+  },
+  {
+    id: 'qianwen',
+    name: '千问',
+    url: 'https://www.qianwen.com/',
+    region: 'cn',
+    defaultDesktopPreset: 'win-chrome-125',
+    defaultMobilePreset: 'iphone-15-pro-safari',
+    defaultUA: IPHONE_UA,
+    defaultResolution: IPHONE_VIEWPORT,
+    defaultLanguage: 'zh-CN',
+    inputSelector: '[data-slate-editor="true"][contenteditable="true"], textarea',
+    sendSelector: 'button[data-session-switch-target="send-query"], button[aria-label="发送消息"]',
+    pageAdapter: { version: 1, hosts: ['www.qianwen.com', 'qianwen.com'], disabledSelector: '[class*="disable-"]', messageEdit: {
+      rootSelector: '[class*="question-edit-"]', sendSelector: '[class*="btn-zone-"] > [class*="secondary-"]',
+      cancelSelector: '[class*="btn-zone-"] > [class*="plain-"]',
+    } },
+    fileInputSelector: 'input[type="file"]',
+    themeColor: '#8754c8',
+    gradientColor: '#6c43a0',
+    allowedOrigins: ['https://www.qianwen.com/', 'https://qianwen.com/'],
+    conversationUrlPatterns: ['/chat/'],
   },
 ]

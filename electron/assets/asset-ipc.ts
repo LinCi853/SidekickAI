@@ -10,19 +10,23 @@ import type { AssetAttachmentInput, AssetCollectionIssue, AssetObservation } fro
 import { OriginalVault } from './original-vault.js'
 import { attachmentFileName, createAttachmentCopy } from './attachment-file.js'
 import { acquireLinkedOriginal, stopLinkedOriginalTransfers, hasLinkedOriginalTransfers } from './api-originals.js'
-import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
 import { getAssetSettings, updateAssetSettings } from './settings.js'
 import { previewAssetCode } from './code-preview.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { cleanSelectedAttachments, recoverSelectedCleanup } from './selected-cleanup.js'
 import { hasActiveAssetImports } from './import-activity.js'
 import { hasActiveBackupExports } from '../store/backup-activity.js'
+import { hasActiveBackupOperations } from '../store/backup/activity.js'
 import { isImportingData } from '../store/import-guard.js'
 import { AssetObservationJournal, setAssetCollectionJournal } from './collection-journal.js'
+import { readAttachmentPreview } from './attachment-preview.js'
+import { createAttachmentRetention } from './attachment-retention.js'
 
 let stopTransfers: (() => void) | undefined
 let transfersActive: () => boolean = () => false
 let observationJournal: AssetObservationJournal | undefined
+let retention: ReturnType<typeof createAttachmentRetention> | undefined
+export function stopAssetRetention(): void { retention?.stop(); retention = undefined }
 export function hasWebOriginalTransfers(): boolean { return transfersActive() }
 export { closeAssetCollectionJournal } from './collection-journal.js'
 export function clearAssetCollectionJournal(clearDatabase?: (filename: string) => void): void {
@@ -89,6 +93,23 @@ export function registerAiAssetIpc(): void {
   observeModuleState(syncCollection)
   syncCollection()
   const vault = new OriginalVault(path.join(app.getPath('userData'), 'ai-assets'), path.join(app.getPath('userData'), '.ai-assets-pending'))
+  let attachmentAccess = 0
+  const accessing = async <T>(operation: () => Promise<T>): Promise<T> => {
+    attachmentAccess += 1
+    try { return await operation() } finally { attachmentAccess -= 1 }
+  }
+  let activeStreams: (() => boolean) | undefined
+  const prepareCleanup = async () => {
+    activeStreams ??= (await import('../ai/handler.js')).hasActiveAssetStreams
+  }
+  const cleanupBusy = () => !activeStreams || activeStreams() || attachmentAccess > 0 || hasWebOriginalTransfers() || hasLinkedOriginalTransfers()
+    || hasActiveAssetImports() || hasActiveBackupExports() || hasActiveBackupOperations()
+  stopAssetRetention()
+  retention = createAttachmentRetention({ userData: app.getPath('userData'), settings: getAssetSettings,
+    assets: () => getChatStore().assets, prepare: prepareCleanup, busy: cleanupBusy,
+    changed: () => broadcastToAllWindows(ipc.CHAT_CONVERSATION_PERSISTED, { sourceId: 'local' }, 'assets'),
+    publish: status => broadcastToAllWindows(ipc.ASSET_RETENTION_STATUS_CHANGED, status, 'assets') })
+  void retention.tick()
   try { recoverSelectedCleanup(app.getPath('userData'), getChatStore().assets) }
   catch (error) { console.warn('[ai-assets] Pending original cleanup needs attention:', error) }
   const owners = new Map<string, number>()
@@ -205,6 +226,7 @@ export function registerAiAssetIpc(): void {
       || (observation.rejected !== undefined && (!Array.isArray(observation.rejected) || observation.rejected.length > 1000))) throw new Error('Invalid asset snapshot')
     for (const message of observation.messages) {
       if ((message.markdownContent !== undefined && typeof message.markdownContent !== 'string')
+        || (message.identityToken !== undefined && (typeof message.identityToken !== 'string' || !message.identityToken || message.identityToken.length > 128))
         || (message.versionKey !== undefined && typeof message.versionKey !== 'string')
         || (message.branchIndex !== undefined && (!Number.isSafeInteger(message.branchIndex) || message.branchIndex < 1))
         || (message.branchCount !== undefined && (!Number.isSafeInteger(message.branchCount) || message.branchCount < 1))) throw new Error('Invalid asset branch')
@@ -368,20 +390,6 @@ export function registerAiAssetIpc(): void {
     window.show(); window.focus(); guest.focus()
     return true
   })
-  ipcMain.handle(ipc.ASSET_FREEZE_TARGETS, event => {
-    local(event)
-    return [...guests.keys()].flatMap(id => {
-      const guest = currentGuest(id)
-      if (!guest || guest.isDestroyed()) return []
-      if (!/^https?:\/\//.test(guest.getURL())) return []
-      const profile = profileStore.list().find(p => p.isAIPlatform && session.fromPartition(`persist:${p.id}`) === guest.session)
-      if (!profile) return []
-      const known = getRecordByWebContentsId(id)
-      return [{ tabId: known?.tabId ?? `asset-page:${id}`, profileId: profile.id,
-        windowId: known?.windowId ?? `asset-window:${id}`, webContentsId: id,
-        title: `${profile.name} · ${guest.getTitle()}`, url: guest.getURL() }]
-    })
-  })
   ipcMain.handle(ipc.ASSET_OPEN_EXTERNAL, (event, value: string) => {
     local(event)
     if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) throw new Error('仅支持 HTTP 或 HTTPS 网页链接')
@@ -405,8 +413,8 @@ export function registerAiAssetIpc(): void {
     local(event)
     if (!['files', 'conversations'].includes(kind) || !Array.isArray(ids) || !ids.length || ids.length > 10000
       || ids.some(id => typeof id !== 'string' || !id || id.length > 200) || new Set(ids).size !== ids.length) throw new Error('Invalid asset selection')
-    const { hasActiveAssetStreams } = await import('../ai/handler.js')
-    if (hasActiveAssetStreams() || hasWebOriginalTransfers() || hasLinkedOriginalTransfers() || hasActiveAssetImports() || hasActiveBackupExports() || isImportingData)
+    await prepareCleanup()
+    if (cleanupBusy())
       throw new Error('请等待响应、导入、备份和原件传输完成后再清理')
     const assets = getChatStore().assets
     const result = kind === 'files' ? cleanSelectedAttachments(app.getPath('userData'), assets, ids)
@@ -417,11 +425,13 @@ export function registerAiAssetIpc(): void {
   ipcMain.handle(ipc.ASSET_RENAME_CONVERSATION, (event, id: string, title: string) => { local(event); getChatStore().assets.renameConversation(id, title); broadcast('local') })
   ipcMain.handle(ipc.ASSET_CLEANUP_RECORDS, event => { local(event); return getChatStore().assets.cleanupRecords() })
   ipcMain.handle(ipc.ASSET_SETTINGS, event => { local(event); return getAssetSettings() })
+  ipcMain.handle(ipc.ASSET_RETENTION_STATUS, event => { local(event); return retention?.status() })
   ipcMain.handle(ipc.ASSET_SETTINGS_UPDATE, (event, changes) => {
     local(event)
     if (!changes || typeof changes !== 'object' || Array.isArray(changes)) throw new Error('Invalid asset settings')
     const next = updateAssetSettings(changes)
     broadcastToAllWindows(ipc.ASSET_SETTINGS_CHANGED, next, 'assets')
+    void retention?.tick()
     return next
   })
   ipcMain.handle(ipc.ASSET_COPY_TEXT, (event, content: string) => {
@@ -446,7 +456,7 @@ export function registerAiAssetIpc(): void {
   }
   ipcMain.handle(ipc.ASSET_ATTACHMENT_OPEN, async (event, id: string) => {
     local(event)
-    try {
+    return accessing(async () => { try {
       const { item, file } = await verifiedAttachment(id)
       let copy: string
       try { copy = await createAttachmentCopy(app.getPath('temp'), file, item) }
@@ -456,11 +466,18 @@ export function registerAiAssetIpc(): void {
       }
       shell.showItemInFolder(copy)
       return { ok: true }
-    } catch (error) { return { ok: false, error: String(error) } }
+    } catch (error) { return { ok: false, error: String(error) } } })
+  })
+  ipcMain.handle(ipc.ASSET_ATTACHMENT_PREVIEW, async (event, id: string) => {
+    local(event)
+    return accessing(async () => {
+      try { const { item, file } = await verifiedAttachment(id); return await readAttachmentPreview(file, item) }
+      catch (error) { return { ok: false, error: String(error) } }
+    })
   })
   ipcMain.handle(ipc.ASSET_ATTACHMENT_EXPORT, async (event, id: string) => {
     local(event)
-    try {
+    return accessing(async () => { try {
       const { item, file } = await verifiedAttachment(id)
       const result = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender)!, {
         title: '导出资料原件', defaultPath: attachmentFileName(item),
@@ -468,7 +485,7 @@ export function registerAiAssetIpc(): void {
       if (result.canceled || !result.filePath) return { ok: false, canceled: true }
       await copyFile(file, result.filePath)
       return { ok: true }
-    } catch (error) { return { ok: false, error: String(error) } }
+    } catch (error) { return { ok: false, error: String(error) } } })
   })
   ipcMain.handle(ipc.ASSET_ATTACHMENT_RETRY, async (event, id: string) => {
     local(event)

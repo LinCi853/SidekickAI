@@ -4,6 +4,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { InstallerInfo, InstallMode, ScanResult } from '../global'
 import LocationItem from '../components/LocationItem'
+import { formatVersion } from '../../../installer-shared/presentation/version'
 
 export interface StepWelcomeProps {
   actionName: string
@@ -27,7 +28,7 @@ export default function StepWelcome({ mode, setMode, scan, info, actionName }: S
         <div>
           <strong>检测到另一版工百窗已安装</strong>
           {scan!.otherEditions!.map(location => <div key={location.path} style={{ marginTop: 8 }}>
-            <div>{location.label} · {location.version || '版本未知'} · {location.arch === 'arm64' ? 'ARM64' : location.arch}</div>
+            <div title={location.version ?? undefined}>{location.label} · {formatVersion(location.version || '版本未知')} · {location.arch === 'arm64' ? 'ARM64' : location.arch}</div>
             <div style={{ overflowWrap: 'anywhere' }}>{location.path}</div>
           </div>)}
           <p>两版可以分别安装，用户数据保持独立。请为本次安装选择独立目录。</p>
@@ -81,7 +82,7 @@ export default function StepWelcome({ mode, setMode, scan, info, actionName }: S
       </div>
       {info && (
         <div className="space-row" style={{ marginTop: 20 }}>
-          <span>版本 {info.version}</span>
+          <span title={info.version}>版本 {formatVersion(info.version)}</span>
           <span>架构 {info.arch === 'arm64' ? 'ARM64' : 'x64'}</span>
           <span>所需空间 {info.requiredSpace}</span>
         </div>

@@ -118,6 +118,7 @@ export async function exportData(
 }
 
 /** 从 zip/sabackup 文件导入所有数据（导入后应用自动重启）。加密文件返回 encrypted: true */
+
 export async function inspectBackup(filePath: string, password?: string): Promise<BackupInspection> { return requireElectron().appSettings.inspectBackup(filePath, password) }
 
 export async function importData(filePath: string, fingerprint?: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }> {

@@ -6,6 +6,7 @@ import { createCipheriv, createDecipheriv, createHash } from 'node:crypto'
 import Database from 'better-sqlite3'
 import AdmZip from 'adm-zip'
 import { classifyBackup } from '../../packages/backup-core/compatibility.js'
+import { parseBackupManifest } from '../../packages/backup-core/format.js'
 import { composeLimitedRestore, composeIncludedRestore } from '../../packages/backup-core/transfer.js'
 import { inspectBackup, readImportBackup } from '../../packages/backup-core/import.js'
 import { applyPendingRestore, finishPendingRestore, prepareRestoreDirectory, queuePreparedRestore } from '../../packages/backup-core/transaction.js'
@@ -72,32 +73,114 @@ describe('backup compatibility', () => {
   it('uses data identity rather than product version distance', () => {
     expect(classifyBackup(manifest('community', { appVersion: '0.0.1' }), 'community').mode).toBe('full')
     expect(classifyBackup(manifest('concept'), 'community').reason).toBe('cross-edition')
-    expect(classifyBackup(manifest('community', { dataSchemaVersion: 2 }), 'community').reason).toBe('data-schema')
+    expect(() => classifyBackup(manifest('community', { dataSchemaVersion: 2 }), 'community')).toThrow('尚不支持的数据结构')
     expect(classifyBackup(manifest('community', { edition: undefined, legacy: true }), 'community').reason).toBe('unidentified')
   })
-  it('inspects without changing the target and binds execution to the confirmed file', () => {
+  it('inspects without changing the target and binds execution to the confirmed file', async () => {
     const source = make('source'); seed(source, {})
     const adapter = { edition: 'community' as const, defaults, validateFull() {} }
     const file = archive(source, manifest('concept'))
-    const inspected = inspectBackup(adapter, file)
+    const inspected = await inspectBackup(adapter, file)
     expect(inspected).toMatchObject({ success: true, mode: 'limited', reason: 'cross-edition' })
     fs.appendFileSync(file, 'changed')
-    expect(() => readImportBackup(adapter, file, make('staged'), undefined, inspected.fingerprint)).toThrow(/已变化/)
+    await expect(readImportBackup(adapter, file, make('staged'), undefined, inspected.fingerprint)).rejects.toThrow(/已变化/)
   })
-  it('supports unmarked legacy profiles and rejects unknown containers and damaged inventory', () => {
+  it('supports unmarked legacy profiles and rejects unknown containers and damaged inventory', async () => {
     const zip = new AdmZip(); zip.addFile('profiles.json', Buffer.from(JSON.stringify({ profiles: [profile] })))
     const file = path.join(temporary, 'legacy.zip'); zip.writeZip(file)
     const adapter = { edition: 'concept' as const, defaults, validateFull() {} }
-    expect(inspectBackup(adapter, file)).toMatchObject({ success: true, mode: 'limited', reason: 'unidentified' })
+    expect(await inspectBackup(adapter, file)).toMatchObject({ success: true, mode: 'limited', reason: 'unidentified' })
     zip.addFile('manifest.json', Buffer.from('{"format":"unknown"}')); zip.writeZip(file)
-    expect(inspectBackup(adapter, file).success).toBe(false)
+    expect((await inspectBackup(adapter, file)).success).toBe(false)
     const source = make('source'); seed(source, {}); const modern = archive(source, manifest('community'))
     const broken = new AdmZip(modern); broken.updateFile('settings.db', Buffer.from('corrupt')); broken.writeZip(modern)
-    expect(inspectBackup(adapter, modern).error).toMatch(/integrity/)
+    expect((await inspectBackup(adapter, modern)).error).toMatch(/integrity/)
   })
 })
 
 describe.each([['concept', 'community'], ['community', 'concept']] as const)('%s to %s limited restore', (sourceEdition, targetEdition) => {
+  it('retains distinct same-platform webpage configurations and validates their composed sessions', () => {
+    const root = make('target'), staged = make('staged')
+    const target = { ...profile, id: 'target-platform', isBuiltIn: true }
+    const incoming = [{ ...profile, id: 'source-one', isBuiltIn: true }, { ...profile, id: 'source-two', isBuiltIn: true }]
+    seed(root, { profiles: { profiles: [target] }, device_presets: { presets: [preset] } })
+    seed(staged, { profiles: { profiles: incoming }, device_presets: { presets: [preset] } })
+    write(staged, 'manifest.json', JSON.stringify(manifest(sourceEdition, { cookieSnapshots: incoming.map((item, index) => ({
+      path: `Partitions/${item.id}`, cookies: [{ ...cookie, value: `session-${index}` }],
+    })) })))
+    composeLimitedRestore(root, staged, targetEdition, defaults)
+    const composed = parseBackupManifest(JSON.parse(fs.readFileSync(path.join(staged, 'manifest.json'), 'utf8')))
+    const profiles = read(staged, 'profiles').profiles
+    expect(profiles).toHaveLength(2)
+    expect(composed.cookieSnapshots?.map(item => item.path)).toEqual(['Partitions/target-platform', 'Partitions/source-two'])
+    expect(composed.cookieSnapshots?.map(item => item.cookies[0].value)).toEqual(['session-0', 'session-1'])
+    expect(read(root, 'profiles').profiles).toEqual([target])
+  })
+
+  it.each([['Foo', 'foo'], ['foo', 'foo-browser']])('skips ambiguous source partition identities %s and %s', (first, second) => {
+    const root = make('target'), staged = make('staged')
+    seed(root, { profiles: { profiles: [] } })
+    seed(staged, { profiles: { profiles: [{ ...profile, id: first }, { ...profile, id: second }, { ...profile, id: 'safe' }] } })
+    write(staged, 'manifest.json', JSON.stringify(manifest(sourceEdition)))
+    composeLimitedRestore(root, staged, targetEdition, defaults)
+    const result = parseBackupManifest(JSON.parse(fs.readFileSync(path.join(staged, 'manifest.json'), 'utf8')))
+    expect(read(staged, 'profiles').profiles.map((item: any) => item.id)).toEqual(['safe'])
+    expect(result.importReport?.skipped.map(item => item.id)).toEqual([first, second])
+    expect(result.importReport?.imported.map(item => item.id)).toEqual(['safe'])
+  })
+
+  it('preserves target-only profiles and orphan session directories on identity collision', () => {
+    const root = make('target'), staged = make('staged')
+    const existing = { ...profile, id: 'source', isAIPlatform: false, isBuiltIn: true }
+    seed(root, { profiles: { profiles: [existing] } })
+    write(root, 'Partitions/orphan-browser/Local Storage/value', 'retained')
+    seed(staged, { profiles: { profiles: [{ ...profile, isBuiltIn: true }, { ...profile, id: 'orphan' }] } })
+    write(staged, 'Partitions/orphan-browser/Local Storage/value', 'incoming')
+    write(staged, 'manifest.json', JSON.stringify(manifest(sourceEdition)))
+    composeLimitedRestore(root, staged, targetEdition, defaults)
+    const result = parseBackupManifest(JSON.parse(fs.readFileSync(path.join(staged, 'manifest.json'), 'utf8')))
+    expect(read(staged, 'profiles').profiles).toEqual([existing])
+    expect(result.importReport?.skipped.map(item => item.id)).toEqual(['source', 'orphan'])
+    expect(result.importReport?.imported).toEqual([])
+    expect(fs.readFileSync(path.join(staged, 'Partitions/orphan-browser/Local Storage/value'), 'utf8')).toBe('retained')
+    expect(fs.readFileSync(path.join(root, 'Partitions/orphan-browser/Local Storage/value'), 'utf8')).toBe('retained')
+  })
+
+  it('rejects overlapping target profiles before replacing either directory', () => {
+    const root = make('target'), staged = make('staged')
+    const existing = [{ ...profile, id: 'foo' }, { ...profile, id: 'foo-browser' }]
+    seed(root, { profiles: { profiles: existing } })
+    seed(staged, { profiles: { profiles: [{ ...profile, id: 'incoming' }] } })
+    write(staged, 'manifest.json', JSON.stringify(manifest(sourceEdition)))
+    expect(() => composeLimitedRestore(root, staged, targetEdition, defaults)).toThrow('Current browser session identities overlap')
+    expect(read(root, 'profiles').profiles).toEqual(existing)
+    expect(read(staged, 'profiles').profiles[0].id).toBe('incoming')
+  })
+
+  it('keeps same-platform mappings stable across two cold replacements', () => {
+    const root = make('target')
+    seed(root, { profiles: { profiles: [{ ...profile, id: 'target-platform', isBuiltIn: true }] } })
+    const incoming = [{ ...profile, id: 'source-one', isBuiltIn: true }, { ...profile, id: 'source-two', isBuiltIn: true }]
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const staged = prepareRestoreDirectory(root)
+      seed(staged, { profiles: { profiles: incoming } })
+      write(staged, 'manifest.json', JSON.stringify(manifest(sourceEdition, { cookieSnapshots: incoming.map((item, index) => ({
+        path: `Partitions/${item.id}`, cookies: [{ ...cookie, value: `session-${index}` }],
+      })) })))
+      queuePreparedRestore(root, staged, 'limited')
+      let result: BackupManifest | undefined
+      expect(applyPendingRestore(root, (current, source) => {
+        composeLimitedRestore(current, source, targetEdition, defaults)
+        result = parseBackupManifest(JSON.parse(fs.readFileSync(path.join(source, 'manifest.json'), 'utf8')))
+      }).restored).toBe(true)
+      finishPendingRestore(root)
+      expect(read(root, 'profiles').profiles.map((item: any) => item.id)).toEqual(['target-platform', 'source-two'])
+      expect(result?.cookieSnapshots?.map(item => [item.path, item.cookies[0].value])).toEqual([
+        ['Partitions/target-platform', 'session-0'], ['Partitions/source-two', 'session-1'],
+      ])
+    }
+  })
+
   it('retains missing nested configuration fields from the target and fills new profiles from defaults', () => {
     const root = make('target'), staged = make('staged')
     const existing = { ...profile, viewport: { width: 900, height: 700 }, fingerprint: { seed: 42, canvas: 'block' } }
@@ -146,7 +229,8 @@ describe.each([['concept', 'community'], ['community', 'concept']] as const)('%s
     expect(decrypt(read(staged, 'ai_providers').providers[0].apiKeyCipher, key)).toBe('target-key')
     const bad = make('bad'); seed(bad, { ai_providers: { providers: [{ ...provider, apiKeyCipher: encrypt('bad', otherKey) }] } })
     write(bad, 'manifest.json', JSON.stringify(manifest(sourceEdition)))
-    expect(() => composeLimitedRestore(root, bad, targetEdition, defaults)).toThrow(/密钥|凭据/)
+    composeLimitedRestore(root, bad, targetEdition, defaults)
+    expect(JSON.parse(fs.readFileSync(path.join(bad, 'manifest.json'), 'utf8')).importReport.skipped).toHaveLength(1)
     expect(decrypt(read(root, 'ai_providers').providers[0].apiKeyCipher, key)).toBe('target-key')
   })
   it('combines the latest target at cold startup and remains stable on repeated import', () => {

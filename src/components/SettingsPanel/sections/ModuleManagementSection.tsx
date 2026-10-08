@@ -22,7 +22,7 @@ export default function ModuleManagementSection() {
     if (!initialized) void useModuleStore.getState().init();
   }, [initialized]);
 
-  const stable = useMemo(() => modules.filter((m) => m.category === 'stable' && m.id !== 'freeze'), [modules]);
+  const stable = useMemo(() => modules.filter((m) => m.category === 'stable'), [modules]);
   const plugins = useMemo(() => modules.filter((m) => m.category === 'plugin'), [modules]);
   const hasMissingLarge = modules.some((m) => m.sizeLevel === 'large' && !m.installed);
 

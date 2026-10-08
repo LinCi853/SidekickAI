@@ -3,7 +3,7 @@
 // 使 App.tsx 无需任何改动即可复用。
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import type { InstallerInfo, InstallOptions, ScanResult, DonePayload, InstalledConfig } from './global'
+import type { DistributionPrepared, DistributionProgress, InstallerInfo, InstallOptions, ScanResult, DonePayload, InstalledConfig, InstallationRecovery } from './global'
 
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
   let unlisten: UnlistenFn | null = null
@@ -20,6 +20,11 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 
 const api = {
   getInfo: (): Promise<InstallerInfo> => invoke<InstallerInfo>('get_info'),
+  prepareDistribution: (localPath?: string): Promise<DistributionPrepared> => invoke('prepare_distribution', { localPath: localPath ?? null }),
+  openLocalDistribution: (): Promise<string> => invoke('open_local_distribution'),
+  cancelDistribution: (): Promise<boolean> => invoke('cancel_distribution'),
+  onDistributionProgress: (cb: (payload: DistributionProgress) => void) => subscribe('distribution:progress', cb),
+  pendingInstallations: (): Promise<InstallationRecovery[]> => invoke<InstallationRecovery[]>('pending_installations'),
   scanInstallations: (): Promise<ScanResult> => invoke<ScanResult>('scan_installations'),
   browseDir: (current: string): Promise<string> => invoke<string>('browse_dir', { current }),
   saveBackupDialog: (defaultName: string): Promise<string> => invoke<string>('save_backup_dialog', { defaultName }),

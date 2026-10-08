@@ -25,9 +25,7 @@ export function useVoiceInjection(
         return;
       }
       const profile = getProfile(activeTab.profileId);
-      const platform = profile?.aiPlatformUrl
-        ? platforms.find((p) => p.url === profile.aiPlatformUrl)
-        : undefined;
+      const platform = platforms.find(p => profile?.aiPlatformId ? p.id === profile.aiPlatformId : p.url === profile?.aiPlatformUrl);
       const inputSelector = profile?.aiInputSelector || platform?.inputSelector || null;
       const sendSelector = profile?.aiSendSelector || platform?.sendSelector || null;
       const el = document.querySelector(`webview[data-tab-id="${activeTab.id}"]`) as WebviewLike | null;
@@ -41,7 +39,7 @@ export function useVoiceInjection(
         return;
       }
       if (send) {
-        await triggerSendInWebview(el, sendSelector, inputSelector);
+        await triggerSendInWebview(el, sendSelector, inputSelector, platform?.pageAdapter?.sendEvent);
       }
     },
     [activeTab, getProfile, platforms],

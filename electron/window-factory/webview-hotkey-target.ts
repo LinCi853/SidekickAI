@@ -1,6 +1,6 @@
 import { BrowserWindow, webContents, type WebContents } from 'electron'
 import type { WebviewHotkeyTarget } from '../shared/api/settings.api.js'
-import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
+import { getRecordByWebContentsId } from './webview-registry.js'
 import { findWindowIdByWin } from './window-utils.js'
 
 interface GuestState {

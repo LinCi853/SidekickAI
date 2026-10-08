@@ -10,9 +10,10 @@ describe('asset navigation', () => {
     expect(search.category).toBeUndefined()
     expect(getAssetNavigation().focusSearch).toBe(true)
   })
-  it('keeps a page selection separate from executing its freeze action', () => {
-    const page = setAssetNavigation({ freezeTabId: 'active-tab' })
-    expect(page.freezeTabId).toBe('active-tab')
+  it('opens settings without changing the current category', () => {
+    const page = setAssetNavigation({ openSettings: true })
+    expect(page.openSettings).toBe(true)
+    expect(page.category).toBeUndefined()
     expect(setAssetNavigation({ category: 'invalid' } as never).category).toBeUndefined()
   })
 })

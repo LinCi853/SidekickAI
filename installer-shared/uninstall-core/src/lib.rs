@@ -2,6 +2,9 @@
 pub mod product;
 
 pub mod archive;
+pub mod distribution;
+pub mod architecture;
+mod sabk_reader;
 pub mod backup;
 pub mod path;
 pub mod protocol;

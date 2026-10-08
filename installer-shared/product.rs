@@ -50,9 +50,14 @@ impl Edition {
 }
 
 pub fn installation_edition(directory: &Path) -> Option<(&'static str, &'static Edition)> {
-    let name = package_name(&directory.join("resources/app.asar")).ok()?;
-    product().editions.iter().find(|(_, edition)| edition.package_name == name)
-        .map(|(id, edition)| (id.as_str(), edition))
+    match package_name(&directory.join("resources/app.asar")) {
+        Ok(name) => product().editions.iter().find(|(_, edition)| edition.package_name == name)
+            .map(|(id, edition)| (id.as_str(), edition)),
+        Err(_) => {
+            let identity = crate::distribution::verify_installed_identity(directory).ok()?;
+            product().editions.get_key_value(&identity.body.edition).map(|(id, edition)| (id.as_str(), edition))
+        }
+    }
 }
 
 pub fn validate_uninstall_identity(directory: &Path) -> Result<(), String> {

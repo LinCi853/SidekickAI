@@ -16,7 +16,7 @@ describe('browser hook fallback', () => {
   it.each([
     [event(87), 'toggleFullscreen'],
     [event(46, { ctrl: true, alt: true }), 'toggleCloudPc'],
-    [event(25, { alt: true }), 'toggleFreeze'],
+    [event(25, { alt: true }), null],
     [event(122), null],
     [event(67, { ctrl: true, alt: true }), null],
     [event(80, { alt: true }), null],
@@ -33,7 +33,7 @@ describe('browser hook fallback', () => {
     expect(tryForward('toggleFullscreen', firstHost)).toBe(true)
     expect(tryForward('toggleFullscreen', firstHost)).toBe(false)
     expect(tryForward('toggleFullscreen', secondHost)).toBe(true)
-    expect(tryForward('toggleFreeze', firstHost)).toBe(true)
+    expect(tryForward('toggleCloudPc', firstHost)).toBe(true)
     vi.advanceTimersByTime(250)
     expect(tryForward('toggleFullscreen', firstHost)).toBe(true)
   })

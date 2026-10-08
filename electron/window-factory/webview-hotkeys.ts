@@ -9,8 +9,6 @@
 
 import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { isFrozen } from '../freeze/freeze-manager.js'
-import { getRecordByWebContentsId } from '../freeze/webview-registry.js'
 import { isCloudPc, forceExitCloudPc } from '../utils/cloud-pc.js'
 import { tryForward } from '../utils/browser-hotkey-fallback.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
@@ -91,16 +89,6 @@ const commonHotkeys: HotkeyDef[] = [
 
   // F10：切换主题（light/dark）
   { key: 'F10', log: 'F10 → 切换主题', action: () => ({ action: 'toggleTheme' }) },
-
-  // Open asset controls for the current page.
-  {
-    key: 'p', alt: true, toLower: true, tryFwd: true,
-    log: 'Alt+P → AI资产页面控制',
-    action: (ctx) => {
-      const record = getRecordByWebContentsId(ctx.wc.id)
-      return { action: 'toggleFreeze', data: record ? { tabId: record.tabId } : undefined }
-    },
-  },
 
   // Alt+1~9：切换到第 N 个标签
   {
@@ -384,17 +372,6 @@ export function attachWebviewHotkeyRouter(
 
     // F12：浏览器窗口中切换 DevTools，其他窗口置顶/取消置顶
     if (key === 'F12' && !hasCtrl) {
-      // 冻结期间短路 F12：debugger 已占用，开 DevTools 会冲突
-      const wcId = wc.id
-      if (wcId !== undefined) {
-        const rec = getRecordByWebContentsId(wcId)
-        if (rec && isFrozen(rec.tabId)) {
-          console.log('[hotkey] F12 跳过：该 webview 处于冻结态')
-          e.preventDefault()
-          return
-        }
-      }
-
       if (isBrowser) {
         console.log('[hotkey] F12 → DevTools 切换 (browser window)')
         e.preventDefault()

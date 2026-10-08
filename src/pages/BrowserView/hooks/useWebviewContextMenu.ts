@@ -14,7 +14,6 @@ import {
 } from '../../../lib/electron-api';
 import type { WebviewContextMenuParams, WebviewElement } from '../../../lib/webview.js';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
-import { useFreezeStore } from '../../../store/useFreezeStore.js';
 import type { WebviewContextType, WebviewEditFlags } from '../WebviewContextMenu.js';
 import { deriveSaveName } from '../utils/derive-save-name.js';
 import {
@@ -209,7 +208,6 @@ export function useWebviewContextMenu({
   const handleContextMenuInspect = useCallback(() => {
     const webview = webviewRef.current;
     if (!webview) return;
-    if (useFreezeStore.getState().states[tab.id] === 'frozen') return;
     try {
       if (!webview.isDevToolsOpened()) {
         webview.openDevTools();

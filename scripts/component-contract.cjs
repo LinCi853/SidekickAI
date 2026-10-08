@@ -9,7 +9,9 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 function readContract(root = ROOT) {
   const value = JSON.parse(fs.readFileSync(path.join(root, 'maintenance/component-contract.json'), 'utf8'))
   if (value.schemaVersion !== 1 || !SEMVER.test(value.componentVersion ?? '')
-    || value.setupProtocolVersion !== 2 || value.uninstallProtocolVersion !== 1
+    || value.setupProtocolVersion !== 3 || value.uninstallProtocolVersion !== 2
+    || value.distributionProtocolVersion !== 1 || !SEMVER.test(value.recoveryComponentVersion ?? '')
+    || !Number.isSafeInteger(value.maintenanceExecutableMaxBytes) || value.maintenanceExecutableMaxBytes <= 0
     || !Array.isArray(value.supportedFeatures) || !value.supportedOptions) throw new Error('Invalid maintenance component contract')
   return value
 }

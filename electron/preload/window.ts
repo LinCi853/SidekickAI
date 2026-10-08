@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
+import type { WebviewRegistration } from '../shared/api/profile-window.api.js'
 
 export const windowApi = {
   // 窗口管理
@@ -16,6 +17,8 @@ export const windowApi = {
     getOpenWindowIds: () => ipcRenderer.invoke(IPC_CHANNELS.WINDOW_GET_OPEN_IDS),
     setupSession: (profileId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.WINDOW_SETUP_SESSION, profileId),
+    registerWebview: (payload: WebviewRegistration) =>
+      ipcRenderer.invoke(IPC_CHANNELS.WINDOW_REGISTER_WEBVIEW, payload),
   },
   // 窗口控制（操作调用方所在窗口本身）
   windowControl: {

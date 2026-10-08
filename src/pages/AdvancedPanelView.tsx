@@ -108,6 +108,19 @@ export default function AdvancedPanelView() {
   const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } = useWindowMaximizedAndPinned();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const initialProviderId = useMemo(() => readInitialProviderId(), []);
+  useEffect(() => {
+    const update = () => {
+      const params = new URLSearchParams(window.location.search);
+      params.set('tab', activeTab);
+      const provider = useChatStore.getState().currentProviderId;
+      if (activeTab === 'chat' && provider) params.set('provider', provider);
+      else params.delete('provider');
+      const search = '?' + params.toString();
+      if (search !== window.location.search) window.history.replaceState(window.history.state, '', search + window.location.hash);
+    };
+    update();
+    return useChatStore.subscribe(update);
+  }, [activeTab]);
 
   // 白板应用层侧边栏显隐（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口）
   // 设置面板关闭时重新读取，使设置变更立即生效

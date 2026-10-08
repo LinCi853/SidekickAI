@@ -3,6 +3,8 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import AdmZip from 'adm-zip'
 import type { BackupManifest, CookieSnapshot } from './types.js'
+import { MAX_BACKUP_ENTRIES, MAX_BACKUP_BYTES } from './io.js'
+import { validateSensitiveDrafts } from './sensitive-drafts-format.js'
 export type { BackupManifest, CookieSnapshot } from './types.js'
 
 export const BACKUP_FORMAT = 'sidekickai-backup'
@@ -28,7 +30,8 @@ export function cookieSetDetails(cookie: Electron.Cookie): Electron.CookiesSetDe
     || ['hostOnly', 'httpOnly', 'secure', 'session'].some(key => typeof cookie[key as keyof Electron.Cookie] !== 'boolean')
     || cookie.expirationDate !== undefined && !Number.isFinite(cookie.expirationDate)) throw new Error('Invalid backup cookie.')
   return {
-    url: `${cookie.secure ? 'https' : 'http'}://${cookie.domain.replace(/^\./, '')}${cookie.path}`,
+    // A trusted replay origin permits overlapping cookies while retaining their individual Secure attributes.
+    url: `https://${cookie.domain.replace(/^\./, '')}${cookie.path}`,
     name: cookie.name, value: cookie.value, path: cookie.path,
     ...(cookie.hostOnly ? {} : { domain: cookie.domain }),
     secure: cookie.secure, httpOnly: cookie.httpOnly, sameSite: cookie.sameSite,
@@ -36,7 +39,7 @@ export function cookieSetDetails(cookie: Electron.Cookie): Electron.CookiesSetDe
   }
 }
 
-function validateSnapshots(manifest: BackupManifest): void {
+export function validateSnapshots(manifest: BackupManifest): void {
   if (manifest.cookieSnapshots === undefined) return
   if (!manifest.options.cookies || !Array.isArray(manifest.cookieSnapshots)) throw new Error('Invalid backup cookie snapshots.')
   const seen = new Set<string>()
@@ -62,13 +65,26 @@ export function parseBackupManifest(raw: unknown): BackupManifest {
   for (const [name, hash] of Object.entries(manifest.entries)) {
     if (!safeBackupPath(name) || name === 'manifest.json' || typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)) throw new Error(`Invalid backup inventory entry: ${name}`)
   }
+  if (Object.keys(manifest.entries).length + 1 > MAX_BACKUP_ENTRIES) throw new Error('Backup manifest contains too many entries.')
+  if (manifest.inventory !== undefined) {
+    if (!Array.isArray(manifest.inventory) || manifest.inventory.length !== Object.keys(manifest.entries).length) throw new Error('Invalid snapshot inventory.')
+    const paths = new Set<string>()
+    let total = 0
+    for (const entry of manifest.inventory) {
+      total += entry.size
+      if (paths.has(entry.path) || !Object.hasOwn(manifest.entries, entry.path) || manifest.entries[entry.path] !== entry.sha256 || entry.state !== 'verified'
+        || !Number.isSafeInteger(entry.size) || entry.size < 0 || !Number.isSafeInteger(total)) throw new Error('Invalid snapshot inventory entry.')
+      paths.add(entry.path)
+    }
+  }
   validateSnapshots(manifest)
+  if (manifest.sensitiveDrafts !== undefined) validateSensitiveDrafts(manifest.sensitiveDrafts)
   return { ...manifest, edition: normalizeEdition(manifest.edition) }
 }
 
 function validatePaths(zip: AdmZip): void {
   const entries = zip.getEntries()
-  if (entries.length > 20_000) throw new Error('Backup contains too many entries.')
+  if (entries.length > MAX_BACKUP_ENTRIES) throw new Error('Backup contains too many entries.')
   const seen = new Set<string>()
   const files = new Set<string>()
   let total = 0
@@ -78,7 +94,7 @@ function validatePaths(zip: AdmZip): void {
     const mode = (entry.attr >>> 16) & 0xf000
     total += entry.header.size
     if (!safeBackupPath(name) || seen.has(key) || mode && mode !== (entry.isDirectory ? 0x4000 : 0x8000)
-      || entry.header.size > 512 * 1024 * 1024 || total > 8 * 1024 * 1024 * 1024) throw new Error(`Invalid backup entry: ${entry.entryName}`)
+      || !Number.isSafeInteger(entry.header.size) || entry.header.size < 0 || !Number.isSafeInteger(total) || total > MAX_BACKUP_BYTES) throw new Error(`Invalid backup entry: ${entry.entryName}`)
     seen.add(key)
     if (!entry.isDirectory) files.add(key)
   }

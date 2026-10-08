@@ -5,9 +5,24 @@ import type { InstallFeature, InstallOption, LicenseDoc } from './install-manife
 
 export type InstallMode = 'install' | 'repair' | 'uninstall'
 
+export interface InstallationRecovery {
+  installDir: string
+  forAllUsers: boolean
+  cleanupPaths: string[]
+  journalPath: string
+  state: string
+}
+
 export interface InstallOptions {
+  distributionSourcePath?: string
+  distributionBodyProof?: string
+  distributionProductVersion?: string
+  distributionReleaseId?: string
+  distributionReleaseSha256?: string
+  distributionReleaseProof?: string
   resources?: InstallationResourceStatus[]
   installDir: string
+  stagingDir?: string
   forAllUsers: boolean
   createDesktopShortcut: boolean
   launchAfterInstall: boolean
@@ -87,6 +102,7 @@ export interface ScanResult {
 }
 
 export interface InstallerInfo {
+  distributionMode: 'online' | 'offline'
   editionLabel?: string
   uninstallEntry?: boolean
   version: string
@@ -107,6 +123,23 @@ export interface DonePayload {
   residualNote: string
 }
 
+export interface DistributionPrepared {
+  sourcePath: string
+  bodyProof: string
+  productVersion: string
+  nativeArchitecture: 'x64' | 'arm64'
+  releaseId: string
+  releaseSha256: string
+  releaseProof: string
+}
+
+export interface DistributionProgress {
+  phase: 'selecting' | 'downloading' | 'verifying' | 'ready'
+  downloadedBytes: number
+  totalBytes: number
+  message: string
+}
+
 /** 预读已安装位置的安装期配置 */
 export interface InstalledConfig {
   modules: Record<string, { enabled: boolean }>
@@ -117,6 +150,11 @@ declare global {
   interface Window {
     installer: {
       getInfo(): Promise<InstallerInfo>
+      prepareDistribution(localPath?: string): Promise<DistributionPrepared>
+      openLocalDistribution(): Promise<string>
+      cancelDistribution(): Promise<boolean>
+      onDistributionProgress(cb: (payload: DistributionProgress) => void): () => void
+      pendingInstallations(): Promise<InstallationRecovery[]>
       scanInstallations(): Promise<ScanResult>
       browseDir(current: string): Promise<string>
       needsAdmin(dir: string, forAllUsers: boolean): Promise<boolean>

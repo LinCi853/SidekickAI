@@ -105,8 +105,6 @@
 .asset-prompt-body .prompt-view-body { overflow: visible; }
 .asset-settings-modal { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
 .asset-settings-modal .modal-body { overflow-y: auto; }
-.asset-freeze-control { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 12px; }
-.asset-freeze-control select { max-width: 280px; padding: 5px; color: var(--foreground); background: var(--card); border: 1px solid var(--border); }
 @media (max-width: 850px) {
   .asset-topbar { height: 80px; padding-bottom: 36px; position: relative; }
   .asset-search-field { position: absolute; left: 10px; right: 10px; bottom: 7px; width: auto; margin: 0; }

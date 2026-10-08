@@ -17,7 +17,12 @@ getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+base64 = "0.22"
+ed25519-dalek = "2"
+time = { version = "0.3", features = ["parsing"] }
 aes-gcm = "0.10"
+aes = "0.8"
+ghash = "0.5"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
@@ -26,8 +31,10 @@ windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Globalization",
   "Win32_Security",
+  "Win32_Security_Authorization",
   "Win32_Storage_FileSystem",
   "Win32_System_Threading",
+  "Win32_System_SystemInformation",
   "Win32_UI_Shell",
 ] }
 

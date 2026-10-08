@@ -155,6 +155,7 @@ struct Response {
     protocol_version: u32,
     request_id: String,
     decision: String,
+    entry: String,
 }
 
 fn session(pid: u32) -> Result<u32, String> {
@@ -333,25 +334,26 @@ fn send_request(pipe_name: &str, entry: &str, sid: &str, own_session: u32) -> Re
         AllowSetForegroundWindow(pid);
     }
     let request = Request {
-        protocol_version: 1,
+        protocol_version: 2,
         request_id: sidekickai_uninstall_core::random_id("wizard").map_err(|error| error.message)?,
         entry: entry.into(),
         executable: std::env::current_exe().map_err(|error| error.to_string())?.to_string_lossy().into_owned(),
     };
     write_message(&pipe, &request)?;
     let response: Response =
-        serde_json::from_slice(&read_message(&pipe, Instant::now() + Duration::from_secs(3), None)?)
+        serde_json::from_slice(&read_message(&pipe, Instant::now() + Duration::from_secs(if super::precise_entry(entry){1}else{3}), None)?)
             .map_err(|error| error.to_string())?;
     if !peer.is_live()
-        || response.protocol_version != 1
+        || response.protocol_version != 2
         || response.request_id != request.request_id
-        || !matches!(response.decision.as_str(), "activate" | "switch")
+        || !matches!(response.decision.as_str(), "activate" | "switch" | "rejected")
+        || super::precise_entry(entry) && response.decision=="activate" && response.entry!=entry
     {
         return Err("维护协调响应无法核验。".into());
     }
     write_message(
         &pipe,
-        &Response { protocol_version: 1, request_id: request.request_id, decision: "received".into() },
+        &Response { protocol_version: 2, request_id: request.request_id, decision: "received".into(),entry:entry.into() },
     )?;
     Ok(response.decision)
 }
@@ -378,7 +380,7 @@ fn serve(pipe: Handle, sid: String, own_session: u32, shared: Arc<Shared>, stop:
             let request: Request =
                 serde_json::from_slice(&read_message(&pipe, Instant::now() + Duration::from_secs(2), Some(&stop))?)
                     .map_err(|error| error.to_string())?;
-            if request.protocol_version != 1
+            if request.protocol_version != 2
                 || request.request_id.is_empty()
                 || request.request_id.len() > 160
                 || request.entry.is_empty()
@@ -392,9 +394,10 @@ fn serve(pipe: Handle, sid: String, own_session: u32, shared: Arc<Shared>, stop:
             let reply = write_message(
                 &pipe,
                 &Response {
-                    protocol_version: 1,
+                    protocol_version: 2,
                     request_id: request.request_id,
-                    decision: if decision == Decision::Switch { "switch" } else { "activate" }.into(),
+                    decision: match decision {Decision::Switch=>"switch",Decision::Activate=>"activate",Decision::Reject=>"rejected"}.into(),
+                    entry:shared.entry()?,
                 },
             );
             if reply.is_ok() {
@@ -480,6 +483,7 @@ pub(super) fn acquire(entry: &str, shared: Arc<Shared>) -> Result<Option<Owner>,
     let attributes = security.attributes();
     let scope = test_scope()?;
     let activate_existing = || scope.is_none() && activate_legacy(&sid, own_session);
+    let precise=super::precise_entry(entry);
     let mutex_name = scope
         .as_ref()
         .map(|scope| format!("Local\\SidekickAI-Maintenance-Test-{scope}"))
@@ -487,33 +491,35 @@ pub(super) fn acquire(entry: &str, shared: Arc<Shared>) -> Result<Option<Owner>,
     let name = wide(&mutex_name);
     let handle = unsafe { CreateMutexW(&attributes, 0, name.as_ptr()) };
     if handle.is_null() {
-        return if activate_existing() { Ok(None) } else { Err(failure()) };
+        return if !precise && activate_existing() { Ok(None) } else { Err(failure()) };
     }
     let existing = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
     let mutex = Handle(handle);
     let suffix = scope.as_ref().map(|scope| format!("-Test-{scope}")).unwrap_or_default();
     let pipe_name = format!("\\\\.\\pipe\\SidekickAI-Maintenance-{sid}-{own_session}{suffix}");
     if existing {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(if precise {3}else{10});
         loop {
             match send_request(&pipe_name, entry, &sid, own_session) {
                 Ok(decision) if decision == "activate" => return Ok(None),
+                Ok(decision) if decision == "rejected" => return Err("当前维护向导正在准备或执行另一项发行操作；已唤起原窗口，本次更新尚未接管。请等待完成后重试。".into()),
                 Ok(_) => {
                     let remaining =
                         deadline.saturating_duration_since(Instant::now()).as_millis().min(u32::MAX as u128) as u32;
                     if !matches!(unsafe { WaitForSingleObject(mutex.0, remaining) }, WAIT_OBJECT_0 | WAIT_ABANDONED) {
+                        if precise {return Err("维护向导尚未完成发行交接，请稍后重试。".into());}
                         activate_existing();
                         return Ok(None);
                     }
                     break;
                 }
-                Err(_) if activate_existing() => return Ok(None),
+                Err(_) if !precise && activate_existing() => return Ok(None),
                 Err(_) => {
                     if Instant::now() >= deadline {
                         if matches!(unsafe { WaitForSingleObject(mutex.0, 0) }, WAIT_OBJECT_0 | WAIT_ABANDONED) {
                             break;
                         }
-                        return Ok(None);
+                        return if precise {Err("已有维护向导未确认本次精准发行，请关闭空闲窗口后重试。".into())} else {Ok(None)};
                     }
                     std::thread::sleep(Duration::from_millis(50));
                 }

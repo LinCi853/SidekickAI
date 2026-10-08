@@ -3305,7 +3305,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sidekickai-installer"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -3320,25 +3320,31 @@ dependencies = [
  "tauri-plugin-dialog",
  "windows 0.58.0",
  "winreg",
+ "zip",
 ]
 
 [[package]]
 name = "sidekickai-uninstall-core"
 version = "0.1.0"
 dependencies = [
+ "aes",
  "aes-gcm",
+ "base64 0.22.1",
+ "ed25519-dalek",
  "getrandom 0.2.17",
+ "ghash",
  "pbkdf2",
  "serde",
  "serde_json",
  "sha2",
+ "time",
  "windows 0.58.0",
  "zip",
 ]
 
 [[package]]
 name = "sidekickai-uninstall-host"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "getrandom 0.2.17",
  "serde",
@@ -3349,6 +3355,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "windows 0.58.0",
  "winreg",
+ "zip",
 ]
 
 [[package]]

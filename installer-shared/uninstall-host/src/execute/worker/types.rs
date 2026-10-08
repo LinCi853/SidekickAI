@@ -115,6 +115,10 @@ pub struct WorkerRequest {
     /// deletes alongside is the one the receipt verified.
     #[serde(default)]
     pub backup_sha256: Option<String>,
+    #[serde(default)]
+    pub backup_proofs: Vec<BackupProof>,
+    #[serde(default)]
+    pub resume_task_id: Option<String>,
     /// A preparation request can stop processes but cannot delete anything.
     #[serde(default)]
     pub preparation: Option<WorkerPreparation>,

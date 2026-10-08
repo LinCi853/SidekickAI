@@ -128,7 +128,6 @@ export function checkArchitecture(files, baseline) {
       || (edge.from.startsWith('electron/') && edge.to.startsWith('src/'))) {
       if (!allowedCrossings.has(`${edge.from}|${edge.to}`)) violations.push(`New process crossing: ${edge.from} -> ${edge.to}`)
     }
-    if (edge.from === 'electron/modules/feature-gate.ts' && edge.to === 'electron/modules/registry.ts') violations.push('Feature policy depends on lifecycle registry')
     if (['electron/modules/runtime-state.ts', 'electron/store/app-settings-defaults.ts'].includes(edge.from)) violations.push(`State/defaults import runtime behavior: ${edge.from} -> ${edge.to}`)
     if (edge.from === 'electron/store/app-settings-repository.ts' && /\/(?:hotkey|window|window-factory|ipc)\//.test(edge.to)) violations.push(`Settings persistence depends on desktop behavior: ${edge.to}`)
   }

@@ -65,10 +65,14 @@ fn verify_account_session(pid: u32) -> Result<(), String> {
         ProcessIdToSessionId(std::process::id(), &mut own).map_err(|error| error.to_string())?;
         ProcessIdToSessionId(pid, &mut peer).map_err(|error| error.to_string())?;
     }
-    if own != peer || sidekickai_uninstall_host::process_user_sid(pid).map_err(|error| error.message)? != sidekickai_uninstall_host::current_user_sid().map_err(|error| error.message)? {
+    if own != peer || application_user_sid(pid, "已有程序")? != sidekickai_uninstall_host::current_user_sid().map_err(|error| error.message)? {
         return Err("工百窗进程账户或会话不匹配。".into());
     }
     Ok(())
+}
+
+fn application_user_sid(pid: u32, purpose: &str) -> Result<String, String> {
+    sidekickai_uninstall_host::process_user_sid(pid).map_err(|error| format!("无法核对{purpose}的账户（PID {pid}，核对端{}）：{}", if crate::elevate::is_process_elevated() { "管理员权限" } else { "普通权限" }, error.message))
 }
 
 fn process_snapshot_matches(started: u64, created: Option<u64>) -> bool {
@@ -87,7 +91,7 @@ fn capture_owned_descendant(application: &Application, record: &ProcessRecord, p
         || sidekickai_uninstall_core::path::path_is_same_or_descendant(&captured.executable, &root.join("resources"));
     let name = captured.executable.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
     let maintenance = ["uninstall", "installer", "setup"].iter().any(|value| name.contains(value))
-        || record.command_line.as_ref().is_some_and(|command| command.split_whitespace().any(|arg| matches!(arg.trim_matches('"'), "--worker" | "--elevated" | "--uninstall" | "--export-user-data")));
+        || record.command_line.as_ref().is_some_and(|command| command.split_whitespace().any(|arg| is_authorization_worker(arg) || matches!(arg.trim_matches('"'), "--worker" | "--elevated" | "--uninstall" | "--export-user-data")));
     if owned_image && !maintenance && verify_account_session(record.process_id).is_ok() { Some(captured) } else { None }
 }
 
@@ -245,13 +249,26 @@ fn shutdown_request(peer: &Value, applications: &[Application]) -> Result<Value,
 }
 
 pub fn validate_target(executable: &Path) -> Result<(), String> {
+    verified_target_version(executable).map(|_| ())
+}
+
+fn verified_target_version(executable: &Path) -> Result<String, String> {
     let directory = executable.parent().ok_or("安装目录无效。")?;
     let identity = product::package_identity(&directory.join("resources/app.asar"))?;
-    let version = crate::setup_metadata::current()?.product_version.as_str();
-    if !executable.is_file() || !product::owns_installation(directory) || identity.version.as_deref() != Some(version) {
+    let installed = sidekickai_uninstall_core::distribution::verify_installed_identity(directory)?;
+    let launch_files: Vec<_> = installed.body.files.iter().filter(|file|
+        file.path.eq_ignore_ascii_case("SidekickAI.exe") || file.path.eq_ignore_ascii_case("resources/app.asar")).cloned().collect();
+    if launch_files.len() != 2 { return Err("本次安装缺少受签程序文件记录。".into()); }
+    sidekickai_uninstall_core::distribution::verify_declared_files(directory, &launch_files)?;
+    let metadata = crate::setup_metadata::current()?;
+    let version = crate::distribution::product_version().unwrap_or_else(|| installed.body.product_version.clone());
+    if !executable.is_file() || !paths_equal(executable, &product::application_executable(directory))
+        || !product::owns_installation(directory) || installed.body.edition != product::edition_id()
+        || installed.body.product_version != version || identity.version.as_deref() != Some(version.as_str())
+        || metadata.distribution_mode == "offline" && version != metadata.product_version {
         return Err("无法确认本次安装的程序，请修复安装后再打开。".into());
     }
-    Ok(())
+    Ok(version)
 }
 
 fn wait_for_exit(pipe: &str, applications: &[Application], timeout: Duration) -> Result<(), String> {
@@ -264,36 +281,50 @@ fn require_live_controller(alive: &dyn Fn() -> Result<bool, String>) -> Result<(
 
 fn wait_for_exit_guarded(pipe: &str, applications: &[Application], timeout: Duration, alive: &dyn Fn() -> Result<bool, String>) -> Result<(), String> {
     let deadline = Instant::now() + timeout;
+    let request_id = sidekickai_uninstall_core::random_id("installation-save").map_err(|error| error.message)?;
     let mut requested = std::collections::HashSet::new();
+    let mut acknowledged = std::collections::HashSet::new();
     let mut legacy_requested = std::collections::HashSet::new();
     while applications.iter().any(|app| !app.exited()) {
         require_live_controller(alive)?;
         if Instant::now() >= deadline {
+            if applications.iter().any(|app| !app.exited() && (acknowledged.contains(&(app.pid as u64)) || requested.contains(&(app.pid as u64)))) {
+                return Err("应用保存退出尚未完成，已保留应用和原资料，请稍后重试。".into());
+            }
             return terminate_applications(applications, alive);
         }
         match request(pipe, json!({ "protocol": 1, "edition": product::edition_id(), "action": "status" })) {
             Ok(peer) => {
-                let shutdown = shutdown_request(&peer, applications)?;
+                let mut shutdown = shutdown_request(&peer, applications)?;
                 let pid = peer["pid"].as_u64().unwrap();
+                if peer["intent"] == "installation" { return Err("已有应用正在完成另一安装维护，已保留应用。".into()); }
+                if peer["status"] == "denied" || peer["retryableHandoff"] == true && requested.contains(&pid) {
+                    return Err("应用未能完成保存，已保留应用和原资料。".into());
+                }
                 match peer["status"].as_str() {
-                    Some("running" | "busy" | "denied") if !requested.contains(&pid) => {
-                        let reply = match request(pipe, shutdown) {
-                            Ok(reply) => reply,
-                            Err(_) if applications.iter().all(Application::exited) => return Ok(()),
-                            Err(error) => return Err(error.to_string()),
-                        };
-                        shutdown_request(&reply, applications)?;
+                    Some("yielding") => { acknowledged.insert(pid); requested.insert(pid); }
+                    Some("running" | "busy") if !acknowledged.contains(&pid) => {
+                        require_live_controller(alive)?;
                         requested.insert(pid);
-                        if reply["status"] == "denied" || peer["retryableHandoff"] == true {
-                            require_live_controller(alive)?;
-                            return terminate_applications(applications, alive);
+                        shutdown["requestId"] = json!(request_id);
+                        match request(pipe, shutdown) {
+                            Ok(reply) => {
+                                shutdown_request(&reply, applications)?;
+                                if reply["intent"] == "installation" || reply["status"] == "denied" || reply["retryableHandoff"] == true {
+                                    return Err("应用未能完成保存或正在维护，已保留应用和原资料。".into());
+                                }
+                                match reply["status"].as_str() {
+                                    Some("yielding") => { acknowledged.insert(pid); }
+                                    Some("starting" | "running" | "busy") => {},
+                                    _ => return Err("无法确认已有工百窗的保存结果。".into()),
+                                }
+                            }
+                            Err(_) if applications.iter().all(Application::exited) => return Ok(()),
+                            Err(error @ RequestError::IdentityMismatch) => return Err(error.to_string()),
+                            Err(_) => {},
                         }
                     }
-                    Some("busy") if peer["retryableHandoff"] == true => {
-                        require_live_controller(alive)?;
-                        return terminate_applications(applications, alive);
-                    },
-                    Some("starting" | "yielding" | "running" | "busy" | "denied") => {},
+                    Some("starting" | "running" | "busy") => {},
                     _ => return Err("无法确认已有工百窗状态，请先退出后重试。".into()),
                 }
             }
@@ -303,7 +334,7 @@ fn wait_for_exit_guarded(pipe: &str, applications: &[Application], timeout: Dura
                     if !applications.iter().any(|app| pid == app.pid) { return Err(RequestError::IdentityMismatch.to_string()); }
                 }
                 for app in applications.iter().filter(|app| !app.exited()) {
-                    if legacy_requested.insert(app.pid as u64) {
+                    if !requested.contains(&(app.pid as u64)) && legacy_requested.insert(app.pid as u64) {
                         require_live_controller(alive)?;
                         let _ = powershell("close", &[("SIDEKICK_LAUNCH_PID", app.pid.to_string()), ("SIDEKICK_LAUNCH_EXECUTABLE", app.executable.to_string_lossy().into_owned())]);
                     }
@@ -345,9 +376,15 @@ fn inspection_requires_elevation(records: &[ProcessRecord]) -> bool {
     })
 }
 
+fn is_authorization_worker(argument: &str) -> bool {
+    let argument = argument.trim_matches('"');
+    ["--sidekick-startup-authorize", "--sidekick-process-authorize"].iter()
+        .any(|name| argument == *name || argument.strip_prefix(name).is_some_and(|suffix| suffix.starts_with('=')))
+}
+
 fn is_application_owner(record: &ProcessRecord, records: &[ProcessRecord]) -> bool {
     !record.command_line.as_ref().is_some_and(|command| command.split_whitespace().any(|arg|
-        arg.starts_with("--type=") || matches!(arg.trim_matches('"'), "--export-user-data" | "--sidekick-cookie-worker" | "--worker" | "--elevated" | "--uninstall")))
+        arg.starts_with("--type=") || is_authorization_worker(arg) || matches!(arg.trim_matches('"'), "--export-user-data" | "--sidekick-cookie-worker" | "--backup-cookie-snapshot" | "--backup-snapshot-worker" | "--backup-recovery-guardian" | "--worker" | "--elevated" | "--uninstall")))
         && !records.iter().any(|parent| parent.process_id == record.parent_process_id && parent.executable_path == record.executable_path && parent.executable_path.is_some())
 }
 
@@ -363,7 +400,7 @@ fn requires_privileged_control(pid: u32) -> bool {
 
 fn verify_started_owner(peer: &Value, executable: &Path) -> Result<(), String> {
     if peer["protocol"] != 1 || peer["edition"] != product::edition_id()
-        || peer["version"] != crate::setup_metadata::current()?.product_version
+        || peer["version"] != verified_target_version(executable)?
         || !peer["executable"].as_str().is_some_and(|path| paths_equal(Path::new(path), executable)) {
         return Err("启动期间出现了另一工百窗实例，未能打开本次安装。请先退出已有程序后重试。".into());
     }
@@ -384,7 +421,7 @@ fn verify_started_owner(peer: &Value, executable: &Path) -> Result<(), String> {
         ProcessIdToSessionId(pid, &mut peer_session).map_err(|error| error.to_string())?;
     }
     if own_session != peer_session || !paths_equal(Path::new(&String::from_utf16_lossy(&buffer[..size as usize])), executable)
-        || sidekickai_uninstall_host::process_user_sid(pid).map_err(|error| error.message)? != sidekickai_uninstall_host::current_user_sid().map_err(|error| error.message)? {
+        || application_user_sid(pid, "启动后的程序")? != sidekickai_uninstall_host::current_user_sid().map_err(|error| error.message)? {
         return Err("启动后的工百窗账户、会话或程序位置不匹配。".into());
     }
     Ok(())
@@ -437,7 +474,8 @@ pub(crate) fn launch_with_owner_reporting_guarded(executable: &Path, argument: &
     validate_target(executable)?;
     progress("正在核对已有程序…");
     let (pipe, applications) = inventory()?;
-    let reservation = reservation::Reservation::acquire(&pipe, executable, crate::setup_metadata::current()?.product_version.as_str(), product::edition_id(), owner_pid)?;
+    let version = verified_target_version(executable)?;
+    let reservation = reservation::Reservation::acquire(&pipe, executable, &version, product::edition_id(), owner_pid)?;
     if !applications.is_empty() { progress("正在保存并关闭已有程序…"); }
     wait_for_exit_guarded(&pipe, &applications, Duration::from_secs(30), alive)?;
     let concurrent = inventory()?.1;

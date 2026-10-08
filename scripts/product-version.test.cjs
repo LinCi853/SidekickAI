@@ -5,7 +5,6 @@ const test = require('node:test')
 const { synchronize } = require('../packages/product-contract/sync.cjs')
 const { productIdentity } = require('./build-distribution.cjs')
 const { readContext } = require('./workspace-menu.cjs')
-const { targetsFor } = require('./sync-versions.cjs')
 
 function fixture(t, edition, version) {
   const build = path.resolve(__dirname, '../build')
@@ -41,7 +40,7 @@ test('each edition projects its own release version from package metadata', t =>
     assert.deepEqual(synchronize(root).changed, [])
     assert.equal(productIdentity(root).version, version)
     assert.equal(readContext(root).product.version, version)
-    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'installer-tauri/package.json'))).version, '1.0.0')
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'installer-tauri/package.json'))).version, require('../maintenance/component-contract.json').componentVersion)
     assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'))).packages[''].version, version)
   }
   assert.deepEqual(fs.readFileSync(path.join(concept, 'packages/product-contract/manifest.json')), fs.readFileSync(path.join(community, 'packages/product-contract/manifest.json')))
@@ -58,6 +57,7 @@ test('concept accepts numbered releases and rejects prerelease labels before wri
 test('shared source never pins edition-specific product version files', () => {
   const shared = require('../maintenance/shared-source.json')
   const pinned = new Set(Object.keys(shared.files))
-  for (const target of targetsFor()) assert(!pinned.has(target.file), target.file)
+  assert(!pinned.has('package.json'))
+  assert(!pinned.has('package-lock.json'))
   assert.equal(Object.hasOwn(require('../packages/product-contract/manifest.json'), 'version'), false)
 })

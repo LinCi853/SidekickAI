@@ -1,10 +1,6 @@
 import { edition } from '../../packages/product-contract/identity'
-// installer/src/renderer/App.tsx
-// SidekickAI 安装向导 — install / repair 入口；卸载走共享 UninstallPage
-//   首页：正常安装（默认）/ 修复安装 / 卸载
-//   install: 欢迎 → 协议 → 位置/残留确认 → 组件 → 应用设置 → 执行 → 完成
-//   repair: 选择目标 → 修复确认 → 执行 → 完成
-//   uninstall: 委托 installer-shared/uninstall/UninstallPage（与独立卸载器同一实现）
+// Installation and repair share the maintenance wizard. Uninstallation delegates
+// to the same page used by the standalone uninstaller.
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import './styles.css'
@@ -12,7 +8,7 @@ import UninstallPage from '../../installer-shared/uninstall/UninstallPage'
 import { uninstallApi } from '../../installer-shared/uninstall/api'
 import { afterCancelRequest, afterCloseWindow } from './close-flow'
 import { hostContext, prepareCloudAssets } from './cloud'
-import type { CloudAssetWire, InstallationResourceStatus, InstallerInfo, InstallMode, ScanResult } from './global'
+import type { CloudAssetWire, DistributionPrepared, InstallationResourceStatus, InstallationRecovery, InstallerInfo, InstallMode, ScanResult } from './global'
 import { MODE_STEPS, type OptionsTab, type StepId } from './types'
 import { WizardShell, CloseConfirmation } from '../../installer-shared/presentation/Wizard'
 import { completionLaunch, finalizeWizard, type CompletionIntent } from '../../installer-shared/presentation/finalize'
@@ -39,6 +35,9 @@ export default function App() {
 
   // 安装选项
   const [installDir, setInstallDir] = useState('')
+  const [stagingDir, setStagingDir] = useState('')
+  const [recoveries, setRecoveries] = useState<InstallationRecovery[]>([])
+  const pendingRecovery = recoveries.find(item => item.installDir.replace(/\\/g, '/').toLowerCase() === installDir.replace(/\\/g, '/').toLowerCase())
   const [forAllUsers, setForAllUsers] = useState(false)
   const [features, setFeatures] = useState<Record<string, boolean>>({})
   const [options, setOptions] = useState<Record<string, boolean | string>>({})
@@ -73,14 +72,19 @@ export default function App() {
   const actionName = operationName(mode, selectedLocation?.version, info?.version)
   const operationSummary: Array<[string, string]> = [
     ['操作', actionName], ['目标位置', installDir],
+    ['安装暂存', stagingDir || '系统临时目录'],
     ['版本', `${selectedLocation?.version || '未安装'} → ${info?.version || '读取中'}`],
     ['架构', info?.arch === 'arm64' ? 'ARM64' : 'x64'],
     ['程序文件', '校验并更新主程序、完整运行库和卸载组件'],
-    ['设置与资源', mode === 'repair' ? '保留现有设置、安装配置和已下载资源' : '应用本次所选设置，并尝试获取默认资源'],
+    ['设置与资源', mode === 'repair' ? '保留现有设置、安装配置和已下载资源'
+      : edition.cloudResources ? '应用本次所选设置，并尝试获取默认资源' : '应用本次所选设置，内置工具与默认内容随本体提供'],
     ['用户数据', '保留现有业务数据和恢复副本'],
   ]
 
   const installingRef = useRef(false)
+  const preparationRef = useRef(false)
+  const distributionPreparingRef = useRef(false)
+  const recoveringCommittedRef = useRef(false)
   const finalizingRef = useRef(false)
   const [loadingConfig, setLoadingConfig] = useState(true)
   // A cancel was accepted and the window must close as soon as the backend
@@ -89,15 +93,18 @@ export default function App() {
 
   useEffect(() => {
     let active = true
-    Promise.all([window.installer.getInfo(), window.installer.scanInstallations()]).then(([data, installations]) => {
+    Promise.all([window.installer.getInfo(), window.installer.scanInstallations(), window.installer.pendingInstallations()]).then(([data, installations, pending]) => {
       if (!active) return
       const normalize = (value: string) => value.replace(/\\/g, '/').toLowerCase()
       const selected = installations.locations.find(location => normalize(location.path) === normalize(installations.recommendedDir)) || installations.locations[0]
       setInfo(data)
       setScan(installations)
-      setInstallDir(selected?.path || data.perUserDefaultDir)
-      setForAllUsers(selected?.forAllUsers ?? false)
-      setMode(data.uninstallEntry ? 'uninstall' : selected ? 'repair' : 'install')
+      setRecoveries(pending)
+      setInstallDir(pending[0]?.installDir || selected?.path || data.perUserDefaultDir)
+      setForAllUsers(pending[0]?.forAllUsers ?? selected?.forAllUsers ?? false)
+      setCleanupPaths(pending[0]?.cleanupPaths ?? [])
+      setMode(data.uninstallEntry ? 'uninstall' : pending.length ? 'install' : selected ? 'repair' : 'install')
+      if (pending.length && !data.uninstallEntry) setStep('location')
     }).catch((error: unknown) => {
       if (active) setBootstrapError('安装器初始化失败：' + String(error))
     })
@@ -124,8 +131,8 @@ export default function App() {
     setLoadingConfig(true)
     const normalize = (value: string) => value.replace(/\\/g, '/').toLowerCase()
     const installed = scan.locations.find(location => normalize(location.path) === normalize(installDir))
-    if (installed?.forAllUsers !== undefined) setForAllUsers(installed.forAllUsers)
-    const config = installed ? window.installer.readInstallConfig(installDir) : Promise.resolve(null)
+    if (!pendingRecovery && installed?.forAllUsers !== undefined) setForAllUsers(installed.forAllUsers)
+    const config = installed && !pendingRecovery ? window.installer.readInstallConfig(installDir) : Promise.resolve(null)
     config.then(cfg => {
       if (!active) return
       setFeatures(Object.fromEntries(info.features.map(feature => [feature.id, cfg?.modules?.[feature.id]?.enabled ?? (feature.defaultEnabled && (!feature.installRequired || Boolean(feature.required)))])))
@@ -134,9 +141,13 @@ export default function App() {
       if (active) setBootstrapError('无法读取所选安装配置：' + String(error))
     }).finally(() => { if (active) setLoadingConfig(false) })
     return () => { active = false }
-  }, [info, scan, installDir])
+  }, [info?.features, info?.options, scan, installDir, pendingRecovery])
   // ---- 订阅安装事件 ----
   useEffect(() => {
+    const offDistribution = window.installer.onDistributionProgress(payload => {
+      setStatusText(payload.message)
+      setProgress(payload.totalBytes > 0 ? Math.min(85, payload.downloadedBytes / payload.totalBytes * 85) : 0)
+    })
     const offStatus = window.installer.onStatus(msg => setStatusText(mode === 'repair' ? msg.split('修复').join(actionName) : msg))
     const offLog = window.installer.onLog(payload => {
       setLogLines(visibleLogLines(payload.text).map(line => mode === 'repair' ? line.split('修复').join(actionName) : line))
@@ -170,6 +181,7 @@ export default function App() {
       }
     })
     return () => {
+      offDistribution()
       offStatus()
       offLog()
       offProgress()
@@ -187,6 +199,7 @@ export default function App() {
   const startRun = useCallback(async () => {
     if (installingRef.current) return
     installingRef.current = true
+    preparationRef.current = true
     cancelPendingRef.current = false
     setCloseBanner('')
     setProgress(4)
@@ -198,6 +211,12 @@ export default function App() {
     setStatusText(`正在准备${actionName}…`)
     setStep('installing')
     let preparationHeld = false
+    const stopForCancellation = () => {
+      if (!cancelPendingRef.current) return false
+      installingRef.current = false
+      setStatusText('已取消')
+      return true
+    }
     try {
       if (!await window.installer.beginPreparation()) {
         installingRef.current = false
@@ -205,14 +224,28 @@ export default function App() {
         return
       }
       preparationHeld = true
-      // Normal installs always attempt defaults before deploying the program.
+      if (stopForCancellation()) return
+      // Resource acquisition follows the edition's installation contract.
       let preparedAssets: CloudAssetWire[] = []
       let resources: InstallationResourceStatus[] = []
-      if (mode === 'install' && edition.cloudResources) {
+      const currentRecoveries = await window.installer.pendingInstallations()
+      if (stopForCancellation()) return
+      setRecoveries(currentRecoveries)
+      const recovery = currentRecoveries.find(item => item.installDir.replace(/\\/g, '/').toLowerCase() === installDir.replace(/\\/g, '/').toLowerCase())
+      recoveringCommittedRef.current = recovery?.state === 'committed'
+      let distribution: DistributionPrepared | null = null
+      if (!recovery) {
+        distributionPreparingRef.current = true
+        distribution = await window.installer.prepareDistribution()
+        distributionPreparingRef.current = false
+        if (stopForCancellation()) return
+        setInfo(current => current ? { ...current, version: distribution!.productVersion, arch: distribution!.nativeArchitecture } : current)
+      }
+      if (!recovery && mode === 'install' && edition.cloudResources) {
         setStatusText('正在检查云端资源…')
         setPreparationLines(lines => [...lines, '正在检查云端默认资源'])
         const prepared = await prepareCloudAssets({
-          host: hostContext(info?.arch ?? 'x64', info?.version ?? ''),
+          host: hostContext(distribution?.nativeArchitecture ?? info?.arch ?? 'x64', distribution?.productVersion ?? info?.version ?? ''),
           selectedComponents: Object.entries(features)
             .filter(([, enabled]) => enabled)
             .map(([id]) => id),
@@ -224,19 +257,25 @@ export default function App() {
         setCloudAssets(preparedAssets)
         setStatusText(`正在准备${actionName}…`)
       }
+      if (stopForCancellation()) return
+      preparationRef.current = false
       await window.installer.start({
         installDir,
-        forAllUsers,
+        stagingDir,
+        forAllUsers: recovery?.forAllUsers ?? forAllUsers,
         createDesktopShortcut: true,
         launchAfterInstall: false,
         showGuideAfterInstall,
         features,
         options,
         mode,
-        cleanupPaths,
+        cleanupPaths: recovery?.cleanupPaths ?? cleanupPaths,
         acceptedLicenses,
         resources,
         cloudAssets: preparedAssets,
+        ...(distribution ? { distributionSourcePath: distribution.sourcePath, distributionBodyProof: distribution.bodyProof,
+          distributionProductVersion: distribution.productVersion, distributionReleaseId: distribution.releaseId ?? '',
+          distributionReleaseSha256: distribution.releaseSha256 ?? '', distributionReleaseProof: distribution.releaseProof } : {}),
       })
     } catch (error) {
       // An early rejection (for example another operation is running) has no
@@ -246,9 +285,17 @@ export default function App() {
       setStatusText('操作失败')
       installingRef.current = false
     } finally {
+      preparationRef.current = false
+      distributionPreparingRef.current = false
       if (preparationHeld) await window.installer.endPreparation().catch(() => {})
+      await window.installer.pendingInstallations().then(setRecoveries).catch(() => {})
+      if (cancelPendingRef.current && !installingRef.current) {
+        cancelPendingRef.current = false
+        const result = afterCloseWindow(await window.installer.closeWindow())
+        if (result.kind === 'stay') setCloseBanner(result.banner)
+      }
     }
-  }, [installDir, forAllUsers, features, options, showGuideAfterInstall, mode, cleanupPaths, acceptedLicenses, info, actionName, selectedLocation?.version])
+  }, [installDir, stagingDir, forAllUsers, features, options, showGuideAfterInstall, mode, cleanupPaths, acceptedLicenses, info, actionName, selectedLocation?.version])
 
   const finalizeAndClose = useCallback(async (intent: CompletionIntent) => {
     if (finalizingRef.current) return
@@ -260,7 +307,7 @@ export default function App() {
     try {
       const completedDir = finalDir || installDir
       const requestedLaunch = completionLaunch(intent)
-      const saveRequired = installDone && mode === 'install' && Boolean(completedDir)
+      const saveRequired = installDone && mode === 'install' && !recoveringCommittedRef.current && Boolean(completedDir)
       await finalizeWizard({
         begin: () => window.installer.beginCompletion(),
         release: () => window.installer.endCompletion(),
@@ -300,7 +347,18 @@ export default function App() {
       // Mark the pending close before awaiting the backend so a terminal event
       // that races the response still closes the window.
       cancelPendingRef.current = true
-      const accepted = await window.installer.cancel()
+      const preparing = preparationRef.current
+      let accepted: boolean
+      try {
+        if (preparing) {
+          if (distributionPreparingRef.current) await window.installer.cancelDistribution()
+          accepted = true
+        } else accepted = await window.installer.cancel()
+      } catch (error) {
+        if (!preparing) cancelPendingRef.current = false
+        setCloseBanner(`取消请求未送达：${error instanceof Error ? error.message : String(error)}`)
+        return
+      }
       if (!cancelPendingRef.current) {
         // A terminal event already arrived while cancel() was in flight; its
         // handler owns the close decision.
@@ -439,7 +497,7 @@ export default function App() {
           )}
           {onNext && (
             <button className="btn btn--primary" disabled={nextDisabled} onClick={onNext}>
-              {next}
+              {step === 'location' && pendingRecovery ? pendingRecovery.state === 'committed' ? '继续清理恢复副本' : '恢复中断的安装' : next}
             </button>
           )}
         </div>
@@ -452,7 +510,7 @@ export default function App() {
   }
 
   return (
-    <WizardShell  kind="install" version={info?.version} stages={steps} currentIndex={currentIndex}
+    <WizardShell  kind="install" version={info?.version} pendingVersionLabel={info?.distributionMode === 'online' ? '在线安装' : '离线安装'} stages={steps} currentIndex={currentIndex}
       onClose={handleClose} className=""
       footer={!bootstrapError && renderFooter()}
       overlay={showCloseConfirm && <CloseConfirmation busy={step === 'installing' && installingRef.current} onCancel={() => setShowCloseConfirm(false)} onConfirm={confirmClose} />}>
@@ -465,6 +523,9 @@ export default function App() {
               </div>
             ) : (
               <>
+                {pendingRecovery && <div className="hint hint--warning" role="status">
+                  {pendingRecovery.state === 'committed' ? '安装已完成，恢复副本尚未清理。可继续清理，无需重新安装。' : '检测到此位置有中断的安装。将先恢复原版本与入口；冲突文件单独保留，之后可重试安装。'}
+                </div>}
                 {step === 'welcome' && (
                   <StepWelcome
                     actionName={operationName('repair', selectedLocation?.version, info?.version)}
@@ -485,6 +546,9 @@ export default function App() {
                 )}
                 {step === 'location' && (
                   <StepLocation
+                    stagingDir={stagingDir}
+                    setStagingDir={setStagingDir}
+                    browseStagingDir={async () => { const selected = await window.installer.browseDir(stagingDir); if (selected) setStagingDir(selected) }}
                     actionName={actionName}
                     mode={mode}
                     info={info}
@@ -511,6 +575,7 @@ export default function App() {
                 )}
                 {step === 'installing' && (
                   <StepInstalling
+                    committed={pendingRecovery?.state === 'committed'}
                     actionName={actionName}
                     mode={mode}
                     errorMsg={errorMsg}

@@ -6,6 +6,8 @@ pub(super) mod validate;
 pub(super) mod prepare;
 pub(super) mod process;
 pub(super) mod registry;
+mod registration_snapshot;
+pub(crate) mod transaction;
 pub(super) mod relocation;
 pub(super) mod session;
 pub(super) mod types;
@@ -32,21 +34,22 @@ pub use relocation::{read_relocation_bootstrap, relocate_ui};
 pub use types::{BackupProof, WorkerTarget};
 pub(crate) use session::WorkerSession;
 pub(crate) use process::processes_require_elevation;
+#[cfg(test)]
+pub(crate) use shutdown::assert_save_without_data_locks;
 
-/// The scan accepts an installation only when `resources\app.asar` and
-/// `uninstall.exe` are present; `SidekickAI.exe` may be absent for a
-/// registry-corroborated degraded identity. The worker re-checks the same two
-/// markers, so a fingerprint synthesized for an arbitrary folder (empty,
-/// system or otherwise) is not enough to authorize a deletion.
+/// Program markers corroborate the separately verified signed installation.
+/// Signed identity permits maintenance when the application archive is damaged.
 pub(super) fn installation_markers_present(fingerprint: &FileFingerprint) -> bool {
     if !fingerprint.exists || !fingerprint.is_directory {
         return false;
     }
-    ["resources\\app.asar", "uninstall.exe"].iter().all(|relative| {
+    let present = |relative: &str| {
         fingerprint.core_files.iter().any(|file| {
             file.relative_path.replace('/', "\\").eq_ignore_ascii_case(relative) && file.exists && file.is_file
         })
-    })
+    };
+    present("uninstall.exe") && (present("resources\\app.asar")
+        || present("distribution-proof.json") && present("maintenance\\distribution-receipt.json"))
 }
 
 /// Re-hash the source files a verified backup actually contains. This is the
@@ -95,3 +98,6 @@ pub(super) fn verified_source_entry_is_safe(entry: &str, hash: &str) -> bool {
         && hash.len() == SHA256_HEX_LEN
         && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
+
+#[cfg(windows)]
+mod shutdown;

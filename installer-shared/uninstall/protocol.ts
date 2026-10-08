@@ -1,8 +1,8 @@
 /** Shared protocol types for the standalone uninstaller UI. */
 
-export const UNINSTALL_PROTOCOL_VERSION = 1 as const
+export const UNINSTALL_PROTOCOL_VERSION = 2 as const
 export const UNINSTALL_EVENT = 'uninstall:event' as const
-export const UNINSTALL_CONFIRMATION = 'delete-v1' as const
+export const UNINSTALL_CONFIRMATION = 'delete-v2' as const
 
 export type UninstallEntry = 'installed' | 'installer' | 'registry' | 'compatFlag'
 export type UninstallArch = 'x64' | 'arm64' | 'unknown'
@@ -91,7 +91,7 @@ export interface UninstallLocation {
 }
 
 export interface UninstallInfo {
-  protocolVersion: 1
+  protocolVersion: 2
   uninstallerVersion: string
   hostArch: UninstallArch
   entry: UninstallEntryMode
@@ -117,6 +117,18 @@ export interface UninstallScanResponse {
   locations: UninstallLocation[]
   recommendedTargetId: UninstallTargetId | null
   dataRoots: DataRoot[]
+  recoveryTasks?: UninstallRecoveryTask[]
+}
+
+export interface UninstallRecoveryTask {
+  taskId: string
+  state: string
+  installPaths: string[]
+  dataPaths: string[]
+  residualPaths: string[]
+  requiresElevation: boolean
+  message: string
+  backups?: BackupResult[]
 }
 
 export interface BackupSelection {
@@ -126,17 +138,19 @@ export interface BackupSelection {
   /** Present only while the request is in memory; never log or persist it. */
   password?: string
   categories: BackupCategory[]
+  stagingPath?: string
 }
 
 export interface UninstallRequest {
-  protocolVersion: 1
+  protocolVersion: 2
   requestId: string
   scanId: string
   targetId: UninstallTargetId
   strategy: DataStrategy
   backup?: BackupSelection
   additionalTargetIds: UninstallTargetId[]
-  confirmation: 'delete-v1'
+  confirmation: 'delete-v2'
+  resumeTaskId?: string
 }
 
 export interface UninstallAccepted {
@@ -171,6 +185,7 @@ export interface UninstallResult {
   removedInstallPaths: string[]
   removedDataRoots: string[]
   backup?: BackupResult
+  backups?: BackupResult[]
   warnings: string[]
   error?: UninstallError
 }
@@ -178,7 +193,7 @@ export interface UninstallResult {
 export interface UninstallEvent {
   logPath?: string
   logError?: string
-  protocolVersion: 1
+  protocolVersion: 2
   operationId: string
   requestId: string
   sequence: number

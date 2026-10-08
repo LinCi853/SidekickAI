@@ -37,14 +37,13 @@ vi.mock('../store/chat-store.js', () => ({
 }))
 vi.mock('../store/profile-store.js', () => ({ profileStore: { list: () => [{ id: 'profile-a', name: 'Account A', isAIPlatform: true }] } }))
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => state.enabled, observeModuleState: (callback: () => void) => state.observers.push(callback) }))
-vi.mock('../freeze/webview-registry.js', () => ({ getRecordByWebContentsId: () => undefined }))
 vi.mock('./settings.js', () => ({ getAssetSettings: () => ({}), updateAssetSettings: () => ({}) }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))
 vi.mock('../ai/handler.js', () => ({ hasActiveAssetStreams: () => state.busy }))
 
 import { OriginalVault } from './original-vault'
 import { dialog, shell } from 'electron'
-import { registerAiAssetIpc, hasWebOriginalTransfers, closeAssetCollectionJournal } from './asset-ipc'
+import { registerAiAssetIpc, hasWebOriginalTransfers, closeAssetCollectionJournal, stopAssetRetention } from './asset-ipc'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
 
 const bytes = Buffer.from('verified original')
@@ -76,6 +75,7 @@ beforeEach(async () => {
   registerAiAssetIpc()
 })
 afterEach(async () => {
+  stopAssetRetention()
   vi.useRealTimers()
   state.enabled = false; for (const observer of state.observers) observer()
   closeAssetCollectionJournal()

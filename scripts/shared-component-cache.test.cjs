@@ -43,10 +43,10 @@ function builtComponent(root, arch = 'x64', fingerprint = 'a'.repeat(64)) {
   return {
     artifact,
     manifest: {
-      protocolVersion: 2,
+      protocolVersion: 3,
       edition: require('../product-edition.json').edition,
       componentVersion: VERSION,
-      uninstallProtocolVersion: 1,
+      uninstallProtocolVersion: require('../maintenance/component-contract.json').uninstallProtocolVersion,
       arch,
       sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
       size: bytes.length,

@@ -25,8 +25,6 @@ import NavHistoryPanel from '../HistoryDownloadView/NavHistoryPanel.js';
 import DownloadPanel from '../HistoryDownloadView/DownloadPanel.js';
 import ZoomIndicator from './ZoomIndicator.js';
 import WindowResizeHandles from '../../components/WindowResizeHandles.js';
-import FreezeOverlay from './FreezeOverlay.js';
-import { useModuleStore } from '../../store/useModuleStore.js';
 import { useBrowserInit } from './hooks/useBrowserInit.js';
 import { useBrowserNavigation } from './hooks/useBrowserNavigation.js';
 import { useBrowserWebview } from './hooks/useBrowserWebview.js';
@@ -363,9 +361,6 @@ export default function BrowserView() {
 
       {/* 底部状态栏：加载进度 + 状态文本 */}
       <BrowserStatusBar />
-
-      {/* 冻结态覆盖层 + 控制条（防撤回保险） */}
-      {useModuleStore.getState().isEnabled('freeze') && <FreezeOverlay activeTabId={activeTabId} />}
 
       <WindowResizeHandles />
     </div>

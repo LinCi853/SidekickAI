@@ -199,7 +199,15 @@ export default function App() {
         .catch((e) => {
           console.error('[App] 模块状态加载失败:', e);
         })
-        .finally(() => {
+        .finally(async () => {
+          if (isBrowser) {
+            try {
+              const { registerDefaultInjectionPoints } = await import('./lib/injection-manager');
+              await registerDefaultInjectionPoints();
+            } catch (error) {
+              console.error('[App] Browser injection setup failed:', error);
+            }
+          }
           setReady(true);
           // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
           void getAppSettings().then((cfg) => {

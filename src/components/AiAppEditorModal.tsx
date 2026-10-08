@@ -1,10 +1,4 @@
-/* =====================================================================
-   AiAppEditorModal —— AI 应用编辑器（设置页内遮罩）
-   由原独立窗口 pages/AiAppEditor/index.tsx 迁移而来。
-   覆盖整个设置页面，通过 Modal portal 渲染到 document.body。
-   渲染按内聚块拆分至 ./AiAppEditorModal/：字段分组、基础信息字段、
-   屏蔽规则编辑区、弹窗白名单编辑区（均为纯展示，状态与回调集中于此）。
-   ===================================================================== */
+// Owns the settings modal's draft and completion behavior.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -33,9 +27,9 @@ import { EMPTY_RULE_DRAFT } from '../pages/AiAppEditor/constants';
 import { useToast } from '../hooks/useToast';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
-import { BasicInfoFields } from './AiAppEditorModal/BasicInfoFields';
-import { BlockRulesSection } from './AiAppEditorModal/BlockRulesSection';
-import { PopupWhitelistSection } from './AiAppEditorModal/PopupWhitelistSection';
+import { BasicInfoFields } from './AiAppEditorFields/BasicInfoFields';
+import { BlockRulesSection } from './AiAppEditorFields/BlockRulesSection';
+import { PopupWhitelistSection } from './AiAppEditorFields/PopupWhitelistSection';
 import '../pages/PromptLibraryView.css';
 import './AiAppEditorModal.css';
 

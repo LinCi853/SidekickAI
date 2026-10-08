@@ -46,17 +46,15 @@ import { peekSttEngine, startBackgroundVoiceGated, stopBackgroundVoiceGated, tog
 import { createTray, hasTray } from './window/tray.js';
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js';
 import { BUILTIN_MODULES } from './modules/manifests.js';
-import { initEnabledModules, registerModule, isModuleEnabled, listManifests } from './modules/registry.js';
+import { initEnabledModules, registerModule, isModuleEnabled } from './modules/registry.js';
 import { registerModuleIpc } from './ipc/module-ipc.js';
 import { closeModuleStateDb } from './store/module-state-store.js';
-import { closeAssetCollectionJournal } from './assets/collection-journal.js';
-import { capabilityRegistry } from './modules/capability-registry.js';
-import { injectionBroker } from './modules/injection-broker.js';
-import { allAdapters } from './modules/adapters/index.js';
-import { extractCapabilities } from './modules/capability.js';
+import { closeAssetCollectionJournal, stopAssetRetention } from './assets/asset-ipc.js';
 import { registerVoiceConfigIPC } from './store/voice-store.js';
 import { registerAIProviderIPC } from './store/ai-provider-store.js';
 import { registerPromptIPC } from './store/prompt-store.js';
+import { registerNotesAssetProtocol } from './store/notes-asset-store.js';
+import { registerWhiteboardAssetProtocol } from './store/whiteboard-asset-store.js';
 import { setRuntimeLogLevel } from './diagnostics/application-log.js';
 const DEFAULT_MAIN_WINDOW_WIDTH = 420;
 const DEFAULT_MAIN_WINDOW_HEIGHT = 820;
@@ -70,22 +68,32 @@ process.on('uncaughtException', (err) => {
 let fingerprintEngine: FingerprintEngine;
 let hotkeyManager: HotkeyManager;
 app.whenReady().then(async () => {
-    if (startupRestore.error)
+    if (startupRestore.error) {
         dialog.showErrorBox('应用数据操作未完成', startupRestore.error);
+    }
     if (startupRestore.restored) {
+        let skippedItems = 0;
         const root = app.getPath('userData');
         try {
             const manifest = parseBackupManifest(JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8')));
+            const { restoreBackupDrafts } = await import('../packages/backup-core/sensitive-drafts.js');
+            const drafts = restoreBackupDrafts(root, manifest.sensitiveDrafts);
+            skippedItems = drafts.unavailable + (manifest.importReport?.skipped.length ?? 0);
             await restoreBackupCookies(root, manifest.cookieSnapshots);
             finishPendingRestore(root);
         }
         catch (error) {
-            requestRestoreRollback(root);
-            dialog.showErrorBox('应用数据恢复失败', `将重新启动并恢复导入前的数据。\n${(error as Error).message}`);
-            app.relaunch();
+            try {
+                requestRestoreRollback(root);
+                console.warn('[backup] Import was rejected; restoring the previous data', error);
+                app.relaunch();
+            } catch (rollbackError) {
+                dialog.showErrorBox('应用数据恢复失败', '自动恢复暂未完成，请重新启动应用。\n' + (rollbackError as Error).message);
+            }
             app.exit(1);
             return;
         }
+        if (skippedItems) await dialog.showMessageBox({ type: 'info', title: '导入完成', message: `数据已恢复，${skippedItems} 项不可用内容已跳过。`, buttons: ['确定'] }).catch(error => console.warn('[backup] Import notice could not be displayed', error));
     }
     if (exportCliRequestPath) {
         try {
@@ -185,13 +193,6 @@ app.whenReady().then(async () => {
             }
             return;
         }
-        if (action === 'toggleFreeze') {
-            if (tryForward('toggleFreeze', win.webContents)) {
-                console.log('[hotkey-fallback] Alt+P → 冻结切换 (uiohook)');
-                win.webContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action: 'toggleFreeze' });
-            }
-            return;
-        }
     });
     setOnboardingLifecycleCallbacks({
         onShow: () => hotkeyManager.pauseAllShortcuts(),
@@ -220,13 +221,9 @@ app.whenReady().then(async () => {
     }
     BUILTIN_MODULES.forEach((m) => registerModule(m));
     registerModuleIpc();
-    injectionBroker.registerAdapters(allAdapters);
-    const capabilities = extractCapabilities(listManifests());
-    if (capabilities.length > 0) {
-        capabilityRegistry.registerMany(capabilities);
-        console.log(`[main] 已注册 ${capabilities.length} 个能力声明`);
-    }
     registerVoiceConfigIPC();
+    registerNotesAssetProtocol();
+    registerWhiteboardAssetProtocol();
     await initEnabledModules();
     if (!isModuleEnabled('custom-chat')) {
         registerAIProviderIPC();
@@ -349,7 +346,10 @@ app.whenReady().then(async () => {
     registerNavHistoryIpc();
     registerUsageTraceIpc();
     registerPdfProtocol();
-    registerAppSettingsIPC();
+    registerAppSettingsIPC(async (target, options, encrypt) => {
+      const { exportApplicationData } = await import('./store/backup-recovery.js');
+      return exportApplicationData(target, options, encrypt);
+    });
     attachDownloadHandlersForAllProfiles();
     void maybeAutoCleanCache();
     registerProxyAuthHandler();
@@ -382,6 +382,7 @@ app.whenReady().then(async () => {
     runUiohookHealthCheck(hotkeyManager);
     bindEditionActivation(() => activateApplicationWindow({ current: () => windowState.mainWindow, create: createMainWindow, show: applicationFocus.show }), () => isApplicationWindowLoading(windowState.mainWindow));
     markEditionReady();
+    void import('./store/backup-recovery.js').then(({ resumeBackupRecovery }) => resumeBackupRecovery()).catch(error => console.error('[backup] Recovery status failed', error));
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createMainWindow();
@@ -421,6 +422,7 @@ app.on('before-quit', (event) => {
 });
 app.on('will-quit', () => {
     cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() });
+    stopAssetRetention();
     closeAssetCollectionJournal();
     closeChatStore();
     closeModuleStateDb();

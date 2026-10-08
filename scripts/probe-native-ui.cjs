@@ -291,9 +291,11 @@ function buildProbeEnvironment(baseEnvironment, fixture, port) {
 function parseCommandLineArguments(argv) {
   const positional = []
   const appArgs = []
+  let requireInstallerReady = false
   for (let index = 0; index < argv.length; index++) {
     const token = argv[index]
     if (token === '--uninstall') appArgs.push('--uninstall')
+    else if (token === '--installer-ready') requireInstallerReady = true
     else if (token === '--arg') {
       const value = argv[++index]
       if (value === undefined) throw new Error('--arg requires a value')
@@ -302,7 +304,7 @@ function parseCommandLineArguments(argv) {
     else if (token.startsWith('--')) throw new Error(`unknown probe option: ${token}`)
     else positional.push(token)
   }
-  return { exe: positional[0], title: positional[1], appArgs }
+  return { exe: positional[0], title: positional[1], appArgs, requireInstallerReady }
 }
 
 // ---------------------------------------------------------------------------
@@ -620,8 +622,11 @@ async function probeNativeUi(exe, options = {}) {
         delete report.evaluateError
         delete report.rootHtmlLength
         delete report.bodyText
+        delete report.installerReady
         report.rootHtmlLength = await dependencies.evaluate(target.webSocketDebuggerUrl, 'document.getElementById("root") ? document.getElementById("root").innerHTML.length : -1')
         report.bodyText = String(await dependencies.evaluate(target.webSocketDebuggerUrl, 'document.body.innerText.slice(0, 120)')).replace(/\s+/g, ' ')
+        if (options.requireInstallerReady) report.installerReady = await dependencies.evaluate(target.webSocketDebuggerUrl,
+          'Boolean(typeof window.installer?.getInfo === "function" && document.querySelector(".mode-grid .mode-card") && document.querySelector(".space-row") && document.querySelector(".sk-wizard__footer button.btn--primary:not(:disabled)") && !document.querySelector(".sk-wizard__body > .error-box"))')
       } catch (error) {
         report.evaluateError = error.message
       }
@@ -631,6 +636,7 @@ async function probeNativeUi(exe, options = {}) {
       report.ok = report.embeddedUrl
         && report.mountedRoot
         && !report.evaluateError
+        && (!options.requireInstallerReady || report.installerReady === true)
         && matchesTitle(expectedTitle, title)
         && !/的索引|未找到文件|Index of/i.test(title)
     }
@@ -645,7 +651,8 @@ async function probeNativeUi(exe, options = {}) {
       return report
     }
 
-    if (!report.ok) report.reason = 'the webview did not load the embedded UI document'
+    if (!report.ok) report.reason = options.requireInstallerReady && report.embeddedUrl && report.mountedRoot && !report.evaluateError
+      ? 'the webview did not expose initialized installation controls' : 'the webview did not load the embedded UI document'
     return report
   } finally {
     try {
@@ -698,11 +705,11 @@ if (require.main === module) {
     process.exitCode = 1
   }
   if (parsed && !parsed.exe) {
-    console.error('Usage: node scripts/probe-native-ui.cjs <exe> [title-regex] [--uninstall] [--arg <value>]')
+    console.error('Usage: node scripts/probe-native-ui.cjs <exe> [title-regex] [--uninstall] [--installer-ready] [--arg <value>]')
     process.exitCode = 1
   } else if (parsed) {
     const expectedTitle = parsed.title ? new RegExp(parsed.title) : DEFAULT_TITLE
-    probeNativeUi(parsed.exe, { expectedTitle, args: parsed.appArgs })
+    probeNativeUi(parsed.exe, { expectedTitle, args: parsed.appArgs, requireInstallerReady: parsed.requireInstallerReady })
       .then(report => {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n')
         // Exit 2 (not 1) marks "this host cannot run the image": the caller may treat

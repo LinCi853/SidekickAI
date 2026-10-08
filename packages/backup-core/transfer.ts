@@ -1,9 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import Database from 'better-sqlite3'
-import { safeBackupPath } from './format.js'
-import { DATA_SCHEMA_VERSION, type BackupEdition, type BackupManifest, type CookieSnapshot } from './types.js'
+import { parseBackupManifest, safeBackupPath } from './format.js'
+import { DATA_SCHEMA_VERSION, type BackupEdition, type BackupManifest, type CookieSnapshot, type ImportReport } from './types.js'
 
 type RecordData = Record<string, any>
 export interface TransferDefaults { profile: RecordData; presets: RecordData[] }
@@ -36,6 +36,15 @@ function array(row: RecordData, key: string): RecordData[] {
   })
 }
 function pick(item: RecordData, fields: string[]): RecordData { return Object.fromEntries(fields.filter(key => item[key] !== undefined).map(key => [key, item[key]])) }
+function sessionNames(id: string): string[] { return [id.toLowerCase(), `${id.toLowerCase()}-browser`] }
+function conflictingProfileIds(values: unknown): Set<string> {
+  const owners = new Map<string, string[]>()
+  for (const item of Array.isArray(values) ? values : []) {
+    if (!item || typeof item.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(item.id)) continue
+    for (const name of sessionNames(item.id)) owners.set(name, [...(owners.get(name) ?? []), item.id])
+  }
+  return new Set([...owners.values()].filter(ids => ids.length > 1).flat())
+}
 function mergeConfiguration(fallback: RecordData, existing: RecordData | undefined, incoming: RecordData): RecordData {
   const result = { ...fallback, ...existing, ...incoming }
   for (const name of ['viewport', 'fingerprint', 'proxyConfig', 'settings']) {
@@ -119,23 +128,51 @@ function encodeSecret(plain: string, key: Buffer): string {
 }
 
 /** Validate transfer inputs without opening or migrating the destination database. */
-export function validateTransfer(directory: string, defaults: TransferDefaults): void {
+function transferPlan(directory: string, defaults: TransferDefaults): { rows: Record<string, RecordData>; report: ImportReport } {
   const rows = sourceRows(directory)
-  for (const preset of array(rows.device_presets, 'presets')) validateViewport(mergeConfiguration(defaults.presets.find(item => item.id === preset.id) ?? defaults.presets[0], undefined, preset))
-  for (const profile of array(rows.profiles, 'profiles').filter(item => item.isAIPlatform)) {
+  const report: ImportReport = { imported: [], skipped: [], warnings: [] }
+  const ambiguousProfiles = conflictingProfileIds(rows.profiles.profiles)
+  const select = (table: string, key: string, validate: (item: RecordData) => void, eligible: (item: RecordData) => boolean = () => true) => {
+    const values = rows[table][key]
+    if (values === undefined) return
+    if (!Array.isArray(values) || values.length > 1000) throw new Error(`Invalid backup ${key} container.`)
+    const counts = new Map<string, number>()
+    for (const value of values) if (value && typeof value.id === 'string') counts.set(value.id, (counts.get(value.id) ?? 0) + 1)
+    const accepted: RecordData[] = []
+    for (const value of values) {
+      const id = value && typeof value.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value.id) ? value.id : undefined
+      try {
+        const item = object(value, key)
+        if (!id || counts.get(id) !== 1) throw new Error(`Invalid or duplicate backup ${key} identity.`)
+        if (!eligible(item)) { report.skipped.push({ category: key, id, reason: '此条目不属于通用迁移白名单。' }); continue }
+        validate(item)
+        accepted.push(item)
+        report.imported.push({ category: key, id })
+      } catch (error) {
+        report.skipped.push({ category: key, id, reason: '配置结构或凭据无法可靠验证，未迁移此条目，来源原件与目标条目保留。' })
+      }
+    }
+    rows[table] = { ...rows[table], [key]: accepted }
+  }
+  select('device_presets', 'presets', preset => validateViewport(mergeConfiguration(defaults.presets.find(item => item.id === preset.id) ?? defaults.presets[0], undefined, preset)))
+  select('profiles', 'profiles', profile => {
+    if (ambiguousProfiles.has(profile.id)) throw new Error('Backup browser session identity is ambiguous.')
     if (profile.isAIPlatform !== true || profile.isBuiltIn !== undefined && typeof profile.isBuiltIn !== 'boolean'
       || typeof profile.name !== 'string' || profile.name.length > 256
       || ['devicePreset', 'aiDesktopPreset', 'aiMobilePreset', 'aiPlatformId'].some(key => profile[key] !== undefined && typeof profile[key] !== 'string')) throw new Error('Invalid backup AI application.')
     validateViewport(mergeConfiguration(defaults.profile, undefined, profile))
     if (profile.aiPlatformUrl !== undefined) validateUrl(profile.aiPlatformUrl, 'AI application URL')
-  }
-  for (const provider of array(rows.ai_providers, 'providers')) {
+  }, profile => profile.isAIPlatform !== false)
+  select('ai_providers', 'providers', provider => {
     validateUrl(provider.apiEndpoint, 'API endpoint')
     if (typeof provider.name !== 'string' || typeof provider.model !== 'string' || !['openai', 'anthropic', 'custom'].includes(provider.protocol)
       || provider.apiKeyCipher !== undefined && typeof provider.apiKeyCipher !== 'string') throw new Error('Invalid backup API configuration.')
     decodeSecret(provider.apiKeyCipher ?? '', rows.app_key.key)
-  }
+  })
+  return { rows, report }
 }
+
+export function validateTransfer(directory: string, defaults: TransferDefaults): ImportReport { return transferPlan(directory, defaults).report }
 
 function assertRealTree(directory: string): void {
   const root = fs.lstatSync(directory)
@@ -161,19 +198,37 @@ export function composeIncludedRestore(root: string, staged: string): void {
   const manifest = JSON.parse(fs.readFileSync(path.join(staged, 'manifest.json'), 'utf8')) as BackupManifest
   const replaced = new Set(fs.readdirSync(staged))
   for (const name of replaced) if (name.endsWith('.db')) for (const suffix of ['-wal', '-shm', '-journal']) replaced.add(name + suffix)
-  if (manifest.options.cookies && manifest.cookieSnapshots) {
-    for (const name of ['Cookies', 'Network', 'Local State']) replaced.add(name)
-    if (manifest.cookieSnapshots.some(snapshot => snapshot.path)) replaced.add('Partitions')
-  }
+  const hasSnapshot = (name: string) => !!manifest.options.cookies && !!manifest.cookieSnapshots?.some(item => item.path.toLowerCase() === name.toLowerCase())
+  if (hasSnapshot('')) for (const suffix of ['', '-wal', '-shm', '-journal']) replaced.add(`Cookies${suffix}`)
   assertRealTree(root)
-  for (const name of fs.readdirSync(root)) if (!replaced.has(name)) fs.cpSync(path.join(root, name), path.join(staged, name), { recursive: true, dereference: false })
+  assertRealTree(staged)
+  const preserveSession = (source: string, destination: string, snapshot: boolean) => {
+    fs.mkdirSync(destination, { recursive: true })
+    for (const name of fs.readdirSync(source)) {
+      if ((snapshot || fs.existsSync(path.join(destination, 'Cookies'))) && /^Cookies(?:-wal|-shm|-journal)?$/.test(name)) continue
+      const from = path.join(source, name), to = path.join(destination, name)
+      if (name === 'Network' && fs.statSync(from).isDirectory()) preserveSession(from, to, snapshot)
+      else if (!fs.existsSync(to)) fs.cpSync(from, to, { recursive: true, dereference: false })
+    }
+  }
+  for (const name of fs.readdirSync(root)) {
+    if (name === 'Partitions' && fs.statSync(path.join(root, name)).isDirectory()) {
+      for (const partition of fs.readdirSync(path.join(root, name))) {
+        const from = path.join(root, name, partition), to = path.join(staged, name, partition)
+        if (fs.statSync(from).isDirectory()) preserveSession(from, to, hasSnapshot(`Partitions/${partition}`))
+        else if (!fs.existsSync(to)) fs.cpSync(from, to, { recursive: true, dereference: false })
+      }
+    } else if (name === 'Network' && fs.statSync(path.join(root, name)).isDirectory()) preserveSession(path.join(root, name), path.join(staged, name), hasSnapshot(''))
+    else if (!replaced.has(name)) fs.cpSync(path.join(root, name), path.join(staged, name), { recursive: true, dereference: false })
+  }
 }
 
 /** Compose a destination snapshot during cold startup; the live root remains untouched until the atomic replacement. */
 export function composeLimitedRestore(root: string, staged: string, edition: BackupEdition, defaults: TransferDefaults): void {
   const manifest = JSON.parse(fs.readFileSync(path.join(staged, 'manifest.json'), 'utf8')) as BackupManifest
-  validateTransfer(staged, defaults)
-  const source = sourceRows(staged)
+  const plan = transferPlan(staged, defaults)
+  plan.report.warnings.push(...(manifest.importReport?.warnings ?? []))
+  const source = plan.rows
   const composed = fs.mkdtempSync(`${staged}.compose-`)
   try {
     assertRealTree(root)
@@ -194,10 +249,25 @@ export function composeLimitedRestore(root: string, staged: string, edition: Bac
         }
         const profileRow = readRow(db, 'profiles')
         const profiles = array(profileRow, 'profiles')
-        for (const incoming of array(source.profiles, 'profiles').filter(item => item.isAIPlatform)) {
-          let existing = profiles.find(item => item.id === incoming.id && item.isAIPlatform)
-          if (!existing && incoming.isBuiltIn && incoming.aiPlatformId) existing = profiles.find(item => item.isBuiltIn && item.aiPlatformId === incoming.aiPlatformId)
-          const id = existing?.id ?? (profiles.some(item => item.id === incoming.id) ? randomUUID() : incoming.id)
+        if (conflictingProfileIds(profiles).size) throw new Error('Current browser session identities overlap; no data was imported.')
+        const occupiedSessions = new Set(profiles.flatMap(item => sessionNames(item.id)))
+        const partitions = path.join(composed, 'Partitions')
+        if (fs.existsSync(partitions)) for (const name of fs.readdirSync(partitions)) occupiedSessions.add(name.toLowerCase())
+        const incomingProfiles = array(source.profiles, 'profiles').filter(item => item.isAIPlatform)
+        const incomingIds = new Set(incomingProfiles.map(item => item.id.toLowerCase()))
+        const mappedIds = new Set<string>()
+        for (const incoming of incomingProfiles) {
+          let existing = profiles.find(item => item.id.toLowerCase() === incoming.id.toLowerCase() && item.isAIPlatform && !mappedIds.has(item.id.toLowerCase()))
+          if (!existing && incoming.isBuiltIn && incoming.aiPlatformId) existing = profiles.find(item => item.isAIPlatform && item.isBuiltIn && item.aiPlatformId === incoming.aiPlatformId
+            && !mappedIds.has(item.id.toLowerCase()) && !incomingIds.has(item.id.toLowerCase()))
+          const id = existing?.id ?? incoming.id
+          if (!existing && sessionNames(id).some(name => occupiedSessions.has(name))) {
+            plan.report.imported = plan.report.imported.filter(item => item.category !== 'profiles' || item.id !== incoming.id)
+            plan.report.skipped.push({ category: 'profiles', id: incoming.id, reason: '网页会话目录与目标保留资料冲突，未迁移此条目，来源原件与目标条目保留。' })
+            continue
+          }
+          for (const name of sessionNames(id)) occupiedSessions.add(name)
+          mappedIds.add(id.toLowerCase())
           profileIds.set(incoming.id, id)
           const fields = edition === 'community' ? [...PROFILE_FIELDS, 'catalogDefinition'] : PROFILE_FIELDS
           const result = mergeConfiguration(defaults.profile, existing, pick(incoming, fields))
@@ -244,15 +314,15 @@ export function composeLimitedRestore(root: string, staged: string, edition: Bac
         const targetPartition = path.join(composed, outputPath)
         if (manifest.options.cookies) replaceIncludedStorage(path.join(sourcePartition, 'Local Storage'), path.join(targetPartition, 'Local Storage'))
         if (manifest.options.indexedDB) for (const name of ['IndexedDB', 'File System', 'blob_storage', 'WebStorage']) replaceIncludedStorage(path.join(sourcePartition, name), path.join(targetPartition, name))
-        const snapshot = manifest.cookieSnapshots?.find(item => item.path.toLowerCase() === inputPath.toLowerCase())
+        const snapshot = manifest.options.cookies ? manifest.cookieSnapshots?.find(item => item.path.toLowerCase() === inputPath.toLowerCase()) : undefined
         if (snapshot) {
           for (const name of ['Cookies', 'Network/Cookies']) for (const sidecar of ['', '-wal', '-shm', '-journal']) fs.rmSync(path.join(targetPartition, name + sidecar), { force: true })
           snapshots.push({ path: outputPath, cookies: snapshot.cookies })
         }
       }
     }
-    const restored = { ...manifest, legacy: undefined, edition, dataSchemaVersion: DATA_SCHEMA_VERSION, restoreMode: 'limited', cookieSnapshots: snapshots, entries: { 'settings.db': createHash('sha256').update(fs.readFileSync(settings)).digest('hex') } }
-    fs.writeFileSync(path.join(composed, 'manifest.json'), JSON.stringify(restored))
+    const restored = { ...manifest, sensitiveDrafts: undefined, inventory: undefined, importReport: plan.report, legacy: undefined, edition, dataSchemaVersion: DATA_SCHEMA_VERSION, restoreMode: 'limited', cookieSnapshots: snapshots, entries: { 'settings.db': createHash('sha256').update(fs.readFileSync(settings)).digest('hex') } }
+    fs.writeFileSync(path.join(composed, 'manifest.json'), JSON.stringify(parseBackupManifest(restored)))
     const sourceDirectory = `${staged}.source`
     fs.renameSync(staged, sourceDirectory)
     try { fs.renameSync(composed, staged) }

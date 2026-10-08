@@ -219,6 +219,8 @@ pub(super) fn prepare_worker_request(
         data_roots: verified_data_roots,
         backup_path: backup_path.map(str::to_string),
         backup_sha256: proof.map(|proof| proof.archive_sha256.clone()),
+        backup_proofs: proof.into_iter().cloned().collect(),
+        resume_task_id: None,
         preparation,
     };
     let request_path = directory.join("request.json");
@@ -435,6 +437,8 @@ pub(super) fn capture_worker_scopes(
         let path = normalize_target_path(&target.path)?;
         let confirmed_data = data_roots.iter().map(PathBuf::from).collect::<Vec<_>>();
         if !stopping_only {
+            sidekickai_uninstall_core::distribution::verify_installed_identity(path.as_path()).map_err(|message|
+                UninstallError::new(UninstallErrorCode::TargetNotInstall, message, UninstallPhase::Validating, false, operation_id))?;
             crate::discovery::validate_local_data_selection(path.as_path(), strategy, &confirmed_data)?;
         }
         if !installation_markers_present(&target.fingerprint)
@@ -453,4 +457,34 @@ pub(super) fn capture_worker_scopes(
         });
     }
     Ok((verified_data_roots, target_identities))
+}
+
+pub(super) fn capture_worker_scopes_all(
+    operation_id: &str, strategy: &DataStrategy, targets: &[WorkerTarget],
+    data_roots: &[String], proofs: &[BackupProof],
+) -> Result<(Vec<WorkerDataRoot>, Vec<TargetDirectoryProof>), UninstallError> {
+    if *strategy != DataStrategy::Export {
+        if !proofs.is_empty() { return Err(invalid_request(operation_id, "只有导出删除才能携带备份证明。")); }
+        return capture_worker_scopes(operation_id, strategy, targets, data_roots, None, None, false);
+    }
+    if data_roots.is_empty() || proofs.len() != data_roots.len() {
+        return Err(invalid_request(operation_id, "每个数据根都需要独立的已验证备份证明。"));
+    }
+    let mut roots = Vec::new();
+    for root in data_roots {
+        let matching = proofs.iter().filter(|proof| paths_equal(Path::new(root), Path::new(&proof.root))).collect::<Vec<_>>();
+        if matching.len() != 1 { return Err(invalid_request(operation_id, "数据根未绑定唯一备份证明。")); }
+        let proof = matching[0];
+        if proofs.iter().filter(|item| paths_equal(Path::new(&item.path), Path::new(&proof.path))).count() != 1 {
+            return Err(invalid_request(operation_id, "不同数据根不能共用一个备份归档。"));
+        }
+        roots.extend(capture_worker_scopes(operation_id, strategy, &[], std::slice::from_ref(root),
+            Some(&proof.path), Some(proof), false)?.0);
+    }
+    let confirmed = data_roots.iter().map(PathBuf::from).collect::<Vec<_>>();
+    for target in targets {
+        crate::discovery::validate_local_data_selection(Path::new(&target.path), strategy, &confirmed)?;
+    }
+    let identities = capture_worker_scopes(operation_id, &DataStrategy::Keep, targets, &[], None, None, true)?.1;
+    Ok((roots, identities))
 }

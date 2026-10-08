@@ -7,6 +7,118 @@ use edition_fixtures::app_archive;
 
 use super::*;
 
+struct IsolatedStopProcesses {
+    root: PathBuf,
+    children: Vec<std::process::Child>,
+}
+
+impl IsolatedStopProcesses {
+    fn new(count: usize) -> Self {
+        use std::os::windows::process::CommandExt;
+        let root = std::env::temp_dir().join(format!("sidekick-stop-{}", random_nonce().unwrap()));
+        fs::create_dir(&root).unwrap();
+        let source = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32/ping.exe");
+        let executable = root.join("SidekickAI.exe");
+        fs::copy(source, &executable).unwrap();
+        let children = (0..count).map(|_| std::process::Command::new(&executable)
+            .args(["-n", "60", "127.0.0.1"]).creation_flags(0x08000000)
+            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap()).collect();
+        Self { root, children }
+    }
+
+    fn target(&self) -> sidekickai_uninstall_core::path::NormalizedAbsolutePath {
+        sidekickai_uninstall_core::normalize_target_path(&self.root).unwrap()
+    }
+}
+
+impl Drop for IsolatedStopProcesses {
+    fn drop(&mut self) {
+        for child in &mut self.children { let _ = child.kill(); let _ = child.wait(); }
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn process_stop_does_not_retain_an_earlier_timeout_after_actual_exit() {
+    use windows::Win32::Foundation::WAIT_TIMEOUT;
+    let mut fixture = IsolatedStopProcesses::new(1);
+    let target = fixture.target();
+    let mut timed_out = false;
+    let result = super::super::process::with_stop_wait_hook(Box::new(move |_, _| {
+        if timed_out { None } else { timed_out = true; Some(WAIT_TIMEOUT) }
+    }), || stop_target_processes(&[target], "transient-exit"));
+    fixture.children[0].wait().unwrap();
+    assert!(result.is_ok(), "a past timeout cannot override a completed exit: {result:?}");
+}
+
+#[test]
+fn process_stop_signals_all_targets_before_waiting_for_exit() {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::{HANDLE, WAIT_TIMEOUT};
+    use windows::Win32::System::Threading::WaitForSingleObject;
+    let fixture = IsolatedStopProcesses::new(2);
+    let handles = fixture.children.iter().map(|child| child.as_raw_handle() as usize).collect::<Vec<_>>();
+    let target = fixture.target();
+    let mut observed = false;
+    let result = super::super::process::with_stop_wait_hook(Box::new(move |_, _| {
+        if !observed {
+            observed = true;
+            assert!(handles.iter().all(|handle| unsafe { WaitForSingleObject(HANDLE(*handle as *mut std::ffi::c_void), 1000) } != WAIT_TIMEOUT),
+                "every selected process must receive termination before waiting on one process");
+        }
+        None
+    }), || stop_target_processes(&[target], "batch-exit"));
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn process_stop_validates_every_handle_before_terminating_any_process() {
+    let mut fixture = IsolatedStopProcesses::new(2);
+    let target = fixture.target();
+    let checked = std::cell::Cell::new(0);
+    let result = super::super::process::stop_target_processes_checked(&[target], "identity-denied", |_, _| {
+        checked.set(checked.get() + 1);
+        if checked.get() == 2 {
+            Err(UninstallError::new(UninstallErrorCode::ProcessStopFailed, "fixture identity rejected", UninstallPhase::Stopping, true, "identity-denied"))
+        } else { Ok(()) }
+    });
+    assert_eq!(checked.get(), 2);
+    assert!(result.unwrap_err().message.contains("fixture identity rejected"));
+    assert!(fixture.children.iter_mut().all(|child| child.try_wait().unwrap().is_none()));
+}
+
+#[test]
+fn process_stop_reports_an_unconfirmed_handle_and_its_native_wait_error() {
+    use windows::Win32::Foundation::{SetLastError, ERROR_INVALID_HANDLE, WAIT_FAILED};
+    let fixture = IsolatedStopProcesses::new(1);
+    let target = fixture.target();
+    let result = super::super::process::with_stop_wait_hook(Box::new(|_, _| {
+        unsafe { SetLastError(ERROR_INVALID_HANDLE); }
+        Some(WAIT_FAILED)
+    }), || stop_target_processes(&[target], "failed-wait"));
+    let error = result.unwrap_err();
+    assert_eq!(error.code, UninstallErrorCode::ProcessStopFailed);
+    assert!(error.message.contains("WaitForSingleObject: 6"), "{}", error.message);
+    assert!(error.message.contains(&format!("PID {}", fixture.children[0].id())));
+}
+
+#[test]
+fn process_stop_uses_one_confirmation_budget_for_all_handles() {
+    use windows::Win32::Foundation::WAIT_TIMEOUT;
+    let fixture = IsolatedStopProcesses::new(2);
+    let target = fixture.target();
+    let started = Instant::now();
+    let result = super::super::process::with_stop_wait_hook(Box::new(|_, milliseconds| {
+        assert_eq!(milliseconds, 0, "confirmation must poll all retained handles");
+        Some(WAIT_TIMEOUT)
+    }), || stop_target_processes(&[target], "shared-deadline"));
+    let elapsed = started.elapsed();
+    let error = result.unwrap_err();
+    assert!(elapsed >= Duration::from_secs(5), "{elapsed:?}");
+    assert!(elapsed < Duration::from_secs(7), "a shared deadline must not multiply by process count: {elapsed:?}");
+    for child in &fixture.children { assert!(error.message.contains(&format!("PID {}", child.id()))); }
+}
+
 #[test]
 fn deletion_worker_closes_only_the_confirmed_running_installation() {
     use std::os::windows::process::CommandExt;
@@ -14,21 +126,23 @@ fn deletion_worker_closes_only_the_confirmed_running_installation() {
     let root = std::env::temp_dir().join(random_nonce().unwrap());
     let selected = root.join("selected");
     let other = root.join("other");
-    let ping = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32/ping.exe");
+    let node = std::process::Command::new("node").args(["-p", "process.execPath"]).creation_flags(0x08000000).output().unwrap();
+    assert!(node.status.success());
+    let ping = PathBuf::from(String::from_utf8(node.stdout).unwrap().trim());
     for directory in [&selected, &other] {
         fs::create_dir_all(directory.join("resources")).unwrap();
         fs::copy(&ping, directory.join("SidekickAI.exe")).unwrap();
-        fs::write(directory.join("resources/app.asar"), app_archive(b"fixture")).unwrap();
+        fs::write(directory.join("resources/app.asar"), edition_fixtures::archive_for_version(&sidekickai_uninstall_core::product::edition().package_name, Some("1.2.3"), b"fixture")).unwrap();
         fs::write(directory.join("uninstall.exe"), b"fixture").unwrap();
     }
     let spawn = |directory: &Path| std::process::Command::new(directory.join("SidekickAI.exe"))
-        .args(["-n", "60", "127.0.0.1"]).creation_flags(0x08000000)
+        .args(["-e", "setInterval(() => {}, 1000)", "--", "--type=utility"]).creation_flags(0x08000000)
         .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
     let mut selected_child = spawn(&selected);
     let mut other_child = spawn(&other);
     let result = run_worker_operation_with(&probe, "running-target", "running-request", &DataStrategy::Keep,
         &[WorkerTarget { path: selected.to_string_lossy().into_owned(), scope: InstallScope::PerUser,
-            fingerprint: FileFingerprint::from_path(&selected).unwrap(), registered_roots: Vec::new() }],
+            fingerprint: edition_fixtures::installed_fingerprint(&selected).unwrap(), registered_roots: Vec::new() }],
         &[], None, false, Arc::new(AtomicBool::new(false)));
     let selected_exited = selected_child.try_wait().unwrap().is_some();
     let other_survived = other_child.try_wait().unwrap().is_none();
@@ -74,7 +188,7 @@ fn deletion_worker_closes_only_the_confirmed_running_installation() {
         fs::write(unselected.join("sentinel.txt"), b"must survive").unwrap();
         assert!(confirmed.starts_with(&root) && unselected.starts_with(&root));
 
-        let fingerprint = FileFingerprint::from_path(&confirmed).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&confirmed).unwrap();
         let outcome = run_worker_operation_with(
             &probe,
             "process-boundary",
@@ -119,7 +233,7 @@ fn deletion_worker_closes_only_the_confirmed_running_installation() {
         fs::write(confirmed.join("SidekickAI.exe"), b"original").unwrap();
         fs::write(confirmed.join("resources").join("app.asar"), app_archive(b"original")).unwrap();
         fs::write(confirmed.join("uninstall.exe"), b"original").unwrap();
-        let fingerprint = FileFingerprint::from_path(&confirmed).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&confirmed).unwrap();
         fs::write(confirmed.join("SidekickAI.exe"), b"tampered after scan").unwrap();
 
         let outcome = run_worker_operation_with(
@@ -280,7 +394,7 @@ fn deletion_worker_closes_only_the_confirmed_running_installation() {
         let process = WorkerProcess::open_for_test(child.id()).unwrap();
         // Publish a verified result while the process is still running.
         let outcome = WorkerOutcome {
-            protocol_version: 1, operation_id: "wait-exit".into(), nonce: nonce.into(),
+            protocol_version: UNINSTALL_PROTOCOL_VERSION, operation_id: "wait-exit".into(), nonce: nonce.into(),
             removed_install_paths: vec![], removed_data_roots: vec![], partially_removed_paths: vec![],
             warnings: vec![], error: None,
         };

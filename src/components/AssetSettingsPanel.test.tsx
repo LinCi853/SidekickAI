@@ -5,12 +5,12 @@ import { settleHooks } from '../hooks/draft-hook-test-harness'
 const harness = await vi.hoisted(async () => (await import('../hooks/draft-hook-test-harness')).createHookHarness())
 const state = vi.hoisted(() => ({ listener: undefined as undefined | ((values: HotkeyConfig[]) => void), off: vi.fn(), bridge: undefined as any }))
 const api = vi.hoisted(() => ({ getAll: vi.fn(), set: vi.fn(), setEnabled: vi.fn(), onChanged: vi.fn() }))
+const preferences = vi.hoisted(() => ({ update: vi.fn() }))
 vi.mock('react', async () => ({ ...await vi.importActual('react'), ...harness.react }))
 vi.mock('../lib/electron-api/core', () => ({ requireElectron: () => state.bridge }))
-vi.mock('../hooks/useAssetSettings', () => ({ useAssetSettings: () => ({ settings: DEFAULT_ASSET_SETTINGS, update: vi.fn(), error: '' }) }))
+vi.mock('../hooks/useAssetSettings', () => ({ useAssetSettings: () => ({ settings: DEFAULT_ASSET_SETTINGS, update: preferences.update, error: '' }) }))
 vi.mock('../store/useModuleStore', () => ({ useModuleStore: (selector: any) => selector({ isEnabled: () => false }) }))
-vi.mock('./ui', () => ({ Button: 'button' }))
-vi.mock('../pages/ai-assets/AssetFreezeControl', () => ({ default: () => null }))
+vi.mock('./ui', () => ({ Button: 'button', ConfirmDialog: 'confirm-dialog' }))
 import AssetSettingsPanel from './AssetSettingsPanel'
 const configured = (accelerator = '', enabled = false, registration?: HotkeyConfig['registration']): HotkeyConfig => ({ action: 'toggleAiAssets', label: '打开／关闭 AI资产', accelerator, enabled, registration })
 function elements(node: any): any[] {
@@ -24,13 +24,26 @@ const save = (node: unknown) => find(node, element => element.type === 'button' 
 const enabled = (node: unknown) => find(node, element => element.type === 'label' && Array.isArray(element.props.children) && element.props.children.includes('启用全局快捷键')).props.children[0]
 beforeEach(() => {
   harness.reset(); vi.resetAllMocks(); state.listener = undefined
-  state.bridge = { hotkey: api, aiAssets: { cleanupRecords: vi.fn() } }
+  state.bridge = { hotkey: api, aiAssets: { cleanupRecords: vi.fn(), retentionStatus: vi.fn(async () => ({ state: 'disabled' })), onRetentionStatusChanged: vi.fn(() => () => {}) } }
   api.getAll.mockResolvedValue([configured()])
   api.onChanged.mockImplementation(listener => { state.listener = listener; return state.off })
   api.set.mockImplementation(async (_action, accelerator) => { state.listener?.([configured(accelerator, !!accelerator, accelerator ? 'registered' : undefined)]); return true })
 })
 afterEach(async () => { harness.unmount(); await settleHooks() })
 describe('AI asset embedded shortcut settings', () => {
+  it('requires confirmation before enabling deletion and allows cancel without saving', async () => {
+    const view = harness.mount(() => AssetSettingsPanel({})); await settleHooks()
+    const select = find(view.current, element => element.props['aria-label'] === '资料自动删除')
+    expect(select.props.value).toBe(0)
+    select.props.onChange({ target: { value: '14' } }); await settleHooks()
+    const confirm = find(view.current, element => element.type === 'confirm-dialog')
+    expect(confirm.props.open).toBe(true); expect(confirm.props.message).toContain('14 天')
+    expect(preferences.update).not.toHaveBeenCalled()
+    confirm.props.onCancel(); await settleHooks(); expect(preferences.update).not.toHaveBeenCalled()
+    select.props.onChange({ target: { value: '30' } }); await settleHooks()
+    await find(view.current, element => element.type === 'confirm-dialog').props.onConfirm()
+    expect(preferences.update).toHaveBeenCalledWith({ fileRetentionDays: 30 })
+  })
   it('shows the same unbound state and unavailable enable switch as global settings', async () => {
     const view = harness.mount(() => AssetSettingsPanel({})); await settleHooks()
     expect(input(view.current).props).toMatchObject({ value: '', placeholder: '未绑定' })

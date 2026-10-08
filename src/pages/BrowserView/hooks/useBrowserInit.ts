@@ -7,16 +7,13 @@
    - P1-3 确保窗口至少有一个非内部标签
    - E2 关闭窗口时将所有网页标签迁移回主窗口
    - E3 根据标签状态同步窗口标题
-   - 冻结状态订阅与切换同步
    ===================================================================== */
 
 import { useEffect, useRef, useState } from 'react';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
 import { useProfileStore } from '../../../store/useProfileStore.js';
 import { useTabStore } from '../../../store/useTabStore.js';
-import { useFreezeStore } from '../../../store/useFreezeStore.js';
 import { consumeAccumulatedLinks, browserTabMigrateBack } from '../../../lib/electron-api/index.js';
-import type { Profile } from '../../../lib/electron-api/index.js';
 import { getQueryParam, INTERNAL_TAB_SOURCES } from '../constants.js';
 import { formatWindowTitle } from '../../../lib/window-title';
 
@@ -37,7 +34,7 @@ export function useBrowserInit() {
 
   const profiles = useProfileStore((s) => s.profiles);
   const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const profile = profiles.find(item => item.id === profileId) ?? null;
   const addressBarRef = useRef<HTMLInputElement | null>(null);
   const webviewContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -50,8 +47,6 @@ export function useBrowserInit() {
     void (async () => {
       await useProfileStore.getState().loadProfiles();
       await init(windowId, pid);
-      const p = useProfileStore.getState().profiles.find((pr) => pr.id === pid) ?? null;
-      setProfile(p);
       setReady(true);
       // E1：消费主窗口 AI 应用内累积的链接，转为浏览器窗口的标签页。
       // consume 语义：取出并清空，避免重复消费。累积链接在主窗口拦截 new-window 时
@@ -130,23 +125,6 @@ export function useBrowserInit() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
-
-  // 冻结状态订阅 + 切换标签时同步冻结状态
-  useEffect(() => {
-    const off = useFreezeStore.getState().init();
-    return off;
-  }, []);
-  useEffect(() => {
-    if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
-  }, [activeTabId]);
-  // 窗口回到前台时兜底同步冻结状态（主进程 blur 自动恢复的广播可能丢失）
-  useEffect(() => {
-    const onFocus = () => {
-      if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
-    };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [activeTabId]);
 
   return {
     tabs,

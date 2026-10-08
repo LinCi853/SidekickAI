@@ -70,7 +70,12 @@ pub(super) fn stop_worker_processes(request: &WorkerRequest, targets: &[Normaliz
                 "安装维护程序仍在目标目录内运行。请关闭该窗口后重试，尚未删除内容。",
                 UninstallPhase::Stopping, true, &request.operation_id));
         }
+        let applications = super::shutdown::prepare(targets, &request.operation_id, request.controller_pid)?;
+        return stop_target_processes_checked(targets, &request.operation_id, |handle, pid| {
+            super::shutdown::validate_process(handle, pid, targets, &applications, &request.operation_id)
+        });
     }
+    #[cfg(not(windows))]
     stop_target_processes(targets, &request.operation_id)
 }
 
@@ -137,32 +142,108 @@ pub(super) fn live_process_matches(process: windows::Win32::Foundation::HANDLE, 
 }
 
 #[cfg(windows)]
+fn termination_wait(process: windows::Win32::Foundation::HANDLE, pid: u32, milliseconds: u32) -> windows::Win32::Foundation::WAIT_EVENT {
+    #[cfg(test)]
+    if let Some(result) = STOP_WAIT_HOOK.with(|hook| hook.borrow_mut().as_mut().and_then(|hook| hook(pid, milliseconds))) { return result; }
+    #[cfg(not(test))]
+    let _ = pid;
+    unsafe { windows::Win32::System::Threading::WaitForSingleObject(process, milliseconds) }
+}
+
+#[cfg(all(test, windows))]
+type StopWaitHook = Box<dyn FnMut(u32, u32) -> Option<windows::Win32::Foundation::WAIT_EVENT>>;
+
+#[cfg(all(test, windows))]
+thread_local! { static STOP_WAIT_HOOK: std::cell::RefCell<Option<StopWaitHook>> = std::cell::RefCell::new(None); }
+
+#[cfg(all(test, windows))]
+pub(crate) fn with_stop_wait_hook<T>(hook: StopWaitHook, operation: impl FnOnce() -> T) -> T {
+    struct Reset;
+    impl Drop for Reset { fn drop(&mut self) { STOP_WAIT_HOOK.with(|hook| { hook.borrow_mut().take(); }); } }
+    STOP_WAIT_HOOK.with(|current| { *current.borrow_mut() = Some(hook); });
+    let _reset = Reset;
+    operation()
+}
+
+#[cfg(windows)]
 pub(super) fn stop_target_processes_inner(targets: &[NormalizedAbsolutePath], operation_id: &str) -> Result<Vec<u32>, UninstallError> {
-    use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
-    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE};
+    stop_target_processes_checked(targets, operation_id, |_, _| Ok(()))
+}
+
+#[cfg(windows)]
+pub(super) fn stop_target_processes_checked(
+    targets: &[NormalizedAbsolutePath],
+    operation_id: &str,
+    validate: impl Fn(windows::Win32::Foundation::HANDLE, u32) -> Result<(), UninstallError>,
+) -> Result<Vec<u32>, UninstallError> {
+    use std::collections::BTreeMap;
+    use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
+    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE};
+    struct Captured { handle: HANDLE, pid: u32 }
+    impl Drop for Captured { fn drop(&mut self) { let _ = unsafe { CloseHandle(self.handle) }; } }
     let bound = target_processes(targets)?;
-    let mut killed = Vec::new();
-    let mut unconfirmed = Vec::new();
-    for pid in &bound {
-        unsafe {
-            if let Ok(process) = OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE, false, *pid) {
-                if live_process_matches(process, targets) && TerminateProcess(process, 1).is_ok() {
-                    killed.push(*pid);
-                    if WaitForSingleObject(process, 5000) != WAIT_OBJECT_0 { unconfirmed.push(*pid); }
+    let mut captured = Vec::new();
+    let mut failures = BTreeMap::new();
+    for pid in bound {
+        match unsafe { OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE, false, pid) } {
+            Ok(handle) => {
+                let process = Captured { handle, pid };
+                if live_process_matches(handle, targets) {
+                    validate(handle, pid)?;
+                    captured.push(process);
                 }
-                let _ = CloseHandle(process);
             }
+            Err(error) => { failures.insert(pid, format!("OpenProcess: {error}")); }
         }
     }
-    // Completion is bound to process handles; an elapsed delay is not proof of exit.
+    let mut killed = Vec::new();
+    for process in &captured {
+        match unsafe { TerminateProcess(process.handle, 1) } {
+            Ok(()) => killed.push(process.pid),
+            Err(error) => { failures.insert(process.pid, format!("TerminateProcess: {error}")); }
+        }
+    }
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let mut pending = false;
+        let mut wait_failed = false;
+        for process in &captured {
+            let state = termination_wait(process.handle, process.pid, 0);
+            let native_error = if state != WAIT_OBJECT_0 && state != WAIT_TIMEOUT { unsafe { GetLastError() }.0 } else { 0 };
+            if state == WAIT_OBJECT_0 { continue; }
+            pending = true;
+            if state != WAIT_TIMEOUT {
+                failures.entry(process.pid).or_insert_with(|| format!("WaitForSingleObject: {native_error} (status {})", state.0));
+                wait_failed = true;
+            }
+        }
+        if !pending || wait_failed || Instant::now() >= deadline { break; }
+        std::thread::sleep(deadline.saturating_duration_since(Instant::now()).min(Duration::from_millis(50)));
+    }
+    // Retained handles bind completion to the original process objects.
+    // Recheck after scanning so an earlier timeout cannot become a stale failure.
     let mut survivors = target_processes(targets)?;
-    survivors.extend(unconfirmed);
+    for process in &captured {
+        let state = termination_wait(process.handle, process.pid, 0);
+        let native_error = if state != WAIT_OBJECT_0 && state != WAIT_TIMEOUT { unsafe { GetLastError() }.0 } else { 0 };
+        if state == WAIT_OBJECT_0 {
+            survivors.retain(|pid| *pid != process.pid);
+        } else {
+            survivors.push(process.pid);
+            failures.entry(process.pid).or_insert_with(|| if state == WAIT_TIMEOUT {
+                "WaitForSingleObject: 进程句柄尚未确认退出".to_string()
+            } else {
+                format!("WaitForSingleObject: {native_error} (status {})", state.0)
+            });
+        }
+    }
     survivors.sort_unstable();
     survivors.dedup();
     if !survivors.is_empty() {
+        let reasons = survivors.iter().map(|pid| format!("PID {pid}: {}", failures.get(pid).map(String::as_str).unwrap_or("停止后仍检测到目标进程"))).collect::<Vec<_>>().join("; ");
         return Err(UninstallError::new(
             UninstallErrorCode::ProcessStopFailed,
-            format!("未能关闭仍在运行的 SidekickAI 进程（PID {:?}），已中止卸载。", survivors),
+            format!("尚未确认 SidekickAI 进程退出，已暂停卸载。{reasons}"),
             UninstallPhase::Stopping,
             true,
             operation_id,
@@ -191,6 +272,20 @@ pub struct WorkerProcess {
 
 #[cfg(windows)]
 impl WorkerProcess {
+    pub(super) fn track(pid: u32) -> Result<Self, UninstallError> {
+        use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE};
+        let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE, false, pid) }
+            .map_err(|error| internal(format!("无法核实协调进程 {pid}：{error}")))?;
+        Ok(Self { handle, pid })
+    }
+
+    pub(super) fn is_alive(&self) -> Result<bool, UninstallError> {
+        use windows::Win32::Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT};
+        use windows::Win32::System::Threading::WaitForSingleObject;
+        match unsafe { WaitForSingleObject(self.handle, 0) } {
+            WAIT_TIMEOUT => Ok(true), WAIT_OBJECT_0 => Ok(false), _ => Err(internal("无法确认协调进程活句柄状态。")),
+        }
+    }
     pub fn pid(&self) -> u32 {
         self.pid
     }
@@ -238,6 +333,8 @@ pub struct WorkerProcess {
 
 #[cfg(not(windows))]
 impl WorkerProcess {
+    pub(super) fn track(pid: u32) -> Result<Self, UninstallError> { Ok(Self { pid }) }
+    pub(super) fn is_alive(&self) -> Result<bool, UninstallError> { Ok(false) }
     pub fn pid(&self) -> u32 {
         self.pid
     }

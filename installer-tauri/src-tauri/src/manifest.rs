@@ -72,6 +72,7 @@ pub struct InstallerInfo {
     pub per_user_default_dir: String,
     pub app_name: String,
     pub arch: String,
+    pub distribution_mode: String,
     pub required_space: String,
     pub licenses: Vec<LicenseDoc>,
     pub features: Vec<InstallFeature>,
@@ -166,6 +167,18 @@ pub struct CloudAssetRequest {
 #[serde(rename_all = "camelCase")]
 pub struct InstallRequest {
     #[serde(default)]
+    pub distribution_source_path: String,
+    #[serde(default)]
+    pub distribution_body_proof: String,
+    #[serde(default)]
+    pub distribution_product_version: String,
+    #[serde(default)]
+    pub distribution_release_id: String,
+    #[serde(default)]
+    pub distribution_release_sha256: String,
+    #[serde(default)]
+    pub distribution_release_proof: String,
+    #[serde(default)]
     pub installation_id: String,
     #[serde(default)]
     pub resources: Vec<serde_json::Value>,
@@ -173,6 +186,8 @@ pub struct InstallRequest {
     #[serde(default)]
     pub action: String,
     pub install_dir: String,
+    #[serde(default)]
+    pub staging_dir: String,
     pub for_all_users: bool,
     pub create_desktop_shortcut: bool,
     pub launch_after_install: bool,
@@ -263,12 +278,15 @@ pub fn licenses() -> Vec<LicenseDoc> {
 }
 
 pub fn host_arch() -> &'static str {
-    let proc = std::env::var("PROCESSOR_ARCHITECTURE").unwrap_or_default().to_ascii_lowercase();
-    let w6432 = std::env::var("PROCESSOR_ARCHITEW6432").unwrap_or_default().to_ascii_lowercase();
-    if proc == "arm64" || w6432 == "arm64" { "arm64" } else { "x64" }
+    sidekickai_uninstall_core::architecture::native_architecture().unwrap_or("unknown")
+}
+
+fn info_product_version(mode: &str, embedded: &str, selected: Option<&str>) -> String {
+    selected.unwrap_or_else(|| if mode == "online" { "" } else { embedded }).to_owned()
 }
 
 pub fn build_info() -> InstallerInfo {
+    let metadata = crate::setup_metadata::current().expect("validated Setup metadata");
     let app_name = "SidekickAI".to_string();
     let default_dir = std::env::var("ProgramFiles")
         .map(|p| format!("{}\\{}", p.trim_end_matches('\\'), sidekickai_uninstall_core::product::edition().directory))
@@ -280,14 +298,28 @@ pub fn build_info() -> InstallerInfo {
     InstallerInfo {
         edition_label: sidekickai_uninstall_core::product::edition().label.clone(),
         uninstall_entry: std::env::args().skip(1).eq(["--uninstall".to_string()]),
-        version: crate::setup_metadata::current().expect("validated Setup metadata").product_version.clone(),
+        version: info_product_version(&metadata.distribution_mode, &metadata.product_version, crate::distribution::product_version().as_deref()),
         default_dir,
         per_user_default_dir,
         app_name,
         arch: host_arch().to_string(),
+        distribution_mode: metadata.distribution_mode.clone(),
         required_space: "约 480 MB".to_string(),
         licenses: licenses(),
         features: features(),
         options: options(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::info_product_version;
+
+    #[test]
+    fn online_info_reports_only_a_selected_product_version() {
+        assert_eq!(info_product_version("online", "1.1.0", None), "");
+        assert_eq!(info_product_version("online", "1.1.0", Some("0.1.5+20261008.001")), "0.1.5+20261008.001");
+        assert_eq!(info_product_version("offline", "0.1.6", None), "0.1.6");
+        assert_eq!(info_product_version("offline", "0.1.6", Some("0.1.7")), "0.1.7");
     }
 }

@@ -2,7 +2,8 @@ import AdmZip from 'adm-zip'
 import { createHash, randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { encryptFile } from './file-crypto.js'
+import { decryptFile, encryptFile } from './file-crypto.js'
+import { validateBackupArchive } from './format.js'
 export type ExportTreeTuple = [string, number, number, string]
 
 export function sha256Hex(data: Buffer): string {
@@ -104,25 +105,11 @@ export async function writeStrictArchive(
   reverifySources: () => Promise<void>,
   encryptWriter = encryptFile,
 ): Promise<void> {
-  const resolvedTarget = path.resolve(targetPath)
-  const directory = path.dirname(resolvedTarget)
-  const scratchBase = path.join(directory, `.${path.basename(resolvedTarget)}.partial-${process.pid}-${randomUUID()}`)
-  const plainZip = `${scratchBase}.zip`
-  const cipherFile = `${scratchBase}.sabackup`
+  const prepared = prepareArchive(targetPath, zip, encrypt, deviceId, encryptWriter)
   try {
-    zip.writeZip(plainZip)
-    let publishSource = plainZip
-    if (encrypt) {
-      encryptWriter(plainZip, cipherFile, encrypt.password, deviceId)
-      publishSource = cipherFile
-    }
     await reverifySources()
-    publishExclusive(publishSource, resolvedTarget)
-  } finally {
-    for (const file of [plainZip, cipherFile]) {
-      try { fs.rmSync(file, { force: true }) } catch {  }
-    }
-  }
+    publishExclusive(prepared.file, path.resolve(targetPath))
+  } finally { prepared.dispose() }
 }
 
 
@@ -133,16 +120,34 @@ export function writePartialArchive(
   deviceId: string,
   encryptWriter = encryptFile,
 ): void {
+  const prepared = prepareArchive(targetPath, zip, encrypt, deviceId, encryptWriter)
+  try { fs.renameSync(prepared.file, targetPath) }
+  finally { prepared.dispose() }
+}
+
+/** Both entry points publish only a readable, authenticated archive of the verified payload. */
+function prepareArchive(targetPath: string, zip: AdmZip, encrypt: { password: string } | undefined, deviceId: string, encryptWriter: typeof encryptFile) {
   const scratch = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${randomUUID()}`)
   const zipPath = `${scratch}.zip`
   const encryptedPath = `${scratch}.sabackup`
-  try {
-    zip.writeZip(zipPath)
-    if (encrypt) encryptWriter(zipPath, encryptedPath, encrypt.password, deviceId)
-    fs.renameSync(encrypt ? encryptedPath : zipPath, targetPath)
-  } finally {
-    for (const file of [zipPath, encryptedPath]) {
-      try { fs.rmSync(file, { force: true }) } catch {  }
+  const verifiedPath = `${scratch}.verified.zip`
+  const dispose = () => {
+    for (const file of [zipPath, encryptedPath, verifiedPath]) {
+      try { fs.rmSync(file, { force: true }) } catch { }
     }
   }
+  try {
+    zip.writeZip(zipPath)
+    const expected = validateBackupArchive(zip)
+    let verified = zipPath
+    if (encrypt) {
+      encryptWriter(zipPath, encryptedPath, encrypt.password, deviceId)
+      if (decryptFile(encryptedPath, verifiedPath, encrypt.password) !== deviceId
+        || sha256FileSync(verifiedPath) !== sha256FileSync(zipPath)) throw new Error('Encrypted backup verification failed.')
+      verified = verifiedPath
+    }
+    const actual = validateBackupArchive(new AdmZip(verified))
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Saved backup does not match its snapshot.')
+    return { file: encrypt ? encryptedPath : zipPath, dispose }
+  } catch (error) { dispose(); throw error }
 }

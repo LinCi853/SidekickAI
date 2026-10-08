@@ -39,7 +39,7 @@ pub(crate) fn commit_staged(src: &Path, dst: &Path) -> Result<(), String> {
         Ok(()) => Ok(()),
         Err(_) => {
             if let Err(error) = copy_dir(src, dst) {
-                let _ = fs::remove_dir_all(dst);
+                if !super::transaction::active() { let _ = fs::remove_dir_all(dst); }
                 return Err(error);
             }
             remove_path(src).map_err(|e| format!("无法清理临时解压目录：{e}"))
@@ -99,6 +99,9 @@ pub(crate) fn program_items(payload: &Path) -> Result<Vec<String>, String> {
                 names.push(format!("resources/{name}"));
             }
         } else {
+            if lower == "maintenance" && entry.path().join("distribution-receipt.json").exists() {
+                return Err("程序载荷包含本地发行记录。".into());
+            }
             names.push(name);
         }
     }
@@ -107,20 +110,6 @@ pub(crate) fn program_items(payload: &Path) -> Result<Vec<String>, String> {
         return Err("程序载荷缺少主程序或应用资源".into());
     }
     Ok(names)
-}
-
-pub(crate) fn copy_path(src: &Path, dst: &Path) -> Result<(), String> {
-    if src.is_dir() {
-        copy_dir(src, dst)
-    } else {
-        if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("无法创建目录 {}：{}", parent.display(), e))?;
-        }
-        fs::copy(src, dst)
-            .map(|_| ())
-            .map_err(|e| format!("无法复制 {} 到 {}：{}", src.display(), dst.display(), e))
-    }
 }
 
 pub(crate) fn remove_path(path: &Path) -> Result<(), String> {
@@ -212,22 +201,30 @@ pub(crate) fn replace_from_sources(
     }
     let parent = install_dir.parent().ok_or("无效的安装目录")?;
     let backup_dir = unique_sibling_path(parent, "SidekickAI-Replace")?;
+    super::transaction::retain(&backup_dir)?;
     fs::create_dir(&backup_dir)
         .map_err(|e| format!("无法创建暂存目录 {}：{}", backup_dir.display(), e))?;
+    super::transaction::bind_retained(&backup_dir)?;
 
     let existed: Vec<(String, String, bool)> = sources
         .iter()
         .map(|(name, source)| ((*name).to_string(), (*source).to_string(), install_dir.join(name).exists()))
         .collect();
     let mut moved: Vec<String> = Vec::new();
+    let mut planned = Vec::new();
+    for (name, _, present) in &existed {
+        if !present { continue; }
+        if let Some(parent) = backup_dir.join(name).parent() {
+            fs::create_dir_all(parent).map_err(|error| format!("无法准备程序备份：{error}"))?;
+        }
+        planned.push((install_dir.join(name), PathBuf::from(name)));
+    }
+    super::transaction::prepare_retained_moves(&backup_dir, &planned)?;
 
     let staged = (|| -> Result<(), String> {
         for (name, _, present) in &existed {
             if !*present {
                 continue;
-            }
-            if let Some(parent) = backup_dir.join(name).parent() {
-                fs::create_dir_all(parent).map_err(|error| format!("无法准备程序备份：{error}"))?;
             }
             move_within_volume(&install_dir.join(name), &backup_dir.join(name))
                 .map_err(|e| format!("无法备份 {name}：{e}"))?;
@@ -236,12 +233,14 @@ pub(crate) fn replace_from_sources(
         Ok(())
     })();
     if let Err(error) = staged {
+        if super::transaction::active() { return Err(error); }
         let restore = restore_replaced(install_dir, &backup_dir, &moved);
         if restore.is_ok() {
             let _ = fs::remove_dir_all(&backup_dir);
         }
         return Err(rollback_message("替换文件失败", &error, restore, &backup_dir));
     }
+    super::transaction::seal_retained(&backup_dir)?;
 
     let deploy = (|| -> Result<(), String> {
         for (name, source, _) in &existed {
@@ -249,10 +248,12 @@ pub(crate) fn replace_from_sources(
             if !src.exists() {
                 return Err(format!("安装载荷缺少 {name}"));
             }
-            if let Err(error) = copy_path(&src, &install_dir.join(name)) {
+            let target = install_dir.join(name);
+            if let Some(parent) = target.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; }
+            if let Err(error) = super::transaction::copy_durable(&src, &target) {
                 // Only the new copy is affected; the previous copy is still in
                 // the backup and is restored below.
-                let _ = remove_path_checked(&install_dir.join(name));
+                if !super::transaction::active() { let _ = remove_path_checked(&install_dir.join(name)); }
                 return Err(format!("部署 {name} 失败：{error}"));
             }
         }
@@ -260,10 +261,11 @@ pub(crate) fn replace_from_sources(
     })();
     match deploy {
         Ok(()) => {
-            let _ = fs::remove_dir_all(&backup_dir);
+            if !super::transaction::active() { let _ = fs::remove_dir_all(&backup_dir); }
             Ok(())
         }
         Err(error) => {
+            if super::transaction::active() { return Err(error); }
             let mut failures = Vec::new();
             for (name, _, present) in &existed {
                 if !present {

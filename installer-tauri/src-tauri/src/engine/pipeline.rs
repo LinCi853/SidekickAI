@@ -9,13 +9,13 @@ use super::deploy::{
     commit_staged, program_items, remove_path, remove_path_checked,
     replace_from_sources, unique_sibling_path, UNINSTALLER_PAIR,
 };
-use super::payload::{clear_readonly_attributes, extract_to_staging, locate_payload};
+use super::payload::clear_readonly_attributes;
 use super::registry::{
     register_uninstall, remove_uninstall_entry_if_matches, restore_registration,
     snapshot_registration, uninstall_registration_key,
 };
 use super::scan::stop_processes_in_targets;
-use super::scope::{acquire_operation_locks, move_portable_state, portable_user_data, prepare_operation_scope_with_hooks};
+use super::scope::{acquire_operation_locks, move_portable_state, portable_user_data, prepare_operation_scope_with_hooks, OperationScope};
 use super::shortcuts::{create_shortcuts, desktop_dir, migrate_legacy_shortcuts, prepare_legacy_alias, remove_shortcuts, start_menu_dir};
 use super::validate::{
     core_payload_matches, uninstaller_payload_matches, validate_application, validate_core,
@@ -26,8 +26,7 @@ use super::{product_version, progress, status, write_log};
 /// Create a directory that is guaranteed to be new for this process. Unlike a
 /// PID-named directory it can never collide with a concurrent process (or a
 /// reused PID), so no existing contents are ever wiped.
-pub(crate) fn unique_temp_dir(prefix: &str) -> Result<PathBuf, String> {
-    let base = std::env::temp_dir();
+pub(crate) fn unique_temp_dir_at(base: &Path, prefix: &str) -> Result<PathBuf, String> {
     for attempt in 0..16u32 {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -35,7 +34,10 @@ pub(crate) fn unique_temp_dir(prefix: &str) -> Result<PathBuf, String> {
             .unwrap_or_default();
         let candidate = base.join(format!("{prefix}-{}-{nanos}-{attempt}", std::process::id()));
         match fs::create_dir(&candidate) {
-            Ok(()) => return Ok(candidate),
+            Ok(()) => {
+                sidekickai_uninstall_host::harden_private_directory(&candidate).map_err(|error| error.message)?;
+                return Ok(candidate);
+            }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(format!("无法创建临时目录 {}：{}", candidate.display(), error)),
         }
@@ -49,10 +51,11 @@ pub(crate) fn unique_temp_dir(prefix: &str) -> Result<PathBuf, String> {
 /// a pre-extracted payload fixture plus dedicated registry and shortcut
 /// directories so the complete sequencing never touches a real installation or
 /// user profile.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct EngineHooks {
     /// A pre-extracted, architecture-specific payload directory.
     pub(crate) extracted: Option<PathBuf>,
+    pub(crate) staging_base: Option<PathBuf>,
     pub(crate) desktop: Option<PathBuf>,
     pub(crate) start_menu: Option<PathBuf>,
     /// Registration key override, so the registration contract is exercised
@@ -64,9 +67,35 @@ pub(crate) struct EngineHooks {
     pub(crate) fail_after_registration: bool,
     #[cfg(test)]
     pub(crate) fail_after_receipt: bool,
+    #[cfg(test)]
+    pub(crate) fail_startup_maintenance: bool,
+    #[cfg(test)]
+    pub(crate) configuration_change_after_prepare: Option<PathBuf>,
 }
 
 impl EngineHooks {
+    pub(crate) fn checkpoint(&self, name: &str) -> Result<(), String> {
+        #[cfg(test)]
+        if name == "prepared" {
+            if let Some(path) = &self.configuration_change_after_prepare {
+                let mut config: serde_json::Value = serde_json::from_slice(&fs::read(path).map_err(|error| error.to_string())?)
+                    .map_err(|error| error.to_string())?;
+                config["options"]["autoStart"] = (!config["options"]["autoStart"].as_bool().unwrap_or(false)).into();
+                fs::write(path, serde_json::to_vec(&config).map_err(|error| error.to_string())?).map_err(|error| error.to_string())?;
+            }
+        }
+        #[cfg(test)]
+        if self.registration_key.is_some() && self.extracted.is_some() && std::env::var("SIDEKICK_INSTALL_INTERRUPT_AT").as_deref() == Ok(name) {
+            if let Ok(marker) = std::env::var("SIDEKICK_INSTALL_INTERRUPT_MARKER") {
+                let mut file = fs::OpenOptions::new().write(true).create_new(true).open(marker).map_err(|error| error.to_string())?;
+                use std::io::Write;
+                file.write_all(name.as_bytes()).and_then(|_| file.sync_all()).map_err(|error| error.to_string())?;
+                loop { std::thread::sleep(std::time::Duration::from_millis(100)); }
+            }
+        }
+        let _ = name;
+        Ok(())
+    }
     pub(crate) fn desktop_dir(&self, for_all_users: bool) -> PathBuf {
         self.desktop.clone().unwrap_or_else(|| desktop_dir(for_all_users))
     }
@@ -87,6 +116,21 @@ impl EngineHooks {
         self.roaming
             .clone()
             .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
+    }
+
+    pub(crate) fn maintain_startup_tasks(&self, directory: &Path) -> Result<(), String> {
+        #[cfg(test)]
+        {
+            if self.fail_startup_maintenance { return Err("管理员启动任务校验失败（测试）。".into()); }
+            if self.extracted.is_some() { return Ok(()); }
+        }
+        sidekickai_uninstall_host::startup_tasks::maintain_installation(directory)
+    }
+
+    fn remove_startup_tasks(&self, directory: &Path) -> Result<(), String> {
+        #[cfg(test)]
+        if self.extracted.is_some() { return Ok(()); }
+        sidekickai_uninstall_host::startup_tasks::remove_installation(directory)
     }
 }
 
@@ -121,16 +165,21 @@ pub(crate) fn stage_payload(hooks: &EngineHooks) -> Result<(PathBuf, PathBuf, bo
         super::validate::validate_payload_identity(extracted)?;
         return Ok((PathBuf::new(), extracted.clone(), false));
     }
-    let files = locate_payload().ok_or_else(|| {
-        let message = "未找到安装载荷 payload.7z / 7zr.exe（需与安装器同目录或内嵌于单文件）";
-        write_log(&format!("E|{}", message));
-        message
-    })?;
-    let staging = unique_temp_dir("SidekickAI-Extract")?;
-    let extracted = match extract_to_staging(&files.payload, &files.sevenz, &staging) {
-        Ok(extracted) => extracted,
-        Err(error) => { cleanup_staging(&staging, true); return Err(error); }
-    };
+    let base = hooks.staging_base.clone().unwrap_or_else(std::env::temp_dir);
+    let prepared = crate::distribution::ready()?.ok_or("尚未准备已签名应用本体。")?;
+    let body = crate::distribution::body()?;
+    let archive = body.archive.as_ref().ok_or("应用归档描述缺失。")?;
+    sidekickai_uninstall_core::distribution::verify_file(Path::new(&prepared.source_path), archive.size_bytes, &archive.sha256)?;
+    let staging = unique_temp_dir_at(&base, "SidekickAI-Extract")?;
+    if let Err(error) = super::preflight::check_space(&[(staging.clone(), archive.expanded_bytes)]) {
+        cleanup_staging(&staging, true);
+        return Err(error);
+    }
+    let extracted = staging.clone();
+    if let Err(error) = sidekickai_uninstall_core::distribution::extract_verified_zip(Path::new(&prepared.source_path), &body.files, &extracted) {
+        cleanup_staging(&staging, true); return Err(error);
+    }
+    fs::write(extracted.join("distribution-proof.json"), &prepared.body_proof).map_err(|error| error.to_string())?;
     if let Err(error) = super::validate::validate_payload_identity(&extracted) {
         cleanup_staging(&staging, true);
         return Err(error);
@@ -180,6 +229,15 @@ pub(crate) fn install_rollback_message(
 
 pub fn run(req: &InstallRequest) -> Result<(), String> {
     crate::setup_metadata::current()?;
+    if req.action != "flush-config" && !super::transaction::root_for(Path::new(&req.install_dir))?.exists() {
+        let body = crate::distribution::apply_request(req)?;
+        let prepared = crate::distribution::PreparedDistribution {
+            source_path: req.distribution_source_path.clone(), body_proof: req.distribution_body_proof.clone(),
+            product_version: body.product_version.clone(), native_architecture: manifest::host_arch().into(),
+            release_id: req.distribution_release_id.clone(), release_sha256: req.distribution_release_sha256.clone(), release_proof: req.distribution_release_proof.clone(),
+        };
+        crate::distribution::adopt_prepared(prepared)?;
+    }
     run_with(req, &EngineHooks::default())
 }
 
@@ -191,17 +249,92 @@ pub(crate) fn run_with(req: &InstallRequest, hooks: &EngineHooks) -> Result<(), 
     if req.action == "flush-config" {
         return flush_install_config_with(req, hooks);
     }
-    match req.mode {
-        InstallMode::Repair => run_repair(req, hooks),
+    let target = super::scope::normalize_owned_dir(&req.install_dir, "安装目录")?;
+    let mut paths = vec![target.clone()];
+    for path in &req.cleanup_paths { paths.push(super::scope::normalize_owned_dir(path, "清理目录")?); }
+    if hooks.registration_key.is_none() {
+        for task in sidekickai_uninstall_host::pending_uninstall_tasks().map_err(|error| error.message)? {
+            if task.install_paths.iter().any(|path| paths.iter().any(|target| sidekickai_uninstall_core::path::paths_equal(Path::new(path), target))) {
+                return Err("此位置有未完成的卸载任务，请返回卸载页面先恢复或完成清理，再安装或修复。".into());
+            }
+        }
+    }
+    let recovery_targets = paths.clone();
+    let _path_locks = acquire_operation_locks(&paths)?;
+    let admitted = if !super::transaction::authorize_recovery(req, hooks)? {
+        Some(prepare_operation_scope_with_hooks(req, hooks.roaming_base().as_deref(), hooks)?)
+    } else { None };
+    stop_processes_in_targets(&recovery_targets)?;
+    let data_paths = sidekickai_uninstall_host::data_paths_for(&target, hooks.roaming_base().as_deref()).map_err(|error| error.message)?;
+    let _data_locks = acquire_operation_locks(&data_paths)?;
+    if super::transaction::root_for(&target)?.exists() {
+        let committed = super::transaction::committed(&target)?;
+        if !committed { stop_processes_in_targets(&recovery_targets)?; }
+        status("正在恢复上次中断的安装…");
+        super::transaction::recover(req, hooks)?;
+        if committed { progress(100); status("安装已完成，恢复副本清理完成"); return Ok(()); }
+        return Err("已恢复上次中断的安装，原版本和冲突副本已保留。请检查后再次点击重试。".into());
+    }
+    let scope = prepare_operation_scope_with_hooks(req, hooks.roaming_base().as_deref(), hooks)?;
+    if let Some(admitted) = &admitted { super::scope::verify_legacy_unchanged(admitted, &scope)?; }
+    fs::create_dir_all(target.parent().ok_or("安装目录无效")?).map_err(|error| error.to_string())?;
+    let mut prepared_hooks = hooks.clone();
+    prepared_hooks.staging_base = Some(super::preflight::staging_directory(req)?);
+    let (staging, extracted, owns_staging) = stage_payload(&prepared_hooks)?;
+    let same_volume = unique_sibling_path(target.parent().ok_or("安装目录无效")?, "SidekickAI-Staged")?;
+    let mut staged_ownership = None;
+    let outcome = (|| {
+        let incoming = super::preflight::tree_size(&extracted)?;
+        let mut required = incoming;
+        for path in std::iter::once(&scope.install_dir).chain(scope.cleanup_dirs.iter()) {
+            required = required.checked_add(super::preflight::tree_size(path)?.saturating_mul(2)).ok_or("安装空间估算超出支持范围")?;
+        }
+        super::preflight::check_space(&[(target.clone(), required)])?;
+        super::transaction::copy_durable(&extracted, &same_volume)?;
+        let seal = super::retained::TreeSeal::capture(&same_volume)?;
+        staged_ownership = Some(seal.clone());
+        prepared_hooks.extracted = Some(same_volume.clone());
+        let mut stop_targets = vec![target.clone()];
+        stop_targets.extend(scope.cleanup_dirs.iter().cloned());
+        stop_processes_in_targets(&stop_targets)?;
+        let current = prepare_operation_scope_with_hooks(req, hooks.roaming_base().as_deref(), hooks)?;
+        super::scope::verify_legacy_unchanged(&scope, &current)?;
+        let transaction = super::transaction::Transaction::begin(req, hooks)?;
+        super::transaction::retain_prepared(&same_volume, &seal)?;
+        hooks.checkpoint("prepared")?;
+        let result = match req.mode {
+        InstallMode::Repair => run_repair(req, &prepared_hooks, &scope),
         InstallMode::Uninstall => unreachable!("uninstall was rejected above"),
-        InstallMode::Install => run_install(req, hooks),
+        InstallMode::Install => run_install(req, &prepared_hooks, &scope),
+        };
+        match result {
+            Ok(()) => { hooks.checkpoint("before-commit")?; transaction.commit() },
+            Err(error) => {
+                drop(transaction);
+                match super::transaction::recover(req, hooks) {
+                    Ok(_) => Err(format!("安装失败：{error}；已恢复原安装与入口。")),
+                    Err(recovery) => Err(format!("{error}；{recovery}")),
+                }
+            }
+        }
+    })();
+    cleanup_staging(&staging, owns_staging);
+    let cleanup = match staged_ownership {
+        Some(seal) => super::transaction::clean_prepared(&same_volume, &seal),
+        None if super::retained::present(&same_volume)? => Err(format!("未封存的安装暂存副本已保留：{}", same_volume.display())),
+        None => Ok(()),
+    };
+    match (outcome, cleanup) {
+        (result, Ok(())) => result,
+        (Ok(()), Err(cleanup)) => Err(cleanup),
+        (Err(error), Err(cleanup)) => Err(format!("{error}；{cleanup}")),
     }
 }
 
-pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(), String> {
+fn run_install(req: &InstallRequest, hooks: &EngineHooks, admitted: &OperationScope) -> Result<(), String> {
     let roaming = hooks.roaming_base();
     let scope = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks)?;
-    let _locks = acquire_operation_locks(&scope.lock_paths)?;
+    super::scope::verify_legacy_unchanged(admitted, &scope)?;
     write_log(&format!("I|安装引擎启动，模式 install，目标目录：{}", scope.install_dir.display()));
     progress(3);
     status("正在准备安装…");
@@ -230,7 +363,8 @@ pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(
 
     // ---- 关闭旧进程（共享实现只结束目标目录内的进程，避免误停同名程序）----
     status("正在关闭旧版本进程…");
-    if let Err(error) = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks) {
+    if let Err(error) = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks)
+        .and_then(|current| super::scope::verify_legacy_unchanged(admitted, &current)) {
         cleanup_staging(&staging, owns_staging);
         return Err(error);
     }
@@ -240,14 +374,23 @@ pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(
         cleanup_staging(&staging, owns_staging);
         return Err(e);
     }
+    if admitted.legacy_identity.is_some() {
+        let current = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks)?;
+        super::scope::verify_legacy_unchanged(admitted, &current)?;
+    }
 
     // ---- backup：同卷同父目录 rename 暂存；失败即中止，绝不做破坏性回退 ----
     let mut backup: Option<PathBuf> = None;
     if install_dir.exists() {
         status("正在备份旧版本…");
         let candidate = unique_sibling_path(&parent, "SidekickAI-Backup")?;
+        super::transaction::retain_move(&install_dir, &candidate)?;
         match fs::rename(&install_dir, &candidate) {
-            Ok(()) => backup = Some(candidate),
+            Ok(()) => {
+                hooks.checkpoint("backup-before-seal")?;
+                super::transaction::seal_retained(&candidate)?;
+                backup = Some(candidate);
+            }
             Err(error) => {
                 cleanup_staging(&staging, owns_staging);
                 return Err(format!(
@@ -260,36 +403,51 @@ pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(
     }
 
     // ---- commit：staging → 目标 ----
+    hooks.checkpoint("old-directory-moved")?;
     progress(84);
     status("正在写入安装文件…");
     if let Err(error) = commit_staged(&extracted, &install_dir) {
+        if super::transaction::active() { return Err(error); }
         write_log(&format!("E|提交安装失败：{}，开始回滚", error));
         let restore = restore_install_dir(&install_dir, backup.as_deref());
         cleanup_staging(&staging, owns_staging);
         return Err(install_rollback_message("安装失败", &error, restore, backup.as_deref()));
     }
     cleanup_staging(&staging, owns_staging);
+    hooks.checkpoint("new-directory-present")?;
 
     // ---- 配置 / 快捷方式 / 注册表 / 云端资源（任一失败 → 回滚文件与旧注册项）----
     let tail = (|| -> Result<(), String> {
         if let Some(backup) = &backup {
+            let mut relatives = super::scope::portable_state_paths(backup)?.into_iter()
+                .map(|entry| entry.file_name().map(PathBuf::from).ok_or("用户数据路径无效"))
+                .collect::<Result<Vec<_>, _>>()?;
+            let acquired = super::scope::acquired_resource_path(backup)?;
+            let acquired_target = install_dir.join("resources/cloud");
+            if let Some(source) = &acquired {
+                if super::retained::present(&acquired_target)? {
+                    return Err("已获取资源目录存在冲突，原内容已保留。".into());
+                }
+                relatives.push(source.strip_prefix(backup).map_err(|error| error.to_string())?.to_path_buf());
+            }
+            super::transaction::prepare_retained_removal(backup, &relatives)?;
+            hooks.checkpoint("portable-state-before-move")?;
             move_portable_state(backup, &install_dir)?;
+            if let Some(source) = acquired {
+                fs::rename(&source, &acquired_target).map_err(|error| format!("无法保留已获取资源：{error}"))?;
+            }
+            hooks.checkpoint("portable-state-moved-before-seal")?;
+            super::transaction::seal_retained(backup)?;
         }
         prepare_legacy_alias(backup.as_deref(), &install_dir)?;
         progress(90);
         status("正在写入配置…");
         write_install_config(req, &install_dir)?;
         write_plugins_manifest(req, &install_dir)?;
-        let trust = crate::cloud::trusted_resource_keys()?;
-        fs::write(install_dir.join("resources/resource-trust.json"), serde_json::to_vec(&trust).map_err(|error| error.to_string())?)
-            .map_err(|error| format!("无法写入公开资源信任配置：{error}"))?;
-        let hosts: Vec<String> = serde_json::from_str(env!("SIDEKICK_RESOURCE_ALLOWED_HOSTS_JSON"))
-            .map_err(|error| format!("资源主机配置无效：{error}"))?;
-        fs::write(install_dir.join("resources/resource-hosts.json"), serde_json::to_vec(&hosts).map_err(|error| error.to_string())?)
-            .map_err(|error| format!("无法写入资源主机配置：{error}"))?;
+        super::config::prepare_public_resource_configuration(req, &install_dir)?;
         let origin = env!("SIDEKICK_OXY_ORIGIN");
         if !origin.is_empty() {
-            fs::write(install_dir.join("oxy-service.json"), serde_json::to_vec(&serde_json::json!({ "origin": origin })).map_err(|error| error.to_string())?)
+            super::transaction::write_file(install_dir.join("oxy-service.json"), serde_json::to_vec(&serde_json::json!({ "origin": origin })).map_err(|error| error.to_string())?)
                 .map_err(|error| format!("无法写入资源来源：{error}"))?;
         }
 
@@ -304,18 +462,21 @@ pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(
         progress(94);
         status("正在创建快捷方式…");
         if req.create_desktop_shortcut {
-            create_shortcuts(hooks, req.for_all_users, &install_dir);
+            create_shortcuts(hooks, req.for_all_users, &install_dir)?;
         }
 
         progress(97);
         status("正在写入卸载信息…");
         register_uninstall(hooks, req, &install_dir)?;
+        hooks.checkpoint("registration-written")?;
         injected_tail_failure(hooks)?;
         copy_uninstaller(&install_dir)?;
+        hooks.maintain_startup_tasks(&install_dir)?;
         Ok(())
     })();
 
     if let Err(error) = tail {
+        if super::transaction::active() { return Err(error); }
         write_log(&format!("E|安装后置步骤失败：{}，开始回滚", error));
         let restore = restore_install_dir(&install_dir, backup.as_deref());
         let registration = restore_registration(&own_key, &previous_registration);
@@ -336,8 +497,16 @@ pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(
         return Err(message);
     }
 
+    for extra in &scope.cleanup_dirs {
+        if extra.exists() && portable_user_data(extra).is_none() {
+            hooks.remove_startup_tasks(extra).map_err(|error| format!(
+                "新安装已写入，但其他安装位置的管理员启动任务未能清理；该位置与旧版本备份已保留：{error}"
+            ))?;
+        }
+    }
+
     // ---- 成功：删除 backup、清理用户确认的其他位置 ----
-    if let Some(backup) = &backup {
+    if let Some(backup) = backup.as_ref().filter(|_| !super::transaction::active()) {
         status("正在清理备份…");
         clear_readonly_attributes(backup);
         if let Err(error) = remove_path(backup) {
@@ -374,10 +543,10 @@ pub(crate) fn run_install(req: &InstallRequest, hooks: &EngineHooks) -> Result<(
 }
 
 /// Repair replaces a complete program payload while preserving local state.
-pub(crate) fn run_repair(req: &InstallRequest, hooks: &EngineHooks) -> Result<(), String> {
+fn run_repair(req: &InstallRequest, hooks: &EngineHooks, admitted: &OperationScope) -> Result<(), String> {
     let roaming = hooks.roaming_base();
     let scope = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks)?;
-    let _locks = acquire_operation_locks(&scope.lock_paths)?;
+    super::scope::verify_legacy_unchanged(admitted, &scope)?;
     write_log(&format!("I|安装引擎启动，模式 repair，目标目录：{}", scope.install_dir.display()));
     progress(5);
     status("正在校验现有安装…");
@@ -430,11 +599,13 @@ pub(crate) fn run_repair(req: &InstallRequest, hooks: &EngineHooks) -> Result<()
         cleanup_staging(&staging, owns_staging);
         progress(96);
         status("正在重建卸载入口…");
+        hooks.maintain_startup_tasks(&install_dir)?;
         register_uninstall(hooks, req, &install_dir)?;
+        hooks.checkpoint("repair-registration-written")?;
         migrate_legacy_shortcuts(hooks, req.for_all_users, &install_dir)
             .map_err(|error| format!("修复尚未完成：历史快捷方式迁移失败（{error}）。已保留匹配当前运行库的历史入口。"))?;
         if req.create_desktop_shortcut {
-            create_shortcuts(hooks, req.for_all_users, &install_dir);
+            create_shortcuts(hooks, req.for_all_users, &install_dir)?;
         }
         progress(100);
         status("核心文件完整，无需修复");
@@ -443,7 +614,8 @@ pub(crate) fn run_repair(req: &InstallRequest, hooks: &EngineHooks) -> Result<()
     }
 
     status("正在关闭运行中的进程…");
-    if let Err(error) = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks) {
+    if let Err(error) = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks)
+        .and_then(|current| super::scope::verify_legacy_unchanged(admitted, &current)) {
         cleanup_staging(&staging, owns_staging);
         return Err(error);
     }
@@ -465,6 +637,10 @@ pub(crate) fn run_repair(req: &InstallRequest, hooks: &EngineHooks) -> Result<()
     for name in &replacements { write_log(&format!("I|待更新：{name}")); }
     let mut sources: Vec<(&str, &str)> = replacements.iter().map(|name| (name.as_str(), name.as_str())).collect();
     if has_legacy_alias { sources.push((&edition.legacy_executable, &product.executable)); }
+    if admitted.legacy_identity.is_some() {
+        let current = prepare_operation_scope_with_hooks(req, roaming.as_deref(), hooks)?;
+        super::scope::verify_legacy_unchanged(admitted, &current)?;
+    }
     let replacement = replace_from_sources(&install_dir, &extracted, &sources, &|| {
         validate_core(&install_dir)?;
         if !core_payload_matches(&install_dir, &extracted) {
@@ -474,7 +650,9 @@ pub(crate) fn run_repair(req: &InstallRequest, hooks: &EngineHooks) -> Result<()
             &install_dir.join(&edition.legacy_executable), &install_dir.join(&product.executable)) {
             return Err("历史程序入口与当前完整运行库不一致。".into());
         }
+        hooks.maintain_startup_tasks(&install_dir)?;
         register_uninstall(hooks, req, &install_dir)?;
+        hooks.checkpoint("repair-registration-written")?;
         Ok(())
     });
     if let Err(error) = replacement {
@@ -490,7 +668,7 @@ pub(crate) fn run_repair(req: &InstallRequest, hooks: &EngineHooks) -> Result<()
         .map_err(|error| format!("修复尚未完成：历史快捷方式迁移失败（{error}）。已保留匹配当前运行库的历史入口。"))?;
     // 修复不重写配置（保留用户设置），只确保卸载入口有效
     if req.create_desktop_shortcut {
-        create_shortcuts(hooks, req.for_all_users, &install_dir);
+        create_shortcuts(hooks, req.for_all_users, &install_dir)?;
     }
     progress(100);
     status("修复完成");

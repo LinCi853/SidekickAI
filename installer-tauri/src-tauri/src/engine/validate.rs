@@ -76,7 +76,7 @@ pub(crate) fn validate_application(dir: &Path) -> Result<String, String> {
 pub(crate) fn validate_payload_identity(dir: &Path) -> Result<(), String> {
     let identity = sidekickai_uninstall_core::product::package_identity(&dir.join("resources/app.asar"))?;
     if identity.name != sidekickai_uninstall_core::product::edition().package_name
-        || identity.version.as_deref() != Some(crate::setup_metadata::current()?.product_version.as_str()) {
+        || identity.version.as_deref() != Some(product_version().as_str()) {
         return Err("应用载荷的路线或产品版本与安装包不一致，尚未安装。".into());
     }
     Ok(())
@@ -92,20 +92,15 @@ pub fn validate_uninstaller(dir: &Path, arch: &str, version: &str) -> Result<Uni
         .map_err(|e| format!("卸载器清单无效：{e}"))?;
     let bytes = fs::read(exe).map_err(|e| e.to_string())?;
     let digest = format!("{:x}", Sha256::digest(&bytes));
-    let compatible = match manifest.protocol_version {
-        1 => manifest.version == version && manifest.product_version.is_empty() && manifest.component_version.is_empty()
-            && manifest.uninstall_protocol_version.is_none(),
-        2 => manifest.version.is_empty() && manifest.product_version == version && manifest.component_version == env!("CARGO_PKG_VERSION")
-            && manifest.uninstall_protocol_version == Some(1),
-        _ => false,
-    };
+    let compatible = manifest.protocol_version == 3 && manifest.version.is_empty() && manifest.product_version == version
+        && manifest.component_version == env!("CARGO_PKG_VERSION") && manifest.uninstall_protocol_version == Some(2);
     if !compatible || manifest.edition != sidekickai_uninstall_core::product::edition_id() || manifest.arch != arch
         || pe_arch(&bytes)? != arch || manifest.size != bytes.len() as u64 || manifest.sha256 != digest
         || manifest.input_fingerprint.len() != 64 || !manifest.input_fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("卸载器清单/哈希/版本/架构不匹配".into());
     }
     // app.asar path strings are valid identity probes, not embedded application data.
-    let setup_footer = [(28, b"SKPAYLD1"), (68, b"SKPAYLD2")].iter()
+    let setup_footer = [(28, b"SKPAYLD1"), (68, b"SKPAYLD2"), (68, b"SKSETUP3")].iter()
         .any(|(size, magic)| bytes.len().checked_sub(*size).and_then(|at| bytes.get(at..at + 8)) == Some(magic.as_slice()));
     if setup_footer || bytes.windows(10).any(|v| v == b"payload.7z")
         || bytes.windows(7).any(|v| v == b"7zr.exe") {
@@ -159,7 +154,15 @@ pub(crate) fn validate_core(dir: &Path) -> Result<(), String> {
 /// "the same version" is fresh only when the bytes really match.
 pub(crate) fn core_payload_matches(install_dir: &Path, payload_dir: &Path) -> bool {
     program_items(payload_dir).is_ok_and(|names| names.iter()
-        .all(|name| paths_have_same_content(&install_dir.join(name), &payload_dir.join(name))))
+        .filter(|name| name.as_str() != "distribution-proof.json")
+        .all(|name| {
+            if name.eq_ignore_ascii_case("maintenance") {
+                match (directory_digest_filtered(&install_dir.join(name), Some("distribution-receipt.json")), directory_digest(&payload_dir.join(name))) {
+                    (Ok(installed), Ok(payload)) => installed == payload,
+                    _ => false,
+                }
+            } else { paths_have_same_content(&install_dir.join(name), &payload_dir.join(name)) }
+        }))
 }
 
 pub(crate) fn paths_have_same_content(left: &Path, right: &Path) -> bool {
@@ -179,6 +182,10 @@ pub(crate) fn paths_have_same_content(left: &Path, right: &Path) -> bool {
 /// Deterministic content digest of a directory tree: relative path plus the hash
 /// of every regular file, in sorted order.
 pub(crate) fn directory_digest(root: &Path) -> Result<String, String> {
+    directory_digest_filtered(root, None)
+}
+
+fn directory_digest_filtered(root: &Path, excluded: Option<&str>) -> Result<String, String> {
     use sha2::{Digest, Sha256};
     let mut entries: Vec<(String, PathBuf)> = Vec::new();
     let mut pending = vec![root.to_path_buf()];
@@ -195,6 +202,7 @@ pub(crate) fn directory_digest(root: &Path) -> Result<String, String> {
                     .map_err(|e| e.to_string())?
                     .to_string_lossy()
                     .replace('/', "\\");
+                if excluded.is_some_and(|excluded| relative.eq_ignore_ascii_case(excluded)) { continue; }
                 entries.push((relative, entry.path()));
             }
         }

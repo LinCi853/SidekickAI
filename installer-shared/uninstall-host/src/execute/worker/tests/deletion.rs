@@ -7,6 +7,43 @@ use edition_fixtures::app_archive;
 
 use super::*;
 
+#[test]
+fn administrator_task_failure_prevents_installation_and_data_deletion() {
+    let root = std::env::temp_dir().join(random_nonce().unwrap());
+    let install = root.join("installation");
+    let data = root.join("profile");
+    fs::create_dir_all(install.join("resources")).unwrap();
+    fs::create_dir_all(&data).unwrap();
+    fs::write(install.join("SidekickAI.exe"), b"fixture executable").unwrap();
+    fs::write(install.join("resources/app.asar"), app_archive(b"fixture")).unwrap();
+    fs::write(install.join("uninstall.exe"), b"fixture uninstaller").unwrap();
+    fs::write(data.join("settings.db"), b"retained settings").unwrap();
+    let operation = create_operation_dir("startup-cleanup-failure").unwrap();
+    let request = fixture_request("startup-cleanup-failure", DataStrategy::Delete, vec![WorkerTarget {
+        path: install.to_string_lossy().into_owned(), scope: InstallScope::PerUser,
+        fingerprint: edition_fixtures::installed_fingerprint(&install).unwrap(), registered_roots: vec![],
+    }], vec![fixture_data_root(&data)], None);
+    let mut outcome = WorkerOutcome {
+        protocol_version: UNINSTALL_PROTOCOL_VERSION, operation_id: request.operation_id.clone(), nonce: request.nonce.clone(),
+        removed_install_paths: vec![], removed_data_roots: vec![], partially_removed_paths: vec![], warnings: vec![], error: None,
+    };
+    let error = super::super::deletion::run_worker_deletion_with_task_cleanup(
+        &request, &operation, &mut outcome, &mut |target| {
+            assert!(paths_equal(target, &install));
+            assert!(!target.exists());
+            assert!(!data.exists());
+            Err("administrator task cleanup refused".into())
+        },
+    ).unwrap_err();
+    assert_eq!(error.code, UninstallErrorCode::RegistryFailed);
+    assert!(outcome.removed_install_paths.is_empty());
+    assert!(outcome.removed_data_roots.is_empty());
+    assert!(install.join("SidekickAI.exe").is_file(), "{}; {} {:?}", error.message, install.display(), fs::read_dir(&install).map(|items| items.map(|item| item.unwrap().path()).collect::<Vec<_>>()));
+    assert_eq!(fs::read(data.join("settings.db")).unwrap(), b"retained settings");
+    cleanup_directory(&operation);
+    fs::remove_dir_all(root).unwrap();
+}
+
     /// End-to-end deletion against an isolated fixture root: the confirmed
     /// installation is removed, while an unselected sibling installation and a
     /// sentinel inside it stay byte-for-byte intact.
@@ -32,7 +69,7 @@ use super::*;
         assert!(root.is_absolute());
         assert!(confirmed.starts_with(&root) && unselected.starts_with(&root));
 
-        let fingerprint = FileFingerprint::from_path(&confirmed).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&confirmed).unwrap();
         let operation = create_operation_dir("e2e-fixture").unwrap();
         let worker = operation.join("worker.exe");
         fs::copy(std::env::current_exe().unwrap(), &worker).unwrap();
@@ -69,7 +106,7 @@ use super::*;
     }
 
     #[test]
-    fn keep_request_refuses_in_place_data_even_without_a_portable_marker() {
+    fn keep_request_preserves_in_place_data_without_a_portable_marker() {
         let root = std::env::temp_dir().join(random_nonce().unwrap());
         let install = root.join("install");
         fs::create_dir_all(install.join("resources")).unwrap();
@@ -83,15 +120,15 @@ use super::*;
         fs::copy(std::env::current_exe().unwrap(), &worker).unwrap();
         let request = fixture_request("keep-local-data", DataStrategy::Keep, vec![WorkerTarget {
             path: install.to_string_lossy().into_owned(), scope: InstallScope::PerUser,
-            fingerprint: FileFingerprint::from_path(&install).unwrap(), registered_roots: vec![],
+            fingerprint: edition_fixtures::installed_fingerprint(&install).unwrap(), registered_roots: vec![],
         }], vec![], None);
         let request_path = write_fixture_request(&operation, &request);
-        assert!(!execute_worker_with(&request_path, &worker).unwrap());
+        assert!(execute_worker_with(&request_path, &worker).unwrap());
         let outcome = read_outcome(&operation, &request.nonce, "keep-local-data").unwrap();
-        assert_eq!(outcome.error.as_ref().unwrap().code, UninstallErrorCode::TargetScopeInvalid);
-        assert!(outcome.removed_install_paths.is_empty());
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.removed_install_paths, vec![install.to_string_lossy().to_string()]);
         assert_eq!(fs::read(install.join("data/settings.db")).unwrap(), b"retained user data");
-        assert!(install.join("SidekickAI.exe").is_file());
+        assert!(!install.join("SidekickAI.exe").exists());
         cleanup_directory(&operation);
         fs::remove_dir_all(root).unwrap();
     }
@@ -106,7 +143,7 @@ use super::*;
         fs::write(target.join("SidekickAI.exe"), b"original").unwrap();
         fs::write(target.join("resources").join("app.asar"), app_archive(b"original")).unwrap();
         fs::write(target.join("uninstall.exe"), b"original").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
         // The installation is modified between scanning and execution.
         fs::write(target.join("SidekickAI.exe"), b"tampered payload").unwrap();
 
@@ -156,7 +193,7 @@ use super::*;
         fs::create_dir_all(&data).unwrap();
         fs::write(data.join("settings.db"), b"settings").unwrap();
 
-        let install_fingerprint = FileFingerprint::from_path(&install).unwrap();
+        let install_fingerprint = edition_fixtures::installed_fingerprint(&install).unwrap();
         // Capture the strong identity before the change.
         let data_root = fixture_data_root(&data);
         // The data root changes after the controller captured its identity: a new
@@ -204,7 +241,7 @@ use super::*;
         fs::write(install.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(install.join("uninstall.exe"), b"uninstaller").unwrap();
 
-        let install_fingerprint = FileFingerprint::from_path(&install).unwrap();
+        let install_fingerprint = edition_fixtures::installed_fingerprint(&install).unwrap();
 
         let operation = create_operation_dir("dangerous-ancestor").unwrap();
         let worker = operation.join("worker.exe");
@@ -233,10 +270,9 @@ use super::*;
         let _ = fs::remove_dir_all(&root);
     }
 
-    /// A failure while removing a later target must keep the paths that were
-    /// already removed instead of reporting an empty, side-effect-free failure.
+    /// Failure before the durable commit restores every selected installation.
     #[test]
-    fn worker_preserves_already_removed_paths_when_a_later_target_fails() {
+    fn worker_restores_prior_targets_when_later_isolation_fails() {
         let root = std::env::temp_dir().join(random_nonce().unwrap());
         let first = root.join("SidekickAI-first");
         let second = root.join("SidekickAI-second");
@@ -247,8 +283,8 @@ use super::*;
             fs::write(directory.join("uninstall.exe"), b"uninstaller").unwrap();
         }
         fs::write(second.join("locked.txt"), b"locked").unwrap();
-        let first_fingerprint = FileFingerprint::from_path(&first).unwrap();
-        let second_fingerprint = FileFingerprint::from_path(&second).unwrap();
+        let first_fingerprint = edition_fixtures::installed_fingerprint(&first).unwrap();
+        let second_fingerprint = edition_fixtures::installed_fingerprint(&second).unwrap();
 
         let operation = create_operation_dir("partial-failure").unwrap();
         let worker = operation.join("worker.exe");
@@ -277,7 +313,7 @@ use super::*;
         let nonce = request.nonce.clone();
 
         // Hold the file without FILE_SHARE_DELETE so the second target cannot be
-        // removed while the first one is. Rust's default share mode allows
+        // isolated while the first one is. Rust's default share mode allows
         // deletion, so the share mode must be narrowed explicitly.
         use std::os::windows::fs::OpenOptionsExt;
         let locked = fs::OpenOptions::new()
@@ -288,24 +324,16 @@ use super::*;
         assert!(!execute_worker_with(&request_path, &worker).unwrap());
         drop(locked);
 
-        assert!(!first.exists(), "the first target should have been removed");
+        assert_eq!(fs::read(first.join("SidekickAI.exe")).unwrap(), b"exe");
+        assert_eq!(fs::read(first.join("resources/app.asar")).unwrap(), app_archive(b"asar"));
         assert!(second.is_dir(), "the locked target must survive");
         let outcome = read_outcome(&operation, &nonce, "partial-failure").unwrap();
         assert_eq!(outcome.error.as_ref().unwrap().code, UninstallErrorCode::DeleteFailed);
-        assert_eq!(outcome.removed_install_paths.len(), 1, "the already-removed path must be reported");
-        assert!(outcome.removed_install_paths[0].ends_with("SidekickAI-first"));
-        // A partial scope must be called out, never presented as a clean failure.
+        assert!(outcome.removed_install_paths.is_empty());
+        assert!(outcome.partially_removed_paths.is_empty());
+        assert_eq!(fs::read(second.join("locked.txt")).unwrap(), b"locked");
         let details = outcome.error.as_ref().unwrap().details.as_ref().unwrap();
-        assert!(details.contains_key("removedEntries"), "the partial count must be reported: {details:?}");
-        assert!(details.contains_key("partiallyRemovedPath"));
-        if details.get("removedEntries") != Some(&DetailValue::Number(0)) {
-            assert!(
-                outcome.partially_removed_paths.iter().any(|path| path.ends_with("SidekickAI-second")),
-                "a partially removed scope must be listed: {:?}",
-                outcome.partially_removed_paths
-            );
-            assert!(outcome.warnings.iter().any(|warning| warning.starts_with("PARTIALLY_REMOVED")));
-        }
+        assert!(details.contains_key("taskId"));
 
         cleanup_directory(&operation);
         let _ = fs::remove_dir_all(&root);
@@ -321,7 +349,7 @@ use super::*;
         fs::write(target.join("SidekickAI.exe"), b"exe").unwrap();
         fs::write(target.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(target.join("uninstall.exe"), b"uninstaller").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
 
         let operation = create_operation_dir("bad-root").unwrap();
         let worker = operation.join("worker.exe");
@@ -360,7 +388,7 @@ use super::*;
         fs::write(target.join("SidekickAI.exe"), b"exe").unwrap();
         fs::write(target.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(target.join("uninstall.exe"), b"uninstaller").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
 
         let operation = create_operation_dir("other-user").unwrap();
         let worker = operation.join("worker.exe");
@@ -400,7 +428,7 @@ use super::*;
         fs::write(target.join("SidekickAI.exe"), b"exe").unwrap();
         fs::write(target.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(target.join("uninstall.exe"), b"uninstaller").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
 
         let operation = create_operation_dir("dead-controller").unwrap();
         let worker = operation.join("worker.exe");
@@ -440,7 +468,7 @@ use super::*;
         fs::write(target.join("SidekickAI.exe"), b"exe").unwrap();
         fs::write(target.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(target.join("uninstall.exe"), b"uninstaller").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
 
         let operation = create_operation_dir("lock-held").unwrap();
         let worker = operation.join("worker.exe");
@@ -524,7 +552,7 @@ use super::*;
         fs::write(target.join("SidekickAI.exe"), b"exe").unwrap();
         fs::write(target.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(target.join("uninstall.exe"), b"uninstaller").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
 
         let operation = create_operation_dir("swapped-image").unwrap();
         let worker = operation.join("worker.exe");
@@ -568,7 +596,7 @@ use super::*;
         fs::write(install.join("uninstall.exe"), b"uninstaller").unwrap();
         fs::create_dir_all(&data).unwrap();
         fs::write(data.join("settings.db"), b"settings").unwrap();
-        let install_fingerprint = FileFingerprint::from_path(&install).unwrap();
+        let install_fingerprint = edition_fixtures::installed_fingerprint(&install).unwrap();
         let data_root = fixture_data_root(&data);
 
         // Replace the directory object at the same path with identical bytes.
@@ -611,19 +639,18 @@ use super::*;
     /// scopes in one run.
     #[cfg(windows)]
     #[test]
-    fn portable_install_with_in_place_data_is_removed_in_one_run() {
+    fn installed_application_with_in_place_data_is_removed_in_one_run() {
         let root = std::env::temp_dir().join(random_nonce().unwrap());
         let install = root.join("SidekickAI-Portable");
         let data = install.join("data");
         fs::create_dir_all(install.join("resources")).unwrap();
-        fs::write(install.join("portable.txt"), b"portable").unwrap();
         fs::write(install.join("SidekickAI.exe"), b"exe").unwrap();
         fs::write(install.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
         fs::write(install.join("uninstall.exe"), b"uninstaller").unwrap();
         fs::create_dir_all(&data).unwrap();
         fs::write(data.join("settings.db"), b"portable data").unwrap();
 
-        let install_fingerprint = FileFingerprint::from_path(&install).unwrap();
+        let install_fingerprint = edition_fixtures::installed_fingerprint(&install).unwrap();
         let operation = create_operation_dir("portable-e2e").unwrap();
         let worker = operation.join("worker.exe");
         fs::copy(std::env::current_exe().unwrap(), &worker).unwrap();
@@ -632,7 +659,7 @@ use super::*;
             DataStrategy::Delete,
             vec![WorkerTarget {
                 path: install.to_string_lossy().into_owned(),
-                scope: InstallScope::Portable,
+                scope: InstallScope::PerUser,
                 fingerprint: install_fingerprint,
                 registered_roots: Vec::new(),
             }],
@@ -735,7 +762,7 @@ use super::*;
             vec![WorkerTarget {
                 path: target.to_string_lossy().into_owned(),
                 scope: InstallScope::PerUser,
-                fingerprint: FileFingerprint::from_path(&target).unwrap(),
+                fingerprint: edition_fixtures::installed_fingerprint(&target).unwrap(),
                 registered_roots: Vec::new(),
             }],
             Vec::new(),
@@ -748,7 +775,7 @@ use super::*;
         fs::rename(&target, &moved).unwrap();
         write_install(&target);
         let mut request = request;
-        request.targets[0].fingerprint = FileFingerprint::from_path(&target).unwrap();
+        request.targets[0].fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
         request.target_identities[0].directory = controller_identity;
 
         let request_path = write_fixture_request(&operation, &request);
@@ -775,7 +802,7 @@ use super::*;
             return;
         };
         let target = PathBuf::from(system_root);
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
         let operation = create_operation_dir("protected-root").unwrap();
         let worker = operation.join("worker.exe");
         fs::copy(std::env::current_exe().unwrap(), &worker).unwrap();
@@ -810,7 +837,7 @@ use super::*;
         let target = root.join("Not-An-Install");
         fs::create_dir_all(&target).unwrap();
         fs::write(target.join("notes.txt"), b"arbitrary data").unwrap();
-        let fingerprint = FileFingerprint::from_path(&target).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&target).unwrap();
 
         let operation = create_operation_dir("not-an-install").unwrap();
         let worker = operation.join("worker.exe");
@@ -867,7 +894,7 @@ use super::*;
         let targets = vec![WorkerTarget {
             path: install.to_string_lossy().into_owned(),
             scope: InstallScope::PerUser,
-            fingerprint: FileFingerprint::from_path(&install).unwrap(),
+            fingerprint: edition_fixtures::installed_fingerprint(&install).unwrap(),
             registered_roots: Vec::new(),
         }];
         let data_roots = vec![data.to_string_lossy().into_owned()];
@@ -935,7 +962,7 @@ use super::*;
         let archive = root.join("backup.zip");
         fs::write(&archive, b"verified archive").unwrap();
         let archive_sha = sha256_file(&archive).unwrap();
-        let install_fingerprint = FileFingerprint::from_path(&install).unwrap();
+        let install_fingerprint = edition_fixtures::installed_fingerprint(&install).unwrap();
 
         let run = |operation_id: &str, data_root: WorkerDataRoot| {
             let operation = create_operation_dir(operation_id).unwrap();

@@ -20,7 +20,6 @@ import {
   onMaximizeToggled,
   onPinToggled,
 } from '../lib/electron-api';
-import { useFreezeStore } from './useFreezeStore';
 
 export interface TabStoreState {
   /** 当前窗口 id（'main' 或 UUID） */
@@ -228,11 +227,6 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   },
 
   closeTab: async (tabId) => {
-    const detached = await useFreezeStore.getState().doDetach(tabId);
-    if (!detached) {
-      console.warn('[useTabStore] 冻结调试器清理失败，取消关闭标签', tabId);
-      return;
-    }
     set((current) => {
       const newTabs = current.tabs
         .filter((tab) => tab.id !== tabId)

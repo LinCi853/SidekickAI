@@ -14,6 +14,7 @@ fn main() {
         [flag, request] if flag == "--worker" => {
             std::process::exit(sidekickai_uninstall_host::run_worker(request));
         }
+        _ if sidekickai_installer_lib::validate_distribution_arguments(&args).unwrap_or(false) => sidekickai_installer_lib::run(),
         _ => {
             eprintln!("不支持的安装器参数。");
             std::process::exit(64);

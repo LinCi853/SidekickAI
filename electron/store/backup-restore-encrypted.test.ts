@@ -12,8 +12,9 @@ import path from 'node:path'
 import Database from 'better-sqlite3'
 
 const fixture = vi.hoisted(() => ({ paths: {} as Record<string, string> }))
+vi.mock('../edition-runtime.js', () => ({ prepareDataRestoreHandoff: async () => () => {} }))
 vi.mock('electron', () => ({
-  app: { isPackaged: true, getPath: (name: string) => fixture.paths[name], getVersion: () => '0.1.5', relaunch: vi.fn(), exit: vi.fn() },
+  app: { isReady: () => true, isPackaged: true, getPath: (name: string) => fixture.paths[name], getVersion: () => '0.1.5', relaunch: vi.fn(), exit: vi.fn() },
   BrowserWindow: { getAllWindows: () => [] }, dialog: { showErrorBox: vi.fn() },
   session: { defaultSession: { clearCache: async () => {}, clearAuthCache: async () => {}, clearStorageData: async () => {}, flushStorageData() {}, cookies: { flushStore: async () => {} } } },
 }))

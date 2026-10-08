@@ -1,5 +1,41 @@
 use super::*;
 use std::io::{BufRead, BufReader};
+#[path = "../../../installer-shared/test-fixtures.rs"]
+mod edition_fixtures;
+
+#[test]
+fn completion_accepts_the_verified_application_version_of_an_online_entry() {
+    let metadata = crate::setup_metadata::current().unwrap();
+    let version = if metadata.distribution_mode == "online" { "0.1.5+20261008.007" } else { &metadata.product_version };
+    let directory = crate::controller::OperationDirectory::create("completion-identity").unwrap();
+    let target = directory.request_path().with_file_name("installed");
+    std::fs::create_dir_all(target.join("resources")).unwrap();
+    let executable = target.join("SidekickAI.exe");
+    let mut pe = vec![0u8; 256];
+    pe[..2].copy_from_slice(b"MZ");
+    pe[60..64].copy_from_slice(&128u32.to_le_bytes());
+    pe[128..132].copy_from_slice(b"PE\0\0");
+    pe[132..134].copy_from_slice(&0x8664u16.to_le_bytes());
+    std::fs::write(&executable, &pe).unwrap();
+    std::fs::write(target.join("resources/app.asar"), edition_fixtures::archive_for_version(
+        &product::edition().package_name, Some(version), b"verified-completion")).unwrap();
+    edition_fixtures::seal_installation(&target);
+    validate_target(&executable).unwrap();
+    assert_eq!(verified_target_version(&executable).unwrap(), version);
+    let wrong = json!({ "protocol": 1, "edition": product::edition_id(), "version": "99.0.0", "executable": executable, "pid": std::process::id() });
+    assert!(verify_started_owner(&wrong, &executable).unwrap_err().contains("另一工百窗实例"));
+    pe[255] = 1;
+    std::fs::write(&executable, &pe).unwrap();
+    assert!(validate_target(&executable).is_err());
+    pe[255] = 0;
+    std::fs::write(&executable, &pe).unwrap();
+    std::fs::write(target.join("resources/app.asar"), edition_fixtures::archive_for_version(
+        &product::edition().package_name, Some(version), b"same-version-altered-bytes")).unwrap();
+    assert!(validate_target(&executable).is_err());
+    std::fs::write(target.join("resources/app.asar"), edition_fixtures::archive_for_version(
+        &product::edition().package_name, Some("99.0.0"), b"changed-version")).unwrap();
+    assert!(validate_target(&executable).is_err());
+}
 
 #[test]
 #[ignore = "Requires final packaged applications in an isolated acceptance directory"]
@@ -57,17 +93,24 @@ fn owner(edition: &str, version: &str, behavior: &str) -> (Probe, String, Applic
     let script = r#"
 const net = require('node:net');
 const { PROBE_PIPE: pipe, PROBE_EDITION: edition, PROBE_VERSION: version, PROBE_BEHAVIOR: behavior } = process.env;
-let refused = false;
+let refused = false, saving = false, savingRequest;
 const server = net.createServer(socket => {
+  socket.on('error', () => {});
   let received = '';
   socket.on('data', chunk => {
     received += chunk; if (!received.includes('\n')) return;
     const input = JSON.parse(received.split('\n')[0]);
-    let status = behavior === 'busy' || refused ? 'busy' : 'running';
+    if (behavior === 'lost-silent' && saving) { socket.destroy(); return; }
+    let status = refused ? 'busy' : saving ? 'yielding' : behavior === 'busy' ? 'busy' : 'running';
     const shutdown = input.action === 'shutdown';
     if (shutdown) {
+      if (savingRequest !== input.requestId) refused = false;
+      savingRequest = input.requestId;
       status = input.edition === edition && input.version === version && input.executable.toLowerCase() === process.execPath.toLowerCase() ? 'yielding' : 'denied';
-      if (behavior === 'save-refused') refused = true;
+      saving = true;
+      if (['save-refused', 'lost-refusal'].includes(behavior)) { refused = true; saving = false; }
+      if (behavior === 'busy-unacknowledged') { saving = false; status = 'busy'; }
+      if (['lost-reply', 'lost-refusal', 'lost-silent'].includes(behavior)) { socket.destroy(); return; }
     }
     socket.end(JSON.stringify({protocol:1,edition,version,executable:behavior === 'wrong-path' ? 'E:/unrelated/SidekickAI.exe' : process.execPath,pid:behavior === 'wrong-pid' ? process.pid + 1 : process.pid,status,retryableHandoff:refused}) + '\n', () => {
       if (shutdown && status === 'yielding' && behavior === 'ready') setTimeout(() => process.exit(0), 120);
@@ -101,11 +144,11 @@ fn installation_completion_closes_either_edition_at_older_or_newer_versions() {
 }
 
 #[test]
-fn installation_completion_terminates_verified_busy_or_unsaved_owners() {
-    for behavior in ["busy", "save-refused"] {
+fn installation_completion_preserves_acknowledged_or_unsaved_owners() {
+    for behavior in ["busy", "save-refused", "lost-reply", "lost-refusal", "lost-silent", "busy-unacknowledged"] {
         let (_probe, pipe, app) = owner("community", "0.1.0-beta.4", behavior);
-        wait_for_exit(&pipe, std::slice::from_ref(&app), Duration::from_millis(500)).unwrap();
-        assert!(app.exited());
+        assert!(wait_for_exit(&pipe, std::slice::from_ref(&app), Duration::from_millis(500)).is_err());
+        assert!(!app.exited());
     }
 }
 
@@ -150,7 +193,7 @@ fn native_inventory_and_authenticated_status_preserve_the_owner_identity() {
 
 #[test]
 fn maintenance_and_renderer_processes_never_request_owner_control() {
-    for command in ["app --type=renderer", "app --worker", "app --elevated", "app --uninstall", "app --export-user-data", "app --sidekick-cookie-worker"] {
+    for command in ["app --type=renderer", "app --worker", "app --elevated", "app --uninstall", "app --export-user-data", "app --sidekick-cookie-worker", "app --backup-cookie-snapshot", "app --backup-snapshot-worker", "app --backup-recovery-guardian", "app --sidekick-startup-authorize=abc", "app --sidekick-process-authorize=C:/request.json"] {
         let record = ProcessRecord { process_id: u32::MAX, parent_process_id: 0, executable_path: None, command_line: Some(command.into()), created: None };
         assert!(!inspection_requires_elevation(std::slice::from_ref(&record)));
     }

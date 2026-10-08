@@ -28,7 +28,7 @@ beforeEach(() => {
   fixture.export.mockImplementation(async (directory: string, read: () => unknown, open: (directory: string) => Promise<string>) => {
     read(); await open(`${directory}/logs`)
   })
-  registerAppSettingsIPC()
+  registerAppSettingsIPC(async () => ({ success: true }))
   fixture.invoke.mockImplementation(async (channel, ...args) => fixture.handlers.get(channel)!({}, ...args))
   vi.stubGlobal('window', { electron: appSettingsApi })
 })

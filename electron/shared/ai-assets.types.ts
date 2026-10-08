@@ -11,6 +11,7 @@ export interface AssetObservedMessage {
   versionKey?: string
   branchIndex?: number
   branchCount?: number
+  identityToken?: string
 }
 export interface AssetObservation {
   observationId?: string
@@ -86,8 +87,20 @@ export interface AssetSettings {
   sort: 'recent' | 'views'
   expandReasoning: boolean
   revisionDisplay: 'history' | 'diff'
-  localShortcuts: { search: string; conversations: string; prompts: string; files: string; freeze: string; previousBranch: string; nextBranch: string }
+  fileRetentionDays: 0 | 14 | 30 | 120
+  localShortcuts: { search: string; conversations: string; prompts: string; files: string; previousBranch: string; nextBranch: string }
 }
+export interface AssetRetentionStatus {
+  state: 'disabled' | 'idle' | 'waiting' | 'error'
+  deleted: number
+  lastRun?: number
+  cleanupPending: boolean
+  error?: string
+}
+export type AssetAttachmentPreview =
+  | { ok: true; kind: 'text'; text: string; truncated: boolean }
+  | { ok: true; kind: 'image' | 'pdf'; bytes: Uint8Array; mimeType: string }
+  | { ok: false; error: string }
 export interface AssetGraphExport {
   nodes: Array<{ id: string; parentId?: string; sourceKey: string; versionKey: string; branchIndex?: number; branchCount?: number; localContent?: string }>
   selectedLeaf?: string; sourceLeaf?: string; views: number
@@ -115,6 +128,7 @@ export interface AssetAttachment {
   size?: number
   error?: string
   createdAt: number
+  updatedAt?: number
 }
 export interface AssetAttachmentInput {
   conversationKey: string
@@ -139,7 +153,6 @@ export interface AssetPromptSuggestion {
 export interface AiAssetsAPI {
   collectionIssues(): Promise<AssetCollectionIssue[]>
   onCollectionIssuesChanged(callback: (issues: AssetCollectionIssue[]) => void): () => void
-  freezeTargets(): Promise<Array<{ tabId: string; profileId: string; windowId: string; webContentsId: number; title: string; url: string }>>
   focusPage(webContentsId: number, expectedProfileId?: string): Promise<boolean>
   observe(observation: AssetObservation): Promise<AssetObservationReceipt>
   details(conversationId: string): Promise<AssetMessageDetail[]>
@@ -156,11 +169,14 @@ export interface AiAssetsAPI {
   settings(): Promise<AssetSettings>
   updateSettings(changes: Partial<AssetSettings>): Promise<AssetSettings>
   onSettingsChanged(callback: (settings: AssetSettings) => void): () => void
+  retentionStatus(): Promise<AssetRetentionStatus>
+  onRetentionStatusChanged(callback: (status: AssetRetentionStatus) => void): () => void
   openExternal(url: string): Promise<void>
   copyText(content: string): Promise<void>
   previewCode(content: string, language: 'html' | 'css' | 'javascript'): Promise<{ ok: boolean; error?: string }>
   attachments(conversationId?: string): Promise<AssetAttachment[]>
   openAttachment(id: string): Promise<{ ok: boolean; error?: string }>
+  previewAttachment(id: string): Promise<AssetAttachmentPreview>
   exportAttachment(id: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
   retryAttachment(id: string): Promise<{ ok: boolean; error?: string }>
   suggestions(): Promise<AssetPromptSuggestion[]>
@@ -169,7 +185,6 @@ export interface AiAssetsAPI {
 export interface AssetNavigation {
   category?: 'conversations' | 'prompts' | 'files'
   focusSearch?: boolean
-  freezeTabId?: string
   openSettings?: boolean
 }
 

@@ -2,6 +2,7 @@
 // 独立安装组件 + 云端下载（同一安装页，由用户勾选）
 
 import type { CloudAssetWire, InstallerInfo } from '../global'
+import { installationPolicy } from '../../../installer-shared/edition-policy'
 
 export interface ComponentsPanelProps {
   info: InstallerInfo | null
@@ -23,7 +24,7 @@ export default function ComponentsPanel({
   const requiredFeatures = info?.features.filter((f) => f.installRequired) ?? []
   return (
     <div style={{ marginTop: embedded ? 0 : 18 }}>
-      <div className="field-label">独立安装组件</div>
+      {requiredFeatures.length > 0 && <div className="field-label">可选安装组件</div>}
       {requiredFeatures.length > 0 && (
         <div className="opt-group">
           {requiredFeatures.map((f) => (
@@ -51,7 +52,7 @@ export default function ComponentsPanel({
       <div className="field-label" style={{ marginTop: 14 }}>默认内容</div>
       <div className="hint" style={{ marginTop: 8 }}>
         <span className="hint__icon">i</span>
-        <span>安装会始终尝试获取 AI 应用、规则、设备预设、服务配置与 Oxy 基线。下载失败仍可完成基础安装。浏览器、页面冻结、笔记、语音和其他工具插件请在应用中手动下载或导入。</span>
+        <span>{installationPolicy.contentDescription}</span>
       </div>
       {cloudNotice && (
         <div className="hint hint--warning" style={{ marginTop: 8 }}>

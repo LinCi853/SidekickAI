@@ -37,6 +37,7 @@ export const IPC_CHANNELS = {
   ASSET_ATTACHMENT_FETCH: 'ai-assets:attachment-fetch',
   ASSET_ATTACHMENT_ASSOCIATE: 'ai-assets:attachment-associate',
   ASSET_ATTACHMENT_OPEN: 'ai-assets:attachment-open',
+  ASSET_ATTACHMENT_PREVIEW: 'ai-assets:attachment-preview',
   ASSET_ATTACHMENT_RETRY: 'ai-assets:attachment-retry',
   ASSET_SUGGESTIONS: 'ai-assets:suggestions',
   ASSET_SEARCH: 'ai-assets:search',
@@ -44,7 +45,8 @@ export const IPC_CHANNELS = {
   ASSET_COLLECTOR_STATE: 'ai-assets:collector-state',
   ASSET_COLLECTOR_REPORT: 'ai-assets:collector-report',
   ASSET_ATTACHMENT_EXPORT: 'ai-assets:attachment-export',
-  ASSET_FREEZE_TARGETS: 'ai-assets:freeze-targets',
+  ASSET_RETENTION_STATUS: 'ai-assets:retention-status',
+  ASSET_RETENTION_STATUS_CHANGED: 'ai-assets:retention-status-changed',
   ASSET_FOCUS_PAGE: 'ai-assets:focus-page',
   // Profile
   PROFILE_LIST: 'profile:list',
@@ -490,25 +492,8 @@ export const IPC_CHANNELS = {
   ACCUMULATED_LINK_CONSUME: 'accumulated-link:consume',
   // 渲染→主：清空指定 Profile 的全部累积链接
   ACCUMULATED_LINK_CLEAR: 'accumulated-link:clear',
-  // ===== 页面冻结（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） =====
-  // 渲染→主：注册 webview 到冻结注册表（did-attach-webview 后渲染层上报 { tabId, windowId, profileId, webContentsId }）
-  FREEZE_REGISTER_WEBVIEW: 'freeze:registerWebview',
-  // 渲染→主：冻结指定 tab（先抓取对话入库再 pause，返回冻结结果 + 抓取到的对话快照）
-  FREEZE_TAB: 'freeze:tab',
-  /** 按主进程真实状态冻结或恢复，避免渲染层缓存状态竞态 */
-  FREEZE_TOGGLE: 'freeze:toggle',
-  // 渲染→主：恢复指定 tab（解除冻结，页面无缝继续）
-  FREEZE_RESUME: 'freeze:resume',
-  // 渲染→主：彻底分离调试器（退出冻结模式）
-  FREEZE_DETACH: 'freeze:detach',
-  // 渲染→主：查询冻结状态（返回 'idle' | 'attached' | 'frozen'）
-  FREEZE_STATUS: 'freeze:status',
-  // 主→渲染：冻结状态变化推送（{ tabId, state }）
-  FREEZE_STATE_CHANGED: 'freeze:stateChanged',
-  // 渲染→主：冻结态滚轮转发（选择层收到滚轮 → guest compositor 滚动画面）
-  FREEZE_SCROLL: 'freeze:scroll',
-  // 渲染→主：冻结态应用内置复制（选中文本 → 主进程写系统剪贴板）
-  FREEZE_COPY_TEXT: 'freeze:copyText',
+  // Shared guest identity for collection, downloads and shortcuts.
+  WINDOW_REGISTER_WEBVIEW: 'window:registerWebview',
   // ===== 模块管理（插件系统：插件市场 / 开发者选项） =====
   // 渲染→主：列出全部模块信息（含状态）
   MODULE_LIST: 'module:list',

@@ -1,3 +1,5 @@
+import type { AIPlatformPageAdapter } from '../../../electron/shared/profile.types.js';
+
 /* =====================================================================
    注入脚本：抓取网页对话内容（运行在 webview 网页上下文，返回 JSON 字符串）
    策略：
@@ -165,12 +167,15 @@ export function buildEnterToSendScript(opts: {
   enabled: boolean;
   inputSelector?: string | null;
   sendSelector?: string | null;
+  pageAdapter?: AIPlatformPageAdapter | null;
 }): string {
   return `(function() {
     if (window.__ai_enter_send_injected__) {
       if (window.__ai_enter_send__) window.__ai_enter_send__.dispose();
     }
     if (!${opts.enabled}) return;
+    var pageAdapter = ${JSON.stringify(opts.pageAdapter ?? null)};
+    if (pageAdapter && (pageAdapter.version !== 1 || pageAdapter.hosts.indexOf(location.hostname) === -1)) return;
     window.__ai_enter_send_injected__ = true;
     window.__ai_enter_send_enabled__ = ${opts.enabled};
     var inputSel = ${JSON.stringify(opts.inputSelector ?? null)};
@@ -178,131 +183,108 @@ export function buildEnterToSendScript(opts: {
     console.log('[EnterSend] 注入监听器, inputSel=', inputSel, 'sendSel=', sendSel, 'enabled=', window.__ai_enter_send_enabled__);
 
     function isShown(element) {
+      if (element.closest('[hidden], [inert]')) return false;
       var rect = element.getBoundingClientRect();
       var style = window.getComputedStyle(element);
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
     }
 
     function findSendButton(inputEl) {
-      console.log('[EnterSend] findSendButton 开始, inputEl=', inputEl.tagName, 'sendSel=', sendSel);
-      // 1. 优先用平台配置的 sendSelector
-      if (sendSel) {
-        var btns = document.querySelectorAll(sendSel);
-        console.log('[EnterSend] sendSel 匹配数量:', btns.length);
-        for (var i = 0; i < btns.length; i++) {
-          var b = btns[i];
-          var visible = isShown(b);
-          console.log('[EnterSend] sendSel 候选[' + i + ']:', b.tagName, 'class=', b.className, 'visible=', visible);
-          if (visible) {
-            console.log('[EnterSend] 找到发送按钮(sendSel):', b);
-            return b;
-          }
-        }
+      var input = inputEl.closest('textarea, input, [contenteditable="true"], [contenteditable=""]');
+      if (!input) return null;
+      var selector = sendSel || 'button[type="submit"], button[aria-label="Send"], button[aria-label="send"], button[aria-label="\\u53d1\\u9001"]';
+      for (var scope = input.parentElement; scope && scope !== document.body && scope !== document.documentElement; scope = scope.parentElement) {
+        if (hasOtherInput(scope, input)) return null;
+        var buttons = queryButtons(scope, selector).filter(isShown);
+        if (buttons.length) return buttons.length === 1 && canClickButton(buttons[0], pageAdapter && pageAdapter.disabledSelector) ? buttons[0] : null;
+        if (scope.tagName === 'FORM') return null;
       }
-      // 2. 在 input 所属 form 内查找 submit 按钮
-      var form = inputEl && inputEl.closest && inputEl.closest('form');
-      if (form) {
-        var submitBtn = form.querySelector('button[type=submit]');
-        if (submitBtn && isShown(submitBtn)) {
-          console.log('[EnterSend] 找到 form submit 按钮');
-          return submitBtn;
-        }
-      }
-      // 3. 通用候选按钮：aria-label / class / data-testid 包含 send/发送
-      var candidates = document.querySelectorAll(
-        'button[aria-label*="发送"], button[aria-label*="Send"], button[aria-label*="send"], ' +
-        'button[class*="send" i], button[class*="Send"], ' +
-        'div[role="button"][aria-label*="发送"], div[role="button"][aria-label*="Send"], div[role="button"][aria-label*="send"], ' +
-        'button[data-testid*="send" i], button[data-testid*="Send"]'
-      );
-      console.log('[EnterSend] 通用候选按钮数量:', candidates.length);
-      for (var i = 0; i < candidates.length; i++) {
-        var c = candidates[i];
-        if (isShown(c)) {
-          console.log('[EnterSend] 找到通用发送按钮:', c);
-          return c;
-        }
-      }
-      // 3.5 DeepSeek 等现代 SPA：发送按钮仅靠 class 区分（ds-button--primary--filled--circle--m），
-      //     aria-label / "send" 文本都没有，只能靠主题色按钮特征识别：
-      //     - 优先精确匹配 --primary + --circle（发送按钮的稳定特征）
-      //     - 再 fallback 到含向上箭头 SVG 的 div[role="button"]
-      //     注意：不再返回任意 ds-button，避免误点"深度思考"/"联网搜索"等开关按钮
-      try {
-        // 3.5a 精确匹配 --primary + --circle（发送按钮特征）
-        var primaryCircleBtns = document.querySelectorAll(
-          'div[role="button"].ds-button--primary.ds-button--circle, ' +
-          'div[role="button"][class*="ds-button--primary"][class*="ds-button--circle"]'
-        );
-        console.log('[EnterSend] DeepSeek --primary--circle 匹配数量:', primaryCircleBtns.length);
-        for (var j = 0; j < primaryCircleBtns.length; j++) {
-          var pcb = primaryCircleBtns[j];
-          var pcbVisible = isShown(pcb);
-          console.log('[EnterSend] primary--circle 候选[' + j + ']:', pcb.tagName, 'class=', pcb.className, 'visible=', pcbVisible);
-          if (pcbVisible) {
-            console.log('[EnterSend] 找到 DeepSeek 发送按钮(--primary--circle):', pcb);
-            return pcb;
-          }
-        }
-        // 3.5b 含向上箭头 SVG 的 div[role="button"]
-        var roleBtns = document.querySelectorAll('div[role="button"]');
-        console.log('[EnterSend] div[role="button"] 总数:', roleBtns.length);
-        for (var k = 0; k < roleBtns.length; k++) {
-          var rb = roleBtns[k];
-          if (!isShown(rb)) continue;
-          var svg = rb.querySelector && rb.querySelector('svg');
-          if (!svg) continue;
-          var path = svg.querySelector && svg.querySelector('path');
-          if (!path) continue;
-          var d = path.getAttribute('d') || '';
-          // 匹配向上箭头（M...Y 0 0.981587 表示 SVG 起始点接近顶端）
-          if (d.indexOf('M8.3125') === 0 || d.indexOf('M12 4') === 0 || d.indexOf('M12 2') === 0 || /^[Mm]12,?\s*2/.test(d) || /^[Mm]12,?\s*4/.test(d)) {
-            console.log('[EnterSend] 找到含向上箭头 SVG 的 role=button:', rb, 'path d=', d);
-            return rb;
-          }
-        }
-      } catch (e4) {
-        console.error('[EnterSend] DeepSeek 风格按钮查找失败:', e4);
-      }
-      // 4. 输入框附近的按钮（兄弟/父级子元素）
-      if (inputEl && inputEl.parentElement) {
-        var nearbyBtns = inputEl.parentElement.querySelectorAll('button:not([disabled]), div[role="button"]');
-        console.log('[EnterSend] 输入框附近按钮数量:', nearbyBtns.length);
-        // 取最后一个可见按钮（通常是发送按钮）
-        var lastBtn = null;
-        for (var i = nearbyBtns.length - 1; i >= 0; i--) {
-          var nb = nearbyBtns[i];
-          if (isShown(nb)) {
-            lastBtn = nb;
-            break;
-          }
-        }
-        if (lastBtn) {
-          console.log('[EnterSend] 找到附近按钮:', lastBtn, 'class=', lastBtn.className);
-          return lastBtn;
-        }
-      }
-      console.log('[EnterSend] 未找到发送按钮');
       return null;
     }
 
-    function isEditable(el) {
+    function isEditable(el, includeUnavailable) {
       if (!el) return false;
       var tag = el.tagName;
-      if (tag === 'TEXTAREA' || (tag === 'INPUT' && ['text', 'search', 'url', 'email', 'tel'].indexOf(el.type || 'text') !== -1)) return !el.disabled && !el.readOnly;
+      if (tag === 'TEXTAREA' || (tag === 'INPUT' && ['text', 'search', 'url', 'email', 'tel'].indexOf(el.type || 'text') !== -1)) return includeUnavailable || (!el.disabled && !el.readOnly);
       if (el.isContentEditable) return true;
       return false;
     }
 
+    function hasOtherInput(scope, input) {
+      return Array.from(scope.querySelectorAll('textarea, input, [contenteditable="true"], [contenteditable=""]')).some(function(other) {
+        return isEditable(other, true) && !other.contains(input) && !input.contains(other);
+      });
+    }
+
+    function queryButtons(scope, selector, labels) {
+      try {
+        return Array.from(scope.querySelectorAll(selector)).filter(function(button) {
+          if (!labels) return true;
+          var names = [button.getAttribute('aria-label'), button.getAttribute('title'), button.value, button.textContent];
+          return names.some(function(name) {
+            return name && labels.some(function(label) {
+              return name.trim().replace(/\\s+/g, ' ').toLowerCase() === label.toLowerCase();
+            });
+          });
+        });
+      } catch (_) { return []; }
+    }
+
+    function findEditActions(target) {
+      if (!pageAdapter) return null;
+      var input = target.closest('textarea, input, [contenteditable="true"], [contenteditable=""]');
+      if (!input) return null;
+      if (pageAdapter.nativeComposerSelector && input.closest(pageAdapter.nativeComposerSelector)) return { send: null, cancel: null };
+      var edit = pageAdapter.messageEdit;
+      var root = edit.rootSelector ? input.closest(edit.rootSelector) : null;
+      if (edit.rootSelector && !root) return null;
+      if (root === input) return { send: null, cancel: null };
+      var pending = null;
+      for (var scope = input.parentElement; scope && scope !== document.body && scope !== document.documentElement; scope = scope.parentElement) {
+        if (hasOtherInput(scope, input)) return pending || (root ? { send: null, cancel: null } : null);
+        var sends = queryButtons(scope, edit.sendSelector, edit.sendLabels);
+        var cancels = queryButtons(scope, edit.cancelSelector, edit.cancelLabels);
+        if (sends.length && cancels.length) {
+          var visibleSends = sends.filter(isShown);
+          var visibleCancels = cancels.filter(isShown);
+          return {
+            send: visibleSends.length === 1 ? visibleSends[0] : null,
+            cancel: visibleCancels.length === 1 ? visibleCancels[0] : null
+          };
+        }
+        if (sends.length || cancels.length) pending = { send: null, cancel: null };
+        if (scope === root) return pending || { send: null, cancel: null };
+      }
+      return pending;
+    }
+
+    function canClickButton(button, disabledSelector) {
+      return button && isShown(button) && !button.closest('[disabled], [aria-disabled="true"], [data-disabled="true"], [inert]')
+        && (!disabledSelector || !button.closest(disabledSelector))
+        && window.getComputedStyle(button).pointerEvents !== 'none';
+    }
+
     function onKeyDown(e) {
-      if (e.key !== 'Enter') return;
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
-      if (e.isComposing) { console.log('[EnterSend] Enter 跳过: 输入法组合中'); return; }
+      if (e.defaultPrevented || (e.key !== 'Enter' && e.key !== 'Escape')) return;
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.repeat || e.keyCode === 229) return;
+      if (e.isComposing) return;
       // 运行时开关：由外部通过 window.__ai_enter_send_enabled__ 控制
       if (!window.__ai_enter_send_enabled__) { console.log('[EnterSend] Enter 跳过: 功能未启用'); return; }
       var target = e.target;
-      console.log('[EnterSend] Enter 按下, target:', target.tagName, 'id=', target.id, 'class=', target.className);
+      console.log('[EnterSend] Key pressed:', e.key, 'target:', target.tagName);
       if (!isEditable(target)) { console.log('[EnterSend] target 不可编辑，跳过'); return; }
+      if (target.closest('dialog, [role="dialog"], nav, aside, [role="menu"], [role="listbox"], [data-login-panel]')) return;
+      if (target.closest('[aria-expanded="true"], [aria-activedescendant]:not([aria-activedescendant=""])') || Array.from(document.querySelectorAll('[role="listbox"], [role="menu"]')).some(isShown)) return;
+      var editActions = findEditActions(target);
+      if (editActions) {
+        var editButton = e.key === 'Enter' ? editActions.send : editActions.cancel;
+        if (!canClickButton(editButton, pageAdapter.disabledSelector)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        editButton.click();
+        return;
+      }
+      if (e.key !== 'Enter') return;
       if (inputSel) {
         var matched = false;
         var els = document.querySelectorAll(inputSel);
@@ -321,10 +303,6 @@ export function buildEnterToSendScript(opts: {
         }
         if (!matched) { console.log('[EnterSend] inputSel 未匹配, 跳过. inputSel=', inputSel); return; }
       }
-      // Shift+Enter = 换行，不拦截
-      if (e.shiftKey) { console.log('[EnterSend] Shift+Enter, 换行'); return; }
-      // 输入法组合中不拦截
-      if (e.keyCode === 229) { console.log('[EnterSend] keyCode=229, 跳过'); return; }
       console.log('[EnterSend] 开始查找发送按钮, url=', location.pathname);
       // 先查找发送按钮，找到才 preventDefault + click
       // 找不到则不阻止原始事件，让网站自身的 Enter 处理逻辑正常工作
@@ -334,10 +312,11 @@ export function buildEnterToSendScript(opts: {
         return;
       }
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       console.log('[EnterSend] 拦截 Enter, 点击发送按钮:', sendBtn.tagName, 'class=', sendBtn.className);
       try {
-        sendBtn.click();
+        if (pageAdapter && pageAdapter.sendEvent === 'mousedown') sendBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, button: 0 }));
+        else sendBtn.click();
         console.log('[EnterSend] 发送按钮 click() 调用完成');
       } catch (err) {
         console.error('[EnterSend] 点击发送按钮失败:', err);

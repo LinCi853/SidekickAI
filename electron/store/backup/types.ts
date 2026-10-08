@@ -1,4 +1,6 @@
 
+import type { ExportPreparation as CorePreparation, ExportResult as CoreResult } from '../../../packages/backup-core/export.js'
+
 export interface ExportOptions {
   basicData: boolean;    
   cookies: boolean;      
@@ -30,15 +32,18 @@ export interface SelectedExportEntry {
 }
 
 /** Optional strict contract used by the uninstaller before it deletes user data. */
-export interface ExportStrictOptions {
+export interface ExportStrictOptions extends CorePreparation {
+  snapshot?: boolean;
+  onSnapshotReady?: () => Promise<void>;
   /** Fail-closed export: no skips, no overwrite, verified source inventory. */
   strict?: boolean;
   /** Strict mode only: the data root the caller expects this process to export. */
   expectedDataRoot?: string;
 }
 
-export interface ExportResult {
+export interface ExportResult extends CoreResult {
   success: boolean;
+  retryable?: boolean;
   filePath?: string;
   error?: string;
   /** Absolute data root the archive was built from. */

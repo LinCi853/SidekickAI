@@ -70,8 +70,6 @@ export interface BrowserKeyboardOptions {
   onToggleSpatialNav?: () => void;
   /** 整体启用开关（云电脑模式下 false：所有浏览器快捷键放行给远端） */
   enabled?: boolean;
-  /** Opens asset controls for the current page. */
-  onToggleFreeze?: (tabId?: string) => void;
 }
 
 /** 快捷键定义：accelerator（渲染层匹配）+ action（主进程转发）+ handler */
@@ -169,7 +167,6 @@ export function buildShortcutDefs(o: BrowserKeyboardOptions): BrowserShortcutDef
     // ===== 窗口 / 系统级 =====
     { accelerator: 'F11', handler: () => { console.log('[fullscreen-keyboard] F11 pressed, calling onToggleFullscreen'); o.onToggleFullscreen?.(); } },
     { accelerator: 'F12', handler: () => o.onToggleDevTools() },
-    { accelerator: 'Alt+P', action: 'toggleFreeze', handler: (d) => o.onToggleFreeze?.((d as { tabId?: string } | undefined)?.tabId) },
 
     // ===== 云电脑模式 =====
     // Ctrl+Alt+C：进入/退出云电脑模式。渲染层 keydown（宿主聚焦）经通用注册表匹配；

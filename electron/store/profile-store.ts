@@ -12,6 +12,7 @@ import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { generateUniqueName } from '../shared/naming.js'
 import { getDefaultProfileParams, createDefaultProfileParams } from './default-config.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
+import { hasQianwenProfile, upgradeAIPlatformProfile } from '../presets/platform-profile-upgrade.js'
 import { getPreset } from './preset-store.js'
 import { createSqliteJsonStore } from './module-state-store.js'
 
@@ -297,18 +298,16 @@ export function registerProfileIPC(): void {
   })
 }
 
-/**
- * 首次启动自动创建 9 个 AI 平台 Profile（移动端指纹）
- *
- * 仅在 store 中 profiles 为空时创建。每个平台使用 iPhone 15 Pro 移动端指纹，
- * DeepSeek 为默认平台。使用 default-config.ts 统一管理的默认配置。
- *
- * @returns 创建的 Profile 列表（若已存在 Profile 则返回空数组）
- */
+/** Initialize platform defaults once and retain later user deletions. */
 export function ensureDefaultProfiles(): Profile[] {
-  const existing = store.get('profiles')
+  if (store.get('version') >= 2) return []
+  const existing = store.get('profiles') as Profile[]
   if (existing.length > 0) {
-    return []
+    const upgraded = existing.map(upgradeAIPlatformProfile)
+    if (upgraded.some((profile, index) => profile !== existing[index])) store.set('profiles', upgraded)
+    const created = hasQianwenProfile(upgraded) ? [] : [profileStore.createAIAppFromPlatform('qianwen')]
+    store.set('version', 2)
+    return created
   }
 
   const created: Profile[] = []
@@ -318,6 +317,7 @@ export function ensureDefaultProfiles(): Profile[] {
       const profile = profileStore.create(params)
       created.push(profile)
     }
+    store.set('version', 2)
     console.log(
       `[profile-store] 首次启动：自动创建 ${created.length} 个 AI 平台 Profile（移动端指纹）`,
     )
@@ -326,5 +326,3 @@ export function ensureDefaultProfiles(): Profile[] {
   }
   return created
 }
-
-

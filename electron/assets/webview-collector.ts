@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetObservedMessage, AssetObservationReceipt } from '../shared/ai-assets.types.js'
-import { canonicalWebConversationUrl } from './conversation-identity.js'
+import { stableWebConversationUrl } from './conversation-identity.js'
 import { readDomConversation } from './dom-messages.js'
 
 export async function startAiAssetCollector(): Promise<void> {
@@ -32,7 +32,7 @@ export async function startAiAssetCollector(): Promise<void> {
 }
 
 function collectAiAssets(): () => void {
-  const documentKey = crypto.randomUUID()
+  let documentKey = crypto.randomUUID()
   let lastLocation = ''
   let announcedLocation = ''
   let visitId = crypto.randomUUID()
@@ -42,6 +42,9 @@ function collectAiAssets(): () => void {
   const suppressed = new Set<string>()
   const rejectedSignatures = new Set<string>()
   let documentMessages = new Map<string, AssetObservedMessage>()
+  let lastMessageShape = ''
+  let lastMessageElements: Element[] = []
+  let awaitingRouteContent: { shape: string; elements: Element[] } | undefined
   let draftTransition: { key: string; messages: Map<string, AssetObservedMessage> } | undefined
   const aliases = new Map<string, string>()
   type Original = {
@@ -63,8 +66,7 @@ function collectAiAssets(): () => void {
   const pendingBudget = 16 * 1024 * 1024
   const context = () => {
     const url = location.href
-    const stable = location.pathname !== '/' && location.pathname !== '/chat' && location.pathname !== '/app'
-    return { conversationKey: stable ? canonicalWebConversationUrl(url)! : `document:${documentKey}`,
+    return { conversationKey: stableWebConversationUrl(url) ?? `document:${documentKey}`,
       title: document.title, url }
   }
   const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
@@ -187,8 +189,17 @@ function collectAiAssets(): () => void {
   }
   const scan = () => {
     if (stopped || paused) return
-    const source = context()
+    let source = context()
+    if (source.conversationKey.startsWith('document:') && lastLocation && !lastLocation.startsWith('document:')) {
+      documentKey = crypto.randomUUID()
+      documentMessages = new Map()
+      source = context()
+    }
     if (lastLocation !== source.conversationKey) {
+      // A route can change before the previous conversation's DOM is replaced.
+      if (lastLocation && !lastLocation.startsWith('document:')
+        && ['aistudio.xiaomimimo.com', 'chatglm.cn', 'www.chatglm.cn'].includes(location.hostname))
+        awaitingRouteContent = { shape: lastMessageShape, elements: lastMessageElements }
       draftTransition = lastLocation.startsWith('document:') && !source.conversationKey.startsWith('document:')
         ? { key: lastLocation, messages: documentMessages } : undefined
       lastLocation = source.conversationKey
@@ -197,6 +208,13 @@ function collectAiAssets(): () => void {
     if (suppressed.has(source.conversationKey)) return
     const snapshot = readDomConversation(document, location.hostname)
     const found = snapshot.messages
+    const shape = JSON.stringify(found.map(({ observed }) => [observed.role, observed.content, observed.reasoning, observed.versionKey]))
+    if (awaitingRouteContent && shape === awaitingRouteContent.shape
+      && found.length === awaitingRouteContent.elements.length
+      && found.every((message, index) => message.element === awaitingRouteContent!.elements[index])) return
+    awaitingRouteContent = undefined
+    lastMessageShape = shape
+    lastMessageElements = found.map(message => message.element)
     const next = new Map(found.map(message => [message.observed.key, message.observed]))
     if (source.conversationKey.startsWith('document:') && found.length) documentMessages = next
     const transition = draftTransition

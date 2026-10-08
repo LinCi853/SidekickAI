@@ -139,6 +139,15 @@ pub(super) fn validate_worker_request(request: &WorkerRequest) -> Result<(), Uni
     {
         return Err(invalid_request(operation_id, "工作请求未绑定工作进程镜像哈希。"));
     }
+    if let Some(task_id) = &request.resume_task_id {
+        validate_worker_identifier(task_id, "resumeTaskId", operation_id)?;
+        if task_id != &request.request_id || !request.targets.is_empty() || !request.data_roots.is_empty()
+            || request.preparation.is_some() || request.strategy != DataStrategy::Keep
+            || request.backup_path.is_some() || !request.backup_proofs.is_empty() {
+            return Err(invalid_request(operation_id, "恢复请求不能携带新的删除范围。"));
+        }
+        return Ok(());
+    }
     for root in &request.data_roots {
         if root.identity.tree_sha256.len() != SHA256_HEX_LEN
             || !root.identity.tree_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -192,6 +201,24 @@ pub(super) fn validate_worker_request(request: &WorkerRequest) -> Result<(), Uni
     if let Some(hash) = &request.backup_sha256 {
         if hash.len() != SHA256_HEX_LEN || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(invalid_request(operation_id, "工作请求归档哈希格式错误。"));
+        }
+    }
+    if !request.backup_proofs.is_empty() {
+        if request.strategy != DataStrategy::Export || request.backup_proofs.len() != request.data_roots.len() {
+            return Err(invalid_request(operation_id, "备份证明数量与数据范围不一致。"));
+        }
+        for proof in &request.backup_proofs {
+            let matching = request.data_roots.iter().filter(|root| paths_equal(Path::new(&root.path), Path::new(&proof.root))).collect::<Vec<_>>();
+            if matching.len() != 1 || matching[0].verified_source_hashes != proof.entry_hashes
+                || matching[0].verified_tree_sha256.as_deref() != Some(proof.tree_sha256.as_str())
+                || proof.archive_sha256.len() != SHA256_HEX_LEN || !proof.archive_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+                || request.backup_proofs.iter().filter(|item| paths_equal(Path::new(&item.path), Path::new(&proof.path))).count() != 1 {
+                return Err(invalid_request(operation_id, "备份证明未准确绑定独立数据根。"));
+            }
+        }
+        let first = &request.backup_proofs[0];
+        if request.backup_path.as_deref() != Some(first.path.as_str()) || request.backup_sha256.as_deref() != Some(first.archive_sha256.as_str()) {
+            return Err(invalid_request(operation_id, "备份首项与兼容字段不一致。"));
         }
     }
     match request.strategy {

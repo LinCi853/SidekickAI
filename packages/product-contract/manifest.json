@@ -22,7 +22,17 @@
       "packageKinds": [
         "installer",
         "portable"
-      ]
+      ],
+      "distribution": {
+        "protocolVersion": 1,
+        "installerMode": "offline",
+        "installerArchitectures": ["x64", "arm64"],
+        "publicPackages": [
+          { "role": "offline-installer", "architecture": "x64" },
+          { "role": "offline-installer", "architecture": "arm64" },
+          { "role": "portable", "architecture": "universal" }
+        ]
+      }
     },
     "community": {
       "label": "社区版",
@@ -40,7 +50,16 @@
       "cloudResources": true,
       "packageKinds": [
         "installer"
-      ]
+      ],
+      "distribution": {
+        "protocolVersion": 1,
+        "installerMode": "online",
+        "installerArchitectures": ["x64"],
+        "publicPackages": [
+          { "role": "online-bootstrap", "architecture": "x64", "supportedNativeArchitectures": ["x64", "arm64"] }
+        ],
+        "internalPayloadArchitectures": ["x64", "arm64"]
+      }
     }
   },
   "portable": {

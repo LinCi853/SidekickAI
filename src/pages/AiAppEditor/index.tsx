@@ -1,15 +1,4 @@
-/* =====================================================================
-   pages/AiAppEditor/index.tsx —— AI 应用编辑独立窗口
-   架构：
-   - 顶栏：标题 + 最小化/最大化/关闭（无边框窗口自定义标题栏）
-   - 主体：单 AI 应用的全部配置编辑（URL、UA、选择器、主题色、区域、屏蔽规则）
-   - 通过 URL 查询参数 ?windowId=ai-app-editor-${base64Opts}&mode=ai-app-editor 接收入参
-     · 编辑模式：opts.profileId 精确定位 Profile（支持同一平台多实例）
-     · 新建模式：opts.mode='create'，表单空白，保存时调用 createProfile
-   - 屏蔽规则按当前平台域名匹配筛选，内嵌紧凑编辑器（增删改即时保存）
-   - 渲染按内聚块拆分至 ./components/：基础信息字段、屏蔽规则编辑区、弹窗白名单编辑区
-     （均为纯展示组件，表单状态与回调集中在本文件）
-   ===================================================================== */
+// Owns the independent editor window's draft and native window lifecycle.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
@@ -50,9 +39,9 @@ import { parseEditorOpts } from './editorOpts.js';
 import { hostnameFromUrl, matchDomain, isValidHexColor, buildProfilePatch } from './domain.js';
 import { EMPTY_RULE_DRAFT } from './constants.js';
 import { AiAppEditorTitleBar } from './components/TitleBar.js';
-import { BasicInfoFields } from './components/BasicInfoFields.js';
-import { BlockRulesSection } from './components/BlockRulesSection.js';
-import { PopupWhitelistSection } from './components/PopupWhitelistSection.js';
+import { BasicInfoFields } from '../../components/AiAppEditorFields/BasicInfoFields';
+import { BlockRulesSection } from '../../components/AiAppEditorFields/BlockRulesSection';
+import { PopupWhitelistSection } from '../../components/AiAppEditorFields/PopupWhitelistSection';
 
 export default function AiAppEditor() {
   const editorOpts = useMemo(parseEditorOpts, []);

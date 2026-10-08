@@ -11,7 +11,7 @@
 //
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, session, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
@@ -24,6 +24,8 @@ import type { WindowManager } from '../window/manager.js'
 import type { FingerprintEngine } from '../fingerprint/engine.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { validateWebviewHotkeyTarget } from '../window-factory/webview-hotkey-target.js'
+import { registerWindowWebview } from '../window-factory/webview-registry.js'
+import type { WebviewRegistration } from '../shared/api/profile-window.api.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface WindowControlIpcDeps {
@@ -62,6 +64,13 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
 
   handle(IPC_CHANNELS.WEBVIEW_VALIDATE_HOTKEY_TARGET, (event: IpcMainInvokeEvent, target: unknown) =>
     validateWebviewHotkeyTarget(event.sender, target))
+  handle(IPC_CHANNELS.WINDOW_REGISTER_WEBVIEW, (event: IpcMainInvokeEvent, payload: WebviewRegistration) => {
+    const win = getSenderWindow(event)
+    const profile = typeof payload?.profileId === 'string' ? profileStore.get(payload.profileId) : null
+    return registerWindowWebview(event, payload,
+      win && !win.isDestroyed() ? findWindowIdByWin(win) : null,
+      profile ? session.fromPartition(`persist:${profile.id}`) : null)
+  })
 
   // ===== 创建自定义对话窗口 IPC（旧单例） =====
   handle(IPC_CHANNELS.CHAT_OPEN_WINDOW, () => {

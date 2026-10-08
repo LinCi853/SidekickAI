@@ -30,10 +30,12 @@ impl State {
             return Decision::Switch;
         }
         if self.callbacks.is_none() {
+            if precise_entry(entry) && self.entry!=entry {return Decision::Reject;}
             self.pending_activation = true;
             return Decision::Activate;
         }
         if self.operations != 0 || self.entry == entry {
+            if self.operations!=0 && self.entry!=entry && precise_entry(entry) {return Decision::Reject;}
             return Decision::Activate;
         }
         self.releasing = true;
@@ -53,7 +55,10 @@ impl State {
 enum Decision {
     Activate,
     Switch,
+    Reject,
 }
+
+fn precise_entry(entry:&str)->bool {entry.starts_with("installer:install:")&&entry.contains(":release:")}
 
 struct Shared {
     state: Mutex<State>,
@@ -68,11 +73,14 @@ impl Shared {
         let decision = state.request(entry);
         let callback = state.callbacks.as_ref().and_then(|callbacks| match decision {
             Decision::Activate => Some(callbacks.activate.clone()),
+            Decision::Reject => Some(callbacks.activate.clone()),
             Decision::Switch if !was_releasing => Some(callbacks.release.clone()),
             Decision::Switch => None,
         });
         (decision, callback)
     }
+
+    fn entry(&self)->Result<String,String>{self.state.lock().map(|state|state.entry.clone()).map_err(|_|"维护向导状态不可用。".into())}
 }
 
 static CURRENT: Mutex<Option<Weak<Shared>>> = Mutex::new(None);
@@ -233,6 +241,20 @@ mod tests {
         owner.operations = 0;
         owner.callbacks = None;
         assert_eq!(owner.request("uninstaller-b"), Decision::Activate);
+    }
+
+    #[test]
+    fn precise_release_switches_only_an_idle_owner_and_rejects_a_busy_different_selection() {
+        let requested="installer:install:C:\\setup.exe:release:release-b:digest-b";
+        let mut owner=state();owner.entry="installer:install:C:\\setup.exe:release:release-a:digest-a".into();
+        owner.operations=1;
+        assert_eq!(owner.request(requested),Decision::Reject);
+        assert!(!owner.releasing);
+        assert_eq!(owner.request(&owner.entry.clone()),Decision::Activate);
+        owner.operations=0;owner.callbacks=None;
+        assert_eq!(owner.request(requested),Decision::Reject);
+        owner.callbacks=Some(Callbacks{activate:Arc::new(||{}),release:Arc::new(||{})});
+        assert_eq!(owner.request(requested),Decision::Switch);
     }
 
     #[test]

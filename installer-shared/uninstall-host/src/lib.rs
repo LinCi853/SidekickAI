@@ -2,18 +2,22 @@
 //! configuration are dependencies of this crate.
 
 mod backup_export;
+mod backup_runtime;
 mod control;
 mod discovery;
 pub mod wizard_instance;
 pub mod diagnostics;
+pub mod startup_tasks;
 mod events;
 mod execute;
 mod plan;
+pub mod prerequisites;
 
 use events::{emit, run_operation, terminal_status, EventSink, TauriSink};
 
 use control::OperationControl;
 pub use discovery::data_paths_for;
+pub fn pending_uninstall_tasks() -> Result<Vec<UninstallRecoveryTask>, UninstallError> { execute::pending_uninstall_tasks() }
 pub fn installed_locations() -> Result<Vec<UninstallLocation>, UninstallError> {
     discovery::inspect_candidates(discovery::collect_candidates(None)?, None)
 }
@@ -224,7 +228,11 @@ pub(crate) fn info_for(entry: &UninstallEntryMode) -> UninstallInfo {
 pub async fn uninstall_scan(host: State<'_, Host>, request: Option<UninstallScanRequest>) -> Result<UninstallScanResponse, UninstallError> {
     let _ = request;
     let source = host.source.clone();
-    tauri::async_runtime::spawn_blocking(move || discovery::discover(source.as_deref()))
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut scan = discovery::discover(source.as_deref())?;
+        scan.recovery_tasks = execute::pending_uninstall_tasks()?;
+        Ok(scan)
+    })
         .await.map_err(|e| UninstallError::invalid_request(e.to_string()))?
 }
 
@@ -236,6 +244,12 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
     let request_id = request.request_id.clone();
     let operation_id = sidekickai_uninstall_core::random_id("operation")?;
     let control = Arc::new(OperationControl::default());
+    if request.resume_task_id.as_ref().is_some_and(|id| id != &request_id) {
+        return Err(UninstallError::invalid_request("恢复任务身份与请求不一致。"));
+    }
+    if request.resume_task_id.is_some() && host.active.lock().map_err(|_| busy())?.is_none() {
+        host.requests.lock().map_err(|_| busy())?.remove(&request_id);
+    }
 
     // Replayed requests short-circuit *before* validation: the operation already
     // exists, so the caller must receive its original identity, not a new plan.
@@ -243,7 +257,16 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
         drop(guard);
         return Ok(Some(UninstallAccepted::new(request_id, existing)));
     }
-    let plan = plan::prepare(&request)?;
+    let recovery = if let Some(task_id) = &request.resume_task_id {
+        execute::pending_uninstall_tasks()?.into_iter().find(|task| &task.task_id == task_id)
+    } else { None };
+    let plan = if recovery.is_some() {
+        if request.protocol_version != UNINSTALL_PROTOCOL_VERSION || request.confirmation != UNINSTALL_CONFIRMATION
+            || request.strategy != DataStrategy::Keep || request.backup.is_some() || !request.additional_target_ids.is_empty() {
+            return Err(UninstallError::invalid_request("恢复已有任务不能添加新的删除范围。"));
+        }
+        None
+    } else { Some(plan::prepare(&request)?) };
     let admitted = {
         let mut active = host.active.lock().map_err(|_| busy())?;
         let mut requests = host.requests.lock().map_err(|_| busy())?;
@@ -289,17 +312,30 @@ pub fn uninstall_start(app: AppHandle, host: State<'_, Host>, request: Uninstall
                 sink.event(UninstallPhase::Failed, 0, "卸载失败", true, Some(UninstallResult {
                     request_id: request_id.clone(), operation_id: operation_id.clone(),
                     state: UninstallTerminal::Failed, phase: UninstallPhase::Failed, target_ids: Vec::new(),
-                    removed_install_paths: Vec::new(), removed_data_roots: Vec::new(), backup: None, warnings: Vec::new(), error: Some(failure),
+                    removed_install_paths: Vec::new(), removed_data_roots: Vec::new(), backup: None, backups: Vec::new(), warnings: Vec::new(), error: Some(failure),
                 }));
                 return;
             }
         };
-        let outcome = run_operation(&sink, &source, &operation_id, &request_id, &strategy, backup_selection.as_ref(), plan, control.clone());
+        let outcome = if let Some(task) = recovery {
+            sink.event(UninstallPhase::Commit, 20, "正在继续原卸载任务", false, None);
+            control.begin_commit();
+            execute::WorkerSession::resume_task(&source, &operation_id, &request_id,
+                task.requires_elevation && !execute::is_process_elevated()).map(|outcome| UninstallResult {
+                request_id: request_id.clone(), operation_id: operation_id.clone(),
+                state: if outcome.error.is_none() { UninstallTerminal::Completed } else { UninstallTerminal::Failed },
+                phase: if outcome.error.is_none() { UninstallPhase::Completed } else { UninstallPhase::Failed },
+                target_ids: Vec::new(), removed_install_paths: outcome.removed_install_paths, removed_data_roots: outcome.removed_data_roots,
+                backup: task.backups.first().cloned(), backups: task.backups, warnings: outcome.warnings, error: outcome.error,
+            })
+        } else {
+            run_operation(&sink, &source, &operation_id, &request_id, &strategy, backup_selection.as_ref(), plan.expect("validated plan"), control.clone())
+        };
         let (state, phase, message) = terminal_status(&outcome);
         let mut result = outcome.unwrap_or_else(|error| UninstallResult {
             request_id: request_id.clone(), operation_id: operation_id.clone(), state, phase: phase.clone(),
             target_ids: Vec::new(), removed_install_paths: Vec::new(), removed_data_roots: Vec::new(),
-            backup: None, warnings: Vec::new(), error: Some(error),
+            backup: None, backups: Vec::new(), warnings: Vec::new(), error: Some(error),
         });
         // Terminal envelope and result must agree; the precise failing stage is
         // preserved in result.error.phase for diagnostics.
@@ -445,7 +481,7 @@ mod tests {
     #[test]
     fn info_reports_fixed_capabilities_and_the_entry_mode() {
         let standalone = crate::commands::info_for(&UninstallEntryMode::Standalone);
-        assert_eq!(standalone.protocol_version, 1);
+        assert_eq!(standalone.protocol_version, UNINSTALL_PROTOCOL_VERSION);
         assert_eq!(standalone.entry, UninstallEntryMode::Standalone);
         assert!(!standalone.supports_silent, "silent uninstall is not implemented");
         assert!(standalone.supports_backup);

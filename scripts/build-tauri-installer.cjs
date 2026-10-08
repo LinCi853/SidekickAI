@@ -11,6 +11,8 @@ const cache = require('./build-cache.cjs')
 const maintenanceInputs = require('./maintenance-inputs.cjs')
 const componentContract = require('./component-contract.cjs')
 const setupMetadata = require('./setup-metadata.cjs')
+const distribution = require('./application-distribution.cjs')
+const executableSigning = require('./windows-executable-signing.cjs')
 const buildEvidence = require('./build-evidence.cjs')
 const { toolInputs } = require('./build-tool-inputs.cjs')
 const { withPackagingLock } = require('./packaging-lock.cjs')
@@ -19,6 +21,7 @@ const INSTALLER = path.join(ROOT, 'installer-tauri')
 const UNINSTALLER = path.join(ROOT, 'uninstaller-tauri')
 const EDITION = JSON.parse(fs.readFileSync(path.join(ROOT, 'product-edition.json'), 'utf8')).edition
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version
+const productVersion = () => require('./sync-versions.cjs').rootPackageVersion(ROOT)
 const COMPONENT_VERSION = componentContract.componentVersion()
 const TARGETS = {
   x64: { triple: 'x86_64-pc-windows-msvc', directory: 'win-unpacked' },
@@ -26,7 +29,6 @@ const TARGETS = {
 }
 const OUTPUT_ROOT = path.join(ROOT, 'build', 'standalone-uninstaller')
 const SEVENZ = process.env.SIDEKICK_7Z || 'C:\\Program Files\\7-Zip\\7z.exe'
-const SEVENZR = path.join(ROOT, 'build', 'tools', '7zr.exe')
 
 function run(command, args, label, options = {}) {
   const started = Date.now()
@@ -124,12 +126,19 @@ function compilerIdentity(toolchain, arch) {
   return identity
 }
 
+const preparedBackupRuntimes = new Set()
+function ensureBackupRuntime(arch) {
+  if (preparedBackupRuntimes.has(arch)) return
+  run(process.execPath, [path.join(ROOT, 'scripts/build-backup-runtime.cjs'), arch], `Independent backup runtime ${arch}`)
+  preparedBackupRuntimes.add(arch)
+}
+
 function nativeInputs(app, arch, toolchain) {
   if (process.env.CARGO_ENCODED_RUSTFLAGS || process.env.RUSTFLAGS) throw new Error('Unset RUSTFLAGS/CARGO_ENCODED_RUSTFLAGS for verified builds')
-  const source = u.fingerprint(ROOT, sourceInputs(app))
-  const cloud = app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : null
+  const source = u.fingerprint(ROOT, [...sourceInputs(app), path.join(ROOT, 'scripts/windows-executable-signing.cjs')])
+  const cloud = require('./oxy-build-config.cjs').cloudBuildEnvironment()
   return { version: COMPONENT_VERSION, fingerprint: u.hash(JSON.stringify({ source: source.fingerprint, arch, version: COMPONENT_VERSION,
-    tools: compilerIdentity(toolchain, arch), cloud, command: nativeBuildArguments(app, arch),
+    tools: compilerIdentity(toolchain, arch), cloud, signing: executableSigning.signingConfiguration(), command: nativeBuildArguments(app, arch),
     config: { build: { beforeBuildCommand: '', frontendDist: '../dist' } } })), inputs: source }
 }
 
@@ -217,7 +226,13 @@ function preflight(architectures, full, output, options = {}) {
     }
   }
   if (full) {
-    for (const file of [SEVENZ, SEVENZR, path.join(ROOT, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js'), path.join(ROOT, 'node_modules', 'electron-builder', 'cli.js')]) {
+    try { distribution.loadLocalSigner(ROOT); executableSigning.signingConfiguration() } catch (error) { errors.push(error.message) }
+    const recoveryCargo = path.join(ROOT, 'tools/backup-recovery-native/Cargo.toml')
+    if (!fs.existsSync(recoveryCargo) || readCargoPackageVersion(recoveryCargo) !== componentContract.readContract().recoveryComponentVersion) {
+      errors.push('Independent recovery entry version does not match its component contract')
+    }
+    if (!fs.existsSync(path.join(ROOT, 'tools/backup-recovery-native/Cargo.lock'))) errors.push('Independent recovery entry Cargo.lock is required before source capture')
+    for (const file of [SEVENZ, path.join(ROOT, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js'), path.join(ROOT, 'node_modules', 'electron-builder', 'cli.js')]) {
       try { u.assertFile(file) } catch { errors.push(`Missing full Setup build dependency: ${file}`) }
     }
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
@@ -323,11 +338,12 @@ function buildNative(app, arch, output, toolchain, standalone) {
   const arguments_ = nativeBuildArguments(app, arch)
   arguments_.splice(arguments_.indexOf('--'), 0, '--config', config)
   run(process.execPath, [toolchain.tauri, ...arguments_], `${name} ${arch} Tauri production`, {
-    cwd: app, env: { ...toolchain.environments?.[arch], ...(app === INSTALLER ? require('./oxy-build-config.cjs').cloudBuildEnvironment() : {}), CARGO_TARGET_DIR: targetDir, SIDEKICK_BUILD_FINGERPRINT: inputFingerprint },
+    cwd: app, env: { ...toolchain.environments?.[arch], ...require('./oxy-build-config.cjs').cloudBuildEnvironment(),
+      CARGO_TARGET_DIR: targetDir, SIDEKICK_BUILD_FINGERPRINT: inputFingerprint },
   })
   u.assertUnchanged(before, u.fingerprint(ROOT, sourceInputs(app)))
   u.assertUnchanged(web, u.fingerprint(ROOT, [path.join(app, 'dist')]))
-  const info = standalone ? u.assertStandaloneBinary(raw, arch) : { ...u.peInfo(fs.readFileSync(raw)), sha256: u.sha256(raw) }
+  let info = standalone ? u.assertStandaloneBinary(raw, arch) : { ...u.peInfo(fs.readFileSync(raw)), sha256: u.sha256(raw) }
   if (info.arch !== arch) throw new Error('Native wizard architecture mismatch')
   // The whole point of the build: the UI must travel inside the executable.
   const webEvidence = webVerify.verifyEmbeddedWebAssets(app, {
@@ -343,12 +359,53 @@ function buildNative(app, arch, output, toolchain, standalone) {
   const artifact = path.join(directory, `${name}.exe`)
   fs.copyFileSync(raw, artifact, fs.constants.COPYFILE_EXCL)
   if (u.sha256(artifact) !== info.sha256) throw new Error('Copied executable differs from raw build output')
-  const manifest = { protocolVersion: 2, edition: EDITION, componentVersion: COMPONENT_VERSION,
+  if (standalone) executableSigning.signExecutable(artifact)
+  info = standalone ? u.assertStandaloneBinary(artifact, arch) : { ...u.peInfo(fs.readFileSync(artifact)), sha256: u.sha256(artifact) }
+  if (info.size > componentContract.readContract().maintenanceExecutableMaxBytes) throw new Error('Maintenance executable exceeds its distribution budget')
+  const manifest = { protocolVersion: 3, edition: EDITION, componentVersion: COMPONENT_VERSION,
     uninstallProtocolVersion: componentContract.readContract().uninstallProtocolVersion, arch, sha256: info.sha256, size: info.size, inputFingerprint }
   fs.writeFileSync(path.join(directory, standalone ? 'uninstall-manifest.json' : 'wizard-manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
   fs.writeFileSync(path.join(directory, 'build-evidence.json'), JSON.stringify({ raw, artifact, manifest, previousRawSha256: previous, sourceInputs: before, webInputs: web, webEvidence, dependency, pe: info, productionConfig: config, productionConfigValues: production }, null, 2) + '\n')
   console.log(`[build] ${artifact}: ${info.size} bytes, ${arch}, SHA-256 ${info.sha256}, embedded UI ${webEvidence.files.length} files / ${webEvidence.streams} streams`)
   return { artifact, manifest, webEvidence }
+}
+
+function recoveryInputs(root = ROOT) {
+  const optional = ['.cargo/config.toml', '.cargo/config', 'rust-toolchain.toml', 'rust-toolchain']
+    .filter(file => fs.existsSync(path.join(root, file)))
+  return ['tools/backup-recovery-native', 'installer-shared/uninstall-core', 'installer-shared/product.rs',
+    'packages/product-contract/manifest.json', 'product-edition.json', ...optional].map(file => path.join(root, file))
+}
+
+function buildRecoveryEntry(output, arch, toolchain) {
+  validateArchitectures([arch])
+  const directory = path.join(ROOT, 'tools/backup-recovery-native')
+  const sources = u.fingerprint(ROOT, recoveryInputs())
+  const target = TARGETS[arch].triple
+  const targetDir = path.join(ROOT, 'build/cargo-targets', 'recovery-' + arch)
+  const inputs = u.hash(JSON.stringify({ sources, arch, trust: distribution.publicTrust(ROOT),
+    signing: executableSigning.signingConfiguration(), tools: compilerIdentity(toolchain, arch) }))
+  const reused = cache.inspect('recovery-entry-' + arch, inputs)
+  const result = path.join(output, 'recovery', arch, 'recover.exe')
+  fs.mkdirSync(path.dirname(result), { recursive: true })
+  if (reused.value) {
+    fs.copyFileSync(reused.value.path, result, fs.constants.COPYFILE_EXCL)
+  } else {
+    run('cargo', ['build', '--manifest-path', path.join(directory, 'Cargo.toml'), '--release', '--offline', '--locked',
+      '--target', target, '--jobs', '2'], 'Independent recovery entry ' + arch, {
+      env: { ...toolchain.environments?.[arch], ...require('./oxy-build-config.cjs').cloudBuildEnvironment(),
+        CARGO_TARGET_DIR: targetDir },
+    })
+    u.assertUnchanged(sources, u.fingerprint(ROOT, recoveryInputs()))
+    fs.copyFileSync(path.join(targetDir, target, 'release', 'sidekickai-backup-recovery.exe'), result, fs.constants.COPYFILE_EXCL)
+    executableSigning.signExecutable(result)
+    const retained = cache.retainFile('recovery-entry-' + arch, inputs, result)
+    cache.remember('recovery-entry-' + arch, inputs, [retained], { path: retained })
+  }
+  const info = u.assertStandaloneBinary(result, arch)
+  if (info.size > componentContract.readContract().maintenanceExecutableMaxBytes) throw new Error('Recovery entry exceeds its distribution budget')
+  u.assertUnchanged(sources, u.fingerprint(ROOT, recoveryInputs()))
+  return { artifact: result, arch, sha256: info.sha256, size: info.size, inputs }
 }
 
 function applicationPackageInputs() {
@@ -361,13 +418,28 @@ function applicationPackageInputs() {
     'scripts/build-startup-helper.cjs', 'scripts/prepare-startup-helper.cjs', 'scripts/verify-startup-helper.cjs', 'tools/startup-helper', 'build/License.txt', 'LICENSE',
     'node_modules/electron/package.json', 'node_modules/electron-builder', 'node_modules/app-builder-lib']
     .map(file => path.join(ROOT, file)).filter(file => fs.existsSync(file)).concat(packages, process.env.SIDEKICK_ELECTRON_DIST ? [path.resolve(process.env.SIDEKICK_ELECTRON_DIST)] : [], [__filename])
+    .concat(['scripts/application-distribution.cjs', 'scripts/oxy-build-config.cjs', 'scripts/local-build-config.cjs', 'scripts/windows-executable-signing.cjs'].map(file => path.join(ROOT, file)))
     .flatMap(file => fs.statSync(file).isDirectory() ? u.listFiles(file, new Set(['.git'])) : [file])
+}
+
+function prepareRecoveryLock(root = ROOT, invoke = run) {
+  const manifest = path.join(root, 'tools/backup-recovery-native/Cargo.toml')
+  const lock = path.join(path.dirname(manifest), 'Cargo.lock')
+  u.assertFile(manifest)
+  if (!fs.existsSync(lock)) invoke('cargo', ['generate-lockfile', '--offline', '--manifest-path', manifest], 'Independent recovery dependency lock')
+  u.assertFile(lock)
+  return lock
+}
+
+function prepareNativeResources() {
+  prepareRecoveryLock()
+  return { startup: require('./build-startup-helper.cjs').build({ resources: true }) }
 }
 
 function buildApplications(output, architectures, options = {}) {
   require('./check-node-version.cjs').assertNodeVersion()
   validateArchitectures(architectures)
-  require('./build-startup-helper.cjs').build({ resources: true })
+  prepareNativeResources()
   const appOutput = path.join(output, 'application-build')
   if (fs.existsSync(appOutput)) throw new Error(`Application build directory already exists: ${appOutput}`)
   fs.mkdirSync(appOutput, { recursive: true })
@@ -378,9 +450,10 @@ function buildApplications(output, architectures, options = {}) {
   const packageBefore = u.fingerprint(ROOT, packageInputs)
   const signing = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(CSC_|WIN_CSC_|SIGN_|ELECTRON_)/.test(key)))
   const evidence = {}
+  const publicConfiguration = distribution.applicationConfiguration(ROOT)
   for (const arch of architectures) {
     const started = Date.now()
-    const key = u.hash(JSON.stringify({ inputs: packageBefore.fingerprint, arch, node: process.version, signing }))
+    const key = u.hash(JSON.stringify({ inputs: packageBefore.fingerprint, arch, node: process.version, signing, publicConfiguration }))
     const dir = path.join(appOutput, TARGETS[arch].directory)
     const decision = options.reuse ? cache.inspect(`application-${arch}`, key) : { value: null, reason: 'disabled' }
     const reused = decision.value
@@ -394,9 +467,19 @@ function buildApplications(output, architectures, options = {}) {
       console.log(`[build] Reused verified ${arch} application package`)
       continue
     }
-    const args = [path.join(ROOT, 'node_modules', 'electron-builder', 'cli.js'), '--win', '--dir', `--${arch}`, `--config.directories.output=${appOutput}`]
+    const packagingConfiguration = require('js-yaml').load(fs.readFileSync(path.join(ROOT, 'electron-builder.yml'), 'utf8'))
+    const otherArchitecture = arch === 'x64' ? 'arm64' : 'x64'
+    packagingConfiguration.files = [...packagingConfiguration.files,
+      '!node_modules/better-sqlite3/prebuilds/win32-' + otherArchitecture + '.node',
+      '!node_modules/uiohook-napi/prebuilds/win32-' + otherArchitecture + '/**',
+      '!node_modules/better-sqlite3/deps/**']
+    packagingConfiguration.directories = { ...packagingConfiguration.directories, output: appOutput }
+    const packagingFile = path.join(output, 'electron-builder-' + arch + '.json')
+    fs.writeFileSync(packagingFile, JSON.stringify(packagingConfiguration, null, 2) + '\n', { flag: 'wx' })
+    const args = [path.join(ROOT, 'node_modules', 'electron-builder', 'cli.js'), '--win', '--dir', '--' + arch, '--config', packagingFile]
     if (process.env.SIDEKICK_ELECTRON_DIST) args.push(`--config.electronDist=${path.resolve(process.env.SIDEKICK_ELECTRON_DIST)}`)
     run(process.execPath, args, `Current ${arch} application directory`)
+    distribution.writeApplicationConfiguration(dir, publicConfiguration)
     evidence[arch] = verifyApplication(dir, arch)
     u.assertUnchanged(packageBefore, u.fingerprint(ROOT, packageInputs))
     const retained = cache.retainDirectory(`application-${arch}`, key, dir)
@@ -431,6 +514,13 @@ function verifyApplication(directory, arch) {
   if (packaged.name !== product.editions[EDITION].packageName || packaged.version !== VERSION) throw new Error('Application payload edition/version mismatch')
   const native = require('./verify-packaged-native.cjs').verifyPackagedNative(directory, arch)
   const startup = require('./build-startup-helper.cjs').verifyResources(path.join(directory, 'resources/windows'), { root: ROOT })
+  const expectedConfiguration = distribution.applicationConfiguration(ROOT)
+  const keys = JSON.parse(fs.readFileSync(path.join(directory, 'resources/application-trust.json'), 'utf8'))
+  const resourceKeys = JSON.parse(fs.readFileSync(path.join(directory, 'resources/resource-trust.json'), 'utf8'))
+  const service = JSON.parse(fs.readFileSync(path.join(directory, 'resources/oxy-service.json'), 'utf8'))
+  if (distribution.canonicalJson(keys) !== distribution.canonicalJson(expectedConfiguration.keys)
+    || distribution.canonicalJson(resourceKeys) !== distribution.canonicalJson(expectedConfiguration.resourceKeys)
+    || service.origin !== expectedConfiguration.origin || Object.keys(service).length !== 1) throw new Error('Application public distribution configuration does not match build inputs')
   return { directory, arch, native, startup, inputs: applicationFingerprint(directory) }
 }
 
@@ -441,89 +531,90 @@ function applicationFingerprint(directory) {
 function buildPayload(output, applications, uninstallers, architectures, options = {}) {
   const started = Date.now()
   validateArchitectures(architectures)
-  const compression = options.compression || 9
-  if (![5, 9].includes(compression)) throw new Error('Unsupported payload compression')
-  const sources = architectures.map(arch => path.join(applications, TARGETS[arch].directory))
-  const key = u.hash(JSON.stringify({ applications: sources.map(applicationFingerprint), uninstallers: architectures.map(arch => u.deploymentManifest(uninstallers[arch].manifest, VERSION)), compression, tools: u.fingerprint(ROOT, [SEVENZ, SEVENZR, __filename]).fingerprint }))
-  const decision = options.reuse ? cache.inspect('payload', key) : { reason: 'disabled' }
-  const existing = options.reuse ? cache.load('payload', key) : null
-  if (existing) {
-    fs.mkdirSync(output, { recursive: true })
-    const payload = path.join(output, 'payload.7z')
-    fs.copyFileSync(existing.path, payload, fs.constants.COPYFILE_EXCL)
-    // A copied cache entry is only reused after its bytes still hash to what the
-    // record captured; otherwise the stale copy is discarded and rebuilt below.
-    if (u.sha256(payload) !== existing.sha256) {
-      console.log('[build] Cached installation payload no longer matches its record; rebuilding')
-      fs.rmSync(payload, { force: true })
-    } else {
-      cache.atomicWrite(path.join(output, 'payload-evidence.json'), JSON.stringify({ ...existing, path: payload, reused: true }, null, 2) + '\n')
-      buildEvidence.record(output, 'payload', key, { reason: 'matched' }, started, { sha256: existing.sha256 })
-      console.log('[build] Reused verified installation payload')
-      return payload
-    }
-  }
+  if (architectures.length !== 1) throw new Error('An application payload must contain exactly one native architecture')
+  const arch = architectures[0]
+  const signer = options.signer || distribution.loadLocalSigner(ROOT)
+  const version = productVersion()
+  const source = path.join(applications, TARGETS[arch].directory)
+  const before = applicationFingerprint(source)
   const staging = path.join(output, 'payload-staging')
   fs.mkdirSync(output, { recursive: true })
-  fs.mkdirSync(staging)
-  const applicationInputs = {}
-  for (const arch of architectures) {
-    const target = TARGETS[arch]
-    const source = path.join(applications, target.directory)
-    const before = applicationFingerprint(source)
-    applicationInputs[arch] = before
-    const destination = path.join(staging, target.directory)
-    fs.cpSync(source, destination, { recursive: true, errorOnExist: true, force: false })
-    u.assertUnchanged(before, applicationFingerprint(source))
-    u.assertUnchanged(before, applicationFingerprint(destination))
-    u.stageUninstaller(uninstallers[arch].artifact, uninstallers[arch].manifest, destination, arch, VERSION)
-  }
-  const before = applicationFingerprint(staging)
-  const payload = path.join(output, 'payload.7z')
-  if (fs.existsSync(payload)) throw new Error('Fresh payload path already exists; refusing archive update')
-  const directories = architectures.map(arch => TARGETS[arch].directory)
-  run(SEVENZ, ['a', '-t7z', `-mx=${compression}`, compression === 9 ? '-md=256m' : '-md=32m', '-ms=on', '-y', payload, ...directories], `Fresh ${architectures.join('+')} payload`, { cwd: staging })
-  run(SEVENZ, ['t', payload], 'Verify fresh payload archive')
-  run(SEVENZR, ['t', payload], 'Verify payload with the embedded extractor')
+  fs.cpSync(source, staging, { recursive: true, errorOnExist: true, force: false })
   u.assertUnchanged(before, applicationFingerprint(staging))
-  const evidence = { architectures, applicationInputs, inputs: before, path: payload, sha256: u.sha256(payload), size: fs.statSync(payload).size }
-  fs.writeFileSync(path.join(output, 'payload-evidence.json'), JSON.stringify(evidence, null, 2) + '\n')
-  const retained = cache.retainFile('payload', key, payload)
-  cache.remember('payload', key, [retained], { ...evidence, path: retained })
-  buildEvidence.record(output, 'payload', key, { reason: existing ? 'output-changed' : decision.reason }, started, { sha256: evidence.sha256 })
-  return payload
+  u.stageUninstaller(uninstallers[arch].artifact, uninstallers[arch].manifest, staging, arch, version)
+  const recovery = options.recoveryEntries?.[arch]
+  if (!recovery) throw new Error('The application payload is missing its independent recovery entry')
+  u.assertStandaloneBinary(recovery.artifact, arch)
+  fs.copyFileSync(recovery.artifact, path.join(staging, 'recover.exe'), fs.constants.COPYFILE_EXCL)
+  if (!options.preparedRuntime) ensureBackupRuntime(arch)
+  const component = distribution.recoveryComponent(staging, arch, EDITION, signer, ROOT, options.runtimeRoot)
+  const files = distribution.fileInventory(staging)
+  const archive = distribution.archiveFiles(staging, path.join(output, 'application.zip'), files)
+  const proof = distribution.signEnvelope(distribution.bodyPayload({
+    edition: EDITION, version, variant: 'installed', architectures: [arch],
+    directory: staging, archive: archive.path, components: [component],
+  }), distribution.PURPOSES.body, signer)
+  const proofPath = path.join(output, 'body-proof.json')
+  fs.writeFileSync(proofPath, distribution.canonicalJson(proof) + '\n', { flag: 'wx' })
+  const container = distribution.packagePayload(archive.path, proof,
+    path.join(output, 'SidekickAI-Application-' + version + '-' + arch + '.zip'), signer)
+  u.assertUnchanged(before, applicationFingerprint(source))
+  const evidence = { architecture: arch, applicationInputs: before, staging, archive, proof, proofPath,
+    bodyProofSha256: distribution.hash(Buffer.from(distribution.canonicalJson(proof.payload))), container,
+    componentVersion: COMPONENT_VERSION, recoveryComponent: component }
+  fs.writeFileSync(path.join(output, 'payload-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
+  buildEvidence.record(output, 'payload-' + arch, u.hash(JSON.stringify(evidence.applicationInputs)),
+    { reason: 'assembled' }, started, { sha256: container.sha256 })
+  return evidence
 }
 
-function appendSetup(output, wizard, payload, architectures, manifest = require('./gen-install-manifest.cjs').generateManifest()) {
+function appendSetup(output, wizard, payload, architectures, manifest, options = {}) {
   const started = Date.now()
   validateArchitectures(architectures)
   const rawWizard = fs.readFileSync(wizard)
   const wizardArch = u.peInfo(rawWizard).arch
-  if (!architectures.includes(wizardArch)) throw new Error('Setup executable architecture is missing from its application payload')
   if (u.footerInfo(rawWizard)) throw new Error('Raw wizard already carries a payload')
-  const wizardBytes = setupMetadata.stampProductVersion(rawWizard, manifest.productVersion)
-  const payloadBytes = fs.readFileSync(payload)
-  const sevenzBytes = fs.readFileSync(SEVENZR)
-  const metadata = setupMetadata.createMetadata(manifest, payloadBytes, sevenzBytes)
-  const metadataBytes = Buffer.from(JSON.stringify(metadata))
-  const footer = setupMetadata.footer(metadataBytes, payloadBytes.length, sevenzBytes.length)
-  const suffix = wizardArch
+  if (wizardArch !== manifest.executableArchitecture || manifest.distributionMode === 'offline'
+    && (architectures.length !== 1 || architectures[0] !== wizardArch)) throw new Error('Setup executable and payload architecture do not match')
+  const version = manifest.distributionMode === 'online' ? manifest.componentVersion : manifest.productVersion
+  const wizardBytes = setupMetadata.stampProductVersion(rawWizard, version)
+  const payloadBytes = payload ? fs.readFileSync(payload) : Buffer.alloc(0)
+  if (manifest.distributionMode === 'offline') {
+    const proof = distribution.verifyEnvelope(manifest.distributionProof, distribution.PURPOSES.body,
+      options.trust || distribution.publicTrust(ROOT))
+    if (proof.payload.variant !== 'installed' || proof.payload.edition !== EDITION
+      || proof.payload.productVersion !== manifest.productVersion
+      || proof.payload.nativeArchitectures[0] !== manifest.targetArchitecture
+      || proof.payload.archive.sha256 !== u.hash(payloadBytes)
+      || proof.payload.archive.sizeBytes !== payloadBytes.length) throw new Error('Setup proof does not match its application payload')
+  }
+  const metadata = setupMetadata.createMetadata(manifest, payloadBytes)
+  const metadataBytes = Buffer.from(distribution.canonicalJson(metadata))
+  const footer = setupMetadata.footer(metadataBytes, payloadBytes.length, 0)
+  const suffix = manifest.distributionMode === 'online' ? 'online' : wizardArch
   fs.mkdirSync(output, { recursive: true })
-  const destination = path.join(output, `SidekickAI-Setup-${VERSION}-${suffix}.exe`)
+  const destination = path.join(output, 'SidekickAI-Setup-' + version + '-' + suffix + '.exe')
   if (fs.existsSync(destination)) throw new Error('Setup destination already exists')
-  cache.atomicWrite(destination, Buffer.concat([wizardBytes, payloadBytes, sevenzBytes, metadataBytes, footer]))
-  const bytes = fs.readFileSync(destination)
-  const info = u.footerInfo(bytes)
-  setupMetadata.readMetadata(bytes)
-  if (info.wizard !== wizardBytes.length || u.hash(bytes.subarray(0, info.wizard)) !== u.hash(wizardBytes)
-    || u.hash(bytes.subarray(info.wizard, info.wizard + info.payload)) !== u.hash(payloadBytes)
-    || u.hash(bytes.subarray(info.wizard + info.payload, info.metadataOffset)) !== u.hash(sevenzBytes)
+  cache.atomicWrite(destination, Buffer.concat([wizardBytes, payloadBytes, metadataBytes, footer]))
+  const beforeSigning = fs.readFileSync(destination)
+  const beforeLayout = setupMetadata.readMetadata(beforeSigning).layout
+  if (beforeLayout.wizard !== wizardBytes.length
+    || u.hash(beforeSigning.subarray(0, beforeLayout.wizard)) !== u.hash(wizardBytes)
+    || u.hash(beforeSigning.subarray(beforeLayout.wizard, beforeLayout.wizard + beforeLayout.payload)) !== u.hash(payloadBytes)
     || u.hash(fs.readFileSync(wizard)) !== u.hash(rawWizard)) throw new Error('Setup appended bytes did not verify')
-  const evidence = { path: destination, sha256: u.sha256(destination), size: bytes.length, architecture: wizardArch, payloadArchitectures: architectures,
-    componentVersion: COMPONENT_VERSION, productVersion: manifest.productVersion, rawWizardSha256: u.hash(rawWizard), metadata, footer: info }
-  fs.writeFileSync(path.join(output, `setup-${suffix}-evidence.json`), JSON.stringify(evidence, null, 2) + '\n')
-  console.log(`[build] Verified Setup (not published): ${destination}`)
-  buildEvidence.record(output, 'setup', u.hash(JSON.stringify(metadata)), { reason: 'assembled' }, started, { sha256: evidence.sha256 })
+  const codeSigning = executableSigning.signExecutable(destination)
+  const bytes = fs.readFileSync(destination)
+  const info = setupMetadata.readMetadata(bytes).layout
+  if (manifest.distributionMode === 'online' && bytes.length > componentContract.readContract().maintenanceExecutableMaxBytes) {
+    throw new Error('Online installer exceeds its distribution budget')
+  }
+  const evidence = { path: destination, sha256: u.sha256(destination), size: bytes.length,
+    executableArchitecture: wizardArch, supportedNativeArchitectures: architectures,
+    distributionMode: manifest.distributionMode, componentVersion: COMPONENT_VERSION, productVersion: manifest.productVersion,
+    rawWizardSha256: u.hash(rawWizard), metadata, footer: info, codeSigning }
+  fs.writeFileSync(path.join(output, 'setup-' + suffix + '-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' })
+  buildEvidence.record(output, 'setup-' + suffix, u.hash(distribution.canonicalJson(metadata)),
+    { reason: 'assembled' }, started, { sha256: evidence.sha256 })
   return destination
 }
 
@@ -550,7 +641,7 @@ function reuseComponent(name, arch, expected, cacheRoot = SHARED_COMPONENTS) {
   let cached
   try { cached = JSON.parse(fs.readFileSync(record, 'utf8')) } catch { return null }
   if (cached.name !== name || cached.arch !== arch || cached.version !== expected.version || cached.inputFingerprint !== expected.fingerprint) return null
-  if (cached.protocolVersion !== 2 || !/^[a-f0-9]{64}$/.test(cached.executableSha256 || '')) return null
+  if (cached.protocolVersion !== 3 || !/^[a-f0-9]{64}$/.test(cached.executableSha256 || '')) return null
   const exe = path.join(directory, arch, 'objects', `${cached.executableSha256}.exe`)
   try {
     // A cached executable is only reused after it verifies against its stored manifest.
@@ -569,7 +660,7 @@ function rememberComponent(name, arch, expected, built, webEvidence, cacheRoot =
   const record = path.join(directory, arch, `${expected.fingerprint}.json`)
   u.verifyComponentArtifact(built.artifact, built.manifest, arch, name === 'uninstaller')
   cache.atomicWrite(exe, fs.readFileSync(built.artifact))
-  const stored = { protocolVersion: 2, name, arch, version: expected.version, inputFingerprint: expected.fingerprint, manifest: built.manifest, webEvidence, storedAt: new Date().toISOString(), executableSha256: u.sha256(exe) }
+  const stored = { protocolVersion: 3, name, arch, version: expected.version, inputFingerprint: expected.fingerprint, manifest: built.manifest, webEvidence, storedAt: new Date().toISOString(), executableSha256: u.sha256(exe) }
   cache.atomicWrite(record, JSON.stringify(stored, null, 2) + '\n')
   return stored
 }
@@ -645,7 +736,7 @@ function probeSetupUi(setup, arch) {
   }
   const probe = path.join(__dirname, 'probe-native-ui.cjs')
   if (!fs.existsSync(probe)) throw new Error(`UI probe helper is missing: ${probe}`)
-  const result = spawnSync(process.execPath, [probe, setup, '安装向导'], { cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 120000 })
+  const result = spawnSync(process.execPath, [probe, setup, '安装向导', '--installer-ready'], { cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 120000 })
   let report
   try {
     report = JSON.parse((result.stdout || '').slice((result.stdout || '').indexOf('{')))
@@ -656,7 +747,7 @@ function probeSetupUi(setup, arch) {
     console.log(`[build] UI probe skipped for ${arch}: ${report.error}`)
     return { skipped: true, reason: report.error }
   }
-  if (!report.ok) {
+  if (!report.ok || report.installerReady !== true) {
     throw new Error(
       `Setup ${arch} does not render its embedded wizard UI: ${report.reason || report.error || 'unknown'} ` +
       `(webview url ${JSON.stringify(report.url)}, title ${JSON.stringify(report.title)}). ` +
@@ -667,43 +758,58 @@ function probeSetupUi(setup, arch) {
   return report
 }
 
+function buildRecoveryEntries(output, architectures, toolchain) {
+  const entries = {}
+  for (const arch of architectures) entries[arch] = buildRecoveryEntry(output, arch, toolchain)
+  return entries
+}
+
 function buildInstallerArtifacts(output, applications, architectures, toolchain, options = {}) {
   validateArchitectures(architectures)
-  // The payload MUST stay dual-architecture (the wizard reads PROCESSOR_ARCHITECTURE to pick win-unpacked
-  // vs win-arm64-unpacked at install time, and the embedded uninstaller manifests must match the host
-  // architecture). The wizard PE itself only needs the x64 build for the release surface: a single
-  // Setup-x64.exe with a dual-architecture payload is enough to install on either native Windows, so
-  // we do NOT publish a second Setup-arm64.exe. The arm64 wizard is still built locally for the
-  // shared-component cache when its inputs change, gated by a future flag if ever needed.
-  if (!architectures.includes('x64')) throw new Error('Setup requires an x64 wizard binary; the payload may still be dual-architecture')
+  if (architectures.length !== 2 || !architectures.includes('x64') || !architectures.includes('arm64')) {
+    throw new Error('Distribution requires both native application architectures')
+  }
   fs.mkdirSync(output, { recursive: true })
+  const signer = options.signer || distribution.loadLocalSigner(ROOT)
   const initialApplications = {}
-  for (const arch of architectures) initialApplications[arch] = verifyApplication(path.join(applications, TARGETS[arch].directory), arch)
   const uninstallers = {}
-  for (const arch of architectures) uninstallers[arch] = buildOrReuseUninstaller(output, arch, toolchain)
-  const payload = buildPayload(output, applications, uninstallers, architectures, options)
-  const currentManifest = require('./gen-install-manifest.cjs').generateManifest()
-  cache.atomicWrite(path.join(output, 'setup-metadata.json'), JSON.stringify(currentManifest, null, 2) + '\n')
+  const payloads = {}
+  const recoveryEntries = options.recoveryEntries || buildRecoveryEntries(output, architectures, toolchain)
+  for (const arch of architectures) {
+    initialApplications[arch] = verifyApplication(path.join(applications, TARGETS[arch].directory), arch)
+    uninstallers[arch] = buildOrReuseUninstaller(output, arch, toolchain)
+    payloads[arch] = buildPayload(path.join(output, 'payloads', arch), applications, uninstallers, [arch],
+      { ...options, signer, recoveryEntries })
+  }
   const setups = {}
   const wizards = {}
   const standaloneUninstallers = {}
   const uiProbes = {}
-  const wizardArch = 'x64'
-  wizards[wizardArch] = buildOrReuseWizard(output, wizardArch, toolchain)
-  setups[wizardArch] = appendSetup(output, wizards[wizardArch].artifact, payload, architectures, currentManifest)
-  uiProbes[wizardArch] = probeSetupUi(setups[wizardArch], wizardArch)
+  const wizardArchitectures = EDITION === 'community' ? ['x64'] : architectures
+  for (const arch of wizardArchitectures) {
+    const online = EDITION === 'community'
+    const currentManifest = require('./gen-install-manifest.cjs').generateManifest(ROOT, {
+      targetArchitecture: online ? null : arch,
+      distributionProof: online ? null : payloads[arch].proof,
+    })
+    if (online) currentManifest.productVersion = COMPONENT_VERSION
+    wizards[arch] = buildOrReuseWizard(output, arch, toolchain)
+    setups[arch] = appendSetup(output, wizards[arch].artifact, online ? null : payloads[arch].archive.path,
+      online ? architectures : [arch], currentManifest, { trust: signer.trust })
+    uiProbes[arch] = probeSetupUi(setups[arch], arch)
+  }
   for (const arch of architectures) {
-    const destination = path.join(output, `SidekickAI-Uninstaller-${VERSION}-${arch}.exe`)
+    const destination = path.join(output, 'SidekickAI-Uninstaller-' + COMPONENT_VERSION + '-' + arch + '.exe')
     fs.copyFileSync(uninstallers[arch].artifact, destination, fs.constants.COPYFILE_EXCL)
-    const deployedManifest = u.deploymentManifest(uninstallers[arch].manifest, VERSION)
-    u.verifyArtifact(destination, deployedManifest, arch, VERSION)
+    const deployedManifest = u.deploymentManifest(uninstallers[arch].manifest, productVersion())
+    u.verifyArtifact(destination, deployedManifest, arch, productVersion())
     fs.writeFileSync(destination.replace(/\.exe$/, '.json'), JSON.stringify(deployedManifest, null, 2) + '\n', { flag: 'wx' })
     standaloneUninstallers[arch] = destination
-    const directory = path.join(applications, TARGETS[arch].directory)
-    u.assertUnchanged(initialApplications[arch].inputs, applicationFingerprint(directory))
+    u.assertUnchanged(initialApplications[arch].inputs, applicationFingerprint(path.join(applications, TARGETS[arch].directory)))
   }
-  const result = { applications, architectures, payload, setups, standaloneUninstallers, uninstallers, wizards, uiProbes }
-  fs.writeFileSync(path.join(output, 'installer-artifacts.json'), JSON.stringify(result, null, 2) + '\n')
+  const result = { applications, architectures, payloads, setups, standaloneUninstallers,
+    uninstallers, wizards, uiProbes, recoveryEntries, signerSource: signer.source }
+  fs.writeFileSync(path.join(output, 'installer-artifacts.json'), JSON.stringify(result, null, 2) + '\n', { flag: 'wx' })
   return result
 }
 
@@ -714,6 +820,7 @@ function main(args = process.argv.slice(2)) {
 }
 
 async function buildFromArguments(args) {
+  Object.assign(process.env, require('./local-build-config.cjs').localBuildEnvironment(ROOT))
   require('../packages/product-contract/sync.cjs').synchronize(ROOT)
   require('./shared-source.cjs').check(ROOT)
   require('./sync-versions.cjs').main(['--check'])
@@ -733,7 +840,7 @@ async function buildFromArguments(args) {
     if (args.length !== 2 || args[1] !== 'all') throw new Error(USAGE)
     architectures = ['x64', 'arm64']
   } else {
-    // Setup and payload are always dual-architecture; single-architecture entries are removed.
+    // Application builds provide both native targets; packaging follows the edition policy.
     if (args.length) throw new Error(USAGE)
     architectures = ['x64', 'arm64']
   }
@@ -754,7 +861,7 @@ async function buildFromArguments(args) {
 }
 
 const nativeDependencies = {
-  prepareResources: () => require('./build-startup-helper.cjs').build({ resources: true }),
+  prepareResources: prepareNativeResources,
   captureInputs: () => EDITION === 'community' ? require('./build-release.cjs').captureReleaseInputs() : require('./build-distribution.cjs').captureInputs(ROOT),
   buildPlugins: options => EDITION === 'community' ? require('./build-plugins.cjs').main(options) : Promise.resolve(),
   buildApplications: (output, architectures) => buildApplications(output, architectures, { reuse: true }),
@@ -786,6 +893,7 @@ async function buildProducts(output, architectures, toolchain, dependencies = na
 }
 
 module.exports = { ROOT, VERSION, COMPONENT_VERSION, TARGETS, INSTALLER, UNINSTALLER, sourceInputs, nativeInputs, dependencyToolIdentity, validateArchitectures, run, tools, preflight, buildWeb, buildNative, cargoTargetDir, applicationFingerprint, verifyApplication, buildApplications, buildPayload, appendSetup, buildInstallerArtifacts, buildProducts, buildOrReuseUninstaller, reuseComponent, rememberComponent, sharedComponentVersion, componentCacheDirectory, probeSetupUi, readCargoPackageVersion, main, buildFromArguments }
+Object.assign(module.exports, { buildRecoveryEntry, buildRecoveryEntries, ensureBackupRuntime, prepareRecoveryLock, prepareNativeResources, recoveryInputs })
 if (require.main === module) {
   main().catch(error => {
     console.error(`[build] Failed: ${error.stack || error}`)

@@ -25,6 +25,7 @@ use sidekickai_uninstall_core::protocol::{
 use std::time::Duration;
 
 pub use hashing::sha256_file;
+pub(crate) use hashing::write_atomic;
 #[cfg(windows)]
 pub use worker::target_processes;
 pub use worker::{
@@ -36,6 +37,9 @@ pub use worker::{
 pub(crate) use identity::{current_user_sid, harden_operation_directory, process_user_sid};
 pub(crate) use tree::export_tree_digest;
 pub(crate) use worker::{WorkerSession, processes_require_elevation};
+#[cfg(test)]
+pub(crate) use worker::assert_save_without_data_locks;
+pub(crate) use worker::transaction::discover as pending_uninstall_tasks;
 
 pub const WORKER_ROOT: &str = "SidekickAI-Uninstall";
 

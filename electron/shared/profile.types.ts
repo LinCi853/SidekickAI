@@ -168,6 +168,21 @@ export interface Profile {
 // 内置 AI 平台（聚合功能）
 // ============================================================================
 
+export interface AIPlatformPageAdapter {
+  version: 1
+  hosts: string[]
+  sendEvent?: 'click' | 'mousedown'
+  disabledSelector?: string
+  nativeComposerSelector?: string
+  messageEdit: {
+    rootSelector?: string
+    sendSelector: string
+    cancelSelector: string
+    sendLabels?: string[]
+    cancelLabels?: string[]
+  }
+}
+
 /** 内置 AI 平台定义 */
 export interface AIPlatform {
   /** 平台 id */
@@ -192,6 +207,7 @@ export interface AIPlatform {
   inputSelector?: string
   /** 发送按钮 CSS 选择器（用于 triggerSend），未设置则用 Enter 回车键兜底 */
   sendSelector?: string
+  pageAdapter?: AIPlatformPageAdapter
   /** 文件上传 input 的 CSS 选择器（用于拖拽导入找 input[type=file]），未设置则用通用 input[type=file] */
   fileInputSelector?: string
   /** 拖放区 CSS 选择器（用于拖拽导入合成 drop 事件的派发目标），未设置则用启发式候选 */

@@ -5,6 +5,7 @@ import type { InstallMode } from '../global'
 import type { StepId } from '../types'
 
 export interface StepInstallingProps {
+  committed?: boolean
   actionName: string
   mode: InstallMode
   errorMsg: string
@@ -16,6 +17,7 @@ export interface StepInstallingProps {
 }
 
 export default function StepInstalling({
+  committed,
   actionName,
   mode,
   errorMsg,
@@ -37,7 +39,7 @@ export default function StepInstalling({
         <div className="state-head">
           <div className="state-dot state-dot--error">!</div>
           <div className="state-text state-text--error">
-            {`${actionName}失败`}
+            {committed ? '安装已完成，等待清理恢复副本' : `${actionName}失败`}
           </div>
         </div>
         <div className="error-box" style={{ maxWidth: 420, textAlign: 'left', marginTop: 10 }}>
@@ -49,7 +51,7 @@ export default function StepInstalling({
             返回修改
           </button>
           <button className="btn btn--primary" onClick={startRun}>
-            重试
+            {committed ? '继续清理' : '重试'}
           </button>
         </div>
       </div>

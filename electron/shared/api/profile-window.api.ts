@@ -22,6 +22,13 @@ export interface ProfileAPI {
   onReordered(callback: (orderedIds: string[]) => void): () => void
 }
 
+export interface WebviewRegistration {
+  tabId: string
+  windowId: string
+  profileId: string
+  webContentsId: number
+}
+
 /** 窗口管理接口 */
 export interface WindowAPI {
   open(profileId: string): Promise<void>
@@ -37,6 +44,7 @@ export interface WindowAPI {
    * 在 <webview> 加载前调用，保证首屏即使用正确 UA。
    */
   setupSession(profileId: string): Promise<void>
+  registerWebview(payload: WebviewRegistration): Promise<boolean>
 }
 
 /** 窗口控制接口（操作调用方所在窗口本身：最小化/最大化/关闭/置顶） */

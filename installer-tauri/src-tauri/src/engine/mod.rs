@@ -1,4 +1,4 @@
-// engine —— 安装引擎：扫描、staging+backup+commit+rollback、修复、卸载、7zr 解压、快捷方式、卸载注册
+// Signed application deployment, repair, registration and transactional recovery.
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -14,11 +14,16 @@ mod scan;
 mod scope;
 mod shortcuts;
 mod validate;
+mod transaction;
+mod retained;
+mod preflight;
+mod legacy;
 
 pub use config::{flush_install_config, install_config_needs_write, read_install_config};
 #[cfg(test)]
 use config::install_config_matches;
 pub use pipeline::run;
+pub use transaction::{pending_installations, RecoveryInfo};
 pub use scan::scan_installations;
 
 /// Log destination bound to the current operation.
@@ -74,7 +79,19 @@ impl CommandHidden for Command {
     }
 }
 
-pub(crate) fn product_version() -> String { manifest::build_info().version }
+pub(crate) fn product_version() -> String { crate::distribution::product_version().unwrap_or_else(|| manifest::build_info().version) }
+
+pub(crate) fn check_distribution_space(directory: &std::path::Path, expanded_bytes: u64) -> Result<(), String> {
+    preflight::check_space(&[(directory.to_path_buf(), expanded_bytes)])
+}
+
+pub(crate) fn write_distribution_receipt(root: &std::path::Path, bytes: Vec<u8>) -> Result<(), String> {
+    transaction::write_file(root.join("maintenance/distribution-receipt.json"), bytes).map_err(|error| error.to_string())
+}
+
+pub(crate) fn write_distribution_proof(root: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    transaction::write_file(root.join("distribution-proof.json"), bytes).map_err(|error| error.to_string())
+}
 
 #[cfg(test)]
 mod tests;

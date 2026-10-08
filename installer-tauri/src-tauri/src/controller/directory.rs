@@ -153,7 +153,16 @@ pub fn prepare_operation(
 /// authentication: a same-user process can recreate such a directory, as the
 /// module header documents.
 #[cfg(windows)]
-pub(super) fn verify_private_directory(directory: &Path) -> Result<(), String> {
+pub(crate) fn verify_private_directory(directory: &Path) -> Result<(), String> {
+    verify_directory_security(directory, false)
+}
+
+pub(crate) fn verify_recovery_directory(directory: &Path) -> Result<(), String> {
+    verify_directory_security(directory, true)
+}
+
+#[cfg(windows)]
+fn verify_directory_security(directory: &Path, allow_administrator_owner: bool) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{HLOCAL, LocalFree};
@@ -161,7 +170,7 @@ pub(super) fn verify_private_directory(directory: &Path) -> Result<(), String> {
         GetNamedSecurityInfoW, SE_FILE_OBJECT,
     };
     use windows::Win32::Security::{
-        GetSecurityDescriptorControl, ACL, DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
+        GetAce, GetSecurityDescriptorControl, ACCESS_ALLOWED_ACE, ACL, DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
         PSECURITY_DESCRIPTOR, PSID, SE_DACL_PROTECTED,
     };
 
@@ -195,12 +204,32 @@ pub(super) fn verify_private_directory(directory: &Path) -> Result<(), String> {
         let protected = control_read && (control & SE_DACL_PROTECTED.0) != 0;
         let ace_count = if dacl.is_null() { 0 } else { (*dacl).AceCount };
         let owner_text = sid_to_string(owner);
+        let mut principals = std::collections::HashSet::new();
+        let mut exact_acl = protected && ace_count == 3;
+        for index in 0..ace_count {
+            let mut raw = std::ptr::null_mut();
+            if GetAce(dacl, index as u32, &mut raw).is_err() || raw.is_null() {
+                exact_acl = false;
+                break;
+            }
+            let ace = &*(raw as *const ACCESS_ALLOWED_ACE);
+            if ace.Header.AceType != 0 || ace.Header.AceFlags != 3 || ace.Mask != 0x001f01ff {
+                exact_acl = false;
+                break;
+            }
+            let sid = sid_to_string(PSID(std::ptr::addr_of!(ace.SidStart).cast_mut().cast()));
+            match sid {
+                Some(sid) if [expected_owner.as_str(), "S-1-5-18", "S-1-5-32-544"].contains(&sid.as_str()) && principals.insert(sid.clone()) => {},
+                _ => { exact_acl = false; break; }
+            }
+        }
         let _ = LocalFree(HLOCAL(descriptor.0));
-        if !protected || ace_count != 3 {
-            return Err("安装请求目录不是本安装器创建的私有目录；已拒绝。".into());
+        if !exact_acl {
+            return Err("安装私有目录的权限与当前账户不匹配；已拒绝。".into());
         }
         match owner_text {
             Some(owner) if owner.eq_ignore_ascii_case(&expected_owner) => Ok(()),
+            Some(owner) if allow_administrator_owner && owner == "S-1-5-32-544" => Ok(()),
             Some(_) => Err("安装请求目录不属于当前用户账户；已拒绝。".into()),
             None => Err("无法确认安装请求目录的所有者；已拒绝。".into()),
         }
@@ -226,6 +255,64 @@ unsafe fn sid_to_string(sid: windows::Win32::Security::PSID) -> Option<String> {
 #[cfg(not(windows))]
 fn verify_private_directory(_directory: &Path) -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(not(windows))]
+fn verify_directory_security(_directory: &Path, _allow_administrator_owner: bool) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    fn set_dacl(path: &Path, acl: &str) {
+        use windows::Win32::Security::Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1};
+        use windows::Win32::Security::{SetFileSecurityW, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
+        use windows::Win32::Foundation::{HLOCAL, LocalFree};
+        let text = crate::elevate::wide(acl);
+        let path = crate::elevate::wide(&path.to_string_lossy());
+        unsafe {
+            let mut descriptor = PSECURITY_DESCRIPTOR::default();
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(windows::core::PCWSTR(text.as_ptr()), SDDL_REVISION_1, &mut descriptor, None).unwrap();
+            let applied = SetFileSecurityW(windows::core::PCWSTR(path.as_ptr()), DACL_SECURITY_INFORMATION, descriptor);
+            let _ = LocalFree(HLOCAL(descriptor.0));
+            assert!(applied.as_bool());
+        }
+    }
+
+    #[test]
+    fn private_directory_can_be_created_with_inherited_modify_access() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).unwrap().join("build/verification")
+            .join(sidekickai_uninstall_core::random_id("installer-owner-access").unwrap());
+        fs::create_dir_all(&root).unwrap();
+        harden_private_directory(&root).unwrap();
+        verify_private_directory(&root).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn private_directory_requires_exact_principals_and_inheritance() {
+        let root = std::env::temp_dir().join(sidekickai_uninstall_core::random_id("installer-acl").unwrap());
+        fs::create_dir(&root).unwrap();
+        harden_private_directory(&root).unwrap();
+        verify_private_directory(&root).unwrap();
+        verify_recovery_directory(&root).unwrap();
+        let sid = current_user_sid().unwrap();
+        for acl in [
+            format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;WD)"),
+            format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;{sid})"),
+            format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;;FA;;;BA)"),
+            format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FR;;;BA)"),
+        ] {
+            set_dacl(&root, &acl);
+            assert!(verify_private_directory(&root).is_err());
+            assert!(verify_recovery_directory(&root).is_err());
+        }
+        harden_private_directory(&root).unwrap();
+        verify_private_directory(&root).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
 }
 
 /// The directory name is `{operationId}-{nonce}`; binding the request to it

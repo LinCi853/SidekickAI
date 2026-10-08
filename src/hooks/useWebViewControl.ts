@@ -190,13 +190,18 @@ export async function triggerSendInWebview(
   webview: WebviewLike,
   sendSelector?: string | null,
   inputSelector?: string | null,
+  sendEvent: 'click' | 'mousedown' = 'click',
 ): Promise<boolean> {
-  const script = `(function(sendSel, inputSel) {
+  const script = `(function(sendSel, inputSel, sendEvent) {
   // 1. 优先点击发送按钮
   if (sendSel) {
     var btn = document.querySelector(sendSel);
     if (btn) {
-      try { btn.click(); return true; } catch (e) {}
+      try {
+        if (sendEvent === 'mousedown') btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, button: 0 }));
+        else btn.click();
+        return true;
+      } catch (e) {}
     }
   }
   // 2. 回退：对输入框 dispatch Enter keydown/keyup
@@ -215,7 +220,7 @@ export async function triggerSendInWebview(
   } catch (e) {
     return false;
   }
-})(${JSON.stringify(sendSelector ?? null)}, ${JSON.stringify(inputSelector ?? null)})`;
+})(${JSON.stringify(sendSelector ?? null)}, ${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendEvent)})`;
   try {
     const result = await webview.executeJavaScript(script);
     return Boolean(result);
@@ -394,5 +399,4 @@ export async function injectEnterSendBehavior(
     return false;
   }
 }
-
 

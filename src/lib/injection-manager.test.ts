@@ -9,6 +9,7 @@ vi.mock('./electron-api', () => ({
     enterToSend: true,
   })),
   getFingerprintScript: vi.fn(() => Promise.resolve('fingerprint-script')),
+  listAIPlatforms: vi.fn(() => Promise.resolve([])),
   onAppSettingsChanged: vi.fn(() => () => {}),
   onBlockRulesChanged: vi.fn(() => () => {}),
 }))
@@ -57,6 +58,40 @@ describe('InjectionManager', () => {
   })
 
   describe('register', () => {
+    it('resolves declarative application data through the list API and retains account selectors', async () => {
+      const api = await import('./electron-api')
+      const scripts = await import('../pages/MainView/scripts')
+      const pageAdapter = { version: 1 as const, hosts: ['custom.example'], messageEdit: {
+        rootSelector: '.history-edit', sendSelector: '.confirm', cancelSelector: '.cancel',
+      } }
+      vi.mocked(api.listAIPlatforms).mockResolvedValueOnce([{ id: 'custom', pageAdapter } as never])
+      await registerDefaultInjectionPoints()
+      const webview = { executeJavaScript: vi.fn(async () => undefined) }
+      await injectionManager.injectAll('custom-app', webview, 'https://custom.example/chat', {
+        manageEnterToSend: true, profile: { id: 'account', isAIPlatform: true, aiPlatformId: 'custom' },
+        inputSelector: '#account-input', sendSelector: '#account-send',
+      })
+      expect(scripts.buildEnterToSendScript).toHaveBeenLastCalledWith({ enabled: true,
+        inputSelector: '#account-input', sendSelector: '#account-send', pageAdapter })
+      expect(webview.executeJavaScript).toHaveBeenCalledWith('enter-script')
+    })
+
+    it('resolves legacy application profiles by their saved URL', async () => {
+      const api = await import('./electron-api')
+      const scripts = await import('../pages/MainView/scripts')
+      const pageAdapter = { version: 1 as const, hosts: ['legacy.example'], messageEdit: {
+        rootSelector: '.history-edit', sendSelector: '.confirm', cancelSelector: '.cancel',
+      } }
+      vi.mocked(api.listAIPlatforms).mockResolvedValueOnce([{ id: 'legacy', url: 'https://legacy.example',
+        inputSelector: '#legacy-input', sendSelector: '#legacy-send', pageAdapter } as never])
+      await registerDefaultInjectionPoints()
+      await injectionManager.injectAll('legacy-app', { executeJavaScript: vi.fn(async () => undefined) }, 'https://legacy.example/chat', {
+        manageEnterToSend: true, profile: { id: 'account', isAIPlatform: true, aiPlatformUrl: 'https://legacy.example' },
+      })
+      expect(scripts.buildEnterToSendScript).toHaveBeenLastCalledWith({ enabled: true,
+        inputSelector: '#legacy-input', sendSelector: '#legacy-send', pageAdapter })
+    })
+
     it('should register an injection point', () => {
       injectionManager.register({
         id: 'test-point',

@@ -18,8 +18,8 @@ const IDLE_LIMIT: Duration = Duration::from_secs(600);
 const SESSION_LIMIT: Duration = Duration::from_secs(1800);
 const COMMAND_LIMIT: Duration = Duration::from_secs(100);
 const MESSAGE_LIMIT: u64 = 64 * 1024;
-struct State { session: Option<Session>, operation: Option<Arc<PreparedOperation>>, expected: Option<PathBuf> }
-static CURRENT: Mutex<State> = Mutex::new(State { session: None, operation: None, expected: None });
+struct State { session: Option<Session>, operation: Option<Arc<PreparedOperation>>, expected: Option<PathBuf>, failure: Option<String> }
+static CURRENT: Mutex<State> = Mutex::new(State { session: None, operation: None, expected: None, failure: None });
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -197,6 +197,18 @@ impl Drop for Session {
     }
 }
 
+fn completed_without_session(session: Session, executable: &Path, detail: String) -> Result<(), String> {
+    let message = format!("程序操作已完成，但完成授权会话不可用。请关闭向导后重新运行安装器：{detail}");
+    crate::engine::write_log(&format!("S|{message}"));
+    let mut state = CURRENT.lock().map_err(|_| "安装授权会话不可用。")?;
+    state.expected = Some(executable.into());
+    state.operation = Some(session.operation.clone());
+    state.failure = Some(message);
+    drop(state);
+    drop(session);
+    Ok(())
+}
+
 pub(crate) fn install(operation: Arc<PreparedOperation>, executable: &Path) -> Result<(), String> {
     release();
     let root = operation.request_path.parent().ok_or("安装授权目录无效。")?;
@@ -204,28 +216,47 @@ pub(crate) fn install(operation: Arc<PreparedOperation>, executable: &Path) -> R
     let binding = Binding { protocol_version: OPERATION_PROTOCOL_VERSION, operation_id: operation.operation_id.clone(), nonce: operation.nonce.clone(),
         pid: std::process::id(), started: caller.started, session: caller.session, executable: caller.executable.clone() };
     write_private(&root.join("session-binding.json"), &binding)?;
-    let mut session = Session { operation: operation.clone(), process: Arc::new(elevate::spawn_elevated(&operation.request_path)?), executable: executable.into(),
+    let session = Session { operation: operation.clone(), process: Arc::new(elevate::spawn_elevated(&operation.request_path)?), executable: executable.into(),
         sequence: 0, opened: Instant::now(), status_offset: 0, failed: false };
+    wait_for_install(session, executable)
+}
+
+fn wait_for_install(mut session: Session, executable: &Path) -> Result<(), String> {
+    let operation = session.operation.clone();
+    let root = operation.request_path.parent().ok_or("安装授权目录无效。")?;
     loop {
         if operation.result_path.is_file() {
             let result: super::envelope::OperationResult = read_private(&operation.result_path)?;
             let raw = serde_json::to_string(&result).map_err(|error| error.to_string())?;
             super::interpret_child_result(Some(&raw), 0, &operation.operation_id, &operation.nonce)?;
             if root.join("session-ready.json").is_file() {
-                let ready: Release = read_private(&root.join("session-ready.json"))?;
-                if ready.protocol_version != OPERATION_PROTOCOL_VERSION || ready.operation_id != operation.operation_id || ready.nonce != operation.nonce { return Err("安装授权会话的就绪身份不匹配。".into()); }
-                if session.process.exit_code()?.is_some() { return Err("安装已完成，但授权执行器已经退出，无法继续完成操作。".into()); }
+                let ready: Release = match read_private(&root.join("session-ready.json")) {
+                    Ok(ready) => ready,
+                    Err(error) => return completed_without_session(session, executable, error),
+                };
+                if ready.protocol_version != OPERATION_PROTOCOL_VERSION || ready.operation_id != operation.operation_id || ready.nonce != operation.nonce {
+                    return completed_without_session(session, executable, "安装授权会话的就绪身份不匹配。".into());
+                }
+                if session.process.exit_code()?.is_some() {
+                    return completed_without_session(session, executable, "授权执行器已经退出。".into());
+                }
                 session.status_offset = std::fs::read_to_string(&operation.log_path).map(|text| text.len()).unwrap_or(0);
                 session.opened = Instant::now();
                 let mut state = CURRENT.lock().map_err(|_| "安装授权会话不可用。")?;
                 state.expected = Some(executable.into());
                 state.operation = Some(operation.clone());
+                state.failure = None;
                 state.session = Some(session);
                 return Ok(());
             }
         }
         if let Some(code) = session.process.exit_code()? {
-            if operation.result_path.is_file() { return Err("安装操作已返回，但授权会话未能就绪。请查看操作日志并重新运行安装器。".into()); }
+            if operation.result_path.is_file() {
+                let result: super::envelope::OperationResult = read_private(&operation.result_path)?;
+                let raw = serde_json::to_string(&result).map_err(|error| error.to_string())?;
+                super::interpret_child_result(Some(&raw), 0, &operation.operation_id, &operation.nonce)?;
+                return completed_without_session(session, executable, "授权执行器未能就绪，请查看操作日志。".into());
+            }
             return super::interpret_child_result(None, code, &operation.operation_id, &operation.nonce);
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -243,13 +274,13 @@ pub(crate) fn release() {
 
 pub(crate) fn reset() {
     release();
-    if let Ok(mut state) = CURRENT.lock() { state.expected = None; }
+    if let Ok(mut state) = CURRENT.lock() { state.expected = None; state.failure = None; }
 }
 
 fn with_session(target: &Path, execute: impl FnOnce(&mut Session) -> Result<(), String>) -> Option<Result<(), String>> {
     let mut current = match CURRENT.lock() { Ok(current) => current, Err(_) => return Some(Err("安装授权会话不可用。".into())) };
     let Some(session) = current.session.as_ref() else {
-        return current.expected.as_ref().map(|_| Err("本次安装的授权会话已结束。请关闭向导后重新运行安装器，不会自动再次请求授权。".into()));
+        return current.expected.as_ref().map(|_| Err(current.failure.clone().unwrap_or_else(|| "本次安装的授权会话已结束。请关闭向导后重新运行安装器，不会自动再次请求授权。".into())));
     };
     if !sidekickai_uninstall_core::path::paths_equal(target, &session.executable) {
         return Some(Err("完成操作目标不属于本次安装授权。".into()));

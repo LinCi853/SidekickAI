@@ -1,8 +1,4 @@
-// electron/shared/module-manifest.types.ts — 模块管理（插件系统）共享类型
-//
-// 模块 manifest 与状态的类型定义。主进程注册表（electron/modules/registry.ts）、
-// 状态存储（electron/store/module-state-store.ts）与渲染层设置页共用。
-// 设计规范见 docs/功能插件系统与安装管控方案.md 第 8、11 章。
+// Built-in module metadata and persisted state shared by desktop consumers.
 
 /** 模块分类：stable=插件市场（稳定）/ dev=开发者选项（实验性，默认关闭 + 测试标签）/ plugin=功能插件 */
 export type ModuleCategory = 'stable' | 'dev' | 'plugin'
@@ -12,7 +8,7 @@ export type ModuleCategory = 'stable' | 'dev' | 'plugin'
  */
 export type AdvancedPanelTabKey = string
 
-/** 体积级别：large=大模块（>10MB，安装期可选）/ small=小模块（≤10MB，恒安装） */
+/** Installation class: large=separate optional component, small=bundled tool. */
 export type ModuleSizeLevel = 'large' | 'small'
 
 /** 模块状态行（settings.db 的 module_state 表） */
@@ -63,52 +59,9 @@ export type EffectKind =
   | 'window'
   | 'webview-script'
   | 'webview-css'
-  | 'debugger'
   | 'event-sub'
   | 'timer'
   | 'renderer-ui'
-
-/** 能力作用范围 */
-export type CapabilityScope =
-  | 'global'
-  | 'window'
-  | 'profile'
-  | 'tab'
-  | 'webview'
-  | 'document'
-
-/** 能力触发时机 */
-export type CapabilityTrigger =
-  | 'startup'
-  | 'window-created'
-  | 'page-navigate'
-  | 'user-command'
-  | 'manual'
-
-/**
- * 功能贡献声明（manifest 级别，供注册表和渲染层使用）。
- * 模块是用户可见的开关单位，能力是实际可控制的最小单位。
- */
-export interface CapabilityRef {
-  /** 所属模块 id */
-  ownerModule: string
-  /** 能力唯一标识，如 'freeze.debugger' */
-  capabilityId: string
-  /** 主要副作用类型 */
-  kind: EffectKind
-  /** 作用范围 */
-  scope: CapabilityScope
-  /** 依赖的其他 capability id 或模块 id */
-  dependencies?: string[]
-  /** 触发时机 */
-  trigger: CapabilityTrigger
-  /** 是否可撤销 */
-  reversible: boolean
-  /** 未来插件权限标签 */
-  permission?: string
-  /** 人类可读描述 */
-  description?: string
-}
 
 /** 模块 manifest（主进程内部注册声明） */
 export interface ModuleManifest {
@@ -138,9 +91,6 @@ export interface ModuleManifest {
   teardown?: () => void | Promise<void>
   /** 清除数据回调：删除该模块全部用户数据（不可逆；未实现时设置页不显示清除按钮） */
   clearData?: () => void | Promise<void>
-  /** 本模块拥有的能力声明（统一注入管线扩展，可选） */
-  capabilities?: CapabilityRef[]
-
   // === 进阶面板 tab 声明（可选） ===
   /** 声明本模块在进阶面板中注册的 tab（key + label） */
   advancedPanelTab?: {

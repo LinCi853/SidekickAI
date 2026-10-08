@@ -32,7 +32,7 @@ pub struct DataRootIdentity {
     pub tree_sha256: String,
 }
 
-/// Apply a protected DACL that grants full control only to the current user,
+/// Bind ownership to the current user and apply a protected DACL granting full control to that user,
 /// SYSTEM and the built-in Administrators group. Inheritance is replaced rather
 /// than extended, so a permissive parent (for example `%TEMP%`) cannot hand the
 /// directory to another account.
@@ -44,13 +44,13 @@ pub(crate) fn harden_operation_directory(directory: &Path) -> Result<(), Uninsta
     use windows::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
-    use windows::Win32::Security::{SetFileSecurityW, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
+    use windows::Win32::Security::{SetFileSecurityW, DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
     let sid = current_user_sid()?;
     // Never interpolate an unexpected SID into an SDDL string.
     if !sid.starts_with("S-1-") || sid.chars().any(|c| c.is_whitespace() || matches!(c, '(' | ')' | ';')) {
         return Err(internal("无法从有效的用户 SID 推导操作目录 ACL。"));
     }
-    let sddl = format!("D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;{sid})");
+    let sddl = format!("O:{sid}D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;{sid})");
     let wide_sddl: Vec<u16> = sddl.encode_utf16().chain(std::iter::once(0)).collect();
     let wide_path: Vec<u16> = directory.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
     unsafe {
@@ -63,9 +63,13 @@ pub(crate) fn harden_operation_directory(directory: &Path) -> Result<(), Uninsta
         )
         .map_err(|e| internal(format!("无法构建操作目录 ACL：{e}")))?;
         let applied = SetFileSecurityW(PCWSTR(wide_path.as_ptr()), DACL_SECURITY_INFORMATION, descriptor);
+        let applied = if applied.as_bool() {
+            SetFileSecurityW(PCWSTR(wide_path.as_ptr()), OWNER_SECURITY_INFORMATION, descriptor)
+        } else { applied };
+        let error = (!applied.as_bool()).then(std::io::Error::last_os_error);
         let _ = LocalFree(HLOCAL(descriptor.0));
-        if !applied.as_bool() {
-            return Err(internal("无法为操作目录应用私有 ACL。"));
+        if let Some(error) = error {
+            return Err(internal(format!("无法设置安装维护私有目录权限 {}：{error}", directory.display())));
         }
     }
     Ok(())

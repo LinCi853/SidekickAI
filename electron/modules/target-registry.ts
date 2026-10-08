@@ -1,13 +1,4 @@
-// electron/modules/target-registry.ts — 统一目标注册表
-//
-// 统一追踪窗口、webview、tab、profile 和 document generation。
-// 替代分散在各处的 target 追踪逻辑（如 freeze/webview-registry.ts）。
-//
-// 设计：
-// - 每个目标有唯一 targetId（由 target type + id 组合）
-// - 支持按 type、owner、profile 等维度查询
-// - 目标销毁时自动清理关联的 EffectHandle
-// - 与 InjectionBroker 配合，实现目标级批量撤销
+// Tracks native targets and their module, profile and document ownership.
 
 import type { WebContents, BrowserWindow } from 'electron'
 

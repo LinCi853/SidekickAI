@@ -6,11 +6,10 @@ import type { SttAPI, VoiceConfigAPI } from './voice.api.js'
 import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings } from './settings.api.js'
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
 import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
-import type { FreezeAPI } from './freeze.api.js'
-import type { UpdatesAPI } from '../../updates/types.js'
 import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
 import type { PromptTemplate } from '../chat.types.js'
 import type { AiAssetsAPI } from '../ai-assets.types.js'
+import type { UpdatesAPI } from '../../updates/types.js'
 import type { WebviewHotkeyPayload, WebviewHotkeyTarget } from './settings.api.js'
 
 /** 模块管理 API（插件市场 / 开发者选项） */
@@ -145,8 +144,6 @@ export interface ElectronAPI {
   browser: BrowserAPI
   /** 导航历史追踪（主窗口上报，脱离时聚合） */
   navHistory: NavHistoryAPI
-  /** 页面冻结（v0.1.0 防撤回保险：Debugger.pause 冻结 webview） */
-  freeze: FreezeAPI
   /** 模块管理（插件市场 / 开发者选项） */
   modules: ModulesAPI
   /**

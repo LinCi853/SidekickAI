@@ -22,6 +22,7 @@ import {
   saveModuleState,
 } from './module-state-store.js'
 import { applyInstallConfigOptions } from './app-settings-store.js'
+import { BUILTIN_MODULE_INSTALL_DATA } from '../modules/builtin-module-data.js'
 
 /** 安装期配置文件名（exe 同级） */
 export const INSTALL_CONFIG_FILENAME = 'install-config.json'
@@ -67,6 +68,7 @@ export function getInstallConfigHash(): string | null {
 function seedModuleStates(modules: Record<string, { enabled: boolean }>, force: boolean): void {
   let seeded = 0
   for (const [id, cfg] of Object.entries(modules)) {
+    if (!BUILTIN_MODULE_INSTALL_DATA.some(module => module.id === id && module.installRequired)) continue
     if (!cfg || typeof cfg.enabled !== 'boolean') continue
     if (!force && getModuleState(id)) continue
     const installed = isLargeModuleInstalledByManifestFile(id)

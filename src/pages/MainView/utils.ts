@@ -1,4 +1,5 @@
 import type { AIPlatform, Profile } from '../../lib/electron-api';
+import { derivePlatformGradient } from '../../../packages/desktop-common/platform-colors';
 
 /** 暖色系渐变色板，用于平台标签图标背景 */
 export const GRADIENTS: ReadonlyArray<readonly [string, string]> = [
@@ -27,13 +28,7 @@ export interface PlatformColors {
   gradientColor: string;
 }
 
-/**
- * 解析平台颜色，fallback 链：
- *   profile.aiThemeColor ?? platform.themeColor ?? gradientFor(id)
- * - 用户在 Profile 上覆盖 aiThemeColor 时优先使用（gradientColor 优先取平台定义，缺失时回退 aiThemeColor）
- * - 否则用平台定义的 themeColor + gradientColor
- * - 都没有时回退到暖色哈希板（gradientFor）
- */
+/** Each profile owns its accent; preset accents provide defaults. */
 export function getPlatformColors(
   profile: Profile | null | undefined,
   platform: AIPlatform | null | undefined,
@@ -42,7 +37,8 @@ export function getPlatformColors(
   if (profile?.aiThemeColor) {
     return {
       themeColor: profile.aiThemeColor,
-      gradientColor: platform?.gradientColor ?? profile.aiThemeColor,
+      gradientColor: profile.aiThemeColor.toLowerCase() === platform?.themeColor.toLowerCase()
+        ? platform.gradientColor : derivePlatformGradient(profile.aiThemeColor),
     };
   }
   if (platform) {

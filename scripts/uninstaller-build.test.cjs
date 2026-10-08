@@ -25,8 +25,71 @@ function executable(dir, bytes = pe()) {
   const file = path.join(dir, 'uninstall.exe'); fs.writeFileSync(file, bytes); return file
 }
 function manifest(file, arch = 'x64') {
-  return { protocolVersion: 1, edition: require('../product-edition.json').edition, version: '0.1.0-alpha', arch, sha256: u.sha256(file), size: fs.statSync(file).size, inputFingerprint: 'a'.repeat(64) }
+  const contract = require('../maintenance/component-contract.json')
+  return { protocolVersion: 3, edition: require('../product-edition.json').edition, componentVersion: contract.componentVersion,
+    uninstallProtocolVersion: contract.uninstallProtocolVersion, arch, sha256: u.sha256(file), size: fs.statSync(file).size, inputFingerprint: 'a'.repeat(64) }
 }
+
+test('recovery dependency preparation precedes source capture and preserves an existing lock', t => {
+  const root = fixture(t)
+  const directory = path.join(root, 'tools/backup-recovery-native')
+  fs.mkdirSync(directory, { recursive: true })
+  const manifest = path.join(directory, 'Cargo.toml')
+  const lock = path.join(directory, 'Cargo.lock')
+  fs.writeFileSync(manifest, '[package]\nname = "isolated-recovery"\nversion = "1.0.0"\n')
+  const calls = []
+  const invoke = (command, args) => {
+    calls.push([command, args])
+    fs.writeFileSync(lock, 'version = 4\n')
+  }
+  assert.equal(build.prepareRecoveryLock(root, invoke), lock)
+  assert.deepEqual(calls, [['cargo', ['generate-lockfile', '--offline', '--manifest-path', manifest]]])
+  const bytes = fs.readFileSync(lock)
+  assert.equal(build.prepareRecoveryLock(root, () => { throw new Error('An existing lock must be retained') }), lock)
+  assert.deepEqual(fs.readFileSync(lock), bytes)
+  fs.unlinkSync(lock)
+  assert.throws(() => build.prepareRecoveryLock(root, () => {}), /Cargo.lock/)
+})
+
+test('recovery cache inputs bind transitive product identity and optional compiler configuration', t => {
+  const root = fixture(t)
+  const write = (relative, contents) => {
+    const file = path.join(root, relative)
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, contents)
+  }
+  write('tools/backup-recovery-native/src/main.rs', 'fn main() {}\n')
+  write('tools/backup-recovery-native/Cargo.toml', '[package]\nname = "isolated-recovery"\n')
+  write('tools/backup-recovery-native/Cargo.lock', 'version = 4\n')
+  write('installer-shared/uninstall-core/src/lib.rs', '#[path = "../../product.rs"]\npub mod product;\n')
+  write('installer-shared/uninstall-core/Cargo.toml', '[package]\nname = "isolated-core"\n')
+  const products = {
+    'installer-shared/product.rs': 'pub const NAME: &str = "Product";\n',
+    'packages/product-contract/manifest.json': '{"edition":"community"}\n',
+    'product-edition.json': '{"edition":"community"}\n',
+  }
+  for (const [relative, contents] of Object.entries(products)) write(relative, contents)
+  const fingerprint = () => u.fingerprint(root, build.recoveryInputs(root))
+  const cacheKey = source => u.hash(JSON.stringify({ sources: source, arch: 'x64' }))
+  const before = fingerprint()
+  for (const [relative, contents] of Object.entries(products)) {
+    write(relative, contents.replace('community', 'concept') + '\n')
+    const changed = fingerprint()
+    assert.notEqual(cacheKey(changed), cacheKey(before), `${relative} must invalidate recovery reuse`)
+    assert.throws(() => u.assertUnchanged(before, changed), /inputs changed/)
+    write(relative, contents)
+    assert.deepEqual(fingerprint(), before)
+  }
+  for (const relative of ['.cargo/config.toml', '.cargo/config', 'rust-toolchain.toml', 'rust-toolchain']) {
+    write(relative, 'compiler-one\n')
+    const added = fingerprint()
+    assert.notEqual(cacheKey(added), cacheKey(before), `${relative} must participate when present`)
+    write(relative, 'compiler-two\n')
+    assert.notEqual(cacheKey(fingerprint()), cacheKey(added))
+    fs.unlinkSync(path.join(root, relative))
+    assert.deepEqual(fingerprint(), before)
+  }
+})
 
 test('PE checks both exact architectures and rejects corrupt/truncated sections', t => {
   const dir = fixture(t)
@@ -57,7 +120,12 @@ test('actual Setup footer, payload dependencies, and unexplained overlay fail', 
   const dir = fixture(t)
   const tail = Buffer.alloc(28); tail.write('SKPAYLD1'); tail.writeBigUInt64LE(10n, 8); tail.writeBigUInt64LE(10n, 16); tail.writeUInt32LE(28, 24)
   const file = executable(dir, Buffer.concat([pe(), Buffer.alloc(20), tail]))
-  assert.deepEqual(u.footerInfo(fs.readFileSync(file)), { wizard: 1024, payload: 10, sevenz: 10, footer: 28 })
+  assert.equal(u.footerInfo(fs.readFileSync(file)), null)
+  assert.throws(() => u.assertStandaloneBinary(file), /overlay/)
+  const metadata = require('./setup-metadata.cjs')
+  const metadataBytes = Buffer.from('{}')
+  fs.writeFileSync(file, Buffer.concat([pe(), Buffer.alloc(10), metadataBytes, metadata.footer(metadataBytes, 10, 0)]))
+  assert.equal(u.footerInfo(fs.readFileSync(file)).protocolVersion, 3)
   assert.throws(() => u.assertStandaloneBinary(file), /footer/)
   for (const bytes of [Buffer.from('payload.7z'), Buffer.from('7zr.exe', 'utf16le')]) {
     fs.writeFileSync(file, pe('x64', bytes)); assert.throws(() => u.assertStandaloneBinary(file), /dependency/)
@@ -75,13 +143,13 @@ test('fingerprints detect changed bytes despite restored timestamps and director
 })
 
 test('artifact metadata binds architecture/version/protocol/size/hash and current bytes', t => {
-  const dir = fixture(t); const file = executable(dir); const meta = manifest(file)
-  assert.doesNotThrow(() => u.verifyArtifact(file, meta, 'x64', meta.version))
-  for (const change of [{ edition: 'foreign' }, { protocolVersion: 2 }, { version: 'old' }, { arch: 'arm64' }, { size: 4 }, { sha256: 'b'.repeat(64) }, { inputFingerprint: 'missing' }]) {
-    assert.throws(() => u.verifyArtifact(file, { ...meta, ...change }, 'x64', meta.version), /manifest/)
+  const dir = fixture(t); const file = executable(dir); const meta = u.deploymentManifest(manifest(file), build.VERSION)
+  assert.doesNotThrow(() => u.verifyArtifact(file, meta, 'x64', meta.productVersion))
+  for (const change of [{ edition: 'foreign' }, { protocolVersion: 2 }, { productVersion: 'old' }, { arch: 'arm64' }, { size: 4 }, { sha256: 'b'.repeat(64) }, { inputFingerprint: 'missing' }]) {
+    assert.throws(() => u.verifyArtifact(file, { ...meta, ...change }, 'x64', meta.productVersion), /manifest/)
   }
   fs.writeFileSync(file, pe('x64', Buffer.from('changed')))
-  assert.throws(() => u.verifyArtifact(file, meta, 'x64', meta.version), /manifest/)
+  assert.throws(() => u.verifyArtifact(file, meta, 'x64', meta.productVersion), /manifest/)
 })
 
 test('staging updates only explicit copy and retains existing package bytes', t => {
@@ -89,7 +157,7 @@ test('staging updates only explicit copy and retains existing package bytes', t 
   fs.mkdirSync(source); fs.mkdirSync(stage)
   const file = executable(source); const meta = manifest(file)
   const old = path.join(dir, 'old-setup.exe'); fs.writeFileSync(old, 'preserve')
-  u.stageUninstaller(file, meta, stage, 'x64', meta.version)
+  u.stageUninstaller(file, meta, stage, 'x64', build.VERSION)
   assert.equal(u.sha256(path.join(stage, 'uninstall.exe')), meta.sha256)
   assert.equal(fs.readFileSync(old, 'utf8'), 'preserve')
   assert.equal(u.sha256(file), meta.sha256)

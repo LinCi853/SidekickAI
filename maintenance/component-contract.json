@@ -1,8 +1,11 @@
 {
   "schemaVersion": 1,
-  "componentVersion": "1.0.0",
-  "setupProtocolVersion": 2,
-  "uninstallProtocolVersion": 1,
+  "componentVersion": "1.1.0",
+  "setupProtocolVersion": 3,
+  "uninstallProtocolVersion": 2,
+  "distributionProtocolVersion": 1,
+  "recoveryComponentVersion": "1.0.0",
+  "maintenanceExecutableMaxBytes": 15728640,
   "supportedFeatures": [
     "whiteboard",
     "notes",
@@ -10,8 +13,7 @@
     "prompt-library",
     "voice",
     "tts",
-    "browser",
-    "freeze"
+    "browser"
   ],
   "supportedOptions": {
     "autoUpdate": {

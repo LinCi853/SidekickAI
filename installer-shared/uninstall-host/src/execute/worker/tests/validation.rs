@@ -186,7 +186,7 @@ use super::*;
     fn outcome_must_match_the_operation_identity() {
         let directory = create_operation_dir("identity-test").unwrap();
         let outcome = WorkerOutcome {
-            protocol_version: 1, operation_id: "identity-test".into(), nonce: "aa".into(),
+            protocol_version: UNINSTALL_PROTOCOL_VERSION, operation_id: "identity-test".into(), nonce: "aa".into(),
             removed_install_paths: vec![], removed_data_roots: vec![], partially_removed_paths: vec![],
             warnings: vec![], error: None,
         };

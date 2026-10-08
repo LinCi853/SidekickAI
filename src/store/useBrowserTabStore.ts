@@ -18,7 +18,6 @@ import {
 } from '../lib/electron-api';
 import { useProfileStore } from './useProfileStore';
 import { useRecentClosedStore } from '../pages/BrowserView/RecentClosedStore';
-import { useFreezeStore } from './useFreezeStore';
 
 export interface BrowserTabStoreState {
   windowId: string;
@@ -157,11 +156,6 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
   closeTab: async (tabId: string) => {
     const initial = get();
     if (!initial.tabs.some((tab) => tab.id === tabId)) return;
-    const detached = await useFreezeStore.getState().doDetach(tabId);
-    if (!detached) {
-      console.warn('[useBrowserTabStore] 冻结调试器清理失败，取消关闭标签', tabId);
-      return;
-    }
     const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads', 'view-source', 'print-preview'];
     let closedTab: BrowserTabState | undefined;
     let wasInternal = false;

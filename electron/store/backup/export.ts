@@ -1,9 +1,9 @@
+import { runBackupOperation } from './activity.js'
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { exportBackup } from '../../../packages/backup-core/export.js'
-import { exportTreeDigest, writeStrictArchive, writePartialArchive } from '../../../packages/backup-core/files.js'
-import { extractBackupArchive } from '../../../packages/backup-core/format.js'
+import { exportTreeDigest } from '../../../packages/backup-core/files.js'
 import { getDeviceId } from '../device-id.js'
 import { validateRestoreDirectory } from '../restore-files.js'
 import { closeChatStore } from '../chat-store.js'
@@ -22,7 +22,13 @@ import { verifyQuiescentSnapshot } from './verify.js'
 import type { ExportOptions, ExportStrictOptions } from './types.js'
 import { runBackupExport } from '../backup-activity.js'
 
-export async function exportAllData(target: string, options: ExportOptions, encrypt?: { password: string }, strict?: ExportStrictOptions) {
+export function exportAllData(target: string, options: ExportOptions, encrypt?: { password: string }, strict?: ExportStrictOptions) {
+  return runBackupOperation('export', () => performExport(target, options, encrypt, strict))
+}
+
+async function performExport(target: string, options: ExportOptions, encrypt?: { password: string }, strict?: ExportStrictOptions) {
+  let resumed = false
+  const resumeCollection = () => { if (!resumed && !strict?.strict && !strict?.snapshot) { resumeAssetCollectionJournal(); resumed = true } }
   try {
     return await runBackupExport(() => exportBackup({
       edition: 'concept', root: getDataDir, version: () => app.getVersion(), deviceId: getDeviceId,
@@ -39,17 +45,24 @@ export async function exportAllData(target: string, options: ExportOptions, encr
           if (value.schema !== 1 || value.edition !== 'sidekickai-opensource') throw new Error('Unrecognized user data ownership.')
         }
       },
-      verifyPayload: zip => {
-        const directory = fs.mkdtempSync(path.join(app.getPath('temp'), 'sidekick-backup-check-'))
-        try { extractBackupArchive(zip, directory); validateRestoreDirectory(directory) }
+      validateSnapshot: root => {
+        const directory = fs.mkdtempSync(path.join(path.dirname(root), '.database-check-'))
+        const copyDatabases = (source: string, targetDirectory: string) => {
+          for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+            const input = path.join(source, entry.name)
+            const output = path.join(targetDirectory, entry.name)
+            if (entry.isDirectory()) { fs.mkdirSync(output, { recursive: true }); copyDatabases(input, output) }
+            else if (/\.db(?:-wal|-shm|-journal)?$/.test(entry.name) || entry.name === 'profiles.json') fs.copyFileSync(input, output, fs.constants.COPYFILE_EXCL)
+          }
+        }
+        try { copyDatabases(root, directory); validateRestoreDirectory(directory) }
         finally { fs.rmSync(directory, { recursive: true, force: true }) }
       },
       treeDigest: exportTreeDigest, verifySources: verifyQuiescentSnapshot,
-      writeStrict: writeStrictArchive, writeLive: writePartialArchive,
-    }, target, options, encrypt, strict))
+    }, target, options, encrypt, { ...strict, onSnapshotReady: async () => { resumeCollection(); await strict?.onSnapshotReady?.() } }))
   }
   finally {
-    try { resumeAssetCollectionJournal() }
+    try { resumeCollection() }
     catch (error) { console.warn('[ai-assets] Cannot resume collection after export:', error) }
   }
 }

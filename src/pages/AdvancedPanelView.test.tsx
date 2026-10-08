@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHookHarness, settleHooks } from '../hooks/draft-hook-test-harness';
 
 const fixture = vi.hoisted(() => ({
+  provider: null as string | null, providerChanged: null as any,
   runtime: null as any,
   navigate: null as any,
   esc: null as any,
@@ -20,7 +21,7 @@ vi.mock('react', () => ({
   },
 }));
 vi.mock('../components/WindowResizeHandles', () => ({ default: 'resize-handles' }));
-vi.mock('../store/useChatStore', () => ({ useChatStore: { getState: () => ({ setCurrentProvider: () => {} }) } }));
+vi.mock('../store/useChatStore', () => ({ useChatStore: { getState: () => ({ currentProviderId: fixture.provider, setCurrentProvider: (provider: string) => { fixture.provider = provider; fixture.providerChanged?.();  } }), subscribe: (callback: () => void) => { fixture.providerChanged = callback; return () => { fixture.providerChanged = null; }; } } }));
 vi.mock('../store/useModuleStore', () => ({ useModuleStore: (selector: any) => selector({ modules: fixture.modules, initialized: true }) }));
 vi.mock('../lib/electron-api', () => ({
   minimizeWindow: async () => {}, closeCurrentWindow: fixture.close,
@@ -52,6 +53,7 @@ function find(node: any, type: string): any {
 }
 
 beforeEach(() => {
+  fixture.provider = null; fixture.providerChanged = null;
   fixture.modules = ['custom-chat', 'whiteboard', 'notes'].map(id => ({ id, enabled: true }));
   fixture.close.mockReset().mockResolvedValue(undefined);
 });
@@ -60,7 +62,7 @@ afterEach(() => vi.unstubAllGlobals());
 async function mount() {
   const harness = createHookHarness();
   harness.reset();
-  Object.assign(window, { location: { search: '?tab=whiteboard' } });
+  Object.assign(window, { location: { search: '?tab=whiteboard', hash: '' }, history: { state: null, replaceState: (_state: unknown, _title: string, url: string) => { window.location.search = url; } } });
   const render = () => { fixture.runtime = harness; return AdvancedPanelView(); };
   const view = harness.mount(render);
   await settleHooks();
@@ -93,6 +95,7 @@ describe('advanced panel draft consumer', () => {
       expect(guard).toHaveBeenCalledOnce();
       expect(find(mounted.view.current, 'whiteboard')).not.toBeNull();
       expect(fixture.close).not.toHaveBeenCalled();
+      expect(new URLSearchParams(window.location.search).get('tab')).toBe(find(mounted.view.current, 'tabs').props.value);
     },
   );
 
@@ -108,4 +111,19 @@ describe('advanced panel draft consumer', () => {
     expect(find(mounted.view.current, 'whiteboard')).toBeNull();
     expect(find(mounted.view.current, 'notes')?.props.onBeforeLeaveReady).toBeTypeOf('function');
   });
+  it('projects only committed panel tabs and current chat provider into its local route', async () => {
+    const mounted = await mount();
+    fixture.navigate({ tab: 'chat', providerId: 'provider-next' });
+    await settleHooks();
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('chat');
+    expect(new URLSearchParams(window.location.search).get('provider')).toBe('provider-next');
+    fixture.provider = 'provider-changed';
+    fixture.providerChanged();
+    expect(new URLSearchParams(window.location.search).get('provider')).toBe('provider-changed');
+    find(mounted.view.current, 'tabs').props.onChange('notes');
+    await settleHooks();
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('notes');
+    expect(new URLSearchParams(window.location.search).has('provider')).toBe(false);
+  });
+
 });

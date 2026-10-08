@@ -2,6 +2,7 @@
 
 import type { InstallerInfo, InstallMode } from '../global'
 import type { CompletionIntent } from '../../../installer-shared/presentation/finalize'
+import { formatVersion } from '../../../installer-shared/presentation/version'
 
 export interface StepDoneProps {
   info: InstallerInfo | null
@@ -31,7 +32,7 @@ export default function StepDone({
       <div className="done-wrap">
         <div className="done__icon">✓</div>
         <div className="done__title">{`工百窗${info?.editionLabel ? ` · ${info.editionLabel}` : ''}${actionName}完成`}</div>
-        <div className="done__desc">版本 {info?.version}</div>
+        <div className="done__desc" title={info?.version}>版本 {formatVersion(info?.version ?? '')}</div>
         <div className="done__desc">
           {isRepair
             ? `已${actionName}：${finalDir || installDir}`

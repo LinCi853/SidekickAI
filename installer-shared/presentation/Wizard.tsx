@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { formatVersion } from './version'
 import './wizard.css'
 
 export const WIZARD_DESIGN_VERSION = '1.0.0'
@@ -8,6 +9,7 @@ const icon = new URL('../../resources/icons/icon.png', import.meta.url).href
 export interface WizardShellProps {
   kind?: 'install' | 'uninstall'
   version?: string
+  pendingVersionLabel?: string
   stages: Array<{ id: string; label: string }>
   currentIndex: number
   onClose: () => void
@@ -17,7 +19,7 @@ export interface WizardShellProps {
   className?: string
 }
 
-export function WizardShell({ kind = 'install', version, stages, currentIndex, onClose, children, footer, overlay, className = '' }: WizardShellProps) {
+export function WizardShell({ kind = 'install', version, pendingVersionLabel = '正在读取版本…', stages, currentIndex, onClose, children, footer, overlay, className = '' }: WizardShellProps) {
   const title = '工百窗' + (kind === 'uninstall' ? '卸载向导' : '安装向导')
   return <div className={'sk-wizard ' + className} data-wizard-design={WIZARD_DESIGN_VERSION}>
     <header className="sk-wizard__titlebar" data-tauri-drag-region>
@@ -37,7 +39,7 @@ export function WizardShell({ kind = 'install', version, stages, currentIndex, o
             <span>{index < currentIndex ? '✓' : index + 1}</span><strong>{stage.label}</strong>
           </li>)}
         </ol>
-        <div className="sk-wizard__version">{version ? 'v' + version : '正在读取版本…'}</div>
+        <div className="sk-wizard__version" title={version}>{version ? 'v' + formatVersion(version) : pendingVersionLabel}</div>
       </aside>
       <main className="sk-wizard__content">
         <div className="sk-wizard__body">{children}</div>

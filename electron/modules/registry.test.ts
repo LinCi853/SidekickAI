@@ -38,12 +38,6 @@ vi.mock('./wiring/hotkey-sync.js', () => ({
   syncBrowserProfileShortcuts: vi.fn(),
 }))
 
-vi.mock('./injection-broker.js', () => ({
-  injectionBroker: {
-    getModuleInjectionCount: vi.fn(() => 0),
-  },
-}))
-
 vi.mock('./target-registry.js', () => ({
   targetRegistry: {
     getByOwner: vi.fn(() => []),
@@ -56,6 +50,10 @@ describe('ModuleRegistry', () => {
   beforeEach(async () => {
     vi.resetModules()
     registry = await import('./registry.js')
+    const state = await import('../store/module-state-store.js')
+    vi.mocked(state.getModuleState).mockReset().mockReturnValue(null)
+    vi.mocked(state.isLargeModuleInstalledByManifestFile).mockReset().mockReturnValue(true)
+    vi.mocked(state.saveModuleState).mockReset()
   })
 
   describe('registerModule', () => {
@@ -217,6 +215,45 @@ describe('ModuleRegistry', () => {
       expect(result.violations).toHaveLength(0)
     })
   })
+
+  it.each([
+    { profile: 'new', installed: undefined, enabled: true },
+    { profile: 'previously omitted', installed: false, enabled: false },
+    { profile: 'explicitly disabled', installed: true, enabled: false },
+    { profile: 'enabled', installed: true, enabled: true },
+  ])('keeps whiteboard installed for a $profile profile despite a legacy omission', async ({ installed, enabled }) => {
+    const state = await import('../store/module-state-store.js')
+    const { BUILTIN_MODULE_INSTALL_DATA } = await import('./builtin-module-data.js')
+    const existing = installed === undefined ? null
+      : { id: 'whiteboard', installed, enabled, clearedAt: 42, updatedAt: 1 }
+    const records = new Map<string, import('../store/module-state-store.js').ModuleStateRecord>()
+    if (existing) records.set(existing.id, existing)
+    vi.mocked(state.getModuleState).mockImplementation(id => records.get(id) ?? null)
+    vi.mocked(state.saveModuleState).mockImplementation(record => { records.set(record.id, record) })
+    vi.mocked(state.isLargeModuleInstalledByManifestFile).mockReturnValue(false)
+    const init = vi.fn()
+    registry.registerModule({ ...BUILTIN_MODULE_INSTALL_DATA.find(module => module.id === 'whiteboard')!, init })
+
+    await registry.initEnabledModules()
+
+    expect(registry.isModuleInstalled('whiteboard')).toBe(true)
+    expect(registry.isModuleEnabled('whiteboard')).toBe(enabled)
+    expect(records.get('whiteboard')).toEqual(expect.objectContaining({
+      id: 'whiteboard', installed: true, enabled, clearedAt: existing?.clearedAt ?? 0,
+    }))
+    expect(state.isLargeModuleInstalledByManifestFile).not.toHaveBeenCalled()
+    if (installed !== true) expect(state.saveModuleState).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'whiteboard', installed: true, enabled, clearedAt: existing?.clearedAt ?? 0,
+    }))
+    expect(init).toHaveBeenCalledTimes(enabled ? 1 : 0)
+
+    expect(await registry.setModuleEnabled('whiteboard', true)).toEqual({ ok: true })
+    expect(registry.isModuleEnabled('whiteboard')).toBe(true)
+    expect(records.get('whiteboard')).toEqual(expect.objectContaining({
+      id: 'whiteboard', installed: true, enabled: true, clearedAt: existing?.clearedAt ?? 0,
+    }))
+  })
+
   it('uses promoted defaults for new users while preserving an existing disabled choice', async () => {
     const state = await import('../store/module-state-store.js')
     vi.mocked(state.getModuleState).mockImplementation(id => id === 'voice'

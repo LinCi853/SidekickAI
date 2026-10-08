@@ -53,6 +53,7 @@ pub(crate) fn open_registry_key(key: &str, flags: u32) -> Result<Option<RegKey>,
 }
 
 pub(crate) fn create_registry_key(key: &str) -> Result<RegKey, String> {
+    super::transaction::registry_key_intent(key)?;
     let (root, subkey) = registry_root(key)?;
     root.create_subkey_with_flags(&subkey, KEY_WRITE | KEY_WOW64_64KEY)
         .map(|(created, _)| created)
@@ -61,6 +62,10 @@ pub(crate) fn create_registry_key(key: &str) -> Result<RegKey, String> {
 
 /// Delete a key and every value below it. `Ok(false)` means it was already gone.
 pub(crate) fn delete_registry_key(key: &str) -> Result<bool, String> {
+    super::transaction::registry_key_intent(key)?;
+    if let Some(values) = snapshot_registration(key)? {
+        for (name, _, _) in values { super::transaction::registry_intent(key, &name, None)?; }
+    }
     let (root, subkey) = registry_root(key)?;
     match root.delete_subkey_all(&subkey) {
         Ok(()) => Ok(true),
@@ -81,6 +86,7 @@ pub(crate) fn read_registry_string(key: &str, name: &str) -> Result<Option<Strin
 }
 
 pub(crate) fn delete_registry_value(key: &str, name: &str) -> Result<(), String> {
+    super::transaction::registry_intent(key, name, None)?;
     let Some(opened) = open_registry_key(key, KEY_SET_VALUE)? else {
         return Ok(());
     };
@@ -108,6 +114,7 @@ pub(crate) fn snapshot_registration(key: &str) -> Result<RegistrationSnapshot, S
 }
 
 pub(crate) fn restore_registration(key: &str, snapshot: &RegistrationSnapshot) -> Result<(), String> {
+    if super::transaction::active() { return Ok(()); }
     delete_registry_key(key)?;
     let Some(values) = snapshot else {
         return Ok(());
@@ -198,8 +205,9 @@ pub(crate) fn register_uninstall(hooks: &EngineHooks, req: &InstallRequest, dir:
     };
     if receipt.installation_id.is_empty() { return Err("缺少安装标识，无法登记安装。".into()); }
     let bytes = serde_json::to_vec(&receipt).map_err(|error| error.to_string())?;
-    let result = fs::write(&receipt_path, bytes).map_err(|error| format!("无法写入安装记录：{error}"))
+    let result = super::transaction::write_file(&receipt_path, bytes).map_err(|error| format!("无法写入安装记录：{error}"))
         .and_then(|_| product::read_install_receipt(dir).map(|_| ()))
+        .and_then(|_| crate::distribution::write_receipt(req, dir))
         .and_then(|_| {
             #[cfg(test)]
             if hooks.fail_after_receipt { return Err("receipt registration interrupted".into()); }
@@ -207,7 +215,7 @@ pub(crate) fn register_uninstall(hooks: &EngineHooks, req: &InstallRequest, dir:
         });
     if let Err(error) = result {
         let receipt_restore = match previous {
-            Some(bytes) => fs::write(&receipt_path, bytes),
+            Some(bytes) => super::transaction::write_file(&receipt_path, bytes),
             None => match fs::remove_file(&receipt_path) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 result => result,
@@ -244,6 +252,8 @@ pub(crate) fn write_uninstall_registration(dir: &Path, key: &str) -> Result<(), 
     }
     let subkey = create_registry_key(key)?;
     for (name, value) in &pairs {
+        use winreg::types::ToRegValue;
+        super::transaction::registry_intent(key, name, Some(value.to_reg_value()))?;
         subkey
             .set_value(name, value)
             .map_err(|error| format!("写入卸载注册项 {name} 失败：{error}"))?;

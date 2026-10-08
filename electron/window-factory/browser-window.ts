@@ -25,8 +25,6 @@ import {
   safeLogWindowTrace,
   setupBoundsTracking,
 } from './helpers.js'
-import { isFrozen } from '../freeze/freeze-manager.js'
-import { getRecordByTabId } from '../freeze/webview-registry.js'
 import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import { trackFullscreen, isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { buildWindowConfig } from './window-config-builder.js'
@@ -148,15 +146,6 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
       }
     }
     const hasMeta = mods.includes('meta') || mods.includes('command')
-    if (!hasCtrl && !hasShift && !hasAlt && !hasMeta && input.key === 'F12') {
-      const state = browserWindowStore.get(windowId)
-      const tabId = state?.activeTabId ?? null
-      if (tabId && getRecordByTabId(tabId) && isFrozen(tabId)) {
-        event.preventDefault()
-        console.log('[hotkey] F12 跳过：当前浏览器标签处于冻结态')
-        return
-      }
-    }
     // Ctrl+W：关闭当前标签（排除 Shift/Alt/Meta，避免误触）
     if (hasCtrl && !hasShift && !hasAlt && !hasMeta && input.key.toLowerCase() === 'w') {
       event.preventDefault()
@@ -234,6 +223,7 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     if (mapped === win) {
       windowState.browserWindowsByProfile.delete(profileId)
     }
+    if (appQuitting) return
     const savedState = browserWindowStore.get(windowId)
     if (!savedState) return
     const mainWindow = windowState.mainWindow

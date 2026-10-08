@@ -38,6 +38,8 @@ fn validate_plan(request: &UninstallRequest, targets: Vec<ScannedTarget>, scan: 
     let selected = targets.iter().map(|t| t.id.token.as_str()).collect::<HashSet<_>>();
     for target in &targets {
         target.identity.verify_unchanged()?;
+        sidekickai_uninstall_core::distribution::verify_installed_identity(target.identity.path.as_path())
+            .map_err(|message| failure(UninstallErrorCode::TargetNotInstall, &message))?;
         validate_tree(target.identity.path.as_path())?;
         for other in &targets {
             if other.id != target.id && (path_is_same_or_descendant(other.identity.path.as_path(), target.identity.path.as_path()) || path_is_same_or_descendant(target.identity.path.as_path(), other.identity.path.as_path())) {
@@ -66,9 +68,7 @@ fn validate_plan(request: &UninstallRequest, targets: Vec<ScannedTarget>, scan: 
             return Err(failure(UninstallErrorCode::TargetScopeInvalid, &format!(
                 "用户数据 {} 仍被未选中的安装使用：{}。请选择保留用户数据，或返回选择需要同时卸载的安装。程序和数据未删除。", root.path, paths)));
         }
-        if request.strategy == DataStrategy::Keep && targets.iter().any(|target| path_is_same_or_descendant(Path::new(&root.path), target.identity.path.as_path())) {
-            return Err(failure(UninstallErrorCode::TargetScopeInvalid, "便携数据位于安装目录内。删除前需要已确认的数据保留计划。"));
-        }
+
     }
     let mut scopes = targets.iter().map(|t| t.identity.path.clone()).collect::<Vec<_>>();
     for root in &data_roots { scopes.push(normalize_target_path(&root.path)?); }
@@ -76,8 +76,8 @@ fn validate_plan(request: &UninstallRequest, targets: Vec<ScannedTarget>, scan: 
         Some(selection) => Some(validate_backup_selection(selection, &scopes)?),
         None => None,
     };
-    if request.strategy == DataStrategy::Export && data_roots.len() != 1 {
-        return Err(failure(UninstallErrorCode::BackupIncomplete, "单个备份无法覆盖零个或多个数据目录（包含历史恢复副本）。请先保留并检查这些数据，或选择保留用户数据。"));
+    if request.strategy == DataStrategy::Export && data_roots.is_empty() {
+        return Err(failure(UninstallErrorCode::BackupIncomplete, "没有可导出的数据目录；请选择保留用户数据。"));
     }
     Ok(Plan { targets, data_roots, backup })
 }
@@ -96,6 +96,12 @@ mod tests {
         let sibling = root.join("Unselected Installation");
         let data = root.join("Data");
         for path in [&selected, &sibling, &data] { fs::create_dir_all(path).unwrap(); }
+        for path in [&selected, &sibling] {
+            fs::create_dir(path.join("resources")).unwrap();
+            fs::write(path.join("resources/app.asar"), app_archive(b"isolated installation")).unwrap();
+            fs::write(path.join("uninstall.exe"), b"isolated maintenance entry").unwrap();
+            edition_fixtures::seal_installation(path);
+        }
         fs::write(sibling.join("sentinel"), b"untouched").unwrap();
         fs::write(data.join("settings.db"), b"untouched").unwrap();
         let location = |path: &Path, token: &str| UninstallLocation {
@@ -113,9 +119,9 @@ mod tests {
             associated_target_ids: vec![first.id, second.id],
         }], None).unwrap();
         let mut request = UninstallRequest {
-            protocol_version: 1, request_id: "test-request".into(), scan_id: scan.scan_id,
+            protocol_version: UNINSTALL_PROTOCOL_VERSION, request_id: "test-request".into(), scan_id: scan.scan_id,
             target_id: scan.locations[0].id.clone(), strategy: DataStrategy::Keep, backup: None,
-            additional_target_ids: vec![], confirmation: "delete-v1".into(),
+            additional_target_ids: vec![], confirmation: UNINSTALL_CONFIRMATION.into(), resume_task_id: None,
         };
         let plan = prepare(&request).unwrap();
         assert_eq!(plan.targets.len(), 1); assert_eq!(plan.data_roots.len(), 1); assert!(plan.backup.is_none());
@@ -131,7 +137,7 @@ mod tests {
         assert!(error.message.contains("原登录账户"));
         assert!(error.message.contains(data.to_string_lossy().as_ref()));
         request.strategy = DataStrategy::Export;
-        request.backup = Some(BackupSelection { format: BackupFormat::Zip, output_path: selected.join("backup.zip").to_string_lossy().into_owned(), encrypt: false, password: None, categories: vec!["basicData".into()] });
+        request.backup = Some(BackupSelection { format: BackupFormat::Zip, output_path: selected.join("backup.zip").to_string_lossy().into_owned(), encrypt: false, password: None, categories: vec!["basicData".into()], staging_path: None });
         request.additional_target_ids = vec![scan.locations[1].id.clone()];
         assert_eq!(prepare(&request).unwrap_err().code, UninstallErrorCode::BackupPathInScope);
 
@@ -158,8 +164,10 @@ mod tests {
         request.target_id = updated_scan.locations[0].id.clone();
         request.additional_target_ids = vec![updated_scan.locations[1].id.clone()];
         request.strategy = DataStrategy::Export;
-        request.backup = Some(BackupSelection { format: BackupFormat::Zip, output_path: root.join("backup.zip").to_string_lossy().into_owned(), encrypt: false, password: None, categories: vec!["basicData".into()] });
-        assert_eq!(prepare(&request).unwrap_err().code, UninstallErrorCode::BackupIncomplete);
+        request.backup = Some(BackupSelection { format: BackupFormat::Zip, output_path: root.join("backup.zip").to_string_lossy().into_owned(), encrypt: false, password: None, categories: vec!["basicData".into()], staging_path: None });
+        let multi_root = prepare(&request).unwrap();
+        assert_eq!(multi_root.data_roots.len(), 2);
+        assert!(multi_root.backup.is_some());
         assert_eq!(fs::read(recovery.join("settings.db")).unwrap(), b"recovery data");
         assert_eq!(fs::read(sibling.join("sentinel")).unwrap(), b"untouched");
         assert_eq!(fs::read(data.join("settings.db")).unwrap(), b"untouched");
@@ -167,11 +175,8 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    /// A portable installation keeps its data inside the installation directory.
-    /// `keep` cannot both preserve that data and remove the directory, so the
-    /// whole request is refused instead of silently destroying user data.
     #[test]
-    fn keep_is_refused_when_portable_data_lives_inside_the_installation() {
+    fn legacy_portable_marker_cannot_authorize_new_maintenance() {
         let _guard = crate::SCAN_TEST_LOCK.lock().unwrap();
         let root = std::env::temp_dir().join(random_id("sidekick-plan-portable").unwrap());
         let portable = root.join("SidekickAI-Portable");
@@ -206,12 +211,12 @@ mod tests {
             associated_target_ids: vec![UninstallTargetId { token: "portable-first".into() }],
         }], None).unwrap();
         let request = UninstallRequest {
-            protocol_version: 1, request_id: "portable-request".into(), scan_id: scan.scan_id,
+            protocol_version: UNINSTALL_PROTOCOL_VERSION, request_id: "portable-request".into(), scan_id: scan.scan_id,
             target_id: scan.locations[0].id.clone(), strategy: DataStrategy::Keep, backup: None,
-            additional_target_ids: vec![], confirmation: "delete-v1".into(),
+            additional_target_ids: vec![], confirmation: UNINSTALL_CONFIRMATION.into(), resume_task_id: None,
         };
 
-        assert_eq!(prepare(&request).unwrap_err().code, UninstallErrorCode::TargetScopeInvalid);
+        assert_eq!(prepare(&request).unwrap_err().code, UninstallErrorCode::TargetNotInstall);
         assert_eq!(fs::read(data.join("settings.db")).unwrap(), b"portable data");
         let _ = fs::remove_dir_all(&root);
     }
@@ -229,6 +234,7 @@ mod tests {
             fs::write(directory.join("SidekickAI.exe"), b"exe").unwrap();
             fs::write(directory.join("resources").join("app.asar"), app_archive(b"asar")).unwrap();
             fs::write(directory.join("uninstall.exe"), b"uninstaller").unwrap();
+            edition_fixtures::seal_installation(directory);
         }
         let location = |path: &Path, token: &str| UninstallLocation {
             edition: sidekickai_uninstall_core::product::edition_id().into(),
@@ -256,9 +262,9 @@ mod tests {
         let fresh_token = scan_b.locations[0].id.clone();
 
         let base = |scan_id: &str, target_id: UninstallTargetId| UninstallRequest {
-            protocol_version: 1, request_id: "stale-request".into(), scan_id: scan_id.to_string(),
+            protocol_version: UNINSTALL_PROTOCOL_VERSION, request_id: "stale-request".into(), scan_id: scan_id.to_string(),
             target_id, strategy: DataStrategy::Keep, backup: None,
-            additional_target_ids: vec![], confirmation: "delete-v1".into(),
+            additional_target_ids: vec![], confirmation: UNINSTALL_CONFIRMATION.into(), resume_task_id: None,
         };
 
         // The superseded token is refused once a newer scan is active.

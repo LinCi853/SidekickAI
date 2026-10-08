@@ -1,8 +1,8 @@
 //! One worker authorization covers process shutdown and verified deletion.
 
 use super::deletion::{resolve_worker_targets, run_worker_deletion};
-use super::prepare::{assert_trusted_caller, capture_worker_scopes, cleanup_directory, prepare_worker_request};
-use super::process::{process_is_alive, spawn_worker, stop_worker_processes, wait_for_outcome, wait_for_worker_exit, WorkerProcess};
+use super::prepare::{assert_trusted_caller, capture_worker_scopes_all, cleanup_directory, prepare_worker_request};
+use super::process::{spawn_worker, stop_worker_processes, wait_for_outcome, wait_for_worker_exit, WorkerProcess};
 use super::types::{BackupProof, WorkerOutcome, WorkerPreparation, WorkerRequest, WorkerTarget};
 use super::validate::{validate_operation_directory_name, validate_worker_request};
 use super::super::hashing::write_atomic;
@@ -38,6 +38,20 @@ pub(crate) struct WorkerSession {
 }
 
 impl WorkerSession {
+    pub(crate) fn resume_task(source: &Path, operation_id: &str, task_id: &str, elevate: bool) -> Result<WorkerOutcome, UninstallError> {
+        let (directory, path, nonce) = prepare_worker_request(source, operation_id, task_id,
+            &DataStrategy::Keep, &[], &[], None, None, None)?;
+        let mut request: WorkerRequest = serde_json::from_slice(&fs::read(&path).map_err(|error| internal(error.to_string()))?)
+            .map_err(|error| internal(error.to_string()))?;
+        request.resume_task_id = Some(task_id.into());
+        validate_worker_request(&request)?;
+        write_atomic(&path, &serde_json::to_vec(&request).map_err(|error| internal(error.to_string()))?).map_err(internal)?;
+        let process = spawn_worker(&directory.join("worker.exe"), &path, elevate)?;
+        let outcome = wait_for_outcome(&directory, &nonce, operation_id, Arc::new(AtomicBool::new(false)), &process);
+        if outcome.is_ok() { cleanup_directory(&directory); }
+        outcome
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn start(
         source_exe: &Path, operation_id: &str, request_id: &str,
@@ -85,18 +99,28 @@ impl WorkerSession {
     }
 
     pub(crate) fn commit(
-        mut self, strategy: &DataStrategy, data_roots: &[String],
+        self, strategy: &DataStrategy, data_roots: &[String],
         backup_path: Option<&str>, proof: Option<&BackupProof>,
     ) -> Result<WorkerOutcome, UninstallError> {
-        let (data, identities) = capture_worker_scopes(&self.request.operation_id, strategy,
-            &self.request.targets, data_roots, backup_path, proof, false)?;
+        if backup_path != proof.map(|item| item.path.as_str()) {
+            return Err(invalid_request(&self.request.operation_id, "备份路径与证明不一致。"));
+        }
+        self.commit_all(strategy, data_roots, &proof.into_iter().cloned().collect::<Vec<_>>())
+    }
+
+    pub(crate) fn commit_all(
+        mut self, strategy: &DataStrategy, data_roots: &[String], proofs: &[BackupProof],
+    ) -> Result<WorkerOutcome, UninstallError> {
+        let (data, identities) = capture_worker_scopes_all(&self.request.operation_id, strategy,
+            &self.request.targets, data_roots, proofs)?;
         let mut request = self.request.clone();
         request.preparation = None;
         request.strategy = strategy.clone();
         request.target_identities = identities;
         request.data_roots = data;
-        request.backup_path = backup_path.map(str::to_string);
-        request.backup_sha256 = proof.map(|proof| proof.archive_sha256.clone());
+        request.backup_path = proofs.first().map(|proof| proof.path.clone());
+        request.backup_sha256 = proofs.first().map(|proof| proof.archive_sha256.clone());
+        request.backup_proofs = proofs.to_vec();
         validate_commit(&self.request, &request)?;
         let bytes = serde_json::to_vec(&request).map_err(|e| internal(e.to_string()))?;
         write_atomic(&self.directory.join("commit.json"), &bytes).map_err(internal)?;
@@ -155,6 +179,8 @@ pub(super) fn run_worker_session(
     validate_worker_request(request)?;
     validate_operation_directory_name(directory, &request.operation_id)?;
     assert_trusted_caller(request)?;
+    let controller = WorkerProcess::track(request.controller_pid)?;
+    assert_trusted_caller(request)?;
     if request.strategy != DataStrategy::Keep || !request.data_roots.is_empty() {
         return Err(invalid_request(&request.operation_id, "准备操作不能携带删除指令。"));
     }
@@ -166,9 +192,8 @@ pub(super) fn run_worker_session(
     let ready = WorkerReady { protocol_version: UNINSTALL_PROTOCOL_VERSION, operation_id: request.operation_id.clone(),
         nonce: request.nonce.clone(), worker_pid: std::process::id() };
     write_atomic(&directory.join("ready.json"), &serde_json::to_vec(&ready).map_err(|e| internal(e.to_string()))?).map_err(internal)?;
-    let started = Instant::now();
     loop {
-        if directory.join("abort.json").exists() || !process_is_alive(request.controller_pid) || started.elapsed() >= WORKER_TIMEOUT {
+        if directory.join("abort.json").exists() || !controller.is_alive()? {
             return Err(aborted(request, "删除确认未完成，已退出且未删除内容。"));
         }
         let path = directory.join("commit.json");
@@ -196,12 +221,14 @@ mod tests {
 
     fn installation(root: &Path) -> WorkerTarget {
         fs::create_dir_all(root.join("resources")).unwrap();
-        let ping = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32/ping.exe");
+        let node = std::process::Command::new("node").args(["-p", "process.execPath"]).creation_flags(0x08000000).output().unwrap();
+        assert!(node.status.success());
+        let ping = PathBuf::from(String::from_utf8(node.stdout).unwrap().trim());
         fs::copy(ping, root.join("SidekickAI.exe")).unwrap();
-        fs::write(root.join("resources/app.asar"), edition_fixtures::app_archive(b"fixture")).unwrap();
+        fs::write(root.join("resources/app.asar"), edition_fixtures::archive_for_version(&sidekickai_uninstall_core::product::edition().package_name, Some("1.2.3"), b"fixture")).unwrap();
         fs::write(root.join("uninstall.exe"), b"fixture").unwrap();
         WorkerTarget { path: root.to_string_lossy().into_owned(), scope: InstallScope::PerUser,
-            fingerprint: FileFingerprint::from_path(root).unwrap(), registered_roots: vec![] }
+            fingerprint: edition_fixtures::installed_fingerprint(root).unwrap(), registered_roots: vec![] }
     }
 
     #[test]
@@ -213,7 +240,7 @@ mod tests {
         fs::create_dir_all(root.join("data")).unwrap();
         fs::write(root.join("data/sentinel"), b"keep").unwrap();
         let mut child = std::process::Command::new(install.join("SidekickAI.exe"))
-            .args(["-n", "60", "127.0.0.1"]).creation_flags(0x08000000)
+            .args(["-e", "setInterval(() => {}, 1000)", "--", "--type=utility"]).creation_flags(0x08000000)
             .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
         let session = WorkerSession::start(&artifact, "stop-commit", "request", &[target], &DataStrategy::Keep, &[], false, || false).unwrap();
         assert!(child.try_wait().unwrap().is_some());

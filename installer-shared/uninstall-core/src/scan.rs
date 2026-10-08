@@ -126,7 +126,8 @@ impl FileFingerprint {
             }
         };
         if fingerprint.is_directory {
-            let mut names = vec!["SidekickAI.exe", "resources\\app.asar", "uninstall.exe", crate::product::INSTALL_RECEIPT];
+            let mut names = vec!["SidekickAI.exe", "resources\\app.asar", "uninstall.exe", crate::product::INSTALL_RECEIPT,
+                "distribution-proof.json", "maintenance\\distribution-receipt.json"];
             names.extend(crate::product::product().editions.values().map(|edition| edition.legacy_executable.as_str()));
             names.sort();
             names.dedup();
@@ -238,6 +239,7 @@ pub fn register_scan(
         }).collect::<Result<Vec<_>, _>>()?;
     }
     let response = UninstallScanResponse {
+        recovery_tasks: Vec::new(),
         scan_id: scan_id.clone(),
         generated_at: generated_at.into(),
         locations: output_locations,

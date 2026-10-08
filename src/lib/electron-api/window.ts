@@ -4,6 +4,7 @@
 
 import type { WindowStateData, DevicePreset, AIPlatform, WebviewHotkeyPayload, WebviewHotkeyTarget } from '../../../electron/shared/types';
 import { requireElectron } from './core';
+import type { WebviewRegistration } from '../../../electron/shared/api/profile-window.api';
 
 /* =====================================================================
    窗口管理 —— 对应 window.electron.window
@@ -51,6 +52,10 @@ export async function getOpenWindowIds(): Promise<string[]> {
 export async function setupSession(profileId: string): Promise<void> {
   const api = requireElectron();
   return api.window.setupSession(profileId);
+}
+
+export function registerWebview(payload: WebviewRegistration): Promise<boolean> {
+  return requireElectron().window.registerWebview(payload);
 }
 
 /* =====================================================================
@@ -344,4 +349,3 @@ export function onWebviewHotkey(
 export function validateWebviewHotkeyTarget(target: WebviewHotkeyTarget): Promise<boolean> {
   return requireElectron().validateWebviewHotkeyTarget(target);
 }
-

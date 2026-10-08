@@ -26,7 +26,7 @@ pub(crate) fn start_menu_dir(for_all_users: bool) -> PathBuf {
         .join("SidekickAI")
 }
 
-pub(crate) fn create_shortcuts(hooks: &EngineHooks, for_all_users: bool, dir: &Path) {
+pub(crate) fn create_shortcuts(hooks: &EngineHooks, for_all_users: bool, dir: &Path) -> Result<(), String> {
     let exe = dir.join("SidekickAI.exe");
     let target = exe.to_string_lossy().into_owned();
     let workdir = dir.to_string_lossy().into_owned();
@@ -37,13 +37,15 @@ pub(crate) fn create_shortcuts(hooks: &EngineHooks, for_all_users: bool, dir: &P
     }).collect();
     for link in &links {
         if let Some(p) = link.parent() {
-            let _ = fs::create_dir_all(p);
+            fs::create_dir_all(p).map_err(|error| format!("无法创建快捷方式目录：{error}"))?;
         }
-        let _ = create_shortcut(link, &target, &workdir);
+        create_shortcut(link, &target, &workdir)?;
     }
+    if links.len() != directories.len() { return Err("快捷方式名称均被占用，已保留原入口。".into()); }
+    Ok(())
 }
 
-fn owned_shortcut_directories(hooks: &EngineHooks, for_all_users: bool) -> Vec<PathBuf> {
+pub(crate) fn owned_shortcut_directories(hooks: &EngineHooks, for_all_users: bool) -> Vec<PathBuf> {
     let start_menu = hooks.start_menu_dir(for_all_users);
     let mut directories = vec![hooks.desktop_dir(for_all_users), start_menu.clone()];
     if hooks.start_menu.is_none() && sidekickai_uninstall_core::product::edition_id() == "concept" {
@@ -128,6 +130,7 @@ pub(crate) fn create_shortcut(lnk: &Path, target: &str, workdir: &str) -> Result
         pf.Save(PCWSTR(lnk_w.as_ptr()), true)
             .map_err(|e| format!("保存快捷方式失败：{}", e))?;
     }
+    fs::OpenOptions::new().write(true).open(lnk).and_then(|file| file.sync_all()).map_err(|error| format!("无法持久保存快捷方式：{error}"))?;
     Ok(())
 }
 

@@ -5,6 +5,8 @@ import { uninstallApi } from './api'
 import { uninstallFailureMessage } from './result-summary'
 import { describeDataScope } from './data-scope'
 import OperationDetails from '../operation-details/OperationDetails'
+import { formatVersion } from '../presentation/version'
+import { UNINSTALL_CONFIRMATION, UNINSTALL_PROTOCOL_VERSION } from './protocol'
 
 import type {
   BackupCategory,
@@ -108,6 +110,7 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
   const [additionalTokens, setAdditionalTokens] = useState<string[]>([])
   const [strategy, setStrategy] = useState<DataStrategy>('keep')
   const [backupPath, setBackupPath] = useState('')
+  const [backupStagingPath, setBackupStagingPath] = useState('')
   const [backupPassword, setBackupPassword] = useState('')
   const [backupEncrypt, setBackupEncrypt] = useState(true)
   const [backupCategories, setBackupCategories] = useState<BackupCategory[]>(DEFAULT_CATEGORIES)
@@ -127,6 +130,8 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
 
   const activeOperationIdRef = useRef<string | null>(null)
   const activeRequestIdRef = useRef<string | null>(null)
+  const taskIdRef = useRef<string | null>(null)
+  const [verifiedBackups, setVerifiedBackups] = useState<UninstallResult['backups']>([])
   const lastSequenceRef = useRef(-1)
   const startInFlightRef = useRef(false)
   const closeStartedRef = useRef(false)
@@ -173,7 +178,7 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
   }, [])
 
   const processEvent = useCallback((event: UninstallEvent) => {
-    if (terminalRef.current || event.protocolVersion !== 1) return
+    if (terminalRef.current || event.protocolVersion !== UNINSTALL_PROTOCOL_VERSION) return
     const activeOperationId = activeOperationIdRef.current
     const activeRequestId = activeRequestIdRef.current
     if (!activeRequestId || event.requestId !== activeRequestId) return
@@ -200,6 +205,8 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
       return
     }
     setTerminalResult(event.result)
+    const backups = event.result.backups?.length ? event.result.backups : event.result.backup ? [event.result.backup] : []
+    if (backups.length) setVerifiedBackups(backups)
     if (event.result.state === 'completed') {
       setProgress(100)
       setStep('done')
@@ -315,7 +322,9 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
       return
     }
 
-    const id = requestId()
+    const previousTask = taskIdRef.current
+    const id = previousTask || requestId()
+    taskIdRef.current = id
     startInFlightRef.current = true
     terminalRef.current = false
     activeOperationIdRef.current = null
@@ -332,7 +341,7 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
     setStep('executing')
 
     const request = {
-      protocolVersion: 1 as const,
+      protocolVersion: UNINSTALL_PROTOCOL_VERSION,
       requestId: id,
       scanId: scan.scanId,
       targetId: selectedLocation.id,
@@ -345,11 +354,13 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
               encrypt: backupEncrypt,
               ...(backupEncrypt ? { password: backupPassword } : {}),
               categories: backupCategories,
+              ...(backupStagingPath.trim() ? { stagingPath: backupStagingPath.trim() } : {}),
             },
           }
         : {}),
       additionalTargetIds: selectedAdditionalLocations.map((location) => location.id),
-      confirmation: 'delete-v1' as const,
+      confirmation: UNINSTALL_CONFIRMATION,
+      ...(previousTask ? { resumeTaskId: previousTask } : {}),
     }
 
     try {
@@ -380,7 +391,36 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
       setStep('policy')
       setOperationError(`开始卸载失败：${errorMessage(error)}`)
     }
-  }, [api, backupCategories, backupEncrypt, backupFormat, backupPassword, backupPath, bootstrapError, dataScopeIssue, info, isLoading, scan, selectedAdditionalLocations, selectedLocation, strategy, validateBackup])
+  }, [api, backupCategories, backupEncrypt, backupFormat, backupPassword, backupPath, backupStagingPath, bootstrapError, dataScopeIssue, info, isLoading, scan, selectedAdditionalLocations, selectedLocation, strategy, validateBackup])
+
+  const resumeTask = useCallback(async (task: NonNullable<UninstallScanResponse['recoveryTasks']>[number]) => {
+    if (startInFlightRef.current || !scan) return
+    taskIdRef.current = task.taskId
+    activeRequestIdRef.current = task.taskId
+    activeOperationIdRef.current = null
+    lastSequenceRef.current = -1
+    terminalRef.current = false
+    startInFlightRef.current = true
+    setTerminalResult(null)
+    setVerifiedBackups(task.backups ?? [])
+    setOperationError('')
+    setStatusText('正在继续原卸载任务…')
+    setProgress(0)
+    setCommitted(true)
+    setStep('executing')
+    try {
+      const accepted = await api.start({ protocolVersion: UNINSTALL_PROTOCOL_VERSION, requestId: task.taskId, resumeTaskId: task.taskId,
+        scanId: scan.scanId, targetId: { token: 'recovery-task' }, strategy: 'keep', additionalTargetIds: [], confirmation: UNINSTALL_CONFIRMATION })
+      if (!accepted || accepted.requestId !== task.taskId || accepted.state !== 'accepted') throw new Error('恢复任务未被接受。')
+      if (activeOperationIdRef.current && activeOperationIdRef.current !== accepted.operationId) throw new Error('恢复任务响应与已建立的操作不一致。')
+      activeOperationIdRef.current = accepted.operationId
+    } catch (error) {
+      if (activeOperationIdRef.current || terminalRef.current) return
+      startInFlightRef.current = false
+      setStep('target')
+      setOperationError(`继续任务失败：${errorMessage(error)}`)
+    }
+  }, [api, scan])
 
   const requestCancel = useCallback(async () => {
     const operationId = activeOperationIdRef.current
@@ -480,7 +520,7 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
                   <span className="uninstall-location-card__path">{location.displayPath || location.path}</span>
                   <span className="uninstall-location-card__meta">
                     {location.edition === 'concept' ? '概念版' : '社区版'} ·{' '}
-                    {location.version ? `v${location.version} · ` : ''}
+                    {location.version ? `v${formatVersion(location.version)} · ` : ''}
                     {displayScope(location.scope)} · {displayArch(location.arch)}
                     {location.identityConfidence === 'degraded' ? ' · 降级身份' : ''}
                     {location.runningPids.length > 0 ? ` · 运行中 (${location.runningPids.join(', ')})` : ''}
@@ -573,6 +613,8 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
               <button type="button" className="uninstall-btn" onClick={() => void chooseBackupPath()} disabled={isChoosingBackup}>{isChoosingBackup ? '打开中…' : '浏览'}</button>
             </div>
             {backupEncrypt && <input className="uninstall-input" type="password" value={backupPassword} onChange={(event) => setBackupPassword(event.target.value)} placeholder="备份密码（至少 6 位）" />}
+            <div className="uninstall-field-label">暂存目录（可选）</div>
+            <input className="uninstall-input" value={backupStagingPath} onChange={event => setBackupStagingPath(event.target.value)} placeholder="留空使用默认位置；空间不足时可填写其他磁盘的完整目录" spellCheck={false} />
             {backupError && <div className="uninstall-inline-error">{backupError}</div>}
           </div>
       </DataPolicyPicker>
@@ -614,11 +656,12 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
       )
     }
     const succeeded = result.state === 'completed'
+    const cleanupPending = result.warnings.some(warning => warning.startsWith('CLEANUP_PENDING:'))
     const cancelled = result.state === 'cancelled'
     return (
       <div className="uninstall-state-panel">
         <div className={`uninstall-state-icon ${succeeded ? '' : 'uninstall-state-icon--error'}`}>{succeeded ? '✓' : cancelled ? 'Ⅱ' : '!'}</div>
-        <h1 className="uninstall-state-title">{succeeded ? '卸载完成' : cancelled ? '已取消卸载' : '卸载失败'}</h1>
+        <h1 className="uninstall-state-title">{succeeded ? cleanupPending ? '程序已卸载，待清理残留' : '卸载完成' : cancelled ? '已取消卸载' : '卸载失败'}</h1>
         <p className="uninstall-state-message">
           {succeeded
             ? strategy === 'keep'
@@ -631,6 +674,13 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
               : uninstallFailureMessage(result)}
         </p>
         {result.error && <div className="uninstall-error-box" role="alert"><strong>{result.error.code}</strong><span>{result.error.message}</span></div>}
+        {(verifiedBackups ?? []).length > 0 && <div className="uninstall-result-list" role="status">
+          <strong>备份结果</strong>
+          {(verifiedBackups ?? []).map(backup => <div key={backup.path}>
+            <span>{backup.verified ? '完整备份已验证' : '备份需要重新核验'} · {backup.path}</span>
+          </div>)}
+          <span>备份结果独立保留；继续卸载时会重新核对原归档和数据范围。</span>
+        </div>}
         {result.warnings.length > 0 && <div className="uninstall-warning-box">{result.warnings.join('；')}</div>}
         {result.removedInstallPaths.length > 0 && <div className="uninstall-result-list">已处理安装位置：{result.removedInstallPaths.join('；')}</div>}
         {result.removedDataRoots.length > 0 && <div className="uninstall-result-list">已处理数据目录：{result.removedDataRoots.join('；')}</div>}
@@ -655,7 +705,7 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
       return (
         <div className="uninstall-footer">
           <span className="uninstall-footer__spacer" />
-          {terminalResult?.state !== 'completed' && <button type="button" className="uninstall-btn" onClick={() => void resetForRetry()}>重新扫描</button>}
+          {(terminalResult?.state !== 'completed' || terminalResult?.warnings.some(warning => warning.startsWith('CLEANUP_PENDING:'))) && <button type="button" className="uninstall-btn" onClick={() => void resetForRetry()}>重新扫描并继续</button>}
           <button type="button" className="uninstall-btn uninstall-btn--primary" onClick={() => void closeWindow()}>{terminalResult?.state === 'completed' ? '完成' : '关闭'}</button>
         </div>
       )
@@ -683,7 +733,16 @@ export default function UninstallPage({ api = uninstallApi, entry = 'standalone'
               <div className="uninstall-loading"><span className="uninstall-spinner uninstall-spinner--large" /><span>正在扫描可卸载的 SidekickAI 安装…</span></div>
             ) : (
               <>
-                {step === 'target' && renderTarget()}
+                {step === 'target' && <>
+                  {(scan?.recoveryTasks ?? []).map(task => <div className="uninstall-warning-box" key={task.taskId}>
+                    <strong>尚未结束的卸载任务</strong>
+                    <p>{task.message}</p>
+                    <div>{task.installPaths.join('；')}</div>
+                    {task.residualPaths.map(path => <div key={path}>{path}</div>)}
+                    <button type="button" className="uninstall-btn" onClick={() => void resumeTask(task)}>继续处理原任务</button>
+                  </div>)}
+                  {renderTarget()}
+                </>}
                 {step === 'policy' && renderPolicy()}
                 {step === 'executing' && renderExecuting()}
                 {step === 'done' && renderDone()}

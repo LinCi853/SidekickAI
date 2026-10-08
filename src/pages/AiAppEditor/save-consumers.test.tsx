@@ -33,12 +33,9 @@ vi.mock('../../components/WindowResizeHandles', () => ({ default: 'resize-handle
 vi.mock('../../components/ui/Modal', () => ({ default: 'modal' }));
 vi.mock('../../components/ui/Button', () => ({ default: 'button' }));
 vi.mock('./components/TitleBar', () => ({ AiAppEditorTitleBar: 'title-bar' }));
-vi.mock('./components/BasicInfoFields', () => ({ BasicInfoFields: 'basic-fields' }));
-vi.mock('./components/BlockRulesSection', () => ({ BlockRulesSection: 'block-rules' }));
-vi.mock('./components/PopupWhitelistSection', () => ({ PopupWhitelistSection: 'popup-whitelist' }));
-vi.mock('../../components/AiAppEditorModal/BasicInfoFields', () => ({ BasicInfoFields: 'modal-basic-fields' }));
-vi.mock('../../components/AiAppEditorModal/BlockRulesSection', () => ({ BlockRulesSection: 'modal-block-rules' }));
-vi.mock('../../components/AiAppEditorModal/PopupWhitelistSection', () => ({ PopupWhitelistSection: 'modal-popup-whitelist' }));
+vi.mock('../../components/AiAppEditorFields/BasicInfoFields', () => ({ BasicInfoFields: 'basic-fields' }));
+vi.mock('../../components/AiAppEditorFields/BlockRulesSection', () => ({ BlockRulesSection: 'block-rules' }));
+vi.mock('../../components/AiAppEditorFields/PopupWhitelistSection', () => ({ PopupWhitelistSection: 'popup-whitelist' }));
 import AiAppEditor from './index';
 import AiAppEditorModal from '../../components/AiAppEditorModal';
 

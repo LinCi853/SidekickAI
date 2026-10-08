@@ -1,6 +1,6 @@
 /* =====================================================================
    SettingsPanel/sections/DeveloperOptionsSection.tsx —— 开发者选项（独立设置栏）
-   不止管理开发者插件：实验性模块（语音/TTS/页面冻结/浏览器）+ 开发者向设置
+   Experimental modules and developer settings.
    （如「启用广告屏蔽规则」等底层调试选项）统一收纳在此栏。
    样式复用 ModuleManagementSection.css。
    ===================================================================== */

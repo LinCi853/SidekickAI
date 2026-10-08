@@ -7,7 +7,7 @@ import { resolveHotkey } from './onboardingData';
 /** 窗口卡片 → 内嵌模块开关（按模块主要使用位置归属） */
 const WINDOW_MODULE_MAP: Record<string, string[]> = {
   main: [],
-  assets: ['prompt-library', 'freeze'],
+  assets: ['prompt-library'],
   panel: ['custom-chat', 'whiteboard', 'notes'],
   browser: ['browser'],
 };
@@ -21,7 +21,6 @@ const MODULE_VALUE_DESC: Record<string, string> = {
   voice: '按住 Alt+V 说话、松开发送，后台语音输入',
   tts: '自定义供应商 TTS 语音合成',
   browser: 'Chrome 风格多标签浏览器窗口，可脱离/回归',
-  freeze: '冻结 AI 页面防止对方撤回/删除内容，可选中复制',
 };
 
 /** 认识窗口页卡片定义 */
@@ -85,7 +84,7 @@ export default function WindowsStep({
       icon: ICONS.appWindow,
       name: 'AI资产',
       entry: { keys: '主窗口菜单', enabled: true },
-      desc: '对话、提示词和资料集中收纳，原件保存在本地；手动页面冻结也在这里管理。',
+      desc: '对话、提示词和资料集中收纳，原件保存在本地。',
       tags: ['对话与修订', '提示词管理', '资料原件', '文本用量'],
       moduleIds: WINDOW_MODULE_MAP.assets,
     },

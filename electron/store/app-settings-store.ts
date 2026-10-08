@@ -364,7 +364,7 @@ export function broadcastUiVersionChanged(payload: { uiVersion: 'classic' | 'oxy
 }
 
 /** 注册应用设置 IPC 处理器（含代理测试与即时生效） */
-export function registerAppSettingsIPC(): void {
+export function registerAppSettingsIPC(exportData: typeof import('./backup-recovery.js').exportApplicationData): void {
   ipcMain.handle(IPC_CHANNELS.APP_GET_SETTINGS, () => getAppSettings())
   // 渲染层请求广播 UI 版本/主题变更到所有窗口
   ipcMain.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, (_e, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
@@ -441,12 +441,11 @@ export function registerAppSettingsIPC(): void {
     cache: boolean;
     voiceAssets: boolean;
   }, encrypt?: { password: string }) => {
-    const { exportAllData } = await import('./backup-restore.js')
-    return exportAllData(targetPath, options, encrypt)
+    return exportData(targetPath, options, encrypt)
   })
 
   // 数据迁移：从 zip/sabackup 文件导入所有数据（导入后应用自动重启）
-  ipcMain.handle(IPC_CHANNELS.APP_INSPECT_BACKUP, async (_e, filePath: string, password?: string) => {
+    ipcMain.handle(IPC_CHANNELS.APP_INSPECT_BACKUP, async (_e, filePath: string, password?: string) => {
     const { inspectImportData } = await import('./backup-restore.js')
     return inspectImportData(filePath, password)
   })

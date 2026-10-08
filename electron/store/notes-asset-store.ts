@@ -4,11 +4,12 @@
 // markdown 中存 notes-asset:// 协议路径，跨设备迁移时路径不含绝对路径。
 // 参照 whiteboard-asset-store.ts 实现，独立目录与协议，互不干扰。
 
-import { app, protocol, ipcMain } from 'electron'
+import { app, protocol } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/types.js'
+import type { EffectScope } from '../modules/effect-scope.js'
 
 const ASSETS_DIR_NAME = 'notes-assets'
 
@@ -66,11 +67,11 @@ export function registerNotesAssetProtocol(): void {
   })
 }
 
-/** 注册笔记图片磁盘存储 IPC + 自定义协议 */
-export function registerNotesAssetIPC(): void {
+/** Keeps image reads available while write IPC belongs to the module scope. */
+export function registerNotesAssetIPC(scope: EffectScope): void {
   registerNotesAssetProtocol()
 
-  ipcMain.handle(
+  scope.ipcHandle(
     IPC_CHANNELS.NOTES_SAVE_IMAGE,
     async (_e, dataUrl: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> => {
       try {

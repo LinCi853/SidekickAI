@@ -5,7 +5,7 @@
 //  - electron/shared/install-manifest-source.ts 派生安装向导清单
 //
 // 安装语义字段：
-//  - installRequired=true：需独立安装才能使用（对应 sizeLevel=large），安装前选定
+//  - installRequired=true: optional separate installation component (sizeLevel=large).
 //  - required=true：不可关闭的核心模块
 //
 // 模块 id 为准，新增/重命名/调整 sizeLevel 时只需改这里。
@@ -23,7 +23,7 @@ export interface BuiltinModuleData {
   dependencies: string[]
   entries: string[]
   hotkeys: string[]
-  /** 需独立安装才能使用（当前对应 sizeLevel=large）；缺省 false */
+  /** Optional separate installation component; omitted for bundled tools. */
   installRequired?: boolean
   /** 不可关闭的核心模块；缺省 false */
   required?: boolean
@@ -35,13 +35,12 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     name: '画板/白板',
     description: 'Excalidraw 无限画布：多白板管理、SQLite 持久化、截图推送到白板',
     category: 'stable',
-    sizeLevel: 'large',
+    sizeLevel: 'small',
     testBadge: false,
     defaultEnabled: true,
     dependencies: [],
     entries: ['进阶面板「白板」标签页', '主窗口「截图推送到白板」'],
     hotkeys: [],
-    installRequired: true,
   },
   {
     id: 'notes',
@@ -116,17 +115,5 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     dependencies: [],
     entries: ['每应用「脱离/回归」快捷键', '标签脱离到浏览器窗口'],
     hotkeys: ['每应用浏览器窗口快捷键（用户配置）'],
-  },
-  {
-    id: 'freeze',
-    name: 'AI资产页面冻结',
-    description: '在 AI资产中手动冻结已加载页面，查看记录并恢复网页',
-    category: 'stable',
-    sizeLevel: 'small',
-    testBadge: false,
-    defaultEnabled: true,
-    dependencies: ['prompt-library'],
-    entries: ['AI资产「手动页面冻结」', '浏览器窗口内冻结按钮与控制条'],
-    hotkeys: [],
   },
 ]

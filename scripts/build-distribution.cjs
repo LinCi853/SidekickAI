@@ -1,8 +1,8 @@
 'use strict'
 
 const fs = require('node:fs')
+const crypto = require('node:crypto')
 const path = require('node:path')
-const { createRequire } = require('node:module')
 const native = require('./build-tauri-installer.cjs')
 const utilities = require('./uninstaller-build-utils.cjs')
 const { withPackagingLock } = require('./packaging-lock.cjs')
@@ -13,11 +13,13 @@ function productIdentity(root = ROOT) {
   const product = JSON.parse(fs.readFileSync(path.join(root, 'packages/product-contract/manifest.json'), 'utf8'))
   const { edition } = JSON.parse(fs.readFileSync(path.join(root, 'product-edition.json'), 'utf8'))
   if (!product.editions[edition]?.packageKinds?.length) throw new Error('Distribution package policy is missing')
-  return { edition, version: rootPackageVersion(root), packageKinds: product.editions[edition].packageKinds }
+  return { edition, version: rootPackageVersion(root), packageKinds: product.editions[edition].packageKinds,
+    distribution: product.editions[edition].distribution }
 }
 
 function parseArguments(args, identity = productIdentity()) {
-  const options = { mode: 'installer', architectures: ['x64', 'arm64'], preflightOnly: false, outputRoot: null }
+  const options = { mode: identity.edition === 'concept' ? 'all' : 'installer',
+    architectures: ['x64', 'arm64'], preflightOnly: false, outputRoot: null }
   for (let index = 0; index < args.length; index++) {
     if (args[index] === '--preflight') options.preflightOnly = true
     else if (args[index] === '--no-publish') continue
@@ -31,7 +33,7 @@ function parseArguments(args, identity = productIdentity()) {
 }
 
 function captureInputs(root = ROOT) {
-  const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'tools/startup-helper', 'installer-tauri', 'uninstaller-tauri', 'installer-shared',
+  const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'tools/startup-helper', 'tools/backup-recovery-native', 'installer-tauri', 'uninstaller-tauri', 'installer-shared',
     'package.json', 'package-lock.json', 'electron-builder.yml', 'electron-builder.portable.yml', 'electron.vite.config.ts', 'tsconfig.json', 'tsconfig.node.json',
     'LICENSE', 'product-edition.json', 'maintenance/shared-source.json', 'maintenance/component-contract.json', 'build/License.txt',
     '.cargo/config.toml', '.cargo/config', 'rust-toolchain.toml', 'rust-toolchain']
@@ -53,24 +55,14 @@ function captureInputs(root = ROOT) {
   return utilities.fingerprint(root, files)
 }
 
-function preflightPortable(architectures) {
-  native.validateArchitectures(architectures)
-  if (process.platform !== 'win32') throw new Error('Portable builds require a Windows host')
-  for (const file of [process.env.SIDEKICK_7Z || 'C:/Program Files/7-Zip/7z.exe',
-    path.join(ROOT, 'node_modules/electron-vite/bin/electron-vite.js'), path.join(ROOT, 'node_modules/electron-builder/cli.js')]) utilities.assertFile(file)
-  const requireRoot = createRequire(path.join(ROOT, 'package.json'))
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
-  for (const name of Object.keys(pkg.dependencies || {})) requireRoot.resolve(name)
-  return null
-}
-
 const defaults = {
   captureInputs,
-  prepareResources: () => require('./build-startup-helper.cjs').build({ resources: true }),
-  preflight: (architectures, output, mode) => mode === 'portable' ? preflightPortable(architectures) : native.preflight(architectures, true, output),
+  prepareResources: native.prepareNativeResources,
+  preflight: (architectures, output) => native.preflight(architectures, true, output),
   buildPlugins: options => fs.existsSync(path.join(ROOT, 'scripts/build-plugins.cjs')) ? require('./build-plugins.cjs').main(options) : [],
   buildApplications: (output, architectures) => native.buildApplications(output, architectures, { reuse: true }),
-  buildInstallers: (output, applications, architectures, toolchain) => native.buildInstallerArtifacts(output, applications, architectures, toolchain, { reuse: true }),
+  buildRecoveryEntries: (output, architectures, toolchain) => native.buildRecoveryEntries(output, architectures, toolchain),
+  buildInstallers: (output, applications, architectures, toolchain, recoveryEntries) => native.buildInstallerArtifacts(output, applications, architectures, toolchain, { reuse: true, recoveryEntries }),
   buildPortable: options => require('./pack-portable.cjs').packPortable(options),
 }
 
@@ -88,12 +80,15 @@ async function buildCandidates(options, output, dependencies = defaults) {
   const applications = await dependencies.buildApplications(path.join(output, 'application'), options.architectures)
   guard()
   const artifacts = { ...options, applications, plugins, inputs: before }
+  const recoveryEntries = await dependencies.buildRecoveryEntries?.(path.join(output, 'maintenance'), options.architectures, toolchain)
+  guard()
   if (options.mode !== 'portable') {
-    artifacts.installers = await dependencies.buildInstallers(path.join(output, 'installation'), applications, options.architectures, toolchain)
+    artifacts.installers = await dependencies.buildInstallers(path.join(output, 'installation'), applications, options.architectures, toolchain, recoveryEntries)
     guard()
   }
   if (options.mode !== 'installer') {
-    artifacts.portable = await dependencies.buildPortable({ output: path.join(output, 'portable'), applications, architectures: options.architectures })
+    artifacts.portable = await dependencies.buildPortable({ output: path.join(output, 'portable'), applications,
+      architectures: options.architectures, recoveryEntries })
     guard()
   }
   return artifacts
@@ -104,40 +99,78 @@ function collectCandidates(artifacts, output, root = ROOT) {
   if (artifacts.edition !== identity.edition || artifacts.version !== identity.version) throw new Error('Candidate identity does not match the current product configuration')
   parseArguments(['--mode', artifacts.mode], identity)
   if (artifacts.architectures?.length !== 2 || !['x64', 'arm64'].every(arch => artifacts.architectures.includes(arch))) throw new Error('Distribution requires both x64 and arm64')
+  const channel = require('./application-distribution.cjs').releaseChannel(artifacts.version)
   const directory = path.join(output, artifacts.edition)
   fs.mkdirSync(directory)
   const files = []
-  const add = (source, name, packageKind) => {
+  const add = (source, name, role, supportedNativeArchitectures, executableArchitecture, bodyProofSha256 = null) => {
     if (!source || path.basename(name) !== name) throw new Error('Invalid candidate artifact')
     const target = path.join(directory, name)
     fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL)
     const sha256 = utilities.sha256(target)
     if (sha256 !== utilities.sha256(source)) throw new Error('Candidate changed during copy')
-    files.push({ edition: artifacts.edition, version: artifacts.version, channel: artifacts.version.includes('-') ? 'beta' : 'stable',
-      platform: 'windows', architecture: 'x64', supportedArchitectures: [...artifacts.architectures], packageKind,
-      arm64Evidence: false,
-      ...(packageKind === 'installer' ? { configurationProtocolVersion: 2 } : {}),
-      file: name, sizeBytes: fs.statSync(target).size, sha256 })
+    if (executableArchitecture && utilities.peInfo(fs.readFileSync(target)).arch !== executableArchitecture) {
+      throw new Error('Candidate PE architecture does not match its distribution role')
+    }
+    files.push({ edition: artifacts.edition, version: artifacts.version, platform: 'windows',
+      architecture: executableArchitecture || (supportedNativeArchitectures.length === 2 ? 'universal' : supportedNativeArchitectures[0]),
+      packageKind: role === 'portable' ? 'portable' : role === 'application-payload' ? 'application-payload' : 'installer',
+      role, executableArchitecture, supportedNativeArchitectures, bodyProofSha256,
+      visibility: role === 'application-payload' ? 'internal' : 'public', assetId: sha256,
+      file: name, sizeBytes: fs.statSync(target).size, sha256,
+      contentType: executableArchitecture ? 'application/vnd.microsoft.portable-executable' : 'application/zip' })
   }
-  if (artifacts.installers) add(artifacts.installers.setups?.x64, `SidekickAI-Setup-${artifacts.version}.exe`, 'installer')
+  if (artifacts.installers) {
+    if (artifacts.edition === 'community') {
+      add(artifacts.installers.setups?.x64, 'SidekickAI-Setup-' + artifacts.version + '.exe',
+        'online-bootstrap', ['x64', 'arm64'], 'x64')
+      for (const arch of ['x64', 'arm64']) {
+        const payload = artifacts.installers.payloads?.[arch]
+        add(payload?.container?.path, 'SidekickAI-Application-' + artifacts.version + '-' + arch + '.zip',
+          'application-payload', [arch], null, payload?.bodyProofSha256)
+      }
+    } else {
+      for (const arch of ['x64', 'arm64']) add(artifacts.installers.setups?.[arch],
+        'SidekickAI-Setup-' + artifacts.version + '-' + arch + '.exe',
+        'offline-installer', [arch], arch, artifacts.installers.payloads?.[arch]?.bodyProofSha256)
+    }
+  }
   if (artifacts.portable) {
     if (artifacts.portable.length !== 1 || artifacts.portable[0].arch !== 'universal') throw new Error('Portable delivery must be one dual-architecture archive')
     const portable = artifacts.portable[0]
-    add(portable.path, `SidekickAI-Portable-${artifacts.version}-win.zip`, 'portable')
+    add(portable.path, 'SidekickAI-Portable-' + artifacts.version + '-win.zip',
+      'portable', ['x64', 'arm64'], null, portable.bodyProofSha256)
   }
-  const required = artifacts.mode === 'all' ? ['installer', 'portable'] : [artifacts.mode]
-  if (files.length !== required.length || required.some(kind => !files.some(file => file.packageKind === kind))) throw new Error('Distribution artifacts do not match requested package kinds')
+  const expected = artifacts.edition === 'community' ? ['online-bootstrap', 'application-payload', 'application-payload']
+    : artifacts.mode === 'all' ? ['offline-installer', 'offline-installer', 'portable']
+      : artifacts.mode === 'installer' ? ['offline-installer', 'offline-installer'] : ['portable']
+  if (files.length !== expected.length || files.some((file, index) => file.role !== expected[index])
+    || files.some(file => file.role !== 'online-bootstrap' && !/^[a-f0-9]{64}$/.test(file.bodyProofSha256 || ''))) {
+    throw new Error('Distribution artifacts do not match the approved package matrix')
+  }
   const shared = JSON.parse(fs.readFileSync(path.join(root, 'maintenance/shared-source.json'), 'utf8'))
-  const manifest = { schemaVersion: 1, status: 'candidate', softwareId: 'sidekickai', edition: artifacts.edition,
-    version: artifacts.version, generatedAt: new Date().toISOString(), architectures: artifacts.architectures,
-    sourceInputs: artifacts.inputs, sharedSource: shared, artifacts: files }
+  const manifest = { schemaVersion: 1, distributionProtocolVersion: 1, status: 'candidate',
+    softwareId: 'sidekickai', edition: artifacts.edition, version: artifacts.version, channel,
+    generatedAt: new Date().toISOString(), architectures: artifacts.architectures,
+    sourceInputs: artifacts.inputs, sharedSource: shared, artifacts: files, architectureEvidence: [] }
   fs.writeFileSync(path.join(directory, 'release-manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
-  fs.writeFileSync(path.join(directory, 'update-channel.json'), JSON.stringify({ schemaVersion: 1, softwareId: 'sidekickai', edition: artifacts.edition,
-    version: artifacts.version, channel: artifacts.version.includes('-') ? 'beta' : 'stable', artifacts: files }, null, 2) + '\n', { flag: 'wx' })
+  fs.writeFileSync(path.join(directory, 'SHA256SUMS.txt'), files.map(file => file.sha256 + '  ' + file.file).join('\n') + '\n', { flag: 'wx' })
+  if (files.length === 3) {
+    const release = { protocolVersion: 1, productId: 'sidekickai', edition: artifacts.edition,
+      productVersion: artifacts.version, releaseId: crypto.randomUUID(), channel, platform: 'windows',
+      maintenanceProtocolVersion: 1, recoveryProtocolVersion: 1,
+      assets: files.map(file => ({ assetId: file.assetId, role: file.role, filename: file.file, sizeBytes: file.sizeBytes,
+        sha256: file.sha256, contentType: file.contentType, executableArchitecture: file.executableArchitecture,
+        supportedNativeArchitectures: file.supportedNativeArchitectures, bodyProofSha256: file.bodyProofSha256 })),
+      publicAssetIds: files.filter(file => file.visibility === 'public').map(file => file.assetId),
+      architectureEvidence: [], notes: '', createdAt: manifest.generatedAt }
+    fs.writeFileSync(path.join(directory, 'application-release-candidate.json'), JSON.stringify(release, null, 2) + '\n', { flag: 'wx' })
+  }
   return { directory, files, manifest }
 }
 
 async function main(args = process.argv.slice(2)) {
+  Object.assign(process.env, require('./local-build-config.cjs').localBuildEnvironment(ROOT))
   require('./check-node-version.cjs').assertNodeVersion()
   const options = parseArguments(args)
   require('../packages/product-contract/sync.cjs').synchronize(ROOT)

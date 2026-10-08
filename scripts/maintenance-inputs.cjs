@@ -21,7 +21,7 @@ function frontendInputs(app, root = ROOT) {
     'installer-shared/uninstall', 'installer-shared/operation-details', 'installer-shared/presentation',
     'installer-tauri/package-lock.json', 'scripts/tauri-web-build.cjs',
     ...[`${name}/tsconfig.node.json`, ...(name === 'uninstaller-tauri' ? [`${name}/package-lock.json`] : [])].filter(file => fs.existsSync(path.join(root, file))),
-    ...(name === 'installer-tauri' ? ['packages/product-contract/identity.ts', 'packages/product-contract/manifest.json', 'product-edition.json'] : [])])
+    ...(name === 'installer-tauri' ? ['installer-shared/edition-policy.ts', 'packages/product-contract/identity.ts', 'packages/product-contract/manifest.json', 'product-edition.json'] : [])])
 }
 
 function sourceInputs(app, root = ROOT) {

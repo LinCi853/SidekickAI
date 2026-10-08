@@ -137,6 +137,10 @@ export default function AppSwitcher({
     return profiles.find((p) => p.id === tab.profileId);
   }, [activeTabId, tabs, profiles]);
 
+  const activeColors = activePlatform
+    ? getPlatformColors(activeProfile, activePlatform, activePlatform.id)
+    : undefined;
+
   // 下拉菜单位置：使用 fixed 定位脱离父级 stacking-context，避免被 overlay/webview 遮挡
   useEffect(() => {
     if (!isOpen || !wrapRef.current) return;
@@ -284,8 +288,8 @@ export default function AppSwitcher({
           title="切换应用"
           onClick={() => setIsOpen((v) => !v)}
           style={
-            activePlatform
-              ? { background: `linear-gradient(135deg, ${activePlatform.themeColor}, ${activePlatform.gradientColor})` }
+            activeColors
+              ? { background: `linear-gradient(135deg, ${activeColors.themeColor}, ${activeColors.gradientColor})` }
               : undefined
           }
         >

@@ -1,6 +1,9 @@
-// Pure application data projected into runtime setup metadata.
-// Feature definitions and option defaults share the application sources.
+// Pure installation data projected from the application's modules and defaults.
+// The generator evaluates this entry without starting the application and writes
+// release metadata under build. The packaged wizard reads its embedded metadata.
+// Imports must remain free of application startup side effects.
 
+import { installationComponents, installationPolicy } from '../../installer-shared/edition-policy.js'
 import { BUILTIN_MODULE_INSTALL_DATA } from '../modules/builtin-module-data.js'
 import { getDefaultAppSettings } from '../store/default-config.js'
 
@@ -10,9 +13,9 @@ export interface InstallManifestFeature {
   description: string
   category: string
   defaultEnabled: boolean
-  /** 不可关闭的核心模块 */
+  /** A core module that cannot be disabled. */
   required?: boolean
-  /** 需独立安装才能使用（安装前选定，安装中不可调整） */
+  /** An optional component selected before installation. */
   installRequired?: boolean
   sizeLevel: string
 }
@@ -29,12 +32,12 @@ export interface InstallManifestOption {
   type: string
   defaultValue: boolean | string | number
   choices?: InstallManifestOptionChoice[]
-  /** 选项分组页（应用行为 / 日志）；空 = 不分页 */
+  /** The wizard page for this option. */
   page?: string
 }
 
-/** 功能清单：直接由内置模块数据派生，模块增删/改名只需维护 builtin-module-data.ts */
-export const INSTALL_MANIFEST_FEATURES: InstallManifestFeature[] = BUILTIN_MODULE_INSTALL_DATA.filter(d => d.id !== 'freeze').map(
+/** Project only components owned by the selected edition. */
+export const INSTALL_MANIFEST_FEATURES: InstallManifestFeature[] = installationComponents(BUILTIN_MODULE_INSTALL_DATA).map(
   (d) => ({
     id: d.id,
     name: d.name,
@@ -47,14 +50,14 @@ export const INSTALL_MANIFEST_FEATURES: InstallManifestFeature[] = BUILTIN_MODUL
   })
 )
 
-/** 选项元数据（id/label/描述/类型/分组）——安装向导独有的展示信息 */
+/** Wizard option labels and grouping. */
 const OPTION_META: Array<
   Omit<InstallManifestOption, 'defaultValue'>
 > = [
   {
     id: 'autoUpdate',
-    label: '自动更新',
-    description: '预留：检查并应用更新（后续版本提供真实更新链路，当前仅保存偏好）',
+    label: installationPolicy.updateLabel,
+    description: installationPolicy.updateDescription,
     type: 'boolean',
     page: 'behavior',
   },
@@ -87,7 +90,7 @@ const OPTION_META: Array<
   },
 ]
 
-/** 默认值从主应用设置默认值投影（optionId → AppSettings 字段映射同 app-settings-store 播种逻辑） */
+/** Default values come from the application settings contract. */
 const DEFAULTS = getDefaultAppSettings(false)
 const OPTION_DEFAULTS: Record<string, boolean | string> = {
   autoUpdate: DEFAULTS.autoUpdate,
@@ -96,7 +99,7 @@ const OPTION_DEFAULTS: Record<string, boolean | string> = {
   usageTracking: DEFAULTS.usageTrackingEnabled,
 }
 
-export const INSTALL_MANIFEST_OPTIONS: InstallManifestOption[] = OPTION_META.map((m) => ({
+export const INSTALL_MANIFEST_OPTIONS: InstallManifestOption[] = OPTION_META.filter(option => installationPolicy.options.includes(option.id)).map((m) => ({
   ...m,
   defaultValue: OPTION_DEFAULTS[m.id] ?? false,
 }))

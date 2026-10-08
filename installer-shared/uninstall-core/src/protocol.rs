@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-pub const UNINSTALL_PROTOCOL_VERSION: u32 = 1;
-pub const UNINSTALL_CONFIRMATION: &str = "delete-v1";
+pub const UNINSTALL_PROTOCOL_VERSION: u32 = 2;
+pub const UNINSTALL_CONFIRMATION: &str = "delete-v2";
 pub const UNINSTALL_EVENT: &str = "uninstall:event";
 pub const BACKUP_CATEGORIES: [&str; 4] =
     ["basicData", "cookies", "indexedDB", "cache"];
@@ -186,6 +186,22 @@ pub struct UninstallScanResponse {
     pub locations: Vec<UninstallLocation>,
     pub recommended_target_id: Option<UninstallTargetId>,
     pub data_roots: Vec<DataRoot>,
+    #[serde(default)]
+    pub recovery_tasks: Vec<UninstallRecoveryTask>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UninstallRecoveryTask {
+    pub task_id: String,
+    pub state: String,
+    pub install_paths: Vec<String>,
+    pub data_paths: Vec<String>,
+    pub residual_paths: Vec<String>,
+    pub requires_elevation: bool,
+    pub message: String,
+    #[serde(default)]
+    pub backups: Vec<BackupResult>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -200,6 +216,8 @@ pub struct BackupSelection {
     #[serde(skip_serializing, default)]
     pub password: Option<String>,
     pub categories: Vec<String>,
+    #[serde(default)]
+    pub staging_path: Option<String>,
 }
 
 impl fmt::Debug for BackupSelection {
@@ -211,6 +229,7 @@ impl fmt::Debug for BackupSelection {
             .field("encrypt", &self.encrypt)
             .field("password", &self.password.as_ref().map(|_| "***"))
             .field("categories", &self.categories)
+            .field("staging_path", &self.staging_path)
             .finish()
     }
 }
@@ -226,6 +245,8 @@ pub struct UninstallRequest {
     pub backup: Option<BackupSelection>,
     pub additional_target_ids: Vec<UninstallTargetId>,
     pub confirmation: String,
+    #[serde(default)]
+    pub resume_task_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -326,6 +347,8 @@ pub struct UninstallResult {
     pub removed_install_paths: Vec<String>,
     pub removed_data_roots: Vec<String>,
     pub backup: Option<BackupResult>,
+    #[serde(default)]
+    pub backups: Vec<BackupResult>,
     pub warnings: Vec<String>,
     pub error: Option<UninstallError>,
 }
@@ -553,7 +576,7 @@ mod tests {
             strategy,
             backup,
             additional_target_ids: Vec::new(),
-            confirmation: UNINSTALL_CONFIRMATION.into(),
+            confirmation: UNINSTALL_CONFIRMATION.into(), resume_task_id: None,
         }
     }
 
@@ -564,13 +587,14 @@ mod tests {
             encrypt,
             password: password.map(str::to_string),
             categories: categories.iter().map(|c| c.to_string()).collect(),
+            staging_path: None,
         }
     }
 
     #[test]
     fn request_shape_is_validated_before_anything_else() {
         let mut wrong_protocol = request(DataStrategy::Keep, None);
-        wrong_protocol.protocol_version = 2;
+        wrong_protocol.protocol_version = 1;
         assert_eq!(validate_request(&wrong_protocol).unwrap_err().code, UninstallErrorCode::InvalidRequest);
 
         let mut empty_request_id = request(DataStrategy::Keep, None);
@@ -578,7 +602,7 @@ mod tests {
         assert_eq!(validate_request(&empty_request_id).unwrap_err().code, UninstallErrorCode::InvalidRequest);
 
         let mut unconfirmed = request(DataStrategy::Keep, None);
-        unconfirmed.confirmation = "delete-v2".into();
+        unconfirmed.confirmation = "delete-v1".into();
         assert_eq!(validate_request(&unconfirmed).unwrap_err().code, UninstallErrorCode::TargetNotConfirmed);
 
         // A bare path can never be smuggled in as a target identity.

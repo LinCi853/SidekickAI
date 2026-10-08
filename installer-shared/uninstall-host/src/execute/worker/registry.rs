@@ -125,7 +125,7 @@ fn remove_registration_key(_root: &str, _key_name: &str, _install: &Path) -> Res
 
 /// Cleanup uses the identity captured before the installation was removed.
 #[cfg(windows)]
-pub(crate) fn remove_shortcuts_for(install: &Path, all_users: bool, edition: &sidekickai_uninstall_core::product::Edition) -> Result<(), String> {
+pub(super) fn owned_shortcuts(install: &Path, all_users: bool, edition: &sidekickai_uninstall_core::product::Edition) -> Result<Vec<PathBuf>, String> {
     use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
     let targets = [install.join("SidekickAI.exe"), install.join(&edition.legacy_executable)];
     let mut candidates = Vec::new();
@@ -151,6 +151,7 @@ pub(crate) fn remove_shortcuts_for(install: &Path, all_users: bool, edition: &si
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
+    let mut owned = Vec::new();
     for link_path in candidates {
         if !link_path.is_file() {
             continue;
@@ -160,9 +161,9 @@ pub(crate) fn remove_shortcuts_for(install: &Path, all_users: bool, edition: &si
         if !targets.iter().any(|target| shortcut_points_to(&link_path, target)) {
             continue;
         }
-        fs::remove_file(&link_path).map_err(|e| format!("无法删除 {}：{e}", link_path.display()))?;
+        owned.push(link_path);
     }
-    Ok(())
+    Ok(owned)
 }
 
 #[cfg(windows)]
@@ -198,3 +199,12 @@ pub(super) fn shortcut_points_to(link_path: &Path, expected: &Path) -> bool {
 pub(crate) fn remove_shortcuts_for(_install: &Path, _all_users: bool, _edition: &sidekickai_uninstall_core::product::Edition) -> Result<(), String> {
     Err("快捷方式清理仅在 Windows 上实现。".into())
 }
+
+#[cfg(windows)]
+pub(crate) fn remove_shortcuts_for(install: &Path, all_users: bool, edition: &sidekickai_uninstall_core::product::Edition) -> Result<(), String> {
+    for link in owned_shortcuts(install, all_users, edition)? { fs::remove_file(&link).map_err(|error| error.to_string())?; }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub(super) fn owned_shortcuts(_install: &Path, _all_users: bool, _edition: &sidekickai_uninstall_core::product::Edition) -> Result<Vec<PathBuf>, String> { Ok(Vec::new()) }

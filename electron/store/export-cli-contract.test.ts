@@ -6,8 +6,15 @@ import Database from 'better-sqlite3'
 
 const fixture = vi.hoisted(() => ({ root: '', temporary: '' }))
 vi.mock('electron', () => ({
-  app: { getPath: (name: string) => name === 'temp' ? fixture.temporary : fixture.root, getVersion: () => '0.1.5' },
+  app: { isReady: () => true, getPath: (name: string) => name === 'temp' ? fixture.temporary : fixture.root, getVersion: () => '0.1.5' },
   session: { defaultSession: { flushStorageData() {}, cookies: { flushStore: async () => {}, get: async () => [] } }, fromPartition: () => ({ flushStorageData() {}, cookies: { flushStore: async () => {}, get: async () => [] } }) },
+}))
+vi.mock('../../packages/backup-core/sessions.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../packages/backup-core/sessions.js')>(),
+  captureOfflineSensitiveData: async (files: Array<{ archivePath: string; sourcePath: string }>) => ({
+    snapshots: [],
+    sensitiveDrafts: (await import('../../packages/backup-core/sensitive-drafts.js')).captureBackupDrafts(path.dirname(files.find(file => file.archivePath === 'settings.db')!.sourcePath)),
+  }),
 }))
 import { runExportCli } from './export-cli.js'
 

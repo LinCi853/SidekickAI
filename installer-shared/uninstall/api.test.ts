@@ -8,8 +8,8 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }))
 
 const request: UninstallRequest = {
-  protocolVersion: 1, requestId: 'request', scanId: 'scan', targetId: { token: 'target' },
-  strategy: 'keep', additionalTargetIds: [], confirmation: 'delete-v1',
+  protocolVersion: 2, requestId: 'request', scanId: 'scan', targetId: { token: 'target' },
+  strategy: 'keep', additionalTargetIds: [], confirmation: 'delete-v2',
 }
 
 beforeEach(() => vi.resetAllMocks())

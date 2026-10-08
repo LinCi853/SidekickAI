@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createHookHarness, deferred, elements, settle } from '../../src/test/hook-harness'
 
-const mocks = vi.hoisted(() => ({ hooks: null as any, installed: true, handlers: {} as Record<string, Function>, pending: false,
+const mocks = vi.hoisted(() => ({ hooks: null as any, installed: true, handlers: {} as Record<string, Function>, pending: false, recoveries: [] as any[],
   flush: vi.fn(), prepare: vi.fn(), close: vi.fn(), begin: vi.fn(), release: vi.fn(),
-  preparation: vi.fn(), preparationEnd: vi.fn(), cloud: vi.fn(), start: vi.fn() }))
+  preparation: vi.fn(), preparationEnd: vi.fn(), cloud: vi.fn(), start: vi.fn(), distribution: vi.fn() }))
 vi.mock('react', () => ({ useState: (...args: any[]) => mocks.hooks.useState(...args), useRef: (...args: any[]) => mocks.hooks.useRef(...args),
   useEffect: (...args: any[]) => mocks.hooks.useEffect(...args), useCallback: (...args: any[]) => mocks.hooks.useCallback(...args) }))
 vi.mock('../../installer-shared/uninstall/UninstallPage', () => ({ default: 'UninstallPage' }))
@@ -13,7 +13,7 @@ vi.mock('./cloud', () => ({ hostContext: () => ({}), prepareCloudAssets: (...arg
 import App from './App'
 
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.installed = true; mocks.handlers = {}; mocks.pending = false
+  vi.clearAllMocks(); mocks.installed = true; mocks.handlers = {}; mocks.pending = false; mocks.recoveries = []
   mocks.flush.mockResolvedValue(true)
   mocks.begin.mockResolvedValue(true)
   mocks.release.mockResolvedValue(undefined)
@@ -21,15 +21,19 @@ beforeEach(() => {
   mocks.preparationEnd.mockResolvedValue(undefined)
   mocks.cloud.mockResolvedValue({ assets: [], resources: [], notice: '' })
   mocks.start.mockResolvedValue(true)
+  mocks.distribution.mockResolvedValue({ sourcePath: 'E:/Staging/application.zip', bodyProof: 'body-proof', productVersion: '0.1.6',
+    nativeArchitecture: 'x64', releaseId: '', releaseSha256: '', releaseProof: '' })
   mocks.prepare.mockImplementation(async (_directory, selected) => { mocks.pending = selected; return true })
   mocks.close.mockImplementation(async () => { if (mocks.pending) throw new Error('无法核对已有程序的启动身份'); return true })
   const subscribe = (name: string) => (callback: Function) => { mocks.handlers[name] = callback; return () => {} }
   vi.stubGlobal('window', { installer: {
-    getInfo: async () => ({ version: '0.1.5-beta-rc', perUserDefaultDir: 'E:/Apps/requested', features: [], options: [], licenses: [] }),
+    pendingInstallations: async () => mocks.recoveries,
+    getInfo: async () => ({ version: '0.1.5-beta-rc', distributionMode: 'offline', perUserDefaultDir: 'E:/Apps/requested', features: [], options: [], licenses: [] }),
     scanInstallations: async () => ({ locations: mocks.installed ? [{ path: 'E:/Apps/requested', version: '0.1.5-beta-rc' }] : [], recommendedDir: 'E:/Apps/requested' }),
     readInstallConfig: async () => null, flushConfig: mocks.flush, setPendingLaunch: mocks.prepare, closeWindow: mocks.close,
     beginCompletion: mocks.begin, endCompletion: mocks.release,
     beginPreparation: mocks.preparation, endPreparation: mocks.preparationEnd, start: mocks.start,
+    prepareDistribution: mocks.distribution, onDistributionProgress: subscribe('distribution'), cancelDistribution: async () => true,
     onStatus: subscribe('status'), onProgress: subscribe('progress'), onLog: subscribe('log'), onDone: subscribe('done'),
     onError: subscribe('error'), onCloseRequested: subscribe('systemClose'),
   } })
@@ -54,6 +58,44 @@ async function readyToInstall() {
   primary().props.onClick(); render()
   return { render, primary }
 }
+
+it('offers recovery on reopening and uses the original scope without downloading resources', async () => {
+  mocks.recoveries = [{ installDir: 'E:/Apps/interrupted', forAllUsers: true, cleanupPaths: ['E:/Apps/previous'], journalPath: 'E:/Apps/journal', state: 'active' }]
+  const runner = createHookHarness(); mocks.hooks = runner.hooks
+  const render = () => runner.render(() => App())
+  render(); await settle(); render(); await settle()
+  const button = elements(render().props.footer).find(element => element.type === 'button' && element.props.className.includes('primary'))!
+  expect(button.props.children).toBe('恢复中断的安装')
+  await button.props.onClick(); await settle()
+  expect(mocks.cloud).not.toHaveBeenCalled()
+  expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({ installDir: 'E:/Apps/interrupted', forAllUsers: true, cleanupPaths: ['E:/Apps/previous'], cloudAssets: [] }))
+})
+
+it('preserves installed settings when closing after committed recovery cleanup', async () => {
+  mocks.recoveries = [{ installDir: 'E:/Apps/interrupted', forAllUsers: true, cleanupPaths: [], journalPath: 'E:/Apps/journal', state: 'committed' }]
+  const runner = createHookHarness(); mocks.hooks = runner.hooks
+  const render = () => runner.render(() => App())
+  render(); await settle(); render(); await settle()
+  const primary = () => elements(render().props.footer).find(element => element.type === 'button' && element.props.className.includes('primary'))!
+  expect(primary().props.children).toBe('继续清理恢复副本')
+  await primary().props.onClick(); await settle()
+  mocks.recoveries = []
+  mocks.handlers.done({ installDir: 'E:/Apps/interrupted' })
+  render().props.onClose(); await settle()
+  expect(mocks.flush).not.toHaveBeenCalled()
+  expect(mocks.prepare).toHaveBeenCalledWith('E:/Apps/interrupted', false, false)
+})
+
+it('sends the selected staging location when retrying installation', async () => {
+  const page = await readyToInstall()
+  const location = elements(page.render()).find(element => typeof element.props.setStagingDir === 'function')!
+  location.props.setStagingDir('E:/Install staging')
+  page.render()
+  await page.primary().props.onClick(); await settle()
+  expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({ stagingDir: 'E:/Install staging' }))
+  expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({ distributionSourcePath: 'E:/Staging/application.zip',
+    distributionBodyProof: 'body-proof', distributionProductVersion: '0.1.6', distributionReleaseProof: '' }))
+})
 
 it('title-bar closure skips a selected launch after successful repair', async () => {
   const page = await completed()
@@ -166,4 +208,13 @@ it('starts neither resource preparation nor deployment when wizard switching win
   expect(mocks.preparationEnd).not.toHaveBeenCalled()
   const operation = elements(page.render()).find(element => typeof element.type === 'function' && element.type.name === 'StepInstalling')!
   expect(operation.props.errorMsg).toBe('')
+})
+
+it('keeps bundled installation offline and reports only applicable resource behavior', async () => {
+  const page = await readyToInstall()
+  const details = elements(page.render()).find(element => Array.isArray(element.props.summary))!
+  expect(details.props.summary.find(([label]: string[]) => label === '设置与资源')[1]).toBe('应用本次所选设置，内置工具与默认内容随本体提供')
+  await page.primary().props.onClick(); await settle()
+  expect(mocks.cloud).not.toHaveBeenCalled()
+  expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({ features: {}, cloudAssets: [], resources: [] }))
 })

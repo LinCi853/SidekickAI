@@ -25,7 +25,7 @@ interface AttachmentRow {
   id: string; conversation_id: string; message_id: string | null; source_id: string
   name: string; mime_type: string; source_url: string | null; direction: 'input' | 'output'
   status: AssetAttachment['status']; sha256: string | null; size: number | null
-  error: string | null; created_at: number
+  error: string | null; created_at: number; updated_at: number | null
 }
 const digest = (text: string) => createHash('sha256').update(text).digest('hex')
 const attachment = (row: AttachmentRow): AssetAttachment => ({
@@ -34,10 +34,12 @@ const attachment = (row: AttachmentRow): AssetAttachment => ({
   sourceUrl: row.source_url ?? undefined, direction: row.direction, status: row.status,
   sha256: row.sha256 ?? undefined, size: row.size ?? undefined, error: row.error ?? undefined,
   createdAt: row.created_at,
+  updatedAt: row.updated_at ?? row.created_at,
 })
 
 export class AiAssetsStore {
   readonly graph: AssetGraphStore
+  private mimoIdentities = new Map<string, string>()
   constructor(private db: Database.Database) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS asset_conversation_keys (
@@ -94,6 +96,8 @@ export class AiAssetsStore {
         source_id TEXT NOT NULL, external_key TEXT NOT NULL, PRIMARY KEY(source_id, external_key)
       );
     `)
+    const attachmentColumns = db.prepare('PRAGMA table_info(asset_attachments)').all() as Array<{ name: string }>
+    if (!attachmentColumns.some(column => column.name === 'updated_at')) db.exec('ALTER TABLE asset_attachments ADD COLUMN updated_at INTEGER')
     this.graph = new AssetGraphStore(db)
     const seed = db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
     const versions = db.prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
@@ -175,17 +179,49 @@ export class AiAssetsStore {
           .run(source.id, observation.conversationKey, draft.conversation_id)
       }
       const conversationId = this.conversation(source, observation)
+      observation = this.protectMiMoIdentity(source, conversationId, observation)
       const messageIds: Record<string, string> = observation.snapshot ? this.graph.observe(conversationId, source.id, observation,
         (message, messageId) => this.captureMessage(conversationId, message, messageId)) : Object.create(null)
       if (!observation.snapshot) for (const message of observation.messages) {
         const id = this.capture(conversationId, message)
         if (id) messageIds[message.key] = id
       }
+      for (const message of observation.messages) if (message.identityToken && messageIds[message.key])
+        this.mimoIdentities.set(`${conversationId}\u0000${message.key}`, message.identityToken)
       if (observation.visitId) this.graph.viewEvent(conversationId, `web:${observation.visitId}`)
       const title = this.localTitle(conversationId) ?? observation.title ?? '新对话'
       this.db.prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND title != ?').run(title, Date.now(), conversationId, title)
       return { conversationId, messageIds }
     })()
+  }
+
+  private protectMiMoIdentity(source: AssetSource, id: string, observation: AssetObservation): AssetObservation {
+    try { if (source.type !== 'webview' || new URL(observation.url ?? '').hostname !== 'aistudio.xiaomimimo.com') return observation }
+    catch { return observation }
+    const blocked = new Set<string>()
+    const keys = new Set<string>()
+    for (const message of observation.messages) {
+      if (!/^(user|assistant):mimo:/.test(message.key)) continue
+      if (keys.has(message.key)) blocked.add(message.key.replace(/^(user|assistant):/, ''))
+      keys.add(message.key)
+      const previous = this.db.prepare(`SELECT m.content, s.reasoning, s.status FROM asset_nodes n
+        JOIN messages m ON m.id = n.message_id JOIN asset_message_state s ON s.message_id = m.id
+        WHERE n.conversation_id = ? AND n.source_key = ? ORDER BY n.rowid DESC LIMIT 1`)
+        .get(id, message.key) as { content: string; reasoning: string; status: AssetMessageStatus } | undefined
+      if (!previous) continue
+      const sameElement = message.identityToken && this.mimoIdentities.get(`${id}\u0000${message.key}`) === message.identityToken
+      const reasoning = message.reasoning ?? previous.reasoning
+      const unchanged = message.content === previous.content && reasoning === previous.reasoning
+      const growing = ['streaming', 'failed', 'stopped'].includes(previous.status)
+        && message.content.startsWith(previous.content) && reasoning.startsWith(previous.reasoning)
+      if (!sameElement && !unchanged && !growing) blocked.add(message.key.replace(/^(user|assistant):/, ''))
+    }
+    if (!blocked.size) return observation
+    const messages = observation.messages.filter(message => !blocked.has(message.key.replace(/^(user|assistant):/, '')))
+    for (const key of blocked) this.recordCleanup(source, observation.adapter ?? 'dom', 'ambiguous-message-identity',
+      observation.messages.filter(message => message.key.replace(/^(user|assistant):/, '') === key).length,
+      0, digest(JSON.stringify([observation.visitId, key, observation.messages])))
+    return { ...observation, messages, completePath: false }
   }
 
   private registerApiConversation(conversationId: string, sourceId: string): string {
@@ -430,6 +466,11 @@ export class AiAssetsStore {
   referencesOriginal(sha256: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM asset_attachments WHERE sha256 = ? LIMIT 1').get(sha256)
   }
+  expiredAttachmentIds(cutoff: number, limit = 200): string[] {
+    return (this.db.prepare(`SELECT a.id FROM asset_attachments a JOIN conversations c ON c.id = a.conversation_id
+      WHERE COALESCE(a.updated_at, a.created_at) <= ? AND c.source_type != 'freeze-snapshot'
+      ORDER BY COALESCE(a.updated_at, a.created_at), a.id LIMIT ?`).all(cutoff, limit) as Array<{ id: string }>).map(row => row.id)
+  }
   deleteAttachments(ids: string[], stage: (hashes: string[]) => void): number {
     return this.db.transaction(() => {
       const records = ids.map(id => this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as (AttachmentRow & { external_key: string }) | undefined)
@@ -461,8 +502,8 @@ export class AiAssetsStore {
     return (rows as AttachmentRow[]).map(attachment)
   }
   attachmentSaved(id: string, sha256: string, size: number, reused: boolean): void {
-    this.db.prepare('UPDATE asset_attachments SET status = ?, sha256 = ?, size = ?, error = NULL WHERE id = ?')
-      .run(reused ? 'reused' : 'saved', sha256, size, id)
+    this.db.prepare('UPDATE asset_attachments SET status = ?, sha256 = ?, size = ?, error = NULL, updated_at = ? WHERE id = ?')
+      .run(reused ? 'reused' : 'saved', sha256, size, Date.now(), id)
   }
   attachmentFailed(id: string, error: string): void {
     this.db.prepare("UPDATE asset_attachments SET status = 'failed', error = ? WHERE id = ?").run(error, id)
@@ -501,12 +542,13 @@ export class AiAssetsStore {
     for (const item of files) {
       if (typeof item.name !== 'string' || !['input', 'output'].includes(item.direction)) throw new Error('Invalid asset attachment')
       this.db.prepare(`INSERT INTO asset_attachments (id, conversation_id, message_id, source_id, external_key,
-        name, mime_type, source_url, direction, status, sha256, size, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        name, mime_type, source_url, direction, status, sha256, size, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(randomUUID(), conversationId, item.messageId ? mapped.get(item.messageId) ?? null : null,
           item.sourceId || sourceId, randomUUID(), item.name, item.mimeType || 'application/octet-stream', item.sourceUrl ?? null,
           item.direction, 'pending', /^[a-f0-9]{64}$/.test(item.sha256 ?? '') ? item.sha256 : null,
           Number.isSafeInteger(item.size) && item.size! >= 0 ? item.size : null,
-          '导入的是资料引用；原件需通过完整备份恢复或重新获取', Number.isSafeInteger(item.createdAt) ? item.createdAt : Date.now())
+          '导入的是资料引用；原件需通过完整备份恢复或重新获取', Number.isSafeInteger(item.createdAt) ? item.createdAt : Date.now(),
+          Number.isSafeInteger(item.updatedAt) && item.updatedAt! >= 0 ? item.updatedAt : null)
     }
   }
   associateAttachments(sourceId: string, observation: Omit<AssetObservation, 'messages'>, messageKey: string, ids: string[], messageId?: string): void {

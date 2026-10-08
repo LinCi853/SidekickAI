@@ -1,14 +1,18 @@
 import { writeFileSync } from 'fs'
 import path from 'path'
 import { exportAllData, type ExportOptions } from './backup-restore.js'
+import { retrySourceSnapshot } from '../../packages/backup-core/export.js'
 
 
 const SUPPORTED_CATEGORIES = ['basicData', 'cookies', 'indexedDB', 'cache'] as const
 
 export interface ExportCliRequest {
   outputPath: string
+  jobId?: string
+  tempRoot?: string
   encrypt?: boolean
   password?: string
+  passwordFromStdin?: boolean
   
   categories?: string[]
   
@@ -39,7 +43,7 @@ function normalizeOptions(categories?: string[]): ExportOptions {
 }
 
 
-export async function runExportCli(requestPath: string): Promise<number> {
+export async function runExportCli(requestPath: string, secretInput: AsyncIterable<Uint8Array | string> = process.stdin): Promise<number> {
   let resultPath = `${requestPath}.result.json`
   try {
     const raw = JSON.parse(await (await import('fs/promises')).readFile(requestPath, 'utf-8')) as ExportCliRequest
@@ -53,18 +57,32 @@ export async function runExportCli(requestPath: string): Promise<number> {
       writeFileSync(resultPath, JSON.stringify({ ok: false, error: 'strict export requires expectedDataRoot', strict: true }))
       return 1
     }
+    if (raw.passwordFromStdin) {
+      const chunks: Buffer[] = []
+      let size = 0
+      for await (const chunk of secretInput) {
+        const bytes = Buffer.from(chunk)
+        size += bytes.length
+        if (size > 65536) throw new Error('Backup secret channel is too large.')
+        chunks.push(bytes)
+      }
+      const secret = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { password?: unknown }
+      if (typeof secret.password !== 'string' || !secret.password) throw new Error('Backup secret channel has no password.')
+      raw.password = secret.password
+    }
     const options = normalizeOptions(raw.categories)
     const encrypt = raw.encrypt && raw.password ? { password: raw.password } : undefined
     if (raw.encrypt && !raw.password) {
       writeFileSync(resultPath, JSON.stringify({ ok: false, error: 'encrypt=true 但未提供 password' }))
       return 1
     }
-    const result = await exportAllData(
+    const perform = () => exportAllData(
       raw.outputPath,
       options,
       encrypt,
-      strict ? { strict: true, expectedDataRoot: raw.expectedDataRoot } : undefined,
+      { strict, expectedDataRoot: raw.expectedDataRoot, jobId: raw.jobId, tempRoot: raw.tempRoot || undefined },
     )
+    const result = await (strict ? retrySourceSnapshot(perform) : perform())
     if (result.success) {
       if (strict && !result.treeSha256) {
         // The native host requires the complete-tree digest; without it the
@@ -75,6 +93,7 @@ export async function runExportCli(requestPath: string): Promise<number> {
       writeFileSync(
         resultPath,
         JSON.stringify({
+          ...result,
           ok: true,
           filePath: result.filePath,
           sourceRoot: result.sourceRoot,
@@ -87,7 +106,7 @@ export async function runExportCli(requestPath: string): Promise<number> {
       )
       return 0
     }
-    writeFileSync(resultPath, JSON.stringify({ ok: false, error: result.error }))
+    writeFileSync(resultPath, JSON.stringify({ ...result, ok: false, error: result.error }))
     return 1
   } catch (err) {
     try {

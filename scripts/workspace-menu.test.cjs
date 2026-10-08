@@ -43,6 +43,8 @@ test('build aliases preserve explicit candidate and preflight behavior', () => {
     assert.deepEqual(actionPlan(current, 'preflight-release')[0].args, ['scripts/build-distribution.cjs', '--mode', 'installer', '--preflight'])
   }
   assert.deepEqual(actionPlan(context('concept'), 'build', 'portable')[0].args, ['scripts/build-distribution.cjs', '--mode', 'portable'])
+  assert.deepEqual(actionPlan(context('concept'), 'build')[0].args, ['scripts/build-distribution.cjs', '--mode', 'all'])
+  assert.deepEqual(actionPlan(context('community'), 'build')[0].args, ['scripts/build-distribution.cjs', '--mode', 'installer'])
 })
 
 test('quick verification does not start desktop or native build regressions', () => {

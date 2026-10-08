@@ -45,7 +45,7 @@ function actionPlan(context, action, mode = null) {
   const communityOnly = ['plugin-preview', 'keys-dev', 'build-keys']
   if (communityOnly.includes(action) && context.editionId !== 'community') throw new Error('此工具只属于社区版工作区。')
   if (['build', 'build-release', 'preflight-release'].includes(action)) {
-    const selected = mode || 'installer'
+    const selected = mode || (action === 'build' && context.editionId === 'concept' ? 'all' : 'installer')
     if (!buildModes(context).includes(selected)) throw new Error(`当前版本不分发 ${selected}，请选择允许的包型。`)
     return [node(['scripts/build-distribution.cjs', '--mode', selected, ...(action === 'preflight-release' ? ['--preflight'] : [])])]
   }
@@ -114,7 +114,9 @@ function menuEntries(context, menu) {
     ['3', '安装卸载回归（原生编译、隔离目标）', 'verify-installer'], ['0', '返回', 'back'],
   ]
   if (menu === 'build') {
-    const labels = { installer: '安装器', portable: '绿色 ZIP', all: '两者一起构建' }
+    const labels = context.editionId === 'concept'
+      ? { installer: '离线安装器（x64、ARM64）', portable: '绿色 ZIP（双架构）', all: '完整候选（两个安装器及绿色 ZIP）' }
+      : { installer: '在线安装器（自动选择本机架构）' }
     return [...buildModes(context).map((mode, index) => [String(index + 1), labels[mode], 'build', mode]), ['0', '返回', 'back']]
   }
   if (menu === 'tools') return [
@@ -136,7 +138,7 @@ function help(context) {
     '操作：dev、verify、build、preview、devtools、dependencies、installer-dev。',
     'verify 为快速检查；verify-desktop 启动隔离桌面回归；verify-installer 编译并运行隔离安装卸载回归。',
     ...(context.editionId === 'community' ? ['社区工具：plugin-preview、keys-dev、build-keys。'] : []),
-    `允许包型：${buildModes(context).join('、')}；build 默认 installer。`,
+    `允许包型：${buildModes(context).join('、')}；build 默认 ${concept ? 'all' : 'installer'}。`,
     '构建按输入摘要复用应用编译和维护组件；PowerShell 中设置 $env:SIDEKICK_REBUILD_ALL="1" 可强制重建。',
     concept ? 'build-release 生成安装器；preflight-release 检查构建条件。' : '兼容入口：build-release 构建安装器候选；preflight-release 仅执行安装器构建预检。',
     '--dry-run 只显示目录、环境和参数，不运行命令；不带操作时预览各菜单。',

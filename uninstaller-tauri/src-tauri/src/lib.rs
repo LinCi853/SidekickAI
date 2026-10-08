@@ -11,6 +11,7 @@ fn launch(host: Host) -> Result<(), String> {
         WizardAcquisition::Activated => return Ok(()),
     };
     let binding = _wizard.binding();
+    sidekickai_uninstall_host::prerequisites::ensure_webview2()?;
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(host)

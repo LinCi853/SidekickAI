@@ -2,8 +2,8 @@
 
 [package]
 name = "sidekickai-installer"
-version = "1.0.0"
-description = "SidekickAI 安装向导（Tauri + 7z solid 载荷）"
+version = "1.1.0"
+description = "SidekickAI maintenance wizard with signed native ZIP payloads"
 authors = ["LinCi853"]
 edition = "2021"
 
@@ -24,10 +24,10 @@ sidekickai-uninstall-core = { path = "../../installer-shared/uninstall-core" }
 sidekickai-uninstall-host = { path = "../../installer-shared/uninstall-host" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# 卸载器清单/载荷校验用到的哈希（aes-gcm / pbkdf2 / zip 等由共享卸载实现承担）
 sha2 = "0.10"
 ed25519-dalek = "2"
 base64 = "0.22"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]

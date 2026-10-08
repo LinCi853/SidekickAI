@@ -27,8 +27,6 @@ import type { Profile } from '../../lib/electron-api';
 import ShortcutsModal from '../../components/ShortcutsModal';
 import DrawerPanel from '../../components/DrawerPanel';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
-import { useFreezeStore } from '../../store/useFreezeStore';
-import FreezeOverlay from '../BrowserView/FreezeOverlay';
 import { useHotkeys } from '../../hooks/useHotkeys';
 import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl';
 import { useProfileStore } from '../../store/useProfileStore';
@@ -238,23 +236,6 @@ export default function MainView() {
     });
     return () => off();
   }, [addDetachedProfile]);
-
-  // 冻结状态订阅 + 切换标签时同步冻结状态（防撤回保险）
-  useEffect(() => {
-    const off = useFreezeStore.getState().init();
-    return off;
-  }, []);
-  useEffect(() => {
-    if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
-  }, [activeTabId]);
-  // 窗口回到前台时兜底同步冻结状态（主进程 blur 自动恢复的广播可能丢失）
-  useEffect(() => {
-    const onFocus = () => {
-      if (activeTabId) void useFreezeStore.getState().syncStatus(activeTabId);
-    };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [activeTabId]);
 
   // 窗口快捷键兜底：主窗口无该 Profile 标签时，主进程请求渲染层创建标签并返回 tabId。
   // 渲染层作为标签真源创建后 persist，主进程收到 tabId 再脱离，保证数据一致。
@@ -560,9 +541,6 @@ export default function MainView() {
         />
 
         <WindowResizeHandles />
-
-        {/* 冻结态覆盖层 + 控制条（防撤回保险，主窗口复用浏览器窗口的 FreezeOverlay） */}
-        <FreezeOverlay activeTabId={activeTabId} />
 
         {contextMenuPosition && contextMenuTabId && (
           <TabContextMenu

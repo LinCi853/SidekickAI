@@ -75,10 +75,10 @@ export function createSingletonPopupWindow(opts: {
     alwaysOnTop: saved.alwaysOnTop,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: opts.title,
-    webPreferences: createDefaultWebPreferences({
+    webPreferences: { ...createDefaultWebPreferences({
       preload: getPreloadPath(),
       webviewTag: false,
-    }),
+    }), plugins: opts.mode === 'prompts' },
   }))
 
   // 恢复最大化状态（与主窗口/进阶面板一致）

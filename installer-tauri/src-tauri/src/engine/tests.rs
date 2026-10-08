@@ -9,7 +9,7 @@ use super::config::write_install_config;
 use super::deploy::{
     deploy_uninstaller_pair, program_items, replace_from_payload, restore_replaced, CORE_ITEMS,
 };
-use super::pipeline::{run_with, EngineHooks};
+use super::pipeline::{run_with as run_engine, EngineHooks};
 use super::registry::{
     create_registry_key, delete_registry_key, read_registry_string,
     registered_install_location, remove_uninstall_entry_if_matches,
@@ -24,6 +24,114 @@ use super::validate::{
 use crate::manifest::{InstallMode, InstallRequest};
 use sidekickai_uninstall_host::data_paths_for;
 use std::path::Path;
+
+#[path = "transaction_tests.rs"]
+mod recovery;
+
+#[path = "legacy_tests.rs"]
+mod legacy;
+
+#[cfg(windows)]
+#[test]
+fn legacy_target_refusal_keeps_its_running_process_alive() {
+    use std::os::windows::process::CommandExt;
+    let root = temporary_root("legacy-running-admission");
+    let install = root.join("install"); let payload = root.join("payload");
+    write_valid_installed_payload(&install, 0x33, 0x44);
+    let node = std::process::Command::new("node").args(["-p", "process.execPath"]).creation_flags(0x08000000).output().unwrap();
+    assert!(node.status.success());
+    fs::copy(String::from_utf8(node.stdout).unwrap().trim(), install.join("SidekickAI.exe")).unwrap();
+    fs::remove_file(install.join("distribution-proof.json")).unwrap();
+    write_valid_payload(&payload, 0x55, 0x66);
+    let mut hooks = isolated_hooks(&root);
+    hooks.extracted = Some(payload);
+    hooks.registration_key = Some(format!("HKCU\\Software\\SidekickAI-Legacy-Running-{}", std::process::id()));
+    let mut child = std::process::Command::new(install.join("SidekickAI.exe")).args(["-e", "setInterval(() => {}, 1000)"])
+        .creation_flags(0x08000000).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap();
+    let started = std::time::Instant::now();
+    let result = run_engine(&request(&install, false), &hooks);
+    let alive = child.try_wait().unwrap().is_none();
+    child.kill().unwrap(); child.wait().unwrap();
+    fs::remove_dir_all(root).unwrap();
+    assert!(result.unwrap_err().contains("新发行合同"));
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    assert!(alive);
+}
+
+#[cfg(windows)]
+#[test]
+fn healthy_repair_ignores_only_its_own_distribution_receipt_without_replacing_core() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = temporary_root("healthy-distribution-repair");
+    let install = root.join("install"); let payload = root.join("payload");
+    write_valid_installed_payload(&install, 0x33, 0x44); write_valid_payload(&payload, 0x33, 0x44);
+    let receipt = install.join("maintenance/distribution-receipt.json");
+    let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
+    value["installationId"] = "different-maintenance-generation".into();
+    fs::write(receipt, serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(core_payload_matches(&install, &payload));
+    fs::write(install.join("maintenance/unexpected.bin"), b"unregistered dependency").unwrap();
+    assert!(!core_payload_matches(&install, &payload));
+    fs::remove_file(install.join("maintenance/unexpected.bin")).unwrap();
+    let pinned = fs::OpenOptions::new().read(true).share_mode(1).open(install.join("SidekickAI.exe")).unwrap();
+    let key = format!("HKCU\\Software\\SidekickAI-Healthy-Distribution-{}", std::process::id());
+    let mut hooks = isolated_hooks(&root); hooks.extracted = Some(payload.clone()); hooks.registration_key = Some(key.clone());
+    let mut req = request(&install,false); req.mode = InstallMode::Repair; req.installation_id.clear();
+    let result = run_engine(&req,&hooks);
+    drop(pinned); cleanup_registry_key(&key);
+    assert!(result.is_ok(), "{result:?}");
+    assert!(core_payload_matches(&install,&payload));
+    fs::remove_dir_all(root).unwrap();
+}
+
+
+#[test]
+fn obsolete_component_choices_are_ignored_and_repair_preserves_configuration() {
+    for selected in [None, Some(false), Some(true)] {
+        let root = temporary_root("edition-component-choice");
+        let install = root.join("install");
+        let payload = root.join("payload");
+        write_valid_payload(&payload, 0x55, 0x66);
+        let key = format!("HKCU\\Software\\SidekickAI-Component-{}", root.file_name().unwrap().to_string_lossy());
+        let mut hooks = isolated_hooks(&root);
+        hooks.registration_key = Some(key.clone());
+        hooks.extracted = Some(payload.clone());
+        let mut req = request(&install, false);
+        if let Some(selected) = selected { req.features.insert("whiteboard".into(), serde_json::json!(selected)); }
+        run_with(&req, &hooks).unwrap();
+        let configuration = fs::read(install.join("install-config.json")).unwrap();
+        let plugins = fs::read(install.join("plugins-manifest.json")).unwrap();
+        let config: serde_json::Value = serde_json::from_slice(&configuration).unwrap();
+        let installed: serde_json::Value = serde_json::from_slice(&plugins).unwrap();
+        assert_eq!(config["modules"], serde_json::json!({}));
+        assert_eq!(installed, serde_json::json!({}));
+        if let Some(selected) = selected {
+            let mut legacy = config.clone();
+            legacy["modules"]["whiteboard"] = serde_json::json!({ "enabled": selected });
+            fs::write(install.join("install-config.json"), serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+            fs::write(install.join("plugins-manifest.json"), serde_json::to_vec(&serde_json::json!({
+                "whiteboard": { "installed": selected }
+            })).unwrap()).unwrap();
+        }
+        let configuration = fs::read(install.join("install-config.json")).unwrap();
+        let plugins = fs::read(install.join("plugins-manifest.json")).unwrap();
+        write_valid_payload(&payload, 0x75, 0x76);
+        req.mode = InstallMode::Repair;
+        req.installation_id.clear();
+        req.features.clear();
+        for requested in [None, Some(!selected.unwrap_or(false))] {
+            if let Some(requested) = requested { req.features.insert("whiteboard".into(), serde_json::json!(requested)); }
+            run_with(&req, &hooks).unwrap();
+            super::config::flush_install_config_with(&req, &hooks).unwrap();
+            assert_eq!(fs::read(install.join("install-config.json")).unwrap(), configuration);
+            assert_eq!(fs::read(install.join("plugins-manifest.json")).unwrap(), plugins);
+        }
+        cleanup_registry_key(&key);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+
 
 #[test]
 fn unresolved_legacy_recovery_blocks_concept_installation() {
@@ -81,7 +189,7 @@ fn custom_directories_allow_same_edition_updates_across_product_versions() {
     let root = temporary_root("custom-directory-upgrade");
     let install = root.join("My tools").join("Chosen location");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
+write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x55, 0x66);
     let package_name = &sidekickai_uninstall_core::product::edition().package_name;
     for version in ["0.1.0-alpha.3", "0.1.0-beta.4", "0.2.0"] {
@@ -132,8 +240,8 @@ fn duplicate_product_shortcuts_keep_both_targets() {
     write_valid_install(&first);
     write_valid_install(&second);
     let hooks = isolated_hooks(&root);
-    super::shortcuts::create_shortcuts(&hooks, false, &first);
-    super::shortcuts::create_shortcuts(&hooks, false, &second);
+    super::shortcuts::create_shortcuts(&hooks, false, &first).unwrap();
+    super::shortcuts::create_shortcuts(&hooks, false, &second).unwrap();
     let desktop = hooks.desktop_dir(false);
     assert!(shortcut_points_to(&desktop.join("SidekickAI.lnk"), &first.join("SidekickAI.exe")));
     assert!(shortcut_points_to(&desktop.join("SidekickAI (2).lnk"), &second.join("SidekickAI.exe")));
@@ -148,7 +256,7 @@ fn corrupt_application_requires_a_receipt_and_matching_registration_to_repair() 
     let root = temporary_root("receipt-repair");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x55, 0x66);
     fs::create_dir_all(install.join("data")).unwrap();
     fs::write(install.join("data/settings.db"), b"retained data").unwrap();
@@ -198,7 +306,7 @@ fn corrupt_application_requires_a_receipt_and_matching_registration_to_repair() 
 fn receipt_cannot_override_foreign_identity_or_authorize_a_copied_directory() {
     let root = temporary_root("receipt-boundaries");
     let install = root.join("install");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     let key = format!("HKCU\\Software\\SidekickAI-Receipt-Boundaries-{}", std::process::id());
     let mut hooks = isolated_hooks(&root);
     hooks.registration_key = Some(key.clone());
@@ -228,7 +336,7 @@ fn registration_failure_restores_receipt_registry_and_program_payload() {
     let root = temporary_root("receipt-rollback");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x55, 0x66);
     let legacy = sidekickai_uninstall_core::product::edition().legacy_executable.as_str();
     let has_legacy = legacy != sidekickai_uninstall_core::product::product().executable;
@@ -275,9 +383,9 @@ fn legacy_repair_migrates_only_owned_shortcuts_and_preserves_data() {
     let install = root.join("install");
     let payload = root.join("payload");
     let foreign = root.join("foreign");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x55, 0x66);
-    write_valid_payload(&foreign, 0x77, 0x88);
+    write_valid_installed_payload(&foreign, 0x77, 0x88);
     fs::rename(install.join(&product.executable), install.join(&edition.legacy_executable)).unwrap();
     fs::create_dir_all(install.join("data")).unwrap();
     fs::write(install.join("data/settings.db"), b"legacy data").unwrap();
@@ -305,15 +413,15 @@ fn legacy_repair_migrates_only_owned_shortcuts_and_preserves_data() {
 }
 
 #[test]
-fn failed_legacy_shortcut_migration_retains_a_matching_runtime_and_reports_incomplete() {
+fn failed_legacy_shortcut_migration_restores_the_original_runtime_and_entry() {
     let product = sidekickai_uninstall_core::product::product();
     let edition = sidekickai_uninstall_core::product::edition();
     if edition.legacy_executable == product.executable { return; }
     let root = temporary_root("legacy-migration-incomplete");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
-    let (expected_executable, _) = write_valid_payload(&payload, 0x55, 0x66);
+    let (original_executable, _) = write_valid_installed_payload(&install, 0x33, 0x44);
+    write_valid_payload(&payload, 0x55, 0x66);
     fs::write(install.join("ffmpeg.dll"), b"old runtime").unwrap();
     fs::write(payload.join("ffmpeg.dll"), b"current runtime").unwrap();
     fs::rename(install.join(&product.executable), install.join(&edition.legacy_executable)).unwrap();
@@ -330,12 +438,10 @@ fn failed_legacy_shortcut_migration_retains_a_matching_runtime_and_reports_incom
     let result = crate::controller::with_operation_context(log.clone(), || run_with(&request(&install, false), &hooks));
     assert!(result.unwrap_err().contains("安装尚未完成"));
     assert!(shortcut_points_to(&legacy_link, &install.join(&edition.legacy_executable)));
-    assert_eq!(fs::read(install.join(&edition.legacy_executable)).unwrap(), expected_executable);
-    assert_eq!(fs::read(install.join("ffmpeg.dll")).unwrap(), b"current runtime");
-    super::validate::validate_core(&install).unwrap();
-    let backups = stray_staging_dirs(&install);
-    assert_eq!(backups.len(), 1);
-    assert_eq!(fs::read(backups[0].join("ffmpeg.dll")).unwrap(), b"old runtime");
+    assert_eq!(fs::read(install.join(&edition.legacy_executable)).unwrap(), original_executable);
+    assert_eq!(fs::read(install.join("ffmpeg.dll")).unwrap(), b"old runtime");
+    assert!(!install.join(&product.executable).exists());
+    assert!(stray_staging_dirs(&install).is_empty());
     assert!(!fs::read_to_string(&log).unwrap().contains("S|安装完成"));
     cleanup_registry_key(&key);
     fs::remove_dir_all(root).unwrap();
@@ -349,7 +455,7 @@ fn failed_legacy_alias_preparation_restores_the_previous_install_and_registratio
     let root = temporary_root("legacy-alias-rollback");
     let install = root.join("install");
     let payload = root.join("payload");
-    let (old_executable, _) = write_valid_payload(&install, 0x33, 0x44);
+    let (old_executable, _) = write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x55, 0x66);
     fs::rename(install.join(&product.executable), install.join(&edition.legacy_executable)).unwrap();
     fs::create_dir(payload.join(&edition.legacy_executable)).unwrap();
@@ -364,7 +470,7 @@ fn failed_legacy_alias_preparation_restores_the_previous_install_and_registratio
     let legacy_link = desktop.join(Path::new(&edition.legacy_executable).with_extension("lnk"));
     super::shortcuts::create_shortcut(&legacy_link, &install.join(&edition.legacy_executable).to_string_lossy(), &install.to_string_lossy()).unwrap();
     let error = run_with(&request(&install, false), &hooks).unwrap_err();
-    assert!(error.contains("已恢复旧版本"));
+    assert!(error.contains("已恢复原安装与入口"), "{error}");
     assert_eq!(fs::read(install.join(&edition.legacy_executable)).unwrap(), old_executable);
     assert!(!install.join(&product.executable).exists());
     assert!(shortcut_points_to(&legacy_link, &install.join(&edition.legacy_executable)));
@@ -375,7 +481,7 @@ fn failed_legacy_alias_preparation_restores_the_previous_install_and_registratio
 }
 
 #[test]
-fn repair_keeps_legacy_links_runnable_after_migration_failure_and_allows_retry() {
+fn repair_restores_original_legacy_state_after_migration_failure_and_allows_retry() {
     let product = sidekickai_uninstall_core::product::product();
     let edition = sidekickai_uninstall_core::product::edition();
     if edition.legacy_executable == product.executable { return; }
@@ -384,7 +490,7 @@ fn repair_keeps_legacy_links_runnable_after_migration_failure_and_allows_retry()
         let case = root.join(if core_current { "current-core" } else { "old-core" });
         let install = case.join("install");
         let payload = case.join("payload");
-        write_valid_payload(&install, if core_current { 0x55 } else { 0x33 }, 0x66);
+        write_valid_installed_payload(&install, if core_current { 0x55 } else { 0x33 }, 0x66);
         write_valid_payload(&payload, 0x55, 0x66);
         fs::write(install.join(&edition.legacy_executable), pe_fixture(0x11)).unwrap();
         let source_digest = super::validate::directory_digest(&payload).unwrap();
@@ -403,8 +509,9 @@ fn repair_keeps_legacy_links_runnable_after_migration_failure_and_allows_retry()
         let error = crate::controller::with_operation_context(log.clone(), || run_with(&req, &hooks)).unwrap_err();
         assert!(error.contains("修复尚未完成"));
         assert!(shortcut_points_to(&legacy_link, &install.join(&edition.legacy_executable)));
-        assert_eq!(fs::read(install.join(&edition.legacy_executable)).unwrap(), fs::read(install.join(&product.executable)).unwrap());
-        assert!(core_payload_matches(&install, &payload));
+        assert_eq!(fs::read(install.join(&edition.legacy_executable)).unwrap(), pe_fixture(0x11));
+        assert_eq!(fs::read(install.join(&product.executable)).unwrap(), pe_fixture(if core_current { 0x55 } else { 0x33 }));
+        assert_eq!(core_payload_matches(&install, &payload), core_current);
         assert_eq!(super::validate::directory_digest(&payload).unwrap(), source_digest);
         assert!(!fs::read_to_string(&log).unwrap().contains("S|修复完成"));
         fs::remove_dir(desktop.join("SidekickAI.lnk")).unwrap();
@@ -421,61 +528,9 @@ fn repair_keeps_legacy_links_runnable_after_migration_failure_and_allows_retry()
 #[test]
 fn application_payload_rejects_installation_receipts() {
     let root = temporary_root("receipt-payload");
-    write_valid_payload(&root, 0x33, 0x44);
+    write_valid_installed_payload(&root, 0x33, 0x44);
     fs::write(root.join(sidekickai_uninstall_core::product::INSTALL_RECEIPT), b"local state").unwrap();
     assert!(program_items(&root).is_err());
-    fs::remove_dir_all(root).unwrap();
-}
-
-fn write_embedded_fixture(path: &Path, payload: &[u8], extractor: &[u8]) {
-    fs::write(path, crate::setup_metadata::tests::fixture_bytes(payload, extractor)).unwrap();
-}
-
-#[test]
-fn concurrent_embedded_payloads_have_independent_owned_directories() {
-    let root = temporary_root("embedded-coexistence");
-    let first = root.join("first.exe");
-    let second = root.join("second.exe");
-    write_embedded_fixture(&first, b"first payload", b"first extractor");
-    write_embedded_fixture(&second, b"second payload", b"second extractor");
-    let a = std::thread::spawn(move || super::payload::extract_embedded_from(&first).unwrap());
-    let b = std::thread::spawn(move || super::payload::extract_embedded_from(&second).unwrap());
-    let a = a.join().unwrap();
-    let b = b.join().unwrap();
-    assert_ne!(a.payload.parent(), b.payload.parent());
-    assert_eq!(fs::read(&a.payload).unwrap(), b"first payload");
-    assert_eq!(fs::read(&b.payload).unwrap(), b"second payload");
-    assert_eq!(fs::read(&a.sevenz).unwrap(), b"first extractor");
-    assert_eq!(fs::read(&b.sevenz).unwrap(), b"second extractor");
-    let a_dir = a.payload.parent().unwrap().to_path_buf();
-    let b_dir = b.payload.parent().unwrap().to_path_buf();
-    drop(a);
-    assert!(!a_dir.exists());
-    assert!(b_dir.is_dir());
-    drop(b);
-    assert!(!b_dir.exists());
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn embedded_payload_refuses_truncated_overflowing_and_unbounded_footers() {
-    let root = temporary_root("embedded-footer");
-    let setup = root.join("setup.exe");
-    for (payload_length, extractor_length, footer_length) in [
-        (u64::MAX, 1, 68), (1, u64::MAX, 68), (0, 1, 68), (1, 0, 68),
-        (1, 1, u32::MAX), (2000, 1, 68), (1, 33 * 1024 * 1024, 68),
-    ] {
-        write_embedded_fixture(&setup, b"payload", b"extractor");
-        let mut bytes = fs::read(&setup).unwrap();
-        let footer = bytes.len() - 68;
-        bytes[footer + 8..footer + 16].copy_from_slice(&payload_length.to_le_bytes());
-        bytes[footer + 16..footer + 24].copy_from_slice(&extractor_length.to_le_bytes());
-        bytes[footer + 64..].copy_from_slice(&footer_length.to_le_bytes());
-        fs::write(&setup, bytes).unwrap();
-        assert!(super::payload::extract_embedded_from(&setup).is_none());
-    }
-    fs::write(&setup, b"truncated").unwrap();
-    assert!(super::payload::extract_embedded_from(&setup).is_none());
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -499,12 +554,12 @@ fn pe_fixture(fill: u8) -> Vec<u8> {
 fn manifest_for(exe: &[u8]) -> UninstallerManifest {
     use sha2::Digest;
     UninstallerManifest {
-        protocol_version: 1,
+        protocol_version: 3,
         edition: sidekickai_uninstall_core::product::edition_id().into(),
-        version: product_version(),
-        product_version: String::new(),
-        component_version: String::new(),
-        uninstall_protocol_version: None,
+        version: String::new(),
+        product_version: product_version(),
+        component_version: env!("CARGO_PKG_VERSION").into(),
+        uninstall_protocol_version: Some(2),
         arch: "x64".into(),
         sha256: format!("{:x}", sha2::Sha256::digest(exe)),
         size: exe.len() as u64,
@@ -523,10 +578,10 @@ fn component_uninstaller_can_be_bound_to_multiple_product_versions() {
     let root = temporary_root("uninstaller-release-binding");
     let exe = pe_fixture(0x35);
     let mut metadata = manifest_for(&exe);
-    metadata.protocol_version = 2;
+    metadata.protocol_version = 3;
     metadata.version.clear();
     metadata.component_version = env!("CARGO_PKG_VERSION").into();
-    metadata.uninstall_protocol_version = Some(1);
+    metadata.uninstall_protocol_version = Some(2);
     for version in ["0.1.5-beta-rc", "0.9.0"] {
         metadata.product_version = version.into();
         write_pair(&root, &exe, &metadata);
@@ -540,6 +595,43 @@ fn component_uninstaller_can_be_bound_to_multiple_product_versions() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[test]
+#[ignore = "Requires an explicit production-signed candidate payload"]
+fn actual_candidate_uninstaller_requires_manifest_protocol_three() {
+    let payload = PathBuf::from(std::env::var("SIDEKICK_INSTALLER_ACCEPTANCE_PAYLOAD").expect("verified payload"));
+    assert!(payload.is_absolute() && payload.is_dir());
+    let proof = sidekickai_uninstall_core::distribution::parse_envelope(&fs::read(payload.join("distribution-proof.json")).unwrap()).unwrap();
+    let body = crate::distribution::verify_body(&proof).unwrap();
+    sidekickai_uninstall_core::distribution::verify_declared_files(&payload, &body.files).unwrap();
+    assert_eq!(body.native_architectures.len(), 1);
+    let architecture = &body.native_architectures[0];
+    let metadata = validate_uninstaller(&payload, architecture, &body.product_version).unwrap();
+    assert_eq!(metadata.protocol_version, 3);
+    assert_eq!(metadata.uninstall_protocol_version, Some(2));
+    let root = temporary_root("actual-uninstaller-protocol");
+    let exe = fs::read(payload.join("uninstall.exe")).unwrap();
+    let mut previous = metadata;
+    previous.protocol_version = 2;
+    write_pair(&root, &exe, &previous);
+    assert!(validate_uninstaller(&root, architecture, &body.product_version).is_err());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn standalone_uninstaller_rejects_setup_footers() {
+    let root = temporary_root("uninstaller-setup-footer");
+    for (size, magic) in [(28, b"SKPAYLD1"), (68, b"SKPAYLD2"), (68, b"SKSETUP3")] {
+        let mut exe = pe_fixture(0x37);
+        let mut footer = vec![0; size];
+        footer[..magic.len()].copy_from_slice(magic);
+        exe.extend(footer);
+        write_pair(&root, &exe, &manifest_for(&exe));
+        let error = validate_uninstaller(&root, "x64", &product_version()).unwrap_err();
+        assert!(error.contains("载荷"), "{error}");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn temporary_root(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("sidekick-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
@@ -549,8 +641,11 @@ fn temporary_root(name: &str) -> PathBuf {
 
 fn request(dir: &Path, for_all_users: bool) -> InstallRequest {
     InstallRequest {
+        distribution_source_path: String::new(), distribution_body_proof: String::new(), distribution_product_version: String::new(),
+        distribution_release_id: String::new(), distribution_release_sha256: String::new(), distribution_release_proof: String::new(),
         installation_id: manifest::new_installation_id(),
         resources: Vec::new(),
+        staging_dir: String::new(),
         action: String::new(),
         install_dir: dir.to_string_lossy().into_owned(),
         for_all_users,
@@ -577,9 +672,61 @@ fn cleanup_registry_key(key: &str) {
     let _ = delete_registry_key(key);
 }
 
+fn run_with(req: &InstallRequest, hooks: &EngineHooks) -> Result<(), String> {
+    run_engine(req, hooks)?;
+    if req.distribution_body_proof.is_empty() && req.action != "flush-config" {
+        edition_fixtures::seal_installation(Path::new(&req.install_dir));
+    }
+    Ok(())
+}
+
+fn write_valid_installed_payload(dir: &Path, exe_fill: u8, uninstaller_fill: u8) -> (Vec<u8>, Vec<u8>) {
+    let bytes = write_valid_payload(dir, exe_fill, uninstaller_fill);
+    edition_fixtures::seal_installation(dir);
+    bytes
+}
+
+fn select_default_fixture_body() {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use ed25519_dalek::Signer;
+    use std::io::Write;
+    use sidekickai_uninstall_core::distribution as contract;
+    if !product_version().is_empty() { return; }
+    let root = temporary_root("selected-engine-fixture");
+    fs::create_dir(root.join("resources")).unwrap();
+    let version = crate::setup_metadata::current().unwrap().product_version.clone();
+    fs::write(root.join("resources/app.asar"), edition_fixtures::archive_for_version(
+        &sidekickai_uninstall_core::product::edition().package_name, Some(&version), b"selected-fixture-asar")).unwrap();
+    fs::write(root.join("SidekickAI.exe"), pe_fixture(0x32)).unwrap();
+    edition_fixtures::seal_installation(&root);
+    let mut proof: serde_json::Value = serde_json::from_slice(&fs::read(root.join("distribution-proof.json")).unwrap()).unwrap();
+    let archive = root.join("application.zip");
+    let mut zip = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
+    for item in proof["payload"]["files"].as_array().unwrap() {
+        let name = item["path"].as_str().unwrap();
+        zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(&fs::read(root.join(name)).unwrap()).unwrap();
+    }
+    zip.finish().unwrap();
+    proof["payload"]["archive"]["sha256"] = contract::sha256_file(&archive).unwrap().into();
+    proof["payload"]["archive"]["sizeBytes"] = fs::metadata(&archive).unwrap().len().into();
+    let header = serde_json::json!({"alg":"EdDSA","kid":"maintenance-test-publisher","typ":contract::BODY_PROOF_TYPE});
+    let text = format!("{}.{}", URL_SAFE_NO_PAD.encode(contract::canonical_bytes(&header).unwrap()),
+        URL_SAFE_NO_PAD.encode(contract::canonical_bytes(&proof["payload"]).unwrap()));
+    let key = ed25519_dalek::SigningKey::from_bytes(&[0x63; 32]);
+    proof["signature"] = format!("{text}.{}", URL_SAFE_NO_PAD.encode(key.sign(text.as_bytes()).to_bytes())).into();
+    let mut req = request(&root, false);
+    req.distribution_source_path = archive.to_string_lossy().into_owned();
+    req.distribution_body_proof = serde_json::to_string(&proof).unwrap();
+    req.distribution_product_version = version;
+    crate::distribution::apply_request(&req).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
 /// A complete payload directory: valid core plus a standalone uninstaller
 /// pair whose manifest matches the executable.
 fn write_valid_payload(dir: &Path, exe_fill: u8, uninstaller_fill: u8) -> (Vec<u8>, Vec<u8>) {
+    select_default_fixture_body();
     fs::create_dir_all(dir.join("resources")).unwrap();
     let exe = pe_fixture(exe_fill);
     fs::write(dir.join("SidekickAI.exe"), &exe).unwrap();
@@ -587,6 +734,9 @@ fn write_valid_payload(dir: &Path, exe_fill: u8, uninstaller_fill: u8) -> (Vec<u
         &sidekickai_uninstall_core::product::edition().package_name, Some(&product_version()), b"payload-asar")).unwrap();
     let uninstaller = pe_fixture(uninstaller_fill);
     write_pair(dir, &uninstaller, &manifest_for(&uninstaller));
+    edition_fixtures::seal_installation(dir);
+    fs::remove_file(dir.join("install-receipt.json")).unwrap();
+    fs::remove_file(dir.join("maintenance/distribution-receipt.json")).unwrap();
     (exe, uninstaller)
 }
 
@@ -761,7 +911,7 @@ fn identical_options_have_distinct_installation_generations_and_flush_keeps_reso
     assert_eq!(before["schemaVersion"], 2);
     assert_eq!(before["configState"], "pending");
     // Only installable components are projected; the host owns core module defaults.
-    assert_eq!(before["modules"]["whiteboard"], serde_json::json!({ "enabled": false }));
+    assert_eq!(before["modules"], serde_json::json!({}));
     assert_eq!(before["resources"].as_array().unwrap().len(), 5);
     assert!(before["resources"].as_array().unwrap().contains(&resource));
     let mut final_options = other;
@@ -786,8 +936,10 @@ fn install_config_round_trips_and_detects_matches() {
     assert!(install_config_matches(&req));
     let read = read_install_config(&root).unwrap();
     assert!(read.get("modules").is_some() && read.get("options").is_some());
-    let automatic_update = manifest::options().into_iter().find(|option| option.id == "autoUpdate").unwrap().default_value;
-    assert_eq!(read["options"]["autoUpdate"], automatic_update);
+    let options = manifest::options();
+    assert_eq!(read["options"].as_object().unwrap().len(), options.len());
+    for option in options { assert_eq!(read["options"][&option.id], option.default_value); }
+    if sidekickai_uninstall_core::product::edition_id() == "concept" { assert!(read["options"].get("autoUpdate").is_none()); }
     // A partial JSON write must not be mistaken for a complete configuration.
     fs::write(root.join("install-config.json"), b"{").unwrap();
     assert!(!install_config_matches(&req));
@@ -800,7 +952,9 @@ fn install_config_round_trips_and_detects_matches() {
 fn write_valid_install(dir: &Path) {
     fs::create_dir_all(dir.join("resources")).unwrap();
     fs::write(dir.join("SidekickAI.exe"), pe_fixture(0x01)).unwrap();
-    fs::write(dir.join("resources").join("app.asar"), app_archive(b"fixture-asar")).unwrap();
+    fs::write(dir.join("resources").join("app.asar"), edition_fixtures::archive_for_version(
+        &sidekickai_uninstall_core::product::edition().package_name, Some(&product_version()), b"fixture-asar")).unwrap();
+    edition_fixtures::seal_installation(dir);
 }
 
 /// The scope locks the target, the explicit cleanup installations and the
@@ -821,8 +975,7 @@ fn operation_scope_locks_install_cleanup_and_data_paths() {
     assert!(scope.lock_paths.contains(&other));
     assert_eq!(scope.cleanup_dirs, vec![other.clone()]);
 
-    // A portable installation reports its in-place data directory.
-    fs::write(install.join("portable.txt"), b"portable").unwrap();
+    // Installed local data remains part of the maintenance scope.
     fs::create_dir_all(install.join("data")).unwrap();
     let scope = prepare_operation_scope(&req, None).unwrap();
     assert!(scope.lock_paths.contains(&install.join("data")));
@@ -939,19 +1092,18 @@ fn portable_cleanup_preserves_user_data_and_ignores_legacy_delete_flags() {
 
     let mut req = request(&install, false);
     req.cleanup_paths = vec![portable.to_string_lossy().into_owned()];
-    assert!(prepare_operation_scope(&req, None).unwrap().cleanup_dirs.is_empty());
+    assert!(prepare_operation_scope(&req, None).is_err());
 
     req.delete_user_data = true;
-    let scope = prepare_operation_scope(&req, None).unwrap();
-    assert!(scope.cleanup_dirs.is_empty());
+    assert!(prepare_operation_scope(&req, None).is_err());
 
     req.delete_user_data = false;
     fs::remove_file(portable.join("data").join("settings.db")).unwrap();
-    assert!(prepare_operation_scope(&req, None).unwrap().cleanup_dirs.is_empty());
+    assert!(prepare_operation_scope(&req, None).is_err());
 
     fs::remove_dir(portable.join("data")).unwrap();
     fs::create_dir(portable.join("data.bak-1234567890123")).unwrap();
-    assert!(prepare_operation_scope(&req, None).unwrap().cleanup_dirs.is_empty());
+    assert!(prepare_operation_scope(&req, None).is_err());
 
     let _ = fs::remove_dir_all(&root);
 }
@@ -1090,7 +1242,7 @@ fn replace_from_payload_preserves_user_config_and_rolls_back() {
     let install = root.join("install");
     let payload = root.join("payload");
     write_valid_install(&install);
-    write_valid_install(&payload);
+write_valid_payload(&payload, 0x01, 0x02);
     fs::write(install.join("install-config.json"), b"{\"user\":true}").unwrap();
     fs::write(install.join("SidekickAI.exe"), pe_fixture(0x81)).unwrap();
     fs::write(payload.join("SidekickAI.exe"), pe_fixture(0x82)).unwrap();
@@ -1164,8 +1316,8 @@ fn core_payload_matching_compares_actual_content() {
     let root = temporary_root("core-match-test");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_install(&install);
-    write_valid_install(&payload);
+    write_valid_installed_payload(&install, 0x01, 0x02);
+    write_valid_payload(&payload, 0x01, 0x02);
     assert!(core_payload_matches(&install, &payload));
 
     fs::write(payload.join("v8_context_snapshot.bin"), b"current-runtime").unwrap();
@@ -1185,7 +1337,7 @@ fn repair_replaces_runtime_files_and_preserves_local_state() {
     let root = temporary_root("repair-runtime-files");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x33, 0x44);
     fs::write(install.join("ffmpeg.dll"), b"old-library").unwrap();
     fs::write(payload.join("ffmpeg.dll"), b"current-library").unwrap();
@@ -1242,12 +1394,16 @@ fn repair_without_request_identity_preserves_the_existing_installation_generatio
         let case = root.join(if changed { "changed" } else { "current" });
         let install = case.join("install");
         let payload = case.join("payload");
-        write_valid_payload(&install, 0x33, 0x44);
+        write_valid_installed_payload(&install, 0x33, 0x44);
         write_valid_payload(&payload, 0x33, 0x44);
         fs::write(install.join("ffmpeg.dll"), b"previous-library").unwrap();
         fs::write(payload.join("ffmpeg.dll"), if changed { b"replaced-library" } else { b"previous-library" }).unwrap();
         let config = b"{\"schemaVersion\":2,\"installationId\":\"existing-generation\",\"configState\":\"complete\",\"options\":{\"autoLaunch\":false},\"resources\":[{\"status\":\"valid\"}]}";
         fs::write(install.join("install-config.json"), config).unwrap();
+        let receipt_path = install.join("install-receipt.json");
+        let mut receipt: serde_json::Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+        receipt["installationId"] = serde_json::json!("existing-generation");
+        fs::write(receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
         let key = format!("HKCU\\Software\\SidekickAI-Repair-Wire-{}-{changed}", std::process::id());
         let mut hooks = isolated_hooks(&case);
         hooks.extracted = Some(payload.clone());
@@ -1273,7 +1429,7 @@ fn repair_without_stored_identity_preserves_legacy_config_and_reuses_the_new_rec
     let root = temporary_root("repair-legacy-generation");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x33, 0x44);
     let config = b"{\"modules\":{},\"options\":{\"autoLaunch\":false}}";
     fs::write(install.join("install-config.json"), config).unwrap();
@@ -1301,7 +1457,7 @@ fn conflicting_repair_identity_is_rejected_before_program_or_registration_change
     let root = temporary_root("repair-conflicting-generation");
     let install = root.join("install");
     let payload = root.join("payload");
-    write_valid_payload(&install, 0x33, 0x44);
+    write_valid_installed_payload(&install, 0x33, 0x44);
     write_valid_payload(&payload, 0x55, 0x66);
     let key = format!("HKCU\\Software\\SidekickAI-Repair-Conflict-Id-{}", std::process::id());
     let mut hooks = isolated_hooks(&root);
@@ -1327,7 +1483,7 @@ fn failed_runtime_replacement_removes_new_files_and_restores_old_bytes() {
     let install = root.join("install");
     let payload = root.join("payload");
     write_valid_install(&install);
-    write_valid_install(&payload);
+    write_valid_payload(&payload, 0x01, 0x02);
     fs::write(install.join("ffmpeg.dll"), b"old-runtime").unwrap();
     fs::write(payload.join("ffmpeg.dll"), b"new-runtime").unwrap();
     fs::write(payload.join("v8_context_snapshot.bin"), b"new-snapshot").unwrap();
@@ -1336,7 +1492,8 @@ fn failed_runtime_replacement_removes_new_files_and_restores_old_bytes() {
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     assert!(replace_from_payload(&install, &payload, &refs, &|| Err("verification rejected".into())).is_err());
     assert_eq!(fs::read(install.join("ffmpeg.dll")).unwrap(), b"old-runtime");
-    assert_eq!(fs::read(install.join("resources/app.asar")).unwrap(), app_archive(b"fixture-asar"));
+    assert_eq!(fs::read(install.join("resources/app.asar")).unwrap(), edition_fixtures::archive_for_version(
+        &sidekickai_uninstall_core::product::edition().package_name, Some(&product_version()), b"fixture-asar"));
     assert!(!install.join("v8_context_snapshot.bin").exists());
     let _ = fs::remove_dir_all(root);
 }
@@ -1351,7 +1508,7 @@ fn replacement_refuses_a_linked_resource_parent_without_changing_external_files(
     fs::create_dir_all(&install).unwrap();
     fs::create_dir_all(&outside).unwrap();
     fs::write(outside.join("app.asar"), app_archive(b"external-content")).unwrap();
-    write_valid_install(&payload);
+    write_valid_payload(&payload, 0x01, 0x02);
     std::os::windows::fs::symlink_dir(&outside, install.join("resources")).unwrap();
     let error = replace_from_payload(&install, &payload, &["resources/app.asar"], &|| Ok(())).unwrap_err();
     assert!(error.contains("重解析点"));
@@ -1366,43 +1523,58 @@ fn replacement_refuses_a_linked_resource_parent_without_changing_external_files(
 fn real_payload_repairs_a_mixed_runtime_and_installs_with_isolated_registration() {
     let root = PathBuf::from(std::env::var("SIDEKICK_INSTALLER_ACCEPTANCE_DIR").expect("acceptance directory"));
     let payload = PathBuf::from(std::env::var("SIDEKICK_INSTALLER_ACCEPTANCE_PAYLOAD").expect("verified payload"));
+    let archive = PathBuf::from(std::env::var("SIDEKICK_INSTALLER_ACCEPTANCE_ARCHIVE").expect("verified raw application archive"));
     let previous = PathBuf::from(std::env::var("SIDEKICK_INSTALLER_ACCEPTANCE_PREVIOUS").expect("previous program copy"));
-    assert!(root.is_absolute() && !root.exists());
-    assert!(payload.is_absolute() && previous.is_absolute());
+    assert!(root.is_absolute() && !root.exists()); assert!(payload.is_absolute() && previous.is_absolute() && archive.is_absolute());
+    let proof_text = fs::read_to_string(payload.join("distribution-proof.json")).unwrap();
+    let proof = sidekickai_uninstall_core::distribution::parse_envelope(proof_text.as_bytes()).unwrap();
+    let body = crate::distribution::verify_body(&proof).unwrap();
+    sidekickai_uninstall_core::distribution::verify_declared_files(&payload,&body.files).unwrap();
     fs::create_dir_all(&root).unwrap();
     let repaired = root.join("repaired");
-    super::deploy::copy_dir(&previous, &repaired).unwrap();
-    let before_config = fs::read(repaired.join("install-config.json")).unwrap();
-    fs::write(repaired.join("portable.txt"), b"AI Window Portable Mode Marker\n").unwrap();
-    assert!(!core_payload_matches(&repaired, &payload));
     let key = format!("HKCU\\Software\\SidekickAI-Acceptance-{}", std::process::id());
-    let mut hooks = isolated_hooks(&root);
-    hooks.extracted = Some(payload.clone());
-    hooks.registration_key = Some(key.clone());
-    let mut req = request(&repaired, false);
-    req.mode = InstallMode::Repair;
-    req.installation_id.clear();
-    run_with(&req, &hooks).unwrap();
-    assert!(core_payload_matches(&repaired, &payload));
-    assert_eq!(fs::read(repaired.join("install-config.json")).unwrap(), before_config);
-    let (receipt, _) = sidekickai_uninstall_core::product::read_install_receipt(&repaired).unwrap();
+    let mut hooks = isolated_hooks(&root); hooks.extracted = Some(payload.clone()); hooks.registration_key = Some(key.clone());
+    let mut req = request(&repaired,false);
+    req.distribution_source_path = archive.to_string_lossy().into_owned();
+    req.distribution_body_proof = proof_text.clone(); req.distribution_product_version = body.product_version.clone();
+    crate::distribution::apply_request(&req).unwrap();
+    run_engine(&req,&hooks).unwrap();
+    let before_config = fs::read(repaired.join("install-config.json")).unwrap();
+    let before_identity = sidekickai_uninstall_core::distribution::verify_installed_identity(&repaired).unwrap();
+    fs::copy(previous.join("SidekickAI.exe"),repaired.join("SidekickAI.exe")).unwrap();
+    assert!(!core_payload_matches(&repaired,&payload));
+    req.mode = InstallMode::Repair; req.installation_id.clear();
+    run_engine(&req,&hooks).unwrap();
+    assert!(core_payload_matches(&repaired,&payload));
+    assert_eq!(fs::read(repaired.join("install-config.json")).unwrap(),before_config);
+    let after_repair = sidekickai_uninstall_core::distribution::verify_installed_identity(&repaired).unwrap();
+    assert_ne!(after_repair.receipt.installation_id,before_identity.receipt.installation_id);
+    let (receipt,_) = sidekickai_uninstall_core::product::read_install_receipt(&repaired).unwrap();
     let config: serde_json::Value = serde_json::from_slice(&before_config).unwrap();
-    assert_eq!(receipt.installation_id, config["installationId"].as_str().expect("previous installation identity"));
-    assert!(repaired.join("portable.txt").is_file());
+    assert_eq!(receipt.installation_id,config["installationId"].as_str().unwrap());
+    let modified = fs::metadata(repaired.join("SidekickAI.exe")).unwrap().modified().unwrap();
+    use std::os::windows::fs::OpenOptionsExt;
+    let pin = fs::OpenOptions::new().read(true).share_mode(1).open(repaired.join("SidekickAI.exe")).unwrap();
+    run_engine(&req,&hooks).unwrap(); drop(pin);
+    assert_eq!(fs::metadata(repaired.join("SidekickAI.exe")).unwrap().modified().unwrap(),modified);
+    let after_healthy = sidekickai_uninstall_core::distribution::verify_installed_identity(&repaired).unwrap();
+    assert_ne!(after_healthy.receipt.installation_id,after_repair.receipt.installation_id);
+    assert_eq!(fs::read(repaired.join("install-config.json")).unwrap(),before_config);
     let fresh = root.join("fresh");
-    let fresh_payload = root.join("fresh-payload");
-    super::deploy::copy_dir(&payload, &fresh_payload).unwrap();
-    hooks.extracted = Some(fresh_payload);
-    req = request(&fresh, false);
-    run_with(&req, &hooks).unwrap();
-    assert!(core_payload_matches(&fresh, &payload));
-    assert!(fresh.join("install-config.json").is_file());
-    fs::write(fresh.join("portable.txt"), b"AI Window Portable Mode Marker\n").unwrap();
+    req = request(&fresh,false); req.distribution_source_path = archive.to_string_lossy().into_owned();
+    req.distribution_body_proof = proof_text; req.distribution_product_version = body.product_version.clone();
+    run_engine(&req,&hooks).unwrap();
+    assert!(core_payload_matches(&fresh,&payload));
+    sidekickai_uninstall_core::distribution::verify_installed_identity(&fresh).unwrap();
+    assert!(!fresh.join("portable.txt").exists() && !repaired.join("portable.txt").exists());
     cleanup_registry_key(&key);
-    fs::write(root.join("native-acceptance.json"), serde_json::to_vec_pretty(&serde_json::json!({
-        "repairRuntimeMatches": true, "repairConfigurationPreserved": true, "repairIdentityPreserved": true,
-        "repairRequestIdentityAbsent": true, "freshRuntimeMatches": true,
-        "registryIsolated": true, "version": product_version(), "repaired": repaired, "fresh": fresh,
+    fs::write(root.join("native-acceptance.json"),serde_json::to_vec_pretty(&serde_json::json!({
+        "repairRuntimeMatches":true,"repairConfigurationPreserved":true,"repairIdentityPreserved":true,
+        "repairRequestIdentityAbsent":true,"freshRuntimeMatches":true,"healthyRepairDoesNotReplaceCore":true,
+        "distributionIdentityChangesAfterEveryRepair":true,"registryIsolated":true,"version":body.product_version,
+        "repaired":repaired,"fresh":fresh,"sourceArchive":archive,
+        "sourceArchiveSha256":sidekickai_uninstall_core::distribution::sha256_file(&archive).unwrap(),
+        "bodyProofSha256":sidekickai_uninstall_core::distribution::content_digest(&proof.payload).unwrap()
     })).unwrap()).unwrap();
 }
 
@@ -1416,7 +1588,7 @@ fn replace_from_payload_reports_a_failed_copy_and_keeps_the_previous_copy() {
     let install = root.join("install");
     let payload = root.join("payload");
     write_valid_install(&install);
-    write_valid_install(&payload);
+    write_valid_payload(&payload, 0x01, 0x02);
     fs::write(payload.join("SidekickAI.exe"), pe_fixture(0x91)).unwrap();
     let before_exe = fs::read(install.join("SidekickAI.exe")).unwrap();
     let before_asar = fs::read(install.join("resources").join("app.asar")).unwrap();
@@ -1502,7 +1674,6 @@ fn install_orchestration_deploys_registers_and_creates_shortcuts() {
     fs::create_dir(install.join("data.bak-1234567890123")).unwrap();
     fs::write(install.join("data.bak-1234567890123/secret"), b"recovery data").unwrap();
     fs::write(install.join("data.restore.json"), b"pending restore").unwrap();
-    fs::write(install.join("portable.txt"), b"portable").unwrap();
 
     let payload = root.join("payload");
     let (new_exe, _) = write_valid_payload(&payload, 0x22, 0x33);
@@ -1526,7 +1697,7 @@ fn install_orchestration_deploys_registers_and_creates_shortcuts() {
     assert_eq!(fs::read(install.join("data/chat.db")).unwrap(), b"portable-conversations");
     assert_eq!(fs::read(install.join("data.bak-1234567890123/secret")).unwrap(), b"recovery data");
     assert_eq!(fs::read(install.join("data.restore.json")).unwrap(), b"pending restore");
-    assert!(install.join("portable.txt").is_file());
+    assert!(!install.join("portable.txt").exists());
     let expected_location = install.to_string_lossy().into_owned();
     assert_eq!(
         registered_install_location(&key).unwrap().as_deref(),
@@ -1606,6 +1777,63 @@ fn failed_install_restores_old_files_and_preserves_old_registration() {
 
     cleanup_registry_key(&key);
     let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn startup_task_validation_failure_restores_install_and_repair_payloads() {
+    if manifest::host_arch() != "x64" { return; }
+    for mode in [InstallMode::Install, InstallMode::Repair] {
+        let root = temporary_root("startup-task-rollback");
+        let install = root.join("install");
+        let payload = root.join("payload");
+        write_valid_installed_payload(&install, 0x21, 0x22);
+        write_valid_payload(&payload, 0x23, 0x24);
+        fs::write(install.join("install-config.json"), b"{\"user\":true}").unwrap();
+        let old_executable = fs::read(install.join("SidekickAI.exe")).unwrap();
+        let old_uninstaller = fs::read(install.join("uninstall.exe")).unwrap();
+        let key = format!("HKCU\\Software\\SidekickAI-Startup-Rollback-{}", std::process::id());
+        cleanup_registry_key(&key);
+        write_uninstall_registration(&install, &key).unwrap();
+        let before = snapshot_registration(&key).unwrap();
+        let mut hooks = isolated_hooks(&root);
+        hooks.extracted = Some(payload);
+        hooks.registration_key = Some(key.clone());
+        hooks.fail_startup_maintenance = true;
+        let mut req = request(&install, false);
+        req.mode = mode;
+        let error = run_with(&req, &hooks).unwrap_err();
+        assert!(error.contains("管理员启动任务校验失败"), "{error}");
+        assert_eq!(fs::read(install.join("SidekickAI.exe")).unwrap(), old_executable);
+        assert_eq!(fs::read(install.join("uninstall.exe")).unwrap(), old_uninstaller);
+        assert_eq!(fs::read(install.join("install-config.json")).unwrap(), b"{\"user\":true}");
+        assert_eq!(snapshot_registration(&key).unwrap(), before);
+        assert!(stray_staging_dirs(&install).is_empty());
+        cleanup_registry_key(&key);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn healthy_repair_reports_task_validation_failure_before_registration() {
+    if manifest::host_arch() != "x64" { return; }
+    let root = temporary_root("healthy-startup-task-validation");
+    let install = root.join("install");
+    let payload = root.join("payload");
+    write_valid_installed_payload(&install, 0x41, 0x42);
+    write_valid_payload(&payload, 0x41, 0x42);
+    let key = format!("HKCU\\Software\\SidekickAI-Startup-Healthy-{}", std::process::id());
+    cleanup_registry_key(&key);
+    let mut hooks = isolated_hooks(&root);
+    hooks.extracted = Some(payload);
+    hooks.registration_key = Some(key.clone());
+    hooks.fail_startup_maintenance = true;
+    let mut req = request(&install, false);
+    req.mode = InstallMode::Repair;
+    assert!(run_with(&req, &hooks).unwrap_err().contains("管理员启动任务校验失败"));
+    assert!(snapshot_registration(&key).unwrap().is_none());
+    assert_eq!(fs::read(install.join("SidekickAI.exe")).unwrap(), pe_fixture(0x41));
+    assert!(stray_staging_dirs(&install).is_empty());
+    fs::remove_dir_all(root).unwrap();
 }
 
 /// Repair must replace only a stale uninstaller and leave the core alone

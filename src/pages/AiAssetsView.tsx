@@ -44,7 +44,6 @@ export default function AiAssetsView() {
   const navigationRevision = useRef(-1);
   const sourceRevision = useRef(0);
   const importMenuRef = useRef<HTMLDetailsElement>(null);
-  const [freezeTarget, setFreezeTarget] = useState<{ tabId: string; revision: number }>();
   const { settings, error: settingsError } = useAssetSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -81,7 +80,6 @@ export default function AiAssetsView() {
       navigationRevision.current = request.revision;
       if (request.category) { setCategory(request.category); setQuery(''); setListOpen(false); }
       if (request.focusSearch) searchRef.current?.focus();
-      if (request.freezeTabId) { setFreezeTarget({ tabId: request.freezeTabId, revision: request.revision }); setSettingsOpen(true); }
       if (request.openSettings) setSettingsOpen(true);
     };
     const off = promptApi.onNavigate(navigate);
@@ -166,7 +164,6 @@ export default function AiAssetsView() {
       if (!action || (action !== 'search' && (event.target as Element)?.closest('input, textarea, select, [contenteditable="true"]'))) return;
       event.preventDefault();
       if (action === 'search') searchRef.current?.focus();
-      else if (action === 'freeze') setSettingsOpen(true);
       else if (action === 'previousBranch' || action === 'nextBranch') { if (category === 'conversations') setBranchRequest({ direction: action === 'previousBranch' ? -1 : 1, revision: Date.now() }); }
       else { setCategory(action); setQuery(''); setListOpen(false); }
     };
@@ -223,7 +220,7 @@ export default function AiAssetsView() {
         {totalUsage && <div className="asset-total-usage" data-name="assets.total-usage" title={`全部对话累计 Unicode 字符（含空白与标点）：输入 ${totalUsage.inputCharacters.toLocaleString()} · 思考 ${totalUsage.reasoningCharacters.toLocaleString()} · 输出 ${totalUsage.outputCharacters.toLocaleString()}`}><span>总字符</span><strong>{totalUsage.totalCharacters.toLocaleString()}</strong></div>}
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
         attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
-    <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="AI资产设置" className="asset-settings-modal" portal><AssetSettingsPanel freezeTarget={freezeTarget} /></Modal>
+    <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="AI资产设置" className="asset-settings-modal" portal><AssetSettingsPanel /></Modal>
     <ConfirmDialog open={!!pendingCleanup} title={`清理所选${pendingCleanup?.kind === 'files' ? '资料' : '对话'}`} variant="danger" confirmLabel="确认清理"
       onCancel={() => { if (!cleaning.current) setPendingCleanup(undefined); }} onConfirm={clearSelection}
       message={<>{pendingCleanup?.ids.length} 项：{pendingCleanup?.names.slice(0, 4).join('、')}{(pendingCleanup?.names.length ?? 0) > 4 ? '…' : ''}。{pendingCleanup?.kind === 'files'

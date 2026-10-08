@@ -52,8 +52,38 @@ function cancelWindowHandoff(): void {
   }
 }
 
+/** Keep editors frozen until a verified restore is queued or explicitly cancelled. */
+export async function prepareDataRestoreHandoff(): Promise<() => void> {
+  if (!ready || isBusy() || pendingHandoff) throw new Error('应用正在执行其他操作，请稍后重试导入。')
+  const release = beginApplicationHandoff()
+  let complete: (accepted: boolean) => void = () => {}
+  const lease = new Promise<boolean>(resolve => { complete = resolve })
+  pendingHandoff = lease
+  let resumed = false
+  const cancel = () => {
+    if (pendingHandoff && pendingHandoff !== lease) return
+    cancelWindowHandoff()
+  }
+  const resume = () => {
+    if (resumed) return
+    resumed = true
+    cancel(); release(); complete(false)
+    if (pendingHandoff === lease) pendingHandoff = undefined
+  }
+  const saving = Promise.all([saveWindows()])
+  try {
+    const [saved] = await withinBudget(saving, SAVE_BUDGET_MS, 'Application restore save timed out')
+    if (!saved || isBusy()) throw new Error('更改尚未全部保存，导入已暂停；请保存后重试。')
+    return resume
+  } catch (error) {
+    resume()
+    void saving.finally(cancel).catch(() => {})
+    throw error
+  }
+}
+
 export async function preparePermissionHandoff(): Promise<boolean> {
-  if (!ready || isBusy()) return false
+  if (!ready || isBusy() || pendingHandoff) return false
   const release = beginApplicationHandoff()
   try {
     return await withinBudget(saveWindows(), SAVE_BUDGET_MS, 'Window handoff save timed out') && !isBusy()
@@ -68,7 +98,12 @@ export function quitPermissionHandoff(canQuit: () => boolean = () => true): Prom
   return performHandoff(canQuit)
 }
 
-function performHandoff(canQuit: () => boolean = () => true): Promise<boolean> {
+export function quitForBackup(beforeQuit: () => Promise<void>): Promise<boolean> {
+  if (!ready || isBusy() || pendingHandoff) return Promise.resolve(false)
+  return performHandoff(() => true, beforeQuit)
+}
+
+function performHandoff(canQuit: () => boolean = () => true, beforeQuit: () => Promise<void> = async () => {}): Promise<boolean> {
   if (pendingHandoff) return pendingHandoff
   const task = (async () => {
     const release = beginApplicationHandoff()
@@ -77,6 +112,7 @@ function performHandoff(canQuit: () => boolean = () => true): Promise<boolean> {
       if (isBusy() || !canQuit()) return false
       if (!await withinBudget(saveWindows(), SAVE_BUDGET_MS, 'Application handoff save timed out')) return false
       if (isBusy() || !canQuit()) return false
+      await beforeQuit()
       accepted = await quitAfterHandoff()
       return accepted
     } finally {

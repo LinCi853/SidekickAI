@@ -1,14 +1,13 @@
 /* =====================================================================
    pages/BrowserView/hooks/useWebviewLifecycle.ts —— webview 生命周期
    抽取自 BrowserWebviewTab.tsx：15 个事件监听器（含注册/注销）、
-   致命失败 remount、冻结注册表注册、F12 DevTools 与文件拖放上报。
+   Owns page recovery, guest identity registration, DevTools and dropped files.
    ===================================================================== */
 
 import { useCallback, useEffect } from 'react';
 import type { BrowserTabState, Profile } from '../../../lib/electron-api';
-import { registerFreezeWebview } from '../../../lib/electron-api';
+import { registerWebview } from '../../../lib/electron-api';
 import type { WebviewElement } from '../../../lib/webview.js';
-import { useFreezeStore } from '../../../store/useFreezeStore.js';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
 import { leaseWebviewLifecycle } from '../../../lib/webview-lifecycle';
 
@@ -162,7 +161,6 @@ export function useWebviewLifecycle({
       if (inputEvent.type !== 'keyDown') return;
       if (inputEvent.key === 'F12') {
         e.preventDefault();
-        if (useFreezeStore.getState().states[tab.id] === 'frozen') return;
         const wv = webview as unknown as {
           isDevToolsOpened: () => boolean;
           openDevTools: () => void;
@@ -198,8 +196,7 @@ export function useWebviewLifecycle({
     };
   }, [handleDomReady, handleNavigate, handleTitleUpdate, handleFaviconUpdate, handleStartLoading, handleStopLoading, handleFinishNavigation, handleFinishLoad, handleFailLoad, handleFatalFailure, handleMediaStartedPlaying, handleMediaPaused, tab.id, remountKey]);
 
-  // 注册 webview 到冻结注册表（did-attach 后 webContentsId 可用）
-  // 防撤回保险：主进程按 tabId 查找 guest webContents 执行 Debugger.pause
+  // Register guest identity after attachment, including replacement guests.
   useEffect(() => {
     const webview = webviewRef.current;
     if (!webview) return;
@@ -209,7 +206,7 @@ export function useWebviewLifecycle({
         if (wcId === undefined) return;
         const windowId = useBrowserTabStore.getState().windowId;
         if (!windowId) return;
-        void registerFreezeWebview({
+        void registerWebview({
           tabId: tab.id,
           windowId,
           profileId: profile.id,

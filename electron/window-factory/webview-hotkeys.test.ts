@@ -13,8 +13,6 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('./renderer-loader.js', () => ({ isBrowserWindowContents: () => fixture.browser }))
 vi.mock('./window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
-vi.mock('../freeze/freeze-manager.js', () => ({ isFrozen: () => false }))
-vi.mock('../freeze/webview-registry.js', () => ({ getRecordByWebContentsId: () => ({ tabId: 'tab-a', profileId: 'profile-a', windowId: 'window-a' }) }))
 vi.mock('../utils/cloud-pc.js', () => ({ isCloudPc: () => fixture.cloud, forceExitCloudPc: fixture.exitCloud }))
 vi.mock('../utils/browser-hotkey-fallback.js', () => ({ tryForward: () => fixture.forward }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
@@ -105,11 +103,17 @@ describe('guest input behavior contract', () => {
     expect(fixture.maximize).not.toHaveBeenCalled()
   })
 
-  it('consumes an already forwarded page asset chord', () => {
+  it('passes Alt+P through to the page', () => {
     fixture.forward = false
     const event = press('p', 'KeyP', ['alt'])
-    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(event.preventDefault).not.toHaveBeenCalled()
     expect(parent.send).not.toHaveBeenCalled()
+  })
+
+  it('opens browser DevTools with F12', () => {
+    const event = press('F12', 'F12')
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(parent.send).toHaveBeenCalledWith('browser:toggleDevTools')
   })
 
   it('does not dispatch from an unfocused window', () => {

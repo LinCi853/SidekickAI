@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { sha256Hex, exportTreeDigest } from '../../../packages/backup-core/files.js';
+import { sha256FileSync, exportTreeDigest } from '../../../packages/backup-core/files.js';
 import { selectedCategoryKeys, collectEntryCategories } from './collect.js';
 import type { ExportCategory, ExportOptions, SelectedExportEntry } from './types.js';
 
@@ -18,8 +18,7 @@ export function verifyQuiescentSnapshot(
     if (!afterPaths.has(archivePath)) throw new Error(`Selected source data changed during export (removed): ${archivePath}`)
   }
   for (const entry of after) {
-    const data = fs.readFileSync(entry.sourcePath)
-    if (sourceEntries[entry.archivePath] !== sha256Hex(data)) {
+    if (sourceEntries[entry.archivePath] !== sha256FileSync(entry.sourcePath)) {
       throw new Error(`Selected source file changed during export: ${entry.archivePath}`)
     }
   }

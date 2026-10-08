@@ -48,7 +48,7 @@ pub(super) fn fixture_request(
         target_identities,
         data_roots,
         backup_path,
-        backup_sha256: None,
+        backup_sha256: None, backup_proofs: Vec::new(), resume_task_id: None,
         preparation: None,
     }
 }

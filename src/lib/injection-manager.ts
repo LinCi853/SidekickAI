@@ -8,7 +8,7 @@ export interface InjectionContext {
   tabId?: string
   pageGeneration?: number
   isCurrent?: () => boolean
-  profile?: { id: string; isAIPlatform?: boolean; aiInputSelector?: string; aiSendSelector?: string }
+  profile?: { id: string; isAIPlatform?: boolean; aiPlatformId?: string; aiPlatformUrl?: string; aiInputSelector?: string; aiSendSelector?: string }
   enterToSend?: boolean
   manageEnterToSend?: boolean
   [key: string]: unknown
@@ -237,9 +237,16 @@ export async function registerDefaultInjectionPoints(): Promise<void> {
     },
     { id: 'enter-to-send', kind: 'enter-to-send', order: 45, reinjectOnNavigation: true,
       enabled: async context => context?.manageEnterToSend === true && (await api.getAppSettings()).enterToSend !== false,
-      scriptFn: context => scripts.buildEnterToSendScript({ enabled: true,
-        inputSelector: context?.inputSelector as string | null | undefined,
-        sendSelector: context?.sendSelector as string | null | undefined }),
+      scriptFn: async context => {
+        const profile = context?.profile
+        const platforms = profile?.isAIPlatform ? await api.listAIPlatforms() : []
+        const platform = platforms.find(item => item.id === profile?.aiPlatformId)
+          ?? platforms.find(item => item.url === profile?.aiPlatformUrl)
+        return scripts.buildEnterToSendScript({ enabled: true,
+          inputSelector: profile?.aiInputSelector || (context?.inputSelector as string | null | undefined) || platform?.inputSelector,
+          sendSelector: profile?.aiSendSelector || (context?.sendSelector as string | null | undefined) || platform?.sendSelector,
+          pageAdapter: platform?.pageAdapter })
+      },
       cleanupScriptFn: () => scripts.buildEnterToSendCleanupScript(),
     },
     { id: 'spatial-nav', kind: 'spatial-nav', order: 50, scriptFn: () => spatial.buildSpatialNavScript(),

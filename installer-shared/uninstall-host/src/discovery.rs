@@ -102,7 +102,7 @@ fn inspect(candidate: &Candidate, source: Option<&Path>) -> Result<Option<Uninst
     let main = sidekickai_uninstall_core::product::application_executable(path.as_path());
     let resources = path.as_path().join("resources").join("app.asar");
     let uninstaller = path.as_path().join("uninstall.exe");
-    if !resources.is_file() || !uninstaller.is_file() { return Ok(None); }
+    if !uninstaller.is_file() || !resources.is_file() && sidekickai_uninstall_core::distribution::verify_installed_identity(path.as_path()).is_err() { return Ok(None); }
     let executable_arch = pe_arch(&main).ok();
     let uninstaller_arch = pe_arch(&uninstaller).ok();
     let registered = candidate.registered_root.is_some();
@@ -119,6 +119,9 @@ fn inspect(candidate: &Candidate, source: Option<&Path>) -> Result<Option<Uninst
     if product::validate_uninstall_identity(path.as_path()).is_err() {
         non_removable_reason = Some(UninstallErrorCode::TargetNotInstall);
     }
+    if sidekickai_uninstall_core::distribution::verify_installed_identity(path.as_path()).is_err() {
+        non_removable_reason = Some(UninstallErrorCode::TargetNotInstall);
+    }
     if let (Some(app_arch), Some(uninstall_arch)) = (&executable_arch, &uninstaller_arch) {
         if app_arch != uninstall_arch { non_removable_reason = Some(UninstallErrorCode::ArchMismatch); }
     }
@@ -131,7 +134,7 @@ fn inspect(candidate: &Candidate, source: Option<&Path>) -> Result<Option<Uninst
         scope, arch: executable_arch.or(uninstaller_arch).unwrap_or(UninstallArch::Unknown),
         version: product::package_identity(&resources).ok().and_then(|identity| identity.version).or_else(|| candidate.version.clone()), registered,
         registered_roots: candidate.registered_root.clone().into_iter().collect(),
-        executable_present: main.is_file(), resources_present: true,
+        executable_present: main.is_file(), resources_present: resources.is_file(),
         identity_confidence: if strong { IdentityConfidence::Strong } else { IdentityConfidence::Degraded },
         running_pids: Vec::new(), removable: non_removable_reason.is_none(), non_removable_reason, recommended,
     }))
@@ -184,8 +187,16 @@ pub(crate) fn local_data_state_paths(install: &Path) -> Result<Vec<PathBuf>, Uni
 }
 
 pub(crate) fn validate_local_data_selection(install: &Path, strategy: &DataStrategy, confirmed: &[PathBuf]) -> Result<(), UninstallError> {
+    use sha2::{Digest, Sha256};
+    let normalized = sidekickai_uninstall_core::path::normalize_absolute_path(install)?.as_string().to_lowercase();
+    let hash = format!("{:x}", Sha256::digest(normalized.as_bytes()));
+    if install.parent().is_some_and(|parent| parent.join(format!(".sidekick-install-recovery-{}", &hash[..24])).exists()) {
+        return Err(UninstallError::new(UninstallErrorCode::TargetScopeInvalid,
+            "该位置有尚未结束的安装恢复任务，请先打开安装器完成恢复。", UninstallPhase::Validating, true, ""));
+    }
     for path in local_data_state_paths(install)? {
-        if *strategy == DataStrategy::Keep || !path.is_dir() || !confirmed.iter().any(|root| paths_equal(root, &path)) {
+        if *strategy == DataStrategy::Keep { continue; }
+        if !path.is_dir() || !confirmed.iter().any(|root| paths_equal(root, &path)) {
             return Err(UninstallError::new(UninstallErrorCode::TargetScopeInvalid,
                 format!("安装目录内仍有需要保留的数据或恢复记录：{}。请先备份并移出这些资料，或明确确认对应数据目录的处理方式，再卸载。程序和数据未删除。", path.display()),
                 UninstallPhase::Validating, false, ""));
@@ -343,6 +354,7 @@ mod tests {
             let edition = &product::product().editions[id];
             fs::write(install.join("resources/app.asar"), edition_fixtures::archive_for_version(&edition.package_name, Some(version), b"fixture")).unwrap();
             if legacy { fs::rename(install.join("SidekickAI.exe"), install.join(&edition.legacy_executable)).unwrap(); }
+            edition_fixtures::seal_installation(&install);
             let mut value = candidate(&install, InstallScope::PerUser, Some("HKCU"));
             value.version = Some("stale-registration".into());
             candidates.push(value);
@@ -456,6 +468,35 @@ mod tests {
     }
 
     #[test]
+    fn signed_installation_can_be_maintained_when_the_application_archive_is_damaged() {
+        let _guard = crate::SCAN_TEST_LOCK.lock().unwrap();
+        let root = fixture_root("signed-damaged-archive");
+        make_install(&root, true, true, true, false);
+        fs::write(root.join("resources/app.asar"), b"damaged new application").unwrap();
+        let candidate = candidate(&root, InstallScope::PerUser, Some("HKCU"));
+        let scan = discover_candidates(vec![candidate.clone()], Some(&root)).unwrap();
+        assert!(scan.locations[0].removable);
+        fs::remove_file(root.join("resources/app.asar")).unwrap();
+        let scan = discover_candidates(vec![candidate], Some(&root)).unwrap();
+        assert!(scan.locations[0].removable);
+        assert!(!scan.locations[0].resources_present);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn legacy_application_is_visible_without_new_maintenance_authorization() {
+        let _guard = crate::SCAN_TEST_LOCK.lock().unwrap();
+        let root = fixture_root("legacy-visible");
+        make_install(&root, true, true, true, false);
+        fs::remove_file(root.join("distribution-proof.json")).unwrap();
+        let scan = discover_candidates(vec![candidate(&root, InstallScope::PerUser, Some("HKCU"))], Some(&root)).unwrap();
+        assert_eq!(scan.locations.len(), 1);
+        assert!(!scan.locations[0].removable);
+        assert!(scan.recommended_target_id.is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn nested_installations_are_visible_but_never_removable() {
         let _guard = crate::SCAN_TEST_LOCK.lock().unwrap();
         let root = fixture_root("nested-installations");
@@ -479,7 +520,7 @@ mod tests {
         std::fs::create_dir(&data).unwrap();
         std::fs::write(data.join("settings.db"), b"retained").unwrap();
         assert_eq!(data_paths_for(&root, None).unwrap(), vec![data.clone()]);
-        assert!(validate_local_data_selection(&root, &DataStrategy::Keep, &[]).is_err());
+        assert!(validate_local_data_selection(&root, &DataStrategy::Keep, &[]).is_ok());
         assert!(validate_local_data_selection(&root, &DataStrategy::Delete, &[root.clone()]).is_err());
         assert!(validate_local_data_selection(&root, &DataStrategy::Delete, &[data.clone()]).is_ok());
         let pending = root.join("data.restore.json");
@@ -529,6 +570,7 @@ mod tests {
             fs::create_dir_all(dir.join("data")).unwrap();
             fs::write(dir.join("data").join("settings.db"), b"portable data").unwrap();
         }
+        edition_fixtures::seal_installation(dir);
     }
 
     fn candidate(path: &Path, scope: InstallScope, registered_root: Option<&str>) -> Candidate {
@@ -639,7 +681,8 @@ mod tests {
         assert_eq!(scan.locations.len(), 1);
         let location = &scan.locations[0];
         assert_eq!(location.scope, InstallScope::Portable, "the portable marker decides the scope");
-        assert!(location.removable);
+        assert!(!location.removable);
+        assert_eq!(location.non_removable_reason, Some(UninstallErrorCode::TargetNotInstall));
         let data_root = scan.data_roots.iter().find(|r| Path::new(&r.path).ends_with("data")).expect("portable data root must be reported");
         assert_eq!(data_root.associated_target_ids, vec![location.id.clone()]);
         let _ = fs::remove_dir_all(&root);

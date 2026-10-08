@@ -7,9 +7,15 @@ import AdmZip from 'adm-zip'
 import { decryptFile } from '../utils/file-crypto.js'
 
 const state = vi.hoisted(() => ({ root: '' }))
-vi.mock('electron', () => ({ app: { getPath: (name: string) => name === 'userData' ? state.root : os.tmpdir(), getVersion: () => 'test' } }))
+vi.mock('electron', () => ({ app: { isReady: () => true, getPath: (name: string) => name === 'userData' ? state.root : os.tmpdir(), getVersion: () => 'test' } }))
 vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }), closeAllModuleDbs() {} }))
-vi.mock('../../packages/backup-core/sessions.js', () => ({ captureOfflineCookies: async () => [], captureBackupSessions: async () => [] }))
+vi.mock('../../packages/backup-core/sessions.js', () => ({
+  captureOfflineCookies: async () => [], captureBackupSessions: async () => [],
+  captureOfflineSensitiveData: async (files: Array<{ archivePath: string; sourcePath: string }>) => ({
+    snapshots: [],
+    sensitiveDrafts: (await import('../../packages/backup-core/sensitive-drafts.js')).captureBackupDrafts(path.dirname(files.find(file => file.archivePath === 'settings.db')!.sourcePath)),
+  }),
+}))
 import { exportForUninstall } from './uninstall-export.js'
 
 const fixtures: string[] = []

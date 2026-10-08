@@ -17,16 +17,7 @@ import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { IPHONE_UA, IPHONE_VIEWPORT } from '../presets/devices.js'
 import { profileStore } from '../store/profile-store.js'
 import { presetStore } from '../store/preset-store.js'
-
-/** 从主题色衍生渐变色（变暗 20%） */
-function deriveGradientColor(hex: string): string {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return hex
-  const r = Math.max(0, Math.min(255, Math.round(parseInt(m[1], 16) * 0.8)))
-  const g = Math.max(0, Math.min(255, Math.round(parseInt(m[2], 16) * 0.8)))
-  const b = Math.max(0, Math.min(255, Math.round(parseInt(m[3], 16) * 0.8)))
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-}
+import { derivePlatformGradient } from '../../packages/desktop-common/platform-colors.js'
 
 /**
  * 为「未绑定预设平台」的自定义 AI 应用合成为一个 AIPlatform 项，
@@ -52,7 +43,7 @@ function synthesizeCustomPlatform(profile: Profile): AIPlatform {
     inputSelector: profile.aiInputSelector,
     sendSelector: profile.aiSendSelector,
     themeColor,
-    gradientColor: deriveGradientColor(themeColor),
+    gradientColor: derivePlatformGradient(themeColor),
   }
 }
 
@@ -73,7 +64,7 @@ export function registerSettingsIpc(scope?: EffectScope): void {
   handle(IPC_CHANNELS.PRESETS_GET, async (_e: unknown, id: string) =>
     presetStore.get(id),
   )
-  // AI 平台列表：合并 Profile 上的用户自定义覆盖（region / desktopPreset / mobilePreset / themeColor）
+  // Platform defaults retain their own accents; profiles own color overrides.
   // 同时为「未绑定预设」的自定义 AI 应用合成 AIPlatform 项追加到列表末尾，
   // 否则 AppSwitcher / BottomBar / AiAppSection 反向匹配平台时找不到对应项会过滤掉自定义应用。
   handle(IPC_CHANNELS.AI_PLATFORM_LIST, async () => {
@@ -93,11 +84,6 @@ export function registerSettingsIpc(scope?: EffectScope): void {
       }
       if (profile.aiMobilePreset) {
         result.defaultMobilePreset = profile.aiMobilePreset
-      }
-      if (profile.aiThemeColor) {
-        result.themeColor = profile.aiThemeColor
-        // 渐变色从主题色衍生（变暗 20%）
-        result.gradientColor = deriveGradientColor(profile.aiThemeColor)
       }
       return result
     })

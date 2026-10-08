@@ -1,12 +1,7 @@
-// electron/modules/effect-scope.ts — 可撤销副作用作用域
-//
-// 统一管理模块的所有副作用（IPC、热键、窗口、webview 注入、Debugger、
-// 事件订阅、定时器等），模块 teardown 时一次性撤销全部。
-//
-// 设计：EffectScope 是 IpcScope 的超集，内部委托 IpcScope 处理 IPC 通道，
-// 同时扩展管理其他 EffectKind。现有 wiring 代码可逐步迁移，不改签名。
+// Owns reversible module effects through disposable handles,
+// IPC registrations, event subscriptions and timers.
 
-import { ipcMain, globalShortcut, type BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 
 // ==================== 类型定义 ====================
 
@@ -18,7 +13,7 @@ import type { EffectKind } from '../shared/module-manifest.types.js'
 export interface EffectHandle {
   /** 所属模块 id */
   readonly ownerModule: string
-  /** 能力唯一标识，如 'freeze.debugger' */
+  /** Unique capability identifier, such as 'browser.window'. */
   readonly capabilityId: string
   /** 目标标识（窗口 id / tab id / webview id），全局级为空 */
   readonly targetId?: string
@@ -63,8 +58,7 @@ function createEffectHandle(params: EffectHandleInternal): EffectHandle {
  * 每个模块的 wiring 持有自己的 EffectScope：init 时通过 scope 的各种
  * 快捷方法注册副作用，teardown 时调用 scope.dispose() 统一撤销。
  *
- * 与 IpcScope 的关系：EffectScope 内部使用 IpcScope 的 dispose 逻辑
- * （removeHandler + removeAllListeners），同时扩展管理其他 EffectKind。
+ * IPC channels are removed along with tracked handles and timers.
  */
 export class EffectScope {
   readonly label: string

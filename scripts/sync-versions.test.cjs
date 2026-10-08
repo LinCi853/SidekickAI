@@ -15,6 +15,7 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 
 const sync = require('./sync-versions.cjs')
+const COMPONENT_VERSION = require('../maintenance/component-contract.json').componentVersion
 
 const SYNC = path.join(__dirname, 'sync-versions.cjs')
 const PRODUCT_FILES = [
@@ -99,17 +100,17 @@ test('apply updates every product copy, preserves the independent core, and is i
   assert.deepEqual(result.changed.toSorted(), PRODUCT_FILES.filter(file => fs.existsSync(path.join(root, file))).toSorted())
   assert.deepEqual(result.remaining, [], 'no drift may remain after apply')
 
-  assert.equal(JSON.parse(read('installer-tauri/package.json')).version, '1.0.0')
+  assert.equal(JSON.parse(read('installer-tauri/package.json')).version, COMPONENT_VERSION)
   assert.deepEqual(sync.jsonLockVersions(read('package-lock.json')), { version: '1.2.3', root: '1.2.3' })
-  assert.deepEqual(sync.jsonLockVersions(read('installer-tauri/package-lock.json')), { version: '1.0.0', root: '1.0.0' })
-  assert.equal(JSON.parse(read('installer-tauri/src-tauri/tauri.conf.json')).version, '1.0.0')
-  assert.equal(sync.cargoPackageVersion(read('installer-tauri/src-tauri/Cargo.toml')).version, '1.0.0')
-  assert.equal(sync.cargoPackageVersion(read('uninstaller-tauri/src-tauri/Cargo.toml')).version, '1.0.0')
-  assert.equal(sync.cargoPackageVersion(read('installer-shared/uninstall-host/Cargo.toml')).version, '1.0.0')
-  assert.equal(sync.cargoLockVersion(read('installer-tauri/src-tauri/Cargo.lock'), 'sidekickai-installer').version, '1.0.0')
-  assert.equal(sync.cargoLockVersion(read('installer-tauri/src-tauri/Cargo.lock'), 'sidekickai-uninstall-host').version, '1.0.0')
-  assert.equal(sync.cargoLockVersion(read('uninstaller-tauri/src-tauri/Cargo.lock'), 'sidekickai-uninstaller').version, '1.0.0')
-  assert.equal(sync.cargoLockVersion(read('installer-shared/uninstall-host/Cargo.lock'), 'sidekickai-uninstall-host').version, '1.0.0')
+  assert.deepEqual(sync.jsonLockVersions(read('installer-tauri/package-lock.json')), { version: COMPONENT_VERSION, root: COMPONENT_VERSION })
+  assert.equal(JSON.parse(read('installer-tauri/src-tauri/tauri.conf.json')).version, COMPONENT_VERSION)
+  assert.equal(sync.cargoPackageVersion(read('installer-tauri/src-tauri/Cargo.toml')).version, COMPONENT_VERSION)
+  assert.equal(sync.cargoPackageVersion(read('uninstaller-tauri/src-tauri/Cargo.toml')).version, COMPONENT_VERSION)
+  assert.equal(sync.cargoPackageVersion(read('installer-shared/uninstall-host/Cargo.toml')).version, COMPONENT_VERSION)
+  assert.equal(sync.cargoLockVersion(read('installer-tauri/src-tauri/Cargo.lock'), 'sidekickai-installer').version, COMPONENT_VERSION)
+  assert.equal(sync.cargoLockVersion(read('installer-tauri/src-tauri/Cargo.lock'), 'sidekickai-uninstall-host').version, COMPONENT_VERSION)
+  assert.equal(sync.cargoLockVersion(read('uninstaller-tauri/src-tauri/Cargo.lock'), 'sidekickai-uninstaller').version, COMPONENT_VERSION)
+  assert.equal(sync.cargoLockVersion(read('installer-shared/uninstall-host/Cargo.lock'), 'sidekickai-uninstall-host').version, COMPONENT_VERSION)
   // The protocol core keeps its own version everywhere.
   assert.equal(sync.cargoPackageVersion(read('installer-shared/uninstall-core/Cargo.toml')).version, '0.1.0')
   assert.equal(sync.cargoLockVersion(read('installer-tauri/src-tauri/Cargo.lock'), 'sidekickai-uninstall-core').version, '0.1.0')
@@ -195,7 +196,7 @@ test('the CLI apply/check round-trip is idempotent through the real command line
   assert.match(again.stdout, /Applied 1\.2\.3: 0 file\(s\) updated/)
   const checked = spawnSync(process.execPath, [SYNC, '--check', '--root', root], { encoding: 'utf8' })
   assert.equal(checked.status, 0, checked.stderr)
-  assert.match(checked.stdout, /Product 1\.2\.3; maintenance 1\.0\.0/)
+  assert.ok(checked.stdout.includes('Product 1.2.3; maintenance ' + COMPONENT_VERSION))
 })
 
 test('rewrites preserve indentation, trailing newlines and CRLF line endings', () => {

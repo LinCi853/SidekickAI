@@ -25,8 +25,11 @@ fn lifecycle_guard() -> std::sync::MutexGuard<'static, ()> {
 
 fn request(install_dir: &Path) -> InstallRequest {
     InstallRequest {
+        distribution_source_path: String::new(), distribution_body_proof: String::new(), distribution_product_version: String::new(),
+        distribution_release_id: String::new(), distribution_release_sha256: String::new(), distribution_release_proof: String::new(),
         installation_id: crate::manifest::new_installation_id(),
         resources: Vec::new(),
+        staging_dir: String::new(),
         action: String::new(),
         install_dir: install_dir.to_string_lossy().into_owned(),
         for_all_users: false,

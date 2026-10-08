@@ -1,13 +1,4 @@
-// electron/modules/registry.ts — 模块注册表（模块管理核心框架）
-//
-// 统一入口 registerModule(manifest)。主进程启动时 initEnabledModules() 按数据库
-// 状态决定是否调用 manifest.init；运行期 setModuleEnabled() 触发 init/teardown；
-// clearModuleData() 触发清除数据。任何状态变更都广播 MODULE_STATE_CHANGED。
-//
-// 遵循方案文档第 11 章《模块实现统一设计规范》：
-//   - 声明式：init/teardown 成对，teardown 逆序撤销
-//   - 启动即隔离：状态入库，重启后从未注册、从未挂载（11.10）
-//   - 关闭零残留：禁用后 IPC/热键/窗口/入口全部卸载
+// Owns built-in module lifecycle, persisted state and window notifications.
 
 import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
@@ -17,13 +8,10 @@ import {
   getModuleState,
   isLargeModuleInstalledByManifestFile,
   saveModuleState,
-  type ModuleStateRecord,
 } from '../store/module-state-store.js'
 import { getHotkeyManagerInstance } from '../hotkey/manager.js'
 import { syncAdvancedPanelHotkey, syncBrowserProfileShortcuts } from './wiring/hotkey-sync.js'
-import { injectionBroker } from './injection-broker.js'
 import { targetRegistry } from './target-registry.js'
-import { capabilityRegistry } from './capability-registry.js'
 import { getModuleRuntime, setModuleRuntime, isModuleEnabled } from './runtime-state.js'
 export { isModuleEnabled, isModuleInstalled, assertModuleEnabled } from './runtime-state.js'
 
@@ -66,49 +54,24 @@ export interface ResidualScanResult {
   disabledModules: string[]
 }
 
-/** 模块专属 IPC 通道前缀（残留扫描用，兜底映射） */
+/** Built-in module prefixes used by the residual listener scan. */
 const MODULE_IPC_PREFIXES: Record<string, string[]> = {
   'custom-chat': ['AI_PROVIDER_', 'CHAT_'],
   'prompt-library': ['PROMPT_', 'INJECTION_'],
   voice: ['STT_', 'VOICE_'],
   tts: ['VOICE_TEST_TTS'],
   browser: ['BROWSER_', 'BOOKMARK_', 'CURSOR_'],
-  freeze: ['FREEZE_'],
   whiteboard: ['WHITEBOARD_'],
   notes: ['NOTES_'],
 }
 
-/**
- * 从 CapabilityRegistry 动态推导模块 IPC 前缀（插件无需手动维护映射）。
- * 兜底：硬编码映射优先（兼容现有模块）。
- */
-function getModuleIpcPrefixes(moduleId: string): string[] {
-  // 硬编码映射优先（已验证的前缀）
-  const hardcoded = MODULE_IPC_PREFIXES[moduleId]
-  if (hardcoded) return hardcoded
-  // 从 capabilityId 推导：如 'task-manager.ipc' → 'TASK_MANAGER_'
-  try {
-    const caps = capabilityRegistry.getByModule(moduleId)
-    return caps
-      .filter((c) => c.kind === 'ipc')
-      .map((c) => c.capabilityId.replace(/\.[^.]+$/, '').toUpperCase().replace(/-/g, '_') + '_')
-  } catch {
-    return []
-  }
-}
-
-/**
- * 零残留扫描（11.8/11.10 验收门禁）：检查禁用模块是否仍有
- * 专属窗口/热键残留。窗口级可查（URL 路由标记），热键级检查语音热键。
- *
- * Phase 6 扩展：增加 InjectionBroker、TargetRegistry 和 IPC handler 的残留检查。
- */
+/** Reports windows, hotkeys, targets and listeners owned by disabled modules. */
 export function runResidualScan(): ResidualScanResult {
   const violations: string[] = []
   const disabled = listModuleInfos()
     .filter((m) => !m.enabled)
     .map((m) => m.id)
-  // 1. 窗口扫描
+  // Check module-owned windows.
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
     let url = ''
@@ -124,23 +87,12 @@ export function runResidualScan(): ResidualScanResult {
       }
     }
   }
-  // 2. 热键扫描：语音模块关闭时不应有语音热键注册
+  // A disabled voice module must release its hotkey.
   const hm = getHotkeyManagerInstance()
   if (hm && !isModuleEnabled('voice') && hm.voiceUnregisterFn) {
     violations.push('语音模块已关闭但仍注册了 Alt+V 语音热键')
   }
-  // 3. InjectionBroker 扫描：禁用模块不应有活跃注入
-  try {
-    for (const moduleId of disabled) {
-      const count = injectionBroker.getModuleInjectionCount(moduleId)
-      if (count > 0) {
-        violations.push(`模块 ${moduleId} 已关闭但仍有 ${count} 个活跃注入`)
-      }
-    }
-  } catch {
-    // InjectionBroker 可能尚未初始化（启动早期阶段），忽略
-  }
-  // 4. TargetRegistry 扫描：禁用模块不应有活跃目标
+  // Disabled modules must not own active targets.
   try {
     for (const moduleId of disabled) {
       const targets = targetRegistry.getByOwner(moduleId)
@@ -152,12 +104,12 @@ export function runResidualScan(): ResidualScanResult {
   } catch {
     // TargetRegistry 可能尚未初始化，忽略
   }
-  // 5. IPC handler 扫描：禁用模块不应有注册的 IPC handler
+  // Check registered listeners against built-in module prefixes.
   try {
     const { ipcMain } = require('electron')
     const registeredChannels = ipcMain.eventNames()
     for (const moduleId of disabled) {
-      const prefixes = getModuleIpcPrefixes(moduleId)
+      const prefixes = MODULE_IPC_PREFIXES[moduleId] ?? []
       if (prefixes.length === 0) continue
       for (const channel of registeredChannels) {
         const channelStr = String(channel)
@@ -240,10 +192,9 @@ function broadcastModuleState(): void {
  */
 export async function initEnabledModules(): Promise<void> {
   for (const m of listManifests()) {
+    const installed = m.sizeLevel === 'large' ? isLargeModuleInstalledByManifestFile(m.id) : true
     let st = getModuleState(m.id)
     if (!st) {
-      const installed =
-        m.sizeLevel === 'large' ? isLargeModuleInstalledByManifestFile(m.id) : true
       st = {
         id: m.id,
         enabled: m.defaultEnabled && installed,
@@ -253,13 +204,10 @@ export async function initEnabledModules(): Promise<void> {
       }
       saveModuleState(st)
     }
-    // 大模块：以安装清单为准刷新 installed（补装后自动恢复可启用）
-    if (m.sizeLevel === 'large') {
-      const installedNow = isLargeModuleInstalledByManifestFile(m.id)
-      if (installedNow !== st.installed) {
-        st = { ...st, installed: installedNow, enabled: installedNow ? st.enabled : false, updatedAt: Date.now() }
-        saveModuleState(st)
-      }
+    // Bundled tools remain installed even when older configurations omitted them.
+    if (installed !== st.installed) {
+      st = { ...st, installed, enabled: installed ? st.enabled : false, updatedAt: Date.now() }
+      saveModuleState(st)
     }
     // 硬依赖：依赖模块未启用时级联禁用（11.1 单向依赖）
     let enabled = st.enabled && st.installed
@@ -403,10 +351,5 @@ export async function clearModuleData(
   }
 }
 
-// ==================== 统一注入管线 re-export ====================
-// 便利导出，避免调用方直接依赖 modules/feature-gate.ts
-export { featureGate } from './feature-gate.js'
-export { capabilityRegistry } from './capability-registry.js'
-export { injectionBroker } from './injection-broker.js'
 export { EffectScope } from './effect-scope.js'
 export type { EffectHandle, EffectKind } from './effect-scope.js'

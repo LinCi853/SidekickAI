@@ -10,13 +10,12 @@ const state = vi.hoisted(() => ({ preset: vi.fn(), fingerprint: vi.fn(), inject:
 }));
 vi.mock('react', async () => ({ ...await vi.importActual('react'), ...harness.react }));
 vi.mock('../../../lib/electron-api', () => ({ getPreset: state.preset, getFingerprintScript: state.fingerprint,
-  registerFreezeWebview: state.register, applyProxyFallback: state.fallback, recordNavHistory: async () => {}, onWebviewPopupUrl: () => () => {} }));
+  registerWebview: state.register, applyProxyFallback: state.fallback, recordNavHistory: async () => {}, onWebviewPopupUrl: () => () => {} }));
 vi.mock('../../../lib/webview.js', () => ({ injectViewportAndPopupGuard: async () => {}, safeLoadURLWebview: vi.fn() }));
 vi.mock('../../../lib/injection-manager.js', () => ({ injectionManager: { injectAll: state.inject, disposeWebview: state.cleanup } }));
 vi.mock('../../../store/useBrowserTabStore.js', () => ({ useBrowserTabStore: Object.assign(() => state.store, { getState: () => state.store }) }));
 vi.mock('../../../store/useCloudPcStore.js', () => ({ useCloudPcStore: { getState: () => ({ isActive: false }) } }));
 vi.mock('../../../store/useGamepadStore.js', () => ({ useGamepadStore: { getState: () => ({ connectedCount: 0 }) } }));
-vi.mock('../../../store/useFreezeStore.js', () => ({ useFreezeStore: { getState: () => ({ states: {} }) } }));
 vi.mock('../../../lib/webview-spatial-nav.js', () => ({ buildSpatialNavScript: () => 'spatial' }));
 vi.mock('../utils/favicon-placeholder.js', () => ({ extractThemeColor: async () => null }));
 vi.mock('../webview-scripts.js', () => ({ GET_TITLE_SCRIPT: 'title', SPATIAL_NAV_ENABLE_SCRIPT: 'enable',

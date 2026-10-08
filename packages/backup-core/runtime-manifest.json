@@ -1,0 +1,7 @@
+{
+  "nodeVersion": "24.20.0",
+  "architectures": {
+    "x64": "5c976096e04e5c2c1f091938926234cc9fbebfe9787ddd149351b3b0ecc707b5",
+    "arm64": "92949e7764e56e305cb84ea3d575912e822c79e85599362e8d408b04b9ffd326"
+  }
+}

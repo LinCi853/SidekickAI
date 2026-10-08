@@ -9,8 +9,12 @@ import type {
 import type { OptionsTab as OptionsTabId } from '../types'
 import ComponentsPanel from '../components/ComponentsPanel'
 import OptionsTab from '../tabs/OptionsTab'
+import { formatVersion } from '../../../installer-shared/presentation/version'
 
 export interface StepLocationProps {
+  stagingDir: string
+  setStagingDir: (directory: string) => void
+  browseStagingDir: () => void
   actionName: string
   mode: InstallMode
   info: InstallerInfo | null
@@ -36,6 +40,9 @@ export interface StepLocationProps {
 }
 
 export default function StepLocation({
+  stagingDir,
+  setStagingDir,
+  browseStagingDir,
   actionName,
   mode,
   info,
@@ -62,6 +69,15 @@ export default function StepLocation({
   const otherLocations = (scan?.locations ?? []).filter(
     (l) => l.path.toLowerCase() !== installDir.toLowerCase()
   )
+  const stagingLocation = <div style={{ marginTop: 18 }}>
+    <div className="field-label">安装暂存位置（可选）</div>
+    <div className="path-row">
+      <input className="input input--mono" aria-label="安装暂存位置" value={stagingDir}
+        placeholder="留空使用系统临时目录" spellCheck={false} onChange={event => setStagingDir(event.target.value)} />
+      <button className="btn" onClick={browseStagingDir}>浏览</button>
+    </div>
+    <p className="opt-desc">系统盘空间不足时可选其他磁盘，用于读取和解压安装文件。原安装将在预检与载荷验证完成后才更新。</p>
+  </div>
 
   if (mode === 'install') {
     return (
@@ -116,6 +132,7 @@ export default function StepLocation({
           <p className="opt-desc">默认目录仅为建议，可输入路径或点击“浏览”自选。同一路线可在原目录覆盖升级；若目录属于另一条路线，请先卸载原路线（默认保留用户数据），再使用该目录安装。</p>
         </div>
 
+        {stagingLocation}
         {otherLocations.length > 0 && (
           <div style={{ marginTop: 18 }}>
             <div className="field-label">清理其他安装位置</div>
@@ -191,8 +208,8 @@ export default function StepLocation({
                   <div className="card__title" style={{ fontFamily: 'var(--mono, monospace)', fontSize: 13 }}>
                     {loc.path}
                   </div>
-                  <div className="card__desc">
-                    {loc.version && `v${loc.version} · `}
+                  <div className="card__desc" title={loc.version}>
+                    {loc.version && `v${formatVersion(loc.version)} · `}
                     {loc.registered ? '已注册卸载项' : '未注册'}
                     {loc.runningPid > 0 ? ` · 运行中 (PID ${loc.runningPid})` : ''}
                   </div>
@@ -202,7 +219,7 @@ export default function StepLocation({
           ))}
         </div>
       )}
-
+      {mode === 'repair' && stagingLocation}
     </>
   )
 }

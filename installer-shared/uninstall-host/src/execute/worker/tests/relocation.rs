@@ -87,7 +87,7 @@ use super::*;
             .unwrap();
         std::thread::sleep(Duration::from_millis(700));
 
-        let fingerprint = FileFingerprint::from_path(&install).unwrap();
+        let fingerprint = edition_fixtures::installed_fingerprint(&install).unwrap();
         let outcome = run_worker_operation_with(
             &artifact,
             "locked-launcher",

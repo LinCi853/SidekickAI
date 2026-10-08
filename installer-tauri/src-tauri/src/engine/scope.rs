@@ -24,6 +24,7 @@ pub(crate) struct OperationScope {
     pub(crate) install_dir: PathBuf,
     pub(crate) lock_paths: Vec<PathBuf>,
     pub(crate) cleanup_dirs: Vec<PathBuf>,
+    pub(crate) legacy_identity: Option<super::legacy::LegacyIdentity>,
 }
 
 /// Environment locations that must never be replaced or deleted wholesale.
@@ -80,6 +81,27 @@ pub(crate) fn portable_state_paths(dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
+pub(crate) fn acquired_resource_path(root: &Path) -> Result<Option<PathBuf>, String> {
+    let mut path = root.to_path_buf();
+    for name in ["resources", "cloud"] {
+        let mut found = None;
+        for entry in std::fs::read_dir(&path).map_err(|error| format!("无法检查已获取资源：{error}"))? {
+            let entry = entry.map_err(|error| format!("无法检查已获取资源：{error}"))?;
+            if entry.file_name().to_string_lossy().eq_ignore_ascii_case(name) {
+                if found.replace(entry.path()).is_some() {
+                    return Err("已获取资源路径存在重复名称，原内容已保留。".into());
+                }
+            }
+        }
+        let Some(next) = found else { return Ok(None); };
+        let metadata = std::fs::symlink_metadata(&next).map_err(|error| format!("无法核验已获取资源：{error}"))?;
+        if !metadata.is_dir() { return Err("已获取资源路径不是普通目录，原内容已保留。".into()); }
+        sidekickai_uninstall_core::path::reject_reparse_points(&next).map_err(|error| error.message)?;
+        path = next;
+    }
+    Ok(Some(path))
+}
+
 pub(crate) fn move_portable_state(source: &Path, destination: &Path) -> Result<(), String> {
     for entry in portable_state_paths(source)? {
         let target = destination.join(entry.file_name().ok_or("用户数据路径无效")?);
@@ -107,6 +129,9 @@ pub(crate) fn prepare_operation_scope_with_hooks(
         super::registry::read_install_registration(&hooks.registration_key(root), root)?
     } else { None };
     sidekickai_uninstall_core::product::validate_destination_with_registration(&install_dir, registration.as_ref())?;
+    let legacy_identity = if install_dir.is_dir() && std::fs::read_dir(&install_dir).map_err(|error| error.to_string())?.next().is_some() {
+        super::legacy::admit(&install_dir, root, hooks)?
+    } else { None };
     let mut cleanup_dirs: Vec<PathBuf> = Vec::new();
     for raw in &req.cleanup_paths {
         let dir = normalize_owned_dir(raw, "清理路径")?;
@@ -130,6 +155,7 @@ pub(crate) fn prepare_operation_scope_with_hooks(
             .map_err(|e| format!("清理路径不安全（{}）：{}", dir.display(), e.message))?;
         sidekickai_uninstall_core::product::validate_legacy_recovery(&dir)?;
         sidekickai_uninstall_core::product::validate_installation_boundaries(&dir)?;
+        sidekickai_uninstall_core::distribution::verify_installed_identity(&dir)?;
         if let Some(data) = portable_user_data(&dir) {
             super::write_log(&format!("W|保留了包含用户数据的安装：{}", data.display()));
             continue;
@@ -141,7 +167,14 @@ pub(crate) fn prepare_operation_scope_with_hooks(
     let mut lock_paths = vec![install_dir.clone()];
     lock_paths.extend(cleanup_dirs.iter().cloned());
     lock_paths.extend(data_paths_for(&install_dir, roaming).map_err(|error| error.message)?);
-    Ok(OperationScope { install_dir, lock_paths, cleanup_dirs })
+    Ok(OperationScope { install_dir, lock_paths, cleanup_dirs, legacy_identity })
+}
+
+pub(crate) fn verify_legacy_unchanged(previous: &OperationScope, current: &OperationScope) -> Result<(), String> {
+    if previous.legacy_identity.is_some() && previous.legacy_identity != current.legacy_identity {
+        return Err("旧安装身份在维护期间发生变化，已中止替换。请检查原安装后重试。".into());
+    }
+    Ok(())
 }
 
 /// Acquire the controller lock first and then the worker lock, holding both for

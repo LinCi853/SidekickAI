@@ -5,7 +5,6 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 
 const MACHINES = { x64: 0x8664, arm64: 0xaa64 }
-const MAGIC = Buffer.from('SKPAYLD1')
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
 const sha256 = file => hash(fs.readFileSync(file))
 
@@ -48,17 +47,7 @@ function peInfo(bytes) {
 }
 
 function footerInfo(bytes) {
-  const current = require('./setup-metadata.cjs').ranges(bytes)
-  if (current) return current
-  if (bytes.length < 28) return null
-  const offset = bytes.length - 28
-  if (!bytes.subarray(offset, offset + 8).equals(MAGIC)) return null
-  if (bytes.readUInt32LE(offset + 24) !== 28) throw new Error('Invalid Setup footer length')
-  const payload = Number(bytes.readBigUInt64LE(offset + 8))
-  const sevenz = Number(bytes.readBigUInt64LE(offset + 16))
-  const wizard = bytes.length - 28 - payload - sevenz
-  if (!Number.isSafeInteger(payload) || !Number.isSafeInteger(sevenz) || payload <= 0 || sevenz <= 0 || wizard <= 0) throw new Error('Invalid Setup footer ranges')
-  return { wizard, payload, sevenz, footer: 28 }
+  return require('./setup-metadata.cjs').ranges(bytes)
 }
 
 function hasAsarArchive(bytes) {
@@ -126,9 +115,7 @@ function assertUnchanged(before, after) {
 function verifyArtifact(file, manifest, arch, version) {
   const info = assertStandaloneBinary(file, arch)
   const contract = require('./component-contract.cjs').readContract()
-  const compatible = manifest.protocolVersion === 1
-    ? manifest.version === version && manifest.productVersion === undefined && manifest.componentVersion === undefined && manifest.uninstallProtocolVersion === undefined
-    : manifest.protocolVersion === 2 && manifest.version === undefined && manifest.productVersion === version
+  const compatible = manifest.protocolVersion === 3 && manifest.version === undefined && manifest.productVersion === version
       && manifest.componentVersion === contract.componentVersion && manifest.uninstallProtocolVersion === contract.uninstallProtocolVersion
   if (manifest.edition !== require('../product-edition.json').edition || !compatible || manifest.arch !== arch || !/^[a-f0-9]{64}$/.test(manifest.inputFingerprint || '') || manifest.sha256 !== info.sha256 || manifest.size !== info.size) throw new Error('Uninstaller manifest does not match current artifact bytes/version/architecture')
   return info
@@ -137,7 +124,7 @@ function verifyArtifact(file, manifest, arch, version) {
 function verifyComponentArtifact(file, manifest, arch, standalone) {
   const info = standalone ? assertStandaloneBinary(file, arch) : { ...peInfo(fs.readFileSync(file)), sha256: sha256(file), size: fs.statSync(file).size }
   const contract = require('./component-contract.cjs').readContract()
-  if (manifest.protocolVersion !== 2 || manifest.edition !== require('../product-edition.json').edition || manifest.componentVersion !== contract.componentVersion
+  if (manifest.protocolVersion !== 3 || manifest.edition !== require('../product-edition.json').edition || manifest.componentVersion !== contract.componentVersion
     || manifest.uninstallProtocolVersion !== contract.uninstallProtocolVersion || manifest.arch !== arch || info.arch !== arch
     || manifest.sha256 !== info.sha256 || manifest.size !== info.size || !/^[a-f0-9]{64}$/.test(manifest.inputFingerprint || '')
     || manifest.version !== undefined || manifest.productVersion !== undefined) throw new Error('Maintenance component manifest does not match artifact')
@@ -145,14 +132,13 @@ function verifyComponentArtifact(file, manifest, arch, standalone) {
 }
 
 function deploymentManifest(manifest, version) {
-  if (manifest.protocolVersion === 1) return manifest
   if (!require('./component-contract.cjs').SEMVER.test(version)) throw new Error('Invalid deployment product version')
   return { ...manifest, productVersion: version }
 }
 
 function stageUninstaller(file, manifest, directory, arch, version) {
   const deployed = deploymentManifest(manifest, version)
-  if (manifest.protocolVersion === 2) verifyComponentArtifact(file, manifest, arch, true)
+  verifyComponentArtifact(file, manifest, arch, true)
   verifyArtifact(file, deployed, arch, version)
   const destination = path.join(directory, 'uninstall.exe')
   fs.copyFileSync(file, destination)

@@ -1,6 +1,5 @@
 // electron/modules/wiring/browser.ts — 浏览器模块接线（init / teardown / clearData）
 //
-// 页面冻结（防撤回）暂随本模块（决策 0.8：设计可能变动，最后改造）。
 //
 // 已迁移到统一注入管线（EffectScope）。
 

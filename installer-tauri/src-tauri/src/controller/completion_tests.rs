@@ -14,6 +14,72 @@ fn fixture() -> (super::super::OperationDirectory, OperationRequest) {
     (directory, envelope)
 }
 
+#[test]
+fn installation_result_survives_a_worker_exiting_before_completion_readiness() {
+    for outcome in ["success", "failure", "foreign"] {
+        reset();
+        let (directory, envelope) = fixture();
+        let operation = Arc::new(directory.into_prepared());
+        let executable = PathBuf::from(&envelope.request.install_dir).join("SidekickAI.exe");
+        let result = super::super::envelope::OperationResult { protocol_version: OPERATION_PROTOCOL_VERSION,
+            operation_id: envelope.operation_id.clone(), nonce: if outcome == "foreign" { "foreign".into() } else { envelope.nonce.clone() },
+            ok: outcome != "failure", error: if outcome == "failure" { Some("isolated engine failure".into()) } else { None } };
+        let mut child = std::process::Command::new("node").args(["-e",
+            "setTimeout(()=>{require('node:fs').writeFileSync(process.env.COMPLETION_RESULT_PATH, process.env.COMPLETION_RESULT);process.exit(1)},100)"])
+            .env("COMPLETION_RESULT_PATH", &operation.result_path)
+            .env("COMPLETION_RESULT", serde_json::to_string(&result).unwrap()).spawn().unwrap();
+        let process = Arc::new(elevate::AuthorizedProcess::from_test_child(&child).unwrap());
+        let session = Session { operation, process, executable: executable.clone(), sequence: 0,
+            opened: Instant::now(), status_offset: 0, failed: false };
+        let observed = wait_for_install(session, &executable);
+        if outcome == "success" {
+            observed.unwrap();
+            let completion = with_session(&executable, |_| panic!("unavailable worker received a command")).unwrap();
+            assert!(completion.unwrap_err().contains("程序操作已完成"));
+        } else {
+            let error = observed.unwrap_err();
+            assert!(error.contains(if outcome == "failure" { "isolated engine failure" } else { "不属于本次" }));
+            assert!(CURRENT.lock().unwrap().expected.is_none());
+        }
+        child.wait().unwrap();
+        reset();
+    }
+}
+
+#[test]
+#[ignore = "Requires an exact signed installation in a private acceptance directory"]
+fn actual_signed_application_readies_the_completion_worker() {
+    let root = PathBuf::from(std::env::var("SIDEKICK_APPLICATION_TEST_ROOT").unwrap()).canonicalize().unwrap();
+    let build = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build").canonicalize().unwrap();
+    assert!(root.starts_with(&build) && root != build && root.join("acceptance-fixture.json").is_file());
+    let executable = PathBuf::from(std::env::var("SIDEKICK_APPLICATION_ACCEPTANCE_TARGET").unwrap());
+    assert!(executable.canonicalize().unwrap().starts_with(&root));
+    let directory = super::super::OperationDirectory::create("signed-completion").unwrap();
+    let request: InstallRequest = serde_json::from_value(json!({
+        "installDir": executable.parent().unwrap(), "forAllUsers": false,
+        "createDesktopShortcut": false, "launchAfterInstall": true,
+        "features": {}, "options": {}, "mode": "repair"
+    })).unwrap();
+    let envelope = directory.write_envelope(super::super::ACTION_INSTALL, &request).unwrap();
+    let caller = Caller::inspect(std::process::id()).unwrap();
+    let binding = Binding { protocol_version: OPERATION_PROTOCOL_VERSION, operation_id: envelope.operation_id.clone(),
+        nonce: envelope.nonce.clone(), pid: std::process::id(), started: caller.started, session: caller.session,
+        executable: caller.executable.clone() };
+    let operation_root = directory.request_path().parent().unwrap().to_path_buf();
+    write_private(&operation_root.join("session-binding.json"), &binding).unwrap();
+    write_private(&operation_root.join("release.json"), &Release { protocol_version: OPERATION_PROTOCOL_VERSION,
+        operation_id: envelope.operation_id.clone(), nonce: envelope.nonce.clone() }).unwrap();
+    let worker = Worker::bind(&envelope, &directory.request_path()).unwrap();
+    worker.serve(&envelope, &directory.request_path()).unwrap();
+    let ready: Release = read_private(&operation_root.join("session-ready.json")).unwrap();
+    assert_eq!(ready.operation_id, envelope.operation_id);
+    assert_eq!(ready.nonce, envelope.nonce);
+    let installed = sidekickai_uninstall_core::distribution::verify_installed_identity(executable.parent().unwrap()).unwrap();
+    std::fs::write(root.join("worker-ready.json"), json!({ "passed": true, "version": installed.body.product_version,
+        "edition": installed.body.edition, "bodyProofSha256": installed.receipt.body_proof_sha256,
+        "target": executable, "persistentWorkerReady": true }).to_string()).unwrap();
+}
+
 fn command(envelope: &OperationRequest, sequence: u32, action: Action) -> Command {
     let configuration = if matches!(action, Action::FlushConfig) {
         Some(Configuration { features: Map::new(), options: Map::new() })
@@ -312,7 +378,12 @@ fn persistent_worker_roundtrip(mode: crate::manifest::InstallMode) {
     std::fs::create_dir_all(target.join("resources")).unwrap();
     let version = crate::setup_metadata::current().unwrap().product_version.clone();
     let edition = sidekickai_uninstall_core::product::edition();
-    std::fs::write(target.join("SidekickAI.exe"), b"private non-executable fixture").unwrap();
+    let mut pe = vec![0u8; 256];
+    pe[..2].copy_from_slice(b"MZ");
+    pe[60..64].copy_from_slice(&128u32.to_le_bytes());
+    pe[128..132].copy_from_slice(b"PE\0\0");
+    pe[132..134].copy_from_slice(&0x8664u16.to_le_bytes());
+    std::fs::write(target.join("SidekickAI.exe"), pe).unwrap();
     std::fs::write(target.join("resources/app.asar"), edition_fixtures::archive_for_version(&edition.package_name, Some(&version), b"completion-roundtrip")).unwrap();
     let receipt = sidekickai_uninstall_core::product::InstallReceipt {
         schema_version: 1, edition: sidekickai_uninstall_core::product::edition_id().into(),
@@ -321,6 +392,7 @@ fn persistent_worker_roundtrip(mode: crate::manifest::InstallMode) {
         registry_root: "HKCU".into(), registry_key: edition.registry_key.clone(),
     };
     write_private(&target.join(sidekickai_uninstall_core::product::INSTALL_RECEIPT), &receipt).unwrap();
+    edition_fixtures::seal_installation(&target);
     let request: InstallRequest = serde_json::from_value(json!({
         "installDir": target, "forAllUsers": false, "createDesktopShortcut": false,
         "launchAfterInstall": false, "features": {}, "options": {}, "mode": mode,

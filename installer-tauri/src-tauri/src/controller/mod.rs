@@ -26,6 +26,7 @@ pub(crate) mod completion;
 
 pub use directory::{prepare_operation, OperationDirectory};
 pub(crate) use directory::PreparedOperation;
+pub(crate) use directory::verify_recovery_directory;
 pub(crate) use envelope::OperationRequest;
 pub use run::{
     bound_log_path, interpret_child_result, run_elevated_operation, with_operation_context,

@@ -1,327 +1,79 @@
-/* =====================================================================
-   pages/DataExportWindow/index.tsx —— 数据迁移独立窗口
-   架构（对齐 PromptLibraryView 约定）：
-   - 顶栏：标题 + pin/min/max/close（IconButton 组件）
-   - 主体：上下堆叠
-     · 导出区：三档预设 + 4 项细粒度选项 + 体积估算 + 导出按钮
-     · 导入区：警告 + 文件选择 + 确认导入
-   - 细粒度选项：basicData（必选）/ cookies / indexedDB / cache
-   - 三档预设：最小迁移 / 推荐迁移 / 完整备份
-   ===================================================================== */
+import { useEffect, useRef, useState } from 'react'
+import WindowResizeHandles from '../../components/WindowResizeHandles'
+import { IconButton, PinToggleButton } from '../../components/ui'
+import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow'
+import { useWindowMaximizedAndPinned } from '../../hooks/useWindowMaximizedAndPinned'
+import { minimizeWindow, closeCurrentWindow, selectExportPath, exportData, selectImportFile, importData, inspectBackup, importDataDecrypted, detectBackupEncrypted } from '../../lib/electron-api'
+import './index.css'
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import WindowResizeHandles from '../../components/WindowResizeHandles';
-import { IconButton, PinToggleButton } from '../../components/ui';
-import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
-import { useWindowMaximizedAndPinned } from '../../hooks/useWindowMaximizedAndPinned';
-import {
-  minimizeWindow,
-  closeCurrentWindow,
-  estimateExportSizes,
-  selectExportPath,
-  exportData,
-  selectImportFile,
-  importData,
-  inspectBackup,
-  importDataDecrypted,
-  detectBackupEncrypted,
-  getPlatformCapabilities,
-} from '../../lib/electron-api';
-import { AlertIcon } from '@/components/icons';
-import './index.css';
-
-/** 格式化字节为可读字符串 */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-/** 导出选项类型（与后端 ExportOptions 对齐） */
-interface ExportOptions {
-  basicData: boolean;
-  cookies: boolean;
-  indexedDB: boolean;
-  cache: boolean;
-  voiceAssets: boolean;
-}
-
-/** 三档快速预设 */
-const PRESETS: Record<string, ExportOptions> = {
-  minimal: { basicData: true, cookies: true, indexedDB: false, cache: false, voiceAssets: false },
-  recommended: { basicData: true, cookies: true, indexedDB: true, cache: false, voiceAssets: false },
-  full: { basicData: true, cookies: true, indexedDB: true, cache: true, voiceAssets: true },
-};
-
-const PRESET_LABELS: Record<string, string> = {
-  minimal: '最小迁移',
-  recommended: '推荐迁移',
-  full: '完整备份',
-};
-
-/** 细粒度选项配置 */
-interface OptionItem {
-  key: keyof ExportOptions;
-  label: string;
-  description: string;
-  /** 是否必选（无法取消） */
-  required?: boolean;
-}
-
-const OPTION_ITEMS: OptionItem[] = [
-  {
-    key: 'basicData',
-    label: '基础数据',
-    description: '应用配置 + 对话记录 + 加密密钥（必选，导入必需）',
-    required: true,
-  },
-  {
-    key: 'cookies',
-    label: '登录凭据',
-    description: 'Cookies + Local Storage，迁移后 AI 平台无需重新登录',
-  },
-  {
-    key: 'indexedDB',
-    label: '应用数据',
-    description: 'IndexedDB 离线应用数据（部分网页应用的本地存储）',
-  },
-  {
-    key: 'cache',
-    label: '离线缓存',
-    description: 'Service Worker / Cache / GPUCache（可安全排除，不影响功能）',
-  },
-];
-
-type Status = { type: 'success' | 'error'; message: string } | null;
+const BACKUP_OPTIONS = { basicData: true, cookies: true, indexedDB: true, cache: false, voiceAssets: false }
 
 export default function DataExportWindow() {
-  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
-  const [sizes, setSizes] = useState<{
-    basicData: number;
-    cookies: number;
-    indexedDB: number;
-    cache: number;
-    voiceAssets: number;
-  } | null>(null);
+  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned()
+  const [exportPassword, setExportPassword] = useState('')
+  const [importPassword, setImportPassword] = useState('')
+  const [importFilePath, setImportFilePath] = useState<string | null>(null)
+  const [importNeedsPassword, setImportNeedsPassword] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [message, setMessage] = useState('')
+  const passwordInput = useRef<HTMLInputElement>(null)
+  const busy = exporting || importing
+  useEscToCloseWindow()
+  useEffect(() => { if (importNeedsPassword) passwordInput.current?.focus() }, [importNeedsPassword])
 
-  // 默认选项 = PRESETS.minimal
-  const [options, setOptions] = useState<ExportOptions>({ ...PRESETS.minimal });
-  const [exporting, setExporting] = useState(false);
-  const [exportStatus, setExportStatus] = useState<Status>(null);
-
-  // 加密导出状态
-  const [encryptEnabled, setEncryptEnabled] = useState(false);
-  const [encryptPassword, setEncryptPassword] = useState('');
-  const [encryptPasswordConfirm, setEncryptPasswordConfirm] = useState('');
-
-  // 导入状态
-  const [importFilePath, setImportFilePath] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState<Status>(null);
-  // 加密导入密码
-  const [importPassword, setImportPassword] = useState('');
-  const [importNeedsPassword, setImportNeedsPassword] = useState(false);
-  const importPasswordRef = useRef<HTMLInputElement>(null);
-  // 导入成功后来源设备 ID
-  const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
-  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
-
-  // ESC / Ctrl+W 关窗：复用统一 hook（覆盖 INPUT/TEXTAREA/SELECT/contentEditable 跳过逻辑）
-  useEscToCloseWindow();
-
-  // 加载体积估算
-  const loadSizes = () => {
-    void estimateExportSizes()
-      .then(setSizes)
-      .catch((e) => console.error('[DataExportWindow] 估算体积失败:', e));
-  };
-
-  useEffect(() => {
-    loadSizes();
-  }, []);
-
-  // 当前选项匹配哪个预设
-  const activePreset = useMemo(() => {
-    for (const [key, preset] of Object.entries(PRESETS)) {
-      if (Object.entries(preset).every(([k, v]) => options[k as keyof ExportOptions] === v)) {
-        return key;
-      }
-    }
-    return null;
-  }, [options]);
-
-  // 选中项总体积
-  const totalSize = useMemo(() => {
-    if (!sizes) return 0;
-    let total = 0;
-    if (options.basicData) total += sizes.basicData;
-    if (options.cookies) total += sizes.cookies;
-    if (options.indexedDB) total += sizes.indexedDB;
-    if (options.cache) total += sizes.cache;
-    return total;
-  }, [sizes, options]);
-
-  // 至少选中一项才可导出（basicData 始终为 true，所以总是可以）
-  const canExport = !exporting;
-
-  // 切换选项（basicData 必选，不可取消）
-  const handleToggle = (key: keyof ExportOptions) => {
-    if (exporting) return;
-    setOptions((prev) => {
-      // 必选项不可取消
-      const item = OPTION_ITEMS.find((o) => o.key === key);
-      if (item?.required) return prev;
-      return { ...prev, [key]: !prev[key] };
-    });
-    setExportStatus(null);
-  };
-
-  // 点击预设按钮
-  const handlePresetClick = (presetKey: string) => {
-    if (exporting) return;
-    setOptions({ ...PRESETS[presetKey] });
-    setExportStatus(null);
-  };
-
-  // 导出
   const handleExport = async () => {
-    if (!canExport) return;
-    // 验证加密密码
-    if (encryptEnabled) {
-      if (encryptPassword.length < 6) {
-        setExportStatus({ type: 'error', message: '密码至少 6 位' });
-        return;
-      }
-      if (encryptPassword !== encryptPasswordConfirm) {
-        setExportStatus({ type: 'error', message: '两次密码不一致' });
-        return;
-      }
-    }
-    setExporting(true);
-    setExportStatus(null);
+    if (busy) return
+    if (exportPassword && exportPassword.length < 6) { window.alert('备份密码至少需要 6 位。'); return }
+    setExporting(true); setMessage('')
     try {
-      const targetPath = await selectExportPath(encryptEnabled);
-      if (!targetPath) {
-        setExporting(false);
-        return;
-      }
-      const result = await exportData(targetPath, options, encryptEnabled ? { password: encryptPassword } : undefined);
-      if (result.success) {
-        setExportStatus({ type: 'success', message: `已${encryptEnabled ? '加密' : ''}导出到：${result.filePath}` });
-      } else {
-        setExportStatus({ type: 'error', message: result.error ?? '导出失败' });
-      }
-    } catch (err) {
-      setExportStatus({ type: 'error', message: (err as Error).message });
-    } finally {
-      setExporting(false);
-    }
-  };
+      const target = await selectExportPath(!!exportPassword)
+      if (!target) return
+      const result = await exportData(target, BACKUP_OPTIONS, exportPassword ? { password: exportPassword } : undefined)
+      if (result.success) { setMessage('备份已保存。'); setExportPassword('') }
+      else if (!result.error?.includes('后台继续')) window.alert(result.error ?? '备份失败，请重试。')
+    } catch (error) { window.alert((error as Error).message) }
+    finally { setExporting(false) }
+  }
 
-  // 选择导入文件：立刻识别是否 SABK 加密，需要密码时直接展示输入区
-  const handleSelectImportFile = async () => {
-    if (importing) return;
-    setImportStatus(null);
+  const handleSelectFile = async () => {
+    if (busy) return
     try {
-      const filePath = await selectImportFile();
-      if (!filePath) return;
-      setImportFilePath(filePath);
-      setImportPassword('');
-      setImportNeedsPassword(false);
-      setSourceDeviceId(null);
-      setCurrentDeviceId(null);
-      const encrypted = await detectBackupEncrypted(filePath).catch(() => false);
-      setImportNeedsPassword(encrypted);
-      if (encrypted) {
-        setImportStatus({ type: 'error', message: '此备份已加密，请输入密码后解密导入' });
-      } else {
-        setImportStatus(null);
-      }
-    } catch (err) {
-      setImportStatus({ type: 'error', message: (err as Error).message });
-    }
-  };
+      const file = await selectImportFile()
+      if (!file) return
+      const encrypted = await detectBackupEncrypted(file)
+      setImportFilePath(file); setImportPassword(''); setImportNeedsPassword(encrypted); setMessage('')
+    } catch (error) { window.alert((error as Error).message) }
+  }
 
-
-  // 确认导入（仅明文 zip；加密文件走解密导入）
-  const handleConfirmImport = async () => {
-    if (!importFilePath || importing) return;
-    if (importNeedsPassword) {
-      await handleDecryptImport();
-      return;
-    }
-    await doImport(importFilePath);
-  };
-
-  // 执行导入（支持加密文件自动检测）
-  const doImport = async (filePath: string, password?: string) => {
-    setImporting(true);
-    setImportStatus(null);
+  const handleImport = async () => {
+    if (busy || !importFilePath || importNeedsPassword && !importPassword) return
+    setImporting(true); setMessage('')
+    let prepared = false
     try {
-      const inspection = await inspectBackup(filePath, password);
+      const password = importNeedsPassword ? importPassword : undefined
+      const inspection = await inspectBackup(importFilePath, password)
       if (!inspection.success) {
-        setImportNeedsPassword(inspection.encrypted === true);
-        setImportStatus({ type: 'error', message: inspection.error ?? '备份检查失败' });
-        setImporting(false);
-        return;
+        if (inspection.encrypted) setImportNeedsPassword(true)
+        window.alert(inspection.error ?? '无法读取此备份。')
+        return
       }
-      if (!window.confirm(`确认导入以下文件？\n\n${filePath}\n\n${inspection.message}`)) { setImporting(false); return; }
-      let result: { success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string };
-      if (password) {
-        const r = await importDataDecrypted(filePath, password, inspection.fingerprint);
-        result = { ...r, encrypted: false };
-      } else {
-        result = await importData(filePath, inspection.fingerprint);
-      }
+      const scope = inspection.mode === 'limited' ? '将合并通用配置，并替换对应的网页登录资料。' : '将用备份替换对应的当前数据。'
+      if (!window.confirm(scope + '\n完成后自动重启，是否继续？')) return
+      const result = password ? await importDataDecrypted(importFilePath, password, inspection.fingerprint) : await importData(importFilePath, inspection.fingerprint)
       if (!result.success) {
-        if (result.encrypted) {
-          // 加密文件，需要密码（选文件时应已识别；此处兜底）
-          setImportNeedsPassword(true);
-          setImportStatus({ type: 'error', message: '此备份已加密，请输入密码' });
-          setImporting(false);
-          return;
-        }
-        setImportStatus({ type: 'error', message: result.error ?? '导入失败' });
-        setImporting(false);
-        return;
+        if ('encrypted' in result && result.encrypted) setImportNeedsPassword(true)
+        window.alert(result.error ?? '导入失败，请重试。')
+        return
       }
-      // 成功：显示来源设备 ID，短暂延迟后应用自动重启
-      if (result.sourceDeviceId) {
-        const caps = await getPlatformCapabilities().catch(() => null);
-        setSourceDeviceId(result.sourceDeviceId);
-        setCurrentDeviceId(caps?.deviceId ?? null);
-        setImportStatus({ type: 'success', message: '导入成功，应用即将重启…' });
-      }
-      // 成功时应用自动重启，无需更新状态
-    } catch (err) {
-      setImportStatus({ type: 'error', message: (err as Error).message });
-      setImporting(false);
-    }
-  };
+      prepared = true; setImportPassword(''); setMessage('正在重启…')
+    } catch (error) { window.alert((error as Error).message) }
+    finally { if (!prepared) setImporting(false) }
+  }
 
-  // 加密文件输入密码后解密导入
-  const handleDecryptImport = async () => {
-    if (!importFilePath || !importPassword || importing) return;
-    await doImport(importFilePath, importPassword);
-  };
-
-  // 检测到加密备份后立即聚焦密码框，避免用户找不到可输入焦点
-  useEffect(() => {
-    if (importNeedsPassword) {
-      const t = window.setTimeout(() => {
-        importPasswordRef.current?.focus();
-        importPasswordRef.current?.select();
-      }, 50);
-      return () => window.clearTimeout(t);
-    }
-  }, [importNeedsPassword]);
-
-  return (
-    <>
-      <WindowResizeHandles />
-      <div className="data-export-view app-shell" data-name="data-export.container">
-        {/* 顶栏 */}
+  return <>
+    <WindowResizeHandles />
+    <div className="data-export-view app-shell" data-name="data-export.container">
         <div className="data-export-top" data-name="data-export.topbar">
           <div className="data-export-top-drag" data-name="data-export.topbar-drag">
             <span className="data-export-top-title" data-name="data-export.topbar-title">数据迁移</span>
@@ -379,278 +131,26 @@ export default function DataExportWindow() {
           </div>
         </div>
 
-        {/* 主体：上下堆叠 */}
-        <div className="data-export-body" data-name="data-export.body">
-          {/* ===== 导出区 ===== */}
-          <div className="data-export-section" data-name="data-export.export-section">
-            <div className="data-export-section-title" data-name="data-export.export-section-title">导出数据</div>
 
-            {/* 说明 + 刷新体积 */}
-            <div className="data-export-desc" data-name="data-export.export-desc">
-              选择需要导出的数据类别，实时显示各项体积估算。导出为 zip 文件，可在另一台设备导入恢复。
-              <button
-                type="button"
-                className="data-export-desc-btn"
-                onClick={loadSizes}
-                disabled={exporting}
-                data-name="data-export.refresh-sizes-button"
-              >
-                刷新体积
-              </button>
-            </div>
-
-            {/* 三档快速预设 */}
-            <div className="data-export-presets" data-name="data-export.presets">
-              {Object.keys(PRESETS).map((key, idx) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`data-export-preset-btn${activePreset === key ? ' is-active' : ''}`}
-                  onClick={() => handlePresetClick(key)}
-                  disabled={exporting}
-                  data-name={`data-export.preset-button-${idx + 1}`}
-                  data-index={idx + 1}
-                  data-id={key}
-                >
-                  {PRESET_LABELS[key]}
-                </button>
-              ))}
-            </div>
-
-            {/* 细粒度选项列表 */}
-            <div className="data-export-options" data-name="data-export.options">
-              {OPTION_ITEMS.map((opt, idx) => {
-                const checked = options[opt.key];
-                const size = sizes ? sizes[opt.key] : 0;
-                const isRequired = opt.required === true;
-                const classNames = [
-                  'data-export-option',
-                  checked ? 'is-checked' : '',
-                  isRequired ? 'is-required' : '',
-                ].filter(Boolean).join(' ');
-                return (
-                  <label
-                    key={opt.key}
-                    className={classNames}
-                    data-name={`data-export.option-item-${idx + 1}`}
-                    data-index={idx + 1}
-                    data-id={opt.key}
-                  >
-                    <input
-                      type="checkbox"
-                      className="data-export-option-checkbox"
-                      checked={checked}
-                      onChange={() => handleToggle(opt.key)}
-                      disabled={isRequired || exporting}
-                      data-name={`data-export.option-item-${idx + 1}-checkbox`}
-                    />
-                    <div className="data-export-option-content" data-name={`data-export.option-item-${idx + 1}-content`}>
-                      <div className="data-export-option-header" data-name={`data-export.option-item-${idx + 1}-header`}>
-                        <span className="data-export-option-label" data-name={`data-export.option-item-${idx + 1}-label`}>{opt.label}</span>
-                        <span className="data-export-option-size" data-name={`data-export.option-item-${idx + 1}-size`}>
-                          {sizes ? formatBytes(size) : '计算中…'}
-                        </span>
-                        {isRequired && (
-                          <span className="data-export-option-badge" data-name={`data-export.option-item-${idx + 1}-badge`}>必选</span>
-                        )}
-                      </div>
-                      <div className="data-export-option-desc" data-name={`data-export.option-item-${idx + 1}-desc`}>{opt.description}</div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            {/* 总体积汇总 */}
-            <div className="data-export-total" data-name="data-export.total">
-              <span className="data-export-total-label" data-name="data-export.total-label">预估总体积</span>
-              <span className="data-export-total-value" data-name="data-export.total-value">{formatBytes(totalSize)}</span>
-            </div>
-
-            {/* 加密选项 */}
-            <div className="data-export-options" data-name="data-export.encrypt-section">
-              <label className={`data-export-option${encryptEnabled ? ' is-checked' : ''}`} data-name="data-export.encrypt-toggle">
-                <input
-                  type="checkbox"
-                  className="data-export-option-checkbox"
-                  checked={encryptEnabled}
-                  onChange={() => { setEncryptEnabled(!encryptEnabled); setEncryptPassword(''); setEncryptPasswordConfirm(''); }}
-                  disabled={exporting}
-                  data-name="data-export.encrypt-checkbox"
-                />
-                <div className="data-export-option-content">
-                  <div className="data-export-option-header">
-                    <span className="data-export-option-label">加密备份</span>
-                  </div>
-                  <div className="data-export-option-desc">密码 + 设备码派生密钥，AES-256-GCM 加密整个备份文件</div>
-                </div>
-              </label>
-              {encryptEnabled && (
-                <div style={{ padding: '0 0 8px 28px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <input
-                    type="password"
-                    placeholder="输入密码（至少 6 位）"
-                    value={encryptPassword}
-                    onChange={(e) => setEncryptPassword(e.target.value)}
-                    disabled={exporting}
-                    style={{ padding: '6px 10px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)' }}
-                    data-name="data-export.encrypt-password-input"
-                  />
-                  <input
-                    type="password"
-                    placeholder="确认密码"
-                    value={encryptPasswordConfirm}
-                    onChange={(e) => setEncryptPasswordConfirm(e.target.value)}
-                    disabled={exporting}
-                    style={{ padding: '6px 10px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)' }}
-                    data-name="data-export.encrypt-password-confirm-input"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* 导出状态消息 */}
-            {exportStatus && (
-              <div
-                className={`data-export-status ${exportStatus.type === 'success' ? 'is-success' : 'is-error'}`}
-                data-name="data-export.export-status"
-              >
-                {exportStatus.type === 'success' ? '✓ ' : '✗ '}{exportStatus.message}
-              </div>
-            )}
-
-            {/* 导出按钮 */}
-            <div className="data-export-actions" data-name="data-export.export-actions">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void closeCurrentWindow()}
-                disabled={exporting}
-                style={{ flex: 1 }}
-                data-name="data-export.cancel-button"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn-primary-flat"
-                onClick={() => void handleExport()}
-                disabled={!canExport}
-                style={{ flex: 2 }}
-                data-name="data-export.export-button"
-              >
-                {exporting ? '导出中…' : '选择位置并导出'}
-              </button>
-            </div>
+      <div className="data-export-body">
+        <section className="data-export-section" data-name="data-export.export-section">
+          <h2>导出备份</h2>
+          <p>保存应用设置和数据，方便以后恢复。</p>
+          <input className="input" type="password" aria-label="备份密码（选填）" placeholder="备份密码（选填，至少 6 位）" autoComplete="new-password" value={exportPassword} onChange={event => setExportPassword(event.target.value)} disabled={busy} data-name="data-export.encrypt-password-input" />
+          <button className="btn-primary-flat" disabled={busy} onClick={handleExport} data-name="data-export.export-button">{exporting ? '正在备份…' : '导出备份'}</button>
+        </section>
+        <section className="data-export-section" data-name="data-export.import-section">
+          <h2>导入备份</h2>
+          <p>选择备份文件，自动恢复可用数据。</p>
+          {importFilePath && <div className="data-export-file" data-name="data-export.import-file-path">{importFilePath}</div>}
+          {importNeedsPassword && <input ref={passwordInput} className="input" type="password" aria-label="备份密码" placeholder="输入备份密码" autoComplete="off" value={importPassword} onChange={event => setImportPassword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void handleImport() }} disabled={busy} data-name="data-export.import-password-input" />}
+          <div className="data-export-actions">
+            <button className="btn-outline" disabled={busy} onClick={handleSelectFile} data-name="data-export.select-file-button">{importFilePath ? '重新选择' : '选择备份文件'}</button>
+            {importFilePath && <button className="btn-primary-flat" disabled={busy || importNeedsPassword && !importPassword} onClick={handleImport} data-name={importNeedsPassword ? 'data-export.import-decrypt-button' : 'data-export.confirm-import-button'}>{importing ? '正在导入…' : '导入'}</button>}
           </div>
-
-          {/* ===== 导入区 ===== */}
-          <div className="data-export-section" data-name="data-export.import-section">
-            <div className="data-export-section-title" data-name="data-export.import-section-title">导入数据</div>
-
-            {/* 警告 */}
-            <div className="data-export-import-warning" data-name="data-export.import-warning">
-              <div className="data-export-import-warning-title" data-name="data-export.import-warning-title"><AlertIcon className="data-export-warning-icon" /> 严重警告：</div>
-              <div data-name="data-export.import-warning-line-1">· 兼容的同路线备份完整恢复；跨路线或结构不兼容时仅合并通用数据，确认时会显示范围</div>
-              <div data-name="data-export.import-warning-line-2">· 导入后应用将自动重启</div>
-              <div data-name="data-export.import-warning-line-3">· 建议先导出当前数据作为备份</div>
-            </div>
-
-            {/* 已选文件 */}
-            {importFilePath && (
-              <div className="data-export-import-file is-selected" data-name="data-export.import-file">
-                <span data-name="data-export.import-file-label">已选择：</span>
-                <span data-name="data-export.import-file-path">{importFilePath}</span>
-              </div>
-            )}
-
-            {/* 加密文件密码输入：置于状态条之上，可聚焦可键入 */}
-            {importNeedsPassword && importFilePath && (
-              <div className="data-export-import-password" data-name="data-export.import-password-section">
-                <div className="data-export-import-password-label" data-name="data-export.import-password-label">
-                  此备份已加密，请输入密码
-                </div>
-                <div className="data-export-import-password-row" data-name="data-export.import-password-row">
-                  <input
-                    ref={importPasswordRef}
-                    type="password"
-                    className="data-export-import-password-input"
-                    placeholder="输入备份密码"
-                    value={importPassword}
-                    onChange={(e) => setImportPassword(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleDecryptImport();
-                      }
-                    }}
-                    disabled={importing}
-                    autoFocus
-                    autoComplete="off"
-                    spellCheck={false}
-                    data-name="data-export.import-password-input"
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary-flat"
-                    onClick={() => void handleDecryptImport()}
-                    disabled={!importPassword || importing}
-                    data-name="data-export.import-decrypt-button"
-                  >
-                    {importing ? '解密中…' : '解密导入'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 导入成功后设备 ID 对比 */}
-            {sourceDeviceId && currentDeviceId && (
-              <div className="data-export-import-warning" style={{ borderColor: 'var(--success)', color: 'var(--foreground)' }} data-name="data-export.device-id-compare">
-                <div style={{ marginBottom: 4, fontWeight: 600 }}>数据来源对比</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>来源设备：{sourceDeviceId}</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>当前设备：{currentDeviceId}</div>
-                <div style={{ marginTop: 4, fontSize: 'var(--text-xs)', color: 'var(--foreground-muted)' }}>重启后仅显示当前设备码</div>
-              </div>
-            )}
-
-            {/* 导入状态消息 */}
-            {importStatus && (
-              <div
-                className={`data-export-status ${importStatus.type === 'success' ? 'is-success' : 'is-error'}`}
-                data-name="data-export.import-status"
-              >
-                {importStatus.type === 'success' ? '✓ ' : '✗ '}{importStatus.message}
-              </div>
-            )}
-
-            {/* 导入按钮：加密文件时主操作为「解密导入」，避免再次点「确认导入」走无密码路径 */}
-            <div className="data-export-actions" data-name="data-export.import-actions">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void handleSelectImportFile()}
-                disabled={importing}
-                style={{ flex: 1 }}
-                data-name="data-export.select-file-button"
-              >
-                {importFilePath ? '重新选择文件' : '选择备份文件'}
-              </button>
-              {!importNeedsPassword && (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() => void handleConfirmImport()}
-                  disabled={!importFilePath || importing}
-                  style={{ flex: 1 }}
-                  data-name="data-export.confirm-import-button"
-                >
-                  {importing ? '导入中…' : '确认导入'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        </section>
+        {message && <p role="status" data-name="data-export.status">{message}</p>}
       </div>
-    </>
-  );
+    </div>
+  </>
 }

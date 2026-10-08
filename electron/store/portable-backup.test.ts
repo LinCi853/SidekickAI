@@ -4,11 +4,13 @@ import os from 'node:os'
 import path from 'node:path'
 import Database from 'better-sqlite3'
 import AdmZip from 'adm-zip'
+import { createHash } from 'node:crypto'
 import { product } from '../../packages/product-contract'
 
 const fixture = vi.hoisted(() => ({ paths: {} as Record<string, string> }))
+vi.mock('../edition-runtime.js', () => ({ prepareDataRestoreHandoff: async () => () => {} }))
 vi.mock('electron', () => ({
-  app: { isPackaged: true, getPath: (name: string) => fixture.paths[name], getVersion: () => '0.1.0-beta.5', relaunch: vi.fn(), exit: vi.fn() },
+  app: { isReady: () => true, isPackaged: true, getPath: (name: string) => fixture.paths[name], getVersion: () => '0.1.0-beta.5', relaunch: vi.fn(), exit: vi.fn() },
   BrowserWindow: { getAllWindows: () => [] }, dialog: { showErrorBox: vi.fn() },
   session: { defaultSession: { clearCache: async () => {}, clearAuthCache: async () => {}, clearStorageData: async () => {}, flushStorageData() {}, cookies: { flushStore: async () => {} } } },
 }))
@@ -99,7 +101,12 @@ describe.each(['x64', 'arm64'] as const)('portable %s data operations', arch => 
     const incoming = settings(path.join(root, 'incoming'), 'restored-shared-root')
     const archive = new AdmZip()
     archive.addFile('settings.db', fs.readFileSync(incoming))
-    archive.addFile('manifest.json', Buffer.from(JSON.stringify({ edition: 'concept', appVersion: '0.1.5' })))
+    archive.addFile('manifest.json', Buffer.from(JSON.stringify({
+      format: 'sidekickai-backup', formatVersion: 1, edition: 'concept', dataSchemaVersion: 1,
+      deviceId: 'portable-fixture', appVersion: '0.1.5', exportedAt: new Date().toISOString(),
+      options: { basicData: true, cookies: false, indexedDB: false, cache: false },
+      entries: { 'settings.db': createHash('sha256').update(fs.readFileSync(incoming)).digest('hex') },
+    })))
     const backup = path.join(root, 'restore.zip')
     archive.writeZip(backup)
     vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -109,7 +116,6 @@ describe.each(['x64', 'arm64'] as const)('portable %s data operations', arch => 
     finishPendingRestore(shared)
     expect(sentinel(path.join(shared, 'settings.db'))).toBe('restored-shared-root')
     expect(sentinel(path.join(decoy, 'settings.db'))).toBe('architecture-local-sentinel')
-    const recovery = fs.readdirSync(root).find(name => name.startsWith('data.bak-'))!
-    expect(sentinel(path.join(root, recovery, 'settings.db'))).toBe('shared-root')
+    expect(fs.readdirSync(root).some(name => name.startsWith('data.bak-'))).toBe(false)
   })
 })

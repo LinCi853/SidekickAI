@@ -56,7 +56,9 @@
     "file-uri-to-path": "1.0.0",
     "opencc-js": "^1.4.0",
     "prebuild-install": "^7.1.1",
-    "undici": "^6.0.0"
+    "undici": "^6.0.0",
+    "yauzl": "3.4.0",
+    "yazl": "3.3.1"
   },
   "optionalDependencies": {
     "uiohook-napi": "^1.5.0"
@@ -77,6 +79,8 @@
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/yauzl": "3.4.0",
+    "@types/yazl": "3.3.1",
     "@vitejs/plugin-react": "^4.3.0",
     "electron": "^43.6.0",
     "electron-builder": "^26.16.1",

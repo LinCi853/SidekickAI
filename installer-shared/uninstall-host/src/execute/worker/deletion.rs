@@ -2,10 +2,9 @@
 
 use super::super::hashing::{sha256_file, write_atomic};
 use super::super::identity::DirectoryIdentity;
-use super::super::pinned::{pin_external_ancestors, remove_tree_pinned, RemovalFailure};
+use super::super::pinned::{pin_external_ancestors, RemovalFailure};
 use super::super::tree::export_tree_digest;
 use super::prepare::assert_trusted_caller;
-use super::registry::remove_registration;
 use super::types::{WorkerDataRoot, WorkerOutcome, WorkerRequest, WorkerTarget};
 use super::validate::{
     protected_scope_reason, reject_dangerous_overlaps, validate_operation_directory_name,
@@ -59,7 +58,9 @@ pub(super) fn execute_worker_with(request_path: &Path, worker_path: &Path) -> Re
     outcome.error = verify_worker_image(&request, worker_path)
         .err()
         .or_else(|| {
-            if request.preparation.is_some() {
+            if request.resume_task_id.is_some() {
+                super::transaction::resume(&request, &mut outcome).err()
+            } else if request.preparation.is_some() {
                 super::session::run_worker_session(&request, &directory, &mut outcome).err()
             } else {
                 run_worker_deletion(&request, &directory, &mut outcome).err()
@@ -134,6 +135,14 @@ pub(super) fn target_directory_identity<'a>(request: &'a WorkerRequest, path: &P
 /// verified. An encrypted SABK container is hashed as stored, so re-encryption
 /// or a swapped archive is refused before any deletion.
 pub(super) fn verify_backup_archive(request: &WorkerRequest) -> Result<(), UninstallError> {
+    for proof in &request.backup_proofs {
+        let actual = sha256_file(Path::new(&proof.path)).map_err(|error| UninstallError::new(
+            UninstallErrorCode::BackupIncomplete, format!("已校验的备份无法读取：{error}"),
+            UninstallPhase::Validating, true, &request.operation_id))?;
+        if !actual.eq_ignore_ascii_case(&proof.archive_sha256) {
+            return Err(invalid_request(&request.operation_id, "已验证备份归档发生变化，未执行删除。"));
+        }
+    }
     let (Some(path), Some(expected)) = (request.backup_path.as_deref(), request.backup_sha256.as_deref()) else {
         return Ok(());
     };
@@ -164,6 +173,15 @@ pub(super) fn run_worker_deletion(
     request: &WorkerRequest,
     directory: &Path,
     outcome: &mut WorkerOutcome,
+) -> Result<(), UninstallError> {
+    run_worker_deletion_with_task_cleanup(request, directory, outcome, &mut crate::startup_tasks::remove_installation)
+}
+
+pub(super) fn run_worker_deletion_with_task_cleanup(
+    request: &WorkerRequest,
+    directory: &Path,
+    outcome: &mut WorkerOutcome,
+    cleanup_tasks: &mut impl FnMut(&Path) -> Result<(), String>,
 ) -> Result<(), UninstallError> {
     validate_worker_request(request)?;
     if request.preparation.is_some() {
@@ -241,53 +259,7 @@ pub(super) fn run_worker_deletion(
     // volume root downward, so the names cannot be renamed or swapped.
     let _ancestor_pins = pin_external_ancestors(&lock_paths)?;
 
-    // 1. Data roots (delete only; export already verified by the controller).
-    if request.strategy != DataStrategy::Keep {
-        for (root, path) in &resolved_data {
-            match remove_tree_pinned(path.as_path(), &root.identity.directory) {
-                Ok(()) => outcome.removed_data_roots.push(path.as_string()),
-                Err(failure) => {
-                    if failure.removed_entries > 0 {
-                        outcome.partially_removed_paths.push(path.as_string());
-                        outcome.warnings.push(format!("PARTIALLY_REMOVED: {}", path.as_string()));
-                    }
-                    return Err(removal_failure(path, UninstallPhase::RemovingData, &request.operation_id, &failure));
-                }
-            }
-        }
-    }
-
-    // 2. Installation directories. The worker lives in %TEMP%, so it never
-    //    blocks removal of the installation that contained the launcher.
-    for resolved in &resolved_targets {
-        match remove_tree_pinned(resolved.path.as_path(), &resolved.identity) {
-            Ok(()) => outcome.removed_install_paths.push(resolved.path.as_string()),
-            Err(failure) => {
-                if failure.removed_entries > 0 {
-                    outcome.partially_removed_paths.push(resolved.path.as_string());
-                    outcome.warnings.push(format!("PARTIALLY_REMOVED: {}", resolved.path.as_string()));
-                }
-                return Err(removal_failure(&resolved.path, UninstallPhase::RemovingInstall, &request.operation_id, &failure));
-            }
-        }
-        if !resolved.target.registered_roots.is_empty() {
-            let mut removed = false;
-            for root in &resolved.target.registered_roots {
-                match remove_registration(root, resolved.path.as_path()) {
-                    Ok(true) => removed = true,
-                    Ok(false) => {}
-                    Err(error) => return Err(UninstallError::new(UninstallErrorCode::RegistryFailed, error, UninstallPhase::RemovingRegistry, false, &request.operation_id)),
-                }
-            }
-            if !removed {
-                outcome.warnings.push("REGISTRY_ENTRY_NOT_FOUND".into());
-            }
-        }
-        if let Err(error) = super::registry::remove_shortcuts_for(resolved.path.as_path(), resolved.target.scope == InstallScope::AllUsers, resolved.edition) {
-            outcome.warnings.push(format!("SHORTCUT_CLEANUP_INCOMPLETE: {error}"));
-        }
-    }
-    Ok(())
+    super::transaction::execute(request, &resolved_targets, &resolved_data, outcome, cleanup_tasks)
 }
 
 pub(super) fn resolve_worker_targets(request: &WorkerRequest) -> Result<Vec<ResolvedTarget>, UninstallError> {
@@ -305,6 +277,8 @@ pub(super) fn resolve_worker_targets(request: &WorkerRequest) -> Result<Vec<Reso
                 &request.operation_id,
             ));
         }
+        sidekickai_uninstall_core::distribution::verify_installed_identity(path.as_path()).map_err(|message|
+            UninstallError::new(UninstallErrorCode::TargetNotInstall, message, UninstallPhase::Validating, false, &request.operation_id))?;
         if !installation_markers_present(&target.fingerprint)
             || sidekickai_uninstall_core::product::validate_uninstall_identity(path.as_path()).is_err() {
             return Err(UninstallError::new(

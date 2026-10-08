@@ -11,6 +11,7 @@ mod elevate;
 mod engine;
 mod manifest;
 mod setup_metadata;
+mod distribution;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -58,8 +59,31 @@ fn end_completion() { if let Ok(mut completion) = COMPLETION.lock() { completion
 
 #[tauri::command]
 fn get_info() -> Result<manifest::InstallerInfo, String> {
-    setup_metadata::current()?;
+    setup_metadata::validate_host(setup_metadata::current()?)?;
     Ok(manifest::build_info())
+}
+
+#[tauri::command]
+async fn prepare_distribution(app: AppHandle, local_path: Option<String>) -> Result<distribution::PreparedDistribution, String> {
+    if RUNNING.load(Ordering::SeqCst) { return Err("安装操作正在进行。".into()); }
+    tauri::async_runtime::spawn_blocking(move || distribution::prepare(local_path.as_deref(), &|progress| {
+        let _ = app.emit("distribution:progress", progress);
+    })).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn get_distribution_selection() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(distribution::selection_info).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn cancel_distribution() -> bool { distribution::cancel() }
+
+#[tauri::command]
+fn open_local_distribution(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog().file().add_filter("已签名应用载荷", &["zip"]).blocking_pick_file()
+        .and_then(|file| file.into_path().ok()).map(|path| path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -71,6 +95,9 @@ fn scan_installations() -> manifest::ScanResult {
 fn needs_admin(dir: String, for_all_users: bool) -> bool {
     elevate::needs_admin(&dir, for_all_users)
 }
+
+#[tauri::command]
+fn pending_installations() -> Result<Vec<engine::RecoveryInfo>, String> { engine::pending_installations() }
 
 #[tauri::command]
 fn browse_dir(app: AppHandle, current: String) -> String {
@@ -334,6 +361,9 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
     if opts.mode == manifest::InstallMode::Uninstall {
         return Err("请使用专用卸载命令并提供已确认的扫描令牌。".into());
     }
+    if opts.distribution_body_proof.is_empty() && engine::pending_installations()?.iter().any(|pending| pending.install_dir == opts.install_dir) {
+        // Recovery uses the already sealed transaction and its original request.
+    } else { distribution::apply_request(&opts)?; }
     // One operation per process: CAS admission. The guard releases the busy flag
     // on `?` early returns, engine errors, panics and join errors, and it is
     // released explicitly before the terminal event so the window cannot stay
@@ -342,7 +372,7 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
         controller::Admission::acquire().ok_or_else(|| "另一个安装操作正在进行。".to_string())?;
     controller::completion::reset();
     end_preparation();
-    if opts.mode == manifest::InstallMode::Install {
+    if opts.mode != manifest::InstallMode::Uninstall {
         opts.installation_id = manifest::new_installation_id();
     }
 
@@ -350,7 +380,9 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
     // overwrite each other before the engine takes the target lock.
     let needs_elev = !elevate::is_process_elevated()
         && (elevate::needs_admin(&opts.install_dir, opts.for_all_users)
-            || opts.cleanup_paths.iter().any(|path| elevate::needs_admin(path, true)));
+            || (!opts.staging_dir.trim().is_empty() && elevate::needs_admin(opts.staging_dir.trim(), false))
+            || opts.cleanup_paths.iter().any(|path| elevate::needs_admin(path, false))
+            || sidekickai_uninstall_host::startup_tasks::removal_requires_elevation(&opts.cleanup_paths.iter().map(std::path::PathBuf::from).collect::<Vec<_>>())?);
     let action = if needs_elev { controller::ACTION_INSTALL_SESSION } else { controller::ACTION_INSTALL };
     let prepared = Arc::new(controller::prepare_operation("install", action, &opts)?);
     let log_path = prepared.log_path.clone();
@@ -412,6 +444,7 @@ async fn start(app: AppHandle, mut opts: manifest::InstallRequest) -> Result<boo
     let _ = tail.join();
     completion_log::bind(&operation_id, std::fs::read_to_string(&prepared.log_path).unwrap_or_default());
     drop(prepared);
+    distribution::clear_ready();
 
     // 计算残留提示：仍有多个有效安装位置时提醒用户
     let residual_note = match &result {
@@ -490,13 +523,15 @@ pub fn run() {
     let source = match std::env::current_exe() { Ok(source) => source, Err(error) => { eprintln!("{error}"); return; } };
     let source = std::fs::canonicalize(&source).unwrap_or(source);
     let mode = if std::env::args().any(|arg| arg == "--uninstall") { "uninstall" } else { "install" };
-    let entry = format!("installer:{mode}:{}", source.to_string_lossy().replace('/', "\\").to_lowercase());
+    let mut entry = format!("installer:{mode}:{}", source.to_string_lossy().replace('/', "\\").to_lowercase());
+    match distribution::precise_binding(){Ok(Some((id,digest)))=>entry.push_str(&format!(":release:{id}:{digest}")),Ok(None)=>{},Err(error)=>{eprintln!("{error}");std::process::exit(64);}}
     let _wizard = match WizardInstance::acquire_entry(&entry) {
         Ok(WizardAcquisition::Owned(instance)) => instance,
         Ok(WizardAcquisition::Activated) => return,
-        Err(message) => { eprintln!("{message}"); return; }
+        Err(message) => { eprintln!("{message}"); std::process::exit(64); }
     };
     let binding = _wizard.binding();
+    if let Err(error) = sidekickai_uninstall_host::prerequisites::ensure_webview2() { eprintln!("{error}"); std::process::exit(64); }
     let builder = tauri::Builder::default();
     #[cfg(test)]
     let builder = builder.any_thread();
@@ -520,8 +555,13 @@ pub fn run() {
             sidekickai_uninstall_host::commands::uninstall_close,
             sidekickai_uninstall_host::commands::uninstall_choose_backup_path,
             get_info,
+            prepare_distribution,
+            get_distribution_selection,
+            cancel_distribution,
+            open_local_distribution,
             scan_installations,
             needs_admin,
+            pending_installations,
             browse_dir,
             save_backup_dialog,
             close_window,
@@ -555,3 +595,5 @@ pub fn run_uninstall() -> i32 {
     run();
     0
 }
+
+pub fn validate_distribution_arguments(arguments:&[String])->Result<bool,String>{distribution::validate_arguments(arguments)}

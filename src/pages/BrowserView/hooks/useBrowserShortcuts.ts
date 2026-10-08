@@ -9,8 +9,7 @@
 import { useEffect, type MutableRefObject } from 'react';
 import { useBrowserKeyboard } from '../useBrowserKeyboard.js';
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
-import { useModuleStore } from '../../../store/useModuleStore.js';
-import { onToggleDevTools, maximizeToggleWindow, openPromptWindow } from '../../../lib/electron-api/index.js';
+import { onToggleDevTools, maximizeToggleWindow } from '../../../lib/electron-api/index.js';
 
 interface UseBrowserShortcutsParams {
   addressBarRef: MutableRefObject<HTMLInputElement | null>;
@@ -82,10 +81,6 @@ export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
     onZoomIn: p.zoomInAction,
     onZoomOut: p.zoomOutAction,
     onZoomReset: p.zoomResetAction,
-    onToggleFreeze: useModuleStore.getState().isEnabled('freeze') ? tabId => {
-      const target = tabId ?? useBrowserTabStore.getState().activeTabId;
-      if (target) void openPromptWindow({ freezeTabId: target });
-    } : undefined,
   });
 
   useEffect(() => {

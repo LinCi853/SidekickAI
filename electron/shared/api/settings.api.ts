@@ -264,7 +264,7 @@ export type OnUiVersionChangedCallback = (callback: (payload: { uiVersion: 'clas
 export type WebviewHotkeyAction =
   | 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme'
   | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab'
-  | 'detachCurrent' | 'toggleFreeze' | 'focusCycle' | 'addBookmark' | 'openHistory'
+  | 'detachCurrent' | 'focusCycle' | 'addBookmark' | 'openHistory'
   | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print'
   | 'toggleCloudPc' | 'focusAddressBar' | 'toggleBookmarkBar' | 'reopenClosed'
   | 'savePageAs' | 'viewSource' | 'zoomOut' | 'zoomReset' | 'zoomIn'

@@ -1,7 +1,9 @@
-import { Download, File, FileImage, FileText, FolderOpen, MessageSquare, RotateCw } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Eye, File, FileImage, FileText, FolderOpen, MessageSquare, RotateCw } from 'lucide-react';
 import { IconButton } from '../../components/ui';
 import type { AssetAttachment } from '../../../electron/shared/ai-assets.types';
 import { requireElectron } from '../../lib/electron-api/core';
+import AssetFilePreview from './AssetFilePreview';
 
 const statuses = { pending: '待获取', saved: '已收纳', reused: '复用原件', failed: '获取失败' };
 function fileSize(size?: number) {
@@ -18,6 +20,7 @@ export default function AssetFileCard({ item, onConversation, onAction, showConv
   selected?: boolean; onSelect?: () => void;
 }) {
   const api = requireElectron().aiAssets;
+  const [previewOpen, setPreviewOpen] = useState(false);
   let source = '';
   try { source = item.sourceUrl ? new URL(item.sourceUrl).hostname : ''; } catch {}
   const kind = item.mimeType.startsWith('image/') ? '图片' : item.mimeType.startsWith('text/') ? '文本' : item.mimeType === 'application/pdf' ? 'PDF 文档' : '文件';
@@ -28,6 +31,7 @@ export default function AssetFileCard({ item, onConversation, onAction, showConv
     <div className="asset-file-status"><span className={`asset-status ${item.status}`}>{statuses[item.status]}</span><span>{item.direction === 'input' ? '用户发送' : 'AI 返回'}</span></div>
     {source && <p className="asset-file-source" title={source}>{source}</p>}
     <div className="asset-file-actions">
+      {item.sha256 && <IconButton className="asset-icon-button" aria-label="预览资料" onClick={() => setPreviewOpen(true)}><Eye size={16} /></IconButton>}
       {showConversation && <IconButton className="asset-icon-button" aria-label="查看来源对话" onClick={() => onConversation(item.conversationId, { messageId: item.messageId, attachmentId: item.id })}><MessageSquare size={16} /></IconButton>}
       {['saved', 'reused'].includes(item.status) ? <IconButton className="asset-icon-button" aria-label="在文件夹中查看副本" onClick={() => onAction(async () => {
         const result = await api.openAttachment(item.id); if (!result.ok) throw new Error(result.error);
@@ -43,5 +47,6 @@ export default function AssetFileCard({ item, onConversation, onAction, showConv
       {item.sha256 && <p><code>SHA-256 {item.sha256}</code></p>}
       {item.error && <p role="status" className="asset-error">{item.error}</p>}
     </details>}
+    {previewOpen && <AssetFilePreview item={item} onClose={() => setPreviewOpen(false)} onAction={onAction} />}
   </article>;
 }

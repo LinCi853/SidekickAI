@@ -43,6 +43,10 @@ describe('快捷键 defs 表', () => {
     }
   });
 
+  it('leaves Alt+P available for page input', () => {
+    expect(defs.some(def => matchAccelerator(fakeEvent('p', { alt: true }), def.accelerator))).toBe(false);
+  });
+
   it('defs 数量符合预期（≥40 条）', () => {
     expect(defs.length).toBeGreaterThanOrEqual(40);
   });
@@ -52,7 +56,6 @@ describe('快捷键 defs 表', () => {
       ['Ctrl+D', fakeEvent('d', { ctrl: true }), true],
       ['Ctrl+U', fakeEvent('u', { ctrl: true }), true],
       ['Ctrl+Alt+C', fakeEvent('c', { ctrl: true, alt: true }), true],
-      ['Alt+P', fakeEvent('p', { alt: true }), true],
       ['F11', fakeEvent('F11'), true],
       ['F12', fakeEvent('F12'), true],
       ['Ctrl+P', fakeEvent('p', { ctrl: true }), true],
@@ -85,7 +88,7 @@ describe('快捷键 defs 表', () => {
   it('关键 action 存在且与主进程转发约定一致', () => {
     const actions = new Set(defs.map((d) => d.action).filter(Boolean));
     for (const required of [
-      'addBookmark', 'viewSource', 'toggleCloudPc', 'toggleFreeze',
+      'addBookmark', 'viewSource', 'toggleCloudPc',
       'print', 'savePageAs', 'findInPage', 'zoomIn', 'zoomOut', 'zoomReset',
       'navBack', 'navForward', 'navRefresh', 'forceRefresh', 'focusCycle',
       'closeTab', 'detachCurrent', 'cycleTab', 'switchTab', 'openHistory',

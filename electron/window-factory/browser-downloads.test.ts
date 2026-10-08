@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
 vi.mock('crypto', () => ({ randomUUID: () => `download-${++state.serial}` }));
 vi.mock('../store/app-settings-repository.js', () => ({ readSettingsRaw: () => ({ downloadDir: 'E:/fixture' }) }));
 vi.mock('../store/browser-download-store.js', () => ({ browserDownloadStore: { add: state.add, update: state.update } }));
-vi.mock('../freeze/webview-registry.js', () => ({ getRecordByWebContentsId: (id: number) => state.records.get(id) }));
+vi.mock('./webview-registry.js', () => ({ getRecordByWebContentsId: (id: number) => state.records.get(id) }));
 vi.mock('../window-state.js', () => ({ windowState: { browserWindowsByProfile: state.byProfile } }));
 vi.mock('./window-utils.js', () => ({ findWindowIdByWin: (win: object) => state.ids.get(win) }));
 

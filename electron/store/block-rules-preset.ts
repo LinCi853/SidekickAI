@@ -70,7 +70,7 @@ export const BLOCK_RULES: BlockRule[] = [
     id: 'builtin-deepseek-download',
     domainPattern: '*.deepseek.com',
     type: 'css',
-    selector: '.ds-button--outlinedNeutral, [class*="_9579690"], [class*="download"], [class*="app-download"], [class*="app-banner"], [class*="qrcode"], a[href*="download"]',
+    selector: '[class*="_9579690"], [class*="download"], [class*="app-download"], [class*="app-banner"], [class*="qrcode"], a[href*="download"]',
     label: 'DeepSeek 下载按钮',
     enabled: true,
     builtin: true,

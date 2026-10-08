@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { onWebviewHotkey, openPromptWindow, validateWebviewHotkeyTarget } from '../../../lib/electron-api';
+import { onWebviewHotkey, validateWebviewHotkeyTarget } from '../../../lib/electron-api';
 import type { WebviewHotkeyPayload } from '../../../../electron/shared/types';
 import { useTabStore } from '../../../store/useTabStore';
 import { useProfileStore } from '../../../store/useProfileStore';
@@ -91,10 +91,6 @@ export function useWebviewHotkeyDispatch(
         if (target) void addTab(target);
       } else if (payload.action === 'closeTab') {
         if (store.activeTabId) void closeTab(store.activeTabId);
-      } else if (payload.action === 'toggleFreeze') {
-        const requested = (payload.data as { tabId?: string } | undefined)?.tabId;
-        const tabId = requested && store.tabs.some(tab => tab.id === requested) ? requested : store.activeTabId;
-        if (tabId) void openPromptWindow({ freezeTabId: tabId });
       } else if (payload.action === 'focusCycle') {
         // 主窗口：聚焦当前 webview 内的 AI 输入框
         const activeTabId = store.activeTabId;

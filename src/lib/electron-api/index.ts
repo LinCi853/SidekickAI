@@ -18,5 +18,4 @@ export * from './onboarding';
 export * from './notes';
 export * from './whiteboard';
 export * from './browser';
-export * from './freeze';
 export * from './modules';

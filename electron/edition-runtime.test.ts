@@ -37,6 +37,119 @@ beforeEach(() => {
   fixture.bind.mockImplementation(async (_edition: string, callbacks: unknown) => { fixture.callbacks = callbacks; return true })
 })
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+
+describe('data restore preparation', () => {
+  const cancellations = (host: any) => host.webContents.executeJavaScript.mock.calls.filter((call: string[]) => call[0].includes("new Event('sidekick:cancel-handoff')")).length
+
+  it('awaits every editor and holds the lease until its idempotent release without exiting', async () => {
+    const first = deferred<boolean>(), second = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(first.promise)
+    const other = window(); other.webContents.executeJavaScript.mockReturnValueOnce(second.promise)
+    const runtime = await start()
+    const { isApplicationHandoff } = await import('./application-handoff-state.js')
+    fixture.app.relaunch = vi.fn()
+    let complete = false
+    const preparing = runtime.prepareDataRestoreHandoff().then(release => { complete = true; return release })
+    await settle()
+    expect(isApplicationHandoff()).toBe(true)
+    await expect(runtime.prepareDataRestoreHandoff()).rejects.toThrow()
+    expect(fixture.windows[0].webContents.executeJavaScript).toHaveBeenCalledOnce()
+    expect(other.webContents.executeJavaScript).toHaveBeenCalledOnce()
+    first.resolve(true); await settle()
+    expect(complete).toBe(false)
+    second.resolve(true)
+    const release = await preparing
+    expect(isApplicationHandoff()).toBe(true)
+    expect(cancellations(other)).toBe(0)
+    await expect(runtime.prepareDataRestoreHandoff()).rejects.toThrow()
+    expect(await runtime.preparePermissionHandoff()).toBe(false)
+    const beforeQuit = vi.fn()
+    expect(await runtime.quitForBackup(beforeQuit)).toBe(false)
+    const overlappingQuit = runtime.quitPermissionHandoff()
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+    expect(fixture.app.relaunch).not.toHaveBeenCalled()
+    release(); release()
+    expect(await overlappingQuit).toBe(false)
+    expect(isApplicationHandoff()).toBe(false)
+    expect(cancellations(other)).toBe(1)
+    expect(beforeQuit).not.toHaveBeenCalled()
+    const retryRelease = await runtime.prepareDataRestoreHandoff()
+    retryRelease()
+  })
+
+  it.each(['rejected', 'refused'])('keeps every editor open after a %s save and allows another attempt', async mode => {
+    const first = deferred<boolean>(), second = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(first.promise)
+    const other = window(); other.webContents.executeJavaScript.mockReturnValueOnce(second.promise)
+    const runtime = await start()
+    const { isApplicationHandoff } = await import('./application-handoff-state.js')
+    let complete = false
+    const preparing = runtime.prepareDataRestoreHandoff().finally(() => { complete = true })
+    const failed = expect(preparing).rejects.toThrow()
+    if (mode === 'rejected') first.reject(new Error('Disk unavailable'))
+    else first.resolve(false)
+    await settle()
+    expect(complete).toBe(false)
+    second.resolve(true); await failed; await settle()
+    expect(isApplicationHandoff()).toBe(false)
+    expect(cancellations(other)).toBeGreaterThan(0)
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+    const retryRelease = await runtime.prepareDataRestoreHandoff()
+    retryRelease()
+  })
+
+  it('cancels after the common timeout and cancels a late save without exiting', async () => {
+    const saved = deferred<boolean>()
+    const host = fixture.windows[0]
+    host.webContents.executeJavaScript.mockReturnValueOnce(saved.promise)
+    const runtime = await start()
+    const { isApplicationHandoff } = await import('./application-handoff-state.js')
+    const failed = expect(runtime.prepareDataRestoreHandoff()).rejects.toThrow('Application restore save timed out')
+    await vi.advanceTimersByTimeAsync(10000); await failed
+    expect(isApplicationHandoff()).toBe(false)
+    const cancelled = cancellations(host)
+    expect(cancelled).toBeGreaterThan(0)
+    saved.resolve(true); await settle()
+    expect(cancellations(host)).toBeGreaterThan(cancelled)
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+  })
+
+  it('does not unfreeze a newer restore when a timed-out save completes late', async () => {
+    const saved = deferred<boolean>(), host = fixture.windows[0]
+    host.webContents.executeJavaScript.mockReturnValueOnce(saved.promise)
+    const runtime = await start()
+    const { isApplicationHandoff } = await import('./application-handoff-state.js')
+    const failed = expect(runtime.prepareDataRestoreHandoff()).rejects.toThrow('Application restore save timed out')
+    await vi.advanceTimersByTimeAsync(10000); await failed
+    const release = await runtime.prepareDataRestoreHandoff()
+    const cancelled = cancellations(host)
+    try {
+      saved.resolve(true); await settle()
+      expect(isApplicationHandoff()).toBe(true)
+      expect(cancellations(host)).toBe(cancelled)
+      expect(fixture.app.quit).not.toHaveBeenCalled()
+    } finally { release() }
+  })
+
+  it('rejects unavailable sessions and a busy transition during saving', async () => {
+    const runtime = await import('./edition-runtime.js')
+    await expect(runtime.prepareDataRestoreHandoff()).rejects.toThrow()
+    expect(fixture.windows[0].webContents.executeJavaScript).not.toHaveBeenCalled()
+    let busy = true
+    await start(() => busy)
+    await expect(runtime.prepareDataRestoreHandoff()).rejects.toThrow()
+    busy = false
+    const saved = deferred<boolean>()
+    fixture.windows[0].webContents.executeJavaScript.mockReturnValueOnce(saved.promise)
+    const preparing = runtime.prepareDataRestoreHandoff()
+    busy = true; saved.resolve(true)
+    await expect(preparing).rejects.toThrow()
+    const { isApplicationHandoff } = await import('./application-handoff-state.js')
+    expect(isApplicationHandoff()).toBe(false)
+    expect(fixture.app.quit).not.toHaveBeenCalled()
+  })
+})
+
 async function start(busy: () => boolean = () => false) {
   const runtime = await import('./edition-runtime.js')
   await runtime.startEditionSession('community', busy)
