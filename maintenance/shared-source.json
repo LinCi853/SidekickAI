@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "c41fad8d6349172500088dcc5eb8f07ce51c457915525849ee4e0fc48876104c",
+  "revision": "904fc75013e6eea6436dc2243f9a59289f11f0922154a57c5656ac82d98c9941",
   "files": {
     "electron.vite.config.ts": "2a760ee75da9987bbf74437bea2fe35ebe769062642ec396f43ba709e56e1142",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
@@ -10,7 +10,7 @@
     "electron/application-startup-helper.test.ts": "7d575907bb55ad46c9b13872cb891aeb0592cbbc54f90111e1c155e1592b2469",
     "electron/store/backup/activity.ts": "b88b757a46265f49d98170b07c1d7030b1b7341af6884895ccfd2f34581a48e9",
     "electron/windows-startup-helper.test.ts": "e9df5e7aa93df96bbb4e592e4df8adb43fabe607afa1ca6c947bbc79fbe9dcb4",
-    "launch.bat": "549a193c203cae27a23e79cf20bc646fa45bd2a6d6bd245322315ba355e070d2",
+    "launch.bat": "44b7bbd0a97b368c14bdc849f237241868c30b3374f2fdd248789ac96b0a5aca",
     "packages/backup-core/FORMAT.md": "b885c9cc589cadc2c9b5125857ba8f9dea73d83791471f4a1c7263d5f61e0bdb",
     "packages/backup-core/cli.ts": "14cacf7b9637af167d65495885fd16b54aaf08805a59afc3d2677308f2666404",
     "packages/backup-core/compatibility.ts": "d1e6084062fede686d90b57885016dbf89fb76b2bfe91f499ff1967d14b21cdc",
@@ -55,8 +55,8 @@
     "scripts/backup-snapshot-runtime.test.cjs": "bc3cc06c195555fa2b57fd8c101a45d49c05f8ca4c7b5c1981d56024a2f433ea",
     "scripts/build-backup-cli.cjs": "b038fe4bd8f94cd8bff623efe7ceb221af98b308e4393d8b5b277d2ec1084f4c",
     "scripts/build-cache.cjs": "185f3c50c6adf58bacc8b9cb776d7085046197ba9045a80c4439f350d97664b6",
-    "scripts/build-distribution.cjs": "280fdbf2daebe6aabaab52b940f0710e16359a41569354be64052eac9a974d56",
-    "scripts/build-distribution.test.cjs": "9ac7fc37bf1eee7d2f03ea8079e74c7b1b231c9eaa7608d326795d24373d1aa2",
+    "scripts/build-distribution.cjs": "0f20d3bccc064a0a2e832b017764b85291a87959dafcb7fe25d1d3756a2b1761",
+    "scripts/build-distribution.test.cjs": "aa304f89b7d2e71dfc446cdb88619536dbf724fbdb18d0ab1f43ddc3d81f81b0",
     "scripts/build-evidence.cjs": "1b4ff9df3904d9a57533964547be435e8bd7e77836179fd594b67b48bfd4f045",
     "scripts/build-startup-helper.cjs": "e9a967707aeefebd929fc4177787f3c6e7349a5cb9e700d0bda4548b6b8a0339",
     "scripts/build-tool-inputs.cjs": "e973cbbdb763a9389cec11654e8a53260749e5bbabdfb8eaaa16652c50a6453b",
