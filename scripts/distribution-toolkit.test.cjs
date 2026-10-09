@@ -69,6 +69,68 @@ test('toolkit reference selection has no implicit sibling workspace fallback', t
   assert.throws(() => toolkit.readReference(root, { referenceFile }), /size limit/)
 })
 
+test('the default project pin resolves its archive within the workspace', async t => {
+  const root = fixtureRoot(t)
+  const published = writeToolkit(path.join(root, 'vendor/distribution'))
+  const reference = structuredClone(published.reference)
+  delete reference.archive.url
+  reference.archive.path = path.relative(root, published.archive).replaceAll('\\', '/')
+  fs.mkdirSync(path.join(root, 'maintenance'))
+  fs.writeFileSync(path.join(root, 'maintenance/distribution-toolkit.json'), JSON.stringify(reference))
+  const prepared = await toolkit.prepareToolkit(root)
+  assert.deepEqual(prepared.reference, reference)
+  assert.equal(prepared.referenceFile, path.join(root, 'maintenance/distribution-toolkit.json'))
+  assert.equal(prepared.manifest.toolkitVersion, reference.toolkitVersion)
+  assert.equal((await toolkit.prepareToolkit(root)).reused, true)
+  for (const archivePath of ['../toolkit.zip', 'C:/toolkit.zip', '/toolkit.zip', 'vendor\\toolkit.zip', 'vendor/../toolkit.zip']) {
+    assert.throws(() => toolkit.validateReference({ ...reference, archive: { ...reference.archive, path: archivePath } }), undefined, archivePath)
+  }
+  assert.throws(() => toolkit.validateReference({ ...reference, archive: { ...reference.archive, url: published.reference.archive.url } }), /exactly one/)
+  const withoutLocation = structuredClone(reference)
+  delete withoutLocation.archive.path
+  assert.throws(() => toolkit.validateReference(withoutLocation), /exactly one/)
+})
+
+test('project pins fail when their local archive is absent or linked outside the project', async t => {
+  const root = fixtureRoot(t)
+  const published = writeToolkit(path.join(root, 'outside'))
+  const reference = structuredClone(published.reference)
+  delete reference.archive.url
+  reference.archive.path = 'vendor/distribution/toolkit.zip'
+  await assert.rejects(toolkit.prepareToolkit(root, { reference }), /file|ENOENT/i)
+  fs.mkdirSync(path.join(root, 'vendor'))
+  fs.symlinkSync(path.join(root, 'outside'), path.join(root, 'vendor/distribution'), process.platform === 'win32' ? 'junction' : 'dir')
+  await assert.rejects(toolkit.prepareToolkit(root, { reference }), /filesystem links/)
+})
+
+test('warm project caches still require the original archive bytes and an unlinked source', async t => {
+  const root = fixtureRoot(t)
+  const published = writeToolkit(path.join(root, 'vendor/distribution'))
+  const reference = structuredClone(published.reference)
+  delete reference.archive.url
+  reference.archive.path = path.relative(root, published.archive).replaceAll('\\', '/')
+  const bytes = fs.readFileSync(published.archive)
+  const prepared = await toolkit.prepareToolkit(root, { reference })
+  const mutations = [
+    () => fs.appendFileSync(published.archive, 'damaged'),
+    () => fs.unlinkSync(published.archive),
+    () => fs.writeFileSync(published.archive, 'version https://git-lfs.github.com/spec/v1\noid sha256:' + reference.archive.sha256 + '\nsize ' + reference.archive.size + '\n'),
+  ]
+  for (const mutate of mutations) {
+    mutate()
+    assert.throws(() => toolkit.assertUnchanged(prepared))
+    await assert.rejects(toolkit.prepareToolkit(root, { reference }))
+    fs.writeFileSync(published.archive, bytes)
+    toolkit.assertUnchanged(prepared)
+  }
+  const original = path.join(root, 'vendor/distribution')
+  const moved = path.join(root, 'retained')
+  fs.renameSync(original, moved)
+  fs.symlinkSync(moved, original, process.platform === 'win32' ? 'junction' : 'dir')
+  assert.throws(() => toolkit.assertUnchanged(prepared), /filesystem links/)
+  await assert.rejects(toolkit.prepareToolkit(root, { reference }), /filesystem links/)
+})
+
 test('a real loopback download verifies a complete toolkit and reuses a rechecked cache', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'published'))

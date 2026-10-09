@@ -131,6 +131,12 @@ function assemblyResult(request, toolkit) {
     artifacts: [],
   }
   fs.mkdirSync(request.outputDirectory)
+  if (request.installationConfiguration !== undefined) {
+    const bytes = Buffer.from(require('../application-runtime.cjs').canonicalJson(request.installationConfiguration) + '\n')
+    fs.mkdirSync(path.join(request.outputDirectory, 'inputs'))
+    fs.writeFileSync(path.join(request.outputDirectory, 'inputs/installation-configuration.json'), bytes)
+    result.installationConfigurationSha256 = u.hash(bytes)
+  }
   for (const architecture of ['x64', 'arm64']) {
     const retained = path.join(request.outputDirectory, 'inputs', architecture)
     fs.mkdirSync(retained, { recursive: true })
@@ -154,6 +160,7 @@ function mockAssembler(toolkit, hooks = {}) {
     if (args[0] === 'inspect') {
       const result = { interfaceVersion: 1, toolkitVersion: toolkit.reference.toolkitVersion,
         capabilities: structuredClone(toolkit.manifest.capabilities), verified: true }
+      if (toolkit.manifest.installationConfigurationVersion !== undefined) result.installationConfigurationVersion = toolkit.manifest.installationConfigurationVersion
       return hooks.inspect?.({ result, respond }) || respond(result)
     }
     if (args[0] === 'assemble') {

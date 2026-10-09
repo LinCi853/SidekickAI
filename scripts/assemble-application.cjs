@@ -9,6 +9,39 @@ const runtime = require('./application-runtime.cjs')
 const u = require('./build-utils.cjs')
 const MAX_RESULT_BYTES = 4 * 1024 * 1024
 const MAX_APPLICATION_MANIFEST_BYTES = 4 * 1024 * 1024
+const MAX_CONFIGURATION_BYTES = 32 * 1024
+const CONFIGURATION_PATH = 'inputs/installation-configuration.json'
+
+function readInstallationConfiguration(root, toolkit) {
+  const file = path.join(root, 'maintenance/installation-configuration.json')
+  if (!fs.existsSync(file)) return null
+  u.assertFile(file)
+  const raw = fs.readFileSync(file)
+  if (raw.length > MAX_CONFIGURATION_BYTES) throw new Error('Installation configuration exceeds its size limit')
+  const value = JSON.parse(raw.toString('utf8'))
+  toolkitApi.fields(value, ['schemaVersion', 'edition', 'options'])
+  if (value.schemaVersion !== 1 || value.edition !== 'concept' || !value.options || Array.isArray(value.options)
+    || typeof value.options !== 'object' || Object.entries(value.options).some(([key, selected]) =>
+      !/^[a-z][a-zA-Z0-9]{0,63}$/.test(key) || typeof selected !== 'boolean' && (typeof selected !== 'string' || selected.length > 128))) {
+    throw new Error('Invalid installation configuration')
+  }
+  if (toolkit.manifest.installationConfigurationVersion !== 1) {
+    throw new Error('The pinned toolkit cannot accept installation defaults; select a compatible toolkit before building')
+  }
+  const bytes = Buffer.from(runtime.canonicalJson(value) + '\n')
+  return { file, value, bytes, sha256: u.hash(bytes), originalSha256: u.hash(raw) }
+}
+
+function assertConfigurationUnchanged(configuration, root) {
+  if (!configuration) {
+    if (fs.existsSync(path.join(root, 'maintenance/installation-configuration.json'))) {
+      throw new Error('Installation configuration changed during assembly')
+    }
+    return
+  }
+  u.assertFile(configuration.file)
+  if (u.sha256(configuration.file) !== configuration.originalSha256) throw new Error('Installation configuration changed during assembly')
+}
 
 function invoke(toolkit, args, options = {}) {
   toolkitApi.assertUnchanged(toolkit)
@@ -26,6 +59,9 @@ function inspectToolkit(toolkit, options = {}) {
     || result.verified !== true || runtime.canonicalJson(result.capabilities) !== runtime.canonicalJson(toolkit.manifest.capabilities)) {
     throw new Error('Distribution toolkit inspection does not match its pinned capability')
   }
+  if (result.installationConfigurationVersion !== toolkit.manifest.installationConfigurationVersion) {
+    throw new Error('Distribution toolkit configuration capability does not match its pinned manifest')
+  }
   return result
 }
 
@@ -33,6 +69,7 @@ async function preflight({ root, toolkitOptions = {}, invokeOptions = {} }) {
   if ((toolkitOptions.platform || process.platform) !== 'win32') throw new Error('完整安装包构建需要 Windows 二进制组装工具。')
   const toolkit = await toolkitApi.prepareToolkit(root, toolkitOptions)
   inspectToolkit(toolkit, invokeOptions)
+  readInstallationConfiguration(root, toolkit)
   return toolkit
 }
 
@@ -63,12 +100,16 @@ function inputIdentity(payloads, edition, productVersion) {
 
 function validateResult(result, toolkit, output, identity) {
   toolkitApi.fields(result, ['interfaceVersion', 'toolkitVersion', 'edition', 'mode', 'productVersion', 'authority',
-    'issuerKeyId', 'issuerFingerprint', 'inputs', 'artifacts'], ['schemaVersion', 'toolkitManifestSha256', 'publicIdentity', 'verified'])
+    'issuerKeyId', 'issuerFingerprint', 'inputs', 'artifacts'], ['schemaVersion', 'toolkitManifestSha256', 'publicIdentity', 'verified', 'installationConfigurationSha256'])
   if (!result || result.interfaceVersion !== toolkitApi.INTERFACE_VERSION || result.toolkitVersion !== toolkit.reference.toolkitVersion
     || result.edition !== identity.edition || result.mode !== 'offline' || result.authority !== 'self-built'
     || result.productVersion !== identity.productVersion || typeof result.issuerKeyId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(result.issuerKeyId)
     || !toolkitApi.digest(result.issuerFingerprint)
     || runtime.canonicalJson(result.inputs) !== runtime.canonicalJson(identity.inputs)) throw new Error('Assembled installer identity does not match its requested inputs')
+  if (result.installationConfigurationSha256 !== identity.installationConfigurationSha256
+    || result.installationConfigurationSha256 !== undefined && !toolkitApi.digest(result.installationConfigurationSha256)) {
+    throw new Error('Assembled installation configuration does not match its requested defaults')
+  }
   if (!Array.isArray(result.artifacts) || result.artifacts.length !== 2) throw new Error('Assembly must produce two offline installers')
   const names = new Set()
   const installers = []
@@ -119,23 +160,35 @@ function retainedInputs(directory, input) {
       files.push({ path: relative, file, architecture: arch, size: fs.statSync(file).size, sha256 })
     }
   }
+  if (input.installationConfigurationSha256 !== undefined) {
+    const file = path.join(directory, ...CONFIGURATION_PATH.split('/'))
+    u.assertFile(file)
+    if (fs.statSync(file).size > MAX_CONFIGURATION_BYTES || u.sha256(file) !== input.installationConfigurationSha256) {
+      throw new Error('Retained installation configuration does not match its requested defaults')
+    }
+    files.push({ path: CONFIGURATION_PATH, file, architecture: null, size: fs.statSync(file).size, sha256: input.installationConfigurationSha256 })
+  }
   return files
 }
 
 async function assemble({ root, output, payloads, edition, productVersion, toolkit, toolkitOptions = {}, invokeOptions = {}, identityStore }) {
   toolkit ||= await preflight({ root, toolkitOptions, invokeOptions })
+  const configuration = readInstallationConfiguration(root, toolkit)
   const input = inputIdentity(payloads, edition, productVersion)
-  const source = { edition, productVersion, inputs: input.inputs }
+  const source = { edition, productVersion, inputs: input.inputs,
+    ...(configuration ? { installationConfigurationSha256: configuration.sha256 } : {}) }
   const directory = path.resolve(output, 'installers')
   if (fs.existsSync(directory)) throw new Error('Installer assembly output already exists')
   const request = { schemaVersion: 1, toolkitDirectory: toolkit.directory, toolkitVersion: toolkit.reference.toolkitVersion,
     edition, mode: 'offline', authority: 'self-built', payloads: input.manifests,
-    identityStore: path.resolve(identityStore || path.join(root, 'local/self-build-identity.json')), outputDirectory: directory }
+    identityStore: path.resolve(identityStore || path.join(root, 'local/self-build-identity.json')), outputDirectory: directory,
+    ...(configuration ? { installationConfiguration: configuration.value } : {}) }
   fs.mkdirSync(output, { recursive: true })
   const requestFile = path.resolve(output, 'assembly-request.json')
   fs.writeFileSync(requestFile, JSON.stringify(request, null, 2) + '\n', { flag: 'wx' })
   console.log('[assembly] Building self-built offline installers with pinned binary components')
   const response = invoke(toolkit, ['assemble', '--request', requestFile], invokeOptions)
+  assertConfigurationUnchanged(configuration, root)
   const resultFile = path.join(directory, 'assembly-result.json')
   if (!response || response.schemaVersion !== 1 || typeof response.outputDirectory !== 'string' || typeof response.resultFile !== 'string'
     || path.resolve(response.outputDirectory) !== directory || path.resolve(response.resultFile) !== resultFile) throw new Error('Assembly tool returned an unexpected result location')
@@ -153,7 +206,7 @@ async function assemble({ root, output, payloads, edition, productVersion, toolk
     throw new Error('Assembly result signing identity does not match its fingerprint')
   }
   const installers = validateResult(result, toolkit, directory, source)
-  const retained = retainedInputs(directory, input)
+  const retained = retainedInputs(directory, source)
   const verified = invoke(toolkit, ['verify', '--toolkit', toolkit.directory, '--result', resultFile], invokeOptions)
   if (verified.verified !== true || verified.issuerKeyId !== result.issuerKeyId) throw new Error('Installer assembly verification failed')
   const checked = validateResult(verified, toolkit, directory, source)
@@ -162,10 +215,12 @@ async function assemble({ root, output, payloads, edition, productVersion, toolk
     throw new Error('Installer verification returned a different signing identity')
   }
   if (!fs.readFileSync(resultFile).equals(resultBytes)) throw new Error('Assembly result changed during verification')
+  assertConfigurationUnchanged(configuration, root)
   u.assertUnchanged(input.fingerprint, u.fingerprint(path.dirname(input.files[0]), input.files))
   return { installers, retainedInputs: retained, preparedToolkit: toolkit, result, resultFile, resultSha256: u.hash(resultBytes), toolkit: {
     toolkitVersion: toolkit.reference.toolkitVersion, interfaceVersion: toolkitApi.INTERFACE_VERSION,
-    archiveUrl: toolkit.reference.archive.url, archiveSize: toolkit.reference.archive.size,
+    ...(toolkit.reference.archive.path ? { archivePath: toolkit.reference.archive.path } : { archiveUrl: toolkit.reference.archive.url }),
+    archiveSize: toolkit.reference.archive.size,
     archiveSha256: toolkit.reference.archive.sha256, manifestSha256: result.toolkitManifestSha256,
     referenceSha256: toolkit.referenceSha256 || null, inputs: toolkit.inputs, authority: 'self-built' } }
 }
@@ -176,7 +231,8 @@ function verifyCollected(assembled, directory, options = {}, collection = null) 
   const snapshot = () => u.fingerprint(directory, u.listFiles(directory, new Set()))
   const before = snapshot()
   if (collection?.collectionFingerprint) u.assertUnchanged(collection.collectionFingerprint, before)
-  const source = { edition: assembled.result.edition, productVersion: assembled.result.productVersion, inputs: assembled.result.inputs }
+  const source = { edition: assembled.result.edition, productVersion: assembled.result.productVersion, inputs: assembled.result.inputs,
+    ...(assembled.result.installationConfigurationSha256 !== undefined ? { installationConfigurationSha256: assembled.result.installationConfigurationSha256 } : {}) }
   const checked = invoke(assembled.preparedToolkit, ['verify', '--toolkit', assembled.preparedToolkit.directory, '--result', resultFile], options)
   validateResult(checked, assembled.preparedToolkit, directory, source)
   retainedInputs(directory, source)

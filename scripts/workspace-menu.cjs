@@ -105,7 +105,7 @@ function menuEntries(context, menu) {
   ]
   if (menu === 'build') {
     const labels = { portable: '绿色 ZIP（双架构）', payload: '标准应用载荷 ZIP（x64、ARM64）', all: '绿色版与标准载荷',
-      installer: '安装器（调用下载的二进制组件）', complete: '完整包（安装器与绿色版）' }
+      installer: '安装器（调用二进制组件）', complete: '完整包（安装器与绿色版）' }
     return [...buildModes(context).map((mode, index) => [String(index + 1), labels[mode], 'build', mode]), ['0', '返回', 'back']]
   }
   if (menu === 'tools') return [
@@ -125,9 +125,10 @@ function help(context) {
     `允许包型：${buildModes(context).join('、')}；build 默认 all。`,
     '构建按输入摘要复用应用编译；PowerShell 中设置 $env:SIDEKICK_REBUILD_ALL="1" 可强制重建。',
     'build-release 生成绿色版与标准载荷；preflight-release 检查软件构建条件。',
-    ...(context.editionId === 'concept' ? ['installer 和 complete 下载已固定版本与摘要的待组装组件，无需私有源码或官方密钥。',
+    ...(context.editionId === 'concept' ? ['installer 和 complete 使用已固定版本与摘要的待组装组件，无需私有源码或官方密钥。',
       '完整包使用本机自建身份；local/self-build-identity.json 用于后续同身份构建，请保留且勿公开。',
       '可设置 SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE 选择组件发布清单；完整包构建不会执行安装。'] : []),
+    ...(context.editionId === 'concept' ? ['maintenance/installation-configuration.json 可设置安装默认值，需工具包支持配置接口；示例见同目录 .example.json。'] : []),
     '--dry-run 只显示目录、环境和参数，不运行命令；不带操作时预览各菜单。',
     '生成的文件保存在本机，不会自动上传或替换已有安装。',
   ].join('\n')

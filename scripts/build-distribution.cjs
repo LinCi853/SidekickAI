@@ -39,7 +39,7 @@ function modePackages(mode, edition) {
 function captureInputs(root = ROOT) {
   const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'tools/startup-helper',
     'package.json', 'package-lock.json', 'electron-builder.yml', 'electron-builder.portable.yml', 'electron.vite.config.ts', 'tsconfig.json', 'tsconfig.node.json',
-    'LICENSE', 'product-edition.json', 'maintenance/shared-source.json', 'maintenance/component-contract.json', 'maintenance/distribution-toolkit.json', 'build/License.txt']
+    'LICENSE', 'product-edition.json', 'maintenance/shared-source.json', 'maintenance/component-contract.json', 'maintenance/distribution-toolkit.json', 'maintenance/installation-configuration.json', 'build/License.txt']
   const excluded = new Set(['node_modules', 'target', 'dist', 'gen', '.git'])
   const files = []
   const collect = file => {
@@ -167,12 +167,14 @@ function collectCandidates(artifacts, output, root = ROOT) {
       if (!entry) throw new Error('Assembly result is missing an installer artifact')
       add(file.path, entry.path, 'offline-installer', arch, file.sha256)
     }
-    if (assembled.retainedInputs?.length !== 4) throw new Error('Installer candidates require their immutable verification inputs')
+    const configurationSha256 = assembled.result.installationConfigurationSha256
+    if (assembled.retainedInputs?.length !== (configurationSha256 === undefined ? 4 : 5)) throw new Error('Installer candidates require their immutable verification inputs')
     for (const file of assembled.retainedInputs) add(file.file, file.path, 'assembly-input', file.architecture, file.sha256)
     add(assembled.resultFile, 'assembly-result.json', 'installer-assembly-result', null, assembled.resultSha256)
     assemblyEvidence = { authority: 'self-built', issuerKeyId: assembled.result.issuerKeyId,
       issuerFingerprint: assembled.result.issuerFingerprint, inputs: assembled.result.inputs,
-      resultSha256: assembled.resultSha256, toolkit: assembled.toolkit }
+      resultSha256: assembled.resultSha256, toolkit: assembled.toolkit,
+      ...(configurationSha256 === undefined ? {} : { installationConfigurationSha256: configurationSha256 }) }
   } else if (artifacts.assembly) throw new Error('Unexpected installer assembly candidates')
   const shared = JSON.parse(fs.readFileSync(path.join(root, 'maintenance/shared-source.json'), 'utf8'))
   const manifest = { schemaVersion: 1, status: 'candidate', softwareId: 'sidekickai', edition: artifacts.edition, version: artifacts.version,

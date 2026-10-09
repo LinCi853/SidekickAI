@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "edition": "concept",
+  "options": {
+    "autoLaunch": false,
+    "logLevel": "info",
+    "usageTracking": true
+  }
+}

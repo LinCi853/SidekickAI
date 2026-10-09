@@ -2,7 +2,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { fileURLToPath } = require('node:url')
+const { fileURLToPath, pathToFileURL } = require('node:url')
 const { Readable, Transform } = require('node:stream')
 const { pipeline } = require('node:stream/promises')
 const yauzl = require('yauzl')
@@ -61,10 +61,14 @@ function validateReference(reference, options = {}) {
   if (reference.schemaVersion !== 1 || reference.interfaceVersion !== INTERFACE_VERSION || !validVersion(reference.toolkitVersion)) {
     throw new Error('Unsupported distribution toolkit reference')
   }
-  fields(reference.archive, ['url', 'size', 'sha256'])
+  fields(reference.archive, ['size', 'sha256'], ['url', 'path'])
+  if (Object.hasOwn(reference.archive, 'url') === Object.hasOwn(reference.archive, 'path')) {
+    throw new Error('Toolkit archive requires exactly one URL or project-relative path')
+  }
   if (!Number.isSafeInteger(reference.archive.size) || reference.archive.size < 1 || reference.archive.size > MAX_ARCHIVE_BYTES
     || !digest(reference.archive.sha256)) throw new Error('Invalid distribution toolkit archive identity')
-  location(reference.archive.url, options.allowLoopback)
+  if (Object.hasOwn(reference.archive, 'path')) runtime.validateRelativePath(reference.archive.path)
+  else location(reference.archive.url, options.allowLoopback)
   return reference
 }
 
@@ -82,12 +86,15 @@ function readReference(root, options = {}) {
 
 function validateManifest(manifest, reference) {
   fields(manifest, ['schemaVersion', 'kind', 'toolkitVersion', 'interfaceVersion', 'maintenanceComponentVersion',
-    'recoveryComponentVersion', 'host', 'assembler', 'capabilities', 'placeholderTrust', 'files'])
+    'recoveryComponentVersion', 'host', 'assembler', 'capabilities', 'placeholderTrust', 'files'], ['installationConfigurationVersion'])
   validatePublicIdentity(manifest.placeholderTrust)
   if (manifest.schemaVersion !== 1 || manifest.kind !== 'sidekick-distribution-toolkit'
     || manifest.interfaceVersion !== INTERFACE_VERSION || manifest.toolkitVersion !== reference.toolkitVersion
     || !validVersion(manifest.maintenanceComponentVersion) || !validVersion(manifest.recoveryComponentVersion)) {
     throw new Error('Distribution toolkit identity does not match its pinned reference')
+  }
+  if (manifest.installationConfigurationVersion !== undefined && manifest.installationConfigurationVersion !== 1) {
+    throw new Error('Unsupported installation configuration interface')
   }
   fields(manifest.host, ['platform', 'architecture'])
   if (manifest.host.platform !== 'windows' || !['x64', 'arm64'].includes(manifest.host.architecture)) throw new Error('Unsupported distribution toolkit host')
@@ -148,8 +155,23 @@ function validateManifest(manifest, reference) {
   return manifest
 }
 
+function projectArchive(root, reference) {
+  if (!root) throw new Error('Project-relative toolkit archives require a workspace root')
+  root = path.resolve(root)
+  const file = path.join(root, ...runtime.validateRelativePath(reference.archive.path).split('/'))
+  for (let current = file; current !== root; current = path.dirname(current)) {
+    if (fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink()) throw new Error('Project toolkit archive cannot use filesystem links')
+  }
+  u.assertFile(file)
+  if (fs.statSync(file).size !== reference.archive.size || u.sha256(file) !== reference.archive.sha256) {
+    throw new Error('Project toolkit archive does not match its pinned size and SHA-256')
+  }
+  return file
+}
+
 async function download(reference, destination, options = {}) {
-  const url = location(reference.archive.url, options.allowLoopback)
+  const url = Object.hasOwn(reference.archive, 'path') ? pathToFileURL(projectArchive(options.root, reference))
+    : location(reference.archive.url, options.allowLoopback)
   let input
   if (url.protocol === 'file:') {
     const source = fileURLToPath(url)
@@ -235,6 +257,8 @@ function verifyDirectory(directory, inventory) {
 async function prepareToolkit(root, options = {}) {
   const selected = options.reference ? { reference: validateReference(options.reference, options), file: null } : readReference(root, options)
   const reference = selected.reference
+  const projectRoot = Object.hasOwn(reference.archive, 'path') ? path.resolve(root) : null
+  if (projectRoot) projectArchive(projectRoot, reference)
   const parent = path.join(root, 'build/component-cache/distribution-toolkit')
   fs.mkdirSync(parent, { recursive: true })
   const destination = path.join(parent, reference.archive.sha256)
@@ -243,7 +267,7 @@ async function prepareToolkit(root, options = {}) {
   if (!reused) {
     directory = fs.mkdtempSync(path.join(parent, 'download-'))
     console.log('[toolkit] Downloading pinned maintenance components ' + reference.toolkitVersion)
-    await download(reference, path.join(directory, 'archive.zip'), options)
+    await download(reference, path.join(directory, 'archive.zip'), { ...options, root })
   }
   const zip = path.join(directory, 'archive.zip')
   u.assertFile(zip)
@@ -253,7 +277,7 @@ async function prepareToolkit(root, options = {}) {
   if (!reused) await extract(zip, toolkitDirectory)
   const inputs = verifyDirectory(toolkitDirectory, inventory)
   if (!reused) fs.renameSync(directory, destination)
-  const toolkit = { reference, referenceFile: selected.file, referenceSha256: selected.sha256,
+  const toolkit = { reference, referenceFile: selected.file, referenceSha256: selected.sha256, projectRoot,
     directory: path.join(destination, 'toolkit'), archive: path.join(destination, 'archive.zip'),
     manifest: inventory.manifest, files: inventory.files, inputs, reused }
   assertUnchanged(toolkit)
@@ -261,6 +285,7 @@ async function prepareToolkit(root, options = {}) {
 }
 
 function assertUnchanged(toolkit) {
+  if (toolkit.projectRoot) projectArchive(toolkit.projectRoot, toolkit.reference)
   if (toolkit.referenceFile) {
     u.assertFile(toolkit.referenceFile)
     if (u.sha256(toolkit.referenceFile) !== toolkit.referenceSha256) throw new Error('Distribution toolkit reference changed during assembly')

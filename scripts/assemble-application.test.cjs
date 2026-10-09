@@ -12,10 +12,15 @@ const { pe } = require('./test-fixtures/application-runtime.cjs')
 const { fixtureRoot, writeToolkit, createPayloads, assemblyResult, mockAssembler } =
   require('./test-fixtures/distribution-toolkit.cjs')
 
-async function context(t, withPayloads = false) {
+async function context(t, withPayloads = false, configurable = false) {
   const directory = fixtureRoot(t)
   const root = path.join(directory, 'workspace with spaces & punctuation')
-  const published = writeToolkit(path.join(directory, 'published'))
+  const fixture = require('./test-fixtures/distribution-toolkit.cjs').toolkitFixture()
+  if (configurable) {
+    fixture.manifest.toolkitVersion = '1.3.0'
+    fixture.manifest.installationConfigurationVersion = 1
+  }
+  const published = writeToolkit(path.join(directory, 'published'), fixture)
   const toolkit = await toolkitApi.prepareToolkit(root, { reference: published.reference })
   const payloads = withPayloads ? await createPayloads(path.join(root, 'source')) : undefined
   return { directory, root, published, toolkit, payloads }
@@ -279,6 +284,54 @@ test('mock assembler contract preserves the product version and verifies both ou
   for (const item of value.payloads) assert.equal(u.sha256(item.path), item.manifest.archive.sha256)
 })
 
+test('assembly forwards workspace installation defaults instead of leaving them inside the binary toolkit', async t => {
+  const value = await context(t, true, true)
+  const configuration = { schemaVersion: 1, edition: 'concept', options: { autoLaunch: true, usageTracking: false } }
+  fs.mkdirSync(path.join(value.root, 'maintenance'), { recursive: true })
+  fs.writeFileSync(path.join(value.root, 'maintenance/installation-configuration.json'), JSON.stringify(configuration))
+  const mock = mockAssembler(value.toolkit)
+  const assembled = await assembly.assemble(optionsFor(value, mock.spawn))
+  const request = JSON.parse(fs.readFileSync(mock.calls[0].args[2], 'utf8'))
+  assert.deepEqual(request.installationConfiguration, configuration)
+  assert.equal(assembled.retainedInputs.length, 5)
+  assert.equal(assembled.result.installationConfigurationSha256, u.hash(Buffer.from('{"edition":"concept","options":{"autoLaunch":true,"usageTracking":false},"schemaVersion":1}\n')))
+  const collected = collect(value, assembled, 'custom-defaults')
+  const retained = collected.manifest.artifacts.find(file => file.file === 'inputs/installation-configuration.json')
+  assert.equal(retained.sha256, assembled.result.installationConfigurationSha256)
+  assert.equal(fs.readFileSync(path.join(collected.directory, retained.file), 'utf8'), '{"edition":"concept","options":{"autoLaunch":true,"usageTracking":false},"schemaVersion":1}\n')
+  assembly.verifyCollected(assembled, collected.directory, { spawn: mock.spawn })
+})
+
+test('custom defaults require a compatible pinned binary before compilation or assembly', async t => {
+  const value = await context(t)
+  fs.mkdirSync(path.join(value.root, 'maintenance'), { recursive: true })
+  fs.writeFileSync(path.join(value.root, 'maintenance/installation-configuration.json'), JSON.stringify({ schemaVersion: 1, edition: 'concept', options: { autoLaunch: true } }))
+  const mock = mockAssembler(value.toolkit)
+  await assert.rejects(assembly.preflight({ root: value.root,
+    toolkitOptions: { reference: value.published.reference, platform: 'win32' }, invokeOptions: { spawn: mock.spawn } }), /compatible toolkit/)
+  assert.deepEqual(mock.calls.map(call => call.args[0]), ['inspect'])
+})
+
+test('configuration changes and missing or substituted result evidence prevent delivery', async t => {
+  const value = await context(t, true, true)
+  const file = path.join(value.root, 'maintenance/installation-configuration.json')
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const original = JSON.stringify({ schemaVersion: 1, edition: 'concept', options: { autoLaunch: true } })
+  for (const [name, hooks] of [
+    ['changed-source', { assemble() { fs.appendFileSync(file, '\n') } }],
+    ['changed-before-verification', { verify() { fs.appendFileSync(file, '\n') } }],
+    ['missing-result', { assemble({ result }) { delete result.installationConfigurationSha256 } }],
+    ['different-result', { assemble({ result }) { result.installationConfigurationSha256 = '0'.repeat(64) } }],
+    ['different-verification', { verify({ verified, respond }) { return respond({ ...verified, installationConfigurationSha256: '0'.repeat(64) }) } }],
+    ['missing-retained', { assemble({ request }) { fs.unlinkSync(path.join(request.outputDirectory, 'inputs/installation-configuration.json')) } }],
+    ['changed-retained', { assemble({ request }) { fs.appendFileSync(path.join(request.outputDirectory, 'inputs/installation-configuration.json'), '\n') } }],
+  ]) {
+    fs.writeFileSync(file, original)
+    const mock = mockAssembler(value.toolkit, hooks)
+    await assert.rejects(assembly.assemble(optionsFor(value, mock.spawn, path.join(value.root, name))))
+  }
+})
+
 test('detailed assembly evidence must identify the pinned toolkit and a matching public signing identity', async t => {
   const value = await context(t, true)
   for (const [name, change] of [
@@ -403,6 +456,19 @@ test('input changes during assembly or verification prevent returning a delivera
     const hooks = { [timing]() { fs.appendFileSync(value.payloads[1].manifestPath, '\n') } }
     const mock = mockAssembler(value.toolkit, hooks)
     await assert.rejects(assembly.assemble(optionsFor(value, mock.spawn)), /inputs changed/)
+    assert.deepEqual(mock.calls.map(call => call.args[0]), timing === 'assemble' ? ['assemble'] : ['assemble', 'verify'])
+  })
+})
+
+test('configuration appearing during assembly or verification prevents returning a deliverable', async t => {
+  for (const timing of ['assemble', 'verify']) await t.test(timing, async sub => {
+    const value = await context(sub, true)
+    const mock = mockAssembler(value.toolkit, { [timing]() {
+      const file = path.join(value.root, 'maintenance/installation-configuration.json')
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, edition: 'concept', options: { autoLaunch: true } }))
+    } })
+    await assert.rejects(assembly.assemble(optionsFor(value, mock.spawn)), /configuration changed/)
     assert.deepEqual(mock.calls.map(call => call.args[0]), timing === 'assemble' ? ['assemble'] : ['assemble', 'verify'])
   })
 })
