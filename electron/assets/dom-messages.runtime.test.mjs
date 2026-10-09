@@ -57,6 +57,94 @@ async function fixture(t, messages, hostname = 'chat.deepseek.com', route = '/a/
 
 const mimoUser = text => `<div class="relative mx-auto flex w-full"><div class="group flex flex-row-reverse"><div class="bg-mimo-bg-message whitespace-pre-wrap">${text}</div><button>Copy</button></div></div>`
 const mimoAnswer = (text, reasoning = '', streaming = false) => `<div class="relative mx-auto flex w-full"><div class="group flex flex-row"><div><span>MiMo-V2.6-Pro</span></div><div class="Markdown_markdown__a19823a0">${reasoning ? `<div class="mb-2"><div>Thinking status</div><blockquote><p>${reasoning}</p></blockquote></div>` : ''}<p>${text}</p>${streaming ? '<span class="animate-pulse"></span>' : ''}</div><button>Copy</button></div></div>`
+const mimoBlock = (html, typing = false) => `<div class="Markdown_markdown__a19823a0" data-is-typing="${typing}">${html}</div>`
+const mimoUltraThinking = (expanded = false) => `<div class="mb-2"><div data-state="${expanded ? 'open' : 'closed'}"><button aria-expanded="${expanded}"><div class="Collapsible_Text__c90b7809"><summary>Completed reasoning</summary></div></button>${expanded ? '<div class="Collapsible_CollapsibleContent__c90b7809"><blockquote><p>Reasoning</p></blockquote></div>' : ''}</div></div>`
+const mimoUltraAnswer = blocks => `<div class="relative mx-auto flex w-full"><div><span>MiMo-V2.6-Pro UltraSpeed</span></div><div class="flex flex-col">${blocks}</div><div>166 TPS</div><button>Copy</button></div>`
+
+test('captures every MiMo UltraSpeed answer block while reasoning is collapsed or expanded', async t => {
+  const body = mimoBlock('<p>First paragraph.</p>') + mimoBlock('<p>Second paragraph.</p>')
+  const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(mimoBlock(mimoUltraThinking()) + body), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const collapsed = await f.parse()
+  assert.deepEqual(collapsed.messages.map(message => message.content), ['Input', 'First paragraph.\nSecond paragraph.'])
+  assert.match(collapsed.messages[1].markdownContent, /^First paragraph\.\n{2,}Second paragraph\.$/)
+  assert.equal(collapsed.messages[1].reasoning, undefined)
+  await f.page.locator('.mb-2').evaluate((node, html) => { node.outerHTML = html }, mimoUltraThinking(true))
+  const expanded = await f.parse()
+  assert.deepEqual(expanded.messages.map(message => message.key), collapsed.messages.map(message => message.key))
+  assert.equal(expanded.messages[1].content, collapsed.messages[1].content)
+  assert.equal(expanded.messages[1].reasoning, 'Reasoning')
+  await f.page.locator('.mb-2').evaluate((node, html) => { node.outerHTML = html }, mimoUltraThinking())
+  const folded = await f.parse()
+  assert.equal(folded.messages[1].reasoning, undefined)
+  assert.equal(folded.messages[1].content, collapsed.messages[1].content)
+})
+
+test('captures MiMo UltraSpeed code without language labels, hidden copies or duplicate markdown roots', async t => {
+  const code = '<h1>UltraSpeed</h1>\n<p>Answer</p>'
+  const escaped = code.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  const html = mimoBlock('<p>Answer paragraph.</p>') + mimoBlock(`<div class="relative my-2 overflow-clip"><div><header><span>html</span><button>Copy</button></header></div><div class="style_overlay__sample"><div aria-hidden="true"><pre><span class="languageLabel">html</span><code>Placeholder</code></pre></div><div><pre data-testid="shiki-container"><span class="languageLabel">html</span><pre class="shiki"><code>${escaped}</code></pre></pre></div></div></div>`) + mimoBlock(mimoBlock('<p>Last paragraph.</p>'))
+  const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(html), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const answer = (await f.parse()).messages[1]
+  assert.equal(answer.content, `Answer paragraph.\n${code}\nLast paragraph.`)
+  assert(answer.markdownContent.includes('```html\n' + code + '\n```'))
+  assert.match(answer.markdownContent, /^Answer paragraph\.\n{2,}[^]*\n{2,}Last paragraph\.$/)
+  assert.equal(answer.markdownContent.match(/```html/g).length, 1)
+})
+
+test('binds multiple MiMo UltraSpeed answers to the nearest preceding prompt in one document', async t => {
+  const html = mimoUser('First input') + mimoUltraAnswer(mimoBlock('<p>First answer.</p>'))
+    + mimoUser('Second input') + mimoUltraAnswer(mimoBlock('<p>Second answer.</p>'))
+  const f = await fixture(t, html, 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const result = await f.parse()
+  assert.deepEqual(result.messages.map(message => [message.role, message.content]), [
+    ['user', 'First input'], ['assistant', 'First answer.'], ['user', 'Second input'], ['assistant', 'Second answer.'],
+  ])
+  assert.equal(new Set(result.messages.map(message => message.key)).size, 4)
+})
+
+test('captures a standalone MiMo Markdown root and all expanded reasoning blocks', async t => {
+  const root = `<div class="Markdown_markdown__a19823a0"><div class="mb-2"><div class="Collapsible_Text__c90b7809"><summary>Completed reasoning</summary><blockquote><p>First thought.</p><blockquote><p>Nested quote.</p></blockquote><p>Second thought.</p></blockquote></div></div><p>Answer.</p></div>`
+  const f = await fixture(t, mimoUser('Input') + root, 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const result = await f.parse()
+  assert.deepEqual(result.messages.map(message => ({ role: message.role, content: message.content, reasoning: message.reasoning })), [
+    { role: 'user', content: 'Input', reasoning: undefined },
+    { role: 'assistant', content: 'Answer.', reasoning: 'First thought.\nNested quote.\nSecond thought.' },
+  ])
+})
+
+test('tracks MiMo UltraSpeed typing across answer blocks without changing message identity', async t => {
+  const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(mimoBlock('<p>First.</p>') + mimoBlock('<p>Partial</p>', true)), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const streaming = await f.parse()
+  assert.equal(streaming.messages[1].status, 'streaming')
+  await f.page.locator('[data-is-typing="true"]').evaluate(node => { node.innerHTML = '<p>Complete.</p>'; node.setAttribute('data-is-typing', 'false') })
+  const complete = await f.parse()
+  assert.equal(complete.messages[1].status, 'complete')
+  assert.equal(complete.messages[1].content, 'First.\nComplete.')
+  assert.deepEqual(complete.messages.map(message => message.key), streaming.messages.map(message => message.key))
+  assert.deepEqual(await f.parse(), complete)
+})
+
+test('keeps normal and MiMo UltraSpeed routes separate during delayed page replacement', async t => {
+  const f = await fixture(t, mimoUser('Input') + mimoAnswer('Normal answer'), 'aistudio.xiaomimimo.com', '/#/chat/one')
+  await f.page.evaluate(() => {
+    window.port = { calls: [], listeners: {}, invoke(channel, ...args) {
+      this.calls.push({ channel, args: structuredClone(args) })
+      return Promise.resolve(channel === 'ai-assets:authorize' ? true : { conversationId: 'fixture', messageIds: {} })
+    } }
+  })
+  await f.page.addScriptTag({ content: collectorBundle })
+  await f.page.evaluate(() => CollectorContract.startAiAssetCollector())
+  await f.page.evaluate(() => { history.pushState(null, '', '#/ultra/one') })
+  await f.page.waitForTimeout(800)
+  assert.equal(await f.page.evaluate(() => window.port.calls.filter(call => call.channel === 'ai-assets:observe').length), 1)
+  await f.page.locator('main').evaluate((node, html) => { node.innerHTML = html }, mimoUser('Ultra input') + mimoUltraAnswer(mimoBlock('<p>First.</p>') + mimoBlock('<p>Second.</p>')))
+  await f.page.waitForFunction(() => window.port.calls.filter(call => call.channel === 'ai-assets:observe').length === 2)
+  const observations = await f.page.evaluate(() => window.port.calls.filter(call => call.channel === 'ai-assets:observe').map(call => call.args[0]))
+  assert.equal(observations[0].conversationKey, 'https://aistudio.xiaomimimo.com/#/chat/one')
+  assert.equal(observations[1].conversationKey, 'https://aistudio.xiaomimimo.com/#/ultra/one')
+  assert.equal(observations[1].previousConversationKey, undefined)
+  assert.deepEqual(observations[1].messages.map(message => message.content), ['Ultra input', 'First.\nSecond.'])
+})
 
 test('captures the public MiMo Studio message component with separate reasoning', async t => {
   const f = await fixture(t, mimoUser('Input') + mimoAnswer('Answer', 'Reasoning'), 'aistudio.xiaomimimo.com', '/#/chat/one')

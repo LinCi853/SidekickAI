@@ -2,6 +2,7 @@ import { classifyCapturedNoise } from './noise-classifier.js'
 import type { AssetObservedMessage } from '../shared/ai-assets.types.js'
 
 const mimoUserSelector = '.bg-mimo-bg-message.whitespace-pre-wrap'
+const mimoMarkdownSelector = '[class*="Markdown_markdown__"]'
 const platforms: Record<string, [string, string]> = {
   'chatgpt.com': ['[data-message-author-role="user"]', '[data-message-author-role="assistant"]'],
   'claude.ai': ['[data-testid="user-message"]', '[data-testid="ai-response"], [data-testid="assistant-message"], .font-claude-message'],
@@ -13,7 +14,7 @@ const platforms: Record<string, [string, string]> = {
   'kimi.com': ['.message-block.user, .user-message, .segment.segment-user', '.message-block.assistant, .ai-message, .segment.segment-assistant'],
   'yiyan.baidu.com': ['.user-question, .user-msg', '.answer-content, .answer-message'],
   'mimo.xiaomi.com': ['.user-msg, .user-message', '.ai-msg, .ai-message'],
-  'aistudio.xiaomimimo.com': [mimoUserSelector, '[class*="Markdown_markdown__"]'],
+  'aistudio.xiaomimimo.com': [mimoUserSelector, mimoMarkdownSelector],
   'qianwen.com': ['.chat-question-wrap', '[data-chat-answers-wrap]'],
   'wenxin.baidu.com': ['.cs-rank[data-query][rank]', '.answer-box[data-base-data], .history-answer-box[data-base-data]'],
 }
@@ -27,7 +28,7 @@ const deepseekUserContentSelector = '.fbb737a4'
 const deepseekAnswerSelector = '.ds-assistant-message-main-content'
 const deepseekThinkingSelector = '.ds-think-content'
 const deepseekAssistantSelector = `${deepseekAnswerSelector}, ${deepseekThinkingSelector}`
-const mimoThinkingSelector = '.mb-2:has(blockquote)'
+const mimoThinkingSelector = '.mb-2:has(blockquote), .mb-2:has([class*="Collapsible_Text__"] summary)'
 const qianwenThinkingSelector = '[data-card_name="deep_think"]'
 const kimiThinkingSelector = '.thinking-container'
 const wenxinThinkingSelector = '[class*="_thinking-steps_"]'
@@ -51,6 +52,23 @@ function stripCodeToolbars(root: Element) {
     pre.setAttribute('data-captured-language', words[1].toLowerCase())
     header.remove()
   }
+}
+
+function cloneMiMoAnswer(element: Element): Element {
+  const clone = element.ownerDocument.createElement('div')
+  const roots = element.matches(mimoMarkdownSelector)
+    ? [element]
+    : Array.from(element.querySelectorAll(mimoMarkdownSelector)).filter(block => !block.parentElement?.closest(mimoMarkdownSelector))
+  for (const block of roots) {
+    clone.appendChild(block.cloneNode(true))
+  }
+  for (const pre of clone.querySelectorAll('pre')) {
+    const language = pre.querySelector('.languageLabel')?.textContent?.trim()
+    if (language) pre.setAttribute('data-captured-language', language)
+    pre.querySelectorAll('.languageLabel').forEach(label => label.remove())
+    pre.closest('.relative.my-2.overflow-clip')?.querySelector('header')?.remove()
+  }
+  return clone
 }
 
 function nodeText(node: Node): string {
@@ -215,9 +233,13 @@ export function readDomConversation(document: Document, hostname: string): DomCo
   candidates.forEach((nodes, roleIndex) => {
     const role = roleIndex === 0 ? 'user' : 'assistant'
     nodes.forEach((element, index) => {
-      const mimoBubble = mimo ? element.querySelector(mimoUserSelector) ??
-        (element.parentElement?.querySelectorAll(mimoUserSelector).length === 1
-          ? element.parentElement.querySelector(mimoUserSelector)! : element) : undefined
+      const mimoBubble = mimo ? role === 'user'
+        ? element.querySelector(mimoUserSelector)
+        : Array.from(document.querySelectorAll(mimoUserSelector))
+          .filter(bubble => !bubble.closest(interfaceSelector))
+          .filter(bubble => Boolean(bubble.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING))
+          .at(-1)
+        : undefined
       const mimoIdentity = mimoBubble ? mimoKeys?.get(mimoBubble) : undefined
       const external = element.getAttribute('data-message-id') || element.getAttribute('data-id') || element.id
         || (deepseek ? element.closest('[data-virtual-list-item-key]')?.getAttribute('data-virtual-list-item-key') : undefined)
@@ -244,10 +266,11 @@ export function readDomConversation(document: Document, hostname: string): DomCo
       const contentElement = currentAssistant ? element.querySelector(deepseekAnswerSelector)
         : deepseek && role === 'user' && element.matches(deepseekUserSelector)
           ? element.querySelector(deepseekUserContentSelector) ?? element
-          : mimo ? element.querySelector(role === 'user' ? mimoUserSelector : '[class*="Markdown_markdown__"]') ?? element
+          : mimo && role === 'user' ? element.querySelector(mimoUserSelector) ?? element
             : chatglm ? element.querySelector(role === 'user' ? '.question-txt' : '.answer-content') ?? element
               : kimi && role === 'user' ? element.querySelector('.user-content') ?? element : element
-      const clone = (contentElement?.cloneNode(true) as Element | undefined) ?? document.createElement('div')
+      const clone = mimo && role === 'assistant' ? cloneMiMoAnswer(element)
+        : (contentElement?.cloneNode(true) as Element | undefined) ?? document.createElement('div')
       if (wenxin && role === 'user') clone.textContent = element.getAttribute('data-query') ?? nodeText(clone)
       if (deepseek && role === 'assistant') stripCodeToolbars(clone)
       clone.querySelectorAll(`${messageThinkingSelector}, ${messageChromeSelector}`).forEach(node => node.remove())
@@ -255,7 +278,11 @@ export function readDomConversation(document: Document, hostname: string): DomCo
       const noise = classifyCapturedNoise(content)
       if (noise && noise !== 'empty-capture') { rejected.push({ key, reason: noise, content }); return }
       const reasoning = thinking.flatMap(node => {
-        if (mimo && node.matches(mimoThinkingSelector)) return [nodeText(node.querySelector('blockquote')!).replace(/\n$/, '')]
+        if (mimo && node.matches(mimoThinkingSelector)) {
+          const bodies = Array.from(node.querySelectorAll('blockquote'))
+            .filter(body => !body.parentElement?.closest('blockquote'))
+          return bodies.map(body => nodeText(body).replace(/\n$/, '')).filter(Boolean)
+        }
         if (qianwen && node.matches(qianwenThinkingSelector)) {
           return reasoningFragments(node, '[class*="thinking-content"], [class*="markdown-content"]', messageChromeSelector)
         }
@@ -271,9 +298,9 @@ export function readDomConversation(document: Document, hostname: string): DomCo
           .map(fragment => nodeText(fragment).replace(/\n$/, '')).filter(text => text.trim())
       }).join('\n')
       const explicitStatus = element.getAttribute('data-status')
-      const streaming = element.matches('[aria-busy="true"], [data-streaming="true"], [data-is-streaming="true"]')
+      const streaming = element.matches('[aria-busy="true"], [data-streaming="true"], [data-is-streaming="true"], [data-is-typing="true"]')
         || !!element.querySelector('[aria-busy="true"], [data-streaming="true"]')
-        || (mimo && role === 'assistant' && !!element.querySelector('[class*="DetailRender_shimmer__"], .animate-pulse'))
+        || (mimo && role === 'assistant' && !!element.querySelector('[class*="DetailRender_shimmer__"], .animate-pulse, [data-is-typing="true"]'))
         || (role === 'assistant' && index === nodes.length - 1 && !!document.querySelector(
           'button[aria-label*="Stop"], button[aria-label*="停止"], button[data-testid="stop-button"]'))
       const status = explicitStatus === 'withdrawn' || explicitStatus === 'stopped' || explicitStatus === 'failed' || explicitStatus === 'streaming'
@@ -281,10 +308,15 @@ export function readDomConversation(document: Document, hostname: string): DomCo
       if (!content.trim() && !reasoning.trim() && status === 'complete') return
       messages.push({ element, observed: { key, role, content, markdownContent: markdown(clone).trim(),
         ...(mimoIdentity ? { identityToken: mimoIdentity.token } : {}),
-        ...(thinking.length ? { reasoning } : {}), ...branchIdentity(element), status } })
+        ...(thinking.length && (!mimo || reasoning.trim()) ? { reasoning } : {}), ...branchIdentity(element), status } })
     })
   })
-  messages.sort((a, b) => a.element.compareDocumentPosition(b.element) & 2 ? 1 : -1)
+  messages.sort((a, b) => {
+    const position = a.element.compareDocumentPosition(b.element)
+    if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1
+    if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1
+    return a.observed.role === 'user' ? -1 : 1
+  })
   const first = messages[0]?.element
   const completePath = !document.querySelector('[data-virtualized="true"], [data-messages-partial="true"]')
     && !mimo && !qianwen
