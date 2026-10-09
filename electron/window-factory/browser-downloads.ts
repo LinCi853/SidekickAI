@@ -1,6 +1,5 @@
 import { BrowserWindow, session, dialog, app, type DownloadItem, type WebContents } from 'electron'
 import { randomUUID } from 'crypto'
-import path from 'path'
 import { readSettingsRaw } from '../store/app-settings-repository.js'
 import { browserDownloadStore } from '../store/browser-download-store.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
@@ -8,6 +7,8 @@ import { consumeAskSavePath } from '../utils/ask-save-path.js'
 import { getRecordByWebContentsId } from './webview-registry.js'
 import { windowState } from '../window-state.js'
 import { findWindowIdByWin } from './window-utils.js'
+import { containedDownloadPath, safeDownloadFilename } from '../security/download-path.js'
+import { installProfilePermissions } from '../security/session-permissions.js'
 
 /** Publishes item progress to browser and download history windows. */
 function broadcastDownloadUpdated(payload: {
@@ -56,17 +57,10 @@ function resolveDownloadOwner(profileId: string, source?: WebContents): { win: B
 export function registerBrowserDownloads(profileId: string): void {
   const partition = `persist:${profileId}`
   const ses = session.fromPartition(partition)
+  installProfilePermissions(ses, profileId)
 
   if ((ses as unknown as { __browserDownloadAttached?: boolean }).__browserDownloadAttached) return
   ;(ses as unknown as { __browserDownloadAttached?: boolean }).__browserDownloadAttached = true
-
-  if (!(ses as unknown as { __permissionHandlerAttached?: boolean }).__permissionHandlerAttached) {
-    ;(ses as unknown as { __permissionHandlerAttached?: boolean }).__permissionHandlerAttached = true
-    ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-      const allowed = new Set(['media', 'geolocation', 'fullscreen', 'clipboard-read', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock', 'speaker-selection'])
-      callback(allowed.has(permission))
-    })
-  }
 
   ses.on('will-download', (_e, item: DownloadItem, source?: WebContents) => {
     const owner = resolveDownloadOwner(profileId, source);
@@ -77,7 +71,7 @@ export function registerBrowserDownloads(profileId: string): void {
     const requestedUrl = item.getURLChain?.()[0] || item.getURL()
     const isAskSavePath = consumeAskSavePath(ses, requestedUrl)
     if (isAskSavePath) {
-      const askFilename = (item.getFilename() || 'download').replace(/[\\/:*?"<>|]/g, '_')
+      const askFilename = safeDownloadFilename(item.getFilename())
       const options = {
         title: '另存为',
         defaultPath: askFilename,
@@ -90,13 +84,13 @@ export function registerBrowserDownloads(profileId: string): void {
         item.cancel()
         return
       }
-      filename = item.getFilename() || 'download'
+      filename = askFilename
       savePath = result
     } else {
       const settings = readSettingsRaw()
       const dir = settings.downloadDir || app.getPath('downloads')
-      filename = item.getFilename() || 'download'
-      savePath = path.join(dir, filename)
+      filename = safeDownloadFilename(item.getFilename())
+      savePath = containedDownloadPath(dir, filename)
     }
     item.setSavePath(savePath)
 

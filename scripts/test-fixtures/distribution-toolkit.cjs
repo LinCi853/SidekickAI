@@ -3,6 +3,8 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
+const { createRequire, wrap } = require('node:module')
+const { runInThisContext } = require('node:vm')
 const crc32 = require('buffer-crc32')
 const u = require('../build-utils.cjs')
 const payloadApi = require('../application-payload.cjs')
@@ -100,7 +102,19 @@ function writeToolkit(root, fixture = toolkitFixture()) {
     schemaVersion: 1, toolkitVersion: fixture.manifest?.toolkitVersion || '1.2.0', interfaceVersion: 1,
     archive: { url: pathToFileURL(archive).href, size: fs.statSync(archive).size, sha256: u.sha256(archive) },
   }
-  return { archive, reference, manifest: fixture.manifest }
+  return { archive, reference, manifest: fixture.manifest, toolkit: fixtureConsumer(reference) }
+}
+
+function fixtureConsumer(reference) {
+  const filename = path.resolve(__dirname, '../distribution-toolkit.cjs')
+  const load = createRequire(filename)
+  const release = Object.freeze({ toolkitVersion: reference.toolkitVersion, size: reference.archive.size,
+    sha256: reference.archive.sha256 })
+  const module = { exports: {} }
+  const consumer = runInThisContext(wrap(fs.readFileSync(filename, 'utf8')), { filename })
+  consumer(module.exports, name => name === './distribution-toolkit-release.cjs' ? release : load(name),
+    module, filename, path.dirname(filename))
+  return module.exports
 }
 
 async function createPayloads(root, productVersion = '9.4.2') {

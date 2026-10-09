@@ -185,11 +185,9 @@ export async function openLogsFolder(options?: LogExportOptions): Promise<LogExp
 }
 
 /** 读取拖拽文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容） */
-export async function dropFiles(
-  filePaths: string[],
-): Promise<Array<{ filename: string; dataUrl: string; mime: string; size: number }>> {
+export async function dropFiles(): Promise<Array<{ filename: string; dataUrl: string; mime: string; size: number }>> {
   const api = requireElectron();
-  return api.appSettings.dropFiles(filePaths);
+  return api.appSettings.dropFiles();
 }
 
 /** 监听下载完成事件（主进程 → 渲染层：filename + path）。返回取消监听函数 */
@@ -331,31 +329,31 @@ export async function previewImportAIProviders(
   return api.aiProvider.previewImport(encrypted, password);
 }
 
-/** v0.5.2 B-4：选择 AI Provider 加密导出文件保存路径 */
-export async function selectAIProviderExportPath(): Promise<string | null> {
+/** Select an export destination and receive a one-use file capability. */
+export async function selectAIProviderExportPath(): Promise<{ token: string; name: string } | null> {
   const api = requireElectron();
   return api.aiProvider.selectExportPath();
 }
 
-/** v0.5.2 B-4：选择 AI Provider 加密导入文件 */
-export async function selectAIProviderImportFile(): Promise<string | null> {
+/** Capture an import selection and receive a one-use file capability. */
+export async function selectAIProviderImportFile(): Promise<{ token: string; name: string } | null> {
   const api = requireElectron();
   return api.aiProvider.selectImportFile();
 }
 
-/** v0.5.2 B-4：写入加密导出文件到指定路径 */
+/** Consume the selected export capability. */
 export async function writeAIProviderExportFile(
-  filePath: string,
+  token: string,
   content: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const api = requireElectron();
-  return api.aiProvider.writeExportFile(filePath, content);
+  return api.aiProvider.writeExportFile(token, content);
 }
 
-/** v0.5.2 B-4：读取导入文件内容 */
+/** Consume the captured import capability. */
 export async function readAIProviderImportFile(
-  filePath: string,
+  token: string,
 ): Promise<{ ok: boolean; content?: string; error?: string }> {
   const api = requireElectron();
-  return api.aiProvider.readImportFile(filePath);
+  return api.aiProvider.readImportFile(token);
 }

@@ -30,6 +30,7 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('node_modules/esbuild/dist/tool.js', 'first tool')
   write('electron/shared/used.mjs', 'first shared source')
   write('scripts/excalidraw-clipboard-feedback.ts', 'first clipboard adapter')
+  write('scripts/renderer-security.ts', 'first renderer policy adapter')
   write('scripts/build-startup-helper.cjs', 'startup recipe')
   write('tools/startup-helper/StartupHelper.cs', 'startup driver')
   let builds = 0
@@ -89,4 +90,12 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('tools/startup-helper/StartupHelper.cs', 'changed startup driver')
   assert.notEqual(compile().key, beforeStartup)
   assert.equal(builds, 11)
+  const beforePolicy = compile().key
+  write('scripts/renderer-security.ts', 'second renderer policy adapter')
+  assert.notEqual(compile().key, beforePolicy)
+  assert.equal(builds, 12)
+  const beforeTheme = compile().key
+  write('src/public/theme-startup.js', 'changed initial theme')
+  assert.notEqual(compile().key, beforeTheme)
+  assert.equal(builds, 13)
 })

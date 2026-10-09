@@ -522,11 +522,14 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
       directory => shell.openPath(directory), options, applicationLogSources())
   })
 
-  // 文件拖拽导入：读取文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容）
-  ipcMain.handle(IPC_CHANNELS.WEBVIEW_FILE_DROP, async (_e, filePaths: string[]) => {
-    const { readFilesAsDataUrls } = await import('../utils/file-drop-handler.js')
-    return readFilesAsDataUrls(filePaths)
-  })
+  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE, async event =>
+    (await import('../utils/file-drop-handler.js')).prepareFileDrop(event))
+  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE, async (event, input: unknown) =>
+    (await import('../utils/file-drop-handler.js')).captureFileDrop(event, input))
+  ipcMain.handle(IPC_CHANNELS.WEBVIEW_FILE_DROP, async (event, input: unknown) =>
+    (await import('../utils/file-drop-handler.js')).readDroppedFiles(event, input))
+  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_OPEN, async (event, input: unknown) =>
+    (await import('../utils/file-drop-handler.js')).openDroppedFiles(event, input))
 
   // ===== 每应用浏览器窗口脱离/回归快捷键 =====
   // 保存/清除指定 Profile 的浏览器窗口快捷键，并重注册全局快捷键

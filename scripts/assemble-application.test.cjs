@@ -21,6 +21,7 @@ async function context(t, withPayloads = false, configurable = false) {
     fixture.manifest.installationConfigurationVersion = 1
   }
   const published = writeToolkit(path.join(directory, 'published'), fixture)
+  t.mock.method(toolkitApi, 'prepareToolkit', published.toolkit.prepareToolkit)
   const toolkit = await toolkitApi.prepareToolkit(root, { reference: published.reference })
   const payloads = withPayloads ? await createPayloads(path.join(root, 'source')) : undefined
   return { directory, root, published, toolkit, payloads }
@@ -110,6 +111,21 @@ test('preflight rejects unsupported platforms before downloading or invoking any
     invokeOptions: { spawn() { invoked = true; throw new Error('unexpected process') } } }), /Windows/)
   assert.equal(invoked, false)
   assert.equal(fs.existsSync(path.join(root, 'build')), false)
+})
+
+test('preflight rejects foreign release identities before binary invocation', async t => {
+  const root = fixtureRoot(t)
+  for (const change of [
+    value => { value.toolkitVersion = '1.3.2' },
+    value => { value.archive.size++ },
+    value => { value.archive.sha256 = '0'.repeat(64) },
+  ]) {
+    const reference = structuredClone(require('../maintenance/distribution-toolkit.json'))
+    change(reference)
+    await assert.rejects(assembly.preflight({ root, toolkitOptions: { reference, platform: 'win32' },
+      invokeOptions: { spawn() { assert.fail('Foreign references must not invoke the assembler') } } }), /trusted release/)
+    assert.equal(fs.existsSync(path.join(root, 'build')), false)
+  }
 })
 
 test('binary invocation rechecks toolkit bytes both before and after the process', async t => {

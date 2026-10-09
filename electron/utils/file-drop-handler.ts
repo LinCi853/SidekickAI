@@ -1,64 +1,128 @@
-// electron/utils/file-drop-handler.ts — 文件拖拽导入：读取文件字节并以 data URL 形式返回
-//
-// 用于跨 webview 边界传递文件内容：
-//   1. 父渲染层 document 监听 drop 事件，从 e.dataTransfer.files 取真实路径（Electron 特性）
-//   2. 经 IPC WEBVIEW_FILE_DROP 把路径送到主进程
-//   3. 本模块读取文件字节，返回 data URL 数组
-//   4. 渲染层 webview.executeJavaScript 注入脚本，在 guest 内构造 File 对象并派发合成事件
-//
-// data URL 方案的取舍：
-//   - 优点：跨 webview 边界传递最简单（无需注册自定义协议、无需禁用 webSecurity）
-//   - 缺点：base64 编码体积膨胀 ~33%，大文件（>100MB）会占用较多内存与 IPC 带宽
-//   - 对于 AI 应用的文件导入场景（图片、文档、代码片段），通常 <50MB，data URL 方案足够
-//   - 若未来需要支持超大文件，可改为注册自定义协议 + 流式读取
+import fs from 'node:fs'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { BrowserWindow, type IpcMainInvokeEvent, type WebContents, type WebFrameMain } from 'electron'
+import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertOwnedWebview } from '../security/webview-owner.js'
+import { openNativeFile, readNativeFile } from '../security/native-file.js'
+import { createLocalPreview } from './pdf-protocol.js'
+import { windowState } from '../window-state.js'
 
-import fs from 'fs'
-import path from 'path'
-
-/** 拖拽文件读取结果 */
 export interface DroppedFile {
-  /** 文件名（含扩展名，不含路径） */
   filename: string
-  /** data URL：`data:<mime>;base64,<...>` */
   dataUrl: string
-  /** MIME 类型（基于扩展名推断，未知类型回退到 application/octet-stream） */
   mime: string
-  /** 文件字节数 */
   size: number
 }
+interface Owner { sender: WebContents; frame: WebFrameMain; host: WebContents }
+interface Challenge extends Owner { nonce: string; timer: NodeJS.Timeout }
+interface Captured extends Owner { files: { name: string; bytes: Buffer }[]; timer: NodeJS.Timeout }
+const challenges = new Map<WebContents, Challenge>()
+const captured = new Map<string, Captured>()
+const observed = new WeakSet<WebContents>()
+const MAX_FILE = 50 * 1024 * 1024
+const MAX_TOTAL = 100 * 1024 * 1024
 
-/**
- * 读取文件并以 data URL 形式返回。
- * 单个文件读取失败不影响其他文件，仅跳过并打印警告。
- *
- * @param filePaths 文件绝对路径数组
- * @returns 成功读取的文件信息数组（顺序与输入一致，跳过失败的）
- */
-export async function readFilesAsDataUrls(filePaths: string[]): Promise<DroppedFile[]> {
-  const results: DroppedFile[] = []
-  for (const p of filePaths) {
-    try {
-      const buf = await fs.promises.readFile(p)
-      const ext = path.extname(p).slice(1).toLowerCase()
-      const mime = guessMime(ext)
-      const dataUrl = `data:${mime};base64,${buf.toString('base64')}`
-      results.push({
-        filename: path.basename(p),
-        dataUrl,
-        mime,
-        size: buf.length,
-      })
-    } catch (e) {
-      console.warn('[file-drop-handler] 读取文件失败:', p, e)
-    }
-  }
-  return results
+function owner(event: IpcMainInvokeEvent): Owner {
+  const sender = event.sender
+  if (!sender || sender.isDestroyed() || !event.senderFrame || event.senderFrame !== sender.mainFrame) throw new Error('拖放来源无效。')
+  const host = sender.getType() === 'webview' ? sender.hostWebContents : sender
+  if (!host) throw new Error('拖放窗口已关闭。')
+  assertTrustedRenderer({ ...event, sender: host, senderFrame: host.mainFrame })
+  if (host !== sender) assertOwnedWebview(host, sender)
+  return { sender, host, frame: event.senderFrame }
 }
 
-/**
- * 基于扩展名推断 MIME 类型。
- * 仅覆盖 AI 应用文件导入常见的类型，未知扩展名回退到 application/octet-stream。
- */
+function discard(token: string): void {
+  const value = captured.get(token)
+  if (value) clearTimeout(value.timer)
+  captured.delete(token)
+}
+
+function revoke(sender: WebContents): void {
+  const challenge = challenges.get(sender)
+  if (challenge) clearTimeout(challenge.timer)
+  challenges.delete(sender)
+  for (const [token, value] of captured) if (value.sender === sender || value.host === sender) discard(token)
+}
+
+function observe(sender: WebContents): void {
+  if (observed.has(sender)) return
+  observed.add(sender)
+  sender.once('destroyed', () => revoke(sender))
+  sender.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revoke(sender) })
+  sender.on('render-process-gone', () => revoke(sender))
+}
+
+function canOpen(source: Owner): boolean {
+  const window = BrowserWindow.fromWebContents(source.host)
+  return !!window && [...windowState.browserWindowsByProfile.values()].includes(window)
+}
+
+/** This challenge is visible only to the isolated native-drop listener. */
+export function prepareFileDrop(event: IpcMainInvokeEvent): { nonce: string; fallbackAllowed: boolean } {
+  const source = owner(event)
+  revoke(source.sender)
+  observe(source.sender)
+  observe(source.host)
+  const nonce = randomUUID()
+  const timer = setTimeout(() => challenges.delete(source.sender), 60000)
+  timer.unref()
+  challenges.set(source.sender, { ...source, nonce, timer })
+  return { nonce, fallbackAllowed: canOpen(source) }
+}
+
+export function captureFileDrop(event: IpcMainInvokeEvent, input: unknown): { token: string } {
+  const source = owner(event)
+  const value = input as { nonce?: unknown; paths?: unknown } | null
+  const challenge = challenges.get(source.sender)
+  if (!challenge || challenge.frame !== source.frame || challenge.host !== source.host || value?.nonce !== challenge.nonce) throw new Error('拖放凭据无效，请重新拖入文件。')
+  clearTimeout(challenge.timer)
+  challenges.delete(source.sender)
+  if (!Array.isArray(value.paths) || !value.paths.length || value.paths.length > 32 || value.paths.some(p => typeof p !== 'string')) throw new Error('拖放文件列表无效。')
+  let total = 0
+  const files = value.paths.map(selected => {
+    const file = openNativeFile(selected)
+    try {
+      const bytes = readNativeFile(file, Math.min(MAX_FILE, MAX_TOTAL - total))
+      total += bytes.length
+      return { name: file.name, bytes }
+    } finally { fs.closeSync(file.descriptor) }
+  })
+  const token = randomUUID()
+  const timer = setTimeout(() => discard(token), 60000)
+  timer.unref()
+  captured.set(token, { ...source, files, timer })
+  return { token }
+}
+
+function take(event: IpcMainInvokeEvent, input: unknown): Captured {
+  const source = owner(event)
+  const token = (input as { token?: unknown } | null)?.token
+  const value = typeof token === 'string' ? captured.get(token) : undefined
+  if (!value || value.sender !== source.sender || value.frame !== source.frame || value.host !== source.host) throw new Error('拖放文件已失效，请重新拖入。')
+  discard(token as string)
+  return value
+}
+
+export function readDroppedFiles(event: IpcMainInvokeEvent, input: unknown): DroppedFile[] {
+  return take(event, input).files.map(({ name, bytes }) => {
+    const mime = guessMime(path.extname(name).slice(1).toLowerCase())
+    return { filename: name, dataUrl: `data:${mime};base64,${bytes.toString('base64')}`, mime, size: bytes.length }
+  })
+}
+
+export function openDroppedFiles(event: IpcMainInvokeEvent, input: unknown): void {
+  const value = take(event, input)
+  if (!canOpen(value)) throw new Error('此窗口不提供本地文件预览。')
+  const files = value.files.map(file => {
+    const preview = createLocalPreview(file.bytes, file.name, value.host)
+    return { name: file.name, url: preview.url, kind: preview.kind }
+  })
+  value.host.send(IPC_CHANNELS.LOCAL_FILES_DROPPED, { guestId: value.sender === value.host ? null : value.sender.id, files })
+}
+
 function guessMime(ext: string): string {
   const map: Record<string, string> = {
     // 图片

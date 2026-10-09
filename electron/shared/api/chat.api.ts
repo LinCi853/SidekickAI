@@ -176,12 +176,10 @@ export interface AIProviderAPI {
     }>
     conflictIds?: string[]
   }>
-  /** v0.5.2 B-4：选择导出文件保存路径（弹出系统保存对话框，返回 .sapp 类型的文件路径） */
-  selectExportPath(): Promise<string | null>
-  /** v0.5.2 B-4：选择导入文件（弹出系统打开对话框，返回文件路径） */
-  selectImportFile(): Promise<string | null>
-  /** v0.5.2 B-4：写入加密导出文件到指定路径 */
-  writeExportFile(filePath: string, content: string): Promise<{ ok: boolean; error?: string }>
-  /** v0.5.2 B-4：读取导入文件内容 */
-  readImportFile(filePath: string): Promise<{ ok: boolean; content?: string; error?: string }>
+  /** Return a one-use capability for the file chosen in the native save dialog. */
+  selectExportPath(): Promise<{ token: string; name: string } | null>
+  /** Return a one-use capability for the captured native import selection. */
+  selectImportFile(): Promise<{ token: string; name: string } | null>
+  writeExportFile(token: string, content: string): Promise<{ ok: boolean; error?: string }>
+  readImportFile(token: string): Promise<{ ok: boolean; content?: string; error?: string }>
 }

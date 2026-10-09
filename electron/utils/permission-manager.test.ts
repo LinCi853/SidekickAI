@@ -60,16 +60,8 @@ describe('permission-manager', () => {
   })
 
   describe('xorDecrypt', () => {
-    it('should decrypt xor: prefixed ciphertext', () => {
-      const key = Buffer.from('ai-window-xor-fallback-v1', 'utf8')
-      const plain = Buffer.from('test', 'utf8')
-      const encrypted = Buffer.alloc(plain.length)
-      for (let i = 0; i < plain.length; i++) {
-        encrypted[i] = plain[i]! ^ key[i % key.length]!
-      }
-      const cipher = 'xor:' + encrypted.toString('base64')
-
-      expect(permissionManager.xorDecrypt(cipher)).toBe('test')
+    it('requires credential re-entry for legacy xor ciphertext', () => {
+      expect(() => permissionManager.xorDecrypt('xor:FRsWGQ==')).toThrow('重新录入')
     })
 
     it('should throw for non-xor: prefix', () => {

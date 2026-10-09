@@ -52,6 +52,8 @@ export interface CustomAIProvider {
   apiEndpoint: string
   /** API 密钥（主进程内加密存储；渲染进程拿到的为明文，仅用于展示星号） */
   apiKey: string
+  /** The stored credential cannot be used until the user enters a replacement. */
+  apiKeyUnavailable?: boolean
   /** 默认模型（主模型） */
   model: string
   /** 可选：备选模型列表（同一供应商下可切换使用的多个模型） */
@@ -77,7 +79,7 @@ export interface CustomAIProvider {
 }
 
 /** 创建/更新 Provider 时传入的载荷（不含加密细节与自动维护字段） */
-export type CustomAIProviderInput = Omit<CustomAIProvider, 'id' | 'createdAt' | 'updatedAt' | 'lastUsedAt'>
+export type CustomAIProviderInput = Omit<CustomAIProvider, 'id' | 'createdAt' | 'updatedAt' | 'lastUsedAt' | 'apiKeyUnavailable'>
 
 // ============================================================================
 // 对话持久化（SQLite）

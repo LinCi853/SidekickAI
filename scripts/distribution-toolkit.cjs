@@ -9,6 +9,7 @@ const yauzl = require('yauzl')
 const archive = require('./application-archive.cjs')
 const runtime = require('./application-runtime.cjs')
 const u = require('./build-utils.cjs')
+const TRUSTED_RELEASE = require('./distribution-toolkit-release.cjs')
 
 const INTERFACE_VERSION = 1
 const MAX_MANIFEST_BYTES = 1024 * 1024
@@ -67,6 +68,15 @@ function validateReference(reference, options = {}) {
   }
   if (!Number.isSafeInteger(reference.archive.size) || reference.archive.size < 1 || reference.archive.size > MAX_ARCHIVE_BYTES
     || !digest(reference.archive.sha256)) throw new Error('Invalid distribution toolkit archive identity')
+  if (reference.toolkitVersion !== TRUSTED_RELEASE.toolkitVersion) {
+    throw new Error('Distribution toolkit version must match the trusted release ' + TRUSTED_RELEASE.toolkitVersion)
+  }
+  if (reference.archive.size !== TRUSTED_RELEASE.size) {
+    throw new Error('Distribution toolkit archive size must match the trusted release (' + TRUSTED_RELEASE.size + ' bytes)')
+  }
+  if (reference.archive.sha256 !== TRUSTED_RELEASE.sha256) {
+    throw new Error('Distribution toolkit archive SHA-256 must match the trusted release ' + TRUSTED_RELEASE.sha256)
+  }
   if (Object.hasOwn(reference.archive, 'path')) runtime.validateRelativePath(reference.archive.path)
   else location(reference.archive.url, options.allowLoopback)
   return reference

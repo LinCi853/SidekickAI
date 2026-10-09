@@ -105,12 +105,7 @@ export function normalizeLegacySettings(directory: string): void {
 
 function decodeSecret(cipher: string, key: unknown): string {
   if (!cipher) return ''
-  if (cipher.startsWith('plain:')) return cipher.slice(6)
-  if (cipher.startsWith('xor:')) {
-    const data = Buffer.from(cipher.slice(4), 'base64')
-    const xorKey = Buffer.from('ai-window-xor-fallback-v1')
-    return Buffer.from(data.map((byte, index) => byte ^ xorKey[index % xorKey.length])).toString('utf8')
-  }
+  if (cipher.startsWith('plain:') || cipher.startsWith('xor:')) throw new Error('历史凭据保护格式已停用，请重新录入 API 密钥。')
   if (!cipher.startsWith('aes:')) throw new Error('此备份的 API 密钥绑定原系统，请在来源应用重新保存密钥并导出。')
   const bytes = Buffer.from(cipher.slice(4), 'base64')
   const sourceKey = typeof key === 'string' ? Buffer.from(key, 'base64') : Buffer.alloc(0)
@@ -149,7 +144,10 @@ function transferPlan(directory: string, defaults: TransferDefaults): { rows: Re
         accepted.push(item)
         report.imported.push({ category: key, id })
       } catch (error) {
-        report.skipped.push({ category: key, id, reason: '配置结构或凭据无法可靠验证，未迁移此条目，来源原件与目标条目保留。' })
+        const reason = key === 'providers' && value && typeof value.apiKeyCipher === 'string' && /^(plain|xor):/.test(value.apiKeyCipher)
+          ? '历史凭据保护格式已停用，请重新录入 API 密钥；来源原件与目标条目保留。'
+          : '配置结构或凭据无法可靠验证，未迁移此条目，来源原件与目标条目保留。'
+        report.skipped.push({ category: key, id, reason })
       }
     }
     rows[table] = { ...rows[table], [key]: accepted }

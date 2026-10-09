@@ -1,6 +1,8 @@
 import { ipcRenderer } from 'electron'
 import type { LogExportOptions } from '../shared/log-export.js'
 import { IPC_CHANNELS, type AppSettings } from '../shared/types.js'
+import type { LocalFilesDroppedEvent } from '../shared/api/settings.api.js'
+import { readDroppedFiles, openDroppedFiles } from './file-drop.js'
 
 export const appSettingsApi = {
   // 应用全局设置（区域代理、隐藏国外模型等）
@@ -48,9 +50,13 @@ export const appSettingsApi = {
     // 下载：在系统文件管理器中打开下载目录
     openDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR),
     openLogsFolder: (options?: LogExportOptions) => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, options),
-    // 文件拖拽导入：读取文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容）
-    dropFiles: (filePaths: string[]) =>
-      ipcRenderer.invoke(IPC_CHANNELS.WEBVIEW_FILE_DROP, filePaths),
+    dropFiles: readDroppedFiles,
+    openDroppedFiles,
+    onLocalFilesDropped: (callback: (info: LocalFilesDroppedEvent) => void) => {
+      const handler = (_event: unknown, info: LocalFilesDroppedEvent) => callback(info)
+      ipcRenderer.on(IPC_CHANNELS.LOCAL_FILES_DROPPED, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.LOCAL_FILES_DROPPED, handler)
+    },
     // 主→渲染：下载完成通知（filename + path）
     onDownloadDone: (callback: (info: { filename: string; path: string }) => void) => {
       const handler = (_e: unknown, info: { filename: string; path: string }) => callback(info)

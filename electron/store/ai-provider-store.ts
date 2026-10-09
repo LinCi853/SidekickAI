@@ -9,10 +9,11 @@
 //
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain, safeStorage, dialog } from 'electron'
+import { ipcMain, safeStorage, dialog, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { randomUUID } from 'crypto'
-import { writeFileSync, readFileSync } from 'fs'
+import { FileSelections } from '../security/file-selection.js'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
@@ -23,7 +24,7 @@ import {
 import { encryptString, decryptString, isAesEncrypted, encryptWithPassword, decryptWithPassword } from '../utils/app-crypto.js'
 
 /** 落盘的 Provider 结构（apiKey 为加密后的 base64 字符串） */
-interface PersistedProvider extends Omit<CustomAIProvider, 'apiKey'> {
+interface PersistedProvider extends Omit<CustomAIProvider, 'apiKey' | 'apiKeyUnavailable'> {
   /** 加密后的 API Key（base64 字符串） */
   apiKeyCipher: string
 }
@@ -55,24 +56,15 @@ function encryptApiKey(plain: string): string {
   return encryptString(plain)
 }
 
-/**
- * 解密 API Key。
- * 自动识别多种格式：
- * - `aes:` 前缀：应用内 AES-256-GCM 加密（新方案，推荐）
- * - `xor:` 前缀：历史 XOR 降级加密（兼容旧数据）
- * - `plain:` 前缀：历史明文（兼容旧数据）
- * - 无前缀：历史 safeStorage 密文（兼容旧数据，仅在源设备可解密）
- */
+/** Read AES credentials or device-bound safeStorage; weak legacy values require re-entry. */
 function decryptApiKey(cipher: string): string {
   if (!cipher) return ''
   // 应用内 AES 加密（新方案）
   if (isAesEncrypted(cipher)) {
     return decryptString(cipher)
   }
-  // 历史明文兼容
   if (cipher.startsWith('plain:')) {
-    console.warn('[ai-provider-store] 检测到历史明文 Key，建议尽快重新保存以加密')
-    return cipher.slice(6)
+    throw new Error('历史凭据保护格式已停用，请重新录入 API 密钥。')
   }
   // XOR 降级密文
   if (cipher.startsWith('xor:')) {
@@ -86,21 +78,24 @@ function decryptApiKey(cipher: string): string {
       throw new Error(`解密 API Key 失败（safeStorage 密文）: ${(e as Error).message}`)
     }
   }
-  throw new Error('无法解密 API Key：safeStorage 不可用且密文非 aes/xor/plain 格式')
+  throw new Error('无法解密 API Key，请重新录入。')
 }
 
 /** 将落盘结构转换为对外暴露的 Provider（解密 apiKey，解密失败时返回空 key） */
 function toProvider(p: PersistedProvider): CustomAIProvider {
   const { apiKeyCipher, ...rest } = p
   let apiKey = ''
+  let apiKeyUnavailable = false
   try {
     apiKey = decryptApiKey(apiKeyCipher)
   } catch (e) {
+    apiKeyUnavailable = true
     console.warn('[ai-provider-store] 解密 API Key 失败，返回空 key:', (e as Error).message)
   }
   return {
     ...rest,
     apiKey,
+    ...(apiKeyUnavailable ? { apiKeyUnavailable } : {}),
   }
 }
 
@@ -223,12 +218,11 @@ export class AIProviderStore {
       ? all.filter((p) => selectedIds.includes(p.id))
       : all
     const providers = targets.map((p) => {
-      // 解密 apiKey 为明文，再加密到密码串中
-      let apiKeyPlain = ''
+      let apiKeyPlain: string
       try {
         apiKeyPlain = decryptApiKey(p.apiKeyCipher)
-      } catch {
-        console.warn(`[ai-provider-store] 导出时解密失败，apiKey 将为空: ${p.name}`)
+      } catch (cause) {
+        throw new Error(`无法导出“${p.name}”：凭据不可解密，请重新录入 API 密钥后重试。`, { cause })
       }
       return {
         id: p.id,
@@ -410,10 +404,7 @@ export function ensureDefaultProviders(): void {
       console.log(`[ai-provider-store] Provider ${p.name} 密文已迁移为应用内 AES 加密`)
       mutated = true
     } catch {
-      // 解密失败（通常是 safeStorage 密文跨设备失效）：清空密文
-      providers[i] = { ...p, apiKeyCipher: '' }
-      console.warn(`[ai-provider-store] Provider ${p.name} 密文失效，已清空（需用户重新输入 API Key）`)
-      mutated = true
+      console.warn('[ai-provider-store] Stored credential requires user re-entry')
     }
   }
   if (mutated) store.set('providers', providers)
@@ -428,6 +419,7 @@ export function ensureDefaultProviders(): void {
  */
 export function registerAIProviderIPC(scope?: EffectScope): void {
   const ipc = IPC_CHANNELS
+  const selections = new FileSelections()
 
   // 辅助函数：根据是否有 scope 选择注册方式
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -460,44 +452,52 @@ export function registerAIProviderIPC(scope?: EffectScope): void {
     (_e: unknown, encrypted: string, password: string) =>
       aiProviderStore.previewImport(encrypted, password),
   )
-  // v0.5.2 B-4：写入加密导出文件到指定路径（渲染层提供路径 + 内容）
   handle(
     ipc.AI_PROVIDER_WRITE_EXPORT_FILE,
-    (_e: unknown, filePath: string, content: string) => {
+    (event: IpcMainInvokeEvent, token: string, content: string) => {
       try {
-        writeFileSync(filePath, content, 'utf8')
+        assertTrustedRenderer(event)
+        selections.write(event, token, content)
         return { ok: true }
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
     },
   )
-  // v0.5.2 B-4：读取导入文件内容（渲染层提供路径）
   handle(
     ipc.AI_PROVIDER_READ_IMPORT_FILE,
-    (_e: unknown, filePath: string) => {
+    (event: IpcMainInvokeEvent, token: string) => {
       try {
-        const content = readFileSync(filePath, 'utf8')
+        assertTrustedRenderer(event)
+        const content = selections.read(event, token)
         return { ok: true, content }
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
     },
   )
-  // v0.5.2 B-4：AI Provider 加密导出文件保存对话框
-  handle(ipc.AI_PROVIDER_SELECT_EXPORT_PATH, async () => {
+  handle(ipc.AI_PROVIDER_SELECT_EXPORT_PATH, async (event: IpcMainInvokeEvent) => {
+    assertTrustedRenderer(event)
+    const frame = event.senderFrame
     const result = await dialog.showSaveDialog({
       filters: [{ name: 'Sidekick AI Providers', extensions: ['sapp'] }],
       defaultPath: `ai-providers-${new Date().toISOString().slice(0, 10)}.sapp`,
     })
-    return result.canceled ? null : result.filePath
+    if (result.canceled || !result.filePath) return null
+    assertTrustedRenderer(event)
+    if (frame !== event.sender.mainFrame) throw new Error('文件选择窗口已变化。')
+    return selections.select(event, result.filePath, 'export')
   })
-  // v0.5.2 B-4：AI Provider 加密导入文件打开对话框
-  handle(ipc.AI_PROVIDER_SELECT_IMPORT_FILE, async () => {
+  handle(ipc.AI_PROVIDER_SELECT_IMPORT_FILE, async (event: IpcMainInvokeEvent) => {
+    assertTrustedRenderer(event)
+    const frame = event.senderFrame
     const result = await dialog.showOpenDialog({
       filters: [{ name: 'Sidekick AI Providers', extensions: ['sapp'] }, { name: 'All Files', extensions: ['*'] }],
       properties: ['openFile'],
     })
-    return result.canceled ? null : result.filePaths[0]
+    if (result.canceled || !result.filePaths[0]) return null
+    assertTrustedRenderer(event)
+    if (frame !== event.sender.mainFrame) throw new Error('文件选择窗口已变化。')
+    return selections.select(event, result.filePaths[0], 'import')
   })
 }

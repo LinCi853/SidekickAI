@@ -139,19 +139,6 @@ export function useWebviewLifecycle({
     webview.addEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
     webview.addEventListener('media-paused', handleMediaPaused as EventListener);
 
-    // 本地文件拖放桥：guest 上报文件路径 → 宿主打开查看
-    const handleConsoleMessage = (e: Event) => {
-      const msg = (e as unknown as { message?: string }).message || '';
-      if (!msg.startsWith('__SK_FILEDROP__:')) return;
-      try {
-        const paths = JSON.parse(msg.slice('__SK_FILEDROP__:'.length)) as string[];
-        if (Array.isArray(paths) && paths.length > 0) {
-          window.dispatchEvent(new CustomEvent('browser-local-files-drop', { detail: { paths } }));
-        }
-      } catch { /* ignore */ }
-    };
-    webview.addEventListener('console-message', handleConsoleMessage as EventListener);
-
     webview.addEventListener('ai-webview-fatal-failure', recoverOnce);
     webview.addEventListener('render-process-gone', recoverOnce);
 
@@ -189,7 +176,6 @@ export function useWebviewLifecycle({
       webview.removeEventListener('did-fail-load', handleFailLoadWithProxy as EventListener);
       webview.removeEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
       webview.removeEventListener('media-paused', handleMediaPaused as EventListener);
-      webview.removeEventListener('console-message', handleConsoleMessage as EventListener);
       webview.removeEventListener('ai-webview-fatal-failure', recoverOnce);
       webview.removeEventListener('render-process-gone', recoverOnce);
       webview.removeEventListener('before-input-event', handleBeforeInput);

@@ -111,11 +111,11 @@ export const chatApi = {
     // v0.5.2 B-4：选择导入文件
     selectImportFile: () => ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_SELECT_IMPORT_FILE),
     // v0.5.2 B-4：写入加密导出文件
-    writeExportFile: (filePath: string, content: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_WRITE_EXPORT_FILE, filePath, content),
+    writeExportFile: (token: string, content: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_WRITE_EXPORT_FILE, token, content),
     // v0.5.2 B-4：读取导入文件
-    readImportFile: (filePath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_READ_IMPORT_FILE, filePath),
+    readImportFile: (token: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_READ_IMPORT_FILE, token),
   },
   // AI 平台
   aiPlatform: {

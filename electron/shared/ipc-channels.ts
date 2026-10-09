@@ -281,6 +281,10 @@ export const IPC_CHANNELS = {
   APP_DOWNLOAD_DONE: 'app:downloadDone',
   // 渲染→主：webview 文件拖拽导入（传递文件路径数组，返回 data URL 数组）
   WEBVIEW_FILE_DROP: 'webview:fileDrop',
+  LOCAL_FILE_DROP_PREPARE: 'localFileDrop:prepare',
+  LOCAL_FILE_DROP_CAPTURE: 'localFileDrop:capture',
+  LOCAL_FILE_DROP_OPEN: 'localFileDrop:open',
+  LOCAL_FILES_DROPPED: 'localFileDrop:files',
   // 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后，各窗口重新计算最小尺寸）
   UI_SCALE_CHANGED: 'app:uiScaleChanged',
   // 主→渲染：应用设置变更广播（任意窗口修改设置后，通知所有窗口同步更新）

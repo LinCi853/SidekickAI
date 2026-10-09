@@ -30,11 +30,10 @@ function parseParams(tabUrl: string): { file: string; title: string; sourceUrl: 
   }
 }
 
-/** 临时 PDF 绝对路径 → sidekick-pdf:// 协议 URL（主进程自定义协议服务，
- *  规避 dev 模式 http 页面 iframe 加载 file:// 被 webSecurity 阻止的问题） */
-function toPdfUrl(filePath: string): string {
-  if (!filePath) return '';
-  return `sidekick-pdf://preview/${encodeURIComponent(filePath)}`;
+/** The main process resolves the preview capability to its private PDF copy. */
+function toPdfUrl(capability: string): string {
+  if (!capability) return '';
+  return `sidekick-pdf://preview/${encodeURIComponent(capability)}`;
 }
 
 export default function PrintPreviewTab({ tab }: PrintPreviewTabProps) {

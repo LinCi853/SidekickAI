@@ -98,6 +98,7 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importPassword, setImportPassword] = useState('');
   const [importFilePath, setImportFilePath] = useState('');
+  const [importContent, setImportContent] = useState('');
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const [cryptoFeedback, setCryptoFeedback] = useState<CryptoFeedback | null>(null);
@@ -421,16 +422,16 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
         exportPassword,
         ids.length > 0 ? ids : undefined,
       );
-      const filePath = await selectAIProviderExportPath();
-      if (!filePath) {
+      const selection = await selectAIProviderExportPath();
+      if (!selection) {
         // 用户取消，保留对话框内容
         return;
       }
-      const result = await writeAIProviderExportFile(filePath, cipher);
+      const result = await writeAIProviderExportFile(selection.token, cipher);
       if (result.ok) {
         setCryptoFeedback({
           type: 'success',
-          msg: `已导出 ${ids.length > 0 ? ids.length : providers.length} 个 Provider 到 ${filePath}`,
+          msg: `已导出 ${ids.length > 0 ? ids.length : providers.length} 个 Provider 到 ${selection.name}`,
         });
         setExportDialogOpen(false);
         setExportPassword('');
@@ -448,24 +449,31 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
   // v0.5.2 B-4：加密导入（文件选择 → 密码 → 预览 → 确认）
   const handleStartImport = () => {
     setImportFilePath('');
+    setImportContent('');
     setImportPassword('');
     setImportPreview(null);
     setImportDialogOpen(true);
   };
   const handleSelectImportFile = async () => {
-    const filePath = await selectAIProviderImportFile();
-    if (filePath) setImportFilePath(filePath);
+    try {
+      const selection = await selectAIProviderImportFile();
+      if (!selection) return;
+      setImportPreview(null);
+      setImportContent('');
+      setImportFilePath('');
+      const result = await readAIProviderImportFile(selection.token);
+      if (!result.ok || !result.content) throw new Error(result.error || '文件内容为空');
+      setImportFilePath(selection.name);
+      setImportContent(result.content);
+    } catch (error) {
+      setCryptoFeedback({ type: 'error', msg: `读取文件失败：${error instanceof Error ? error.message : String(error)}` });
+    }
   };
   const handlePreviewImport = async () => {
-    if (!importFilePath || !importPassword) return;
+    if (!importContent || !importPassword) return;
     setImporting(true);
     try {
-      const readResult = await readAIProviderImportFile(importFilePath);
-      if (!readResult.ok || !readResult.content) {
-        setCryptoFeedback({ type: 'error', msg: `读取文件失败：${readResult.error}` });
-        return;
-      }
-      const preview = await previewImportAIProviders(readResult.content, importPassword);
+      const preview = await previewImportAIProviders(importContent, importPassword);
       if (!preview.ok) {
         setCryptoFeedback({ type: 'error', msg: `解析失败：${preview.error}` });
         return;
@@ -481,15 +489,10 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
     }
   };
   const handleConfirmImport = async () => {
-    if (!importFilePath || !importPassword || !importPreview) return;
+    if (!importContent || !importPassword || !importPreview) return;
     setImporting(true);
     try {
-      const readResult = await readAIProviderImportFile(importFilePath);
-      if (!readResult.ok || !readResult.content) {
-        setCryptoFeedback({ type: 'error', msg: `读取文件失败：${readResult.error}` });
-        return;
-      }
-      const result = await importAIProvidersEncrypted(readResult.content, importPassword);
+      const result = await importAIProvidersEncrypted(importContent, importPassword);
       if (result.ok) {
         setCryptoFeedback({
           type: 'success',
@@ -497,6 +500,7 @@ export default function ProviderSection({ defaultCollapsed = true, collapsibleTi
         });
         setImportDialogOpen(false);
         setImportFilePath('');
+        setImportContent('');
         setImportPassword('');
         setImportPreview(null);
         await initProviders();

@@ -1,7 +1,7 @@
 // electron/utils/permission-manager.ts — 统一权限管理
 //
 // 集中管理 macOS 辅助功能权限检测与申请、safeStorage 后端检测与降级策略。
-// 跨平台：非 macOS 的辅助功能检查直接返回 true，safeStorage 不可用时提供 XOR 降级。
+// Legacy weak credential protection is intentionally unavailable.
 
 import { dialog, safeStorage, shell, systemPreferences } from 'electron'
 
@@ -88,28 +88,10 @@ export function isSafeStorageAvailable(): boolean {
   }
 }
 
-// ============================================================================
-// XOR 降级加密（safeStorage 不可用时的兜底方案）
-// ============================================================================
-
-/**
- * XOR 降级加密密钥（固定值，仅用于 safeStorage 不可用时的兜底。
- * 安全性有限，但比明文存储好；配合文件权限 600 使用）。
- * 注意：此密钥不应更改，否则已加密的数据无法解密。
- */
-const XOR_KEY = Buffer.from('ai-window-xor-fallback-v1', 'utf8')
-
-/**
- * XOR 解密字符串（识别 'xor:' 前缀的密文）。
- */
+/** Retain the compatibility entry point while requiring deliberate credential re-entry. */
 export function xorDecrypt(cipher: string): string {
   if (!cipher.startsWith('xor:')) {
     throw new Error('不是 XOR 降级密文（缺少 xor: 前缀）')
   }
-  const encrypted = Buffer.from(cipher.slice(4), 'base64')
-  const result = Buffer.alloc(encrypted.length)
-  for (let i = 0; i < encrypted.length; i++) {
-    result[i] = encrypted[i]! ^ XOR_KEY[i % XOR_KEY.length]!
-  }
-  return result.toString('utf8')
+  throw new Error('历史凭据保护格式已停用，请重新录入 API 密钥。')
 }

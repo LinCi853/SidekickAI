@@ -19,7 +19,6 @@ import {
   GET_TITLE_SCRIPT,
   SPATIAL_NAV_ENABLE_SCRIPT,
   buildFaviconToDataUrlScript,
-  FILE_DROP_BRIDGE_SCRIPT,
   CONTEXT_COORD_HOOK_SCRIPT,
 } from '../webview-scripts.js';
 
@@ -163,14 +162,6 @@ export function useWebviewDomReady({ webviewRef, domReadyRef, tab, profile, remo
         (webview as WebviewElement & { setZoomFactor: (f: number) => void }).setZoomFactor(cloudPcState.zoomFactor);
       } catch { /* ignore */ }
     }
-
-    // 注入本地文件拖放桥：拖文件到页面时，若页面自身没有处理（无上传区），
-    // 通过 console-message 上报文件路径（Electron File.path），由宿主打开查看；
-    // 页面已处理（preventDefault）则不干预，保留网页上传能力。
-    try {
-      await webview.executeJavaScript(FILE_DROP_BRIDGE_SCRIPT);
-    } catch { /* ignore */ }
-    if (!page.isCurrent()) return;
 
     // 注入右键坐标记录脚本：guest 的 contextmenu DOM 事件提供精确的
     // clientX/clientY（viewport CSS 坐标），供右键菜单定位、聚焦输入框、

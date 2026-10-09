@@ -2,7 +2,7 @@
 
 ## Scope
 
-The backup is either a standard ZIP/ZIP64 archive or the compatible SABK v1 encrypted envelope described below. The file extension does not determine the format. A backup captures one explicitly selected application data root. Community and concept ownership remain separate; a backup is not permission to merge their profiles or delete either source.
+The backup is either a standard ZIP/ZIP64 archive or the SABK v2 encrypted envelope described below. Readers also accept existing SABK v1 envelopes. The file extension does not determine the format. A backup captures one explicitly selected application data root. Community and concept ownership remain separate; a backup is not permission to merge their profiles or delete either source.
 
 An independent recovery extracts original files into a new directory. It does not install the application, modify a running profile, migrate databases, register plugins, or activate browser cookies. In particular, `cookieTransfer: "raw-profile"` preserves Chromium files whose operating-system encryption can still require their original account and profile. Portable cookie snapshots contain sensitive plaintext inside the ZIP and are protected only when the outer SABK envelope is encrypted.
 
@@ -39,7 +39,27 @@ Independent Node export preserves raw encrypted database records and does not pe
 
 Application import presents file selection, a password when needed and one replacement confirmation. It keeps no permanent import history or selectable restore-copy registry. The active restore transaction retains the original directory only until acceptance or automatic rollback, then removes its verified temporary directories and request. Cleanup failure cannot undo an accepted restore. Unknown or altered directories are preserved rather than guessed.
 
-## SABK v1 envelope
+## SABK v2 envelope
+
+New encrypted archives use a fresh 32-byte random salt, independent of the device identity. PBKDF2-HMAC-SHA256 derives a 32-byte key from the UTF-8 password and this salt using 100,000 iterations. The salt is intentionally public; its uniqueness prevents reuse of a derived key across archives from one device. A fresh 12-byte nonce accompanies each AES-256-GCM encryption. Integers are unsigned little-endian; offsets count bytes.
+
+| Offset | Length | Value |
+| --- | --- | --- |
+| 0 | 4 | ASCII `SABK` |
+| 4 | 1 | Version `02` |
+| 5 | 4 | Salt length, exactly 32 |
+| 9 | 4 | UTF-8 device identity length `D`, 1 through 65,536 |
+| 13 | 32 | Random salt |
+| 45 | D | UTF-8 device identity |
+| 45 + D | 12 | Random AES-GCM nonce |
+| 57 + D | 16 | AES-GCM authentication tag |
+| 73 + D | Remaining | Ciphertext of the complete ZIP archive |
+
+The entire header before the tag, including magic, version, lengths, salt, identity and nonce, is supplied as GCM additional authenticated data. Changed header bytes or ciphertext cause rejection before plaintext is published. Resumed encryption always generates a new salt and nonce. Device identity remains attribution metadata and is not a trust root. Readers that support only v1 cannot open v2 output; use the updated application or independently built recovery tool.
+
+Unencrypted export refuses a captured settings database with nonempty application key material, or a legacy `app-key.json` carrying it, and asks the user to set a backup password. Original source and snapshot bytes remain unchanged. The same check applies to resumed publication. AES credentials remain portable in encrypted archives; historical `xor:` and `plain:` API credentials require re-entry and are not decoded or silently upgraded.
+
+## Legacy SABK v1 reading
 
 All offsets and lengths below count bytes. Integer fields are unsigned little-endian. No padding or trailer is present.
 
@@ -55,7 +75,7 @@ All offsets and lengths below count bytes. Integer fields are unsigned little-en
 
 Derive a 32-byte key using PBKDF2-HMAC-SHA256 with the UTF-8 password, UTF-8 device identity as salt, and 100,000 iterations. No Unicode normalization is performed. Encrypt with AES-256-GCM, a fresh cryptographically random 12-byte nonce, and a 16-byte authentication tag. No additional authenticated data is supplied. The tag authenticates the entire ciphertext; v1 does not separately authenticate the raw header bytes. The header's identity and nonce are required for successful decryption. There is no password recovery key or server dependency.
 
-The GCM plaintext length is limited to 68,719,476,704 bytes (`2^36 - 32`). The writer checks a conservative archive estimate before capturing and the actual ZIP size before encryption. Larger selections require unencrypted ZIP64 or a smaller explicit selection; no new encrypted format or silent downgrade is performed. The nonce is never reused for continuation: interrupted encryption restarts from the verified ZIP with a new nonce. Finished encrypted artifacts can subsequently be copied in resumable blocks without the password.
+Both versions have a GCM plaintext limit of 68,719,476,704 bytes (`2^36 - 32`). The writer checks a conservative archive estimate before capturing and the actual ZIP size before encryption. Larger selections require a smaller explicit selection, or unencrypted ZIP64 only when the credential policy permits it. No silent downgrade is performed. Finished encrypted artifacts can subsequently be copied in resumable blocks without the password.
 
 Decryption writes into a private temporary file and publishes it only after GCM authentication succeeds. A wrong password or altered ciphertext cannot publish unauthenticated plaintext. Plaintext temporary files still exist while processing and may remain after process termination; an encrypted destination does not imply encrypted staging.
 

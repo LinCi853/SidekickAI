@@ -4,6 +4,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { decryptFile, encryptFile } from './file-crypto.js'
 import { validateBackupArchive } from './format.js'
+import { assertUnencryptedCredentialsAbsent } from './credential-export.js'
+import { createPrivateDirectory } from './io.js'
 export type ExportTreeTuple = [string, number, number, string]
 
 export function sha256Hex(data: Buffer): string {
@@ -131,12 +133,25 @@ function prepareArchive(targetPath: string, zip: AdmZip, encrypt: { password: st
   const zipPath = `${scratch}.zip`
   const encryptedPath = `${scratch}.sabackup`
   const verifiedPath = `${scratch}.verified.zip`
+  const credentialDirectory = `${scratch}.credentials`
+  let ownCredentialDirectory = false
   const dispose = () => {
     for (const file of [zipPath, encryptedPath, verifiedPath]) {
       try { fs.rmSync(file, { force: true }) } catch { }
     }
+    if (ownCredentialDirectory) fs.rmSync(credentialDirectory, { recursive: true, force: true })
   }
   try {
+    if (!encrypt) {
+      fs.mkdirSync(credentialDirectory, { mode: 0o700 })
+      ownCredentialDirectory = true
+      createPrivateDirectory(credentialDirectory)
+      for (const name of ['settings.db', 'app-key.json']) {
+        const bytes = zip.readFile(name)
+        if (bytes) fs.writeFileSync(path.join(credentialDirectory, name), bytes, { flag: 'wx', mode: 0o600 })
+      }
+      assertUnencryptedCredentialsAbsent(credentialDirectory)
+    }
     zip.writeZip(zipPath)
     const expected = validateBackupArchive(zip)
     let verified = zipPath

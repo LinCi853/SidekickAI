@@ -7,13 +7,17 @@
 //
 // 已迁移到统一注入管线：使用 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain, shell, app, BrowserWindow, webContents, dialog, session, screen, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, shell, BrowserWindow, dialog, screen, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { markAskSavePath } from '../utils/ask-save-path.js'
 import { enterCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import fs from 'fs'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { ownedProfileSession, ownedWebContents } from '../security/webview-owner.js'
+import { httpUrl, withPublicResponse } from '../security/public-request.js'
+import { createPdfPreview, readPdfPreview, deletePdfPreview } from '../utils/pdf-protocol.js'
+import { openNativeFile } from '../security/native-file.js'
+
 import type {
   BrowserWindowState,
   BrowserTabState,
@@ -155,16 +159,16 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
 
   // ===== 外部浏览器打开 =====
 
-  handle(IPC_CHANNELS.BROWSER_OPEN_EXTERNAL, (_e, url: string) => {
-    return shell.openExternal(url)
+  handle(IPC_CHANNELS.BROWSER_OPEN_EXTERNAL, (event, url: string) => {
+    assertTrustedRenderer(event)
+    return shell.openExternal(httpUrl(url).href)
   })
 
   // ===== 另存为（页面 / 链接 / 图片） =====
 
   // 另存为当前页面：主进程弹保存对话框后以 HTMLComplete 格式保存
   handle(IPC_CHANNELS.BROWSER_SAVE_PAGE_AS, async (e, webContentsId: number, suggestedName?: string) => {
-    const wc = webContents.fromId(webContentsId)
-    if (!wc || wc.isDestroyed()) return { ok: false, error: 'webContents not found' }
+    const wc = ownedWebContents(e, webContentsId)
     const win = BrowserWindow.fromWebContents(wc) ?? getSenderWindow(e as IpcMainInvokeEvent)
     if (!win || win.isDestroyed()) return { ok: false, error: 'window not found' }
     const url = wc.getURL() || ''
@@ -195,11 +199,11 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
 
   // 另存为链接/图片：标记一次性「询问保存路径」后触发下载，will-download 中弹保存对话框
   // partition 为 webview 的 session 分区（persist:profileId），与下载记录注册的 session 一致
-  handle(IPC_CHANNELS.BROWSER_DOWNLOAD_AS, (_e, partition: string, url: string, _suggestedFilename?: string) => {
+  handle(IPC_CHANNELS.BROWSER_DOWNLOAD_AS, (event, partition: string, url: string, _suggestedFilename?: string) => {
     if (!/^(https?:|data:|blob:)/i.test(url)) return { ok: false, error: 'invalid url' }
     let cancelSaveIntent: (() => void) | undefined
     try {
-      const initiatingSession = session.fromPartition(partition)
+      const initiatingSession = ownedProfileSession(event, partition)
       cancelSaveIntent = markAskSavePath(initiatingSession, url)
       initiatingSession.downloadURL(url)
       return { ok: true }
@@ -210,77 +214,62 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
   })
 
   // ===== 查看网页源代码 =====
-  // 使用对应 partition 的 session.fetch（携带登录态 Cookie），返回原始 HTML 文本
-  handle(IPC_CHANNELS.BROWSER_VIEW_SOURCE, async (_e, partition: string, url: string) => {
-    if (!/^(https?:|file:|data:)/i.test(url)) return { ok: false, error: 'unsupported url' }
+  // Source reads retain session cookies and validate every network destination.
+  handle(IPC_CHANNELS.BROWSER_VIEW_SOURCE, async (event, partition: string, url: string) => {
     try {
-      const ses = session.fromPartition(partition)
-      const res = await ses.fetch(url, { bypassCustomProtocolHandlers: true })
-      if (!res.ok) return { ok: false, error: 'HTTP ' + res.status }
-      const contentType = res.headers.get('content-type') || 'text/html'
-      const text = await res.text()
-      // 防御：截断超大源码（3MB），避免渲染层卡顿
-      const MAX = 3 * 1024 * 1024
-      const html = text.length > MAX ? text.slice(0, MAX) + '\n<!-- [SidekickAI] 源码过大已截断 -->' : text
-      return { ok: true, html, contentType }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
+      const ses = ownedProfileSession(event, partition)
+      return await withPublicResponse(ses, url, AbortSignal.timeout(30000), async response => {
+        if (response.statusCode < 200 || response.statusCode >= 300) throw new Error('HTTP ' + response.statusCode)
+        const limit = 3 * 1024 * 1024
+        const chunks: Buffer[] = []
+        let size = 0, truncated = false
+        for await (const chunk of response.body) {
+          const bytes = Buffer.from(chunk)
+          const remaining = limit - size
+          chunks.push(bytes.subarray(0, remaining))
+          size += Math.min(bytes.length, remaining)
+          if (bytes.length > remaining) { truncated = true; break }
+        }
+        const html = Buffer.concat(chunks).toString('utf8') + (truncated ? '\n<!-- 源码过大已截断 -->' : '')
+        return { ok: true, html, contentType: response.headers['content-type'] || 'text/html' }
+      })
+    } catch (err) { return { ok: false, error: String(err) } }
   })
-
-  // ===== 打印预览 =====
-  // 生成当前页面的 PDF 临时文件，返回路径供渲染层在应用内预览
-  handle(IPC_CHANNELS.BROWSER_PRINT_PREVIEW, async (e, webContentsId: number, title?: string) => {
-    const wc = webContents.fromId(webContentsId)
-    if (!wc || wc.isDestroyed()) return { ok: false, error: 'webContents not found' }
-    const win = BrowserWindow.fromWebContents(wc) ?? getSenderWindow(e as IpcMainInvokeEvent)
-    if (!win || win.isDestroyed()) return { ok: false, error: 'window not found' }
+  handle(IPC_CHANNELS.BROWSER_PRINT_PREVIEW, async (event, webContentsId: number, title?: string) => {
     try {
+      const wc = ownedWebContents(event, webContentsId)
       const pdf = await wc.printToPDF({ printBackground: true, preferCSSPageSize: true })
-      const dir = app.getPath('temp')
-      const safeTitle = (title || 'page').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'page'
-      const filePath = path.join(dir, `sidekick-print-${safeTitle}-${Date.now()}-${randomUUID().slice(0, 8)}.pdf`)
-      fs.writeFileSync(filePath, pdf)
-      return { ok: true, filePath, title: safeTitle }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
+      assertTrustedRenderer(event)
+      const safeTitle = (typeof title === 'string' ? title : 'page').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'page'
+      return { ok: true, filePath: createPdfPreview(pdf, event.sender), title: safeTitle }
+    } catch (err) { return { ok: false, error: String(err) } }
   })
 
-  // 打印预览页「另存为」：把临时 PDF 复制到用户指定路径
-  handle(IPC_CHANNELS.BROWSER_SAVE_PDF_AS, (e, sourcePath: string, suggestedName?: string) => {
-    if (!sourcePath || !fs.existsSync(sourcePath)) return { ok: false, error: 'file not found' }
-    const win = getSenderWindow(e as IpcMainInvokeEvent)
-    if (!win || win.isDestroyed()) return { ok: false, error: 'window not found' }
-    const defaultName = (suggestedName || 'page').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) + '.pdf'
-    const result = dialog.showSaveDialogSync(win, {
-      title: '另存为 PDF',
-      defaultPath: defaultName,
-      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }, { name: '所有文件', extensions: ['*'] }],
-    })
-    if (!result) return { ok: false, canceled: true }
+  handle(IPC_CHANNELS.BROWSER_SAVE_PDF_AS, (event, token: string, suggestedName?: string) => {
     try {
-      fs.copyFileSync(sourcePath, result)
+      assertTrustedRenderer(event)
+      const bytes = readPdfPreview(token, event.sender)
+      const win = getSenderWindow(event)!
+      const defaultName = (typeof suggestedName === 'string' ? suggestedName : 'page').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) + '.pdf'
+      const selected = dialog.showSaveDialogSync(win, { title: '另存为 PDF', defaultPath: defaultName,
+        filters: [{ name: 'PDF 文件', extensions: ['pdf'] }, { name: '所有文件', extensions: ['*'] }] })
+      if (!selected) return { ok: false, canceled: true }
+      const file = openNativeFile(selected, true)
+      try {
+        fs.writeFileSync(file.descriptor, bytes)
+        fs.ftruncateSync(file.descriptor, bytes.length)
+        fs.fsyncSync(file.descriptor)
+      } finally { fs.closeSync(file.descriptor) }
       return { ok: true }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
+    } catch (err) { return { ok: false, error: String(err) } }
   })
 
-  // 删除打印预览临时文件（预览标签关闭时清理）。
-  // 安全约束：仅删除本应用生成的 sidekick-print-* 临时文件；
-  // 用户拖入查看的本地 PDF 复用打印预览器时不可被误删。
-  handle(IPC_CHANNELS.BROWSER_DELETE_TEMP_PDF, (_e, filePath: string) => {
+  handle(IPC_CHANNELS.BROWSER_DELETE_TEMP_PDF, (event, token: string) => {
     try {
-      const base = path.basename(filePath || '')
-      if (!filePath || !base.startsWith('sidekick-print-')) return { ok: false }
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-      return { ok: true }
-    } catch {
-      return { ok: false }
-    }
+      assertTrustedRenderer(event)
+      return { ok: deletePdfPreview(token, event.sender) }
+    } catch { return { ok: false } }
   })
-
   // ===== 网页截图 =====
   // 保存截图 PNG（渲染层 capturePage 的 dataURL）到用户指定路径
   handle(IPC_CHANNELS.BROWSER_SAVE_CAPTURE, (e, dataUrl: string, suggestedName?: string) => {

@@ -14,35 +14,6 @@ export const SPATIAL_NAV_ENABLE_SCRIPT =
 /** 读取 guest 注入的右键坐标（contextmenu DOM 事件记录的 clientX/clientY） */
 export const READ_CONTEXT_COORD_SCRIPT = 'window.__sidekickCtx || null';
 
-/** 本地文件拖放桥：拖文件到页面时，若页面自身没有处理（无上传区），
- * 通过 console-message 上报文件路径（Electron File.path），由宿主打开查看；
- * 页面已处理（preventDefault）则不干预，保留网页上传能力。 */
-export const FILE_DROP_BRIDGE_SCRIPT = `
-(function() {
-  if (window.__sidekickFileDropHook) return;
-  window.__sidekickFileDropHook = true;
-  document.addEventListener('dragover', function(e) {
-    var dt = e.dataTransfer;
-    if (!dt || !dt.types || dt.types.indexOf('Files') < 0) return;
-    if (e.defaultPrevented) return; // 页面自己处理上传
-    e.preventDefault();
-    if (dt.dropEffect) dt.dropEffect = 'copy';
-  });
-  document.addEventListener('drop', function(e) {
-    var dt = e.dataTransfer;
-    if (!dt || !dt.types || dt.types.indexOf('Files') < 0) return;
-    if (e.defaultPrevented) return;
-    e.preventDefault();
-    var paths = [];
-    for (var i = 0; i < dt.files.length; i++) {
-      var f = dt.files[i];
-      if (f.path) paths.push(f.path); // Electron File.path（绝对路径）
-    }
-    if (paths.length > 0) console.log('__SK_FILEDROP__:' + JSON.stringify(paths));
-  });
-})()
-`;
-
 /** 右键坐标记录脚本：guest 的 contextmenu DOM 事件提供精确的 clientX/clientY
  * （viewport CSS 坐标），供右键菜单定位、聚焦输入框、检查元素使用
  * （比 Electron 转发的 params 坐标更可靠）。 */

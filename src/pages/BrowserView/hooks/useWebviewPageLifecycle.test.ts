@@ -19,7 +19,7 @@ vi.mock('../../../store/useGamepadStore.js', () => ({ useGamepadStore: { getStat
 vi.mock('../../../lib/webview-spatial-nav.js', () => ({ buildSpatialNavScript: () => 'spatial' }));
 vi.mock('../utils/favicon-placeholder.js', () => ({ extractThemeColor: async () => null }));
 vi.mock('../webview-scripts.js', () => ({ GET_TITLE_SCRIPT: 'title', SPATIAL_NAV_ENABLE_SCRIPT: 'enable',
-  buildFaviconToDataUrlScript: () => 'favicon', buildImageUrlToDataUrlScript: () => 'favicon', FILE_DROP_BRIDGE_SCRIPT: 'drop', CONTEXT_COORD_HOOK_SCRIPT: 'context' }));
+  buildFaviconToDataUrlScript: () => 'favicon', buildImageUrlToDataUrlScript: () => 'favicon', CONTEXT_COORD_HOOK_SCRIPT: 'context' }));
 
 import { useWebviewDomReady } from './useWebviewDomReady';
 import { useWebviewLifecycle } from './useWebviewLifecycle';
@@ -53,6 +53,15 @@ beforeEach(() => {
 afterEach(() => { harness.unmount(); vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('browser webview page ownership', () => {
+  it('ignores file path messages printed by guest page scripts', () => {
+    const dispatchEvent = vi.fn(); vi.stubGlobal('window', { dispatchEvent });
+    vi.stubGlobal('CustomEvent', class { constructor(public type: string, public options: unknown) {} });
+    const parameters = fixture();
+    harness.mount(() => useWebviewLifecycle({ ...parameters, setRemountKey: vi.fn(), handlers: lifecycleHandlers() }));
+    parameters.emit('console-message', { message: '__SK_FILEDROP__:["E:/private/fixture.pdf"]' });
+    expect(dispatchEvent).not.toHaveBeenCalled();
+  });
+
   it('refreshes AI enhancement and input ownership on SPA navigation without reloading', async () => {
     const parameters = fixture(); parameters.profile = { ...profile, isAIPlatform: true, aiInputSelector: '#input', aiSendSelector: '#send' };
     const mounted = harness.mount(() => useWebviewDomReady(parameters)); parameters.emit('dom-ready'); await mounted.current();

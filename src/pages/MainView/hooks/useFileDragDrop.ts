@@ -43,18 +43,11 @@ export function useFileDragDrop(platforms: AIPlatform[]) {
       }
     };
     const onDrop = async (e: DragEvent) => {
-      if (!hasFiles(e)) return;
+      if (!e.isTrusted || !hasFiles(e)) return;
       e.preventDefault();
       dragCounterRef.current = 0;
       setIsDragOver(false);
       if (!e.dataTransfer) return;
-      const paths = Array.from(e.dataTransfer.files)
-        .map((f) => (f as File & { path?: string }).path)
-        .filter((p): p is string => !!p);
-      if (paths.length === 0) {
-        showDownloadToast('未能获取文件路径');
-        return;
-      }
       const activeTabIdNow = useTabStore.getState().activeTabId;
       if (!activeTabIdNow) {
         showDownloadToast('没有激活的标签');
@@ -68,7 +61,7 @@ export function useFileDragDrop(platforms: AIPlatform[]) {
         return;
       }
       try {
-        const fileInfos: DroppedFileInfo[] = await dropFiles(paths);
+        const fileInfos: DroppedFileInfo[] = await dropFiles();
         if (fileInfos.length === 0) {
           showDownloadToast('读取文件失败');
           return;

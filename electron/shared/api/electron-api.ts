@@ -146,14 +146,4 @@ export interface ElectronAPI {
   navHistory: NavHistoryAPI
   /** 模块管理（插件市场 / 开发者选项） */
   modules: ModulesAPI
-  /**
-   * 通用插件 IPC 通道。插件通过此命名空间调用主进程注册的 IPC handler。
-   * 用法：`window.electron.plugins.invoke('my-plugin:doSomething', arg)`
-   * 主进程侧：插件在 init() 中通过 scope.ipcHandle('my-plugin:doSomething', handler) 注册。
-   */
-  plugins: {
-    invoke(channel: string, ...args: unknown[]): Promise<unknown>
-    send(channel: string, ...args: unknown[]): void
-    on(channel: string, callback: (...args: unknown[]) => void): () => void
-  }
 }

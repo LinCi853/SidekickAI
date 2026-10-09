@@ -5,7 +5,8 @@ import { pipeline } from 'node:stream/promises'
 import { checkAbort, flushFile, STREAM_BUFFER_BYTES } from './io.js'
 
 const MAGIC = Buffer.from('SABK')
-const VERSION = 1
+const VERSION = 2
+const SALT_LENGTH = 32
 const IV_LENGTH = 12
 const AUTH_TAG_LENGTH = 16
 const KEY_LENGTH = 32
@@ -14,23 +15,28 @@ const MAX_SALT_BYTES = 64 * 1024
 export const SABK_MAX_PLAINTEXT_BYTES = 2 ** 36 - 32
 
 function validatePlaintextSize(file: string): void {
-  if (fs.statSync(file).size > SABK_MAX_PLAINTEXT_BYTES) throw new Error('SABK v1 cannot encrypt more than 68719476704 bytes in one authenticated archive. Choose an unencrypted ZIP64 backup or a smaller explicit selection.')
+  if (fs.statSync(file).size > SABK_MAX_PLAINTEXT_BYTES) throw new Error('SABK cannot encrypt more than 68719476704 bytes in one authenticated archive. Choose a smaller explicit selection.')
 }
 
-interface Header { deviceId: string; iv: Buffer; tag: Buffer; length: number }
+interface Header { deviceId: string; salt: Buffer; iv: Buffer; tag: Buffer; length: number; aad?: Buffer }
 export interface CryptoProgress { signal?: AbortSignal; cancelled?: () => boolean; onBytes?: (bytes: number) => void }
 
-function key(password: string, deviceId: string): Buffer { return pbkdf2Sync(password, Buffer.from(deviceId, 'utf8'), PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256') }
+function key(password: string, salt: Buffer): Buffer {
+  if (!password) throw new Error('备份加密密码不能为空。')
+  return pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256')
+}
 
-function makeHeader(deviceId: string, iv: Buffer): Buffer {
-  const salt = Buffer.from(deviceId, 'utf8')
-  if (!salt.length || salt.length > MAX_SALT_BYTES) throw new Error('Invalid backup encryption identity.')
-  const header = Buffer.alloc(9 + salt.length + IV_LENGTH + AUTH_TAG_LENGTH)
+function makeHeader(deviceId: string, salt: Buffer, iv: Buffer): Buffer {
+  const identity = Buffer.from(deviceId, 'utf8')
+  if (!identity.length || identity.length > MAX_SALT_BYTES) throw new Error('Invalid backup encryption identity.')
+  const header = Buffer.alloc(13 + salt.length + identity.length + IV_LENGTH + AUTH_TAG_LENGTH)
   MAGIC.copy(header)
   header[4] = VERSION
   header.writeUInt32LE(salt.length, 5)
-  salt.copy(header, 9)
-  iv.copy(header, 9 + salt.length)
+  header.writeUInt32LE(identity.length, 9)
+  salt.copy(header, 13)
+  identity.copy(header, 13 + salt.length)
+  iv.copy(header, 13 + salt.length + identity.length)
   return header
 }
 
@@ -38,12 +44,25 @@ function readHeader(file: string): Header | null {
   const descriptor = fs.openSync(file, 'r')
   try {
     const prefix = Buffer.alloc(9)
-    if (fs.readSync(descriptor, prefix, 0, 9, 0) !== 9 || !prefix.subarray(0, 4).equals(MAGIC) || prefix[4] !== VERSION) return null
+    if (fs.readSync(descriptor, prefix, 0, 9, 0) !== 9 || !prefix.subarray(0, 4).equals(MAGIC) || ![1, VERSION].includes(prefix[4])) return null
     const saltLength = prefix.readUInt32LE(5)
     if (!saltLength || saltLength > MAX_SALT_BYTES) return null
+    if (prefix[4] === VERSION) {
+      if (saltLength !== SALT_LENGTH) return null
+      const identitySize = Buffer.alloc(4)
+      if (fs.readSync(descriptor, identitySize, 0, 4, 9) !== 4) return null
+      const identityLength = identitySize.readUInt32LE()
+      if (!identityLength || identityLength > MAX_SALT_BYTES) return null
+      const body = Buffer.alloc(saltLength + identityLength + IV_LENGTH + AUTH_TAG_LENGTH)
+      if (fs.readSync(descriptor, body, 0, body.length, 13) !== body.length) return null
+      const ivOffset = saltLength + identityLength
+      return { deviceId: body.subarray(saltLength, ivOffset).toString('utf8'), salt: body.subarray(0, saltLength),
+        iv: body.subarray(ivOffset, ivOffset + IV_LENGTH), tag: body.subarray(ivOffset + IV_LENGTH), length: 13 + body.length,
+        aad: Buffer.concat([prefix, identitySize, body.subarray(0, -AUTH_TAG_LENGTH)]) }
+    }
     const body = Buffer.alloc(saltLength + IV_LENGTH + AUTH_TAG_LENGTH)
     if (fs.readSync(descriptor, body, 0, body.length, 9) !== body.length) return null
-    return { deviceId: body.subarray(0, saltLength).toString('utf8'), iv: body.subarray(saltLength, saltLength + IV_LENGTH), tag: body.subarray(saltLength + IV_LENGTH), length: 9 + body.length }
+    return { deviceId: body.subarray(0, saltLength).toString('utf8'), salt: body.subarray(0, saltLength), iv: body.subarray(saltLength, saltLength + IV_LENGTH), tag: body.subarray(saltLength + IV_LENGTH), length: 9 + body.length }
   } finally { fs.closeSync(descriptor) }
 }
 
@@ -52,12 +71,14 @@ function writeAll(descriptor: number, bytes: Buffer): void {
   while (offset < bytes.length) { const written = fs.writeSync(descriptor, bytes, offset, bytes.length - offset); if (!written) throw new Error('Backup encryption write made no progress.'); offset += written }
 }
 
-/** SABK v1 places its GCM tag before ciphertext; seeking only updates the reserved tag. */
+/** The complete envelope header except the tag is authenticated as GCM additional data. */
 export function encryptFile(inputPath: string, outputPath: string, password: string, deviceId: string): void {
   validatePlaintextSize(inputPath)
+  const salt = randomBytes(SALT_LENGTH)
   const iv = randomBytes(IV_LENGTH)
-  const cipher = createCipheriv('aes-256-gcm', key(password, deviceId), iv)
-  const header = makeHeader(deviceId, iv)
+  const cipher = createCipheriv('aes-256-gcm', key(password, salt), iv)
+  const header = makeHeader(deviceId, salt, iv)
+  cipher.setAAD(header.subarray(0, -AUTH_TAG_LENGTH))
   const input = fs.openSync(inputPath, 'r')
   const output = fs.openSync(outputPath, 'w', 0o600)
   try {
@@ -79,7 +100,8 @@ export function decryptFile(inputPath: string, outputPath: string, password: str
   const header = readHeader(inputPath)
   if (!header) return null
   const scratch = `${outputPath}.${randomUUID()}.decrypting`
-  const decipher = createDecipheriv('aes-256-gcm', key(password, header.deviceId), header.iv)
+  const decipher = createDecipheriv('aes-256-gcm', key(password, header.salt), header.iv)
+  if (header.aad) decipher.setAAD(header.aad)
   decipher.setAuthTag(header.tag)
   const input = fs.openSync(inputPath, 'r')
   const output = fs.openSync(scratch, 'wx', 0o600)
@@ -115,9 +137,11 @@ function meter(options: CryptoProgress): Transform {
 export async function encryptFileStream(inputPath: string, outputPath: string, password: string, deviceId: string, options: CryptoProgress = {}): Promise<void> {
   validatePlaintextSize(inputPath)
   checkAbort(options.signal, options.cancelled)
+  const salt = randomBytes(SALT_LENGTH)
   const iv = randomBytes(IV_LENGTH)
-  const cipher = createCipheriv('aes-256-gcm', key(password, deviceId), iv)
-  const header = makeHeader(deviceId, iv)
+  const cipher = createCipheriv('aes-256-gcm', key(password, salt), iv)
+  const header = makeHeader(deviceId, salt, iv)
+  cipher.setAAD(header.subarray(0, -AUTH_TAG_LENGTH))
   fs.writeFileSync(outputPath, header, { mode: 0o600 })
   try {
     await pipeline(fs.createReadStream(inputPath, { highWaterMark: STREAM_BUFFER_BYTES }), meter(options), cipher, fs.createWriteStream(outputPath, { flags: 'r+', start: header.length, highWaterMark: STREAM_BUFFER_BYTES }), { signal: options.signal })
@@ -132,7 +156,8 @@ export async function decryptFileStream(inputPath: string, outputPath: string, p
   const header = readHeader(inputPath)
   if (!header) return null
   const scratch = `${outputPath}.${randomUUID()}.decrypting`
-  const decipher = createDecipheriv('aes-256-gcm', key(password, header.deviceId), header.iv)
+  const decipher = createDecipheriv('aes-256-gcm', key(password, header.salt), header.iv)
+  if (header.aad) decipher.setAAD(header.aad)
   decipher.setAuthTag(header.tag)
   try {
     await pipeline(fs.createReadStream(inputPath, { start: header.length, highWaterMark: STREAM_BUFFER_BYTES }), meter(options), decipher, fs.createWriteStream(scratch, { flags: 'wx', mode: 0o600, highWaterMark: STREAM_BUFFER_BYTES }), { signal: options.signal })

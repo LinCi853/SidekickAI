@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { compilationInputs } from './scripts/compilation-inputs'
 import { excalidrawClipboardFeedback } from './scripts/excalidraw-clipboard-feedback'
+import { rendererSecurity } from './scripts/renderer-security'
 
 // 空模块路径：用于 alias 排除不需要的传递依赖
 const emptyMod = resolve(__dirname, 'src/lib/_empty.ts')
@@ -69,7 +70,7 @@ export default defineConfig({
         },
       },
     },
-    plugins: [react(), excalidrawClipboardFeedback(), compilationInputs(__dirname, 'renderer')],
+    plugins: [react(), rendererSecurity(), excalidrawClipboardFeedback(), compilationInputs(__dirname, 'renderer')],
     optimizeDeps: {
       // Keep the clipboard transform active and prebundle its nested CommonJS dependencies.
       exclude: ['@excalidraw/excalidraw'],

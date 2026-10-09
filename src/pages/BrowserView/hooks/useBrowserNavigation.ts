@@ -112,35 +112,13 @@ export function useBrowserNavigation({
     }
   }, [tabs, newTab, switchTab]);
 
-  /* ===== 本地文件拖拽导入（文本/图片等直接查看） ===== */
-  // 分发：PDF → 应用内 PDF 预览器（复用打印预览标签，sidekick-pdf 协议加载本地文件）；
-  // 图片/文本/HTML 等 → 新标签 file:// 打开（Chromium 内建文本/图片查看器）
-  const openLocalFiles = useCallback((paths: string[]) => {
-    for (const raw of paths) {
-      if (!raw) continue;
-      const normalized = raw.replace(/\\/g, '/');
-      if (/\.pdf$/i.test(normalized)) {
-        const params = new URLSearchParams({
-          file: raw,
-          title: raw.split(/[\\/]/).pop() || 'PDF',
-          sourceUrl: '',
-        });
-        newTab(`sidekickai://print-preview?${params.toString()}`, { source: 'print-preview', kind: 'web' });
-      } else {
-        newTab(encodeURI('file:///' + normalized), { kind: 'web' });
-      }
-    }
-  }, [newTab]);
-
-  // guest 上报（页面未处理文件上传时）
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { paths: string[] } | undefined;
-      if (detail?.paths?.length) openLocalFiles(detail.paths);
-    };
-    window.addEventListener('browser-local-files-drop', handler);
-    return () => window.removeEventListener('browser-local-files-drop', handler);
-  }, [openLocalFiles]);
+    return window.electron?.appSettings.onLocalFilesDropped(({ files }) => {
+      for (const file of files) {
+        newTab(file.url, file.kind === 'pdf' ? { source: 'print-preview', kind: 'web' } : { kind: 'web' });
+      }
+    });
+  }, [newTab]);
 
   // 宿主 UI 区域拖入文件：打开查看（webview 区域由 guest 页面自行处理上传）
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -151,15 +129,12 @@ export function useBrowserNavigation({
   }, []);
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
+    if (!e.nativeEvent.isTrusted || !files || files.length === 0) return;
     e.preventDefault();
-    const paths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i] as File & { path?: string };
-      if (f.path) paths.push(f.path);
-    }
-    if (paths.length > 0) openLocalFiles(paths);
-  }, [openLocalFiles]);
+    void window.electron?.appSettings.openDroppedFiles().catch(error => {
+      console.warn('[BrowserView] Unable to open dropped files:', error);
+    });
+  }, []);
 
   return {
     navigateUrl,

@@ -14,17 +14,9 @@ import { getDefaultProfileParams, createDefaultProfileParams } from './default-c
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { hasQianwenProfile, upgradeAIPlatformProfile } from '../presets/platform-profile-upgrade.js'
 import { getPreset } from './preset-store.js'
-import { createSqliteJsonStore } from './module-state-store.js'
+import { profileRepository as store, readProfile } from './profile-repository.js'
 
 // Windows Chrome 125 默认 UA 已迁移到 default-config.ts
-
-// 持久化存储实例（写入 profiles.json）
-// 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
-// 生产环境：使用默认 userData 路径（AppData\Roaming\<appName>）
-const store = createSqliteJsonStore<{ profiles: Profile[]; version: number }>({
-  tableName: 'profiles',
-  defaults: { profiles: [], version: 1 },
-})
 
 /**
  * 创建默认 Profile
@@ -52,7 +44,7 @@ export class ProfileStore {
 
   /** 按 id 查找单个 Profile */
   get(id: string): Profile | null {
-    return (store.get('profiles') as Profile[]).find((p) => p.id === id) ?? null
+    return readProfile(id)
   }
 
   /**

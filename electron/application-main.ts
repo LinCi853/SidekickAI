@@ -6,8 +6,10 @@ import { restoreBackupCookies } from '../packages/backup-core/sessions.js';
 import { finishPendingRestore, requestRestoreRollback } from '../packages/backup-core/transaction.js';
 import { parseBackupManifest } from '../packages/backup-core/format.js';
 import { readFileSync } from 'node:fs';
-import { app, BrowserWindow, Menu, ipcMain, protocol, screen, session, systemPreferences, dialog } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, protocol, screen, session, dialog } from 'electron';
 import { allowWhiteboardClipboard } from './assets/whiteboard-clipboard.js';
+import { installApplicationPermissions } from './security/session-permissions.js';
+import { installRendererContentSecurity } from './security/renderer-csp.js';
 import path from 'path';
 import { registerProfileIPC, ensureDefaultProfiles, } from './store/profile-store.js';
 import { registerBlockRulesIPC, ensureDefaultBlockRules, } from './store/block-rules-store.js';
@@ -121,31 +123,11 @@ app.whenReady().then(async () => {
     const showGuideRequested = process.argv.includes('--show-guide');
     const skipGuideRequested = process.argv.includes('--skip-guide');
     initAppFocusTracker();
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
-        if (permission === 'media') {
-            if (process.platform === 'darwin') {
-                try {
-                    const status = systemPreferences.getMediaAccessStatus('microphone');
-                    callback(status === 'granted');
-                }
-                catch {
-                    callback(true);
-                }
-            }
-            else {
-                callback(true);
-            }
-        }
-        else if (allowWhiteboardClipboard({ permission, senderId: _wc?.id, hostId: windowState.advancedPanelWindow?.webContents.id,
-            hostUrl: _wc?.getURL() ?? '', requestingUrl: details.requestingUrl, isMainFrame: details.isMainFrame,
-            enabled: isModuleEnabled('whiteboard') })) {
-            callback(true);
-        }
-        else {
-            callback(false);
-        }
-    });
-    session.defaultSession.setDevicePermissionHandler((_details) => true);
+    installRendererContentSecurity(session.defaultSession);
+    installApplicationPermissions(session.defaultSession, (contents, permission, details) =>
+        allowWhiteboardClipboard({ permission, senderId: contents.id, hostId: windowState.advancedPanelWindow?.webContents.id,
+            hostUrl: contents.getURL(), requestingUrl: details.requestingUrl ?? '', isMainFrame: details.isMainFrame,
+            enabled: isModuleEnabled('whiteboard') }));
     fingerprintEngine = new FingerprintEngine();
     const windowManager = new WindowManager(fingerprintEngine);
     windowState.windowManager = windowManager;

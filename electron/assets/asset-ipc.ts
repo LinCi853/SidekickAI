@@ -21,6 +21,9 @@ import { isImportingData } from '../store/import-guard.js'
 import { AssetObservationJournal, setAssetCollectionJournal } from './collection-journal.js'
 import { readAttachmentPreview } from './attachment-preview.js'
 import { createAttachmentRetention } from './attachment-retention.js'
+import { withPublicResponse } from '../security/public-request.js'
+import { assertOwnedWebview } from '../security/webview-owner.js'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 
 let stopTransfers: (() => void) | undefined
 let transfersActive: () => boolean = () => false
@@ -341,21 +344,22 @@ export function registerAiAssetIpc(): void {
     const profile = own(event, id)
     const controller = controllers.get(id)!
     try {
+      const host = event.sender.hostWebContents
+      if (!host) throw new Error('Original source window is unavailable')
+      assertTrustedRenderer({ ...event, sender: host, senderFrame: host.mainFrame })
+      assertOwnedWebview(host, event.sender)
       const url = getChatStore().assets.getAttachment(id)?.sourceUrl
       if (!url || !/^https?:\/\//.test(url)) throw new Error('Original URL is unavailable')
-      const response = await event.sender.session.fetch(url, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]) })
-      if (!response.ok || !response.body) throw new Error(`Original fetch failed: HTTP ${response.status}`)
-      const reader = response.body.getReader()
       let offset = 0
-      try {
-        for (;;) {
-          const part = await reader.read()
+      await withPublicResponse(event.sender.session, url, AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]), async response => {
+        if (response.statusCode < 200 || response.statusCode >= 300) throw new Error(`Original fetch failed: HTTP ${response.statusCode}`)
+        for await (const part of response.body) {
           controller.signal.throwIfAborted()
-          if (part.done) break
-          await vault.append(id, offset, part.value)
-          offset += part.value.byteLength
+          own(event, id)
+          await vault.append(id, offset, part)
+          offset += part.byteLength
         }
-      } finally { reader.releaseLock() }
+      })
       controller.signal.throwIfAborted()
       const original = await vault.finish(id, offset, getChatStore().assets.getAttachment(id)?.sha256)
       controller.signal.throwIfAborted()

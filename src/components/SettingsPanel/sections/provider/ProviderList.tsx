@@ -60,6 +60,7 @@ export default function ProviderList({
                 <Badge variant="accent" data-name={`advanced-panel.provider-card-${idx + 1}-protocol-badge`}>{p.protocol}</Badge>
               </span>
               <span className="provider-row-endpoint" title={p.apiEndpoint} data-name={`advanced-panel.provider-card-${idx + 1}-endpoint`}>{p.apiEndpoint}</span>
+              {p.apiKeyUnavailable && <span role="status" className="provider-row-endpoint">已保存的密钥无法使用，请编辑并重新录入 API 密钥。</span>}
             </span>
 
             {/* 右侧：导出勾选 + 操作按钮 */}

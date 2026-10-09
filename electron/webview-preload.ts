@@ -7,6 +7,9 @@
 // contextIsolation 隔离保证 Node 能力不泄露到页面。
 
 import { startAiAssetCollector } from './assets/webview-collector.js'
+import { installFileDropCapture } from './preload/file-drop.js'
+
+installFileDropCapture('guest')
 
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', () => { void startAiAssetCollector().catch(error => console.warn('[ai-assets] Collector unavailable:', error)) }, { once: true })

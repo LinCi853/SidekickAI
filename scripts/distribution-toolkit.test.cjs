@@ -11,6 +11,60 @@ const u = require('./build-utils.cjs')
 const { pe } = require('./test-fixtures/application-runtime.cjs')
 const { fixtureRoot, toolkitFixture, writeToolkit } = require('./test-fixtures/distribution-toolkit.cjs')
 
+function pinnedReference() {
+  return structuredClone(require('../maintenance/distribution-toolkit.json'))
+}
+
+const foreignIdentities = [
+  ['version', value => { value.toolkitVersion = '1.3.2' }, /version.*trusted release/i],
+  ['size', value => { value.archive.size++ }, /size.*trusted release/i],
+  ['digest', value => { value.archive.sha256 = '0'.repeat(64) }, /SHA-256.*trusted release/i],
+]
+
+test('production references reject each foreign release identity', () => {
+  const reference = pinnedReference()
+  assert.equal(toolkit.validateReference(reference), reference)
+  for (const [name, change, expected] of foreignIdentities) {
+    const foreign = structuredClone(reference)
+    change(foreign)
+    assert.throws(() => toolkit.validateReference(foreign), expected, name)
+  }
+})
+
+test('production acquisition rejects foreign identities before archive access or cache creation', async t => {
+  for (const selection of ['default', 'environment', 'direct']) {
+    for (const [name, change, expected] of foreignIdentities) await t.test(selection + ':' + name, async sub => {
+      const root = fixtureRoot(sub)
+      const reference = pinnedReference()
+      reference.archive.path = 'vendor/distribution/unread.zip'
+      change(reference)
+      const referenceFile = path.join(root, selection === 'default' ? 'maintenance/distribution-toolkit.json' : 'reference.json')
+      fs.mkdirSync(path.dirname(referenceFile), { recursive: true })
+      fs.writeFileSync(referenceFile, JSON.stringify(reference))
+      const previous = process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE
+      if (selection === 'environment') process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE = referenceFile
+      else delete process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE
+      sub.after(() => {
+        if (previous === undefined) delete process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE
+        else process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE = previous
+      })
+      const archivePath = path.join(root, reference.archive.path)
+      const read = fs.readFileSync
+      sub.mock.method(fs, 'readFileSync', (file, ...args) => {
+        assert.notEqual(path.resolve(file), archivePath, 'Foreign references must not read archive bytes')
+        return read(file, ...args)
+      })
+      sub.mock.method(u, 'sha256', () => assert.fail('Foreign references must not hash archive bytes'))
+      sub.mock.method(fs, 'createReadStream', () => assert.fail('Foreign references must not stream archive bytes'))
+      sub.mock.method(yauzl, 'openPromise', () => assert.fail('Foreign references must not open ZIP entries'))
+      const options = { fetch() { assert.fail('Foreign references must not download archive bytes') } }
+      if (selection === 'direct') options.reference = reference
+      await assert.rejects(toolkit.prepareToolkit(root, options), expected)
+      assert.equal(fs.existsSync(path.join(root, 'build')), false)
+    })
+  }
+})
+
 async function localServer(t, handler) {
   const server = http.createServer(handler)
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -21,11 +75,12 @@ async function localServer(t, handler) {
   return 'http://127.0.0.1:' + server.address().port
 }
 
-test('toolkit references pin the protocol, version, size, digest and explicit source', t => {
-  const { reference } = writeToolkit(fixtureRoot(t))
+test('toolkit references pin the protocol, version, size, digest and explicit source', () => {
+  const reference = pinnedReference()
   assert.equal(toolkit.validateReference(reference), reference)
   const https = structuredClone(reference)
-  https.archive.url = 'https://example.invalid/downloads/toolkit.zip?version=1.2.0'
+  delete https.archive.path
+  https.archive.url = 'https://example.invalid/downloads/toolkit.zip?version=1.3.1'
   assert.equal(toolkit.validateReference(https), https)
   for (const [name, change] of [
     ['protocol', value => { value.interfaceVersion = 2 }],
@@ -45,11 +100,11 @@ test('toolkit references pin the protocol, version, size, digest and explicit so
   for (const url of ['http://example.invalid/toolkit.zip', 'ftp://example.invalid/toolkit.zip',
     'https://user:password@example.invalid/toolkit.zip', 'https://example.invalid/toolkit.zip#fragment',
     'file://server/share/toolkit.zip', './toolkit.zip']) {
-    const value = structuredClone(reference)
+    const value = structuredClone(https)
     value.archive.url = url
     assert.throws(() => toolkit.validateReference(value, { allowLoopback: true }), undefined, url)
   }
-  const loopback = structuredClone(reference)
+  const loopback = structuredClone(https)
   loopback.archive.url = 'http://127.0.0.1:12345/toolkit.zip'
   assert.throws(() => toolkit.validateReference(loopback), /HTTPS/)
   assert.equal(toolkit.validateReference(loopback, { allowLoopback: true }), loopback)
@@ -57,7 +112,7 @@ test('toolkit references pin the protocol, version, size, digest and explicit so
 
 test('toolkit reference selection has no implicit sibling workspace fallback', t => {
   const root = fixtureRoot(t)
-  const { reference } = writeToolkit(path.join(root, 'published'))
+  const reference = pinnedReference()
   assert.throws(() => toolkit.readReference(root, { env: {} }), /SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE/)
   const referenceFile = path.join(root, 'selected-reference.json')
   fs.writeFileSync(referenceFile, JSON.stringify(reference))
@@ -72,6 +127,7 @@ test('toolkit reference selection has no implicit sibling workspace fallback', t
 test('the default project pin resolves its archive within the workspace', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'vendor/distribution'))
+  const toolkit = published.toolkit
   const reference = structuredClone(published.reference)
   delete reference.archive.url
   reference.archive.path = path.relative(root, published.archive).replaceAll('\\', '/')
@@ -94,6 +150,7 @@ test('the default project pin resolves its archive within the workspace', async 
 test('project pins fail when their local archive is absent or linked outside the project', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'outside'))
+  const toolkit = published.toolkit
   const reference = structuredClone(published.reference)
   delete reference.archive.url
   reference.archive.path = 'vendor/distribution/toolkit.zip'
@@ -106,6 +163,7 @@ test('project pins fail when their local archive is absent or linked outside the
 test('warm project caches still require the original archive bytes and an unlinked source', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'vendor/distribution'))
+  const toolkit = published.toolkit
   const reference = structuredClone(published.reference)
   delete reference.archive.url
   reference.archive.path = path.relative(root, published.archive).replaceAll('\\', '/')
@@ -134,6 +192,7 @@ test('warm project caches still require the original archive bytes and an unlink
 test('a real loopback download verifies a complete toolkit and reuses a rechecked cache', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'published'))
+  const toolkit = published.toolkit
   const bytes = fs.readFileSync(published.archive)
   let requests = 0
   const origin = await localServer(t, (request, response) => {
@@ -161,22 +220,25 @@ test('a real loopback download verifies a complete toolkit and reuses a rechecke
 test('download errors and pin mismatches never promote an unverified cache entry', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'published'))
+  const toolkit = published.toolkit
   const bytes = fs.readFileSync(published.archive)
   const origin = await localServer(t, (request, response) => {
     if (request.url === '/failed') { response.writeHead(503); response.end('unavailable'); return }
     if (request.url === '/redirect') { response.writeHead(302, { Location: '/archive' }); response.end(); return }
+    const changed = Buffer.from(bytes)
+    changed[0] ^= 1
     response.end(request.url === '/short' ? bytes.subarray(0, bytes.length - 1)
+      : request.url === '/changed' ? changed
       : request.url === '/long' ? Buffer.concat([bytes, Buffer.from('extra')]) : bytes)
   })
-  for (const [name, route, change, expected] of [
-    ['http-error', '/failed', () => {}, /HTTP 503/],
-    ['truncated', '/short', () => {}, /pinned size and SHA-256/],
-    ['excess', '/long', () => {}, /exceeds its declared size/],
-    ['digest', '/archive', value => { value.archive.sha256 = '0'.repeat(64) }, /pinned size and SHA-256/],
+  for (const [name, route, expected] of [
+    ['http-error', '/failed', /HTTP 503/],
+    ['truncated', '/short', /pinned size and SHA-256/],
+    ['excess', '/long', /exceeds its declared size/],
+    ['digest', '/changed', /pinned size and SHA-256/],
   ]) await t.test(name, async () => {
     const reference = structuredClone(published.reference)
     reference.archive.url = origin + route
-    change(reference)
     const workspace = path.join(root, name)
     await assert.rejects(toolkit.prepareToolkit(workspace, { reference, allowLoopback: true }), expected)
     assert.equal(fs.existsSync(path.join(workspace, 'build/component-cache/distribution-toolkit', reference.archive.sha256)), false)
@@ -189,6 +251,7 @@ test('download errors and pin mismatches never promote an unverified cache entry
 test('download responses cannot change an HTTPS reference to an unapproved transport', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'published'))
+  const toolkit = published.toolkit
   const reference = structuredClone(published.reference)
   reference.archive.url = 'https://example.invalid/toolkit.zip'
   await assert.rejects(toolkit.prepareToolkit(path.join(root, 'workspace'), {
@@ -302,6 +365,7 @@ test('real toolkit ZIP parsing rejects missing, duplicate, unsafe, extra and spe
     const fixture = toolkitFixture()
     change(fixture)
     const published = writeToolkit(path.join(root, 'published'), fixture)
+    const toolkit = published.toolkit
     await assert.rejects(toolkit.prepareToolkit(path.join(root, 'workspace'), { reference: published.reference }))
     assert.equal(fs.existsSync(path.join(root, 'workspace/build/component-cache/distribution-toolkit', published.reference.archive.sha256)), false)
     assert.equal(fs.existsSync(path.join(root, 'outside.txt')), false)
@@ -317,6 +381,7 @@ test('matching archive hashes cannot conceal an executable architecture mismatch
   file.size = entry.bytes.length
   file.sha256 = u.hash(entry.bytes)
   const published = writeToolkit(path.join(root, 'published'), fixture)
+  const toolkit = published.toolkit
   await assert.rejects(toolkit.prepareToolkit(path.join(root, 'workspace'), { reference: published.reference }), /native architecture/)
 })
 
@@ -330,6 +395,7 @@ test('toolkit native libraries must match the architecture advertised for their 
     fixture.manifest.files.push({ path: name, role: 'backup-runtime', architecture: 'x64',
       size: bytes.length, sha256: u.hash(bytes) })
     const published = writeToolkit(path.join(root, 'published'), fixture)
+    const toolkit = published.toolkit
     await assert.rejects(toolkit.prepareToolkit(path.join(root, 'workspace'), { reference: published.reference }), /native architecture/)
   })
 })
@@ -351,6 +417,7 @@ test('cached archives and extracted resources are revalidated before reuse', asy
   ]) await t.test(name, async sub => {
     const root = fixtureRoot(sub)
     const published = writeToolkit(path.join(root, 'published'))
+    const toolkit = published.toolkit
     const workspace = path.join(root, 'workspace')
     const prepared = await toolkit.prepareToolkit(workspace, { reference: published.reference })
     change(prepared)
@@ -362,6 +429,7 @@ test('cached archives and extracted resources are revalidated before reuse', asy
 test('a selected reference file cannot change between preparation and binary invocation', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'published'))
+  const toolkit = published.toolkit
   const referenceFile = path.join(root, 'selected-reference.json')
   fs.writeFileSync(referenceFile, JSON.stringify(published.reference))
   const prepared = await toolkit.prepareToolkit(path.join(root, 'workspace'), { referenceFile })
@@ -373,6 +441,7 @@ test('a selected reference file cannot change between preparation and binary inv
 test('cache promotion waits until all archive reader handles have closed', async t => {
   const root = fixtureRoot(t)
   const published = writeToolkit(path.join(root, 'published'))
+  const toolkit = published.toolkit
   const open = yauzl.openPromise
   const rename = fs.renameSync
   const readers = new Set()

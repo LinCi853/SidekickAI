@@ -9,6 +9,7 @@ import { validateBackupArchive } from './format.js'
 import AdmZip from 'adm-zip'
 import { exportTreeDigest } from './files.js'
 import { decryptFile } from './file-crypto.js'
+import Database from 'better-sqlite3'
 
 let root = ''
 const options = { basicData: true, cookies: false, indexedDB: false, cache: false }
@@ -16,7 +17,10 @@ beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'transient-backu
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) })
 function fixture() {
   const source = path.join(root, 'source'); fs.mkdirSync(source)
-  const settings = path.join(source, 'settings.db'); fs.writeFileSync(settings, 'opaque SQLite fixture for archive transport')
+  const settings = path.join(source, 'settings.db')
+  const database = new Database(settings)
+  try { database.exec('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)') }
+  finally { database.close() }
   const target = path.join(root, 'backup.zip')
   const adapter: ExportAdapter = {
     edition: 'community', root: () => source, version: () => 'fixture', deviceId: () => 'fixture', cookieTransfer: 'raw-profile',

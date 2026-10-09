@@ -127,7 +127,7 @@ export async function exportBackup(adapter: ExportAdapter, targetPath: string, o
     const total = validateArchiveSelection([...planned, { archivePath: 'manifest.json', sourcePath: '', size: 0, sha256: '' }])
     if (!entries.some(entry => entry.archivePath === 'settings.db')) throw new Error('Export failed: the archive is missing settings.db.')
     const archiveBound = Math.ceil(total * 1.01) + entries.length * 512 + MAX_MANIFEST_BYTES
-    if (encrypt && archiveBound > SABK_MAX_PLAINTEXT_BYTES) throw new Error('SABK v1 encryption is limited to 68719476704 archive bytes. Use ZIP64 without encryption or reduce the explicit selection.')
+    if (encrypt && archiveBound > SABK_MAX_PLAINTEXT_BYTES) throw new Error('SABK encryption is limited to 68719476704 archive bytes. Reduce the explicit selection.')
     checkDiskSpace([{ path: snapshot, bytes: total + archiveBound * (encrypt ? 3 : 1), purpose: '一致快照、归档及校验' }, { path: path.dirname(targetPath), bytes: archiveBound + (encrypt ? 65573 : 0), purpose: '备份目标' }])
     job.snapshotBytes = total
     job.progress = { phase: 'capturing-snapshot', completedBytes: 0, totalBytes: total }; saveBackupJob(job, control)

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { encryptFileStream, decryptFileStream } from './file-crypto.js'
+import { assertUnencryptedCredentialsAbsent } from './credential-export.js'
 import { readStreamingArchive, writeStreamingArchive, type ArchiveEntry } from './stream-archive.js'
 import { exportTreeDigest } from './files.js'
 import { parseBackupManifest, safeBackupPath } from './format.js'
@@ -273,13 +274,15 @@ async function verifySnapshot(job: BackupJob, control: BackupJobControl): Promis
 
 async function prepareArtifact(job: BackupJob, control: BackupJobControl): Promise<string> {
   const directory = backupJobDirectory(job.id, control.tempRoot)
+  const checkedSnapshot = !job.encrypted ? await verifySnapshot(job, control) : undefined
+  if (checkedSnapshot) assertUnencryptedCredentialsAbsent(backupSnapshotDirectory(job, control.tempRoot))
   const artifact = path.join(directory, job.encrypted ? 'artifact.sabackup' : 'artifact.zip')
   const cancelled = () => backupCancellationRequested(job, control.tempRoot)
   if (job.artifactSha256 && fs.existsSync(artifact)) {
     if (fs.statSync(artifact).size !== job.artifactBytes || await hashFile(artifact, control.signal, cancelled) !== job.artifactSha256) throw new Error('The retained backup artifact has changed.')
     return artifact
   }
-  const { manifest, entries } = await verifySnapshot(job, control)
+  const { manifest, entries } = checkedSnapshot ?? await verifySnapshot(job, control)
   const archive = path.join(directory, 'archive.zip')
   const upperBound = Math.ceil(job.snapshotBytes * 1.01) + entries.length * 512 + MAX_MANIFEST_BYTES
   checkDiskSpace([{ path: directory, bytes: upperBound * (job.encrypted ? 3 : 1), purpose: '打包与验证' }])

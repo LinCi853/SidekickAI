@@ -9,12 +9,13 @@
 // 抽离到独立模块避免 main.ts 与 profile-store.ts 循环依赖。
 
 import { app, BrowserWindow, dialog, session, type Session, type DownloadItem } from 'electron'
-import path from 'path'
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { getAppSettings, updateAppSettings } from '../store/app-settings-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { browserDownloadStore } from '../store/browser-download-store.js'
+import { containedDownloadPath, safeDownloadFilename } from '../security/download-path.js'
+import { installProfilePermissions } from '../security/session-permissions.js'
 
 /**
  * 为指定 session 注册 will-download 监听。
@@ -30,6 +31,7 @@ import { browserDownloadStore } from '../store/browser-download-store.js'
  * @param ses 要挂载的 session（defaultSession 或 persist:<profileId> partition）
  */
 export function attachDownloadHandler(ses: Session, profileId?: string): void {
+  if (profileId) installProfilePermissions(ses, profileId)
   // 避免重复挂载（同一 session 多次调用会叠加监听器）
   if ((ses as unknown as { __downloadHandlerAttached?: boolean }).__downloadHandlerAttached) {
     return
@@ -42,18 +44,18 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
   ses.on('will-download', async (_e, item: DownloadItem) => {
     const settings = getAppSettings()
     const dir = settings.downloadDir || app.getPath('downloads')
-    const filename = item.getFilename() || 'download'
+    const filename = safeDownloadFilename(item.getFilename())
 
     let savePath: string
     if (settings.downloadBehavior === 'auto' && dir) {
       // 自动保存到指定目录
-      savePath = path.join(dir, filename)
+      savePath = containedDownloadPath(dir, filename)
       item.setSavePath(savePath)
     } else {
       // 每次询问：弹保存框（默认目录为 downloadDir 或系统下载目录）
       try {
         const result = await dialog.showSaveDialog({
-          defaultPath: path.join(dir, filename),
+          defaultPath: containedDownloadPath(dir, filename),
         })
         if (result.canceled || !result.filePath) {
           item.cancel()

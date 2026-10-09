@@ -11,14 +11,16 @@
 | 字段 | 类型 | 要求 |
 | --- | --- | --- |
 | schemaVersion | 整数 | 1 |
-| toolkitVersion | 字符串 | 组件包版本，独立于应用版本 |
+| toolkitVersion | 字符串 | 组件包版本，须与消费端代码内固定版本一致，独立于应用版本 |
 | interfaceVersion | 整数 | 1 |
 | archive.url | 可选字符串 | 无凭据及片段的绝对 HTTPS URL；明确选择本地文件时可用 file URL，与 archive.path 二选一 |
 | archive.path | 可选字符串 | 相对于本工作区根目录的安全路径，使用 `/`；不得使用绝对路径、`..` 或文件系统链接，与 archive.url 二选一 |
-| archive.size | 正整数 | ZIP 原始字节数，最多 1 GiB |
-| archive.sha256 | 字符串 | ZIP 原始字节 SHA-256，小写十六进制 64 字符 |
+| archive.size | 正整数 | ZIP 原始字节数，须与消费端代码内固定值一致 |
+| archive.sha256 | 字符串 | ZIP 原始字节 SHA-256，小写十六进制 64 字符，须与消费端代码内固定值一致 |
 
-组件引用默认从 `maintenance/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。可用 `SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 指向另一份明确的引用 JSON；缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用必须填写真实发行字节，不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
+组件引用默认从 `maintenance/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，使同一归档可从明确的其他位置取得；版本、大小与摘要以消费端代码内固定值为准，环境变量不改变信任锚。任一身份字段不一致，都会在读取归档、下载、使用缓存或运行组件之前失败。缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
+
+当前消费端只接受 `scripts/distribution-toolkit-release.cjs` 固定的 1.3.1：120,258,510 字节，SHA-256 为 `9cf2d0b68b4ced11fb8e7b622123df9f819dca3a24d15d5ec69e7ce14a7037f1`。接受新的组件发行版须审查并更新源码固定值及引用；不提供跳过固定值校验的开关。
 
 下载与缓存复用均核对 ZIP 大小、摘要、完整条目及逐文件内容。构建前后重新核对引用和组件字节。缓存位于 `build/component-cache/distribution-toolkit`，不包含自建私钥。
 
@@ -89,7 +91,7 @@ assemble 的请求为以下对象，所有路径是绝对路径，outputDirector
 
 工程可提供 `maintenance/installation-configuration.json`，由调用包装传入二进制组件。格式见同目录的 `installation-configuration.example.json`。声明 `installationConfigurationVersion: 1` 的工具包支持覆盖 `autoLaunch`（布尔值）、`logLevel`（debug、info、warn、error）和 `usageTracking`（布尔值）的默认值；可只指定部分选项，最大 32 KiB。未知字段、选项和值均被拒绝。用户仍可在向导中调整最终值，修复时保留已有配置。
 
-未提供配置时继续兼容 1.2.0 工具包；传入配置要求固定工具包声明兼容能力，旧工具包须在编译应用前停止。新增选项、信任、身份或执行逻辑需要升级组件。应用版本及默认值的兼容调整可复用同一工具包，无需安装器源码。
+配置接口在 1.2.0 中可省略；当前消费端仍只接受上述固定发行版。传入配置要求固定工具包声明兼容能力，不支持时须在编译应用前停止。新增选项、信任、身份或执行逻辑需要升级组件。应用版本及默认值的兼容调整可复用同一工具包，无需安装器源码。
 
 成功时 stdout 最后一行输出 `{ schemaVersion: 1, outputDirectory, resultFile }`；resultFile 固定为输出根的 `assembly-result.json`。该文件最多 4 MiB，含 schemaVersion、interfaceVersion、toolkitVersion、toolkitManifestSha256、edition、mode、productVersion、authority、issuerKeyId、issuerFingerprint、publicIdentity、inputs 和 artifacts。安装正文保留 `maintenance/LICENSE.txt` 和 `maintenance/THIRD-PARTY-NOTICES.txt`，与已核验工具包逐字节一致并纳入正文签名；单独分发最终 Setup 时仍保留维护组件许可。
 

@@ -22,6 +22,8 @@
     "electron.vite.config.ts",
     "scripts/compilation-inputs.ts",
     "scripts/excalidraw-clipboard-feedback.ts",
-    "scripts/excalidraw-feedback.test.ts"
+    "scripts/excalidraw-feedback.test.ts",
+    "scripts/renderer-security.ts",
+    "scripts/renderer-security.test.ts"
   ]
 }

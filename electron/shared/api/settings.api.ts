@@ -129,6 +129,12 @@ export const ALL_TOP_BAR_BUTTON_GROUPS: TopBarButtonGroup[] = [
   'pinToggle',
 ]
 
+/** Main-process snapshots from a verified native file drop. */
+export interface LocalFilesDroppedEvent {
+  guestId: number | null
+  files: Array<{ name: string; url: string; kind: 'pdf' | 'file' }>
+}
+
 /** 应用全局设置 API */
 export interface AppSettingsAPI {
   /** 读取应用全局设置 */
@@ -209,8 +215,10 @@ export interface AppSettingsAPI {
   openDownloadDir(): Promise<void>
   /** Export persisted software logs and open the dated export directory. */
   openLogsFolder(options?: LogExportOptions): Promise<LogExportResult>
-  /** 读取拖拽文件并以 data URL 形式返回（用于跨 webview 边界传递文件内容） */
-  dropFiles(filePaths: string[]): Promise<Array<{ filename: string; dataUrl: string; mime: string; size: number }>>
+  /** Consumes the latest native drop captured in the isolated preload. */
+  dropFiles(): Promise<Array<{ filename: string; dataUrl: string; mime: string; size: number }>>
+  openDroppedFiles(): Promise<void>
+  onLocalFilesDropped(callback: (info: LocalFilesDroppedEvent) => void): () => void
   /** 监听下载完成事件（主进程 → 渲染层：filename + path） */
   onDownloadDone(callback: (info: { filename: string; path: string }) => void): () => void
 }

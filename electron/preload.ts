@@ -19,6 +19,7 @@ import { whiteboardApi } from './preload/whiteboard.js'
 import { bootstrapApi, setupDomSideEffects } from './preload/bootstrap.js'
 import { modulesApi } from './preload/modules.js'
 import { UPDATE_IPC } from './updates/types.js'
+import { installFileDropCapture } from './preload/file-drop.js'
 
 const api: ElectronAPI = {
   updates: {
@@ -41,16 +42,9 @@ const api: ElectronAPI = {
   ...whiteboardApi,
   ...bootstrapApi,
   ...modulesApi,
-  plugins: {
-    invoke: (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
-    send: (channel: string, ...args: unknown[]) => ipcRenderer.send(channel, ...args),
-    on: (channel: string, callback: (...args: unknown[]) => void) => {
-      const handler = (_e: unknown, ...args: unknown[]) => callback(...args)
-      ipcRenderer.on(channel, handler)
-      return () => ipcRenderer.removeListener(channel, handler)
-    },
-  },
 }
+
+installFileDropCapture('host')
 
 // 暴露到 window.electron
 contextBridge.exposeInMainWorld('electron', api)
