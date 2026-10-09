@@ -17,7 +17,7 @@
 | archive.size | 正整数 | ZIP 原始字节数，最多 1 GiB |
 | archive.sha256 | 字符串 | ZIP 原始字节 SHA-256，小写十六进制 64 字符 |
 
-下载引用默认从 `maintenance/distribution-toolkit.json` 读取。可用 `SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 指向另一份明确的引用 JSON；未配置引用时，完整包入口停止并提示条件缺失。引用必须填写真实发行字节，不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
+下载引用默认从 `maintenance/distribution-toolkit.json` 读取，固定到 `toolkit-v1.2.0` 的组件 ZIP。可用 `SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 指向另一份明确的引用 JSON；缺少引用或发布资源尚不可下载时，完整包入口停止。引用必须填写真实发行字节，不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
 
 下载与缓存复用均核对 ZIP 大小、摘要、完整条目及逐文件内容。构建前后重新核对引用和组件字节。缓存位于 `build/component-cache/distribution-toolkit`，不包含自建私钥。
 
@@ -82,7 +82,7 @@ assemble 的请求为以下对象，所有路径是绝对路径，outputDirector
 
 产品版本从两份一致的标准载荷取得，并与实际软件归档交叉核对；工具包版本不覆盖应用版本。标准载荷清单最多 4 MiB。输出正文包含对应架构卸载器、独立恢复程序及其运行时，由组装器核验、注入并生成本地证明。原始标准载荷保持不变。
 
-成功时 stdout 最后一行输出 `{ schemaVersion: 1, outputDirectory, resultFile }`；resultFile 固定为输出根的 `assembly-result.json`。该文件最多 4 MiB，含 schemaVersion、interfaceVersion、toolkitVersion、toolkitManifestSha256、edition、mode、productVersion、authority、issuerKeyId、issuerFingerprint、publicIdentity、inputs 和 artifacts。
+成功时 stdout 最后一行输出 `{ schemaVersion: 1, outputDirectory, resultFile }`；resultFile 固定为输出根的 `assembly-result.json`。该文件最多 4 MiB，含 schemaVersion、interfaceVersion、toolkitVersion、toolkitManifestSha256、edition、mode、productVersion、authority、issuerKeyId、issuerFingerprint、publicIdentity、inputs 和 artifacts。安装正文保留 `maintenance/LICENSE.txt` 和 `maintenance/THIRD-PARTY-NOTICES.txt`，与已核验工具包逐字节一致并纳入正文签名；单独分发最终 Setup 时仍保留维护组件许可。
 
 publicIdentity 为 `{ id, publicKey: { kty, crv, x } }`，只含公开材料；issuerKeyId 与 id 相同。issuerFingerprint 为递归排序键名后的 publicIdentity JSON UTF-8 字节 SHA-256。inputs 为 `{ x64: { manifestSha256, archiveSha256 }, arm64: { manifestSha256, archiveSha256 } }`，对应原始标准载荷。artifacts 包含两项 `{ path, role: "offline-installer", architecture, size, sha256 }`，path 相对于输出根。
 

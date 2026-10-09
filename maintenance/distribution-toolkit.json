@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "toolkitVersion": "1.2.0",
+  "interfaceVersion": 1,
+  "archive": {
+    "url": "https://github.com/LinCi853/SidekickAI/releases/download/toolkit-v1.2.0/SidekickAI-Distribution-Toolkit-1.2.0-windows-x64.zip",
+    "size": 120259044,
+    "sha256": "9e77fd7f1642bb1419358d2dbdb95d298a7d262012fb8ae3985212199bee559c"
+  }
+}
