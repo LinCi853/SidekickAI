@@ -34,7 +34,7 @@
     "prebuild": "npm run product:check && npm run shared:check && npm run architecture:check",
     "workspace:menu": "node scripts/workspace-menu.cjs",
     "test:workspace-menu": "node --test scripts/workspace-menu.test.cjs",
-    "test:distribution": "node --test scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs",
+    "test:distribution": "node --test scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs",
     "build:candidate": "node scripts/build-distribution.cjs",
     "build:release": "node scripts/build-distribution.cjs",
     "preflight:release": "node scripts/build-distribution.cjs --preflight",
@@ -44,9 +44,12 @@
     "architecture:check": "node scripts/architecture-check.mjs",
     "test:architecture": "node --test scripts/architecture-check.test.mjs",
     "build:payload": "node scripts/build-distribution.cjs --mode payload",
+    "build:installer": "node scripts/build-distribution.cjs --mode installer",
+    "build:complete": "node scripts/build-distribution.cjs --mode complete",
+    "preflight:complete": "node scripts/build-distribution.cjs --mode complete --preflight",
     "build:candidate:payload": "node scripts/build-distribution.cjs --mode payload",
     "versions:check": "node scripts/sync-versions.cjs --check",
-    "test:tooling": "node --test scripts/workspace-menu.test.cjs scripts/shared-source.test.cjs scripts/sync-versions.test.cjs scripts/product-version.test.cjs scripts/local-build-config.test.cjs scripts/incremental-build.test.cjs scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs",
+    "test:tooling": "node --test scripts/workspace-menu.test.cjs scripts/shared-source.test.cjs scripts/sync-versions.test.cjs scripts/product-version.test.cjs scripts/local-build-config.test.cjs scripts/incremental-build.test.cjs scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs",
     "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test -- --maxWorkers=4 --minWorkers=1"
   },
   "dependencies": {

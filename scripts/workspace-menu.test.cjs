@@ -19,7 +19,7 @@ test('software menus expose portable and payload builds independently of officia
       ['1', '启动开发'], ['2', '验证'], ['3', '生成软件包'], ['4', '预览构建'], ['5', '更多工具'], ['0', '退出'],
     ])
     const modes = menuEntries(current, 'build').filter(([, , action]) => action === 'build').map(([, , , mode]) => mode)
-    assert.deepEqual(modes, ['portable', 'payload', 'all'])
+    assert.deepEqual(modes, ['portable', 'payload', 'all', ...(id === 'concept' ? ['installer', 'complete'] : [])])
     assert.equal(menuEntries(current, 'tools').some(([, , action]) => /installer|keys|plugin/.test(action)), false)
     for (const menu of ['verify', 'build', 'tools']) {
       for (const [, , action, mode] of menuEntries(current, menu)) {
@@ -29,8 +29,12 @@ test('software menus expose portable and payload builds independently of officia
   }
 })
 
-test('software menus reject maintenance builds and unavailable tools', () => {
-  for (const mode of ['installer', 'server', 'unknown']) assert.throws(() => actionPlan(context('concept'), 'build', mode))
+test('software menus reject unavailable tools and keep community maintenance separate', () => {
+  for (const mode of ['server', 'unknown']) assert.throws(() => actionPlan(context('concept'), 'build', mode))
+  for (const mode of ['installer', 'complete']) {
+    assert.deepEqual(actionPlan(context('concept'), 'build', mode)[0].args, ['scripts/build-distribution.cjs', '--mode', mode])
+    assert.throws(() => actionPlan(context('community'), 'build', mode))
+  }
   for (const action of ['installer-dev', 'verify-installer', 'plugin-preview', 'keys-dev', 'build-keys']) assert.throws(() => actionPlan(context('concept'), action))
   assert.throws(() => actionPlan(context('concept'), 'publish'))
   assert.throws(() => actionPlan(context('concept'), 'dev', 'installer'))

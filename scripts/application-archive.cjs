@@ -4,10 +4,18 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { pipeline } = require('node:stream/promises')
+const { once } = require('node:events')
 const yazl = require('yazl')
 const yauzl = require('yauzl')
 const crc32 = require('buffer-crc32')
 const { validateRelativePath } = require('./application-runtime.cjs')
+
+async function closeArchive(zip) {
+  if (!zip.isOpen) return
+  const closed = once(zip, 'close')
+  zip.close()
+  await closed
+}
 
 async function createArchive(directory, destination, request) {
   const zip = new yazl.ZipFile()
@@ -76,7 +84,7 @@ async function verifyArchive(archive, files, { emptyDirectories = [] } = {}) {
       expected?.delete(entry.fileName)
     }
     if (expected?.size) throw new Error('Archive inventory files are missing')
-  } finally { zip.close() }
+  } finally { await closeArchive(zip) }
 }
 
 async function main(args = process.argv.slice(2)) {
@@ -88,5 +96,5 @@ async function main(args = process.argv.slice(2)) {
   throw new Error('Usage: application-archive.cjs create <directory> <archive> <inventory> | verify <archive> [inventory]')
 }
 
-module.exports = { createArchive, verifyArchive }
+module.exports = { closeArchive, createArchive, verifyArchive }
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1 })
