@@ -1,14 +1,5 @@
-// electron/modules/builtin-module-data.ts — 内置模块「纯数据」单源
-//
-// 只包含声明式字段（无 init/teardown/clearData 等副作用函数），供两处消费：
-//  - manifests.ts 组装 BUILTIN_MODULES（绑定 wiring 生命周期函数）
-//  - electron/shared/install-manifest-source.ts 派生安装向导清单
-//
-// 安装语义字段：
-//  - installRequired=true: optional separate installation component (sizeLevel=large).
-//  - required=true：不可关闭的核心模块
-//
-// 模块 id 为准，新增/重命名/调整 sizeLevel 时只需改这里。
+// Declarative module data; runtime wiring is supplied by the module registry.
+// Required modules cannot be disabled; installation state preserves compatibility.
 
 import type { ModuleCategory, ModuleSizeLevel } from '../shared/module-manifest.types.js'
 

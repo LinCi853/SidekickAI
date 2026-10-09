@@ -2,9 +2,9 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const u = require('./uninstaller-build-utils.cjs')
+const u = require('./build-utils.cjs')
 const cache = require('./build-cache.cjs')
-const { isProduction } = require('./maintenance-inputs.cjs')
+const isProduction = file => !/(?:^|\/)(?:tests|__tests__)(?:\/|\.)|(?:[._-](?:test|tests|spec)\.(?:rs|tsx?|cjs|mjs))$|(?:^|\/)(?:tests|test-fixtures)\.rs$|\.md$/.test(file.replaceAll('\\', '/'))
 const evidence = require('./build-evidence.cjs')
 const { toolInputs } = require('./build-tool-inputs.cjs')
 

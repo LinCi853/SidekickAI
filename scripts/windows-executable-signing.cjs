@@ -2,7 +2,7 @@
 
 const fs = require('node:fs')
 const { spawnSync } = require('node:child_process')
-const { peInfo } = require('./uninstaller-build-utils.cjs')
+const { peInfo } = require('./build-utils.cjs')
 
 function signingConfiguration(env = process.env) {
   const thumbprint = env.SIDEKICK_AUTHENTICODE_CERTIFICATE_SHA1 || ''

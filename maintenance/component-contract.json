@@ -1,38 +1,5 @@
 {
   "schemaVersion": 1,
-  "componentVersion": "1.1.0",
-  "setupProtocolVersion": 3,
-  "uninstallProtocolVersion": 2,
   "distributionProtocolVersion": 1,
-  "recoveryComponentVersion": "1.0.0",
-  "maintenanceExecutableMaxBytes": 15728640,
-  "supportedFeatures": [
-    "whiteboard",
-    "notes",
-    "custom-chat",
-    "prompt-library",
-    "voice",
-    "tts",
-    "browser"
-  ],
-  "supportedOptions": {
-    "autoUpdate": {
-      "type": "boolean"
-    },
-    "autoLaunch": {
-      "type": "boolean"
-    },
-    "logLevel": {
-      "type": "choice",
-      "values": [
-        "error",
-        "warn",
-        "info",
-        "debug"
-      ]
-    },
-    "usageTracking": {
-      "type": "boolean"
-    }
-  }
+  "applicationPayloadSchemaVersion": 1
 }

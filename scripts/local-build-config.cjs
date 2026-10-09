@@ -15,7 +15,7 @@ function readLocalBuildConfiguration(root) {
   let config
   try { config = JSON.parse(fs.readFileSync(file, 'utf8')) }
   catch { throw new Error('Cannot parse local distribution build configuration') }
-  object(config, ['schemaVersion', 'publicConfiguration', 'signingIdentity', 'toolDirectories'])
+  object(config, ['schemaVersion', 'publicConfiguration', 'toolDirectories'])
   if (config.schemaVersion !== 1) throw new Error('Unsupported local distribution build configuration')
   if (config.publicConfiguration !== undefined) {
     const publicConfig = object(config.publicConfiguration, ['origin', 'distributionKeys', 'resourceKeys', 'allowedHosts'])
@@ -23,11 +23,6 @@ function readLocalBuildConfiguration(root) {
       || ['distributionKeys', 'resourceKeys', 'allowedHosts'].some(key => publicConfig[key] !== undefined && !Array.isArray(publicConfig[key]))) {
       throw new Error('Invalid local public distribution configuration')
     }
-  }
-  if (config.signingIdentity !== undefined) {
-    object(config.signingIdentity, ['keysFile', 'trustFile'])
-    if (['keysFile', 'trustFile'].some(key => typeof config.signingIdentity[key] !== 'string'
-      || !path.isAbsolute(config.signingIdentity[key]))) throw new Error('Local publication signer paths must be absolute')
   }
   if (config.toolDirectories !== undefined && (!Array.isArray(config.toolDirectories)
     || config.toolDirectories.some(directory => typeof directory !== 'string' || !path.isAbsolute(directory)))) {
@@ -44,10 +39,6 @@ function localBuildEnvironment(root, env = process.env) {
   for (const [key, variable] of [['distributionKeys', 'SIDEKICK_DISTRIBUTION_TRUST_KEYS_JSON'],
     ['resourceKeys', 'SIDEKICK_RESOURCE_TRUST_KEYS_JSON'], ['allowedHosts', 'SIDEKICK_RESOURCE_ALLOWED_HOSTS_JSON']]) {
     if (publicConfig[key] !== undefined) defaults[variable] = JSON.stringify(publicConfig[key])
-  }
-  if (config.signingIdentity) {
-    defaults.SIDEKICK_DISTRIBUTION_SIGNING_KEYS_FILE = config.signingIdentity.keysFile
-    defaults.SIDEKICK_DISTRIBUTION_SIGNING_TRUST_FILE = config.signingIdentity.trustFile
   }
   const result = { ...defaults, ...env }
   if (config.toolDirectories?.length) {

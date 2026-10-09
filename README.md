@@ -16,6 +16,8 @@
 - **窗口与快捷键**：快速唤出、切换和置顶窗口，自定义常用操作的快捷键。
 - **备份与恢复**：导出本地资料，在需要时恢复配置和已保存内容。
 
+源码构建的绿色版保留应用内备份与恢复，不附带官方安装版的独立恢复工具及其运行时。
+
 ## 数据与使用
 
 对话资产、笔记、白板、提示词和设置保存在本机，已保存的本地内容可离线使用。AI 网页和远程模型服务需要网络，以及相应的账号或接口配置；第三方服务的使用条件和费用由对应服务提供方决定。
@@ -35,9 +37,13 @@
 - [安装版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Setup-0.1.5.exe)：安装后，从开始菜单或桌面快捷方式打开工百窗。
 - [绿色版](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SidekickAI-Portable-0.1.5-win.zip)：完整解压后，直接运行对应架构目录中的 `SidekickAI.exe`。
 
+下载后可按同一发布页的 [SHA-256 校验和](https://github.com/LinCi853/SidekickAI/releases/download/v0.1.5/SHA256SUMS.txt) 核对文件。安装版是官方独立构建的可选二进制产物；绿色版也可从本仓源码构建。
+
 ## 开发
 
 开发建议使用项目根目录的 `launch.bat`，按菜单提示操作。
+
+本仓维护软件源码、绿色版与标准应用载荷 ZIP。安装、卸载和官方维护附件的实现由私有分发工作区维护；第三方自行组装安装器须自行负责，可参阅 [SKSETUP3 格式说明](docs/formats/SKSETUP3.md)。官方安装向导仅接受官方签名载荷。
 
 ## 反馈与参与
 
@@ -46,8 +52,6 @@
 ## 开源依赖
 
 应用使用 Electron、React、Tiptap 和 Excalidraw 等开源组件；第三方组件及字体遵循各自许可证，相关许可声明随软件分发。
-
-构建时使用 7-Zip 生成和检查标准 ZIP；当前安装器通过原生 ZIP 实现读取载荷。7-Zip 版权所有 © Igor Pavlov，按 [GNU LGPL](https://www.gnu.org/licenses/lgpl-2.1.html) 许可提供；LZMA SDK 部分为公有领域。[7-Zip 源码与说明](https://www.7-zip.org/)。
 
 ## 许可证与商标
 

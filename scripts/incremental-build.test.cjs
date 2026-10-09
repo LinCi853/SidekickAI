@@ -7,50 +7,12 @@ const os = require('node:os')
 const path = require('node:path')
 const application = require('./application-build.cjs')
 const cache = require('./build-cache.cjs')
-const u = require('./uninstaller-build-utils.cjs')
-const selector = require('./maintenance-inputs.cjs')
-const ROOT = path.resolve(__dirname, '..')
-
-test('maintenance frontend has no compiled product version or installation data dependency', () => {
-  const result = require('esbuild').buildSync({ absWorkingDir: ROOT, entryPoints: ['installer-tauri/src/main.tsx'],
-    bundle: true, platform: 'browser', format: 'esm', write: false, metafile: true, outdir: 'build/dependency-inspection',
-    nodePaths: [path.join(ROOT, 'installer-tauri/node_modules')], logLevel: 'silent' })
-  const inputs = Object.keys(result.metafile.inputs)
-  assert.ok(inputs.includes('packages/product-contract/identity.ts'))
-  assert.equal(inputs.includes('package.json'), false)
-  assert.equal(inputs.includes('electron/shared/install-manifest-source.ts'), false)
-})
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-incremental-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   return root
 }
-
-test('maintenance inputs ignore release data and tests but track component-specific logic', t => {
-  const root = fixture(t)
-  const apps = ['installer-tauri', 'uninstaller-tauri']
-  const sets = Object.fromEntries(apps.map(app => [app, selector.sourceInputs(path.join(ROOT, app))]))
-  for (const file of new Set(Object.values(sets).flat())) {
-    const destination = path.join(root, path.relative(ROOT, file))
-    fs.mkdirSync(path.dirname(destination), { recursive: true })
-    fs.copyFileSync(file, destination)
-  }
-  const fingerprints = () => Object.fromEntries(apps.map(app => [app, u.fingerprint(root, selector.sourceInputs(path.join(root, app), root)).fingerprint]))
-  const baseline = fingerprints()
-  for (const file of ['package.json', 'installer-tauri/src-tauri/install-manifest.json', 'installer-tauri/src-tauri/src/engine/tests.rs']) {
-    const destination = path.join(root, file)
-    fs.mkdirSync(path.dirname(destination), { recursive: true })
-    fs.writeFileSync(destination, 'release data or test change')
-  }
-  assert.deepEqual(fingerprints(), baseline)
-  fs.appendFileSync(path.join(root, 'installer-tauri/src-tauri/src/engine/pipeline.rs'), '\n// installation behavior\n')
-  const installerChange = fingerprints()
-  assert.notEqual(installerChange['installer-tauri'], baseline['installer-tauri'])
-  assert.equal(installerChange['uninstaller-tauri'], baseline['uninstaller-tauri'])
-  fs.appendFileSync(path.join(root, 'installer-shared/product.rs'), '\n// shared installation identity\n')
-  for (const app of apps) assert.notEqual(fingerprints()[app], installerChange[app])
-})
 
 test('compilation skips identical inputs and rebuilds corrupted outputs or changed dependencies', t => {
   const root = fixture(t)
@@ -127,16 +89,4 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('tools/startup-helper/StartupHelper.cs', 'changed startup driver')
   assert.notEqual(compile().key, beforeStartup)
   assert.equal(builds, 11)
-})
-
-test('unsupported Rust flags are rejected before any native cache lookup', () => {
-  const previous = process.env.RUSTFLAGS
-  process.env.RUSTFLAGS = '-C debuginfo=2'
-  try {
-    const native = require('./build-tauri-installer.cjs')
-    assert.throws(() => native.nativeInputs(native.INSTALLER, 'x64', {}), /Unset RUSTFLAGS/)
-  } finally {
-    if (previous === undefined) delete process.env.RUSTFLAGS
-    else process.env.RUSTFLAGS = previous
-  }
 })

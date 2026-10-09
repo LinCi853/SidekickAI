@@ -12,15 +12,15 @@ function context(editionId) {
   return { ...current, editionId, edition: current.product.editions[editionId] }
 }
 
-test('both editions expose six main choices with scoped labels and tools', () => {
+test('software menus expose portable and payload builds independently of official distribution policy', () => {
   for (const id of ['concept', 'community']) {
     const current = context(id)
     assert.deepEqual(menuEntries(current, 'main').map(([key, label]) => [key, label]), [
-      ['1', id === 'concept' ? '启动工具' : '启动开发'], ['2', '验证'], ['3', id === 'concept' ? '生成安装包' : '构建候选'], ['4', '预览构建'], ['5', '更多工具'], ['0', '退出'],
+      ['1', '启动开发'], ['2', '验证'], ['3', '生成软件包'], ['4', '预览构建'], ['5', '更多工具'], ['0', '退出'],
     ])
     const modes = menuEntries(current, 'build').filter(([, , action]) => action === 'build').map(([, , , mode]) => mode)
-    assert.deepEqual(modes, id === 'concept' ? ['installer', 'portable', 'all'] : ['installer'])
-    assert.equal(menuEntries(current, 'tools').some(([, , action]) => action === 'plugin-preview'), id === 'community')
+    assert.deepEqual(modes, ['portable', 'payload', 'all'])
+    assert.equal(menuEntries(current, 'tools').some(([, , action]) => /installer|keys|plugin/.test(action)), false)
     for (const menu of ['verify', 'build', 'tools']) {
       for (const [, , action, mode] of menuEntries(current, menu)) {
         if (action !== 'back') assert.ok(actionPlan(current, action, mode ?? null).length)
@@ -29,9 +29,9 @@ test('both editions expose six main choices with scoped labels and tools', () =>
   }
 })
 
-test('community rejects disallowed package kinds and concept rejects community tools', () => {
-  for (const mode of ['portable', 'all', 'server', 'unknown']) assert.throws(() => actionPlan(context('community'), 'build', mode))
-  for (const action of ['plugin-preview', 'keys-dev', 'build-keys']) assert.throws(() => actionPlan(context('concept'), action))
+test('software menus reject maintenance builds and unavailable tools', () => {
+  for (const mode of ['installer', 'server', 'unknown']) assert.throws(() => actionPlan(context('concept'), 'build', mode))
+  for (const action of ['installer-dev', 'verify-installer', 'plugin-preview', 'keys-dev', 'build-keys']) assert.throws(() => actionPlan(context('concept'), action))
   assert.throws(() => actionPlan(context('concept'), 'publish'))
   assert.throws(() => actionPlan(context('concept'), 'dev', 'installer'))
 })
@@ -39,12 +39,12 @@ test('community rejects disallowed package kinds and concept rejects community t
 test('build aliases preserve explicit candidate and preflight behavior', () => {
   for (const id of ['concept', 'community']) {
     const current = context(id)
-    assert.deepEqual(actionPlan(current, 'build-release'), actionPlan(current, 'build', 'installer'))
-    assert.deepEqual(actionPlan(current, 'preflight-release')[0].args, ['scripts/build-distribution.cjs', '--mode', 'installer', '--preflight'])
+    assert.deepEqual(actionPlan(current, 'build-release'), actionPlan(current, 'build', 'all'))
+    assert.deepEqual(actionPlan(current, 'preflight-release')[0].args, ['scripts/build-distribution.cjs', '--mode', 'all', '--preflight'])
   }
   assert.deepEqual(actionPlan(context('concept'), 'build', 'portable')[0].args, ['scripts/build-distribution.cjs', '--mode', 'portable'])
   assert.deepEqual(actionPlan(context('concept'), 'build')[0].args, ['scripts/build-distribution.cjs', '--mode', 'all'])
-  assert.deepEqual(actionPlan(context('community'), 'build')[0].args, ['scripts/build-distribution.cjs', '--mode', 'installer'])
+  assert.deepEqual(actionPlan(context('concept'), 'build', 'payload')[0].args, ['scripts/build-distribution.cjs', '--mode', 'payload'])
 })
 
 test('quick verification does not start desktop or native build regressions', () => {
@@ -54,7 +54,7 @@ test('quick verification does not start desktop or native build regressions', ()
     assert.ok(plan.some(command => command.args.includes('shared:check')))
     assert.ok(plan.some(command => command.args.includes('typecheck')))
     assert.equal(plan.some(command => command.args.some(arg => /test:desktop|test:reliability|test:installers/.test(arg))), false)
-    assert.deepEqual(actionPlan(context(id), 'verify-installer')[0].args, ['run', 'test:installers'])
+    assert.deepEqual(actionPlan(context(id), 'verify-packaging')[0].args, ['run', 'test:distribution'])
   }
 })
 

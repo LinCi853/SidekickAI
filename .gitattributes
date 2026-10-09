@@ -31,5 +31,4 @@
 *.woff2 binary
 
 # 语言统计：标记生成/第三方目录，避免污染 GitHub 语言占比
-installer-tauri/src-tauri/icons/* linguist-documentation
 build/License.txt linguist-documentation

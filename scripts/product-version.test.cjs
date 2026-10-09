@@ -23,12 +23,9 @@ function fixture(t, edition, version) {
     fs.writeFileSync(target, JSON.stringify(value, null, 2) + '\n')
   }
   json('packages/product-contract/manifest.json', common)
-  json('maintenance/component-contract.json', require('../maintenance/component-contract.json'))
   json('product-edition.json', { edition })
   json('package.json', { name: product.editions[edition].packageName, version })
   json('package-lock.json', { version: '9.9.9', packages: { '': { version: '9.9.9' } } })
-  json('installer-tauri/package.json', { name: 'installer', version: '9.9.9' })
-  json('uninstaller-tauri/package.json', { name: 'uninstaller', version: '9.9.9' })
   return root
 }
 
@@ -40,7 +37,6 @@ test('each edition projects its own release version from package metadata', t =>
     assert.deepEqual(synchronize(root).changed, [])
     assert.equal(productIdentity(root).version, version)
     assert.equal(readContext(root).product.version, version)
-    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'installer-tauri/package.json'))).version, require('../maintenance/component-contract.json').componentVersion)
     assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'))).packages[''].version, version)
   }
   assert.deepEqual(fs.readFileSync(path.join(concept, 'packages/product-contract/manifest.json')), fs.readFileSync(path.join(community, 'packages/product-contract/manifest.json')))
@@ -48,7 +44,7 @@ test('each edition projects its own release version from package metadata', t =>
 
 test('concept accepts numbered releases and rejects prerelease labels before writing', t => {
   const root = fixture(t, 'concept', '0.1.5-beta.1')
-  const file = path.join(root, 'installer-tauri/package.json')
+  const file = path.join(root, 'package-lock.json')
   const before = fs.readFileSync(file)
   assert.throws(() => synchronize(root, true), /正式版本|stable release/i)
   assert.deepEqual(fs.readFileSync(file), before)

@@ -356,26 +356,6 @@
       "from": "electron/window-factory/window-size-helpers.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
-    },
-    {
-      "from": "scripts/build-distribution.cjs",
-      "to": "scripts/build-tauri-installer.cjs",
-      "kind": "value"
-    },
-    {
-      "from": "scripts/build-distribution.cjs",
-      "to": "scripts/pack-portable.cjs",
-      "kind": "value"
-    },
-    {
-      "from": "scripts/build-tauri-installer.cjs",
-      "to": "scripts/build-distribution.cjs",
-      "kind": "value"
-    },
-    {
-      "from": "scripts/pack-portable.cjs",
-      "to": "scripts/build-tauri-installer.cjs",
-      "kind": "value"
     }
   ],
   "processCrossings": [

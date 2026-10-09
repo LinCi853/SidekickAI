@@ -34,9 +34,6 @@ build/native-test-artifacts/
 build/native-test-evidence.json
 /build/*
 !/build/License.txt
-!/build/tools/
-/build/tools/*
-!/build/tools/7zr.exe
 
 # ============================================================
 # Electron Cache
@@ -82,7 +79,10 @@ Thumbs.db
 _fixes/
 ai-window-uiux/
 ai-window-uiux-v2/
-docs/
+/docs/*
+!/docs/formats/
+/docs/formats/*
+!/docs/formats/SKSETUP3.md
 tests/
 showcase.html
 # 根目录散落 .md 不入库（仅以下开源基建文件例外）
@@ -118,20 +118,10 @@ scripts/poc/
 .claude/
 
 
-# ============================================================
-# installer-tauri (Tauri 2 + React 安装向导子项目) 非源码产物
-# ============================================================
-installer-tauri/node_modules/
-installer-tauri/dist/
-installer-tauri/src-tauri/target/
-installer-tauri/src-tauri/gen/
-installer-tauri/payload.7z
-
-# ============================================================
-# uninstaller-tauri (Tauri 2 独立卸载向导子项目) 非源码产物
-# ============================================================
-uninstaller-tauri/src-tauri/target/
-uninstaller-tauri/src-tauri/gen/
+# Official maintenance sources remain local and are built in the private workspace.
+/installer-*/
+/uninstaller-*/
+/tools/backup-recovery-native/
 
 # ============================================================
 # Non-Windows platforms (已移除，仅保留 Windows 桌面端)
@@ -149,7 +139,3 @@ src/pages/MobileMainView.css
 src/pages/MobileMainView.tsx
 src/store/useMobileTabStore.ts
 src/styles/mobile.css
-
-# Native shared regression sources and synthetic fixtures.
-!installer-shared/**/tests/
-!installer-shared/**/tests/**

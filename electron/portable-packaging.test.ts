@@ -11,7 +11,7 @@ const asar = require('@electron/asar')
 const packer = require('../scripts/pack-portable.cjs')
 const product = require('../packages/product-contract/manifest.json')
 const workspace = require('../package.json')
-const u = require('../scripts/uninstaller-build-utils.cjs')
+const u = require('../scripts/build-utils.cjs')
 let directory: string
 beforeEach(() => { directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-portable-package-')) })
 afterEach(() => { fs.rmSync(directory, { recursive: true, force: true }) })
@@ -38,7 +38,7 @@ function syntheticPe(arch: 'x64' | 'arm64') {
 
 async function application(arch: 'x64' | 'arm64', unsafeEntry?: string, metadata: { version?: string } = { version: workspace.version }) {
   const source = path.join(directory, arch)
-  for (const name of packer.REQUIRED_RUNTIME_FILES) write(`${arch}/${name}`, 'runtime fixture')
+  for (const name of packer.REQUIRED_RUNTIME_FILES) write(`${arch}/${name}`, /\.(?:exe|dll)$/.test(name) ? syntheticPe(arch) : 'runtime fixture')
   write(`${arch}/SidekickAI.exe`, syntheticPe(arch))
   write(`${arch}/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-${arch}.node`, syntheticPe(arch))
   write(`${arch}/resources/app.asar.unpacked/node_modules/uiohook-napi/prebuilds/win32-${arch}/uiohook-napi.node`, syntheticPe(arch))
@@ -156,6 +156,13 @@ describe('portable application staging', () => {
     fs.unlinkSync(path.join(source, 'ffmpeg.dll'))
     const target = path.join(directory, 'staged')
     expect(() => packer.stagePortableApplication(source, target, 'x64')).toThrow()
+    expect(fs.existsSync(target)).toBe(false)
+  })
+  it('rejects an incompatible native DLL before portable staging', async () => {
+    const source = await application('x64')
+    fs.writeFileSync(path.join(source, 'ffmpeg.dll'), syntheticPe('arm64'))
+    const target = path.join(directory, 'staged')
+    expect(() => packer.stagePortableApplication(source, target, 'x64')).toThrow('architecture')
     expect(fs.existsSync(target)).toBe(false)
   })
   it('refuses to overwrite previous staging or use the application as its output', async () => {

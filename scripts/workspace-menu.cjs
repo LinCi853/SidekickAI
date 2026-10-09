@@ -33,20 +33,16 @@ function parseArgs(args) {
 }
 
 function buildModes(context) {
-  const modes = context.edition.packageKinds.filter(kind => ['installer', 'portable'].includes(kind))
-  if (modes.includes('installer') && modes.includes('portable')) modes.push('all')
-  return modes
+  return ['portable', 'payload', 'all']
 }
 
 function actionPlan(context, action, mode = null) {
   const root = context.root
   const npm = (args, directory = root, env = {}) => ({ tool: 'npm', args, directory, env })
   const node = (args) => ({ tool: 'node', args, directory: root, env: {} })
-  const communityOnly = ['plugin-preview', 'keys-dev', 'build-keys']
-  if (communityOnly.includes(action) && context.editionId !== 'community') throw new Error('此工具只属于社区版工作区。')
   if (['build', 'build-release', 'preflight-release'].includes(action)) {
-    const selected = mode || (action === 'build' && context.editionId === 'concept' ? 'all' : 'installer')
-    if (!buildModes(context).includes(selected)) throw new Error(`当前版本不分发 ${selected}，请选择允许的包型。`)
+    const selected = mode || 'all'
+    if (!buildModes(context).includes(selected)) throw new Error(`公开软件工作区不构建 ${selected}，请选择绿色版或标准载荷。`)
     return [node(['scripts/build-distribution.cjs', '--mode', selected, ...(action === 'preflight-release' ? ['--preflight'] : [])])]
   }
   if (mode !== null) throw new Error('此操作不接受包型。')
@@ -55,18 +51,12 @@ function actionPlan(context, action, mode = null) {
     case 'preview': return [npm(['run', 'preview'])]
     case 'devtools': return [npm(['run', 'dev'], root, { DEV_TOOLS: '1' })]
     case 'dependencies': return [npm(['ci'])]
-    case 'installer-dev': return [npm(['run', 'tauri', '--', 'dev'], path.join(root, 'installer-tauri'))]
-    case 'plugin-preview': return [npm(['run', 'preview:plugins'])]
-    case 'keys-dev': return [npm(['run', 'tauri', '--', 'dev'], path.join(root, 'tools/oxy-key-manager'))]
-    case 'build-keys': return [npm(['run', 'build:oxy-key-manager'])]
     case 'verify': return [
       npm(['run', 'product:check']), npm(['run', 'shared:check']), npm(['run', 'typecheck']),
       node(['--test', 'scripts/workspace-menu.test.cjs', 'scripts/shared-source.test.cjs']),
     ]
-    case 'verify-desktop': return context.editionId === 'concept'
-      ? [npm(['test', '--', '--maxWorkers=4', '--minWorkers=1']), npm(['run', 'test:desktop'])]
-      : [npm(['run', 'test:reliability', '--', '--maxWorkers=4', '--minWorkers=1'])]
-    case 'verify-installer': return [npm(['run', 'test:installers'])]
+    case 'verify-desktop': return [npm(['test', '--', '--maxWorkers=4', '--minWorkers=1']), npm(['run', 'test:desktop'])]
+    case 'verify-packaging': return [npm(['run', 'test:distribution'])]
     default: throw new Error(`未知操作：${action}`)
   }
 }
@@ -105,45 +95,37 @@ function executePlan(plan, options = {}) {
 
 function menuEntries(context, menu) {
   if (menu === 'main') return [
-    ['1', context.editionId === 'concept' ? '启动工具' : '启动开发', 'dev'], ['2', '验证', 'verify-menu'], ['3', context.editionId === 'concept' ? '生成安装包' : '构建候选', 'build-menu'],
+    ['1', '启动开发', 'dev'], ['2', '验证', 'verify-menu'], ['3', '生成软件包', 'build-menu'],
     ['4', '预览构建', 'preview'], ['5', '更多工具', 'tools-menu'], ['0', '退出', 'exit'],
   ]
   if (menu === 'verify') return [
     ['1', '快速检查（配置、类型、菜单）', 'verify'],
     ['2', '桌面完整回归（隔离数据，会启动应用）', 'verify-desktop'],
-    ['3', '安装卸载回归（原生编译、隔离目标）', 'verify-installer'], ['0', '返回', 'back'],
+    ['3', '绿色版与载荷回归（隔离目录）', 'verify-packaging'], ['0', '返回', 'back'],
   ]
   if (menu === 'build') {
-    const labels = context.editionId === 'concept'
-      ? { installer: '离线安装器（x64、ARM64）', portable: '绿色 ZIP（双架构）', all: '完整候选（两个安装器及绿色 ZIP）' }
-      : { installer: '在线安装器（自动选择本机架构）' }
+    const labels = { portable: '绿色 ZIP（双架构）', payload: '标准应用载荷 ZIP（x64、ARM64）', all: '绿色版与标准载荷' }
     return [...buildModes(context).map((mode, index) => [String(index + 1), labels[mode], 'build', mode]), ['0', '返回', 'back']]
   }
   if (menu === 'tools') return [
-    ['1', '开发并打开调试工具', 'devtools'], ['2', '安装锁定依赖', 'dependencies'], ['3', '安装器开发', 'installer-dev'],
-    ...(context.editionId === 'community' ? [
-      ['4', '隔离插件预览', 'plugin-preview'], ['5', '密钥工具开发', 'keys-dev'], ['6', '构建密钥工具（更新稳定入口）', 'build-keys'],
-    ] : []), ['0', '返回', 'back'],
+    ['1', '开发并打开调试工具', 'devtools'], ['2', '安装锁定依赖', 'dependencies'], ['0', '返回', 'back'],
   ]
   throw new Error(`未知菜单：${menu}`)
 }
 
 function help(context) {
-  const concept = context.editionId === 'concept'
   return [
     `工百窗 / SidekickAI ${context.product.version} 工作区入口`,
     '无参数显示菜单：' + menuEntries(context, 'main').map(([key, label]) => `${key} ${label}`).join('；') + '。',
     '用法：launch.bat <操作> [--mode <包型>] [--dry-run]',
-    concept ? '推荐通过 launch.bat 启动；首次使用请选择「更多工具 → 安装锁定依赖」，完成后选择「启动工具」。' : '也可运行 node scripts/workspace-menu.cjs，工作目录由脚本位置确定。',
-    '操作：dev、verify、build、preview、devtools、dependencies、installer-dev。',
-    'verify 为快速检查；verify-desktop 启动隔离桌面回归；verify-installer 编译并运行隔离安装卸载回归。',
-    ...(context.editionId === 'community' ? ['社区工具：plugin-preview、keys-dev、build-keys。'] : []),
-    `允许包型：${buildModes(context).join('、')}；build 默认 ${concept ? 'all' : 'installer'}。`,
-    '构建按输入摘要复用应用编译和维护组件；PowerShell 中设置 $env:SIDEKICK_REBUILD_ALL="1" 可强制重建。',
-    concept ? 'build-release 生成安装器；preflight-release 检查构建条件。' : '兼容入口：build-release 构建安装器候选；preflight-release 仅执行安装器构建预检。',
+    '开发建议使用 launch.bat；首次使用请选择「更多工具 → 安装锁定依赖」，完成后选择「启动开发」。',
+    '操作：dev、verify、build、preview、devtools、dependencies。',
+    'verify 为快速检查；verify-desktop 启动隔离桌面回归；verify-packaging 验证软件打包。',
+    `允许包型：${buildModes(context).join('、')}；build 默认 all。`,
+    '构建按输入摘要复用应用编译；PowerShell 中设置 $env:SIDEKICK_REBUILD_ALL="1" 可强制重建。',
+    'build-release 生成绿色版与标准载荷；preflight-release 检查软件构建条件。',
     '--dry-run 只显示目录、环境和参数，不运行命令；不带操作时预览各菜单。',
-    concept ? '生成的文件保存在本机，不会自动上传或替换已有安装。' : '候选构建不发布、不上传、不替换个人安装；原生构建预检可能产生探测文件。',
-    ...(concept ? [] : ['社区版不接受 portable 或 all；绿色包不会被静默改成安装器。']),
+    '生成的文件保存在本机，不会自动上传或替换已有安装。',
   ].join('\n')
 }
 
@@ -185,7 +167,7 @@ async function main(args = process.argv.slice(2)) {
     if (options.dryRun) {
       console.log(help(context))
       for (const menu of ['main', 'verify', 'build', 'tools']) {
-        console.log(`\n${{ main: '主菜单', verify: '验证', build: context.editionId === 'concept' ? '生成安装包' : '构建候选', tools: '更多工具' }[menu]}`)
+        console.log(`\n${{ main: '主菜单', verify: '验证', build: '生成软件包', tools: '更多工具' }[menu]}`)
         for (const [key, label, action, mode] of menuEntries(context, menu)) console.log(`  [${key}] ${label}${mode ? ` (${mode})` : ''}: ${action}`)
       }
       return 0

@@ -2,67 +2,30 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawnSync } = require('node:child_process')
-const asar = require('@electron/asar')
-const u = require('./uninstaller-build-utils.cjs')
-const { verifyPackagedNative } = require('./verify-packaged-native.cjs')
-const { ROOT, VERSION, validateArchitectures, applicationFingerprint } = require('./build-tauri-installer.cjs')
+const u = require('./build-utils.cjs')
+const { ROOT, VERSION, REQUIRED_RUNTIME_FILES, validateArchitectures, applicationFingerprint, verifyRuntime, verifyNativeFiles } = require('./application-packaging.cjs')
 const product = require('../packages/product-contract/manifest.json')
 const selection = require('../product-edition.json')
-const distribution = require('./application-distribution.cjs')
+const runtime = require('./application-runtime.cjs')
 
-const SEVENZ = process.env.SIDEKICK_7Z || 'C:\\Program Files\\7-Zip\\7z.exe'
 const DIRECTORY_NAME = product.name
 const LAYOUT = product.portable
 const MARKER = 'SidekickAI Dual Architecture Portable Marker\n'
 const MIN_ZIP_BYTES = 120 * 1024 * 1024
-const REQUIRED_RUNTIME_FILES = [
-  product.executable, 'resources/app.asar', 'resources/LICENSE.application.txt', 'LICENSE.electron.txt', 'LICENSES.chromium.html',
-  'chrome_100_percent.pak', 'chrome_200_percent.pak', 'resources.pak', 'icudtl.dat',
-  'snapshot_blob.bin', 'v8_context_snapshot.bin', 'ffmpeg.dll', 'libEGL.dll', 'libGLESv2.dll',
-  'd3dcompiler_47.dll', 'vk_swiftshader.dll', 'vk_swiftshader_icd.json', 'vulkan-1.dll',
-  'locales/en-US.pak', 'locales/zh-CN.pak', 'locales/zh-TW.pak',
-]
 const REQUIRED_ENTRIES = [
   `${DIRECTORY_NAME}/${LAYOUT.launcher}`,
   `${DIRECTORY_NAME}/portable-layout.json`,
   `${DIRECTORY_NAME}/portable-manifest.json`,
-  `${DIRECTORY_NAME}/distribution-proof.json`,
   ...Object.values(LAYOUT.runtimes).flatMap(directory => [
     `${DIRECTORY_NAME}/${directory}/${product.executable}`,
     `${DIRECTORY_NAME}/${directory}/resources/app.asar`,
     `${DIRECTORY_NAME}/${directory}/portable.txt`,
-    `${DIRECTORY_NAME}/${directory}/recover.exe`,
-    `${DIRECTORY_NAME}/${directory}/maintenance/backup-runtime.zip`,
-    `${DIRECTORY_NAME}/${directory}/maintenance/runtime-proof.json`,
   ]),
 ]
-const FORBIDDEN_NAMES = new Set([
-  'uninstall.exe', 'installer.exe', 'uninstaller.exe', 'uninstall-manifest.json', 'install-config.json', 'install-receipt.json',
-  'install-receipt.pending.json', 'install-state.json', 'payload.7z', '7zr.exe',
-  'oxy-service.json', 'oxy-deployment.json', 'edition-identity.json', '.app-data',
-  '.app-data.instance', '.git', '.env', 'devkit', 'plugin-sdk',
-])
-
-function runArchive(args, cwd) {
-  const result = spawnSync(SEVENZ, args, { cwd, stdio: 'inherit', windowsHide: true })
-  if (result.error) throw new Error(`Portable archive failed: ${result.error.message}`)
-  if (result.status !== 0) throw new Error(`Portable archive failed with exit ${result.status}`)
-}
-
 function validatePortablePath(name) {
-  const segments = name.replaceAll('\\', '/').replace(/\/$/, '').split('/')
-  if (segments.some(segment => !segment || segment === '..' || segment === '.' || /[:\x00]/.test(segment))) throw new Error(`Unexpected portable path: ${name}`)
-  for (const segment of segments) {
-    const lower = segment.toLowerCase()
-    const publicService = /^(?:SidekickAI\/(?:win-unpacked|win-arm64-unpacked)\/)?resources\/(?:oxy-service|application-trust|resource-trust)\.json$/.test(segments.join('/'))
-    if (FORBIDDEN_NAMES.has(lower) && !publicService || lower.startsWith('.env.') || /^(?:sidekickai-)?setup.*\.exe$/i.test(segment) || /\.(?:db|sqlite|sqlite3)(?:-wal|-shm)?$/i.test(segment)) {
-      throw new Error(`Portable input contains non-distributable content: ${name}`)
-    }
-  }
-  if (/(?:^|\/)(?:better-sqlite3|uiohook-napi)\/(?:build|bin)(?:\/|$)/i.test(segments.join('/'))) throw new Error(`Portable input contains a development native build: ${name}`)
-  if (segments.some(segment => segment.toLowerCase() === 'data')) throw new Error(`Portable input contains user data: ${name}`)
+  return runtime.validateSoftwarePath(name.replaceAll('\\', '/').replace(/\/$/, ''))
 }
+
 function readAt(fd, size, offset) {
   const bytes = Buffer.alloc(size)
   if (fs.readSync(fd, bytes, 0, size, offset) !== size) throw new Error('Truncated ZIP metadata')
@@ -145,7 +108,7 @@ function verifyZip(zipPath, minimumSize = MIN_ZIP_BYTES) {
   }
   for (const name of REQUIRED_ENTRIES) if (!entries.includes(name)) throw new Error(`Portable ZIP is missing ${name}`)
   if (size < minimumSize) throw new Error(`Portable ZIP is unexpectedly small: ${size} bytes; minimum ${minimumSize}`)
-  runArchive(['t', zipPath], path.dirname(zipPath))
+  runtime.verifyArchive(zipPath)
   console.log(`[pack-portable] Verified ${entries.length} ZIP entries (${(size / 1024 / 1024).toFixed(1)} MB)`)
   return { size, entries: entries.length, sha256: u.sha256(zipPath) }
 }
@@ -175,14 +138,8 @@ function stagePortableApplication(source, destination, arch) {
   if (!relative || relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) throw new Error('Portable destination must be outside the source application directory')
   if (fs.existsSync(destination)) throw new Error(`Portable staging directory already exists: ${destination}`)
   const applicationInputs = applicationFingerprint(source)
-  for (const entry of applicationInputs.entries) validatePortablePath(entry.path)
-  for (const name of REQUIRED_RUNTIME_FILES) u.assertFile(path.join(source, name))
-  if (u.peInfo(fs.readFileSync(path.join(source, product.executable))).arch !== arch) throw new Error(`Portable application architecture mismatch: ${arch}`)
-  const archive = path.join(source, 'resources', 'app.asar')
-  for (const name of asar.listPackage(archive)) validatePortablePath(name.replace(/^[\\/]+/, ''))
-  const packaged = JSON.parse(asar.extractFile(archive, 'package.json').toString())
-  if (packaged.name !== product.editions.concept.packageName || packaged.version !== VERSION) throw new Error('Portable application edition/version mismatch')
-  const native = verifyPackagedNative(source, arch)
+  const { native } = verifyRuntime(source, arch, { allowPortable: true })
+  verifyNativeFiles(source, arch)
   const existingMarker = path.join(source, 'portable.txt')
   if (fs.existsSync(existingMarker)) {
     u.assertFile(existingMarker)
@@ -195,57 +152,39 @@ function stagePortableApplication(source, destination, arch) {
   return { source, directory: destination, native, applicationInputs, inputs: applicationFingerprint(destination) }
 }
 
-function packPortable({ output, applications, architectures = ['x64', 'arm64'], recoveryEntries, signer, runtimeRoot, minimumZipBytes = MIN_ZIP_BYTES }) {
-  if (selection.edition !== 'concept' || !product.editions.concept.packageKinds.includes('portable')) throw new Error('Portable application distribution is only available for the concept edition')
+function packPortable({ output, applications, architectures = ['x64', 'arm64'], minimumZipBytes = MIN_ZIP_BYTES }) {
   validateArchitectures(architectures)
   if (architectures.length !== 2 || !architectures.includes('x64') || !architectures.includes('arm64')) throw new Error('Portable distribution requires x64 and arm64 runtimes')
   if (!output || !applications) throw new Error('Portable output and application directories are required')
   output = path.resolve(output)
   applications = path.resolve(applications)
-  signer ||= distribution.loadLocalSigner(ROOT)
-  if (!recoveryEntries || architectures.some(arch => !recoveryEntries[arch]?.artifact)) throw new Error('Portable distribution requires both independent recovery entries')
-  u.assertFile(SEVENZ)
   const staging = path.join(output, 'portable-staging', 'universal')
   const directory = path.join(staging, DIRECTORY_NAME)
-  const zip = path.join(output, `SidekickAI-Portable-${VERSION}-win.zip`)
+  const zip = path.join(output, 'SidekickAI-Portable-' + VERSION + '-win.zip')
   for (const target of [directory, zip, path.join(output, 'portable-evidence.json')]) {
-    if (fs.existsSync(target)) throw new Error(`Portable output already exists: ${target}`)
+    if (fs.existsSync(target)) throw new Error('Portable output already exists: ' + target)
   }
   const applicationInputs = {}
-  const components = []
   for (const arch of ['x64', 'arm64']) {
     const source = path.join(applications, LAYOUT.runtimes[arch])
     const staged = stagePortableApplication(source, path.join(directory, LAYOUT.runtimes[arch]), arch)
     applicationInputs[arch] = staged.applicationInputs
-    const recovery = recoveryEntries[arch].artifact
-    u.assertStandaloneBinary(recovery, arch)
-    fs.copyFileSync(recovery, path.join(staged.directory, 'recover.exe'), fs.constants.COPYFILE_EXCL)
-    if (!runtimeRoot) require('./build-tauri-installer.cjs').ensureBackupRuntime(arch)
-    const component = distribution.recoveryComponent(staged.directory, arch, 'concept', signer, ROOT, runtimeRoot)
-    components.push({ ...component, archivePath: LAYOUT.runtimes[arch] + '/' + component.archivePath,
-      proofPath: LAYOUT.runtimes[arch] + '/' + component.proofPath })
   }
   fs.mkdirSync(path.join(directory, LAYOUT.dataDirectory))
   fs.writeFileSync(path.join(directory, LAYOUT.launcher), universalLauncher(), { flag: 'wx' })
   fs.writeFileSync(path.join(directory, 'portable-layout.json'), JSON.stringify(LAYOUT, null, 2) + '\n', { flag: 'wx' })
-  const runtimeInputs = applicationFingerprint(directory)
   const manifest = {
-    schemaVersion: 1, edition: 'concept', name: product.name, version: VERSION,
-    architectures: ['x64', 'arm64'], packageKind: 'portable',
-    files: runtimeInputs.entries,
+    schemaVersion: 1, edition: selection.edition, name: product.name, version: VERSION,
+    architectures: ['x64', 'arm64'], packageKind: 'portable', files: runtime.fileInventory(directory),
   }
   fs.writeFileSync(path.join(directory, 'portable-manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
-  const proof = distribution.signEnvelope(distribution.bodyPayload({ edition: 'concept', version: VERSION,
-    variant: 'portable', architectures: ['x64', 'arm64'], directory, archive: null, components }),
-  distribution.PURPOSES.body, signer)
-  fs.writeFileSync(path.join(directory, 'distribution-proof.json'), distribution.canonicalJson(proof) + '\n', { flag: 'wx' })
   const inputs = applicationFingerprint(directory)
-  runArchive(['a', '-tzip', '-mx=5', '-y', zip, DIRECTORY_NAME], staging)
+  runtime.archiveFiles(staging, zip, runtime.fileInventory(directory, { prefix: DIRECTORY_NAME + '/' }),
+    { emptyDirectories: [DIRECTORY_NAME + '/' + LAYOUT.dataDirectory] })
   const verification = verifyZip(zip, minimumZipBytes)
   u.assertUnchanged(inputs, applicationFingerprint(directory))
   for (const arch of architectures) u.assertUnchanged(applicationInputs[arch], applicationFingerprint(path.join(applications, LAYOUT.runtimes[arch])))
-  const artifacts = [{ arch: 'universal', path: zip, ...verification, directory, applicationInputs, inputs,
-    bodyProof: proof, bodyProofSha256: distribution.hash(Buffer.from(distribution.canonicalJson(proof.payload))) }]
+  const artifacts = [{ arch: 'universal', path: zip, ...verification, directory, applicationInputs, inputs }]
   fs.writeFileSync(path.join(output, 'portable-evidence.json'), JSON.stringify(artifacts, null, 2) + '\n', { flag: 'wx' })
   return artifacts
 }
@@ -259,14 +198,7 @@ function main(args = process.argv.slice(2)) {
   }
   if (!options['--applications']) throw new Error('A shared application build directory is required (--applications)')
   const output = options['--output'] ? path.resolve(options['--output']) : u.uniqueOutput(path.join(ROOT, 'build/portable-runs'))
-  const native = require('./build-tauri-installer.cjs')
-  native.prepareNativeResources()
-  const toolchain = native.preflight(['x64', 'arm64'], true, path.join(output, 'preflight'))
-  const recoveryEntries = native.buildRecoveryEntries(path.join(output, 'maintenance'), ['x64', 'arm64'], toolchain)
-  return packPortable({
-    applications: path.resolve(options['--applications']),
-    output, recoveryEntries,
-  })
+  return packPortable({ applications: path.resolve(options['--applications']), output })
 }
 
 module.exports = { listZipEntries, verifyZip, universalLauncher, validatePortablePath, stagePortableApplication, packPortable, main, REQUIRED_ENTRIES, REQUIRED_RUNTIME_FILES }

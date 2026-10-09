@@ -57,8 +57,7 @@ extraResources:
 # CSC_LINK：证书 .pfx 路径或 base64；CSC_KEY_PASSWORD：证书密码
 # 架构由命令行 --x64 / --arm64 参数控制（yml 不配置 arch 避免追加导致合并包）
 win:
-  # dir 目标仅产出 win-unpacked / win-arm64-unpacked 目录，
-  # 作为 Tauri 安装器（scripts/build-tauri-installer.cjs）的 7z 载荷源
+  # Unpacked application directories feed the portable and standard payload ZIPs.
   target:
     - target: dir
   icon: resources/icons/icon.ico

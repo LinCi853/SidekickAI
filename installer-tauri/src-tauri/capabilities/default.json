@@ -1,6 +1,0 @@
-{
-  "identifier": "default",
-  "description": "Default capability for the installer window",
-  "windows": ["main"],
-  "permissions": ["core:default"]
-}

@@ -1,9 +1,0 @@
-/* SidekickAI 安装向导样式汇总（顺序 = 原 styles.css 分区顺序） */
-@import './styles/tokens.css';
-@import './styles/shell.css';
-@import './styles/components.css';
-@import './styles/steps/welcome.css';
-@import './styles/steps/license.css';
-@import './styles/steps/location.css';
-@import './styles/steps/installing.css';
-@import './styles/steps/done.css';

@@ -2,7 +2,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { listFiles } = require('./uninstaller-build-utils.cjs')
+const { listFiles } = require('./build-utils.cjs')
 
 function toolInputs(root, names) {
   const visited = new Set()

@@ -3,7 +3,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const u = require('./uninstaller-build-utils.cjs')
+const u = require('./build-utils.cjs')
 
 const ROOT = path.resolve(__dirname, '../build/component-cache')
 
