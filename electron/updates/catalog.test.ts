@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchReleases } from './catalog.js'
+import { distributionOrigin, fetchReleases } from './catalog.js'
 import { compareVersions, contentDigest, validateRelease, verifyProof } from './contract.js'
 import { distributionFixture } from './fixtures.js'
 
@@ -12,6 +12,16 @@ function fixture() {
   return { ...input, sequences, fetcher, origin: 'https://fixture.invalid', channels: ['stable'] as const }
 }
 describe('concept release selection', () => {
+  it('admits explicit private IPv4 HTTP origins while rejecting ambiguous and public HTTP', () => {
+    for (const host of ['10.0.0.1', '172.16.0.1', '172.31.255.254', '192.168.31.180']) {
+      expect(distributionOrigin(`http://${host}:4318`).origin).toBe(`http://${host}:4318`)
+    }
+    for (const origin of ['http://8.8.8.8', 'http://169.254.1.1', 'http://172.32.0.1', 'http://oxy.lan',
+      'http://192.168.031.180', 'http://3232243636', 'http://192.168.31.180:0',
+      'http://user@192.168.31.180', 'http://192.168.31.180/api', 'http://192.168.31.180?x=1']) {
+      expect(() => distributionOrigin(origin)).toThrow()
+    }
+  })
   it('verifies exact channel and release with both native installers and portable ZIP', async () => {
     const input = fixture()
     const selected = await fetchReleases({ ...input, channels: ['stable'] })

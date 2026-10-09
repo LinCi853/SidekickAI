@@ -1,14 +1,11 @@
 import { createHash } from 'node:crypto'
 import { contentDigest, DISTRIBUTION_PATH, validateChannel, validateRelease, verifyProof } from './contract.js'
 import type { DistributionKey, ReleaseChannel, UpdateRelease } from './types.js'
+import { validateServiceOrigin } from '../../packages/resource-contract/service-origin.mjs'
 
 export function distributionOrigin(value: string): URL {
-  const origin = new URL(value)
-  if (origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash
-    || origin.protocol !== 'https:' && !(origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname))) {
-    throw new Error('软件发行来源必须使用 HTTPS。')
-  }
-  return origin
+  try { return new URL(validateServiceOrigin(value)) }
+  catch { throw new Error('软件发行来源必须使用 HTTPS、本机或明确配置的局域网 IPv4 地址。') }
 }
 async function fetchJson(url: URL, fetcher: typeof fetch): Promise<unknown> {
   const response = await fetcher(url, { signal: AbortSignal.timeout(15_000), redirect: 'error', headers: { Accept: 'application/json' } })
