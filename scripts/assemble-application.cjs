@@ -62,6 +62,8 @@ function inputIdentity(payloads, edition, productVersion) {
 }
 
 function validateResult(result, toolkit, output, identity) {
+  toolkitApi.fields(result, ['interfaceVersion', 'toolkitVersion', 'edition', 'mode', 'productVersion', 'authority',
+    'issuerKeyId', 'issuerFingerprint', 'inputs', 'artifacts'], ['schemaVersion', 'toolkitManifestSha256', 'publicIdentity', 'verified'])
   if (!result || result.interfaceVersion !== toolkitApi.INTERFACE_VERSION || result.toolkitVersion !== toolkit.reference.toolkitVersion
     || result.edition !== identity.edition || result.mode !== 'offline' || result.authority !== 'self-built'
     || result.productVersion !== identity.productVersion || typeof result.issuerKeyId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(result.issuerKeyId)
@@ -74,6 +76,7 @@ function validateResult(result, toolkit, output, identity) {
     const matches = result.artifacts.filter(file => file.role === 'offline-installer' && file.architecture === arch)
     if (matches.length !== 1) throw new Error('Assembly must produce one installer per architecture')
     const item = matches[0]
+    toolkitApi.fields(item, ['path', 'role', 'architecture', 'size', 'sha256'])
     runtime.validateRelativePath(item.path)
     if (!item.path.endsWith('.exe') || names.has(item.path.toLowerCase()) || !Number.isSafeInteger(item.size) || item.size <= 0
       || item.size > 2 * 1024 * 1024 * 1024 || !toolkitApi.digest(item.sha256)) throw new Error('Invalid assembled installer inventory')

@@ -90,6 +90,8 @@ publicIdentity 为 `{ id, publicKey: { kty, crv, x } }`，只含公开材料；i
 
 verify 读取真实成品，核对容器布局、模板、正文与恢复证明、维护附件、原生架构及保留输入，不执行 Setup。成功 JSON 含 verified: true，以及 interfaceVersion、toolkitVersion、edition、mode、productVersion、authority、issuerKeyId、issuerFingerprint、inputs、artifacts；它们须与结果文件和磁盘成品完全一致。公开调用包装在复制成品后再次运行 verify。
 
+结果和产物记录拒绝未声明字段；公开身份对象只接受声明的公钥字段，不得携带私钥或额外材料。
+
 ## 自建身份
 
 首次组装由二进制入口生成本机独立 Ed25519 身份，默认保存在忽略的 `local/self-build-identity.json`，后续同身份构建复用它。该文件含私钥，不能提交、打包或公开；组件缓存与成品只保留公开身份和证明。删除或更换该文件会产生另一构建身份，不能直接覆盖原身份的安装。

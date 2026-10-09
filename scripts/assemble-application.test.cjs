@@ -293,6 +293,8 @@ test('detailed assembly evidence must identify the pinned toolkit and a matching
     ['key-bytes', result => { result.publicIdentity.publicKey.x = 'not-a-public-key' }],
     ['noncanonical-key', result => { result.publicIdentity.publicKey.x = 'A'.repeat(42) + 'B' }],
     ['private-key', result => { result.publicIdentity.publicKey.d = 'private-key-material' }],
+    ['private-result-field', result => { result.privateKey = 'private-key-material' }],
+    ['private-artifact-field', result => { result.artifacts[0].privateKey = 'private-key-material' }],
   ]) await t.test(name, async () => {
     const mock = mockAssembler(value.toolkit, { assemble({ result }) { change(result) } })
     await assert.rejects(assembly.assemble(optionsFor(value, mock.spawn, path.join(value.root, name))))
