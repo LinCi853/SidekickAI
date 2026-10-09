@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "c69e2021ef8820c0dbd4c2ecf5185012a966526750a0edb4dc8ecf9853340b26",
+  "revision": "d46d268bb552a5aa3ce58cf2531cb37e4e41603a183da0c0edb3ef162dd19fa0",
   "files": {
     "electron.vite.config.ts": "7acd230acd0c117708ccbdc09532b67440c50bc7c90ea07a767726b0f8cc55e9",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
@@ -52,7 +52,7 @@
     "resources/windows/SidekickStartup.exe.config": "894fbbdeb71840ee5de8685c45b71865fbeeac25525a6da4d4af2121e540780d",
     "resources/windows/application-process.ps1": "b8959774a7545886922bd880918eb8cb04c01d30a63a1192acf7f7b46917edea",
     "resources/windows/startup-helper.json": "89437a29313a00d43b6eed84327b5dfcb3932e893950522785843453358c2196",
-    "scripts/application-build.cjs": "7a48faf5b09930843ef499e83ad0b21d86ca7177231803f0c2310503ee94d068",
+    "scripts/application-build.cjs": "7ed42f9397fad6f3dff51876b2eb7e9ca724fa11367083969c80df5509a459a5",
     "scripts/backup-durable-runtime.test.cjs": "02c80b6427728bc7b570272b7587c9a28ce1ab8d771d886c384823ea1970efc5",
     "scripts/backup-recovery-runtime.test.cjs": "9777416f80a39af4d0a7831e32739d4bb61af317276ed076979ce7c9729834e6",
     "scripts/backup-snapshot-runtime.test.cjs": "bc3cc06c195555fa2b57fd8c101a45d49c05f8ca4c7b5c1981d56024a2f433ea",
