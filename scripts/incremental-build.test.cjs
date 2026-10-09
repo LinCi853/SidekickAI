@@ -21,7 +21,7 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
     fs.mkdirSync(path.dirname(destination), { recursive: true })
     fs.writeFileSync(destination, bytes)
   }
-  for (const dir of ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'electron/shared']) fs.mkdirSync(path.join(root, dir), { recursive: true })
+  for (const dir of ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'packages/resource-contract', 'electron/shared']) fs.mkdirSync(path.join(root, dir), { recursive: true })
   for (const file of ['product-edition.json', 'package.json', 'electron.vite.config.ts', 'scripts/compilation-inputs.ts', 'tsconfig.json', 'tsconfig.node.json']) write(file, '{}')
   write('package-lock.json', JSON.stringify({ packages: { 'node_modules/runtime': {} } }))
   write('node_modules/runtime/package.json', '{}')
@@ -98,4 +98,8 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('src/public/theme-startup.js', 'changed initial theme')
   assert.notEqual(compile().key, beforeTheme)
   assert.equal(builds, 13)
+  const beforeOrigin = compile().key
+  write('packages/resource-contract/service-origin.mjs', 'service origin validation')
+  assert.notEqual(compile().key, beforeOrigin)
+  assert.equal(builds, 14)
 })
