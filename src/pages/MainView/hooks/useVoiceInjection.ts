@@ -33,13 +33,13 @@ export function useVoiceInjection(
         console.warn('[MainView] injectAndSendVoice: 未找到激活 webview');
         return;
       }
-      const ok = await injectTextToWebview(el, text, inputSelector);
+      const ok = await injectTextToWebview(el, text, inputSelector, platform?.pageAdapter?.nativeComposerSelector);
       if (!ok) {
         console.warn('[MainView] injectAndSendVoice: 注入失败');
         return;
       }
       if (send) {
-        await triggerSendInWebview(el, sendSelector, inputSelector, platform?.pageAdapter?.sendEvent);
+        await triggerSendInWebview(el, sendSelector, inputSelector, platform?.pageAdapter?.sendEvent, platform?.pageAdapter?.nativeComposerSelector);
       }
     },
     [activeTab, getProfile, platforms],

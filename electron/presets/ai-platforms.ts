@@ -237,7 +237,7 @@ export const AI_PLATFORMS: AIPlatform[] = [
     defaultResolution: IPHONE_VIEWPORT,
     defaultLanguage: 'zh-CN',
     inputSelector: 'textarea, div[contenteditable=true]',
-    sendSelector: 'button[class*="send"], button[class*="Send"], button[aria-label*="发送"], div[role="button"][aria-label*="发送"]',
+    sendSelector: 'button[data-track-id="home_send_btn"][data-track-name="home_send_message"]:has(svg[viewBox="0 0 19 16"]), button[class*="send"], button[class*="Send"], button[aria-label*="\u53d1\u9001"], div[role="button"][aria-label*="\u53d1\u9001"]',
     pageAdapter: { version: 1, hosts: ['aistudio.xiaomimimo.com', 'mimo.xiaomi.com'],
       nativeComposerSelector: '.dialogue-container', messageEdit: semanticEdit('.user-msg, .user-message') },
     themeColor: '#ff6b35',

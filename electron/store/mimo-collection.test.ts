@@ -52,6 +52,43 @@ describe('MiMo inferred message identity', () => {
     expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({ content: 'Answer continued' })
     expect(reloaded.usage().outputCharacters).toBe('Answer continued'.length)
   })
+  it('fills a complete reasoning-only reply after reload when the same reasoning is visible', () => {
+    const initial = observation('', 'first-element')
+    initial.messages[1].reasoning = 'Retained reasoning'
+    const first = store.observe(source, initial)
+    const reloaded = new AiAssetsStore(db)
+    const completed = observation('Previously missing answer', 'reloaded-element')
+    completed.messages[1].reasoning = 'Retained reasoning'
+    const next = reloaded.observe(source, completed)
+    expect(next.messageIds).toEqual(first.messageIds)
+    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({ content: 'Previously missing answer' })
+    expect(reloaded.details(first.conversationId)[1].reasoning).toBe('Retained reasoning')
+    expect(reloaded.usage().reasoningCharacters).toBe('Retained reasoning'.length)
+    expect(reloaded.usage().outputCharacters).toBe('Previously missing answer'.length)
+    reloaded.observe(source, completed)
+    expect(reloaded.usage().outputCharacters).toBe('Previously missing answer'.length)
+  })
+  for (const [name, reasoning, prompt] of [
+    ['hidden reasoning', undefined, 'Same prompt'],
+    ['different reasoning', 'Different reasoning', 'Same prompt'],
+    ['extended reasoning', 'Retained reasoning continued', 'Same prompt'],
+    ['different prompt', 'Retained reasoning', 'Different prompt'],
+    ['missing prompt', 'Retained reasoning', undefined],
+  ]) it(`retains a reasoning-only reply after reload with ${name}`, () => {
+    const initial = observation('', 'first-element')
+    initial.messages[1].reasoning = 'Retained reasoning'
+    const first = store.observe(source, initial)
+    const usage = store.usage()
+    const reloaded = new AiAssetsStore(db)
+    const next = observation('Unconfirmed answer', 'reloaded-element')
+    next.messages[1].reasoning = reasoning
+    if (prompt === undefined) next.messages.shift()
+    else next.messages[0].content = prompt
+    expect(reloaded.observe(source, next).messageIds).toEqual({})
+    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({ content: '' })
+    expect(reloaded.usage()).toEqual(usage)
+    expect(reloaded.details(first.conversationId)[1].reasoning).toBe('Retained reasoning')
+  })
   it('rejects conflicting tokens for the same inferred message key in one snapshot', () => {
     const first = store.observe(source, observation('Answer', 'first-element'))
     const duplicate = observation('Answer', 'first-element')

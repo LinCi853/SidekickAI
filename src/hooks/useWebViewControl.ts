@@ -11,6 +11,19 @@ export interface WebviewLike {
   focus?(): void;
 }
 
+const nativeComposerInputScript = `function findNativeComposerInput(inputSel, composerSel) {
+  var inputs = Array.from(document.querySelectorAll(inputSel || 'textarea, [contenteditable="true"]')).filter(function(input) {
+    var rect = input.getBoundingClientRect();
+    var style = window.getComputedStyle(input);
+    return input.closest(composerSel) && !input.disabled && !input.readOnly
+      && !input.closest('[disabled], [aria-disabled="true"], [hidden], [inert]')
+      && rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  });
+  var active = document.activeElement;
+  if (active && active.matches(inputSel || 'textarea, [contenteditable="true"]')) return inputs.includes(active) ? active : null;
+  return inputs.length === 1 ? inputs[0] : null;
+}`;
+
 /**
  * 构建「明输入明注入」脚本 —— 将文本填入 AI 平台输入框。
  * 采用两级降级策略：平台专属选择器 → 通用 textarea/contenteditable 兜底。
@@ -36,8 +49,9 @@ export interface WebviewLike {
  *  - 派发 input/change 事件让 React 同步 internal state，避免用户点击输入框时
  *    React 用空 state 覆盖 DOM value 导致注入文本消失
  */
-export function buildInjectionScript(text: string, selector?: string | null): string {
-  return `(function(text, selector) {
+export function buildInjectionScript(text: string, selector?: string | null, nativeComposerSelector?: string | null): string {
+  return `(function(text, selector, nativeComposerSel) {
+  ${nativeComposerInputScript}
   var nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLTextAreaElement.prototype, 'value'
   );
@@ -65,6 +79,12 @@ export function buildInjectionScript(text: string, selector?: string | null): st
     } else {
       el.value = text;
     }
+  }
+  if (nativeComposerSel) {
+    var nativeInput = findNativeComposerInput(selector, nativeComposerSel);
+    if (!nativeInput) return false;
+    fill(nativeInput);
+    return true;
   }
   // 1. 平台专属选择器（可能为逗号分隔的多选择器）
   if (selector) {
@@ -158,7 +178,7 @@ export function buildInjectionScript(text: string, selector?: string | null): st
   setTimeout(cleanupSidebarArtifacts, 400);
 
   return true;
-})(${JSON.stringify(text)}, ${JSON.stringify(selector ?? null)})`;
+})(${JSON.stringify(text)}, ${JSON.stringify(selector ?? null)}, ${JSON.stringify(nativeComposerSelector ?? null)})`;
 }
 
 /**
@@ -169,9 +189,10 @@ export async function injectTextToWebview(
   webview: WebviewLike,
   text: string,
   selector?: string | null,
+  nativeComposerSelector?: string | null,
 ): Promise<boolean> {
   try {
-    const result = await webview.executeJavaScript(buildInjectionScript(text, selector));
+    const result = await webview.executeJavaScript(buildInjectionScript(text, selector, nativeComposerSelector));
     return Boolean(result);
   } catch (e) {
     console.error('[injectTextToWebview] 注入失败:', e);
@@ -191,8 +212,26 @@ export async function triggerSendInWebview(
   sendSelector?: string | null,
   inputSelector?: string | null,
   sendEvent: 'click' | 'mousedown' = 'click',
+  nativeComposerSelector?: string | null,
 ): Promise<boolean> {
-  const script = `(function(sendSel, inputSel, sendEvent) {
+  const script = `(function(sendSel, inputSel, sendEvent, nativeComposerSel) {
+  ${nativeComposerInputScript}
+  if (nativeComposerSel) {
+    var input = findNativeComposerInput(inputSel, nativeComposerSel);
+    var composer = input && input.closest(nativeComposerSel);
+    if (!composer || !sendSel || input.disabled || input.readOnly) return false;
+    var buttons = Array.from(composer.querySelectorAll(sendSel)).filter(function(button) {
+      var rect = button.getBoundingClientRect();
+      var style = window.getComputedStyle(button);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    });
+    if (buttons.length !== 1) return false;
+    var button = buttons[0];
+    if (button.closest('[disabled], [aria-disabled="true"], [data-disabled="true"], [hidden], [inert]') || window.getComputedStyle(button).pointerEvents === 'none') return false;
+    if (sendEvent === 'mousedown') button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, button: 0 }));
+    else button.click();
+    return true;
+  }
   // 1. 优先点击发送按钮
   if (sendSel) {
     var btn = document.querySelector(sendSel);
@@ -220,7 +259,7 @@ export async function triggerSendInWebview(
   } catch (e) {
     return false;
   }
-})(${JSON.stringify(sendSelector ?? null)}, ${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendEvent)})`;
+})(${JSON.stringify(sendSelector ?? null)}, ${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendEvent)}, ${JSON.stringify(nativeComposerSelector ?? null)})`;
   try {
     const result = await webview.executeJavaScript(script);
     return Boolean(result);
@@ -399,4 +438,3 @@ export async function injectEnterSendBehavior(
     return false;
   }
 }
-

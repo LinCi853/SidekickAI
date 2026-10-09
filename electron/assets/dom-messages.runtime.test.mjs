@@ -56,7 +56,7 @@ async function fixture(t, messages, hostname = 'chat.deepseek.com', route = '/a/
 }
 
 const mimoUser = text => `<div class="relative mx-auto flex w-full"><div class="group flex flex-row-reverse"><div class="bg-mimo-bg-message whitespace-pre-wrap">${text}</div><button>Copy</button></div></div>`
-const mimoAnswer = (text, reasoning = '', streaming = false) => `<div class="relative mx-auto flex w-full"><div class="group flex flex-row"><div><span>MiMo-V2.6-Pro</span></div><div class="Markdown_markdown__a19823a0">${reasoning ? `<div class="mb-2"><div>Thinking status</div><blockquote><p>${reasoning}</p></blockquote></div>` : ''}<p>${text}</p>${streaming ? '<span class="animate-pulse"></span>' : ''}</div><button>Copy</button></div></div>`
+const mimoAnswer = (text, reasoning = '', streaming = false) => `<div class="relative mx-auto flex w-full"><div class="group flex flex-row"><div><span>MiMo-V2.6-Pro</span></div><div class="Markdown_markdown__a19823a0">${reasoning ? `<div class="mb-2"><button><div class="Collapsible_Text__sample"><summary>Completed reasoning</summary></div></button><div class="Collapsible_CollapsibleContent__sample"><blockquote><p>${reasoning}</p></blockquote></div></div>` : ''}<p>${text}</p>${streaming ? '<span class="animate-pulse"></span>' : ''}</div><button>Copy</button></div></div>`
 const mimoBlock = (html, typing = false) => `<div class="Markdown_markdown__a19823a0" data-is-typing="${typing}">${html}</div>`
 const mimoUltraThinking = (expanded = false) => `<div class="mb-2"><div data-state="${expanded ? 'open' : 'closed'}"><button aria-expanded="${expanded}"><div class="Collapsible_Text__c90b7809"><summary>Completed reasoning</summary></div></button>${expanded ? '<div class="Collapsible_CollapsibleContent__c90b7809"><blockquote><p>Reasoning</p></blockquote></div>' : ''}</div></div>`
 const mimoUltraAnswer = blocks => `<div class="relative mx-auto flex w-full"><div><span>MiMo-V2.6-Pro UltraSpeed</span></div><div class="flex flex-col">${blocks}</div><div>166 TPS</div><button>Copy</button></div>`
@@ -90,6 +90,40 @@ test('captures MiMo UltraSpeed code without language labels, hidden copies or du
   assert.match(answer.markdownContent, /^Answer paragraph\.\n{2,}[^]*\n{2,}Last paragraph\.$/)
   assert.equal(answer.markdownContent.match(/```html/g).length, 1)
 })
+
+test('keeps a quoted MiMo answer without a reasoning control in the output', async t => {
+  const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(mimoBlock('<div class="mb-2"><blockquote><p>Quoted answer.</p></blockquote></div>')), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const answer = (await f.parse()).messages[1]
+  assert.equal(answer.content, 'Quoted answer.')
+  assert.equal(answer.reasoning, undefined)
+  assert.equal(answer.markdownContent, '> Quoted answer.')
+})
+
+test('removes only the innermost MiMo reasoning control from a shared answer wrapper', async t => {
+  const html = mimoBlock('<div class="mb-2">' + mimoUltraThinking(true) + '<p>Answer.</p><blockquote><p>Quoted answer.</p></blockquote></div>')
+  const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(html), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+  const answer = (await f.parse()).messages[1]
+  assert.equal(answer.content, 'Answer.\nQuoted answer.')
+  assert.equal(answer.reasoning, 'Reasoning')
+  assert.match(answer.markdownContent, /Answer\.\s+> Quoted answer\./)
+})
+
+for (const attributes of ['hidden', 'aria-hidden="true"', 'inert', 'style="display:none"', 'style="visibility:hidden"', 'style="opacity:0"']) {
+  test(`does not use retained hidden MiMo reasoning as visible evidence: ${attributes}`, async t => {
+    const thought = mimoUltraThinking(true).replace('class="Collapsible_CollapsibleContent__c90b7809"', `class="Collapsible_CollapsibleContent__c90b7809" ${attributes}`)
+    const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(mimoBlock(thought) + mimoBlock('<p>Answer.</p>')), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+    const answer = (await f.parse()).messages[1]
+    assert.equal(answer.content, 'Answer.')
+    assert.equal(answer.reasoning, undefined)
+  })
+  test(`does not use hidden descendants of visible MiMo reasoning as evidence: ${attributes}`, async t => {
+    const thought = mimoUltraThinking(true).replace('<p>Reasoning</p>', `<p ${attributes}>Reasoning</p>`)
+    const f = await fixture(t, mimoUser('Input') + mimoUltraAnswer(mimoBlock(thought) + mimoBlock('<p>Answer.</p>')), 'aistudio.xiaomimimo.com', '/#/ultra/one')
+    const answer = (await f.parse()).messages[1]
+    assert.equal(answer.content, 'Answer.')
+    assert.equal(answer.reasoning, undefined)
+  })
+}
 
 test('binds multiple MiMo UltraSpeed answers to the nearest preceding prompt in one document', async t => {
   const html = mimoUser('First input') + mimoUltraAnswer(mimoBlock('<p>First answer.</p>'))

@@ -28,7 +28,7 @@ const deepseekUserContentSelector = '.fbb737a4'
 const deepseekAnswerSelector = '.ds-assistant-message-main-content'
 const deepseekThinkingSelector = '.ds-think-content'
 const deepseekAssistantSelector = `${deepseekAnswerSelector}, ${deepseekThinkingSelector}`
-const mimoThinkingSelector = '.mb-2:has(blockquote), .mb-2:has([class*="Collapsible_Text__"] summary)'
+const mimoThinkingSelector = '.mb-2:has([class*="Collapsible_Text__"] summary):not(:has(.mb-2 [class*="Collapsible_Text__"] summary))'
 const qianwenThinkingSelector = '[data-card_name="deep_think"]'
 const kimiThinkingSelector = '.thinking-container'
 const wenxinThinkingSelector = '[class*="_thinking-steps_"]'
@@ -71,13 +71,15 @@ function cloneMiMoAnswer(element: Element): Element {
   return clone
 }
 
-function nodeText(node: Node): string {
+function nodeText(node: Node, visibleOnly = false): string {
   if (node.nodeType === 3) return node.textContent ?? ''
   if (!(node instanceof Element)) return ''
+  if (visibleOnly && (node.closest('[hidden], [aria-hidden="true"], [inert]')
+    || !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }))) return ''
   if (node.matches('button, svg, script, style, [aria-hidden="true"], .copy-button, .message-toolbar')) return ''
   if (node.tagName === 'BR') return '\n'
-  if (node.tagName === 'PRE') return (node.textContent ?? '') + '\n'
-  const text = Array.from(node.childNodes).map(nodeText).join('')
+  if (node.tagName === 'PRE' && !visibleOnly) return (node.textContent ?? '') + '\n'
+  const text = Array.from(node.childNodes).map(child => nodeText(child, visibleOnly)).join('')
   return text + (blocks.has(node.tagName) && text && !text.endsWith('\n') ? '\n' : '')
 }
 
@@ -281,7 +283,7 @@ export function readDomConversation(document: Document, hostname: string): DomCo
         if (mimo && node.matches(mimoThinkingSelector)) {
           const bodies = Array.from(node.querySelectorAll('blockquote'))
             .filter(body => !body.parentElement?.closest('blockquote'))
-          return bodies.map(body => nodeText(body).replace(/\n$/, '')).filter(Boolean)
+          return bodies.map(body => nodeText(body, true).replace(/\n$/, '')).filter(Boolean)
         }
         if (qianwen && node.matches(qianwenThinkingSelector)) {
           return reasoningFragments(node, '[class*="thinking-content"], [class*="markdown-content"]', messageChromeSelector)

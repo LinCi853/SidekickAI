@@ -23,7 +23,7 @@ let blockerBundle
 before(async () => {
   const bytes = await readFile(source)
   console.log(JSON.stringify({ source, sha256: createHash('sha256').update(bytes).digest('hex') }))
-  const output = await build({ stdin: { contents: bytes.toString() + '\nexport { AI_PLATFORMS } from "../../../electron/presets/ai-platforms.ts"; export { triggerSendInWebview } from "../../hooks/useWebViewControl.ts"', loader: 'ts', resolveDir: path.dirname(source) },
+  const output = await build({ stdin: { contents: bytes.toString() + '\nexport { AI_PLATFORMS } from "../../../electron/presets/ai-platforms.ts"; export { injectTextToWebview, triggerSendInWebview } from "../../hooks/useWebViewControl.ts"', loader: 'ts', resolveDir: path.dirname(source) },
     bundle: true, write: false, platform: 'browser', format: 'iife', globalName: 'EnterContract' })
   bundle = output.outputFiles[0].text
   const blocker = await build({ stdin: { contents: "export { BLOCK_RULES } from './electron/store/block-rules-preset.ts'; export { buildBlockerScript } from './src/lib/webview-blocker.ts'", resolveDir: root },
@@ -316,6 +316,84 @@ test('voice sending uses the declarative mouse event', async t => {
     return { sent, clicks: window.clicks }
   })
   assert.deepEqual(result, { sent: true, clicks: ['normal:compose'] })
+})
+
+const mimoComposer = (id, attributes = '', icon = '0 0 19 16') => `<div class="dialogue-container" id="${id}"><textarea>Prompt</textarea><button data-action="voice">Microphone</button><button data-action="attach">Upload</button><button type="button" data-track-id="home_send_btn" data-track-name="home_send_message" data-action="compose" ${attributes}><svg viewBox="${icon}"></svg></button></div>`
+const sendMiMo = page => page.evaluate(async () => {
+  const platform = EnterContract.AI_PLATFORMS.find(platform => platform.id === 'mimo')
+  const sent = await EnterContract.triggerSendInWebview({ executeJavaScript: async script => (0, eval)(script) },
+    platform.sendSelector, platform.inputSelector, platform.pageAdapter.sendEvent, platform.pageAdapter.nativeComposerSelector)
+  return { sent, clicks: window.clicks }
+})
+
+test('MiMo voice sending recognizes the current paper-plane button in its composer', async t => {
+  const f = await fixture(t, mimoComposer('current'), 'aistudio.xiaomimimo.com')
+  assert.deepEqual(await sendMiMo(f.page), { sent: true, clicks: ['normal:compose'] })
+})
+
+for (const [name, attributes, icon] of [
+  ['disabled', 'disabled', '0 0 19 16'],
+  ['aria-disabled', 'aria-disabled="true"', '0 0 19 16'],
+  ['hidden', 'style="display:none"', '0 0 19 16'],
+  ['stopping', '', '0 0 16 16'],
+]) test(`MiMo voice sending refuses a ${name} button without an Enter fallback`, async t => {
+  const f = await fixture(t, mimoComposer('current', attributes, icon), 'aistudio.xiaomimimo.com')
+  await f.page.evaluate(() => document.querySelector('textarea').addEventListener('keydown', () => window.clicks.push('native:enter')))
+  assert.deepEqual(await sendMiMo(f.page), { sent: false, clicks: [] })
+})
+
+test('MiMo voice sending follows the focused composer and refuses ambiguous local buttons', async t => {
+  const f = await fixture(t, mimoComposer('first') + mimoComposer('second'), 'aistudio.xiaomimimo.com')
+  await f.page.locator('#second textarea').focus()
+  await f.page.evaluate(() => document.querySelector('#first [data-action=compose]').dataset.action = 'other')
+  assert.deepEqual(await sendMiMo(f.page), { sent: true, clicks: ['normal:compose'] })
+  await f.page.evaluate(() => {
+    window.clicks = []
+    const button = document.querySelector('#second [data-action=compose]')
+    button.after(button.cloneNode(true))
+  })
+  assert.deepEqual(await sendMiMo(f.page), { sent: false, clicks: [] })
+})
+
+test('MiMo voice injection and sending use the same focused composer', async t => {
+  const f = await fixture(t, mimoComposer('first') + mimoComposer('second'), 'aistudio.xiaomimimo.com')
+  await f.page.locator('#second textarea').focus()
+  const injected = await f.page.evaluate(async () => {
+    const platform = EnterContract.AI_PLATFORMS.find(platform => platform.id === 'mimo')
+    return EnterContract.injectTextToWebview({ executeJavaScript: async script => (0, eval)(script) },
+      'Recognized speech', platform.inputSelector, platform.pageAdapter.nativeComposerSelector)
+  })
+  assert.equal(injected, true)
+  assert.equal(await f.page.locator('#first textarea').inputValue(), 'Prompt')
+  assert.equal(await f.page.locator('#second textarea').inputValue(), 'Recognized speech')
+  assert.deepEqual(await sendMiMo(f.page), { sent: true, clicks: ['normal:compose'] })
+})
+
+test('MiMo voice injection refuses multiple unfocused composers', async t => {
+  const f = await fixture(t, mimoComposer('first') + mimoComposer('second'), 'aistudio.xiaomimimo.com')
+  const injected = await f.page.evaluate(async () => {
+    const platform = EnterContract.AI_PLATFORMS.find(platform => platform.id === 'mimo')
+    return EnterContract.injectTextToWebview({ executeJavaScript: async script => (0, eval)(script) },
+      'Recognized speech', platform.inputSelector, platform.pageAdapter.nativeComposerSelector)
+  })
+  assert.equal(injected, false)
+  assert.equal(await f.page.locator('#first textarea').inputValue(), 'Prompt')
+  assert.equal(await f.page.locator('#second textarea').inputValue(), 'Prompt')
+})
+
+test('MiMo voice injection does not switch away from a focused disabled composer', async t => {
+  const f = await fixture(t, mimoComposer('first') + mimoComposer('second'), 'aistudio.xiaomimimo.com')
+  await f.page.locator('#second textarea').focus()
+  await f.page.locator('#second textarea').evaluate(node => node.setAttribute('aria-disabled', 'true'))
+  const injected = await f.page.evaluate(async () => {
+    const platform = EnterContract.AI_PLATFORMS.find(platform => platform.id === 'mimo')
+    return EnterContract.injectTextToWebview({ executeJavaScript: async script => (0, eval)(script) },
+      'Recognized speech', platform.inputSelector, platform.pageAdapter.nativeComposerSelector)
+  })
+  assert.equal(injected, false)
+  assert.equal(await f.page.locator('#first textarea').inputValue(), 'Prompt')
+  assert.equal(await f.page.locator('#second textarea').inputValue(), 'Prompt')
+  assert.deepEqual(await sendMiMo(f.page), { sent: false, clicks: [] })
 })
 
 test('an editable message boundary cannot claim actions outside itself', async t => {

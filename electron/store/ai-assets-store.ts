@@ -204,17 +204,29 @@ export class AiAssetsStore {
       if (!/^(user|assistant):mimo:/.test(message.key)) continue
       if (keys.has(message.key)) blocked.add(message.key.replace(/^(user|assistant):/, ''))
       keys.add(message.key)
-      const previous = this.db.prepare(`SELECT m.content, s.reasoning, s.status FROM asset_nodes n
+      const previous = this.db.prepare(`SELECT m.content, s.reasoning, s.status, s.output_characters FROM asset_nodes n
         JOIN messages m ON m.id = n.message_id JOIN asset_message_state s ON s.message_id = m.id
         WHERE n.conversation_id = ? AND n.source_key = ? ORDER BY n.rowid DESC LIMIT 1`)
-        .get(id, message.key) as { content: string; reasoning: string; status: AssetMessageStatus } | undefined
+        .get(id, message.key) as { content: string; reasoning: string; status: AssetMessageStatus; output_characters: number } | undefined
       if (!previous) continue
       const sameElement = message.identityToken && this.mimoIdentities.get(`${id}\u0000${message.key}`) === message.identityToken
       const reasoning = message.reasoning ?? previous.reasoning
       const unchanged = message.content === previous.content && reasoning === previous.reasoning
       const growing = ['streaming', 'failed', 'stopped'].includes(previous.status)
         && message.content.startsWith(previous.content) && reasoning.startsWith(previous.reasoning)
-      if (!sameElement && !unchanged && !growing) blocked.add(message.key.replace(/^(user|assistant):/, ''))
+      let completingReasoning = false
+      if (message.role === 'assistant' && previous.status === 'complete' && !previous.content
+        && previous.output_characters === 0 && message.content.trim() && previous.reasoning.trim() && message.reasoning === previous.reasoning) {
+        const promptKey = message.key.replace(/^assistant:/, 'user:')
+        const prompt = observation.messages.find(item => item.key === promptKey && item.role === 'user')
+        const saved = this.db.prepare(`SELECT m.content FROM asset_nodes n JOIN messages m ON m.id = n.message_id
+          WHERE n.conversation_id = ? AND n.source_key = ? AND m.role = 'user' ORDER BY n.rowid DESC LIMIT 1`)
+          .get(id, promptKey) as { content: string } | undefined
+        completingReasoning = !!prompt && prompt.content === saved?.content
+          && observation.messages.indexOf(prompt) < observation.messages.indexOf(message)
+          && !!message.identityToken && prompt.identityToken === message.identityToken
+      }
+      if (!sameElement && !unchanged && !growing && !completingReasoning) blocked.add(message.key.replace(/^(user|assistant):/, ''))
     }
     if (!blocked.size) return observation
     const messages = observation.messages.filter(message => !blocked.has(message.key.replace(/^(user|assistant):/, '')))
