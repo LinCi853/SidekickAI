@@ -52,6 +52,23 @@ function clearRecordingWatchdog(): void {
 let recordingWatchdog: NodeJS.Timeout | null = null
 
 /**
+ * 录音硬上限：keyup 丢失（焦点切换吞掉全局 keyup 等）时 backgroundRecording
+ * 会恒为 true，只能靠下一次按键自愈；watchdog 保证最迟 30 分钟强制收尾
+ * （识别已录内容上屏）。取值需兼顾 toggle 模式下不受按键约束的长听写。
+ */
+const RECORDING_MAX_DURATION_MS = 30 * 60_000
+
+function armRecordingWatchdog(sttEngine: SttEngine): void {
+  clearRecordingWatchdog()
+  recordingWatchdog = setTimeout(() => {
+    recordingWatchdog = null
+    if (!backgroundRecording) return
+    console.warn('[voice] 录音超过 30 分钟未结束（keyup 可能丢失），watchdog 强制收尾')
+    void stopBackgroundVoice(sttEngine).catch((err) => console.error('[voice] watchdog 收尾失败:', err))
+  }, RECORDING_MAX_DURATION_MS)
+}
+
+/**
  * 启动后台语音录音（Alt+V keydown，主窗口未聚焦时调用）。
  * 显示预览窗"录音中…"，调用 SttEngine.start()。
  *
@@ -70,7 +87,7 @@ export async function startBackgroundVoice(sttEngine: SttEngine): Promise<void> 
   backgroundRecording = true
   console.log('[voice] 开始录音（按下）')
   showPreview({ status: 'recording', text: '正在聆听…' })
-  clearRecordingWatchdog()
+  armRecordingWatchdog(sttEngine)
   try {
     if (windowState.previewWindow && !windowState.previewWindow.isDestroyed()) {
       sttEngine.setRendererWindow(windowState.previewWindow)

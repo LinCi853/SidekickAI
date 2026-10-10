@@ -12,6 +12,8 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import type { EffectScope } from '../modules/effect-scope.js'
 
 const ASSETS_DIR_NAME = 'notes-assets'
+/** 协议处理器只放行 saveNotesImageAsset 生成的 <uuid>.<ext>，拒绝路径分隔符、`..` 与编码变体（同 whiteboard-asset） */
+const ASSET_FILENAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9_]{1,20}$/
 
 /** 自定义协议名，与 whiteboard-asset:// 分离 */
 export const NOTES_ASSET_SCHEME = 'notes-asset'
@@ -50,7 +52,7 @@ export function registerNotesAssetProtocol(): void {
     try {
       const url = new URL(request.url)
       const filename = url.pathname.replace(/^\//, '')
-      if (!filename) return new Response('Not found', { status: 404 })
+      if (url.host !== 'asset' || !ASSET_FILENAME.test(filename)) return new Response('Not found', { status: 404 })
       const filepath = path.join(getAssetsDir(), filename)
       if (!fs.existsSync(filepath)) {
         console.error('[notes-asset] 文件不存在:', filepath)

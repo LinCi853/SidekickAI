@@ -104,9 +104,14 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
       startTime,
     })
 
-    // 监听下载进度
+    // 监听下载进度：updated 事件按下载速率高频触发，每次都做同步 sqlite 读写
+    // 并向所有窗口广播会随速度线性放大主进程负载；节流到至多每 500ms 落一次盘
+    let lastProgressAt = 0
     item.on('updated', (_e2, state) => {
       if (state === 'progressing') {
+        const now = Date.now()
+        if (now - lastProgressAt < 500) return
+        lastProgressAt = now
         const received = item.getReceivedBytes()
         const total = item.getTotalBytes()
         try {

@@ -101,10 +101,12 @@ export default function AiAssetsView() {
     void api.suggestions().then(items => { if (active) setSuggestions(items); }).catch(failure => { if (active) setError(String(failure)); });
     return () => { active = false; };
   }, [api, category, revision]);
-  const run = async (operation: () => Promise<void>) => {
+  // useCallback 稳定引用：下游 AssetMarkdown 依赖 onAction 身份做 memo，
+  // 内联箭头每次渲染新建会让 memo 全部失效（setError/setNotice 引用稳定）。
+  const run = useCallback(async (operation: () => Promise<void>) => {
     setError(''); setNotice('');
     try { await operation(); } catch (failure) { setError(String(failure)); }
-  };
+  }, []);
   useEffect(() => {
     void refresh().catch(failure => setError(String(failure)));
     let timer: ReturnType<typeof setTimeout> | undefined;

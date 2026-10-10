@@ -3,7 +3,9 @@
 // 覆盖 2026-09 game-hotkey audit 指出的窗口路径缺口：
 //   1. 唤出后核验焦点是否真正取得，未取得时一次有界 moveTop+focus 重试；
 //   2. 快速 hide→show 后，旧隐藏的外部焦点恢复被代际取消（迟到的
-//      SetForegroundWindow 不得把焦点抢回外部窗口）。
+//      SetForegroundWindow 不得把焦点抢回外部窗口）；
+//   3. 恢复进程已派生后才唤出：PowerShell 无法中断，show 在其估计完成后
+//      安排晚期重申守卫，夺回被抢走的前台焦点（"收起后再打开不在前台"修复）。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
@@ -25,7 +27,9 @@ function makeWindow(overrides: Partial<Record<string, unknown>> = {}): BrowserWi
     isFocused: vi.fn(() => false),
     isMaximized: vi.fn(() => false),
     isFullScreen: vi.fn(() => false),
+    isAlwaysOnTop: vi.fn(() => false),
     setSkipTaskbar: vi.fn(),
+    setAlwaysOnTop: vi.fn(),
     restore: vi.fn(),
     show: vi.fn(),
     hide: vi.fn(),
@@ -148,5 +152,53 @@ describe('外部焦点恢复代际取消', () => {
     vi.advanceTimersByTime(5000)
 
     expect(execCalls('restore')).toHaveLength(0)
+  })
+})
+
+describe('在途恢复的晚期重申守卫', () => {
+  it('恢复进程已派生后才唤出 → 恢复估计完成后重申前台焦点', async () => {
+    const win = makeWindow()
+    track(win)
+    hide(win)
+    await Promise.resolve() // 焦点捕获完成 → prevHandle=4242
+    hide(win) // 安排恢复（120ms 后派生）
+    vi.advanceTimersByTime(120) // 恢复进程派生，无法取消
+    expect(execCalls('restore')).toHaveLength(1)
+
+    show(win) // 此刻唤出：PowerShell 迟到的 SetForegroundWindow 会抢走焦点
+    vi.advanceTimersByTime(150) // 常规激活核验重试
+    expect(win.moveTop).toHaveBeenCalledTimes(1)
+
+    // 晚期守卫：恢复估计完成（120ms + 3000ms 余量）+ 150ms margin 后重申
+    vi.advanceTimersByTime(3000)
+    expect(win.moveTop).toHaveBeenCalledTimes(2)
+    // 重申走"短暂 topmost"路径，且还原置顶偏好（false）
+    expect(win.setAlwaysOnTop).toHaveBeenCalledWith(true)
+    expect(win.setAlwaysOnTop).toHaveBeenLastCalledWith(false)
+  })
+
+  it('唤出时无在途恢复 → 不安排晚期重申（无多余抢焦点）', () => {
+    const win = makeWindow()
+    track(win)
+    show(win)
+    vi.advanceTimersByTime(6000)
+
+    // 仅常规激活核验的一次重试，没有额外的重申
+    expect(win.moveTop).toHaveBeenCalledTimes(1)
+    expect(win.focus).toHaveBeenCalledTimes(2)
+  })
+
+  it('恢复派生前已唤出（快速 hide→show）→ 恢复被取消且无守卫干扰', async () => {
+    const win = makeWindow()
+    track(win)
+    hide(win)
+    await Promise.resolve()
+    hide(win)
+    show(win) // 派生前唤出 → 代际取消恢复
+    vi.advanceTimersByTime(6000)
+
+    expect(execCalls('restore')).toHaveLength(0)
+    // 仅常规激活核验重试
+    expect(win.moveTop).toHaveBeenCalledTimes(1)
   })
 })

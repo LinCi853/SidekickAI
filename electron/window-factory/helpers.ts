@@ -23,6 +23,7 @@
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { accumulatedLinksStore } from '../store/accumulated-links-store.js'
 import { getAppSettings } from '../store/app-settings-store.js'
+import { allowRemoteNavigation } from '../security/trusted-renderer.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
 import { attachWebviewHotkeyRouter } from './webview-hotkeys.js'
 
@@ -119,7 +120,13 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
   const popupDenialCount = new Map<string, number>()
   const POPUP_DENIAL_THRESHOLD = 3
 
+  // 已注册过的 guest：同一 webview 反复 attach（同域跳转往返、DOM 移动）时
+  // setWindowOpenHandler 天然幂等，但 .on('new-window')/did-create-window 会累积
+  const attachedWebviews = new WeakSet<Electron.WebContents>()
+
   parentWebContents.on('did-attach-webview', (_e, wc) => {
+    if (attachedWebviews.has(wc)) return
+    attachedWebviews.add(wc)
     // 需求 8：Ctrl+click 放行 —— setWindowOpenHandler 内无法读取修饰键，
     // 通过 before-input-event 维护 per-webview Ctrl 按下状态。
     // setWindowOpenHandler 内若 ctrlPressed=true 且 URL 为 http(s)，放行新窗口。
@@ -221,7 +228,9 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(wc as any).on('did-create-window', (_e: Event, win: unknown, url: string) => {
       console.log('[webview-popup] did-create-window: 独立窗口已创建（setWindowOpenHandler 已 allow）:', url)
-      // 不做任何阻止，让窗口正常显示
+      // 该窗口将加载远程内容，向 will-navigate 守卫登记豁免（OAuth/登录流程依赖后续跳转）
+      const popupWebContents = (win as { webContents?: Electron.WebContents }).webContents
+      if (popupWebContents) allowRemoteNavigation(popupWebContents)
     })
 
     // 3. before-input-event：应用内快捷键统一处理（主进程兜底，确保 webview 焦点时可用）。

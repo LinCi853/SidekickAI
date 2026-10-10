@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -9,7 +9,7 @@ import type { ChatMessage } from '../lib/electron-api';
 import { CodeBlock } from './CodeBlock';
 
 /** 单条消息气泡：头像 + 元信息 + 内容（assistant 用 Markdown 渲染） */
-export function MessageBubble({
+function MessageBubbleImpl({
   message,
   streaming,
   providerName,
@@ -37,6 +37,11 @@ export function MessageBubble({
   // 6.5: 编辑态管理
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
+
+  // 外部内容更新（重试/继续生成改写 assistant 消息）时同步编辑草稿
+  useEffect(() => {
+    if (!isEditing) setEditText(message.content);
+  }, [message.content, isEditing]);
 
   const handleStartEdit = () => {
     setEditText(message.content);
@@ -117,5 +122,11 @@ export function MessageBubble({
     </div>
   );
 }
+
+/**
+ * memo：历史消息对象引用稳定，流式期间每个 chunk 只需重渲染内容变化的气泡，
+ * 其余消息跳过 ReactMarkdown + highlight 全量重解析（长对话卡顿的主因）。
+ */
+export const MessageBubble = memo(MessageBubbleImpl);
 
 export default MessageBubble;

@@ -27,7 +27,9 @@ import { calculateMainWindowMinWidth, getUiScaleFromSettings, MAIN_WINDOW_MIN_HE
 /**
  * 主窗口渲染层加载失败重试状态。
  * 用于在 did-fail-load 事件中追踪重试次数，避免无限循环。
- * 加载成功后（did-finish-load）会被重置为 null。
+ * 加载成功后（did-finish-load）会被重置为 null；
+ * 窗口销毁重建（activate 重建路径）时在 createMainWindow 顶部重置，
+ * 避免旧窗口残留的计数吃掉新窗口的重试机会。
  */
 let mainWindowLoadRetryState: { retries: number; lastUrl: string } | null = null
 
@@ -36,6 +38,7 @@ let mainWindowLoadRetryState: { retries: number; lastUrl: string } | null = null
  * 从 windowStore 恢复上次的位置/尺寸/置顶状态
  */
 export function createMainWindow(): void {
+  mainWindowLoadRetryState = null
   const saved = windowStore.getOrDefault(MAIN_WINDOW_ID)
   // 校验 tabs 数组：过滤掉 url 异常的 tab，防止 webview 挂载失败导致白屏
   windowStore.sanitizeTabs(MAIN_WINDOW_ID)
@@ -211,13 +214,20 @@ export function createMainWindow(): void {
     const settings = getAppSettings()
     const isQuitting = (app as unknown as { isQuitting?: boolean }).isQuitting
     if (settings.closeBehavior === 'minimize' && !isQuitting) {
-      e.preventDefault()
-      // minimize + skipTaskbar 彻底隐藏：屏幕、Alt+Tab、任务栏均不可见
-      win.minimize()
-      win.setSkipTaskbar(true)
-      win.hide()
-      console.log('[main] 主窗口隐藏到托盘（closeBehavior=minimize）')
-      return
+      // 托盘不可用（图标缺失/创建失败）时不能把窗口藏起来：那样应用既没有
+      // 可见窗口也没有托盘入口，只能任务管理器杀进程。降级为正常关闭，
+      // window-all-closed（hasTray()=false）会退出应用
+      if (!windowState.trayEnabled) {
+        console.warn('[main] 托盘不可用，closeBehavior=minimize 降级为直接关闭')
+      } else {
+        e.preventDefault()
+        // minimize + skipTaskbar 彻底隐藏：屏幕、Alt+Tab、任务栏均不可见
+        win.minimize()
+        win.setSkipTaskbar(true)
+        win.hide()
+        console.log('[main] 主窗口隐藏到托盘（closeBehavior=minimize）')
+        return
+      }
     }
     // 正常关闭：保存 bounds + isMaximized + alwaysOnTop + isFullscreen
     // 用 win.isMaximized() 而非 state.isMaximized，避免 OS 原生最大化时 state 未同步

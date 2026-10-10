@@ -9,7 +9,9 @@ const fixture = vi.hoisted(() => ({
   modules: [] as any[],
   close: vi.fn(),
 }));
-vi.mock('react', () => ({
+vi.mock('react', async (importOriginal) => ({
+  // AppErrorBoundary（进阶面板各 tab 的局部边界）需要真实 Component 类
+  ...(await importOriginal<Record<string, unknown>>()),
   useRef: (...args: any[]) => fixture.runtime.react.useRef(...args),
   useState: (...args: any[]) => fixture.runtime.react.useState(...args),
   useCallback: (...args: any[]) => fixture.runtime.react.useCallback(...args),

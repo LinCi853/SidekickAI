@@ -16,6 +16,11 @@ import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { EffectScope } from '../modules/effect-scope.js'
 
 const ASSETS_DIR_NAME = 'whiteboard-assets'
+/**
+ * 协议处理器只放行 saveImageAsset 自己生成的文件名：randomUUID 全小写十六进制 + 数据 URL 扩展名。
+ * 正则不含路径分隔符、`..` 和 `%`，因此归一化、反斜杠与百分号编码的穿越变体全部不匹配。
+ */
+const ASSET_FILENAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9_]{1,20}$/
 
 /** 自定义协议名，替代 file:// 避免 dev 模式 CORS 阻止 */
 export const WHITEBOARD_ASSET_SCHEME = 'whiteboard-asset'
@@ -57,7 +62,7 @@ export function registerWhiteboardAssetProtocol(): void {
       // whiteboard-asset://asset/<filename>
       const filename = url.pathname.replace(/^\//, '')
       console.log('[whiteboard-asset] 请求文件:', filename, 'url:', request.url)
-      if (!filename) return new Response('Not found', { status: 404 })
+      if (url.host !== 'asset' || !ASSET_FILENAME.test(filename)) return new Response('Not found', { status: 404 })
       const filepath = path.join(getAssetsDir(), filename)
       if (!fs.existsSync(filepath)) {
         console.error('[whiteboard-asset] 文件不存在:', filepath)

@@ -75,13 +75,24 @@ export async function recognizeWithLocalExe(
     const proc = spawn(config.localExePath, args, { windowsHide: true })
     let stdout = ''
     let stderr = ''
-    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    // 识别程序挂起（等待 stdin / 弹 GUI）时不能让预览窗永久卡在"正在聆听"：
+    // 超时强杀并返回空结果；stdout/stderr 封顶累积，防异常引擎输出撑爆内存
+    const RECOGNIZE_TIMEOUT_MS = 60_000
+    const MAX_OUTPUT_CHARS = 4 * 1024 * 1024
+    const timer = setTimeout(() => {
+      console.error('[SttEngine] 本地识别超时（60s），已终止进程')
+      try { proc.kill() } catch { /* 进程已退出 */ }
+      resolve('')
+    }, RECOGNIZE_TIMEOUT_MS)
+    proc.stdout?.on('data', (d: Buffer) => { stdout = (stdout + d.toString()).slice(-MAX_OUTPUT_CHARS) })
+    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-MAX_OUTPUT_CHARS) })
     proc.on('error', (err) => {
       console.error('[SttEngine] 本地识别软件启动失败:', err.message)
+      clearTimeout(timer)
       resolve('')
     })
     proc.on('exit', (code) => {
+      clearTimeout(timer)
       if (code !== 0) {
         console.error(`[SttEngine] 本地识别软件退出码 ${code}: ${stderr.slice(-256)}`)
       }

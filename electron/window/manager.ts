@@ -40,6 +40,9 @@ export class WindowManager {
   /** profileId -> 当前 Client Hints 配置（运行时可变，供 webRequest 拦截器读取） */
   private clientHints = new Map<string, ClientHints>()
 
+  /** profileId -> 在途的 openProfile：检查与登记之间有 await，需要去重防止双开 */
+  private openingProfiles = new Map<string, Promise<void>>()
+
   constructor(private fingerprintEngine: FingerprintEngine) {}
 
   /**
@@ -50,6 +53,20 @@ export class WindowManager {
    * - dom-ready 后注入指纹覆盖脚本
    */
   async openProfile(profileId: string): Promise<void> {
+    // 「已存在检查」与「windows.set」之间有 await（代理应用等），
+    // 双击/双触发 WINDOW_OPEN 会为同一 Profile 开出两个窗口、前者脱管，
+    // 且其 closed 处理会误删对方的映射项；在途调用直接复用同一次打开
+    const inFlight = this.openingProfiles.get(profileId)
+    if (inFlight) return inFlight
+    const opening = this.doOpenProfile(profileId)
+    this.openingProfiles.set(profileId, opening)
+    void opening.finally(() => {
+      if (this.openingProfiles.get(profileId) === opening) this.openingProfiles.delete(profileId)
+    }).catch(() => { /* 拒绝由返回给调用方的 opening 传递 */ })
+    return opening
+  }
+
+  private async doOpenProfile(profileId: string): Promise<void> {
     try {
       // 已打开则聚焦
       const existing = this.windows.get(profileId)

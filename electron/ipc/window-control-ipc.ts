@@ -15,6 +15,7 @@ import { ipcMain, session, type BrowserWindow, type IpcMainInvokeEvent } from 'e
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import { createMaximizeManager } from '../window-factory/window-maximize-manager.js'
 import {
   IPC_CHANNELS,
@@ -163,6 +164,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_RESIZE, (e, bounds: { x?: number; y?: number; width: number; height: number }) => {
     const win = getSenderWindow(e)
     if (!win || win.isDestroyed()) return
+    if (!Number.isFinite(bounds?.width) || !Number.isFinite(bounds?.height)) return
     try {
       // 若窗口处于最大化状态，先还原再设置 bounds，避免 setBounds 行为异常
       if (win.isMaximized()) {
@@ -170,11 +172,12 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
       }
       // Clamp 到窗口的 minimumSize：setBounds 不会自动约束，
       // 需手动确保 width/height 不低于 minWidth/minHeight（UI 比例变化时 minWidth 会动态更新）
+      // minimumSize 可能尚未设置（返回 0），此时 Math.max(0) 才是正确下限，不能用 NaN
       const [minW, minH] = win.getMinimumSize()
       const clamped = {
         ...bounds,
-        width: Math.max(bounds.width, minW),
-        height: Math.max(bounds.height, minH),
+        width: Math.max(bounds.width, Number.isFinite(minW) ? minW : 0),
+        height: Math.max(bounds.height, Number.isFinite(minH) ? minH : 0),
       }
       win.setBounds(clamped)
     } catch (err) {
@@ -243,8 +246,18 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   ipcMain.handle(IPC_CHANNELS.WIN_STATE_GET, (_e, windowId: string) => {
     return windowStore.get(windowId)
   })
-  ipcMain.handle(IPC_CHANNELS.WIN_STATE_SAVE, (_e, windowId: string, incoming: WindowStateData) => {
+  ipcMain.handle(IPC_CHANNELS.WIN_STATE_SAVE, (e: IpcMainInvokeEvent, windowId: string, incoming: WindowStateData) => {
+    assertTrustedRenderer(e)
     const existing = windowStore.get(windowId)
+    // 脱离流程在 await 间隙把标签的 detachedWindowId 置为 __PENDING__，
+    // 期间渲染层的整包 persist 携带旧状态，原样写入会擦掉占位符并让后续回填失败
+    if (existing?.tabs.length && Array.isArray(incoming.tabs)) {
+      const pending = new Map(existing.tabs.filter((t) => t?.detachedWindowId === '__PENDING__').map((t) => [t.id, t]))
+      if (pending.size) {
+        incoming.tabs = incoming.tabs.map((t) =>
+          t && pending.has(t.id) && t.detachedWindowId !== '__PENDING__' ? { ...t, detachedWindowId: '__PENDING__' } : t)
+      }
+    }
     // 最大化时保留旧 bounds，避免渲染层 persist 用全屏尺寸覆盖小窗口尺寸
     if (incoming.isMaximized && existing) {
       incoming.bounds = existing.bounds

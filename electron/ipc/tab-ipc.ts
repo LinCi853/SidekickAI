@@ -18,6 +18,7 @@ import { profileStore } from '../store/profile-store.js'
 import { windowState } from '../window-state.js'
 import { detachProfileToBrowserWindow } from '../window-factory/detach-profile.js'
 import { isModuleEnabled } from '../modules/registry.js'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import type { WindowManager } from '../window/manager.js'
 
@@ -47,13 +48,18 @@ export function registerTabIpc(deps: TabIpcDeps, scope?: EffectScope): void {
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   // ===== 标签管理 IPC =====
-  handle(IPC_CHANNELS.TAB_UPDATE_TITLE, (_e: unknown, windowId: string, tabId: string, title: string) => {
+  // 标签状态写入必须来自应用窗口：标签可携带 URL 在脱离时装载进 webview，
+  // 不能让任意 sender（webview guest、被导航的页面）改写任意窗口的标签状态。
+  handle(IPC_CHANNELS.TAB_UPDATE_TITLE, (e: IpcMainInvokeEvent, windowId: string, tabId: string, title: string) => {
+    assertTrustedRenderer(e)
     windowStore.updateTabTitle(windowId, tabId, title)
   })
-  handle(IPC_CHANNELS.TAB_UPDATE_URL, (_e: unknown, windowId: string, tabId: string, url: string) => {
+  handle(IPC_CHANNELS.TAB_UPDATE_URL, (e: IpcMainInvokeEvent, windowId: string, tabId: string, url: string) => {
+    assertTrustedRenderer(e)
     windowStore.updateTabUrl(windowId, tabId, url)
   })
-  handle(IPC_CHANNELS.TAB_UPDATE_HOME_URL, (_e: unknown, windowId: string, tabId: string, homeUrl: string) => {
+  handle(IPC_CHANNELS.TAB_UPDATE_HOME_URL, (e: IpcMainInvokeEvent, windowId: string, tabId: string, homeUrl: string) => {
+    assertTrustedRenderer(e)
     windowStore.updateTabHomeUrl(windowId, tabId, homeUrl)
   })
 

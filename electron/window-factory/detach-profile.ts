@@ -20,6 +20,7 @@ import { windowState } from '../window-state.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { BrowserWindowState, BrowserTabState } from '../shared/browser.types.js'
 import type { BrowserWindow } from 'electron'
+import type { WindowManager } from '../window/manager.js'
 
 /** 脱离所需依赖（windowManager 与 createBrowserWindow 由 main.ts 注入，避免循环引用） */
 export interface DetachProfileDeps {
@@ -40,7 +41,6 @@ export async function detachProfileToBrowserWindow(
   tabId: string,
   deps: DetachProfileDeps,
 ): Promise<string | null> {
-  const { createBrowserWindow } = deps
   const mgr = windowState.windowManager
   if (!mgr) {
     console.warn('[detachProfile] windowManager 未初始化')
@@ -65,14 +65,60 @@ export async function detachProfileToBrowserWindow(
     }
   }
 
+  const tab = windowStore.getOrDefault(sourceWindowId).tabs.find((t) => t.id === tabId)
+  if (!tab) {
+    console.warn(`[detachProfile] 标签 ${tabId} 不存在于窗口 ${sourceWindowId}`)
+    return null
+  }
+  const profileId = tab.profileId
+
+  // 在途锁：单例守卫（上方）与 createBrowserWindow（步骤 9）之间有 await，
+  // 双触发会在守卫通过后重复脱离；同一 Profile 在途时忽略本次调用
+  if (detachingProfiles.has(profileId)) return null
+  detachingProfiles.add(profileId)
+  const detaching = detachProfileToBrowserWindowWithin(sourceWindowId, tabId, profileId, mgr, deps)
+  void detaching
+    .catch(() => rollbackPendingDetachMarkers(sourceWindowId))
+    .finally(() => detachingProfiles.delete(profileId))
+  return detaching
+}
+
+/** 同一 Profile 同时只允许一个在途脱离流程（在途锁登记表） */
+const detachingProfiles = new Set<string>()
+
+/** 脱离占位符：等待浏览器窗口 id 回填期间，标签的 detachedWindowId 临时取该值 */
+const DETACH_WINDOW_ID_PLACEHOLDER = '__PENDING__'
+
+/** 脱离流程失败后清除 __PENDING__ 占位，否则标签归属查询永久悬空 */
+function rollbackPendingDetachMarkers(sourceWindowId: string): void {
+  try {
+    const rolled = windowStore.getOrDefault(sourceWindowId)
+    if (!rolled.tabs.some((t) => t.detachedWindowId === DETACH_WINDOW_ID_PLACEHOLDER)) return
+    windowStore.save(sourceWindowId, {
+      ...rolled,
+      tabs: rolled.tabs.map((t) => t.detachedWindowId === DETACH_WINDOW_ID_PLACEHOLDER
+        ? { ...t, detachedWindowId: null }
+        : t),
+    })
+  } catch { /* 回滚失败时保留现场便于排查 */ }
+}
+
+/** 在途脱离执行体：占位符写入 → session 准备 → 建窗回填 */
+async function detachProfileToBrowserWindowWithin(
+  sourceWindowId: string,
+  tabId: string,
+  profileId: string,
+  mgr: WindowManager,
+  deps: DetachProfileDeps,
+): Promise<string | null> {
+  const { createBrowserWindow } = deps
+
   const state = windowStore.getOrDefault(sourceWindowId)
   const tab = state.tabs.find((t) => t.id === tabId)
   if (!tab) {
     console.warn(`[detachProfile] 标签 ${tabId} 不存在于窗口 ${sourceWindowId}`)
     return null
   }
-
-  const profileId = tab.profileId
 
   // 1. 标记该 Profile 为已脱离（主窗口渲染层将隐藏这些标签）
   //    同时在主窗口 TabState 上记录 detachedWindowId，便于跨窗口归属查询

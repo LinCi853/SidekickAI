@@ -161,35 +161,35 @@ export class ConversationStore {
     const loginKeywordRe = /登录|login|sign\s*in|请登录|log\s*in/i
 
     this.db.transaction(() => {
-      // 取出全部对话 id（逐个判定，数据量可控）
-      const convs = this.db
-        .prepare('SELECT id FROM conversations')
-        .all() as Array<{ id: string }>
+      // 单次聚合扫描替代逐会话加载全部消息：原实现把每条消息内容搬进 JS（N+1），
+      // 启动耗时随 chat.db 体积线性增长且全程阻塞主进程。规则 1/2 在 SQLite 内部
+      // 聚合判定；规则 3 用去空白归一的 INSTR/LIKE 预筛候选，仅候选会话逐条正则复核。
+      const stats = this.db.prepare(`
+        SELECT c.id AS id, COUNT(m.id) AS total,
+          COALESCE(SUM(m.role = 'assistant'), 0) AS assistants,
+          COALESCE(SUM(CASE WHEN m.content LIKE '%登录%'
+            OR INSTR(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(m.content), ' ', ''), char(9), ''), char(10), ''), char(13), ''), 'login') > 0
+            OR INSTR(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(m.content), ' ', ''), char(9), ''), char(10), ''), char(13), ''), 'signin') > 0
+          THEN 1 ELSE 0 END), 0) AS loginish
+        FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
+        GROUP BY c.id
+      `).all() as Array<{ id: string; total: number; assistants: number; loginish: number }>
 
       const toDelete: string[] = []
-
-      for (const c of convs) {
-        const rows = this.db
-          .prepare('SELECT role, content FROM messages WHERE conversation_id = ?')
-          .all(c.id) as Array<{ role: string; content: string }>
-
-        // 无消息的空对话也视为无效
-        if (rows.length === 0) {
-          toDelete.push(c.id)
+      for (const row of stats) {
+        // 无消息的空对话，或无任何 assistant 回复 → 删除
+        if (row.total === 0 || row.assistants === 0) {
+          toDelete.push(row.id)
           continue
         }
-
-        // 规则 1：无任何 assistant 回复 → 删除
-        const hasAssistant = rows.some((r) => r.role === 'assistant')
-        if (!hasAssistant) {
-          toDelete.push(c.id)
-          continue
-        }
-
-        // 规则 2：所有消息内容均匹配「要求登录」类关键词 → 删除
-        const allLoginRelated = rows.every((r) => loginKeywordRe.test(r.content || ''))
-        if (allLoginRelated) {
-          toDelete.push(c.id)
+        // 「要求登录」类对话：SQL 预筛（去空白后的 login/signin 与 登录 关键词）是正则
+        // 匹配的等价超集；命中不足直接排除，命中足额才加载原文逐条正则复核，不因预筛误删。
+        if (row.loginish < row.total) continue
+        const contents = this.db
+          .prepare('SELECT content FROM messages WHERE conversation_id = ?')
+          .all(row.id) as Array<{ content: string }>
+        if (contents.every((r) => loginKeywordRe.test(r.content || ''))) {
+          toDelete.push(row.id)
         }
       }
 

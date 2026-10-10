@@ -30,6 +30,8 @@ export interface BrowserTabStoreState {
   /** 书签栏是否显示（默认 true） */
   bookmarkBarVisible: boolean;
   initialized: boolean;
+  /** IPC 广播监听已注册（防 StrictMode 双挂载/重挂载导致重复订阅） */
+  _ipcListenersSetUp: boolean;
 
   init: (windowId: string, profileId: string) => Promise<void>;
   newTab: (url?: string, opts?: { source?: BrowserTabState['source']; kind?: 'home' | 'web' }) => string;
@@ -80,6 +82,7 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
   isFullscreen: false,
   bookmarkBarVisible: true,
   initialized: false,
+  _ipcListenersSetUp: false,
 
   init: async (windowId: string, profileId: string) => {
     const state = await getBrowserState(windowId);
@@ -99,12 +102,15 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
       set({ windowId, profileId, initialized: true });
     }
 
-    // 监听主进程推送的窗口状态变化
-    onMaximizeToggled((isMax: boolean) => set({ isMaximized: isMax }));
-    onPinToggled((pinned: boolean) => set({ alwaysOnTop: pinned }));
-    onToggleFullscreen(() => {
-      set((s) => ({ isFullscreen: !s.isFullscreen }));
-    });
+    // 监听主进程推送的窗口状态变化（仅注册一次，同 useTabStore 的防护模式）
+    if (!get()._ipcListenersSetUp) {
+      set({ _ipcListenersSetUp: true });
+      onMaximizeToggled((isMax: boolean) => set({ isMaximized: isMax }));
+      onPinToggled((pinned: boolean) => set({ alwaysOnTop: pinned }));
+      onToggleFullscreen(() => {
+        set((s) => ({ isFullscreen: !s.isFullscreen }));
+      });
+    }
   },
 
   newTab: (url?: string, opts?: { source?: BrowserTabState['source']; kind?: 'home' | 'web' }) => {
@@ -241,19 +247,29 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
   },
 
   updateTabLoadingProgress: (tabId: string, progress: number) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, loadingProgress: progress } : t,
-      ),
-    }));
+    set((s) => {
+      const current = s.tabs.find((t) => t.id === tabId);
+      // 值未变化时返回原 state：加载进度按 ~400ms 轮询推送，若每次都换新
+      // tabs 数组引用，所有订阅 tabs 的组件（TabBar/AddressBar）都会跟着重渲染
+      if (!current || current.loadingProgress === progress) return s;
+      return {
+        tabs: s.tabs.map((t) =>
+          t.id === tabId ? { ...t, loadingProgress: progress } : t,
+        ),
+      };
+    });
   },
 
   updateTabLoadingStatus: (tabId: string, status: string) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, loadingStatus: status } : t,
-      ),
-    }));
+    set((s) => {
+      const current = s.tabs.find((t) => t.id === tabId);
+      if (!current || current.loadingStatus === status) return s;
+      return {
+        tabs: s.tabs.map((t) =>
+          t.id === tabId ? { ...t, loadingStatus: status } : t,
+        ),
+      };
+    });
   },
 
   updateTabNavState: (tabId: string, canGoBack: boolean, canGoForward: boolean) => {

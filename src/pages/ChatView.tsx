@@ -14,6 +14,7 @@
    ===================================================================== */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import { Button, IconButton, TitleBar, Combobox, PinToggleButton } from '../components/ui';
 import type { ComboboxOption } from '../components/ui';
@@ -39,6 +40,54 @@ import { AlertIcon, GearIcon } from '@/components/icons';
 import './ChatBubble.css';
 import './ChatView.css';
 
+/**
+ * 流式气泡：单独订阅 streamingText，每个 chunk 只重渲染这一个气泡，
+ * 并负责流式期间滚动到底部；thinking 占位（尚无文本时）也在这里切换。
+ */
+function StreamingMessageBubble({ conversationId, endRef, providerName, showAvatar, showTimestamp }: {
+  conversationId: string;
+  endRef: React.MutableRefObject<HTMLDivElement | null>;
+  providerName?: string;
+  showAvatar: boolean;
+  showTimestamp: boolean;
+}) {
+  const streamingText = useChatStore((s) => s.streamingText);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [streamingText, endRef]);
+  if (!streamingText) {
+    return (
+      <div className="chat-msg-row assistant" data-name="chat.thinking-indicator">
+        <div className="chat-avatar assistant" data-name="chat.thinking-avatar">
+          {providerName?.charAt(0).toUpperCase() || 'AI'}
+        </div>
+        <div className="chat-msg-content" data-name="chat.thinking-content">
+          <div className="chat-thinking" data-name="chat.thinking-dots">
+            <span className="chat-thinking-dot" data-name="chat.thinking-dot-1" />
+            <span className="chat-thinking-dot" data-name="chat.thinking-dot-2" />
+            <span className="chat-thinking-dot" data-name="chat.thinking-dot-3" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <MessageBubble
+      message={{
+        id: 'streaming',
+        conversationId,
+        role: 'assistant',
+        content: streamingText,
+        createdAt: Date.now(),
+      }}
+      streaming
+      providerName={providerName}
+      showAvatar={showAvatar}
+      showTimestamp={showTimestamp}
+    />
+  );
+}
+
 export default function ChatView({ windowId }: { windowId?: string }) {
   const [input, setInput] = useState('');
   const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
@@ -52,6 +101,8 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // useShallow 选择器订阅：排除 streamingText，流式期间每个 chunk 只重渲染
+  // StreamingMessageBubble，不再让整个视图与全部历史消息气泡跟着重渲染。
   const {
     providers,
     currentProviderId,
@@ -59,7 +110,6 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     currentConversationId,
     messages,
     streaming,
-    streamingText,
     streamError,
     initProviders,
     initConversations,
@@ -73,7 +123,27 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     retryLastMessage,
     continueGeneration,
     registerStreamListeners,
-  } = useChatStore();
+  } = useChatStore(useShallow((s) => ({
+    providers: s.providers,
+    currentProviderId: s.currentProviderId,
+    conversations: s.conversations,
+    currentConversationId: s.currentConversationId,
+    messages: s.messages,
+    streaming: s.streaming,
+    streamError: s.streamError,
+    initProviders: s.initProviders,
+    initConversations: s.initConversations,
+    setCurrentProvider: s.setCurrentProvider,
+    selectConversation: s.selectConversation,
+    startNewConversation: s.startNewConversation,
+    removeConversation: s.removeConversation,
+    sendMessage: s.sendMessage,
+    cancelStream: s.cancelStream,
+    editMessage: s.editMessage,
+    retryLastMessage: s.retryLastMessage,
+    continueGeneration: s.continueGeneration,
+    registerStreamListeners: s.registerStreamListeners,
+  })));
 
   // 获取当前窗口的 chatConfig（chat 脱离窗口专属配置）
   useEffect(() => {
@@ -157,10 +227,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     },
   });
 
-  // 消息更新时滚动到底部
+  // 消息更新时滚动到底部（流式 chunk 的滚动由 StreamingMessageBubble 自行处理）
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText]);
+  }, [messages]);
 
   // 6.2: 窗口重新显示时（启动/Alt+Q 唤出/快捷键唤出后）聚焦输入框
   // 使用主进程 WINDOW_SHOWN IPC 代替 window.focus 事件（后者在 hide/show 循环后不稳定），
@@ -494,34 +564,14 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                       onContinue={continueGeneration}
                     />
                   ))}
-                  {streaming && streamingText && (
-                    <MessageBubble
-                      message={{
-                        id: 'streaming',
-                        conversationId: currentConversationId ?? '',
-                        role: 'assistant',
-                        content: streamingText,
-                        createdAt: Date.now(),
-                      }}
-                      streaming
+                  {streaming && (
+                    <StreamingMessageBubble
+                      conversationId={currentConversationId ?? ''}
+                      endRef={messagesEndRef}
                       providerName={currentProvider?.name}
                       showAvatar={showAvatar}
                       showTimestamp={showTimestamp}
                     />
-                  )}
-                  {streaming && !streamingText && (
-                    <div className="chat-msg-row assistant" data-name="chat.thinking-indicator">
-                      <div className="chat-avatar assistant" data-name="chat.thinking-avatar">
-                        {currentProvider?.name?.charAt(0).toUpperCase() || 'AI'}
-                      </div>
-                      <div className="chat-msg-content" data-name="chat.thinking-content">
-                        <div className="chat-thinking" data-name="chat.thinking-dots">
-                          <span className="chat-thinking-dot" data-name="chat.thinking-dot-1" />
-                          <span className="chat-thinking-dot" data-name="chat.thinking-dot-2" />
-                          <span className="chat-thinking-dot" data-name="chat.thinking-dot-3" />
-                        </div>
-                      </div>
-                    </div>
                   )}
                   <div ref={messagesEndRef} data-name="chat.messages-end-anchor" />
                 </>

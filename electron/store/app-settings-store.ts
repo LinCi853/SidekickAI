@@ -155,8 +155,9 @@ export async function clearAllData(): Promise<void> {
   const settingsDbWal = path.join(dataDir, 'settings.db-wal')
   const settingsDbShm = path.join(dataDir, 'settings.db-shm')
   
-  // 带重试的文件删除函数（Windows 上文件锁释放可能需要多次尝试）
-  const unlinkWithRetry = (filePath: string, maxRetries = 3, delayMs = 200): boolean => {
+  // 带重试的文件删除函数（Windows 上文件锁释放可能需要多次尝试）。
+  // 退避等待用 setTimeout 而非忙等：忙等会烧 CPU 并加剧恢复出厂期间的 UI 冻结
+  const unlinkWithRetry = async (filePath: string, maxRetries = 3, delayMs = 200): Promise<boolean> => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (fs.existsSync(filePath)) {
@@ -168,18 +169,16 @@ export async function clearAllData(): Promise<void> {
       } catch (err) {
         console.warn(`[app-settings] 删除文件失败 (attempt ${attempt}/${maxRetries}):`, filePath, err)
         if (attempt < maxRetries) {
-          // 同步等待后重试
-          const start = Date.now()
-          while (Date.now() - start < delayMs) { /* busy wait */ }
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
         }
       }
     }
     return false
   }
-  
+
   // 优先删除 settings.db 及其 WAL/SHM 文件
   for (const f of [settingsDbPath, settingsDbWal, settingsDbShm]) {
-    unlinkWithRetry(f)
+    await unlinkWithRetry(f)
   }
 
   try {

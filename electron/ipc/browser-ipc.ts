@@ -365,19 +365,24 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
     return bookmarkStore.list(filter)
   })
 
-  handle(IPC_CHANNELS.BOOKMARK_ADD, (_e, input: BookmarkInput) => {
+  // 书签写路径必须来自应用窗口（与 BROWSER_OPEN_EXTERNAL 一致）
+  handle(IPC_CHANNELS.BOOKMARK_ADD, (e, input: BookmarkInput) => {
+    assertTrustedRenderer(e)
     return bookmarkStore.add(input)
   })
 
-  handle(IPC_CHANNELS.BOOKMARK_UPDATE, (_e, id: string, patch: BookmarkPatch) => {
+  handle(IPC_CHANNELS.BOOKMARK_UPDATE, (e, id: string, patch: BookmarkPatch) => {
+    assertTrustedRenderer(e)
     return bookmarkStore.update(id, patch)
   })
 
-  handle(IPC_CHANNELS.BOOKMARK_DELETE, (_e, id: string) => {
+  handle(IPC_CHANNELS.BOOKMARK_DELETE, (e, id: string) => {
+    assertTrustedRenderer(e)
     bookmarkStore.delete(id)
   })
 
-  handle(IPC_CHANNELS.BOOKMARK_REORDER, (_e, ids: string[]) => {
+  handle(IPC_CHANNELS.BOOKMARK_REORDER, (e, ids: string[]) => {
+    assertTrustedRenderer(e)
     bookmarkStore.reorder(ids)
   })
 

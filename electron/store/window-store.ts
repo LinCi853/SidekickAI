@@ -26,6 +26,23 @@ const store = createSqliteJsonStore<WindowStateStore>({
   defaults: { states: {} },
 })
 
+/**
+ * 高频窗口状态合并落盘（毫秒）：states 是整库单条 JSON（所有窗口 + 全部标签），
+ * 标签标题变化、防抖 resize、最大化等热路径每次都全量序列化写库会让主进程
+ * 在多标签场景持续做无谓大 JSON 写。内存写入即时生效（get 读缓存对象），
+ * 磁盘写入合并到 100ms 批次；异常退出最多丢最近 100ms 的窗口状态，可接受。
+ */
+const WINDOW_STATE_FLUSH_DELAY_MS = 100
+let flushTimer: NodeJS.Timeout | undefined
+
+function scheduleFlush(): void {
+  if (flushTimer) return
+  flushTimer = setTimeout(() => {
+    flushTimer = undefined
+    store.set('states', store.get('states'))
+  }, WINDOW_STATE_FLUSH_DELAY_MS)
+}
+
 /** 主窗口默认 id */
 export const MAIN_WINDOW_ID = 'main'
 
@@ -92,11 +109,11 @@ export class WindowStore {
     return false
   }
 
-  /** 保存窗口状态（整体覆盖） */
+  /** 保存窗口状态（整体覆盖；磁盘写合并到批次，见 scheduleFlush） */
   save(windowId: string, state: WindowStateData): void {
     const states = store.get('states')
     states[windowId] = state
-    store.set('states', states)
+    scheduleFlush()
   }
 
   /** 删除窗口状态（脱离窗口关闭时清理） */
@@ -104,7 +121,7 @@ export class WindowStore {
     if (windowId === MAIN_WINDOW_ID) return // 主窗口状态不删
     const states = store.get('states')
     delete states[windowId]
-    store.set('states', states)
+    scheduleFlush()
   }
 
   /** 列出所有脱离窗口的 id（排除 main） */

@@ -7,7 +7,8 @@
    全部完成后才渲染实际视图，保证状态就绪。
    ===================================================================== */
 
-import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 // 首屏关键组件：同步导入，避免 CSS 异步加载导致布局紊乱
 import MainView from './pages/MainView';
 import StandaloneView from './pages/StandaloneView';
@@ -54,41 +55,9 @@ const BrowserView = lazy(() => import('./pages/BrowserView'));
 const HistoryDownloadView = lazy(() => import('./pages/HistoryDownloadView'));
 
 /* =====================================================================
-   ErrorBoundary —— 捕获子组件渲染错误，防止单个 webview 报错导致整个应用白屏
+   ErrorBoundary —— 已抽离到 components/AppErrorBoundary.tsx：
+   捕获子组件渲染错误，防止单个 webview 报错导致整个应用白屏
    ===================================================================== */
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error?: Error;
-}
-class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false };
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: Error, info: { componentStack: string }): void {
-    console.error('[ErrorBoundary] 捕获渲染错误:', error, info.componentStack);
-  }
-  render(): ReactNode {
-    if (this.state.hasError) {
-      return (
-        <div data-name="app.error-boundary.container" style={{ padding: 'var(--space-6)', textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>
-          <h3 data-name="app.error-boundary.title" style={{ marginBottom: 'var(--space-2)' }}>页面渲染出错</h3>
-          <p data-name="app.error-boundary.message" style={{ color: 'var(--muted-foreground)', fontSize: 'var(--text-base)', marginBottom: 'var(--space-4)', wordBreak: 'break-word' }}>
-            {this.state.error?.message || '未知错误'}
-          </p>
-          <Button
-            data-name="app.error-boundary.retry-button"
-            variant="ghost"
-            onClick={() => this.setState({ hasError: false, error: undefined })}
-          >
-            重试
-          </Button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 /** 从 URL 查询参数获取当前窗口 id（默认 'main'） */
 function getWindowId(): string {

@@ -9,7 +9,7 @@
 //
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain } from 'electron'
+import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type AIPlatform } from '../shared/types.js'
 import type { Profile } from '../shared/profile.types.js'
@@ -17,7 +17,24 @@ import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { IPHONE_UA, IPHONE_VIEWPORT } from '../presets/devices.js'
 import { profileStore } from '../store/profile-store.js'
 import { presetStore } from '../store/preset-store.js'
+import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import { derivePlatformGradient } from '../../packages/desktop-common/platform-colors.js'
+
+/**
+ * 归一化弹窗白名单 origin：只接受可解析为合法 http(s) origin 的字符串。
+ * 白名单是安全匹配逻辑的输入，脏数据进入会导致匹配永久失效或意外放宽。
+ */
+function normalizePopupOrigin(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  try {
+    const url = new URL(value.trim())
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined
+    return url.origin
+  }
+  catch {
+    return undefined
+  }
+}
 
 /**
  * 为「未绑定预设平台」的自定义 AI 应用合成为一个 AIPlatform 项，
@@ -107,22 +124,28 @@ export function registerSettingsIpc(scope?: EffectScope): void {
   })
 
   // 弹窗白名单：添加 origin 到全局 AppSettings.popupWhitelist
-  handle(IPC_CHANNELS.POPUP_ADD_WHITELIST, async (_e: unknown, origin: string) => {
+  handle(IPC_CHANNELS.POPUP_ADD_WHITELIST, async (e: IpcMainInvokeEvent, origin: unknown) => {
+    assertTrustedRenderer(e)
+    const normalized = normalizePopupOrigin(origin)
+    if (!normalized) return
     const { getAppSettings, updateAppSettings } = await import('../store/app-settings-store.js')
     const cfg = getAppSettings()
     const list = cfg.popupWhitelist ?? []
-    if (!list.includes(origin)) {
-      updateAppSettings({ popupWhitelist: [...list, origin] })
+    if (!list.includes(normalized)) {
+      updateAppSettings({ popupWhitelist: [...list, normalized] })
     }
   })
 
   // 弹窗白名单：添加 origin 到 Profile 专属 popupWhitelist
-  handle(IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST, async (_e: unknown, profileId: string, origin: string) => {
+  handle(IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST, async (e: IpcMainInvokeEvent, profileId: string, origin: unknown) => {
+    assertTrustedRenderer(e)
+    const normalized = normalizePopupOrigin(origin)
+    if (!normalized) return
     const profile = profileStore.get(profileId)
     if (!profile) return
     const list = profile.popupWhitelist ?? []
-    if (!list.includes(origin)) {
-      profileStore.update(profileId, { popupWhitelist: [...list, origin] })
+    if (!list.includes(normalized)) {
+      profileStore.update(profileId, { popupWhitelist: [...list, normalized] })
     }
   })
 }

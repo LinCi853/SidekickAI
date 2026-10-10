@@ -23,6 +23,7 @@ import {
   onAppSettingsChanged,
 } from '../lib/electron-api';
 import { IconButton, SegmentedControl, TitleBar } from '../components/ui';
+import { AppErrorBoundary } from '../components/AppErrorBoundary';
 import { GearIcon } from '../components/icons';
 import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel';
 import { ChatTab } from './AdvancedPanelChatTab';
@@ -268,19 +269,26 @@ export default function AdvancedPanelView() {
         }
       />
       <div className="advanced-panel-provider-body" data-name="advanced-panel.body">
+        {/* 各 tab 独立边界：白板/聊天流等重组件崩溃只影响所在 tab，不拖垮整个面板 */}
         {activeTab === 'chat' && moduleEnabled('custom-chat') && (
-          <ChatTab onOpenSettings={() => setSettingsOpen(true)} />
+          <AppErrorBoundary>
+            <ChatTab onOpenSettings={() => setSettingsOpen(true)} />
+          </AppErrorBoundary>
         )}
         {activeTab === 'whiteboard' && (
-          <WhiteboardView
-            onBeforeLeaveReady={registerBeforeLeave}
-            onClose={() => requestTab(availableTabs[0] ?? 'chat')}
-            sidebarVisible={whiteboardSidebarVisible}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
+          <AppErrorBoundary>
+            <WhiteboardView
+              onBeforeLeaveReady={registerBeforeLeave}
+              onClose={() => requestTab(availableTabs[0] ?? 'chat')}
+              sidebarVisible={whiteboardSidebarVisible}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+          </AppErrorBoundary>
         )}
         {activeTab === 'notes' && (
-          <NotesView onOpenSettings={() => setSettingsOpen(true)} onBeforeLeaveReady={registerBeforeLeave} />
+          <AppErrorBoundary>
+            <NotesView onOpenSettings={() => setSettingsOpen(true)} onBeforeLeaveReady={registerBeforeLeave} />
+          </AppErrorBoundary>
         )}
         {/* 插件 tab 渲染：非内置 tab 时显示插件提供的 UI 或占位 */}
         {!['chat', 'whiteboard', 'notes'].includes(activeTab) && tabRegistry[activeTab] && (

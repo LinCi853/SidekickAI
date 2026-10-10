@@ -22,3 +22,17 @@ export function assertTrustedRenderer(event: IpcMainInvokeEvent): void {
   const window = BrowserWindow.fromWebContents(event.sender)
   if (!window || window.isDestroyed()) throw new Error('应用窗口已关闭。')
 }
+
+/**
+ * 明确允许加载远程内容的窗口登记表：webview guest 经 Ctrl+click 或登录域白名单
+ * 放行产生的独立弹窗（OAuth 登录等）。will-navigate 守卫据此豁免这些窗口。
+ */
+const remoteNavigationAllowed = new WeakSet<Electron.WebContents>()
+
+export function allowRemoteNavigation(contents: Electron.WebContents): void {
+  remoteNavigationAllowed.add(contents)
+}
+
+export function isRemoteNavigationAllowed(contents: Electron.WebContents): boolean {
+  return remoteNavigationAllowed.has(contents)
+}

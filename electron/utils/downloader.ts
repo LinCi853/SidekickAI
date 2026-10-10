@@ -10,7 +10,7 @@ import { net } from 'electron'
 import * as fs from 'fs'
 
 /**
- * 流式下载文件（自动跟随 3xx 重定向）。
+ * 流式下载文件（自动跟随 3xx 重定向，至多 5 跳：防错误镜像的重定向循环拖满超时窗口）。
  * 使用 Electron net 模块，自动遵循应用 session 的代理配置（system/custom/direct）。
  * 国内访问 HuggingFace / GitHub 常被墙，主 URL 失败时自动尝试镜像。
  * 超时设计：连接超时 30s + 数据流停滞超时 30s（收到 headers 后仍保护 body 传输）
@@ -19,6 +19,7 @@ export function downloadFile(
   url: string,
   dest: string,
   onProgress: (percent: number) => void,
+  redirects = 0,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = net.request(url)
@@ -51,10 +52,14 @@ export function downloadFile(
       // 跟随重定向
       if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
         ;(res as unknown as NodeJS.ReadableStream).resume()
+        if (redirects >= 5) {
+          reject(new Error('重定向次数过多（>5）'))
+          return
+        }
         const nextUrl = Array.isArray(res.headers.location)
           ? res.headers.location[0]
           : res.headers.location
-        downloadFile(nextUrl, dest, onProgress).then(resolve, reject)
+        downloadFile(nextUrl, dest, onProgress, redirects + 1).then(resolve, reject)
         return
       }
       if (statusCode !== 200) {

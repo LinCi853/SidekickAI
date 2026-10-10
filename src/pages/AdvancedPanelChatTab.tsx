@@ -5,6 +5,7 @@
    ===================================================================== */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '../store/useChatStore';
 import SidebarShell from '../components/SidebarShell';
 import { IconButton, Combobox } from '../components/ui';
@@ -17,7 +18,47 @@ import {
 } from '../lib/electron-api';
 import { MAIN_WINDOW_MIN_HEIGHT } from '../../electron/shared/window-size';
 
+/**
+ * 流式气泡：单独订阅 streamingText，每个 chunk 只重渲染这一个气泡并负责滚动；
+ * thinking 占位（尚无文本时）也在这里切换。
+ */
+function StreamingMessageBubble({ conversationId, endRef }: {
+  conversationId: string;
+  endRef: React.MutableRefObject<HTMLDivElement | null>;
+}) {
+  const streamingText = useChatStore((s) => s.streamingText);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [streamingText, endRef]);
+  if (!streamingText) {
+    return (
+      <div className="chat-msg-row assistant" data-name="advanced-panel.chat-thinking">
+        <div className="chat-avatar assistant">AI</div>
+        <div className="chat-thinking" data-name="advanced-panel.chat-thinking-dots">
+          <span className="chat-thinking-dot" />
+          <span className="chat-thinking-dot" />
+          <span className="chat-thinking-dot" />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <MessageBubble
+      message={{
+        id: 'streaming',
+        conversationId,
+        role: 'assistant',
+        content: streamingText,
+        createdAt: Date.now(),
+      }}
+      streaming
+    />
+  );
+}
+
 export function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
+  // useShallow 选择器订阅：排除 streamingText，流式期间每个 chunk 只重渲染
+  // StreamingMessageBubble，不让整个 tab 与历史消息气泡跟着重渲染。
   const {
     providers,
     currentProviderId,
@@ -25,7 +66,6 @@ export function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
     currentConversationId,
     messages,
     streaming,
-    streamingText,
     streamError,
     initProviders,
     initConversations,
@@ -37,7 +77,25 @@ export function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
     sendMessage,
     cancelStream,
     registerStreamListeners,
-  } = useChatStore();
+  } = useChatStore(useShallow((s) => ({
+    providers: s.providers,
+    currentProviderId: s.currentProviderId,
+    conversations: s.conversations,
+    currentConversationId: s.currentConversationId,
+    messages: s.messages,
+    streaming: s.streaming,
+    streamError: s.streamError,
+    initProviders: s.initProviders,
+    initConversations: s.initConversations,
+    setCurrentProvider: s.setCurrentProvider,
+    editProvider: s.editProvider,
+    selectConversation: s.selectConversation,
+    startNewConversation: s.startNewConversation,
+    removeConversation: s.removeConversation,
+    sendMessage: s.sendMessage,
+    cancelStream: s.cancelStream,
+    registerStreamListeners: s.registerStreamListeners,
+  })));
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -148,12 +206,19 @@ export function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
   // 消息列表自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText]);
+  }, [messages]);
 
-  // 保存光标位置到设置
+  // 保存光标位置到设置：仅用于恢复焦点，内存 ref 即时更新；
+  // 写盘防抖 500ms——每次按键都全量读+写 settings 并向所有窗口广播
+  // APP_SETTINGS_CHANGED 会形成持续 IO/广播风暴
+  const cursorSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const saveCursorPos = useCallback((pos: number) => {
     cursorPosRef.current = pos;
-    void updateAppSettings({ chatInputCursorPos: pos }).catch(() => {});
+    if (cursorSaveTimerRef.current) clearTimeout(cursorSaveTimerRef.current);
+    cursorSaveTimerRef.current = setTimeout(() => {
+      cursorSaveTimerRef.current = undefined;
+      void updateAppSettings({ chatInputCursorPos: cursorPosRef.current }).catch(() => {});
+    }, 500);
   }, []);
 
   const handleSend = async () => {
@@ -315,27 +380,8 @@ export function ChatTab({ onOpenSettings }: { onOpenSettings: () => void }) {
           {messages.map((m) => (
             <MessageBubble key={m.id} message={m} streaming={streaming && m.id === messages[messages.length - 1]?.id} />
           ))}
-          {streaming && !streamingText && (
-            <div className="chat-msg-row assistant" data-name="advanced-panel.chat-thinking">
-              <div className="chat-avatar assistant">AI</div>
-              <div className="chat-thinking" data-name="advanced-panel.chat-thinking-dots">
-                <span className="chat-thinking-dot" />
-                <span className="chat-thinking-dot" />
-                <span className="chat-thinking-dot" />
-              </div>
-            </div>
-          )}
-          {streaming && streamingText && (
-            <MessageBubble
-              message={{
-                id: 'streaming',
-                conversationId: currentConversationId ?? '',
-                role: 'assistant',
-                content: streamingText,
-                createdAt: Date.now(),
-              }}
-              streaming
-            />
+          {streaming && (
+            <StreamingMessageBubble conversationId={currentConversationId ?? ''} endRef={messagesEndRef} />
           )}
           {streamError && (
             <div className="advanced-panel-chat-error" data-name="advanced-panel.chat-error">{streamError}</div>

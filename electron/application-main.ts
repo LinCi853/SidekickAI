@@ -59,8 +59,11 @@ import { registerPromptIPC } from './store/prompt-store.js';
 import { registerNotesAssetProtocol } from './store/notes-asset-store.js';
 import { registerWhiteboardAssetProtocol } from './store/whiteboard-asset-store.js';
 import { setRuntimeLogLevel } from './diagnostics/application-log.js';
+import { isRemoteNavigationAllowed, isTrustedRendererUrl } from './security/trusted-renderer.js';
 const DEFAULT_MAIN_WINDOW_WIDTH = 420;
 const DEFAULT_MAIN_WINDOW_HEIGHT = 820;
+/** 应用自身的特权 scheme：will-navigate 守卫放行这些内部协议的页面导航 */
+const INTERNAL_NAVIGATION_SCHEMES = new Set(['sidekickai', 'sidekick-pdf', 'whiteboard-asset', 'notes-asset', 'devtools', 'about']);
 const __dirname = path.dirname(__filename);
 process.on('unhandledRejection', (reason) => {
     console.error('[main] Unhandled Rejection:', reason);
@@ -114,7 +117,14 @@ app.whenReady().then(async () => {
         return;
     Menu.setApplicationMenu(null);
     seedFromInstallConfig();
-    setRuntimeLogLevel(getAppSettings().logLevel);
+    // settings.db 损坏或原生模块加载失败时降级为默认日志级别继续启动：
+    // 后续 getAppSettings 调用点均已各自降级，不能让这里成为启动的中断点
+    try {
+        setRuntimeLogLevel(getAppSettings().logLevel);
+    }
+    catch (err) {
+        console.error('[main] 读取应用设置失败，使用默认日志级别继续启动:', err);
+    }
     const autoOpenDevTools = process.argv.includes('--dev-tools') || process.env.DEV_TOOLS === '1';
     if (autoOpenDevTools) {
         console.log('[main] DevTools 调试模式：新窗口将自动打开 DevTools');
@@ -373,7 +383,14 @@ app.whenReady().then(async () => {
         }
     });
 }).catch((err) => {
+    // 兜底必须退出进程：只打日志会把"启动中断但进程存活"变成无窗口、无托盘、
+    // 无法退出的僵尸应用（用户只能任务管理器杀进程）。
     console.error('[main] app.whenReady() 失败:', err);
+    try {
+        dialog.showErrorBox('应用启动失败', `初始化过程中出现错误，应用即将退出。\n${err instanceof Error ? err.message : String(err)}`);
+    }
+    catch { /* dialog 不可用时保留日志即可 */ }
+    app.exit(1);
 });
 app.on('window-all-closed', () => {
     if (hasTray())
@@ -392,6 +409,20 @@ app.on('web-contents-created', (_event, contents) => {
                     isQuitting: boolean;
                 }).isQuitting = false;
         });
+    });
+    // 页面发起的顶层导航只允许留在本应用文档或内部特权 scheme；一旦渲染层出现
+    // 意外导航（XSS、错误 loadURL），不能让带着完整 IPC 面的页面运行在不可信内容上。
+    // webview guest 与登记过豁免的独立弹窗（OAuth/登录、Ctrl+click）不受此守卫约束。
+    contents.on('will-navigate', (event, url) => {
+        if (contents.getType() !== 'window' || isRemoteNavigationAllowed(contents)) return;
+        if (isTrustedRendererUrl(url)) return;
+        try {
+            const scheme = new URL(url).protocol.slice(0, -1);
+            if (INTERNAL_NAVIGATION_SCHEMES.has(scheme)) return;
+        }
+        catch { /* URL 解析失败视为不可信 */ }
+        console.warn('[main] 已拦截应用窗口的页面导航:', url);
+        event.preventDefault();
     });
 });
 app.on('before-quit', (event) => {
