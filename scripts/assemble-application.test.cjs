@@ -116,7 +116,7 @@ test('preflight rejects unsupported platforms before downloading or invoking any
 test('preflight rejects foreign release identities before binary invocation', async t => {
   const root = fixtureRoot(t)
   for (const change of [
-    value => { value.toolkitVersion = '1.3.2' },
+    value => { value.toolkitVersion += '-foreign' },
     value => { value.archive.size++ },
     value => { value.archive.sha256 = '0'.repeat(64) },
   ]) {
