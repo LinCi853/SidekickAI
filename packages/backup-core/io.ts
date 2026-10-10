@@ -57,37 +57,60 @@ export function identityMatches(left: DiskIdentity, right: DiskIdentity): boolea
   return left.device === right.device && left.inode === right.inode
 }
 
+const WHOAMI_EXE = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'whoami.exe')
+const ICACLS_EXE = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'icacls.exe')
+
 let userSid: string | undefined
-let userSddlAlias: string | undefined
 function recordCurrentUser(account: string): string {
   userSid = account.match(/S-1-5-[0-9-]+/)?.[0]
-  const domain = account.match(/^"([^"\\]+)\\/m)?.[1]
-  if (domain?.toLowerCase() === os.hostname().toLowerCase()) {
-    if (userSid?.endsWith('-500')) userSddlAlias = 'LA'
-    if (userSid?.endsWith('-501')) userSddlAlias = 'LG'
-  }
-  if (userSid === 'S-1-5-19') userSddlAlias = 'LS'
-  if (userSid === 'S-1-5-20') userSddlAlias = 'NS'
   if (!userSid) throw new Error('Cannot identify the current account for private backup staging.')
   return userSid
 }
 function currentUserSid(): string {
   if (!userSid) {
-    const account = execFileSync('whoami.exe', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true })
+    const account = execFileSync(WHOAMI_EXE, ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true })
     return recordCurrentUser(account)
   }
-  if (!userSid) throw new Error('Cannot identify the current account for private backup staging.')
   return userSid
 }
 
-function assertPrivateAcl(contents: string, sid: string): void {
+// icacls /save 会把受托人 SID 规范化为 SDDL 别名（内置管理员 RID-500 → LA、本地系统
+// S-1-5-18 → SY 等），写回形式随账户类型与系统版本而变。因此不靠主机名推断账户身份，
+// 而是在探测目录上执行与私有暂存目录完全相同的授权，把 icacls 实际写回的受托人形式
+// 缓存为校验基准，保证创建与校验自洽。
+let userTrustees: readonly string[] | undefined
+function currentUserTrustees(): readonly string[] {
+  if (!userTrustees) {
+    const sid = currentUserSid()
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-backup-acl-'))
+    try {
+      const probe = path.join(scratch, 'probe')
+      const aclFile = path.join(scratch, 'probe.txt')
+      fs.mkdirSync(probe)
+      execFileSync(ICACLS_EXE, [probe, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`, '*S-1-5-18:(OI)(CI)F'], { windowsHide: true, stdio: 'ignore' })
+      execFileSync(ICACLS_EXE, [probe, '/save', aclFile, '/q'], { windowsHide: true, stdio: 'ignore' })
+      const lines = fs.readFileSync(aclFile, 'utf16le').replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean)
+      const sddl = lines[1] ?? ''
+      const prefix = sddl.slice(0, sddl.indexOf('('))
+      const rules = [...sddl.matchAll(/\(([^()]*)\)/g)]
+      if (lines.length !== 2 || !/^D:(?:P|AI|AR)*$/.test(prefix) || !prefix.includes('P') || !rules.length
+        || prefix + rules.map(rule => rule[0]).join('') !== sddl) throw new Error('Cannot calibrate the private ACL trustee form for backup staging.')
+      const trustees = rules.map(rule => rule[1].split(';')).filter(fields => fields.length === 6 && ['A', 'D'].includes(fields[0])).map(fields => fields[5])
+      if (trustees.length !== rules.length) throw new Error('Cannot calibrate the private ACL trustee form for backup staging.')
+      userTrustees = trustees
+    } finally { fs.rmSync(scratch, { recursive: true, force: true }) }
+  }
+  return userTrustees
+}
+
+function assertPrivateAcl(contents: string, trustees: readonly string[]): void {
   const lines = contents.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean)
   const sddl = lines[1] ?? ''
   const prefix = sddl.slice(0, sddl.indexOf('('))
   const rules = [...sddl.matchAll(/\(([^()]*)\)/g)]
   if (lines.length !== 2 || !/^D:(?:P|AI|AR)*$/.test(prefix) || !prefix.includes('P') || !rules.length
     || prefix + rules.map(rule => rule[0]).join('') !== sddl
-    || rules.some(rule => { const fields = rule[1].split(';'); return fields.length !== 6 || !['A', 'D'].includes(fields[0]) || ![sid, 'SY', 'S-1-5-18', userSddlAlias].includes(fields[5]) })) {
+    || rules.some(rule => { const fields = rule[1].split(';'); return fields.length !== 6 || !['A', 'D'].includes(fields[0]) || !trustees.includes(fields[5]) })) {
     throw new Error('Backup staging ACL is not private to the current account and SYSTEM.')
   }
 }
@@ -98,12 +121,12 @@ export function assertPrivateDirectory(directory: string): void {
     if ((info.mode & 0o077) !== 0) throw new Error('Backup staging directory permits access by other accounts.')
     return
   }
-  const sid = currentUserSid()
+  const trustees = currentUserTrustees()
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-backup-acl-'))
   try {
     const aclFile = path.join(scratch, 'access.txt')
-    execFileSync('icacls.exe', [directory, '/save', aclFile, '/q'], { windowsHide: true, stdio: 'ignore' })
-    assertPrivateAcl(fs.readFileSync(aclFile, 'utf16le'), sid)
+    execFileSync(ICACLS_EXE, [directory, '/save', aclFile, '/q'], { windowsHide: true, stdio: 'ignore' })
+    assertPrivateAcl(fs.readFileSync(aclFile, 'utf16le'), trustees)
   } finally { fs.rmSync(scratch, { recursive: true, force: true }) }
 }
 
@@ -111,7 +134,7 @@ export function createPrivateDirectory(directory: string): void {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
   assertOrdinaryPath(directory, true)
   if (process.platform === 'win32') {
-    execFileSync('icacls.exe', [directory, '/inheritance:r', '/grant:r', `*${currentUserSid()}:(OI)(CI)F`, '*S-1-5-18:(OI)(CI)F'], { windowsHide: true, stdio: 'ignore' })
+    execFileSync(ICACLS_EXE, [directory, '/inheritance:r', '/grant:r', `*${currentUserSid()}:(OI)(CI)F`, '*S-1-5-18:(OI)(CI)F'], { windowsHide: true, stdio: 'ignore' })
   } else fs.chmodSync(directory, 0o700)
   assertPrivateDirectory(directory)
 }

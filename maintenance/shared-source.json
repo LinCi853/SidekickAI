@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "739ae4e28501cadfa25d922fba4106377a1d89800cd9327f325e260c9fe77887",
+  "revision": "da46c67243c2b2bac2ba4a284398aa5fe646ea78bf2594c00167a635bc7228fb",
   "files": {
     "electron.vite.config.ts": "7acd230acd0c117708ccbdc09532b67440c50bc7c90ea07a767726b0f8cc55e9",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
@@ -25,7 +25,7 @@
     "packages/backup-core/guardian.ts": "fc3dcbc78e6e2eebb3ed3d01867eea1f9145b216ecd3b3df172014ec9c015bff",
     "packages/backup-core/import-choices.test.ts": "135663694d96220a70c12eebc978c6f794c8c322fed3f4d277a6d438612d3294",
     "packages/backup-core/import.ts": "d19b77b41676a1da0e2a984682063d8a7dc22901508e3453ee6ebc81a5c4b3d7",
-    "packages/backup-core/io.ts": "9c323214a48aacb0fff5f44e67017ff3e527179080826efd593175a9e7c6be8a",
+    "packages/backup-core/io.ts": "b047bd834293d630b4785b97680ccefd7fc06fa69ac2164f5478d3d6d6b1e0e5",
     "packages/backup-core/jobs.ts": "ab81fcd60b0fe1b71cb3443299a80192c9fbbe5d87e3d6e6813cfede6770896f",
     "packages/backup-core/offline.ts": "e9ff8abc1e9bdb66cf7a17c9ee1a63c23935c73ccd22921043c46fde1c9266a2",
     "packages/backup-core/recovery.ts": "30d3ba8184949a78ba19927a02af354230ece565fd6a05b1b751ff0bf8769f14",
