@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "d46d268bb552a5aa3ce58cf2531cb37e4e41603a183da0c0edb3ef162dd19fa0",
+  "revision": "739ae4e28501cadfa25d922fba4106377a1d89800cd9327f325e260c9fe77887",
   "files": {
     "electron.vite.config.ts": "7acd230acd0c117708ccbdc09532b67440c50bc7c90ea07a767726b0f8cc55e9",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
@@ -67,7 +67,7 @@
     "scripts/compilation-inputs.ts": "38303368727a59a42114cce2c50b87e5bc8843d8f343fd8a3e7fd485d556eb56",
     "scripts/fixtures/backup-recovery-runtime.cjs": "0909b4f331431c05a9e647a23ef00a306aad7b3f79b6e021f0fd1abfb052d66a",
     "scripts/fixtures/backup-snapshot-runtime.cjs": "4c88b7e595a1757cc2555217adff755f54d72ef3a85a17a725b509c6e15f0894",
-    "scripts/incremental-build.test.cjs": "b704e779c1074abd025e038884c83cc0f9cb0c37f334032623bff734f8f81d36",
+    "scripts/incremental-build.test.cjs": "06f6a236c6922c69907aab1a3c9597103e10f6c35b3d5ac56765bd299b22dbe7",
     "scripts/local-build-config.cjs": "3c980eea90ec1fd7fb1c00a8aa3c0f91d19ee2beacb5074b826388a25838c866",
     "scripts/local-build-config.test.cjs": "31f7ae1809e1f84ec2d828af37ae12a277a9bd49fd7583f08c9ce799ed2f984d",
     "scripts/oxy-build-config.cjs": "89724bed4dc675adde945e5bee4a35286bfa98cfc61de4e16ee23961433b95d3",
