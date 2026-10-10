@@ -68,6 +68,9 @@ export const appSettingsApi = {
   platformCapabilities: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.PLATFORM_CAPABILITIES),
   },
+  runtimeProcesses: {
+    get: () => ipcRenderer.invoke(IPC_CHANNELS.RUNTIME_PROCESSES_GET),
+  },
   // 引导 API（首次启动引导窗 + 重新查看入口）
   onboarding: {
     show: () => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_SHOW),

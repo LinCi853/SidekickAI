@@ -355,6 +355,7 @@ export const IPC_CHANNELS = {
   WEBVIEW_POPUP_URL: 'webview:popupUrl',
   // 平台能力查询（设置页显示权限状态）
   PLATFORM_CAPABILITIES: 'platform:capabilities',
+  RUNTIME_PROCESSES_GET: 'runtime-processes:get',
   // 引导（首次启动引导窗）
   ONBOARDING_SHOW: 'onboarding:show',
   ONBOARDING_IS_COMPLETED: 'onboarding:isCompleted',

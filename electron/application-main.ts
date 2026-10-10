@@ -38,6 +38,7 @@ import { registerApplicationUpdates } from './updates/host.js';
 import { registerOnboardingIpc } from './ipc/onboarding-ipc.js';
 import { promptAccessibilityPermission } from './utils/permission-manager.js';
 import { registerPlatformInfoIPC } from './utils/platform-info.js';
+import { registerRuntimeProcessesIPC } from './diagnostics/runtime-processes.js';
 import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache } from './utils/download-handler.js';
 import { windowState } from './window-state.js';
 import { windowStore } from './store/window-store.js';
@@ -353,6 +354,7 @@ app.whenReady().then(async () => {
     registerSettingsIpc();
     registerApplicationUpdates();
     registerPlatformInfoIPC();
+    registerRuntimeProcessesIPC();
     registerHotkeyIpc({
         hotkeyManager,
         getMainWindow: () => windowState.mainWindow,

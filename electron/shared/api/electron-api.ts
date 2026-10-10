@@ -10,6 +10,7 @@ import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.t
 import type { PromptTemplate } from '../chat.types.js'
 import type { AiAssetsAPI } from '../ai-assets.types.js'
 import type { UpdatesAPI } from '../../updates/types.js'
+import type { RuntimeProcessesAPI } from '../runtime-processes.js'
 import type { WebviewHotkeyPayload, WebviewHotkeyTarget } from './settings.api.js'
 
 /** 模块管理 API（插件市场 / 开发者选项） */
@@ -53,6 +54,7 @@ export interface ElectronAPI {
   whiteboard: WhiteboardAPI
   /** 平台能力查询（设置页显示权限状态） */
   platformCapabilities: PlatformCapabilitiesAPI
+  runtimeProcesses: RuntimeProcessesAPI
   /** 主进程 → 渲染层：拦截 webview 弹窗后新建标签页 */
   onNewTab: (callback: (url: string, windowId: string) => void) => () => void
   /**

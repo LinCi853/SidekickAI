@@ -35,6 +35,7 @@ import { useThemeStore } from '../../store/useThemeStore';
 import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms';
 import './styles.css';
 import { WebviewTab } from './WebviewTab';
+import DeferredTab from '../../components/DeferredTab';
 import TabContextMenu from './TabContextMenu';
 import BottomBar from './BottomBar';
 import TopBar from './TopBar';
@@ -467,34 +468,35 @@ export default function MainView() {
             const desktopPresetId = platform?.defaultDesktopPreset ?? 'win-chrome-125';
             const mobilePresetId = platform?.defaultMobilePreset ?? 'iphone-15-pro-safari';
             return (
-              <WebviewTab
-                key={tab.id}
-                tab={tab}
-                profile={profile}
-                active={tab.id === activeTabId}
-                isNarrow={isNarrow}
-                desktopPresetId={desktopPresetId}
-                mobilePresetId={mobilePresetId}
-                inputSelector={profile?.aiInputSelector || platform?.inputSelector || null}
-                sendSelector={profile?.aiSendSelector || platform?.sendSelector || null}
-                enterToSend={enterToSend}
-                onNavigationChange={(back, fwd) => {
-                  if (tab.id === activeTabId) {
-                    handleNavigationChange(back, fwd);
-                  }
-                }}
-                onDomReadyChange={(isReady) => {
-                  if (tab.id === activeTabId) {
-                    setActiveTabDomReady(isReady);
-                  }
-                }}
-                onProcessGone={(reason) => {
-                  console.warn('[MainView] webview 进程崩溃，已触发自动恢复:', tab.id, reason);
-                  if (tab.id === activeTabId) {
-                    setActiveTabDomReady(false);
-                  }
-                }}
-              />
+              <DeferredTab key={tab.id} active={tab.id === activeTabId}>
+                <WebviewTab
+                  tab={tab}
+                  profile={profile}
+                  active={tab.id === activeTabId}
+                  isNarrow={isNarrow}
+                  desktopPresetId={desktopPresetId}
+                  mobilePresetId={mobilePresetId}
+                  inputSelector={profile?.aiInputSelector || platform?.inputSelector || null}
+                  sendSelector={profile?.aiSendSelector || platform?.sendSelector || null}
+                  enterToSend={enterToSend}
+                  onNavigationChange={(back, fwd) => {
+                    if (tab.id === activeTabId) {
+                      handleNavigationChange(back, fwd);
+                    }
+                  }}
+                  onDomReadyChange={(isReady) => {
+                    if (tab.id === activeTabId) {
+                      setActiveTabDomReady(isReady);
+                    }
+                  }}
+                  onProcessGone={(reason) => {
+                    console.warn('[MainView] webview 进程崩溃，已触发自动恢复:', tab.id, reason);
+                    if (tab.id === activeTabId) {
+                      setActiveTabDomReady(false);
+                    }
+                  }}
+                />
+              </DeferredTab>
             );
           })}
         </div>

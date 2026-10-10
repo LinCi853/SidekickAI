@@ -242,6 +242,7 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
       />
 
       <AdvancedSection
+        active={open && !providerEditing}
         presets={presetsState.presets}
         altSpaceResetThreshold={app.altSpaceResetThreshold}
         onAltSpaceThresholdChange={handleAltSpaceThresholdChange}

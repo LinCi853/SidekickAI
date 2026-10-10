@@ -16,6 +16,7 @@ import TabsPanel from './TabBar/TabsPanel.js';
 import NavBar from './NavBar/NavBar.js';
 import BookmarksBar from './BookmarksBar/BookmarksBar.js';
 import BrowserWebviewTab from './BrowserWebviewTab.js';
+import DeferredTab from '../../components/DeferredTab';
 import BrowserSettingsTab from './BrowserSettingsTab.js';
 import ViewSourceTab from './ViewSourceTab.js';
 import PrintPreviewTab from './PrintPreviewTab.js';
@@ -337,24 +338,25 @@ export default function BrowserView() {
           }
           // 普通网页标签
           return (
-            <BrowserWebviewTab
-              key={tab.id}
-              tab={tab}
-              profile={activeProfile}
-              active={tab.id === activeTabId}
-              navigateUrl={tab.id === activeTabId ? navigation.navigateUrl : null}
-              onNavigateComplete={navigation.handleNavigateComplete}
-              onGoBack={webview.handleGoBack}
-              onGoForward={webview.handleGoForward}
-              onReload={webview.handleRefresh}
-              canGoBack={tab.canGoBack ?? false}
-              canGoForward={tab.canGoForward ?? false}
-              onToggleCloudPc={webview.toggleCloudPc}
-              isCloudPc={webview.isCloudPc}
-              onZoomIn={webview.zoomInAction}
-              onZoomOut={webview.zoomOutAction}
-              onZoomReset={webview.zoomResetAction}
-            />
+            <DeferredTab key={tab.id} active={tab.id === activeTabId}>
+              <BrowserWebviewTab
+                tab={tab}
+                profile={activeProfile}
+                active={tab.id === activeTabId}
+                navigateUrl={tab.id === activeTabId ? navigation.navigateUrl : null}
+                onNavigateComplete={navigation.handleNavigateComplete}
+                onGoBack={webview.handleGoBack}
+                onGoForward={webview.handleGoForward}
+                onReload={webview.handleRefresh}
+                canGoBack={tab.canGoBack ?? false}
+                canGoForward={tab.canGoForward ?? false}
+                onToggleCloudPc={webview.toggleCloudPc}
+                isCloudPc={webview.isCloudPc}
+                onZoomIn={webview.zoomInAction}
+                onZoomOut={webview.zoomOutAction}
+                onZoomReset={webview.zoomResetAction}
+              />
+            </DeferredTab>
           );
         })}
       </div>

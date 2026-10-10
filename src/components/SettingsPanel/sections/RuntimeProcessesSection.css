@@ -1,0 +1,63 @@
+.runtime-processes {
+  min-width: 0;
+  letter-spacing: 0;
+}
+
+.runtime-process-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+  margin: 8px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.runtime-process-scroll {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.runtime-process-table {
+  width: 100%;
+  min-width: 390px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.runtime-process-table .process-role-column { width: 78px; }
+.runtime-process-table .process-pid-column { width: 58px; }
+.runtime-process-table .process-cpu-column { width: 60px; }
+.runtime-process-table .process-memory-column { width: 84px; }
+
+.runtime-process-table th,
+.runtime-process-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--glass-bd-2);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.runtime-process-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.runtime-process-table .runtime-process-number,
+.runtime-process-table th:nth-child(n + 3) {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.runtime-process-target + .runtime-process-target { margin-top: 6px; }
+.runtime-process-target span { display: block; }
+.runtime-process-target small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}

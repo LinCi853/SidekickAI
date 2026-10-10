@@ -13,11 +13,13 @@ import { SectionTitle, FormRow, Combobox } from '../../ui';
 import type { ComboboxOption } from '../../ui';
 import StorageSection from './StorageSection';
 import LogFolderSection from './LogFolderSection';
+import RuntimeProcessesSection from './RuntimeProcessesSection';
 import ProxySection from './ProxySection';
 import CookieSection from './CookieSection';
 import type { ProxySettings } from '../types';
 
 interface AdvancedSectionProps {
+  active?: boolean;
   // 设备预设（用于 UA 选择器选项）
   presets: DevicePreset[];
   // Alt+Space 阈值
@@ -46,6 +48,7 @@ export default function AdvancedSection({
   proxy,
   onProxyChange,
   compact = false,
+  active = true,
 }: AdvancedSectionProps) {
   const [collapsed, setCollapsed] = useState(true);
 
@@ -153,6 +156,7 @@ export default function AdvancedSection({
           </FormRow>
 
           {/* 下载与缓存清理 */}
+          <RuntimeProcessesSection active={active} />
           <StorageSection />
           <LogFolderSection />
 

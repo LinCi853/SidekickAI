@@ -3,7 +3,7 @@
    对应 window.electron.platformCapabilities
    ===================================================================== */
 
-import type { PlatformCapabilities } from '../../../electron/shared/types';
+import type { PlatformCapabilities, RuntimeProcessSnapshot } from '../../../electron/shared/types';
 import { requireElectron } from './core';
 
 /**
@@ -13,4 +13,8 @@ import { requireElectron } from './core';
 export function getPlatformCapabilities(): Promise<PlatformCapabilities> {
   const api = requireElectron();
   return api.platformCapabilities.get();
+}
+
+export function getRuntimeProcesses(): Promise<RuntimeProcessSnapshot> {
+  return requireElectron().runtimeProcesses.get();
 }
