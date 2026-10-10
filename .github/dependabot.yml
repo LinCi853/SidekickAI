@@ -19,6 +19,12 @@ updates:
       # Electron 大版本升级需人工评估（原生模块 ABI 变更）
       - dependency-name: electron
         update-types: ["version-update:semver-major"]
+      # TypeScript 7 移除 baseUrl 并禁止非相对 paths，需专门迁移评估
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # plugin-react 6 要求 vite 6+，需与 vite/electron-vite/vitest 一并评估
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
