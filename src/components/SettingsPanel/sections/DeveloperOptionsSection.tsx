@@ -12,15 +12,18 @@ import Toggle from '../../ui/Toggle';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import SectionTitle from '../../ui/SectionTitle';
 import FormRow from '../../ui/FormRow';
+import RuntimeProcessesSection from './RuntimeProcessesSection';
 import './ModuleManagementSection.css';
 
 export interface DeveloperOptionsSectionProps {
+  active?: boolean;
   /** 广告屏蔽规则开关状态（true=已禁用） */
   disableAllBlockRules: boolean;
   onToggleDisableAllBlockRules: () => void;
 }
 
 export default function DeveloperOptionsSection({
+  active = true,
   disableAllBlockRules,
   onToggleDisableAllBlockRules,
 }: DeveloperOptionsSectionProps) {
@@ -130,6 +133,8 @@ export default function DeveloperOptionsSection({
       <div className="module-column" data-name="settings.developer.dev-module-list">
         {devModules.map((m, i) => renderModule(m, i))}
       </div>
+
+      <RuntimeProcessesSection active={active} />
 
       <ConfirmDialog
         open={pendingClear !== null}

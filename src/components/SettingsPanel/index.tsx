@@ -242,7 +242,6 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
       />
 
       <AdvancedSection
-        active={open && !providerEditing}
         presets={presetsState.presets}
         altSpaceResetThreshold={app.altSpaceResetThreshold}
         onAltSpaceThresholdChange={handleAltSpaceThresholdChange}
@@ -265,6 +264,7 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
       <ModuleManagementSection />
 
       <DeveloperOptionsSection
+        active={open && !providerEditing}
         disableAllBlockRules={app.disableAllBlockRules}
         onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
       />

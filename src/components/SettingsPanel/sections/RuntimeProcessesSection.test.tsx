@@ -25,7 +25,7 @@ const text = (tree: unknown): string => {
   return tree && typeof tree === 'object' && 'props' in tree ? text((tree as any).props.children) : '';
 };
 const refreshButton = (tree: unknown) => elements(tree).flatMap(item => [item, ...elements(item.props?.actions)])
-  .find(item => item.props?.['data-name'] === 'settings.advanced.processes.refresh')!;
+  .find(item => item.props?.['data-name'] === 'settings.developer.processes.refresh')!;
 
 beforeEach(() => {
   vi.useFakeTimers(); runner.reset(); vi.resetAllMocks();

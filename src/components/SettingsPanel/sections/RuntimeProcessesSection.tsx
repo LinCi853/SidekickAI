@@ -55,15 +55,15 @@ export default function RuntimeProcessesSection({ active = true }: { active?: bo
   }, [active]);
 
   return (
-    <section className="runtime-processes" data-name="settings.advanced.processes.section">
+    <section className="runtime-processes" data-name="settings.developer.processes.section">
       <SectionTitle actions={
         <IconButton type="button" aria-label="刷新进程信息" title="刷新进程信息" disabled={refreshing || !active}
-          onClick={() => void refresh.current()} data-name="settings.advanced.processes.refresh">
+          onClick={() => void refresh.current()} data-name="settings.developer.processes.refresh">
           <RefreshCw size={16} aria-hidden="true" />
         </IconButton>
       }>运行进程</SectionTitle>
       <div className="runtime-process-summary">
-        <span data-name="settings.advanced.processes.count">{snapshot ? `${snapshot.processes.length} 个进程` : error ? '未获取进程信息' : '正在读取'}</span>
+        <span data-name="settings.developer.processes.count">{snapshot ? `${snapshot.processes.length} 个进程` : error ? '未获取进程信息' : '正在读取'}</span>
         {snapshot && <time dateTime={new Date(snapshot.capturedAt).toISOString()}>
           {new Date(snapshot.capturedAt).toLocaleTimeString('zh-CN', { hour12: false })}
         </time>}

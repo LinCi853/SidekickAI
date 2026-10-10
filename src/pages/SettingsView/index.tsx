@@ -34,7 +34,6 @@ import PresetSection from '../../components/SettingsPanel/sections/PresetSection
 import CookieSection from '../../components/SettingsPanel/sections/CookieSection';
 import StorageSection from '../../components/SettingsPanel/sections/StorageSection';
 import LogFolderSection from '../../components/SettingsPanel/sections/LogFolderSection';
-import RuntimeProcessesSection from '../../components/SettingsPanel/sections/RuntimeProcessesSection';
 import AboutSection from '../../components/SettingsPanel/sections/AboutSection';
 import ModuleManagementSection from '../../components/SettingsPanel/sections/ModuleManagementSection';
 import DeveloperOptionsSection from '../../components/SettingsPanel/sections/DeveloperOptionsSection';
@@ -417,7 +416,6 @@ export default function SettingsView() {
               </FormRow>
             </section>
             {/* 下载与缓存清理 */}
-            <RuntimeProcessesSection />
             <StorageSection />
             <LogFolderSection />
           </>
