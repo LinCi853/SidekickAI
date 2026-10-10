@@ -16,7 +16,7 @@ function pinnedReference() {
 }
 
 const foreignIdentities = [
-  ['version', value => { value.toolkitVersion = '1.3.2' }, /version.*trusted release/i],
+  ['version', value => { value.toolkitVersion += '-foreign' }, /version.*trusted release/i],
   ['size', value => { value.archive.size++ }, /size.*trusted release/i],
   ['digest', value => { value.archive.sha256 = '0'.repeat(64) }, /SHA-256.*trusted release/i],
 ]

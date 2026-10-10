@@ -33,4 +33,4 @@
 # 语言统计：标记生成/第三方目录，避免污染 GitHub 语言占比
 build/License.txt linguist-documentation
 
-/vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.1-windows-x64.zip filter=lfs diff=lfs merge=lfs -text
+/vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.2-windows-x64.zip filter=lfs diff=lfs merge=lfs -text
