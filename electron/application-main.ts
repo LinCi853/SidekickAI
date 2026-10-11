@@ -405,11 +405,17 @@ app.on('window-all-closed', () => {
     }
 });
 app.on('web-contents-created', (_event, contents) => {
-    // 网络边界：内嵌 AI 应用页面（webview guest）的 WebRTC 实时语音/视频会绑定
-    // UDP 监听端口并触发 Windows 防火墙的网络弹窗。统一限制为只允许默认公网接口，
-    // 不触碰局域网/内网接口；这是应用级策略，不响应网站侧的任何申请。
-    if (contents.getType() === 'webview') {
-        try { contents.setWebRTCIPHandlingPolicy('default_public_interface_only'); } catch { /* guest 销毁竞态 */ }
+    // 网络边界（启动期全局强制，网站侧不可更改）：内嵌 AI 页面（webview）及其弹窗、
+    // 独立浏览器窗等所有应用内 webContents 的 WebRTC 一律只允许默认公网接口绑定，
+    // 不触碰局域网/内网接口，避免实时语音/视频创建预期外的 UDP 监听并触发
+    // Windows 防火墙网络弹窗；覆盖所有 profile 会话，不响应网站侧的任何申请。
+    try {
+        contents.setWebRTCIPHandlingPolicy('default_public_interface_only');
+        if (contents.getWebRTCIPHandlingPolicy() !== 'default_public_interface_only') {
+            throw new Error('策略读取校验不一致');
+        }
+    } catch (error) {
+        console.error('[network-boundary] WebRTC 策略设置失败，该内容可能触发网络弹窗:', error);
     }
     contents.on('will-prevent-unload', (event) => {
         queueMicrotask(() => {
