@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookPlus, Brain, Copy, GitBranch, History, MoreHorizontal, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookPlus, Brain, ChevronDown, ChevronUp, Copy, GitBranch, History, MoreHorizontal, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { Button, EmptyState, IconButton } from '../../components/ui';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { exportConversation, updateMessage } from '../../lib/electron-api';
@@ -12,6 +12,9 @@ import { displayConversationTitle } from './asset-platform';
 import { cleanCapturedCodeToolbar } from '../../../electron/shared/asset-presentation';
 
 const statuses: Record<string, string> = { streaming: '接收中', complete: '已记录', withdrawn: '已撤回，原文保留', retained: '原文保留', stopped: '主动停止', failed: '异常中断' };
+// 长消息默认折叠：字符数阈值（约 20 行），折叠后显示一行开头预览
+const FOLD_THRESHOLD = 1200;
+const FOLD_PREVIEW_CHARS = 110;
 function RevisionDifference({ before, after }: { before: string; after: string }) {
   const old = Array.from(before), next = Array.from(after);
   let start = 0, end = 0;
@@ -45,6 +48,10 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
   const [pendingDelete, setPendingDelete] = useState<'conversation' | string>();
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [rename, setRename] = useState<string>();
+  // 详情标题重命名无独立按钮：Enter/失焦提交，Escape 取消（取消标记避免失焦误提交）
+  const renameCancelled = useRef(false);
+  // 消息折叠状态：长消息默认折叠，键为消息 id；未记录时按内容长度取默认值
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [selection, setSelection] = useState<{ content: string; messageId?: string; left: number; top: number }>();
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -161,7 +168,10 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
   </details>;
   const messages = graph.path.map(id => graph.nodes.find(node => node.id === id)!).filter(Boolean);
   return <><div className="asset-detail-heading">
-    <div className="asset-detail-title">{rename !== undefined ? <div className="asset-actions"><input aria-label="本地对话名称" value={rename} onChange={event => setRename(event.target.value)} /><Button variant="primary" onClick={() => onAction(async () => { await api.renameConversation(conversation.id, rename); setRename(undefined); await onRefresh(); })}>保存名称</Button><Button variant="ghost" onClick={() => setRename(undefined)}>取消</Button></div> : <h2>{displayConversationTitle(conversation)}</h2>}
+    <div className="asset-detail-title" onKeyDown={event => { if (event.key === 'F2' && rename === undefined) { event.preventDefault(); setRename(conversation.title); } }}>{rename !== undefined ? <div className="asset-actions"><input aria-label="本地对话名称" autoFocus value={rename} onChange={event => setRename(event.target.value)}
+      onBlur={() => { if (renameCancelled.current) { renameCancelled.current = false; return; } onAction(async () => { if (rename.trim() && rename !== conversation.title) await api.renameConversation(conversation.id, rename.trim()); setRename(undefined); await onRefresh(); }); }}
+      onKeyDown={event => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); else if (event.key === 'Escape') { renameCancelled.current = true; setRename(undefined); } }} /></div>
+      : <h2 tabIndex={0} style={{ cursor: 'default' }} title="重命名（F2）">{displayConversationTitle(conversation)}</h2>}
       <details className="asset-operation-menu"><summary aria-label="对话操作" title="对话操作"><MoreHorizontal size={18} /></summary><div>
         <Button variant="ghost" onClick={() => setRename(conversation.title)}>本地重命名</Button>
         {(['md', 'json'] as const).map(format => <Button key={format} variant="ghost" onClick={() => onAction(async () => { const result = await exportConversation(conversation.id, format); if (!result.ok && !result.canceled) throw new Error('导出失败'); })}>导出 {format.toUpperCase()}</Button>)}
@@ -189,21 +199,31 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       const known = siblings(message);
       const branchCount = Math.max(message.branchCount ?? 1, known.length);
       const branchIndex = message.branchIndex ?? known.findIndex(node => node.id === message.id) + 1;
+      const foldable = content.length > FOLD_THRESHOLD;
+      const foldedNow = foldable && (folded[message.id] ?? true);
+      const toggleFold = () => setFolded(current => ({ ...current, [message.id]: !(folded[message.id] ?? true) }));
+      const foldPreview = `${content.replace(/\s+/g, ' ').trim().slice(0, FOLD_PREVIEW_CHARS)}${content.replace(/\s+/g, ' ').trim().length > FOLD_PREVIEW_CHARS ? '…' : ''}`;
       return <article className={`asset-message asset-message-${message.role}`} key={message.id} data-name="assets.message" data-id={message.id}>
-        <div className="asset-bubble">
+        <div className={`asset-bubble${foldedNow ? ' folded' : ''}`}>
           <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
             {branchCount > 1 && <div className="asset-branch" aria-label="消息分支"><GitBranch size={14} aria-hidden="true" /><IconButton className="asset-icon-button" aria-label="上一个分支" disabled={branchIndex <= 1} onClick={() => onAction(() => switchBranch(message, -1))}><ArrowLeft size={14} /></IconButton><span>{branchIndex}/{branchCount}</span><IconButton className="asset-icon-button" aria-label="下一个分支" disabled={branchIndex >= branchCount} onClick={() => onAction(() => switchBranch(message, 1))}><ArrowRight size={14} /></IconButton>{known.length < branchCount && <span className="asset-branch-missing">部分分支尚未收纳</span>}</div>}
             <span className="asset-message-tools">
+              {foldable && <IconButton className="asset-icon-button" aria-label={foldedNow ? '展开消息' : '折叠消息'} onClick={toggleFold}>{foldedNow ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</IconButton>}
               <IconButton className="asset-icon-button" aria-label="复制消息" onClick={() => onAction(() => api.copyText(message.content))}><Copy size={15} /></IconButton>
-              <IconButton className="asset-icon-button" aria-label="编辑消息" onClick={() => setEditing({ id: message.id, content: message.content })}><Pencil size={15} /></IconButton>
+              <IconButton className="asset-icon-button" aria-label="编辑消息" onClick={() => { setEditing({ id: message.id, content: message.content }); if (foldable) setFolded(current => ({ ...current, [message.id]: false })); }}><Pencil size={15} /></IconButton>
               <IconButton className="asset-icon-button" aria-label="存为提示词" onClick={() => onAction(() => onPrompt(message.content, { conversationId: conversation.id, messageId: message.id }))}><BookPlus size={15} /></IconButton>
               <IconButton className="asset-icon-button" aria-label="删除消息" onClick={() => setPendingDelete(message.id)}><Trash2 size={15} /></IconButton>
             </span>
             <time title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></header>
+          {foldedNow ? <button type="button" className="asset-message-folded" onClick={toggleFold} title="点击展开">
+              <span>{foldPreview}</span><ChevronDown size={14} aria-hidden="true" />
+            </button>
+            : <>
           {message.role === 'assistant' && !!detail?.reasoning && <details key={`${message.id}:${settings.expandReasoning}`} className="asset-thinking" open={settings.expandReasoning || undefined}><summary><Brain size={14} aria-hidden="true" />思考 · {detail.reasoningCharacters.toLocaleString()} 字符</summary><AssetMarkdown content={detail.reasoning} onAction={onAction} /></details>}
           {editing?.id === message.id ? <><textarea className="asset-message-editor" aria-label="编辑消息" value={editing.content} onChange={event => setEditing({ id: message.id, content: event.target.value })} /><div className="asset-actions"><Button variant="primary" onClick={() => onAction(async () => { await updateMessage(message.id, { content: editing.content }); setEditing(null); await onRefresh(); })}>保存本地编辑</Button><Button variant="outline" onClick={() => setEditing(null)}>取消</Button></div></> : <AssetMarkdown content={content} onAction={onAction} />}
           {!!detail?.revisions.length && <details className="asset-revisions"><summary><History size={14} aria-hidden="true" />修订记录 · {detail.revisions.length}</summary>{detail.revisions.map((item, index) => <div key={item.id}><span>{new Date(item.capturedAt).toLocaleString()} · {statuses[item.status]}</span>{item.reasoning && <details><summary>当时的思考</summary><pre>{item.reasoning}</pre></details>}{settings.revisionDisplay === 'diff' ? <RevisionDifference before={item.content} after={detail.revisions[index + 1]?.content ?? message.content} /> : <pre>{item.content}</pre>}</div>)}</details>}
           {files(attachments.filter(item => item.conversationId === conversation.id && item.messageId === message.id))}
+            </>}
         </div>
       </article>;
     })}

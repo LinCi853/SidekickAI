@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { Plus, SquareLibrary } from 'lucide-react';
 import type { PromptTemplate } from '../lib/electron-api';
 import { openPromptWindow } from '../lib/electron-api';
 import { usePromptStore } from '../store/usePromptStore';
 import { useTabStore } from '../store/useTabStore';
-import Button from './ui/Button';
 import './PromptLibrary.css';
 import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
 
@@ -38,8 +38,10 @@ export default function PromptLibrary({ onInject }: PromptLibraryProps) {
         className={`prompt-chip${injectedId === template.id ? ' injected' : ''}`}
         title={hasUsablePromptContent(template) ? template.content : '待编写通用提示词'} disabled={!hasUsablePromptContent(template)} data-name={`component.prompt-library.chip-${index + 1}`}
         onClick={() => void inject(template)}><span className="prompt-chip-title">{template.title}</span></button>)}
-      <Button variant="outline" data-name="component.prompt-library.manage-button"
-        onClick={() => void openPromptWindow({ category: 'prompts' }).catch(error => setNotice(String(error)))}>管理提示词</Button>
+      <button type="button" className="prompt-chip prompt-chip-action" aria-label="新增提示词" title="新增提示词" data-name="component.prompt-library.new-button"
+        onClick={() => void openPromptWindow({ category: 'prompts', createPrompt: true }).catch(error => setNotice(String(error)))}><Plus size={15} /></button>
+      <button type="button" className="prompt-chip prompt-chip-action" aria-label="管理提示词" title="管理提示词" data-name="component.prompt-library.manage-button"
+        onClick={() => void openPromptWindow({ category: 'prompts' }).catch(error => setNotice(String(error)))}><SquareLibrary size={15} /></button>
     </div>
     {notice && <p role="status">{notice}</p>}
   </div>;

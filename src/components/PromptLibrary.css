@@ -52,3 +52,5 @@
   transition: opacity var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
 }
 .prompt-toast.is-open { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+.prompt-chip-action { justify-content: center; width: 30px; padding: var(--space-1) 0; color: var(--muted-foreground); }
+.prompt-chip-action:hover:not(:disabled) { color: var(--foreground); }

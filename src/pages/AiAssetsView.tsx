@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
+import { Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { Button, ConfirmDialog, EmptyState, IconButton } from '../components/ui';
@@ -79,6 +79,10 @@ export default function AiAssetsView() {
       if (request.category) { setCategory(request.category); setQuery(''); setListOpen(false); }
       if (request.focusSearch) searchRef.current?.focus();
       if (request.openSettings) setSettingsOpen(true);
+      if (request.createPrompt) {
+        setCategory('prompts'); setQuery(''); setListOpen(false);
+        setPromptDraft({ revision: ++sourceRevision.current, example: { content: '' }, title: '' });
+      }
     };
     const off = promptApi.onNavigate(navigate);
     void promptApi.navigation().then(navigate).catch(failure => setError(String(failure)));
@@ -172,6 +176,8 @@ export default function AiAssetsView() {
     if (!trimmed) return;
     void run(async () => { await api.renameConversation(id, trimmed); await refresh(); });
   };
+  // 重命名无独立按钮：Enter 或失焦提交，Escape 取消（取消标记避免失焦误提交）
+  const renameCancelled = useRef(false);
   const menuConversation = menu ? conversations.find(item => item.id === menu.id) : undefined;
   useEffect(() => { setCleanupError(''); }, [pendingCleanup]);
   const clearSelection = async () => {
@@ -267,16 +273,25 @@ export default function AiAssetsView() {
         <div className="asset-conversation-list">{!visibleConversations.length && <EmptyState message={query ? '没有匹配的对话' : '交流记录会自动保存在这里'} />}
         {visibleConversations.map((item, index) => <div key={item.id} className="asset-conversation-row">{selecting && <input type="checkbox" aria-label={`选择对话 ${item.title || '未命名对话'}`} checked={selectedIds.includes(item.id)} onChange={() => toggleSelection(item.id)} />}
           {renaming?.id === item.id ? <div className="asset-conversation-rename"><input aria-label="重命名对话" autoFocus value={renaming.value} onChange={event => setRenaming({ id: item.id, value: event.target.value })}
-            onKeyDown={event => { if (event.key === 'Enter') saveConversationRename(); else if (event.key === 'Escape') setRenaming(undefined); }} />
-            <IconButton className="asset-icon-button" aria-label="保存名称" onClick={saveConversationRename}><Check size={15} /></IconButton>
-            <IconButton className="asset-icon-button" aria-label="取消重命名" onClick={() => setRenaming(undefined)}><X size={15} /></IconButton></div>
+            onBlur={() => { if (renameCancelled.current) { renameCancelled.current = false; return; } saveConversationRename(); }}
+            onKeyDown={event => { if (event.key === 'Enter') saveConversationRename(); else if (event.key === 'Escape') { renameCancelled.current = true; setRenaming(undefined); } }} /></div>
             : <button className={`asset-conversation${selected === item.id ? ' active' : ''}${selectedIds.includes(item.id) ? ' selected' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'}
-              onClick={event => handleConversationClick(event, index, item.id)} onContextMenu={event => openConversationMenu(event, item.id)}>
+              onClick={event => handleConversationClick(event, index, item.id)} onContextMenu={event => openConversationMenu(event, item.id)}
+              onKeyDown={event => { if (event.key === 'F2') { event.preventDefault(); setRenaming({ id: item.id, value: item.title ?? '' }); } }}>
               <strong>{displayConversationTitle(item)}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button>}</div>)}
         </div>
         {totalUsage && <div className="asset-total-usage" data-name="assets.total-usage" title={`全部对话累计 Unicode 字符（含空白与标点）：输入 ${totalUsage.inputCharacters.toLocaleString()} · 思考 ${totalUsage.reasoningCharacters.toLocaleString()} · 输出 ${totalUsage.outputCharacters.toLocaleString()}`}><span>总字符</span><strong>{totalUsage.totalCharacters.toLocaleString()}</strong></div>}
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
-        attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
+        attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main>
+        <div className="asset-quick-rail" role="navigation" aria-label="快速切换对话">
+          {visibleConversations.slice(0, 12).map(item => <div key={item.id} className={`asset-quick-pill${selected === item.id ? ' active' : ''}`}>
+            <button type="button" aria-label={`切换到 ${displayConversationTitle(item)}`} onClick={() => openConversation(item.id)} />
+            <div className="asset-quick-preview" role="tooltip">
+              <strong>{displayConversationTitle(item)}</strong>
+              <span>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0} · {new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</span>
+            </div>
+          </div>)}
+        </div></div>}
     {menu && <div className="asset-context-menu" role="menu" aria-label="对话操作菜单" style={{ left: menu.left, top: menu.top }}>
       <Button variant="ghost" role="menuitem" onClick={() => { const id = menu.id; setMenu(undefined); openConversation(id); }}>打开</Button>
       <Button variant="ghost" role="menuitem" disabled={!menuConversation} onClick={() => { const item = menuConversation; setMenu(undefined); if (item) setRenaming({ id: item.id, value: item.title ?? '' }); }}>重命名</Button>

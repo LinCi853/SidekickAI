@@ -281,6 +281,8 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
             key={wb.id}
             className={`wb-sidebar-item sidebar-list-item ${wb.id === activeId ? 'active' : ''}`}
             onClick={() => editingId !== wb.id && onSelect(wb.id)}
+            onKeyDown={(e) => { if (e.key === 'F2' && editingId !== wb.id) { e.preventDefault(); handleStartRename(wb); } }}
+            tabIndex={0}
             data-name={`advanced-panel.wb-sidebar-item-${idx + 1}`}
             data-index={idx + 1}
             data-id={wb.id}

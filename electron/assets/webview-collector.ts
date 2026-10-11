@@ -64,10 +64,30 @@ function collectAiAssets(): () => void {
   let pendingObservations = 0
   let pendingBytes = 0
   const pendingBudget = 16 * 1024 * 1024
+  // 部分 SPA（小米 MiMo 等）从不更新 document.title，对话名要从页面 DOM 里抓：
+  // 优先取侧栏里指向当前路径的链接文本，再退回常见的活跃会话节点，最后回退 document.title。
+  const domConversationTitle = (): string | undefined => {
+    const host = location.hostname
+    if (host !== 'aistudio.xiaomimimo.com' && !host.endsWith('.xiaomimimo.com')) return undefined
+    const candidates = [
+      `aside a[href="${location.pathname}"]`,
+      `nav a[href="${location.pathname}"]`,
+      'aside [aria-current="true"]',
+      'aside [aria-current="page"]',
+      '[class*="conversation-list" i] [class*="active" i]',
+    ]
+    for (const selector of candidates) {
+      try {
+        const text = document.querySelector(selector)?.textContent?.trim()
+        if (text) return text
+      } catch { /* 选择器不被当前文档支持时直接尝试下一个 */ }
+    }
+    return undefined
+  }
   const context = () => {
     const url = location.href
     return { conversationKey: stableWebConversationUrl(url) ?? `document:${documentKey}`,
-      title: document.title, url }
+      title: domConversationTitle() ?? document.title, url }
   }
   const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
   const active = (entry: Original) => !stopped && !entry.retired && !suppressed.has(entry.input.conversationKey)

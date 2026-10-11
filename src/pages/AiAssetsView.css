@@ -156,3 +156,23 @@
 .asset-conversation-row > input, .asset-file-heading > input { flex: none; accent-color: var(--accent-bright); }
 .asset-conversation-rename { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .asset-conversation-rename input { flex: 1; min-width: 0; min-height: 28px; padding: 4px 7px; font-size: 12px; color: var(--foreground); background: var(--background); border: 1px solid var(--accent-bright); border-radius: 4px; outline: 0; }
+
+/* 右缘快速切换（参考 Codex）：细条气泡，当前对话加长高亮，悬停极简预览 */
+.asset-quick-rail { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; z-index: 10; max-height: 72%; overflow-y: auto; padding: 4px 2px; scrollbar-width: none; }
+.asset-quick-rail::-webkit-scrollbar { display: none; }
+.asset-quick-pill { position: relative; display: flex; justify-content: flex-end; }
+.asset-quick-pill > button { width: 20px; height: 12px; padding: 0; border: 0; background: transparent; cursor: pointer; position: relative; }
+.asset-quick-pill > button::after { content: ''; position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 14px; height: 3px; border-radius: 2px; background: var(--border); transition: width .12s ease, background .12s ease; }
+.asset-quick-pill > button:hover::after, .asset-quick-pill > button:focus-visible::after { background: var(--muted-foreground); }
+.asset-quick-pill.active > button::after { width: 22px; background: var(--accent-bright); }
+.asset-quick-preview { display: none; position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 7px 10px; min-width: 140px; max-width: 240px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; z-index: 30; pointer-events: none; }
+.asset-quick-pill:hover .asset-quick-preview, .asset-quick-pill > button:focus-visible ~ .asset-quick-preview { display: flex; }
+.asset-quick-preview strong { font-size: 12px; font-weight: 500; color: var(--foreground); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.asset-quick-preview > span { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 折叠消息：一行预览 + 展开箭头 */
+.asset-message-folded { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 6px 9px; margin: 2px 0 0; border: 0; border-radius: 6px; background: var(--muted); color: var(--muted-foreground); font-size: 12px; text-align: left; cursor: pointer; }
+.asset-message-folded:hover { color: var(--foreground); }
+.asset-message-folded > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.asset-message-folded > svg { flex: none; }
+.asset-bubble.folded { padding-bottom: 7px; }

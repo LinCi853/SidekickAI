@@ -3,10 +3,9 @@ import PromptLibrary from '../../components/PromptLibrary';
 import { GearIcon } from '../../components/icons';
 import type { AIPlatform, CustomAIProvider, Profile, PromptTemplate } from '../../lib/electron-api';
 import {
-  triggerVoiceStart,
-  triggerVoiceStop,
   listAIProviders,
   openAdvancedPanelWindow,
+  openPromptWindow,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
 import { useModuleStore } from '../../store/useModuleStore';
@@ -59,8 +58,7 @@ export default function BottomBar({
   appClickBehavior,
   activeProfileId,
 }: BottomBarProps) {
-  // 模块门控：语音模块关闭时隐藏语音按钮（11.10 跨位置无注入）
-  const voiceEnabled = useModuleStore((s) => s.isEnabled('voice'));
+  // 模块门控：提示词模块关闭时隐藏提示词区（11.10 跨位置无注入）
   const promptLibraryEnabled = useModuleStore((s) => s.isEnabled('prompt-library'));
 
   const {
@@ -346,6 +344,22 @@ export default function BottomBar({
               <button
                 type="button"
                 className="expanded-btn"
+                onClick={() => void openPromptWindow({ category: 'conversations' }).catch((e) =>
+                  console.error('[BottomBar] 打开 AI资产失败:', e),
+                )}
+                data-name="main.bottom-bar.assets-button"
+              >
+                <svg className="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="main.bottom-bar.assets-icon">
+                  <path d="m16 6 4 14" />
+                  <path d="M12 6v14" />
+                  <path d="M8 8v12" />
+                  <path d="M4 4v16" />
+                </svg>
+                AI资产
+              </button>
+              <button
+                type="button"
+                className="expanded-btn"
                 onClick={onOpenSettings}
                 data-name="main.bottom-bar.settings-button"
               >
@@ -364,26 +378,6 @@ export default function BottomBar({
                 </svg>
                 快捷键
               </button>
-              {voiceEnabled && (
-              <button
-                type="button"
-                className="expanded-btn"
-                onMouseDown={() => void triggerVoiceStart()}
-                onMouseUp={() => void triggerVoiceStop()}
-                onMouseLeave={() => void triggerVoiceStop()}
-                onTouchStart={() => void triggerVoiceStart()}
-                onTouchEnd={() => void triggerVoiceStop()}
-                title="按住说话，松开发送（Alt+V）"
-                data-name="main.bottom-bar.voice-button"
-              >
-                <svg className="icon-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="main.bottom-bar.voice-icon">
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="22" />
-                </svg>
-                语音
-              </button>
-              )}
               <button
                 type="button"
                 className="expanded-btn"

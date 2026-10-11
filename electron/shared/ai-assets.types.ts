@@ -186,6 +186,8 @@ export interface AssetNavigation {
   category?: 'conversations' | 'prompts' | 'files'
   focusSearch?: boolean
   openSettings?: boolean
+  /** 打开提示词页并直接进入空白的新建模板编辑器 */
+  createPrompt?: boolean
 }
 
 export interface AssetNavigationEvent extends AssetNavigation { revision: number }

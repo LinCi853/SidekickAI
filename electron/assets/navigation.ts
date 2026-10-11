@@ -7,6 +7,7 @@ export function setAssetNavigation(request: AssetNavigation): AssetNavigationEve
     category: ['conversations', 'prompts', 'files'].includes(request?.category ?? '') ? request.category : undefined,
     focusSearch: request?.focusSearch === true,
     openSettings: request?.openSettings === true,
+    createPrompt: request?.createPrompt === true,
   }
   return current
 }
