@@ -405,6 +405,12 @@ app.on('window-all-closed', () => {
     }
 });
 app.on('web-contents-created', (_event, contents) => {
+    // 网络边界：内嵌 AI 应用页面（webview guest）的 WebRTC 实时语音/视频会绑定
+    // UDP 监听端口并触发 Windows 防火墙的网络弹窗。统一限制为只允许默认公网接口，
+    // 不触碰局域网/内网接口；这是应用级策略，不响应网站侧的任何申请。
+    if (contents.getType() === 'webview') {
+        try { contents.setWebRTCIPHandlingPolicy('default_public_interface_only'); } catch { /* guest 销毁竞态 */ }
+    }
     contents.on('will-prevent-unload', (event) => {
         queueMicrotask(() => {
             if (!event.defaultPrevented)

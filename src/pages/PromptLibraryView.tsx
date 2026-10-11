@@ -29,9 +29,11 @@ interface EditorState {
   category: string;
   hotkey: string;
   example?: PromptExample;
+  /** 内容面：通用 / 案例（翻面切换，数据模型不变） */
+  activeFace: 'general' | 'example';
 }
 
-const EMPTY_EDITOR: EditorState = { open: false, editing: null, title: '', content: '', category: '', hotkey: '' };
+const EMPTY_EDITOR: EditorState = { open: false, editing: null, title: '', content: '', category: '', hotkey: '', activeFace: 'general' };
 const hasExample = (template: PromptTemplate) => !!template.example?.content.trim();
 const isDual = (template: PromptTemplate) => hasUsablePromptContent(template) && hasExample(template);
 
@@ -94,6 +96,7 @@ export default function PromptLibraryView({ embedded = false, query = '', draft,
     setEditor(template ? {
       open: true, editing: template, title: template.title, content: template.content,
       category: template.category ?? '', hotkey: template.hotkey ?? '', example: template.example ? { ...template.example } : undefined,
+      activeFace: 'general',
     } : { ...EMPTY_EDITOR, open: true });
   };
   const handleSave = async () => {
@@ -169,6 +172,7 @@ export default function PromptLibraryView({ embedded = false, query = '', draft,
       {editor.open && <div className="prompt-editor" role="dialog" aria-modal="true" aria-label="提示词编辑" data-name="prompts.editor-modal" onClick={event => event.stopPropagation()}>
         <div className="prompt-editor-header"><h3>{editor.editing ? '编辑提示词' : '新增提示词'}</h3><IconButton type="button" variant="close" disabled={saving} aria-label="关闭" title="关闭" onClick={closeEditor} data-name="prompts.editor-close-button"><X size={18} /></IconButton></div>
         <PromptEditorForm title={editor.title} content={editor.content} category={editor.category} hotkey={editor.hotkey} example={editor.example} editingId={editor.editing?.id ?? null}
+          activeFace={editor.activeFace} onFaceChange={face => setEditor(previous => ({ ...previous, activeFace: face }))}
           onTitleChange={value => setEditor(previous => ({ ...previous, title: value }))} onContentChange={value => setEditor(previous => ({ ...previous, content: value }))}
           onCategoryChange={value => setEditor(previous => ({ ...previous, category: value }))} onHotkeyChange={value => setEditor(previous => ({ ...previous, hotkey: value }))}
           onExampleContentChange={value => setEditor(previous => ({ ...previous, example: { ...previous.example, content: value } }))}

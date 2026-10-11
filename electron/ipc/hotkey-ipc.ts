@@ -237,6 +237,17 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
     }
 
     // 普通 globalShortcut 路径
+    // 清除分支：空 accelerator = 注销旧组合、持久化空值、动作置禁用
+    if (!accelerator) {
+      const oldAcc = hotkeyManager.getActionAccelerator(action)
+      hotkeyManager.unregister(oldAcc)
+      hotkeyManager.setHotkey(action, '')
+      hotkeyManager.recordActionAccelerator(action, '')
+      hotkeyManager.setEnabled(action, false)
+      syncAssetShortcut()
+      notifyConfiguration()
+      return true
+    }
     const oldAcc = hotkeyManager.getActionAccelerator(action)
     // 先注销旧热键（仅当当前启用时才已注册，无需判断 enabled）
     hotkeyManager.unregister(oldAcc)

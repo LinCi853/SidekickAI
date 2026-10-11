@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button, ConfirmDialog } from './ui';
+import HotkeyRecorder from './ui/HotkeyRecorder';
 import { requireElectron } from '../lib/electron-api/core';
+import { startHotkeyRecording, stopHotkeyRecording, onHotkeyRecordingResult, onHotkeyRecordingPartial } from '../lib/electron-api';
 import { useAssetSettings } from '../hooks/useAssetSettings';
 import { ASSET_SHORTCUT_LABELS } from '../../electron/shared/asset-settings';
 import type { AssetCleanupRecord, AssetRetentionStatus, AssetSettings } from '../../electron/shared/ai-assets.types';
@@ -50,13 +52,21 @@ export default function AssetSettingsPanel(_props: Record<string, never> = {}) {
     </p>}
     <ConfirmDialog open={pendingDays !== undefined} title="启用资料自动删除" variant="danger" confirmLabel="确认自动删除" message={`将删除最近收纳或更新已满 ${pendingDays ?? 0} 天的资料记录及无引用原件，现有超期资料也会删除。对话、提示词及历史冻结快照保留。删除不可撤销，请先导出需要长期保留的资料。`}
       onCancel={() => setPendingDays(undefined)} onConfirm={async () => { if (pendingDays !== undefined) await update({ fileRetentionDays: pendingDays }); setPendingDays(undefined); }} />
-    <fieldset><legend>全局快捷键</legend><label>打开／关闭 AI资产 <input aria-label="打开／关闭 AI资产快捷键" placeholder="未绑定" value={globalDraft} onChange={event => setGlobalDraft(event.target.value)} /></label>
+    <fieldset><legend>全局快捷键</legend><label>打开／关闭 AI资产 <HotkeyRecorder value={globalDraft} placeholder="未绑定" ariaLabel="打开／关闭 AI资产快捷键"
+      onRecord={acc => setGlobalDraft(acc)} otherHotkeys={[]}
+      startRecording={startHotkeyRecording} stopRecording={stopHotkeyRecording}
+      onRecordingResult={onHotkeyRecordingResult} onRecordingPartial={onHotkeyRecordingPartial} /></label>
       <Button variant="outline" onClick={() => void run(async () => { if (!await api.hotkey.set('toggleAiAssets', globalDraft.trim())) throw new Error('快捷键未注册，请选择其他组合'); })}>保存全局快捷键</Button>
       <label><input type="checkbox" checked={hotkey?.enabled ?? false} disabled={!hotkey?.accelerator} onChange={event => void run(() => api.hotkey.setEnabled('toggleAiAssets', event.target.checked))} />启用全局快捷键</label>
       {hotkey?.registrationReason && <p role="status">{hotkey.registrationReason}</p>}
     </fieldset>
     <fieldset><legend>AI资产窗口内快捷键</legend>
-      {(Object.keys(ASSET_SHORTCUT_LABELS) as Array<keyof typeof drafts>).map(key => <label key={key}>{ASSET_SHORTCUT_LABELS[key]}<input aria-label={`${ASSET_SHORTCUT_LABELS[key]}快捷键`} value={drafts[key]} onChange={event => setDrafts({ ...drafts, [key]: event.target.value })} /></label>)}
+      {(Object.keys(ASSET_SHORTCUT_LABELS) as Array<keyof typeof drafts>).map((key, index, keys) => <label key={key}>{ASSET_SHORTCUT_LABELS[key]}
+        <HotkeyRecorder value={drafts[key]} placeholder="未绑定"
+          onRecord={acc => setDrafts(current => ({ ...current, [key]: acc }))}
+          otherHotkeys={keys.filter(other => other !== key).map(other => ({ label: ASSET_SHORTCUT_LABELS[other], accelerator: drafts[other] }))}
+          startRecording={startHotkeyRecording} stopRecording={stopHotkeyRecording}
+          onRecordingResult={onHotkeyRecordingResult} onRecordingPartial={onHotkeyRecordingPartial} /></label>)}
       <Button variant="outline" onClick={() => void update({ localShortcuts: drafts })}>保存局部快捷键</Button>
     </fieldset>
     <details onToggle={event => { if (event.currentTarget.open) void run(async () => setAudits(await api.aiAssets.cleanupRecords())); }}><summary>异常清理记录</summary>

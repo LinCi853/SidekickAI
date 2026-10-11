@@ -64,22 +64,24 @@ function collectAiAssets(): () => void {
   let pendingObservations = 0
   let pendingBytes = 0
   const pendingBudget = 16 * 1024 * 1024
-  // 部分 SPA（小米 MiMo 等）从不更新 document.title，对话名要从页面 DOM 里抓：
-  // 优先取侧栏里指向当前路径的链接文本，再退回常见的活跃会话节点，最后回退 document.title。
+  // 部分 SPA（小米 MiMo 等）从不更新 document.title，对话名要从页面 DOM 里抓。
+  // 实测 MiMo 侧栏条目的会话名在 <span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"> 里：
+  // 先找高亮/当前项内的该类 span，再回退到全页第一个匹配（侧栏按最近排序，第一个通常是当前会话）。
   const domConversationTitle = (): string | undefined => {
     const host = location.hostname
     if (host !== 'aistudio.xiaomimimo.com' && !host.endsWith('.xiaomimimo.com')) return undefined
     const candidates = [
-      `aside a[href="${location.pathname}"]`,
-      `nav a[href="${location.pathname}"]`,
-      'aside [aria-current="true"]',
-      'aside [aria-current="page"]',
-      '[class*="conversation-list" i] [class*="active" i]',
+      '[aria-current="true"] span[class~="text-ellipsis"]',
+      '[aria-current="page"] span[class~="text-ellipsis"]',
+      '[class*="active" i] span[class~="text-ellipsis"][class~="whitespace-nowrap"]',
+      'span[class~="text-ellipsis"][class~="whitespace-nowrap"]',
     ]
     for (const selector of candidates) {
       try {
-        const text = document.querySelector(selector)?.textContent?.trim()
-        if (text) return text
+        for (const element of document.querySelectorAll(selector)) {
+          const text = element.textContent?.trim()
+          if (text && Array.from(text).length <= 100) return text
+        }
       } catch { /* 选择器不被当前文档支持时直接尝试下一个 */ }
     }
     return undefined

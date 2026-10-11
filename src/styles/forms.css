@@ -101,3 +101,8 @@
   gap: var(--space-1);
   flex: none;
 }
+
+/* 快捷键录制器：清除按钮（Del/退格等效） */
+.hotkey-recorder-wrapper input { padding-right: 28px; }
+.hotkey-recorder-clear { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.hotkey-recorder-clear:hover { background: var(--muted); color: var(--foreground); }

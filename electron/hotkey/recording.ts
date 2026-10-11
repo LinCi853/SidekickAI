@@ -196,6 +196,12 @@ export function handleRecordingKeydown(host: RecordingHost, e: UiohookEvent): vo
     return
   }
 
+  // Del/退格（无修饰键）：结束录制并返回清除结果（与 Esc 取消区分，渲染层据此清空绑定）
+  if ((keyName === 'Delete' || keyName === 'Backspace') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+    finishRecording(host, '', undefined, true)
+    return
+  }
+
   // 必须至少包含 Ctrl/Alt/Meta
   if (!e.ctrlKey && !e.altKey && !e.metaKey) return
 
@@ -250,12 +256,12 @@ export function handleRecordingKeydown(host: RecordingHost, e: UiohookEvent): vo
   finishRecording(host, accelerator, reason)
 }
 
-/** 完成录制（成功或失败） */
-export function finishRecording(host: RecordingHost, accelerator: string, reason?: string): void {
+/** 完成录制（成功或失败；cleared=true 表示用户以 Del/退格请求清除绑定） */
+export function finishRecording(host: RecordingHost, accelerator: string, reason?: string, cleared?: boolean): void {
   const cb = host._recordingCallback
   restoreAfterRecording(host)
   if (cb) {
-    cb({ accelerator, reason })
+    cb({ accelerator, reason, ...(cleared ? { cleared: true } : {}) })
   }
 }
 

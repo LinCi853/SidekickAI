@@ -11,6 +11,8 @@ vi.mock('../lib/electron-api/core', () => ({ requireElectron: () => state.bridge
 vi.mock('../hooks/useAssetSettings', () => ({ useAssetSettings: () => ({ settings: DEFAULT_ASSET_SETTINGS, update: preferences.update, error: '' }) }))
 vi.mock('../store/useModuleStore', () => ({ useModuleStore: (selector: any) => selector({ isEnabled: () => false }) }))
 vi.mock('./ui', () => ({ Button: 'button', ConfirmDialog: 'confirm-dialog' }))
+// 录制器桩：保留 value/onRecord 合同，避免拉入浮窗层依赖；ariaLabel 区分全局快捷键实例
+vi.mock('./ui/HotkeyRecorder', () => ({ default: 'hotkey-recorder' }))
 import AssetSettingsPanel from './AssetSettingsPanel'
 const configured = (accelerator = '', enabled = false, registration?: HotkeyConfig['registration']): HotkeyConfig => ({ action: 'toggleAiAssets', label: '打开／关闭 AI资产', accelerator, enabled, registration })
 function elements(node: any): any[] {
@@ -19,7 +21,7 @@ function elements(node: any): any[] {
   return [node, ...elements(node.props.children)]
 }
 const find = (node: unknown, predicate: (element: any) => boolean) => elements(node).find(predicate)!
-const input = (node: unknown) => find(node, element => element.props['aria-label'] === '打开／关闭 AI资产快捷键')
+const input = (node: unknown) => find(node, element => element.type === 'hotkey-recorder' && element.props.ariaLabel === '打开／关闭 AI资产快捷键')
 const save = (node: unknown) => find(node, element => element.type === 'button' && element.props.children === '保存全局快捷键')
 const enabled = (node: unknown) => find(node, element => element.type === 'label' && Array.isArray(element.props.children) && element.props.children.includes('启用全局快捷键')).props.children[0]
 beforeEach(() => {
@@ -62,7 +64,7 @@ describe('AI asset embedded shortcut settings', () => {
   it('clears the AI asset binding through the shared runtime action and shows it disabled', async () => {
     api.getAll.mockResolvedValue([configured('Ctrl+Alt+A', true, 'registered')])
     const view = harness.mount(() => AssetSettingsPanel({})); await settleHooks()
-    input(view.current).props.onChange({ target: { value: '' } })
+    input(view.current).props.onRecord('')
     await settleHooks()
     save(view.current).props.onClick(); await settleHooks()
     expect(api.set).toHaveBeenCalledWith('toggleAiAssets', '')
@@ -71,7 +73,7 @@ describe('AI asset embedded shortcut settings', () => {
   it('keeps duplicate-combination refusal visible without claiming registration success', async () => {
     api.set.mockRejectedValue(new Error('快捷键与其他操作重复'))
     const view = harness.mount(() => AssetSettingsPanel({})); await settleHooks()
-    input(view.current).props.onChange({ target: { value: 'Alt+Space' } })
+    input(view.current).props.onRecord('Alt+Space')
     await settleHooks()
     save(view.current).props.onClick(); await settleHooks()
     expect(api.set).toHaveBeenCalledWith('toggleAiAssets', 'Alt+Space')

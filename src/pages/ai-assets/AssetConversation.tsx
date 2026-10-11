@@ -12,9 +12,9 @@ import { displayConversationTitle } from './asset-platform';
 import { cleanCapturedCodeToolbar } from '../../../electron/shared/asset-presentation';
 
 const statuses: Record<string, string> = { streaming: '接收中', complete: '已记录', withdrawn: '已撤回，原文保留', retained: '原文保留', stopped: '主动停止', failed: '异常中断' };
-// 长消息默认折叠：字符数阈值（约 20 行），折叠后显示一行开头预览
-const FOLD_THRESHOLD = 1200;
-const FOLD_PREVIEW_CHARS = 110;
+// 长消息默认折叠：字符数阈值（约 30 行），折叠态保留 4 行预览，顶部头部与底部横条都可展开/收起
+const FOLD_THRESHOLD = 2000;
+const FOLD_PREVIEW_CHARS = 600;
 function RevisionDifference({ before, after }: { before: string; after: string }) {
   const old = Array.from(before), next = Array.from(after);
   let start = 0, end = 0;
@@ -202,7 +202,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       const foldable = content.length > FOLD_THRESHOLD;
       const foldedNow = foldable && (folded[message.id] ?? true);
       const toggleFold = () => setFolded(current => ({ ...current, [message.id]: !(folded[message.id] ?? true) }));
-      const foldPreview = `${content.replace(/\s+/g, ' ').trim().slice(0, FOLD_PREVIEW_CHARS)}${content.replace(/\s+/g, ' ').trim().length > FOLD_PREVIEW_CHARS ? '…' : ''}`;
+      const foldPreview = content.replace(/\s+/g, ' ').trim().slice(0, FOLD_PREVIEW_CHARS);
       return <article className={`asset-message asset-message-${message.role}`} key={message.id} data-name="assets.message" data-id={message.id}>
         <div className={`asset-bubble${foldedNow ? ' folded' : ''}`}>
           <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
@@ -215,12 +215,14 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
               <IconButton className="asset-icon-button" aria-label="删除消息" onClick={() => setPendingDelete(message.id)}><Trash2 size={15} /></IconButton>
             </span>
             <time title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></header>
-          {foldedNow ? <button type="button" className="asset-message-folded" onClick={toggleFold} title="点击展开">
-              <span>{foldPreview}</span><ChevronDown size={14} aria-hidden="true" />
-            </button>
+          {foldedNow ? <>
+              <div className="asset-message-folded" onClick={toggleFold}>{foldPreview}</div>
+              <button type="button" className="asset-fold-bar" onClick={toggleFold}>展开全部<ChevronDown size={14} aria-hidden="true" /></button>
+            </>
             : <>
           {message.role === 'assistant' && !!detail?.reasoning && <details key={`${message.id}:${settings.expandReasoning}`} className="asset-thinking" open={settings.expandReasoning || undefined}><summary><Brain size={14} aria-hidden="true" />思考 · {detail.reasoningCharacters.toLocaleString()} 字符</summary><AssetMarkdown content={detail.reasoning} onAction={onAction} /></details>}
           {editing?.id === message.id ? <><textarea className="asset-message-editor" aria-label="编辑消息" value={editing.content} onChange={event => setEditing({ id: message.id, content: event.target.value })} /><div className="asset-actions"><Button variant="primary" onClick={() => onAction(async () => { await updateMessage(message.id, { content: editing.content }); setEditing(null); await onRefresh(); })}>保存本地编辑</Button><Button variant="outline" onClick={() => setEditing(null)}>取消</Button></div></> : <AssetMarkdown content={content} onAction={onAction} />}
+          {foldable && <button type="button" className="asset-fold-bar" onClick={toggleFold}>收起<ChevronUp size={14} aria-hidden="true" /></button>}
           {!!detail?.revisions.length && <details className="asset-revisions"><summary><History size={14} aria-hidden="true" />修订记录 · {detail.revisions.length}</summary>{detail.revisions.map((item, index) => <div key={item.id}><span>{new Date(item.capturedAt).toLocaleString()} · {statuses[item.status]}</span>{item.reasoning && <details><summary>当时的思考</summary><pre>{item.reasoning}</pre></details>}{settings.revisionDisplay === 'diff' ? <RevisionDifference before={item.content} after={detail.revisions[index + 1]?.content ?? message.content} /> : <pre>{item.content}</pre>}</div>)}</details>}
           {files(attachments.filter(item => item.conversationId === conversation.id && item.messageId === message.id))}
             </>}

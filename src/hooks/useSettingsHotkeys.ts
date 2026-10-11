@@ -72,8 +72,23 @@ export function useHotkeys(enabled: boolean): HotkeysState {
   const saveHotkey = useCallback(
     async (action: HotkeyAction) => {
       const acc = (drafts[action] ?? '').trim();
+      // 空值 = 清除绑定：主进程注销旧组合并持久化空值，动作置为禁用
       if (!acc && action !== 'toggleAiAssets') {
-        setFeedback((p) => ({ ...p, [action]: { type: 'error', msg: '热键不能为空' } }));
+        setSavingAction(action);
+        setFeedback((p) => ({ ...p, [action]: null }));
+        try {
+          const ok = await setHotkeyFor(action, '');
+          if (ok) {
+            setHotkeys((list) => list.map((h) => (h.action === action ? { ...h, accelerator: '', enabled: false } : h)));
+            setFeedback((p) => ({ ...p, [action]: { type: 'success', msg: '已清除绑定' } }));
+          } else {
+            setFeedback((p) => ({ ...p, [action]: { type: 'error', msg: '清除失败，请重试' } }));
+          }
+        } catch (e) {
+          setFeedback((p) => ({ ...p, [action]: { type: 'error', msg: String(e) } }));
+        } finally {
+          setSavingAction(null);
+        }
         return;
       }
       setSavingAction(action);

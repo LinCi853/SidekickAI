@@ -302,3 +302,12 @@ select.ai-editor-input option {
   background: var(--muted);
   color: var(--foreground);
 }
+
+/* 编辑器翻面布局：标题+分类一行，内容区为主体（通用/案例共用，翻面切换） */
+.prompt-editor-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-3); }
+.prompt-face-field { flex: 1 1 auto; min-height: 0; }
+.prompt-face-field textarea { flex: 1 1 auto; min-height: 180px; resize: vertical; }
+.prompt-face-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prompt-face-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--muted-foreground); font-size: var(--text-xs); cursor: pointer; }
+.prompt-face-toggle:hover:not(:disabled) { background: var(--muted); color: var(--foreground); }
+.prompt-face-toggle:disabled { opacity: .4; cursor: default; }

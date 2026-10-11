@@ -37,6 +37,7 @@ export default function SaveAsPromptModal({
   const [content, setContent] = useState(initialContent);
   const [category, setCategory] = useState('');
   const [hotkey, setHotkey] = useState('');
+  const [activeFace, setActiveFace] = useState<'general' | 'example'>('general');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +131,8 @@ export default function SaveAsPromptModal({
           category={category}
           hotkey={hotkey}
           editingId={null}
+          activeFace={activeFace}
+          onFaceChange={setActiveFace}
           onTitleChange={setTitle}
           onContentChange={setContent}
           onCategoryChange={setCategory}

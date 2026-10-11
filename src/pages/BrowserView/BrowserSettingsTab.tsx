@@ -363,7 +363,7 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
               value={shortcutDraft}
               placeholder="未设置（点击录制）"
               className="input-underline"
-              onRecord={handleShortcutRecord}
+              onRecord={(accelerator) => (accelerator ? handleShortcutRecord(accelerator) : handleShortcutClear())}
               otherHotkeys={[]}
               startRecording={startHotkeyRecording}
               stopRecording={stopHotkeyRecording}

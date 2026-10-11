@@ -5,6 +5,7 @@
 // Alt+key 等被系统拦截的组合也能可靠捕获。
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { X } from 'lucide-react'
 import { checkSystemHotkeyConflict } from '../../lib/system-hotkeys'
 import { useEscToCloseOverlay } from '../../hooks/useEscToCloseWindow'
 
@@ -33,12 +34,14 @@ export interface HotkeyRecorderProps {
   startRecording: () => Promise<boolean>
   /** 停止录制 */
   stopRecording: () => Promise<void>
-  /** 监听录制结果 */
-  onRecordingResult: (cb: (result: { accelerator: string; reason?: string }) => void) => () => void
+  /** 监听录制结果（cleared=true 表示录制中按了 Del/退格，请求清除绑定） */
+  onRecordingResult: (cb: (result: { accelerator: string; reason?: string; cleared?: boolean }) => void) => () => void
   /** 监听录制实时反馈（每次按键时推送当前组合，用于 UI 实时显示） */
   onRecordingPartial: (cb: (partial: { modifiers: string[]; key: string | null }) => void) => () => void
   /** 传入的 CSS 类名 */
   className?: string
+  /** 输入框 aria-label（供测试与无障碍定位） */
+  ariaLabel?: string
   /** 是否禁用 */
   disabled?: boolean
 }
@@ -53,6 +56,7 @@ export default function HotkeyRecorder({
   onRecordingResult,
   onRecordingPartial,
   className,
+  ariaLabel,
   disabled,
 }: HotkeyRecorderProps) {
   const [recording, setRecording] = useState(false)
@@ -78,7 +82,14 @@ export default function HotkeyRecorder({
       setPartialText(null)
       resetActiveRecorder = null
 
-      // 空 accelerator 表示用户按 Esc 取消
+      // cleared=true：录制中按了 Del/退格，请求清除绑定（与 Esc 取消区分）
+      if (result.cleared) {
+        setError(null)
+        onRecord('')
+        return
+      }
+
+      // 空 accelerator 且无 cleared 标记表示用户按 Esc 取消（保留原值）
       if (!result.accelerator) {
         setError(null)
         return
@@ -160,12 +171,20 @@ export default function HotkeyRecorder({
 
   const displayValue = recording
     ? (partialText ?? '按下快捷键…（Esc 取消）')
-    : value
+    : (value || '未绑定')
   const inputClass = [
     className ?? '',
     recording ? ' is-recording' : '',
     error ? ' has-error' : '',
   ].join(' ')
+
+  // 清除绑定：聚焦输入框按 Del/退格，或点旁侧清除按钮
+  const clearBinding = useCallback(() => {
+    if (disabled || !value) return
+    setError(null)
+    setPartialText(null)
+    onRecord('')
+  }, [disabled, value, onRecord])
 
   return (
     <div
@@ -181,8 +200,30 @@ export default function HotkeyRecorder({
         readOnly
         disabled={disabled}
         onClick={() => void handleClick()}
+        onKeyDown={(event) => {
+          if (recording) return
+          if (event.key === 'Delete' || event.key === 'Backspace') {
+            event.preventDefault()
+            clearBinding()
+          }
+        }}
+        title={value && !recording ? '按 Del 或退格键清除' : undefined}
+        aria-label={ariaLabel}
         data-name="ui.hotkey-recorder.input"
       />
+      {!!value && !recording && !disabled && (
+        <button
+          type="button"
+          className="hotkey-recorder-clear"
+          aria-label="清除快捷键"
+          title="按 Del 或退格键清除"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={clearBinding}
+          data-name="ui.hotkey-recorder.clear-button"
+        >
+          <X size={13} aria-hidden="true" />
+        </button>
+      )}
       {error && (
         <span
           style={{
