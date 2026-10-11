@@ -29,6 +29,18 @@ updates:
       # CI（--ignore-scripts）覆盖不到该路径，major 升级须本地 test:desktop 验证
       - dependency-name: file-uri-to-path
         update-types: ["version-update:semver-major"]
+      # React 19 是并发模式/类型体系的大版本迁移，需专项评估
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      # vite 8 要求 electron-vite 同步升级，需一并评估
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
