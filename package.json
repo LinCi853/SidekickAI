@@ -50,7 +50,7 @@
     "build:candidate:payload": "node scripts/build-distribution.cjs --mode payload",
     "versions:check": "node scripts/sync-versions.cjs --check",
     "test:tooling": "node --test scripts/workspace-menu.test.cjs scripts/shared-source.test.cjs scripts/sync-versions.test.cjs scripts/product-version.test.cjs scripts/local-build-config.test.cjs scripts/incremental-build.test.cjs scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs",
-    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test -- --maxWorkers=4 --minWorkers=1"
+    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
@@ -70,20 +70,20 @@
     "@electron/rebuild": "^4.2.1",
     "@excalidraw/excalidraw": "^0.18.1",
     "@types/adm-zip": "^0.5.7",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20.14.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/yauzl": "3.4.0",
     "@types/yazl": "3.3.1",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "electron": "^43.7.9",
     "electron-builder": "^26.17.0",
-    "electron-vite": "^2.3.0",
+    "electron-vite": "^5.0.0",
     "highlight.js": "^11.12.0",
     "katex": "^0.19.0",
-    "lucide-react": "^0.400.0",
-    "mermaid": "^11.4.1",
+    "lucide-react": "^1.55.0",
+    "mermaid": "^12.1.0",
     "playwright": "1.64.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
@@ -91,9 +91,9 @@
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "typescript": "^5.4.0",
-    "vite": "^5.3.0",
-    "vitest": "^2.1.9",
-    "zustand": "^4.5.0"
+    "vite": "^7.3.7",
+    "vitest": "^5.0.3",
+    "zustand": "^5.0.15"
   },
   "editionSessionProtocol": 2
 }

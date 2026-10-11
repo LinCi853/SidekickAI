@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: 配置 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -36,7 +36,7 @@ jobs:
         run: npm run typecheck
 
       - name: 单元回归
-        run: npm test -- --maxWorkers=4 --minWorkers=1
+        run: npm test
 
       - name: 依赖边界检查
         run: npm run test:architecture && npm run architecture:check

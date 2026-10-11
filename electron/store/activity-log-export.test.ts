@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import fs from 'node:fs'
 import promises from 'node:fs/promises'
 import path from 'node:path'
@@ -10,7 +10,7 @@ import { openActivityLogFolder } from './activity-log-export'
 import { localLogDate, logDateRange } from '../shared/log-export'
 
 const fixtureBase = path.resolve('build')
-let directory: string, store: ChatStore, openPath: ReturnType<typeof vi.fn>
+let directory: string, store: ChatStore, openPath: Mock<(directory: string) => Promise<string>>
 const snapshot = (folder: string) => JSON.parse(fs.readFileSync(path.join(folder, 'activity-records.json'), 'utf8'))
 const manifest = (folder: string) => JSON.parse(fs.readFileSync(path.join(folder, 'manifest.json'), 'utf8'))
 const exportLogs = (options = {}, sources: import('./activity-log-export').LogSource[] = []) =>
@@ -20,7 +20,7 @@ beforeEach(() => {
   fs.mkdirSync(fixtureBase, { recursive: true })
   directory = fs.mkdtempSync(path.join(fixtureBase, 'activity-log-test-'))
   store = new ChatStore(path.join(directory, 'chat.db'))
-  openPath = vi.fn(async () => '')
+  openPath = vi.fn(async (_directory: string) => '')
 })
 afterEach(() => {
   store.close(); vi.restoreAllMocks()

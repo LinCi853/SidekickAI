@@ -117,7 +117,9 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(
 
 describe('whiteboard save failures and navigation', () => {
   it('catches the real 500ms autosave failure, vetoes handoff/unload, and retries the retained scene', async () => {
-    vi.useFakeTimers();
+    // 仅伪造防抖计时器：vitest 5 起默认会连 requestAnimationFrame 一起接管，
+    // 覆盖掉 beforeEach 的同步 rAF 桩，导致水合标记不置位、onChange 被跳过
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     fixture.realAutoSave = true;
     fixture.save.mockResolvedValue({ ok: false });
     fixture.saveSync.mockReturnValue({ ok: false });

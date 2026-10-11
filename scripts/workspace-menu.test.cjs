@@ -75,7 +75,7 @@ test('dry run prints the full command plan without spawning a child', () => {
   const code = executePlan(plan, { dryRun: true, output: value => output.push(value), spawn: () => { throw new Error('unexpected child') } })
   assert.equal(code, 0)
   assert.ok(output.some(line => line.includes('test:desktop')))
-  assert.ok(output.some(line => line.includes('--maxWorkers=4')))
+  assert.ok(output.some(line => line.includes('"test"')))
   assert.ok(output.some(line => line.includes(context('concept').root)))
 })
 

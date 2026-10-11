@@ -22,7 +22,7 @@ function assertNoKey(bytes: unknown): void {
 export function assertUnencryptedCredentialsAbsent(directory: string): void {
   const file = path.join(directory, 'settings.db')
   assertOrdinaryPath(file)
-  const sqlite = process.getBuiltinModule('node:sqlite') as SqliteModule | undefined
+  const sqlite = process.getBuiltinModule('node:sqlite') as unknown as SqliteModule | undefined
   if (!sqlite) throw new Error('当前运行环境无法验证备份中的密钥材料，请设置备份密码。')
   const database = new sqlite.DatabaseSync(file, { readOnly: true })
   try {

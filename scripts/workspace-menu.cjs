@@ -55,7 +55,7 @@ function actionPlan(context, action, mode = null) {
       npm(['run', 'product:check']), npm(['run', 'shared:check']), npm(['run', 'typecheck']),
       node(['--test', 'scripts/workspace-menu.test.cjs', 'scripts/shared-source.test.cjs']),
     ]
-    case 'verify-desktop': return [npm(['test', '--', '--maxWorkers=4', '--minWorkers=1']), npm(['run', 'test:desktop'])]
+    case 'verify-desktop': return [npm(['test']), npm(['run', 'test:desktop'])]
     case 'verify-packaging': return [npm(['run', 'test:distribution'])]
     default: throw new Error(`未知操作：${action}`)
   }
