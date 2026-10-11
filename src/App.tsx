@@ -18,6 +18,7 @@ import { useTabStore } from './store/useTabStore';
 import { useWindowStore } from './store/useWindowStore';
 import { usePromptStore } from './store/usePromptStore';
 import { useModuleStore } from './store/useModuleStore';
+import { useShallow } from 'zustand/react/shallow';
 import { getAppSettings, onUiScaleChanged, onAppSettingsChanged, onUiVersionChanged, onThemeColorChanged, setMinimumSize } from './lib/electron-api';
 import {
   calculateMainWindowMinWidth,
@@ -437,8 +438,9 @@ export default function App() {
   // 模块门控：对应模块关闭时，独立窗口路由渲染占位视图（11.10 全路径封死）。
   // 注意：hook 必须在 if (!ready) 提前返回之前调用，保证每次渲染 hooks 数量一致。
   // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
-  const enabledModuleIds = useModuleStore((s) =>
-    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  // zustand 5 下 selector 每次返回新数组会触发无限重渲染（React #185），必须用 useShallow 缓存
+  const enabledModuleIds = useModuleStore(
+    useShallow((s) => s.modules.filter((m) => m.enabled).map((m) => m.id)),
   );
   const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
 

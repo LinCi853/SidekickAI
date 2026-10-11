@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { updateAppSettings } from '../../../lib/electron-api';
 import { useModuleStore } from '../../../store/useModuleStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSettingsDraft } from '../../../hooks/useSettingsData';
 import SegmentedControl from '../../ui/SegmentedControl';
 import Toggle from '../../ui/Toggle';
@@ -17,9 +18,10 @@ export default function AdvancedPanelGeneralSection() {
   // 模块联动：「默认打开」始终显示完整三个选项，已关闭模块的选项置灰不可选；
   // 可选项仅剩一项时隐藏整行；模块状态未加载完成时回退显示全部（防闪失）。
   // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
+  // zustand 5 下 selector 每次返回新数组会触发无限重渲染（React #185），必须用 useShallow 缓存
   const modules = useModuleStore((s) => s.modules);
-  const enabledModuleIds = useModuleStore((s) =>
-    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  const enabledModuleIds = useModuleStore(
+    useShallow((s) => s.modules.filter((m) => m.enabled).map((m) => m.id)),
   );
   const modulesInitialized = useModuleStore((s) => s.initialized);
 

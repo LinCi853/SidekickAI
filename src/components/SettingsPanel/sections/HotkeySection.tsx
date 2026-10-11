@@ -8,6 +8,7 @@ import {
 } from '../../../lib/electron-api';
 import Button from '../../ui/Button';
 import { useModuleStore } from '../../../store/useModuleStore';
+import { useShallow } from 'zustand/react/shallow';
 import HotkeyRecorder from '../../ui/HotkeyRecorder';
 import { SectionTitle } from '../../ui';
 
@@ -40,8 +41,9 @@ export default function HotkeySection({
 }: HotkeySectionProps) {
   // 模块联动：语音模块关闭时隐藏语音热键；进阶面板无可用模块时隐藏 Alt+Q
   // 订阅 modules 数组（勿用 (s) => s.isEnabled 函数 selector，不会触发重渲染）
-  const enabledModuleIds = useModuleStore((s) =>
-    s.modules.filter((m) => m.enabled).map((m) => m.id),
+  // zustand 5 下 selector 每次返回新数组会触发无限重渲染（React #185），必须用 useShallow 缓存
+  const enabledModuleIds = useModuleStore(
+    useShallow((s) => s.modules.filter((m) => m.enabled).map((m) => m.id)),
   );
   const advancedPanelAvailable =
     enabledModuleIds.includes('custom-chat') ||
