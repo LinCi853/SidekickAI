@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
+import { Check, Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { Button, ConfirmDialog, EmptyState, IconButton } from '../components/ui';
@@ -16,6 +16,7 @@ import { requireElectron } from '../lib/electron-api/core';
 import type { Conversation, PromptExample } from '../lib/electron-api';
 import type { AssetAttachment, AssetPromptSuggestion, AssetTextUsage } from '../../electron/shared/ai-assets.types';
 import { useEscToCloseWindow, hasOverlay } from '../hooks/useEscToCloseWindow';
+import { conversationPlatform, displayConversationTitle } from './ai-assets/asset-platform';
 import './AiAssetsView.css';
 import { isAssetInterfaceImage } from '../../electron/shared/asset-presentation';
 import { useAssetMenuDismissal } from './ai-assets/useAssetMenuDismissal';
@@ -27,12 +28,6 @@ const categories = [
   { id: 'prompts', label: '提示词', Icon: SquareLibrary },
   { id: 'files', label: '资料', Icon: Files },
 ] as const;
-
-function conversationPlatform(conversation: Conversation) {
-  if (conversation.sourceType === 'api') return 'API';
-  try { return conversation.url ? new URL(conversation.url).hostname.replace(/^www\./, '') : '网页'; }
-  catch { return '网页'; }
-}
 
 export default function AiAssetsView() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -57,6 +52,9 @@ export default function AiAssetsView() {
   const [fileDirection, setFileDirection] = useState<'all' | 'input' | 'output'>('input');
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [menu, setMenu] = useState<{ id: string; left: number; top: number }>();
+  const [renaming, setRenaming] = useState<{ id: string; value: string }>();
+  const anchorIndex = useRef<number>();
   const [pendingCleanup, setPendingCleanup] = useState<{ kind: 'files' | 'conversations'; ids: string[]; names: string[] }>();
   const [cleanupError, setCleanupError] = useState('');
   const cleaning = useRef(false);
@@ -131,6 +129,50 @@ export default function AiAssetsView() {
     : category === 'conversations' ? visibleConversations.map(item => ({ id: item.id, name: item.title || '未命名对话' })) : [], [category, visibleFiles, visibleConversations]);
   useEffect(() => { setSelectedIds(current => current.filter(id => selectionItems.some(item => item.id === id))); }, [selectionItems]);
   const toggleSelection = (id: string) => setSelectedIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+  // 对话列表右键菜单：指针按下/键盘/缩放时关闭，与文字选择浮层同一套约定
+  useEffect(() => {
+    if (!menu) return;
+    const outside = (event: PointerEvent) => { if (!(event.target as Element).closest('.asset-context-menu')) setMenu(undefined); };
+    const dismiss = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(undefined); };
+    const clear = () => setMenu(undefined);
+    window.addEventListener('pointerdown', outside);
+    window.addEventListener('keydown', dismiss);
+    window.addEventListener('resize', clear);
+    return () => {
+      window.removeEventListener('pointerdown', outside);
+      window.removeEventListener('keydown', dismiss);
+      window.removeEventListener('resize', clear);
+    };
+  }, [menu]);
+  const openConversationMenu = (event: React.MouseEvent, id: string) => {
+    event.preventDefault();
+    setRenaming(undefined);
+    setMenu({ id, left: Math.min(event.clientX, window.innerWidth - 168), top: Math.min(event.clientY, window.innerHeight - 190) });
+  };
+  const handleConversationClick = (event: React.MouseEvent<HTMLButtonElement>, index: number, id: string) => {
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      const anchor = anchorIndex.current ?? index;
+      setSelecting(true);
+      if (event.shiftKey) setSelectedIds(visibleConversations.slice(Math.min(anchor, index), Math.max(anchor, index) + 1).map(item => item.id));
+      else toggleSelection(id);
+      anchorIndex.current = index;
+      return;
+    }
+    anchorIndex.current = index;
+    if (renaming) { setRenaming(undefined); return; }
+    if (selecting) { toggleSelection(id); return; }
+    openConversation(id);
+  };
+  const saveConversationRename = () => {
+    if (!renaming) return;
+    const { id, value } = renaming;
+    const trimmed = value.trim();
+    setRenaming(undefined);
+    if (!trimmed) return;
+    void run(async () => { await api.renameConversation(id, trimmed); await refresh(); });
+  };
+  const menuConversation = menu ? conversations.find(item => item.id === menu.id) : undefined;
   useEffect(() => { setCleanupError(''); }, [pendingCleanup]);
   const clearSelection = async () => {
     if (!pendingCleanup || cleaning.current) return;
@@ -182,7 +224,14 @@ export default function AiAssetsView() {
     <StandaloneWindowHeader title="AI资产" className="asset-topbar" dataNamePrefix="assets.topbar" leading={<>
       {category === 'conversations' && <IconButton className="asset-list-toggle asset-icon-button" aria-label="打开对话列表" aria-expanded={listOpen} aria-controls="asset-conversations" onClick={() => setListOpen(value => !value)}><List size={16} /></IconButton>}
       <span className="asset-window-title">AI资产</span></>} onOpenSettings={() => setSettingsOpen(true)}
-      actions={<IconButton className="asset-icon-button" aria-label="刷新" onClick={() => void run(refresh)}><RefreshCw size={16} /></IconButton>}
+      actions={<>
+        {category === 'conversations' && (selecting || !!selectedIds.length) && <>
+          {selecting && <Button variant="ghost" onClick={() => setSelectedIds(selectedIds.length === visibleConversations.length ? [] : visibleConversations.map(item => item.id))}>{selectedIds.length === visibleConversations.length ? '取消全选' : '全选'}</Button>}
+          <Button variant="danger" disabled={!selectedIds.length} onClick={() => setPendingCleanup({ kind: 'conversations', ids: [...selectedIds], names: visibleConversations.filter(item => selectedIds.includes(item.id)).map(item => item.title || '未命名对话') })}>清理所选</Button>
+          <Button variant="ghost" onClick={() => { setSelecting(false); setSelectedIds([]); }}>取消</Button>
+        </>}
+        <IconButton className="asset-icon-button" aria-label="刷新" onClick={() => void run(refresh)}><RefreshCw size={16} /></IconButton>
+      </>}
       center={<><nav className="asset-categories" aria-label="AI资产分类">
         {categories.map(({ id, label, Icon }) => <button key={id} type="button" aria-label={label} title={label} aria-pressed={category === id} className={category === id ? 'active' : ''} onClick={() => { setCategory(id); setQuery(''); setListOpen(false); }}><Icon size={15} /><span>{label}</span></button>)}
       </nav><label className="asset-search-field"><Search size={15} aria-hidden="true" /><input ref={searchRef} className="asset-search" aria-label="搜索 AI资产" placeholder="搜索资产" value={query} onChange={event => setQuery(event.target.value)} /></label></>} />
@@ -190,13 +239,13 @@ export default function AiAssetsView() {
     {error && <p className="asset-feedback asset-error" role="alert">{error}</p>}
     {notice && <p className="asset-feedback" role="status">{notice}</p>}
     <AssetCollectionStatus onAction={operation => void run(operation)} />
-    {category !== 'prompts' && <div className="asset-bulk-toolbar">
-      {category === 'files' && <label>来源 <select aria-label="资料来源" value={fileDirection} onChange={event => setFileDirection(event.target.value as typeof fileDirection)}><option value="input">用户发送</option><option value="output">AI 返回（历史）</option><option value="all">全部资料</option></select></label>}
+    {category === 'files' && <div className="asset-bulk-toolbar">
+      <label>来源 <select aria-label="资料来源" value={fileDirection} onChange={event => setFileDirection(event.target.value as typeof fileDirection)}><option value="input">用户发送</option><option value="output">AI 返回（历史）</option><option value="all">全部资料</option></select></label>
       <span>{selectionItems.length} 项{selecting ? ` · 已选 ${selectedIds.length} 项` : ''}</span>
       {selecting ? <><Button variant="ghost" onClick={() => setSelectedIds(selectedIds.length === selectionItems.length ? [] : selectionItems.map(item => item.id))}>{selectedIds.length === selectionItems.length ? '取消全选' : '全选当前结果'}</Button>
         <Button variant="danger" disabled={!selectedIds.length} onClick={() => setPendingCleanup({ kind: category, ids: [...selectedIds], names: selectionItems.filter(item => selectedIds.includes(item.id)).map(item => item.name) })}>清理所选</Button>
         <Button variant="ghost" onClick={() => { setSelecting(false); setSelectedIds([]); }}>取消多选</Button></> : <Button variant="outline" disabled={!selectionItems.length} onClick={() => setSelecting(true)}>多选清理</Button>}
-      {category === 'files' && <small>仅自动收纳用户上传、粘贴或拖入的附件</small>}
+      <small>仅自动收纳用户上传、粘贴或拖入的附件</small>
     </div>}
     {category === 'prompts' ? <div className="asset-prompt-body">
       {!!suggestions.length && <details className="asset-suggestions" open><summary>自动提取的重点提示词</summary>
@@ -212,16 +261,28 @@ export default function AiAssetsView() {
       : <div className="asset-conversation-body">
         {listOpen && <button className="asset-list-scrim" aria-label="关闭对话列表" onClick={() => setListOpen(false)} />}
         <aside id="asset-conversations" className={`asset-conversations${listOpen ? ' is-open' : ''}`} aria-label="对话列表">
-        <div className="asset-list-heading"><span>{visibleConversations.length} 个对话</span><details ref={importMenuRef} className="asset-operation-menu asset-import-menu"><summary aria-label="导入对话" title="导入对话"><Upload size={15} /></summary><div>
+        <div className="asset-list-heading"><span>{visibleConversations.length} 个对话{selectedIds.length ? ` · 已选 ${selectedIds.length}` : ''}</span><details ref={importMenuRef} className="asset-operation-menu asset-import-menu"><summary aria-label="导入对话" title="导入对话"><Upload size={15} /></summary><div>
           {([['json', 'JSON'], ['md', 'Markdown'], ['deepseek', 'DeepSeek']] as const).map(([format, label]) => <Button key={format} variant="ghost" onClick={() => { if (importMenuRef.current) importMenuRef.current.open = false; void run(async () => { const result = await importConversation(format, 'imported'); if (result.ok) await refresh(); else if (!result.canceled) throw new Error('导入失败'); }); }}>导入 {label}</Button>)}
         </div></details><IconButton className="asset-list-close asset-icon-button" aria-label="关闭对话列表" onClick={() => setListOpen(false)}><X size={15} /></IconButton></div>
         <div className="asset-conversation-list">{!visibleConversations.length && <EmptyState message={query ? '没有匹配的对话' : '交流记录会自动保存在这里'} />}
-        {visibleConversations.map(item => <div key={item.id} className="asset-conversation-row">{selecting && <input type="checkbox" aria-label={`选择对话 ${item.title || '未命名对话'}`} checked={selectedIds.includes(item.id)} onChange={() => toggleSelection(item.id)} />}<button className={`asset-conversation ${selected === item.id ? 'active' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'} onClick={() => selecting ? toggleSelection(item.id) : openConversation(item.id)}>
-          <strong>{item.title || '未命名对话'}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button></div>)}
+        {visibleConversations.map((item, index) => <div key={item.id} className="asset-conversation-row">{selecting && <input type="checkbox" aria-label={`选择对话 ${item.title || '未命名对话'}`} checked={selectedIds.includes(item.id)} onChange={() => toggleSelection(item.id)} />}
+          {renaming?.id === item.id ? <div className="asset-conversation-rename"><input aria-label="重命名对话" autoFocus value={renaming.value} onChange={event => setRenaming({ id: item.id, value: event.target.value })}
+            onKeyDown={event => { if (event.key === 'Enter') saveConversationRename(); else if (event.key === 'Escape') setRenaming(undefined); }} />
+            <IconButton className="asset-icon-button" aria-label="保存名称" onClick={saveConversationRename}><Check size={15} /></IconButton>
+            <IconButton className="asset-icon-button" aria-label="取消重命名" onClick={() => setRenaming(undefined)}><X size={15} /></IconButton></div>
+            : <button className={`asset-conversation${selected === item.id ? ' active' : ''}${selectedIds.includes(item.id) ? ' selected' : ''}`} aria-current={selected === item.id ? 'true' : undefined} title={item.title || '未命名对话'}
+              onClick={event => handleConversationClick(event, index, item.id)} onContextMenu={event => openConversationMenu(event, item.id)}>
+              <strong>{displayConversationTitle(item)}</strong><span className="asset-conversation-meta"><span title={conversationPlatform(item)}>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0}</span><time title={new Date(item.updatedAt).toLocaleString()} dateTime={new Date(item.updatedAt).toISOString()}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time></span></button>}</div>)}
         </div>
         {totalUsage && <div className="asset-total-usage" data-name="assets.total-usage" title={`全部对话累计 Unicode 字符（含空白与标点）：输入 ${totalUsage.inputCharacters.toLocaleString()} · 思考 ${totalUsage.reasoningCharacters.toLocaleString()} · 输出 ${totalUsage.outputCharacters.toLocaleString()}`}><span>总字符</span><strong>{totalUsage.totalCharacters.toLocaleString()}</strong></div>}
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
         attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
+    {menu && <div className="asset-context-menu" role="menu" aria-label="对话操作菜单" style={{ left: menu.left, top: menu.top }}>
+      <Button variant="ghost" role="menuitem" onClick={() => { const id = menu.id; setMenu(undefined); openConversation(id); }}>打开</Button>
+      <Button variant="ghost" role="menuitem" disabled={!menuConversation} onClick={() => { const item = menuConversation; setMenu(undefined); if (item) setRenaming({ id: item.id, value: item.title ?? '' }); }}>重命名</Button>
+      <Button variant="ghost" role="menuitem" disabled={!menuConversation} onClick={() => { const item = menuConversation; setMenu(undefined); if (item) setPendingCleanup({ kind: 'conversations', ids: [item.id], names: [item.title || '未命名对话'] }); }}>删除</Button>
+      <Button variant="ghost" role="menuitem" onClick={() => { setMenu(undefined); setSelecting(true); }}>多选清理</Button>
+    </div>}
     <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="AI资产设置" className="asset-settings-modal" portal><AssetSettingsPanel /></Modal>
     <ConfirmDialog open={!!pendingCleanup} title={`清理所选${pendingCleanup?.kind === 'files' ? '资料' : '对话'}`} variant="danger" confirmLabel="确认清理"
       onCancel={() => { if (!cleaning.current) setPendingCleanup(undefined); }} onConfirm={clearSelection}

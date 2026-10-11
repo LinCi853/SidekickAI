@@ -8,6 +8,7 @@ import type { Conversation } from '../../lib/electron-api';
 import type { AssetAttachment, AssetConversationGraph, AssetGraphNode, AssetMessageDetail, AssetSettings, AssetTextUsage } from '../../../electron/shared/ai-assets.types';
 import AssetFileCard from './AssetFileCard';
 import AssetMarkdown from './AssetMarkdown';
+import { displayConversationTitle } from './asset-platform';
 import { cleanCapturedCodeToolbar } from '../../../electron/shared/asset-presentation';
 
 const statuses: Record<string, string> = { streaming: '接收中', complete: '已记录', withdrawn: '已撤回，原文保留', retained: '原文保留', stopped: '主动停止', failed: '异常中断' };
@@ -160,7 +161,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
   </details>;
   const messages = graph.path.map(id => graph.nodes.find(node => node.id === id)!).filter(Boolean);
   return <><div className="asset-detail-heading">
-    <div className="asset-detail-title">{rename !== undefined ? <div className="asset-actions"><input aria-label="本地对话名称" value={rename} onChange={event => setRename(event.target.value)} /><Button variant="primary" onClick={() => onAction(async () => { await api.renameConversation(conversation.id, rename); setRename(undefined); await onRefresh(); })}>保存名称</Button><Button variant="ghost" onClick={() => setRename(undefined)}>取消</Button></div> : <h2>{conversation.title}</h2>}
+    <div className="asset-detail-title">{rename !== undefined ? <div className="asset-actions"><input aria-label="本地对话名称" value={rename} onChange={event => setRename(event.target.value)} /><Button variant="primary" onClick={() => onAction(async () => { await api.renameConversation(conversation.id, rename); setRename(undefined); await onRefresh(); })}>保存名称</Button><Button variant="ghost" onClick={() => setRename(undefined)}>取消</Button></div> : <h2>{displayConversationTitle(conversation)}</h2>}
       <details className="asset-operation-menu"><summary aria-label="对话操作" title="对话操作"><MoreHorizontal size={18} /></summary><div>
         <Button variant="ghost" onClick={() => setRename(conversation.title)}>本地重命名</Button>
         {(['md', 'json'] as const).map(format => <Button key={format} variant="ghost" onClick={() => onAction(async () => { const result = await exportConversation(conversation.id, format); if (!result.ok && !result.canceled) throw new Error('导出失败'); })}>导出 {format.toUpperCase()}</Button>)}
@@ -189,19 +190,21 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       const branchCount = Math.max(message.branchCount ?? 1, known.length);
       const branchIndex = message.branchIndex ?? known.findIndex(node => node.id === message.id) + 1;
       return <article className={`asset-message asset-message-${message.role}`} key={message.id} data-name="assets.message" data-id={message.id}>
-        <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
-          {branchCount > 1 && <div className="asset-branch" aria-label="消息分支"><GitBranch size={14} aria-hidden="true" /><IconButton className="asset-icon-button" aria-label="上一个分支" disabled={branchIndex <= 1} onClick={() => onAction(() => switchBranch(message, -1))}><ArrowLeft size={14} /></IconButton><span>{branchIndex}/{branchCount}</span><IconButton className="asset-icon-button" aria-label="下一个分支" disabled={branchIndex >= branchCount} onClick={() => onAction(() => switchBranch(message, 1))}><ArrowRight size={14} /></IconButton>{known.length < branchCount && <span className="asset-branch-missing">部分分支尚未收纳</span>}</div>}
-          <time title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></header>
-        {message.role === 'assistant' && !!detail?.reasoning && <details key={`${message.id}:${settings.expandReasoning}`} className="asset-thinking" open={settings.expandReasoning || undefined}><summary><Brain size={14} aria-hidden="true" />思考 · {detail.reasoningCharacters.toLocaleString()} 字符</summary><AssetMarkdown content={detail.reasoning} onAction={onAction} /></details>}
-        {editing?.id === message.id ? <><textarea className="asset-message-editor" aria-label="编辑消息" value={editing.content} onChange={event => setEditing({ id: message.id, content: event.target.value })} /><div className="asset-actions"><Button variant="primary" onClick={() => onAction(async () => { await updateMessage(message.id, { content: editing.content }); setEditing(null); await onRefresh(); })}>保存本地编辑</Button><Button variant="outline" onClick={() => setEditing(null)}>取消</Button></div></> : <AssetMarkdown content={content} onAction={onAction} />}
-        <div className="asset-message-footer"><div className="asset-actions">
-          <IconButton className="asset-icon-button" aria-label="复制消息" onClick={() => onAction(() => api.copyText(message.content))}><Copy size={15} /></IconButton>
-          <IconButton className="asset-icon-button" aria-label="编辑消息" onClick={() => setEditing({ id: message.id, content: message.content })}><Pencil size={15} /></IconButton>
-          <IconButton className="asset-icon-button" aria-label="存为提示词" onClick={() => onAction(() => onPrompt(message.content, { conversationId: conversation.id, messageId: message.id }))}><BookPlus size={15} /></IconButton>
-          <IconButton className="asset-icon-button" aria-label="删除消息" onClick={() => setPendingDelete(message.id)}><Trash2 size={15} /></IconButton>
-        </div></div>
-        {!!detail?.revisions.length && <details className="asset-revisions"><summary><History size={14} aria-hidden="true" />修订记录 · {detail.revisions.length}</summary>{detail.revisions.map((item, index) => <div key={item.id}><span>{new Date(item.capturedAt).toLocaleString()} · {statuses[item.status]}</span>{item.reasoning && <details><summary>当时的思考</summary><pre>{item.reasoning}</pre></details>}{settings.revisionDisplay === 'diff' ? <RevisionDifference before={item.content} after={detail.revisions[index + 1]?.content ?? message.content} /> : <pre>{item.content}</pre>}</div>)}</details>}
-        {files(attachments.filter(item => item.conversationId === conversation.id && item.messageId === message.id))}
+        <div className="asset-bubble">
+          <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
+            {branchCount > 1 && <div className="asset-branch" aria-label="消息分支"><GitBranch size={14} aria-hidden="true" /><IconButton className="asset-icon-button" aria-label="上一个分支" disabled={branchIndex <= 1} onClick={() => onAction(() => switchBranch(message, -1))}><ArrowLeft size={14} /></IconButton><span>{branchIndex}/{branchCount}</span><IconButton className="asset-icon-button" aria-label="下一个分支" disabled={branchIndex >= branchCount} onClick={() => onAction(() => switchBranch(message, 1))}><ArrowRight size={14} /></IconButton>{known.length < branchCount && <span className="asset-branch-missing">部分分支尚未收纳</span>}</div>}
+            <span className="asset-message-tools">
+              <IconButton className="asset-icon-button" aria-label="复制消息" onClick={() => onAction(() => api.copyText(message.content))}><Copy size={15} /></IconButton>
+              <IconButton className="asset-icon-button" aria-label="编辑消息" onClick={() => setEditing({ id: message.id, content: message.content })}><Pencil size={15} /></IconButton>
+              <IconButton className="asset-icon-button" aria-label="存为提示词" onClick={() => onAction(() => onPrompt(message.content, { conversationId: conversation.id, messageId: message.id }))}><BookPlus size={15} /></IconButton>
+              <IconButton className="asset-icon-button" aria-label="删除消息" onClick={() => setPendingDelete(message.id)}><Trash2 size={15} /></IconButton>
+            </span>
+            <time title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></header>
+          {message.role === 'assistant' && !!detail?.reasoning && <details key={`${message.id}:${settings.expandReasoning}`} className="asset-thinking" open={settings.expandReasoning || undefined}><summary><Brain size={14} aria-hidden="true" />思考 · {detail.reasoningCharacters.toLocaleString()} 字符</summary><AssetMarkdown content={detail.reasoning} onAction={onAction} /></details>}
+          {editing?.id === message.id ? <><textarea className="asset-message-editor" aria-label="编辑消息" value={editing.content} onChange={event => setEditing({ id: message.id, content: event.target.value })} /><div className="asset-actions"><Button variant="primary" onClick={() => onAction(async () => { await updateMessage(message.id, { content: editing.content }); setEditing(null); await onRefresh(); })}>保存本地编辑</Button><Button variant="outline" onClick={() => setEditing(null)}>取消</Button></div></> : <AssetMarkdown content={content} onAction={onAction} />}
+          {!!detail?.revisions.length && <details className="asset-revisions"><summary><History size={14} aria-hidden="true" />修订记录 · {detail.revisions.length}</summary>{detail.revisions.map((item, index) => <div key={item.id}><span>{new Date(item.capturedAt).toLocaleString()} · {statuses[item.status]}</span>{item.reasoning && <details><summary>当时的思考</summary><pre>{item.reasoning}</pre></details>}{settings.revisionDisplay === 'diff' ? <RevisionDifference before={item.content} after={detail.revisions[index + 1]?.content ?? message.content} /> : <pre>{item.content}</pre>}</div>)}</details>}
+          {files(attachments.filter(item => item.conversationId === conversation.id && item.messageId === message.id))}
+        </div>
       </article>;
     })}
     {files(attachments.filter(item => item.conversationId === conversation.id && (!item.messageId || !graph.nodes.some(node => node.id === item.messageId))))}

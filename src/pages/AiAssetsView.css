@@ -23,6 +23,7 @@
 .asset-conversation { width: 100%; min-height: 60px; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 6px; border: 0; border-radius: 4px; padding: 9px 10px; background: transparent; color: var(--foreground); cursor: pointer; }
 .asset-conversation:hover { background: var(--muted); }
 .asset-conversation.active { background: var(--accent-10); }
+.asset-conversation.selected { outline: 1px solid var(--accent-bright); outline-offset: -1px; }
 .asset-conversation strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
 .asset-conversation-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-foreground); }
 .asset-conversation-meta > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -39,15 +40,19 @@
 .asset-operation-menu > div { position: absolute; right: 0; top: 32px; min-width: 145px; display: flex; flex-direction: column; padding: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; box-shadow: 0 6px 18px #0002; z-index: 15; }
 .asset-operation-menu > div button { justify-content: flex-start; font-size: 12px; white-space: nowrap; }
 .asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 4px 14px 16px; }
-.asset-message { min-width: 0; border: 0; border-radius: 6px; background: transparent; padding: 10px 12px; margin: 8px 0; overflow-wrap: anywhere; }
-.asset-message-user { background: var(--accent-10); }
-.asset-message-system { background: var(--muted); }
-.asset-message > header { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px; color: var(--muted-foreground); }
+.asset-message { display: flex; min-width: 0; margin: 8px 0; }
+.asset-message-user { justify-content: flex-end; }
+.asset-bubble { min-width: 0; max-width: min(78%, 900px); border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 8px 12px 9px; overflow-wrap: anywhere; }
+.asset-message-user .asset-bubble { background: var(--accent-10); border-color: transparent; border-top-right-radius: 4px; }
+.asset-message-assistant .asset-bubble, .asset-message-system .asset-bubble { border-top-left-radius: 4px; }
+.asset-message-system .asset-bubble { background: var(--muted); }
+.asset-message header { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px; color: var(--muted-foreground); }
 .asset-message header strong { color: var(--foreground); }
-.asset-message time { margin-left: auto; font-size: 10px; }
+.asset-message-tools { display: inline-flex; gap: 2px; margin-left: auto; visibility: hidden; }
+.asset-message:hover .asset-message-tools, .asset-message:focus-within .asset-message-tools { visibility: visible; }
+.asset-message time { flex: none; font-size: 10px; }
 .asset-status { font-size: 11px; color: var(--muted-foreground); }
 .asset-status.failed, .asset-error { color: color-mix(in srgb, var(--destructive, #b64134) 60%, var(--foreground)); }
-.asset-message-footer { display: flex; align-items: center; gap: 8px; }
 .asset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
 .asset-message .asset-actions { gap: 2px; margin: 3px 0 0; }
 .asset-branch { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 11px; }
@@ -74,6 +79,8 @@
 .asset-diff del { background: #df524729; color: var(--foreground); text-decoration: line-through; }
 .asset-diff ins { background: #38964c29; color: var(--foreground); text-decoration: none; }
 .asset-selection-actions { position: fixed; display: flex; gap: 4px; width: fit-content; z-index: 20; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
+.asset-context-menu { position: fixed; z-index: 40; display: flex; flex-direction: column; min-width: 150px; padding: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; }
+.asset-context-menu button { justify-content: flex-start; font-size: 12px; white-space: nowrap; }
 .asset-attachment-group { margin-top: 6px; padding: 0; }
 .asset-attachment-group > summary { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 7px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
 .asset-attachment-count, .asset-attachment-failure, .asset-attachment-pending { flex: none; white-space: nowrap; }
@@ -123,7 +130,7 @@
   .asset-detail-heading { padding: 8px 10px; }
   .asset-detail-heading .asset-usage { width: 100%; font-size: 10px; }
   .asset-chat-scroll { padding: 2px 8px 12px; }
-  .asset-message { padding: 9px; }
+  .asset-bubble { max-width: 88%; padding: 8px 10px; }
   .asset-file-list, .asset-prompt-body { padding: 10px; }
   .asset-attachment-group > summary { gap: 5px; }
   .asset-attachment-failure, .asset-attachment-pending { font-size: 10px; }
@@ -145,5 +152,7 @@
 .asset-bulk-toolbar > span { margin-right: auto; color: var(--muted-foreground); }
 .asset-bulk-toolbar small { flex-basis: 100%; color: var(--muted-foreground); font-size: 11px; }
 .asset-conversation-row { display: flex; align-items: center; gap: 4px; }
-.asset-conversation-row > .asset-conversation { min-width: 0; }
+.asset-conversation-row > .asset-conversation { min-width: 0; flex: 1; }
 .asset-conversation-row > input, .asset-file-heading > input { flex: none; accent-color: var(--accent-bright); }
+.asset-conversation-rename { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+.asset-conversation-rename input { flex: 1; min-width: 0; min-height: 28px; padding: 4px 7px; font-size: 12px; color: var(--foreground); background: var(--background); border: 1px solid var(--accent-bright); border-radius: 4px; outline: 0; }
