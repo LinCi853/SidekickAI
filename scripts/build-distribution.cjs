@@ -147,8 +147,10 @@ function collectCandidates(artifacts, output, root = ROOT) {
     }
   } else if (artifacts.payloads) throw new Error('Unexpected application payload candidates')
   if (packages.portable) {
-    if (artifacts.portable?.length !== 1 || artifacts.portable[0].arch !== 'universal') throw new Error('Portable delivery must be one dual-architecture archive')
-    add(artifacts.portable[0].path, 'SidekickAI-Portable-' + artifacts.version + '-win.zip', 'portable', 'universal', artifacts.portable[0].sha256)
+    if (artifacts.portable?.length !== 2 || !['x64', 'arm64'].every(arch => artifacts.portable.some(file => file.arch === arch))) throw new Error('Portable delivery requires one archive per architecture')
+    for (const artifact of artifacts.portable) {
+      add(artifact.path, `SidekickAI-Portable-${artifacts.version}-${artifact.arch}-win.zip`, 'portable', artifact.arch, artifact.sha256)
+    }
   } else if (artifacts.portable) throw new Error('Unexpected portable candidate')
   let assemblyEvidence
   if (packages.installer) {

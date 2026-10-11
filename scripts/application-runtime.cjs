@@ -35,7 +35,7 @@ function validateSoftwarePath(value) {
   const segments = value.split('/')
   for (const segment of segments) {
     const lower = segment.toLowerCase()
-    const publicService = /^(?:(?:SidekickAI\/)?(?:win-unpacked|win-arm64-unpacked)\/)?resources\/oxy-service\.json$/.test(value)
+    const publicService = /^(?:(?:SidekickAI\/)?(?:(?:win-unpacked|win-arm64-unpacked)\/)?resources\/oxy-service\.json)$/.test(value)
     if (FORBIDDEN_NAMES.has(lower) || lower === 'oxy-service.json' && !publicService || lower.startsWith('.env.')
       || /^(?:sidekickai-)?setup.*\.exe$/i.test(segment) || /\.(?:db|sqlite|sqlite3)(?:-wal|-shm)?$/i.test(segment)) {
       throw new Error(`Application input contains non-distributable content: ${value}`)

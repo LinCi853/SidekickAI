@@ -10,17 +10,13 @@ const runtime = require('./application-runtime.cjs')
 
 const DIRECTORY_NAME = product.name
 const LAYOUT = product.portable
-const MARKER = 'SidekickAI Dual Architecture Portable Marker\n'
-const MIN_ZIP_BYTES = 120 * 1024 * 1024
+// 单架构便携包：应用目录即包根，数据目录位于应用目录内（应用原生单目录便携模式）
+const SINGLE_MARKER = 'AI Window Portable Mode Marker\n'
+const MIN_ZIP_BYTES = 90 * 1024 * 1024
 const REQUIRED_ENTRIES = [
-  `${DIRECTORY_NAME}/${LAYOUT.launcher}`,
-  `${DIRECTORY_NAME}/portable-layout.json`,
-  `${DIRECTORY_NAME}/portable-manifest.json`,
-  ...Object.values(LAYOUT.runtimes).flatMap(directory => [
-    `${DIRECTORY_NAME}/${directory}/${product.executable}`,
-    `${DIRECTORY_NAME}/${directory}/resources/app.asar`,
-    `${DIRECTORY_NAME}/${directory}/portable.txt`,
-  ]),
+  `${DIRECTORY_NAME}/${product.executable}`,
+  `${DIRECTORY_NAME}/resources/app.asar`,
+  `${DIRECTORY_NAME}/portable.txt`,
 ]
 function validatePortablePath(name) {
   return runtime.validateSoftwarePath(name.replaceAll('\\', '/').replace(/\/$/, ''))
@@ -113,25 +109,6 @@ function verifyZip(zipPath, minimumSize = MIN_ZIP_BYTES) {
   return { size, entries: entries.length, sha256: u.sha256(zipPath) }
 }
 
-function universalLauncher() {
-  return [
-    '@echo off',
-    'setlocal',
-    'set "SIDEKICK_ARCH=x64"',
-    'if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "SIDEKICK_ARCH=arm64"',
-    'if /I "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "SIDEKICK_ARCH=arm64"',
-    `set "SIDEKICK_TARGET=%~dp0${LAYOUT.runtimes.x64}\\${product.executable}"`,
-    `if "%SIDEKICK_ARCH%"=="arm64" set "SIDEKICK_TARGET=%~dp0${LAYOUT.runtimes.arm64}\\${product.executable}"`,
-    'if not exist "%SIDEKICK_TARGET%" (',
-    '  echo Application runtime is missing. Extract the complete archive and try again.',
-    '  exit /b 1',
-    ')',
-    'start "" "%SIDEKICK_TARGET%" %*',
-    'exit /b %errorlevel%',
-    '',
-  ].join('\r\n')
-}
-
 function stagePortableApplication(source, destination, arch) {
   validateArchitectures([arch])
   const relative = path.relative(path.resolve(source), path.resolve(destination))
@@ -147,35 +124,24 @@ function stagePortableApplication(source, destination, arch) {
   }
   fs.cpSync(source, destination, { recursive: true, errorOnExist: true, force: false })
   u.assertUnchanged(applicationInputs, applicationFingerprint(destination))
-  fs.writeFileSync(path.join(destination, 'portable.txt'), MARKER)
+  fs.writeFileSync(path.join(destination, 'portable.txt'), SINGLE_MARKER)
   u.assertUnchanged(applicationInputs, applicationFingerprint(source))
   return { source, directory: destination, native, applicationInputs, inputs: applicationFingerprint(destination) }
 }
 
-function packPortable({ output, applications, architectures = ['x64', 'arm64'], minimumZipBytes = MIN_ZIP_BYTES }) {
-  validateArchitectures(architectures)
-  if (architectures.length !== 2 || !architectures.includes('x64') || !architectures.includes('arm64')) throw new Error('Portable distribution requires x64 and arm64 runtimes')
-  if (!output || !applications) throw new Error('Portable output and application directories are required')
-  output = path.resolve(output)
-  applications = path.resolve(applications)
-  const staging = path.join(output, 'portable-staging', 'universal')
+function packPortableArchitecture({ output, applications, arch, minimumZipBytes }) {
+  const staging = path.join(output, 'portable-staging', arch)
   const directory = path.join(staging, DIRECTORY_NAME)
-  const zip = path.join(output, 'SidekickAI-Portable-' + VERSION + '-win.zip')
-  for (const target of [directory, zip, path.join(output, 'portable-evidence.json')]) {
+  const zip = path.join(output, `SidekickAI-Portable-${VERSION}-${arch}-win.zip`)
+  for (const target of [directory, zip]) {
     if (fs.existsSync(target)) throw new Error('Portable output already exists: ' + target)
   }
-  const applicationInputs = {}
-  for (const arch of ['x64', 'arm64']) {
-    const source = path.join(applications, LAYOUT.runtimes[arch])
-    const staged = stagePortableApplication(source, path.join(directory, LAYOUT.runtimes[arch]), arch)
-    applicationInputs[arch] = staged.applicationInputs
-  }
-  fs.mkdirSync(path.join(directory, LAYOUT.dataDirectory))
-  fs.writeFileSync(path.join(directory, LAYOUT.launcher), universalLauncher(), { flag: 'wx' })
-  fs.writeFileSync(path.join(directory, 'portable-layout.json'), JSON.stringify(LAYOUT, null, 2) + '\n', { flag: 'wx' })
+  const source = path.join(applications, LAYOUT.runtimes[arch])
+  const staged = stagePortableApplication(source, directory, arch)
+  fs.mkdirSync(path.join(directory, LAYOUT.dataDirectory), { recursive: true })
   const manifest = {
     schemaVersion: 1, edition: selection.edition, name: product.name, version: VERSION,
-    architectures: ['x64', 'arm64'], packageKind: 'portable', files: runtime.fileInventory(directory),
+    architectures: [arch], packageKind: 'portable', files: runtime.fileInventory(directory),
   }
   fs.writeFileSync(path.join(directory, 'portable-manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
   const inputs = applicationFingerprint(directory)
@@ -183,8 +149,23 @@ function packPortable({ output, applications, architectures = ['x64', 'arm64'], 
     { emptyDirectories: [DIRECTORY_NAME + '/' + LAYOUT.dataDirectory] })
   const verification = verifyZip(zip, minimumZipBytes)
   u.assertUnchanged(inputs, applicationFingerprint(directory))
-  for (const arch of architectures) u.assertUnchanged(applicationInputs[arch], applicationFingerprint(path.join(applications, LAYOUT.runtimes[arch])))
-  const artifacts = [{ arch: 'universal', path: zip, ...verification, directory, applicationInputs, inputs }]
+  u.assertUnchanged(staged.applicationInputs, applicationFingerprint(source))
+  return { arch, path: zip, ...verification, directory, applicationInputs: staged.applicationInputs, inputs }
+}
+
+function packPortable({ output, applications, architectures = ['x64', 'arm64'], minimumZipBytes = MIN_ZIP_BYTES }) {
+  validateArchitectures(architectures)
+  if (!output || !applications) throw new Error('Portable output and application directories are required')
+  output = path.resolve(output)
+  applications = path.resolve(applications)
+  if (fs.existsSync(path.join(output, 'portable-evidence.json'))) throw new Error('Portable output already exists: ' + path.join(output, 'portable-evidence.json'))
+  const applicationInputs = {}
+  const artifacts = []
+  for (const arch of architectures) {
+    const artifact = packPortableArchitecture({ output, applications, arch, minimumZipBytes })
+    applicationInputs[arch] = artifact.applicationInputs
+    artifacts.push(artifact)
+  }
   fs.writeFileSync(path.join(output, 'portable-evidence.json'), JSON.stringify(artifacts, null, 2) + '\n', { flag: 'wx' })
   return artifacts
 }
@@ -201,7 +182,7 @@ function main(args = process.argv.slice(2)) {
   return packPortable({ applications: path.resolve(options['--applications']), output })
 }
 
-module.exports = { listZipEntries, verifyZip, universalLauncher, validatePortablePath, stagePortableApplication, packPortable, main, REQUIRED_ENTRIES, REQUIRED_RUNTIME_FILES }
+module.exports = { listZipEntries, verifyZip, validatePortablePath, stagePortableApplication, packPortable, main, REQUIRED_ENTRIES, REQUIRED_RUNTIME_FILES }
 if (require.main === module) {
   require('./packaging-lock.cjs').withPackagingLock(() => main()).catch(error => {
     console.error(`[pack-portable] Failed: ${error.stack || error}`)

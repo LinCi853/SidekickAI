@@ -31,7 +31,7 @@ function dependencies() {
     buildPlugins: async options => { assert.equal(options.shipBundledResources, false); calls.push('plugins'); return [] },
     buildApplications: async () => { calls.push('applications'); return 'application' },
     buildPayloads: async ({ applications, architectures }) => { assert.equal(applications, 'application'); assert.deepEqual(architectures, ['x64', 'arm64']); calls.push('payload'); return [] },
-    buildPortable: async ({ applications, architectures }) => { assert.equal(applications, 'application'); assert.deepEqual(architectures, ['x64', 'arm64']); calls.push('portable'); return [{ arch: 'universal', path: 'portable' }] },
+    buildPortable: async ({ applications, architectures }) => { assert.equal(applications, 'application'); assert.deepEqual(architectures, ['x64', 'arm64']); calls.push('portable'); return [{ arch: 'x64', path: 'portable-x64' }, { arch: 'arm64', path: 'portable-arm64' }] },
     buildInstallers: async ({ toolkit, payloads, productVersion, edition }) => {
       assert.equal(toolkit.version, '1.2.0'); assert.deepEqual(payloads, []); assert.equal(productVersion, concept.version); assert.equal(edition, 'concept')
       calls.push('installers'); return { installers: [] }
@@ -103,7 +103,7 @@ test('native application resources are prepared before capture and omitted from 
   await build.buildCandidates(build.parseArguments(['--preflight'], concept), 'output', preflight)
 })
 
-test('candidates retain both native payload manifests, one green archive and immutable copies', async t => {
+test('candidates retain both native payload manifests, one green archive per architecture and immutable copies', async t => {
   const root = temporary(t)
   fs.mkdirSync(path.join(root, 'maintenance'))
   fs.mkdirSync(path.join(root, 'packages/product-contract'), { recursive: true })
@@ -116,14 +116,18 @@ test('candidates retain both native payload manifests, one green archive and imm
     const source = await createRuntime(root, architecture)
     payloads.push(payload.packApplicationPayload({ source, output: path.join(root, 'payloads'), architecture }))
   }
-  const zip = path.join(root, 'portable.zip')
-  fs.writeFileSync(zip, 'portable bytes')
-  const candidates = { ...build.parseArguments([], concept), inputs: { fingerprint: 'source' }, payloads, portable: [{ arch: 'universal', path: zip }] }
+  const portableZips = {}
+  for (const architecture of ['x64', 'arm64']) {
+    const zip = path.join(root, `portable-${architecture}.zip`)
+    fs.writeFileSync(zip, `portable bytes ${architecture}`)
+    portableZips[architecture] = { arch: architecture, path: zip }
+  }
+  const candidates = { ...build.parseArguments([], concept), inputs: { fingerprint: 'source' }, payloads, portable: Object.values(portableZips) }
   const result = build.collectCandidates(candidates, root, root)
   assert.equal(result.manifest.status, 'candidate')
-  assert.equal(result.files.length, 5)
-  assert.deepEqual(result.files.map(file => file.role), ['application-payload', 'application-payload-manifest', 'application-payload', 'application-payload-manifest', 'portable'])
-  assert.deepEqual(result.files.map(file => file.architecture), ['x64', 'x64', 'arm64', 'arm64', 'universal'])
+  assert.equal(result.files.length, 6)
+  assert.deepEqual(result.files.map(file => file.role), ['application-payload', 'application-payload-manifest', 'application-payload', 'application-payload-manifest', 'portable', 'portable'])
+  assert.deepEqual(result.files.map(file => file.architecture), ['x64', 'x64', 'arm64', 'arm64', 'x64', 'arm64'])
   assert.ok(result.files.every(file => /^[a-f0-9]{64}$/.test(file.sha256) && !Object.hasOwn(file, 'bodyProofSha256')))
   assert.equal(fs.existsSync(path.join(result.directory, 'application-release-candidate.json')), false)
   assert.throws(() => build.collectCandidates(candidates, root, root), /EEXIST/)
@@ -148,7 +152,7 @@ test('candidates retain both native payload manifests, one green archive and imm
   fs.mkdirSync(completeRoot)
   const complete = build.collectCandidates({ ...candidates, mode: 'complete', assembly: { installers, result: assemblyResult,
     resultFile, resultSha256: u.sha256(resultFile), retainedInputs, toolkit: { toolkitVersion: '1.2.0' } } }, completeRoot, root)
-  assert.equal(complete.files.length, 12)
+  assert.equal(complete.files.length, 13)
   assert.equal(complete.files.filter(file => file.role === 'offline-installer').length, 2)
   assert.equal(complete.manifest.assembly.issuerKeyId, 'local-builder')
   assert.equal(complete.manifest.assembly.authority, 'self-built')

@@ -59,7 +59,7 @@ function zip(extra: string[] = [], omitted?: string) {
 }
 
 describe('portable archive boundaries', () => {
-  it('verifies the dual architecture archive and its CRCs', () => {
+  it('verifies the portable archive and its CRCs', () => {
     const target = zip()
     expect(packer.verifyZip(target, 0).sha256).toMatch(/^[a-f0-9]{64}$/)
   })
@@ -94,8 +94,8 @@ describe('portable archive boundaries', () => {
     expect(packer.listZipEntries(target).sort()).toEqual([...packer.REQUIRED_ENTRIES].sort())
     expect(packer.verifyZip(target, 0).entries).toBe(packer.REQUIRED_ENTRIES.length)
   })
-  it('rejects a missing ARM64 application', () => {
-    const target = zip([], 'SidekickAI/win-arm64-unpacked/SidekickAI.exe')
+  it('rejects an archive missing the application executable', () => {
+    const target = zip([], 'SidekickAI/SidekickAI.exe')
     expect(() => packer.verifyZip(target, 0)).toThrow('missing')
   })
   it.each(['data/settings.db', 'win-unpacked/install-receipt.json', 'win-unpacked/uninstall.exe', 'win-arm64-unpacked/.env.local', 'devkit/readme.txt'])('rejects %s from the archive', name => {
@@ -111,14 +111,14 @@ describe('portable archive boundaries', () => {
     expect(() => packer.verifyZip(target, 0)).toThrow('archive failed')
   })
   it('rejects case-insensitive duplicate paths', () => {
-    const target = zip(['SidekickAI/PORTABLE-LAYOUT.json'])
+    const target = zip(['SidekickAI/PORTABLE.TXT'])
     expect(() => packer.verifyZip(target, 0)).toThrow('Duplicate')
   })
   it.each(['../settings.json', '/settings.json', 'C:/settings.json', 'runtime/./app.exe'])('rejects unsafe input path %s', name => {
     expect(() => packer.validatePortablePath(name)).toThrow()
   })
-  it('refuses a single architecture distribution', () => {
-    expect(() => packer.packPortable({ output: directory, applications: directory, architectures: ['x64'] })).toThrow('requires x64 and arm64')
+  it('rejects an empty architecture list before packaging', () => {
+    expect(() => packer.packPortable({ output: directory, applications: directory, architectures: [] })).toThrow(/architectures/)
   })
 })
 
@@ -143,7 +143,7 @@ describe('portable application staging', () => {
     const before = u.fingerprint(source, u.listFiles(source, new Set()))
     const staged = packer.stagePortableApplication(source, path.join(directory, 'staged', arch), arch)
     expect(staged.native.arch).toBe(arch)
-    expect(fs.readFileSync(path.join(staged.directory, 'portable.txt'), 'utf8')).toBe('SidekickAI Dual Architecture Portable Marker\n')
+    expect(fs.readFileSync(path.join(staged.directory, 'portable.txt'), 'utf8')).toBe('AI Window Portable Mode Marker\n')
     expect(u.fingerprint(source, u.listFiles(source, new Set()))).toEqual(before)
   })
   it('rejects a development native hook before copying', async () => {

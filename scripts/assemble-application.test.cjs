@@ -45,10 +45,16 @@ function collect(value, assembled, name, mode = 'installer') {
   fs.writeFileSync(path.join(value.root, 'maintenance/shared-source.json'), JSON.stringify({ schemaVersion: 1, files: [] }))
   const output = path.join(value.root, 'collected-' + name)
   fs.mkdirSync(output)
-  const portableFile = path.join(value.root, 'portable.zip')
-  if (mode === 'complete') fs.writeFileSync(portableFile, 'fixture portable archive')
+  const portable = {}
+  if (mode === 'complete') {
+    for (const architecture of ['x64', 'arm64']) {
+      const file = path.join(value.root, `portable-${architecture}.zip`)
+      fs.writeFileSync(file, `fixture portable archive ${architecture}`)
+      portable[architecture] = { arch: architecture, path: file }
+    }
+  }
   return distribution.collectCandidates({ edition: 'concept', version: '9.4.2', mode,
-    ...(mode === 'complete' ? { portable: [{ arch: 'universal', path: portableFile }] } : {}),
+    ...(mode === 'complete' ? { portable: Object.values(portable) } : {}),
     architectures: ['x64', 'arm64'], payloads: value.payloads, assembly: assembled,
     inputs: { fingerprint: 'fixture-source-inputs', entries: [] } }, output, value.root)
 }

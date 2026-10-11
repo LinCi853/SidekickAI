@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "6be9c0de4ff396eafd3625f859bfa183e4d9c2f40f06105dbb42181aa7257338",
+  "revision": "6530a841c6ebc7b1de0ccf46a0477839eedd5485e7f0937acdb1c1ae56b7cd88",
   "files": {
     "electron.vite.config.ts": "7acd230acd0c117708ccbdc09532b67440c50bc7c90ea07a767726b0f8cc55e9",
     "electron/application-activation.ts": "b35cf8b9ed499ea000782ef8c3cfcbe648c5f093f73203c5404ba2f8911c51e7",
@@ -58,8 +58,8 @@
     "scripts/backup-snapshot-runtime.test.cjs": "bc3cc06c195555fa2b57fd8c101a45d49c05f8ca4c7b5c1981d56024a2f433ea",
     "scripts/build-backup-cli.cjs": "b038fe4bd8f94cd8bff623efe7ceb221af98b308e4393d8b5b277d2ec1084f4c",
     "scripts/build-cache.cjs": "185f3c50c6adf58bacc8b9cb776d7085046197ba9045a80c4439f350d97664b6",
-    "scripts/build-distribution.cjs": "153a60e54a1f80a71a9a9a0f02eca85e8dc77b88e7c65c4f0c7fa40deca4b746",
-    "scripts/build-distribution.test.cjs": "bd4059df4bf8038f239113bd8b33aeedc10ab9223820ae504f1d3e29f80b987b",
+    "scripts/build-distribution.cjs": "a70c4880b4e085596afba91d8172eb06343b507fedc08457afd68dd148514f16",
+    "scripts/build-distribution.test.cjs": "110b7cb12b927537b04a63519f438156114b69c701c9abbc0983ee28a3a84397",
     "scripts/build-evidence.cjs": "1b4ff9df3904d9a57533964547be435e8bd7e77836179fd594b67b48bfd4f045",
     "scripts/build-startup-helper.cjs": "e9a967707aeefebd929fc4177787f3c6e7349a5cb9e700d0bda4548b6b8a0339",
     "scripts/build-tool-inputs.cjs": "e973cbbdb763a9389cec11654e8a53260749e5bbabdfb8eaaa16652c50a6453b",
