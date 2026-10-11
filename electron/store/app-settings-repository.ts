@@ -9,6 +9,7 @@ const choices: Partial<Record<keyof AppSettings, readonly string[]>> = {
   closeBehavior: ['close', 'minimize'],
   logLevel: ['error', 'warn', 'info', 'debug'],
   uiScale: ['small', 'medium', 'large'],
+  themeMode: ['light', 'dark', 'system'],
   startupOpen: ['home', 'lastConversation'],
   appClickBehavior: ['switch', 'close'],
   cacheAutoClean: ['never', 'daily', 'weekly', 'monthly'],

@@ -18,6 +18,7 @@ import { registerPdfProtocol } from './utils/pdf-protocol.js';
 import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js';
 import { setBrowserHotkeyFallback, tryForward, matchBrowserHotkeyFallback } from './utils/browser-hotkey-fallback.js';
 import { registerAppSettingsIPC, getAppSettings, applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js';
+import { setNativeThemeSource } from './theme/native-theme-source.js';
 import { seedFromInstallConfig } from './store/install-config-seed.js';
 import { registerProxyAuthHandler } from './store/proxy-helper.js';
 import { initChatStore, getChatStore, closeChatStore } from './store/chat-store.js';
@@ -250,6 +251,8 @@ app.whenReady().then(async () => {
     try {
         const settings = getAppSettings();
         applyAutoLaunchSetting(settings.autoLaunch, settings.silentStart);
+        // 启动即恢复应用内主题（nativeTheme.themeSource），webview 内 AI 应用不依赖首个窗口上报
+        setNativeThemeSource(settings.themeMode);
     }
     catch (e) {
         console.warn('[main] 同步自启动设置失败:', e);

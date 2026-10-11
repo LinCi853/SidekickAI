@@ -43,6 +43,8 @@ export interface AppSettings {
   silentStart: boolean
   /** UI 比例：small=紧凑 / medium=中档（默认）/ large=大号 */
   uiScale: 'small' | 'medium' | 'large'
+  /** 主题模式：light=亮色（默认）/ dark=暗色 / system=跟随系统；主进程映射到 nativeTheme.themeSource，webview 内 AI 应用据此配色 */
+  themeMode: 'light' | 'dark' | 'system'
   /** 启动时默认打开：home=平台首页 / lastConversation=最近对话地址（无历史时回退首页） */
   startupOpen: 'home' | 'lastConversation'
   /** 引导是否已完成（首次启动为 false，完成引导后置 true，后续启动不再弹引导窗） */

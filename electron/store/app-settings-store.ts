@@ -23,6 +23,7 @@ import { openActivityLogFolder } from './activity-log-export.js'
 import { applicationLogSources } from '../diagnostics/log-sources.js'
 import type { LogExportOptions } from '../shared/log-export.js'
 import { setRuntimeLogLevel } from '../diagnostics/application-log.js'
+import { applyUiThemeBroadcast } from '../theme/native-theme-source.js'
 
 /** 读取应用设置 */
 export function getAppSettings(): AppSettings {
@@ -367,6 +368,11 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
   ipcMain.handle(IPC_CHANNELS.APP_GET_SETTINGS, () => getAppSettings())
   // 渲染层请求广播 UI 版本/主题变更到所有窗口
   ipcMain.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, (_e, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
+    // 以应用内主题为准：映射到 nativeTheme.themeSource，webview 内 AI 应用随之切换
+    const effective = applyUiThemeBroadcast(payload.uiVersion, payload.theme)
+    if (getAppSettings().themeMode !== effective) {
+      updateAppSettings({ themeMode: effective })
+    }
     broadcastUiVersionChanged(payload)
   })
   // 渲染层请求广播 Oxy 主题色变更到所有窗口

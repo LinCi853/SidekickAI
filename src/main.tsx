@@ -7,6 +7,7 @@ import "./styles/app-layout.css";
 import "./styles/oxy-visual-hierarchy.css";
 import { useThemeStore } from "./store/useThemeStore";
 import { useUiVersionStore } from "./store/useUiVersionStore";
+import { broadcastUiVersionChanged } from "./lib/electron-api";
 import { getInitialWindowTitle } from "./lib/window-title";
 
 const windowQuery = new URLSearchParams(window.location.search);
@@ -25,6 +26,17 @@ useThemeStore.getState().initTheme();
 // 同步界面版本（经典版/Oxy Design System）到 <html data-ui-version>
 // 控制器会自动处理 Oxy 下的亮色强制、UI 比例自动计算、监听器注册等
 useUiVersionStore.getState().initUiVersion();
+
+// 主窗口向主进程上报当前主题模式：主进程据此设置 nativeTheme.themeSource，
+// 让 webview 内 AI 应用以应用内主题为准（并覆盖升级前主进程无持久化记录的存量数据）。
+// 仅主窗口上报：脱离窗口等独立分区的 localStorage 可能是过期值，以广播同步为准。
+if (!windowQuery.get('mode')) {
+  try {
+    const { theme } = useThemeStore.getState();
+    const { version } = useUiVersionStore.getState();
+    broadcastUiVersionChanged({ uiVersion: version, theme });
+  } catch { /* 非 Electron 环境忽略 */ }
+}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

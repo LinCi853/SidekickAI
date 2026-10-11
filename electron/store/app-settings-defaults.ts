@@ -22,6 +22,7 @@ export function getDefaultAppSettings(isPortable: boolean): DefaultAppSettings {
     autoUpdate: true,
     logLevel: 'info',
     uiScale: 'medium',
+    themeMode: 'light',
     startupOpen: 'lastConversation',
     onboardingCompleted: false,
     topBarVisibleButtons: ['navBack', 'navForward', 'navHome', 'pinToggle'],

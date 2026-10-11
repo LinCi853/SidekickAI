@@ -294,16 +294,44 @@ export function safeLoadURLWebview(webview: WebviewElement, url: string): void {
 
 export interface InjectViewportOptions {
   /**
-   * 是否注入清除网页右侧阴影/滚动条光晕并强制亮色 color-scheme 的样式块。
+   * 是否注入清除网页右侧阴影/滚动条光晕并跟随应用主题切换 color-scheme 的样式块。
    * MainView 启用，StandaloneView 不启用。默认 false。
    */
   injectShadowStyle?: boolean;
 }
 
 /**
+ * 生成 MainView webview 的阴影/滚动条清理脚本块。
+ * color-scheme 跟随当前配色偏好（主进程 nativeTheme.themeSource，即应用内主题）：
+ * 亮色强制 light 避免未定义背景的页面变黑；暗色随主题变 dark。
+ * 注入的脚本监听 matchMedia 变化实时改写样式，应用内切换主题时无需重新注入。
+ */
+export function buildShadowStyleScript(): string {
+  const cleanupCss = '* { box-shadow: none !important; text-shadow: none !important; } ::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; } ::-webkit-scrollbar-track, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-corner { background: transparent !important; }';
+  return `
+            // 3. 清除网页右侧阴影/渐变/滚动条光晕；color-scheme 跟随应用内主题（亮色下避免未定义背景的页面变黑）
+            try {
+              const id = '__ai_no_shadow__';
+              if (!document.getElementById(id)) {
+                const s = document.createElement('style');
+                s.id = id;
+                const cleanupCss = ${JSON.stringify(cleanupCss)};
+                const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                const applyScheme = () => {
+                  s.textContent = ':root { color-scheme: ' + (mq.matches ? 'dark' : 'light') + '; } ' + cleanupCss;
+                };
+                applyScheme();
+                if (typeof mq.addEventListener === 'function') mq.addEventListener('change', applyScheme);
+                document.head.appendChild(s);
+              }
+            } catch (e) { /* webview 上下文错误已通过返回值上报 */ }
+`;
+}
+
+/**
  * 向 webview 注入：
  * 1. 强制移动端 viewport，防止部分网页因 viewport 宽度计算错误出现横向滚动/阴影
- * 2.（可选）清除右侧阴影/滚动条光晕，强制亮色 color-scheme
+ * 2.（可选）清除右侧阴影/滚动条光晕，color-scheme 跟随应用内主题
  * 3. 兜底拦截 window.open 与 target="_blank"，统一在当前页内跳转
  *
  * 注入脚本的 JS 内容与原内联实现逐字一致，仅抽取到函数体；调用时机（dom-ready）不变。
@@ -316,18 +344,7 @@ export async function injectViewportAndPopupGuard(
 
   // 仅 MainView 启用的阴影/滚动条样式块（前导换行对应原空行，结尾换行对应原空行）
   const shadowBlock = injectShadowStyle
-    ? `
-            // 3. 清除网页右侧阴影/渐变/滚动条光晕；强制亮色 color-scheme，避免黑暗模式下未定义背景的页面变黑
-            try {
-              const id = '__ai_no_shadow__';
-              if (!document.getElementById(id)) {
-                const s = document.createElement('style');
-                s.id = id;
-                s.textContent = ':root { color-scheme: light; } * { box-shadow: none !important; text-shadow: none !important; } ::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; } ::-webkit-scrollbar-track, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-corner { background: transparent !important; }';
-                document.head.appendChild(s);
-              }
-            } catch (e) { /* webview 上下文错误已通过返回值上报 */ }
-`
+    ? buildShadowStyleScript()
     : '';
 
   // // 4. 注释仅在 MainView（injectShadowStyle=true）中出现
