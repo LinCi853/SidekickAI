@@ -25,6 +25,10 @@ updates:
       # plugin-react 6 要求 vite 6+，需与 vite/electron-vite/vitest 一并评估
       - dependency-name: "@vitejs/plugin-react"
         update-types: ["version-update:semver-major"]
+      # file-uri-to-path 是 better-sqlite3 在 asar 内解析原生模块路径的运行时依赖，
+      # CI（--ignore-scripts）覆盖不到该路径，major 升级须本地 test:desktop 验证
+      - dependency-name: file-uri-to-path
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
