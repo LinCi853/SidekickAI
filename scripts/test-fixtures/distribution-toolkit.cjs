@@ -137,7 +137,7 @@ function assemblyResult(request, toolkit) {
   const result = {
     schemaVersion: 1, interfaceVersion: 1, toolkitVersion: toolkit.reference.toolkitVersion,
     toolkitManifestSha256: u.sha256(path.join(toolkit.directory, 'toolkit-manifest.json')),
-    edition: 'concept', mode: 'offline', authority: 'self-built', productVersion: manifests.x64.productVersion,
+    edition: 'concept', mode: 'offline', authority: 'self-built', productVersion: Object.values(manifests)[0].productVersion,
     issuerKeyId: publicIdentity.id, issuerFingerprint: u.hash(JSON.stringify(publicIdentity)), publicIdentity,
     inputs: Object.fromEntries(Object.entries(request.payloads).map(([arch, file]) => [arch, {
       manifestSha256: u.sha256(file), archiveSha256: manifests[arch].archive.sha256,
@@ -151,7 +151,7 @@ function assemblyResult(request, toolkit) {
     fs.writeFileSync(path.join(request.outputDirectory, 'inputs/installation-configuration.json'), bytes)
     result.installationConfigurationSha256 = u.hash(bytes)
   }
-  for (const architecture of ['x64', 'arm64']) {
+  for (const architecture of Object.keys(request.payloads)) {
     const retained = path.join(request.outputDirectory, 'inputs', architecture)
     fs.mkdirSync(retained, { recursive: true })
     fs.copyFileSync(request.payloads[architecture], path.join(retained, 'application.manifest.json'))

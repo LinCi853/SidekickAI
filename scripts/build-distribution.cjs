@@ -23,8 +23,12 @@ function parseArguments(args, identity = productIdentity()) {
     if (args[index] === '--preflight') options.preflightOnly = true
     else if (args[index] === '--no-publish') continue
     else if (args[index] === '--mode' && ['portable', 'payload', 'all', 'installer', 'complete'].includes(args[index + 1])) options.mode = args[++index]
+    else if (args[index] === '--arch' && ['x64', 'arm64', 'all'].includes(args[index + 1])) {
+      const arch = args[++index]
+      options.architectures = arch === 'all' ? ['x64', 'arm64'] : [arch]
+    }
     else if (args[index] === '--output' && args[index + 1] && !args[index + 1].startsWith('--')) options.outputRoot = path.resolve(args[++index])
-    else throw new Error('Usage: build-distribution.cjs [--mode portable|payload|all|installer|complete] [--preflight] [--output <directory>]')
+    else throw new Error('Usage: build-distribution.cjs [--mode portable|payload|all|installer|complete] [--arch x64|arm64|all] [--preflight] [--output <directory>]')
   }
   modePackages(options.mode, identity.edition)
   return { ...options, edition: identity.edition, version: identity.version }
@@ -72,7 +76,7 @@ const defaults = {
 
 async function buildCandidates(options, output, dependencies = defaults) {
   parseArguments(['--mode', options.mode], options)
-  if (options.architectures?.length !== 2 || !['x64', 'arm64'].every(arch => options.architectures.includes(arch))) throw new Error('Distribution requires both x64 and arm64')
+  application.validateArchitectures(options.architectures)
   const packages = modePackages(options.mode, options.edition)
   const toolkit = packages.installer ? await dependencies.preflightToolkit() : null
   if (!options.preflightOnly) await dependencies.prepareResources?.()
@@ -110,7 +114,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
   if (artifacts.edition !== identity.edition || artifacts.version !== identity.version) throw new Error('Candidate identity does not match the current product configuration')
   parseArguments(['--mode', artifacts.mode], identity)
   const packages = modePackages(artifacts.mode, artifacts.edition)
-  if (artifacts.architectures?.length !== 2 || !['x64', 'arm64'].every(arch => artifacts.architectures.includes(arch))) throw new Error('Distribution requires both x64 and arm64')
+  const architectures = application.validateArchitectures(artifacts.architectures)
   const directory = path.join(output, artifacts.edition)
   fs.mkdirSync(directory)
   const files = []
@@ -129,8 +133,8 @@ function collectCandidates(artifacts, output, root = ROOT) {
       contentType: name.endsWith('.json') ? 'application/json' : name.endsWith('.exe') ? 'application/vnd.microsoft.portable-executable' : 'application/zip' })
   }
   if (packages.payload) {
-    if (artifacts.payloads?.length !== 2 || !['x64', 'arm64'].every(arch => artifacts.payloads.filter(payload => payload.architecture === arch).length === 1)) throw new Error('Distribution requires two standard application payloads')
-    for (const arch of ['x64', 'arm64']) {
+    if (artifacts.payloads?.length !== architectures.length || !architectures.every(arch => artifacts.payloads.filter(payload => payload.architecture === arch).length === 1)) throw new Error('Distribution requires the requested standard application payloads')
+    for (const arch of architectures) {
       const payload = artifacts.payloads.find(entry => entry.architecture === arch)
       const manifestBytes = fs.readFileSync(payload.manifestPath)
       const manifest = JSON.parse(manifestBytes.toString('utf8'))
@@ -147,7 +151,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
     }
   } else if (artifacts.payloads) throw new Error('Unexpected application payload candidates')
   if (packages.portable) {
-    if (artifacts.portable?.length !== 2 || !['x64', 'arm64'].every(arch => artifacts.portable.some(file => file.arch === arch))) throw new Error('Portable delivery requires one archive per architecture')
+    if (artifacts.portable?.length !== architectures.length || !architectures.every(arch => artifacts.portable.filter(file => file.arch === arch).length === 1)) throw new Error('Portable delivery requires one archive per architecture')
     for (const artifact of artifacts.portable) {
       add(artifact.path, `SidekickAI-Portable-${artifacts.version}-${artifact.arch}-win.zip`, 'portable', artifact.arch, artifact.sha256)
     }
@@ -156,12 +160,12 @@ function collectCandidates(artifacts, output, root = ROOT) {
   if (packages.installer) {
     const assembled = artifacts.assembly
     if (!assembled?.result || !assembled.toolkit || !assembled.resultFile || !assembled.resultSha256
-      || assembled.installers?.length !== 2 || assembled.result.authority !== 'self-built'
+      || assembled.installers?.length !== architectures.length || assembled.result.authority !== 'self-built'
       || assembled.result.edition !== artifacts.edition || assembled.result.productVersion !== artifacts.version) {
       throw new Error('Distribution requires verified self-built installer candidates')
     }
     if (utilities.sha256(assembled.resultFile) !== assembled.resultSha256) throw new Error('Assembly result changed before candidate collection')
-    for (const arch of ['x64', 'arm64']) {
+    for (const arch of architectures) {
       const matches = assembled.installers.filter(file => file.architecture === arch)
       if (matches.length !== 1) throw new Error('Distribution requires one offline installer per architecture')
       const file = matches[0]
@@ -170,7 +174,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
       add(file.path, entry.path, 'offline-installer', arch, file.sha256)
     }
     const configurationSha256 = assembled.result.installationConfigurationSha256
-    if (assembled.retainedInputs?.length !== (configurationSha256 === undefined ? 4 : 5)) throw new Error('Installer candidates require their immutable verification inputs')
+    if (assembled.retainedInputs?.length !== (architectures.length * 2 + (configurationSha256 === undefined ? 0 : 1))) throw new Error('Installer candidates require their immutable verification inputs')
     for (const file of assembled.retainedInputs) add(file.file, file.path, 'assembly-input', file.architecture, file.sha256)
     add(assembled.resultFile, 'assembly-result.json', 'installer-assembly-result', null, assembled.resultSha256)
     assemblyEvidence = { authority: 'self-built', issuerKeyId: assembled.result.issuerKeyId,

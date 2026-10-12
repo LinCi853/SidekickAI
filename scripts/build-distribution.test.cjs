@@ -62,6 +62,23 @@ test('public packages share a single awaited application build and metadata base
   }
 })
 
+test('single architecture selection reaches each requested package without expanding the build', async () => {
+  for (const architecture of ['x64', 'arm64']) {
+    const options = build.parseArguments(['--mode', 'complete', '--arch', architecture], concept)
+    assert.deepEqual(options.architectures, [architecture])
+    const seen = []
+    const deps = dependencies()
+    deps.preflight = async architectures => { seen.push(architectures); return {} }
+    deps.buildApplications = async (_output, architectures) => { seen.push(architectures); return 'application' }
+    deps.buildPayloads = async ({ architectures }) => { seen.push(architectures); return [] }
+    deps.buildPortable = async ({ architectures }) => { seen.push(architectures); return [] }
+    await build.buildCandidates(options, 'output', deps)
+    assert.deepEqual(seen, Array.from({ length: 4 }, () => [architecture]))
+  }
+  assert.deepEqual(build.parseArguments(['--arch', 'all'], concept).architectures, ['x64', 'arm64'])
+  assert.throws(() => build.parseArguments(['--arch', 'ia32'], concept), /Usage/)
+})
+
 test('installer preflight fails before native preparation and compilation', async () => {
   const deps = dependencies()
   deps.preflightToolkit = async () => { throw new Error('missing toolkit') }

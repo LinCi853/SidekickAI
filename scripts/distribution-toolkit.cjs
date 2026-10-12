@@ -114,17 +114,24 @@ function validateManifest(manifest, reference) {
   }
   const capabilities = new Set()
   for (const capability of manifest.capabilities) {
-    fields(capability, ['edition', 'mode', 'authority', 'architectures'])
-    if (!['concept', 'community'].includes(capability.edition) || !['offline', 'online'].includes(capability.mode)
+    fields(capability, ['mode', 'authority', 'architectures'], ['edition', 'capabilityGrants'])
+    if (capability.edition !== undefined && !['concept', 'community'].includes(capability.edition) || !['offline', 'online'].includes(capability.mode)
       || !['official', 'self-built'].includes(capability.authority) || !Array.isArray(capability.architectures)
       || !capability.architectures.length || capability.architectures.length > 2
       || capability.architectures.some(arch => !['x64', 'arm64'].includes(arch))
       || new Set(capability.architectures).size !== capability.architectures.length) throw new Error('Invalid distribution toolkit capability')
-    const key = [capability.edition, capability.mode, capability.authority].join(':')
+    if (capability.capabilityGrants !== undefined) {
+      const bits = ['backupExport', 'onlineChannel', 'startupTasks', 'systemRegistration', 'systemScope']
+      fields(capability.capabilityGrants, bits)
+      if (bits.some(bit => capability.capabilityGrants[bit] !== (capability.authority === 'official'))) {
+        throw new Error('Toolkit capability grants conflict with its authority')
+      }
+    }
+    const key = [capability.edition || '*', capability.mode, capability.authority].join(':')
     if (capabilities.has(key)) throw new Error('Duplicate distribution toolkit capability')
     capabilities.add(key)
   }
-  if (!manifest.capabilities.some(capability => capability.edition === 'concept' && capability.mode === 'offline'
+  if (!manifest.capabilities.some(capability => (capability.edition === undefined || capability.edition === 'concept') && capability.mode === 'offline'
     && capability.authority === 'self-built' && ['x64', 'arm64'].every(arch => capability.architectures.includes(arch)))) {
     throw new Error('Distribution toolkit does not support dual-architecture self-built concept installers')
   }
@@ -286,7 +293,14 @@ async function prepareToolkit(root, options = {}) {
   const toolkitDirectory = path.join(directory, 'toolkit')
   if (!reused) await extract(zip, toolkitDirectory)
   const inputs = verifyDirectory(toolkitDirectory, inventory)
-  if (!reused) fs.renameSync(directory, destination)
+  if (!reused) {
+    for (let attempt = 0; ; attempt++) {
+      try { await fs.promises.rename(directory, destination); break } catch (error) {
+        if (attempt >= 7 || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || fs.existsSync(destination)) throw error
+        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+      }
+    }
+  }
   const toolkit = { reference, referenceFile: selected.file, referenceSha256: selected.sha256, projectRoot,
     directory: path.join(destination, 'toolkit'), archive: path.join(destination, 'archive.zip'),
     manifest: inventory.manifest, files: inventory.files, inputs, reused }

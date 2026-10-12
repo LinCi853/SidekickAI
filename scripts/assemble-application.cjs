@@ -74,9 +74,10 @@ async function preflight({ root, toolkitOptions = {}, invokeOptions = {} }) {
 }
 
 function inputIdentity(payloads, edition, productVersion) {
-  if (!Array.isArray(payloads) || payloads.length !== 2 || edition !== 'concept') throw new Error('Self-built assembly requires both concept application payloads')
+  if (!Array.isArray(payloads) || edition !== 'concept') throw new Error('Self-built assembly requires concept application payloads')
+  const architectures = require('./application-packaging.cjs').validateArchitectures(payloads.map(value => value.architecture))
   const inputs = {}, manifests = {}, files = [], expected = new Map()
-  for (const arch of ['x64', 'arm64']) {
+  for (const arch of architectures) {
     const matches = payloads.filter(value => value.architecture === arch)
     if (matches.length !== 1) throw new Error('Self-built assembly requires one payload per architecture')
     const item = matches[0]
@@ -110,10 +111,11 @@ function validateResult(result, toolkit, output, identity) {
     || result.installationConfigurationSha256 !== undefined && !toolkitApi.digest(result.installationConfigurationSha256)) {
     throw new Error('Assembled installation configuration does not match its requested defaults')
   }
-  if (!Array.isArray(result.artifacts) || result.artifacts.length !== 2) throw new Error('Assembly must produce two offline installers')
+  const architectures = require('./application-packaging.cjs').validateArchitectures(Object.keys(identity.inputs))
+  if (!Array.isArray(result.artifacts) || result.artifacts.length !== architectures.length) throw new Error('Assembly must produce the requested offline installers')
   const names = new Set()
   const installers = []
-  for (const arch of ['x64', 'arm64']) {
+  for (const arch of architectures) {
     const matches = result.artifacts.filter(file => file.role === 'offline-installer' && file.architecture === arch)
     if (matches.length !== 1) throw new Error('Assembly must produce one installer per architecture')
     const item = matches[0]
@@ -139,7 +141,7 @@ function validateResult(result, toolkit, output, identity) {
 
 function retainedInputs(directory, input) {
   const files = []
-  for (const arch of ['x64', 'arm64']) {
+  for (const arch of require('./application-packaging.cjs').validateArchitectures(Object.keys(input.inputs))) {
     const manifestPath = 'inputs/' + arch + '/application.manifest.json'
     const manifestFile = path.join(directory, ...manifestPath.split('/'))
     u.assertFile(manifestFile)

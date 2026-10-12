@@ -55,7 +55,7 @@ function collect(value, assembled, name, mode = 'installer') {
   }
   return distribution.collectCandidates({ edition: 'concept', version: '9.4.2', mode,
     ...(mode === 'complete' ? { portable: Object.values(portable) } : {}),
-    architectures: ['x64', 'arm64'], payloads: value.payloads, assembly: assembled,
+    architectures: value.payloads.map(item => item.architecture), payloads: value.payloads, assembly: assembled,
     inputs: { fingerprint: 'fixture-source-inputs', entries: [] } }, output, value.root)
 }
 
@@ -161,8 +161,8 @@ test('input identity binds both real application archives and their exact extern
   }
   assert.equal(identity.files.length, 4)
   assert.equal(identity.fingerprint.entries.length, 4)
-  for (const payloads of [[], value.payloads.slice(0, 1), [value.payloads[0], value.payloads[0]]]) {
-    assert.throws(() => assembly.inputIdentity(payloads, 'concept', '9.4.2'), /payload/)
+  for (const payloads of [[], [value.payloads[0], value.payloads[0]]]) {
+    assert.throws(() => assembly.inputIdentity(payloads, 'concept', '9.4.2'), /architectures/)
   }
   assert.throws(() => assembly.inputIdentity(value.payloads, 'community', '9.4.2'), /concept/)
   assert.throws(() => assembly.inputIdentity(value.payloads, 'concept', '1.2.0'), /identity/)
@@ -238,6 +238,20 @@ test('assembly result acceptance binds authority, application identity, inputs a
   fs.writeFileSync(x64, pe('arm64'))
   swapped.artifacts[0].sha256 = u.sha256(x64)
   assert.throws(() => assembly.validateResult(swapped, value.toolkit, output, identity), /bytes/)
+})
+
+test('single native payload assembly retains, collects and verifies only its requested architecture', async t => {
+  const value = await context(t, true)
+  value.payloads = value.payloads.filter(item => item.architecture === 'x64')
+  const runner = mockAssembler(value.toolkit)
+  const assembled = await assembly.assemble(optionsFor(value, runner.spawn))
+  assert.deepEqual(Object.keys(assembled.result.inputs), ['x64'])
+  assert.deepEqual(assembled.installers.map(item => item.architecture), ['x64'])
+  assert.equal(assembled.retainedInputs.length, 2)
+  const collection = collect(value, assembled, 'single')
+  assert.deepEqual(collection.manifest.architectures, ['x64'])
+  assert.equal(collection.files.filter(item => item.role === 'offline-installer').length, 1)
+  assert.equal(assembly.verifyCollected(assembled, collection.directory, { spawn: runner.spawn }, collection).verified, true)
 })
 
 test('installer result paths reject escape, duplicate names, non-files and linked directories', async t => {

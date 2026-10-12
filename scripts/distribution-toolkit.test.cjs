@@ -287,6 +287,21 @@ test('toolkit capabilities must include both self-built concept architectures', 
   }
 })
 
+test('generic toolkit capability rows accept camelCase grants and reject authority escalation', () => {
+  const fixture = toolkitFixture()
+  delete fixture.manifest.capabilities[0].edition
+  const grants = { backupExport: false, onlineChannel: false, startupTasks: false, systemRegistration: false, systemScope: false }
+  fixture.manifest.capabilities[0].capabilityGrants = grants
+  const reference = { toolkitVersion: fixture.manifest.toolkitVersion }
+  assert.equal(toolkit.validateManifest(fixture.manifest, reference), fixture.manifest)
+  for (const change of [value => { value.backupExport = true }, value => { value.backup_export = false },
+    value => { delete value.onlineChannel }]) {
+    const altered = structuredClone(fixture.manifest)
+    change(altered.capabilities[0].capabilityGrants)
+    assert.throws(() => toolkit.validateManifest(altered, reference))
+  }
+})
+
 test('toolkit placeholder trust must be a canonical public Ed25519 identity bound to its key', () => {
   const base = toolkitFixture().manifest
   const reference = { toolkitVersion: base.toolkitVersion }
@@ -443,7 +458,7 @@ test('cache promotion waits until all archive reader handles have closed', async
   const published = writeToolkit(path.join(root, 'published'))
   const toolkit = published.toolkit
   const open = yauzl.openPromise
-  const rename = fs.renameSync
+  const rename = fs.promises.rename
   const readers = new Set()
   t.mock.method(yauzl, 'openPromise', async (...args) => {
     const reader = await open(...args)
@@ -451,12 +466,16 @@ test('cache promotion waits until all archive reader handles have closed', async
     reader.once('close', () => readers.delete(reader))
     return reader
   })
-  t.mock.method(fs, 'renameSync', (source, destination) => {
+  let promotions = 0
+  t.mock.method(fs.promises, 'rename', async (source, destination) => {
     if (path.basename(source).startsWith('download-')) {
+      promotions++
       assert.equal(readers.size, 0, 'Toolkit cache promotion must not race open ZIP handles')
+      if (promotions === 1) throw Object.assign(new Error('Temporary Windows directory lock'), { code: 'EPERM' })
     }
     return rename(source, destination)
   })
   const prepared = await toolkit.prepareToolkit(path.join(root, 'workspace'), { reference: published.reference })
   assert.equal(prepared.reused, false)
+  assert.ok(promotions >= 2)
 })
