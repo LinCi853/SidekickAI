@@ -53,3 +53,9 @@ export function displayConversationTitle(conversation: Conversation): string {
   }
   return title;
 }
+
+/** 消息头的应用标识：显示对话所属 AI 应用，未知来源回退「AI应用」 */
+export function conversationAiLabel(conversation: Conversation): string {
+  const platform = conversationPlatform(conversation);
+  return platform === '网页' ? 'AI应用' : platform;
+}

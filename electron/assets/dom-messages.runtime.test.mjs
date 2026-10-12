@@ -369,6 +369,16 @@ for (const [hostname, html] of [
   ])
 })
 
+test('drops tool call source chips from captured ChatGLM answers', async t => {
+  const f = await fixture(t, '<div class="conversation question" id="row-question-0"><div class="question-txt">Input</div></div>'
+    + '<div class="answer" id="row-answer-0"><div class="answer-content">'
+    + '<div class="search-result-list"><span>梦幻杰</span><span>12个来源</span><span>1个来源</span></div>'
+    + '<div class="markdown-body">Answer body</div><div><span>搜索词</span><span>3个来源</span></div><p>More</p><p>7个来源</p></div></div>', 'chatglm.cn')
+  assert.deepEqual((await f.parse()).messages.map(({ role, content }) => ({ role, content })), [
+    { role: 'user', content: 'Input' }, { role: 'assistant', content: 'Answer body\nMore' },
+  ])
+})
+
 test('captures the confirmed current DeepSeek roles and keeps answer and reasoning separate', async t => {
   const f = await fixture(t, user('1') + assistant('2'))
   const result = await f.parse()

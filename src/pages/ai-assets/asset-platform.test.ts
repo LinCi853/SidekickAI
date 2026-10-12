@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { conversationPlatform, displayConversationTitle } from './asset-platform'
+import { conversationAiLabel, conversationPlatform, displayConversationTitle } from './asset-platform'
 import type { Conversation } from '../../lib/electron-api'
 
 const conversation = (overrides: Partial<Conversation> = {}): Conversation => ({
@@ -35,5 +35,15 @@ describe('displayConversationTitle', () => {
     expect(displayConversationTitle(conversation({ title: ' - DeepSeek', url: 'https://chat.deepseek.com/a' }))).toBe(' - DeepSeek')
     expect(displayConversationTitle(conversation({ title: '', url: 'https://chat.deepseek.com/a' }))).toBe('未命名对话')
     expect(displayConversationTitle(conversation({ title: '本地笔记', url: undefined }))).toBe('本地笔记')
+  })
+})
+
+describe('conversationAiLabel', () => {
+  it('names the owning AI application and falls back for unknown sources', () => {
+    expect(conversationAiLabel(conversation({ url: 'https://chatglm.cn/main/alltoolsdetail?cid=one' }))).toBe('智谱清言')
+    expect(conversationAiLabel(conversation({ url: 'https://chat.deepseek.com/a' }))).toBe('DeepSeek')
+    expect(conversationAiLabel(conversation({ sourceType: 'api' }))).toBe('API')
+    expect(conversationAiLabel(conversation({ url: undefined }))).toBe('AI应用')
+    expect(conversationAiLabel(conversation({ url: 'https://example.org/chat' }))).toBe('example.org')
   })
 })

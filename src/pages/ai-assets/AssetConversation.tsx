@@ -8,7 +8,7 @@ import type { Conversation } from '../../lib/electron-api';
 import type { AssetAttachment, AssetConversationGraph, AssetGraphNode, AssetMessageDetail, AssetSettings, AssetTextUsage } from '../../../electron/shared/ai-assets.types';
 import AssetFileCard from './AssetFileCard';
 import AssetMarkdown from './AssetMarkdown';
-import { displayConversationTitle } from './asset-platform';
+import { conversationAiLabel, displayConversationTitle } from './asset-platform';
 import { cleanCapturedCodeToolbar } from '../../../electron/shared/asset-presentation';
 
 const statuses: Record<string, string> = { streaming: '接收中', complete: '已记录', withdrawn: '已撤回，原文保留', retained: '原文保留', stopped: '主动停止', failed: '异常中断' };
@@ -134,8 +134,16 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     setLoading(true);
     setError('');
     void Promise.all([api.graph(conversation.id), api.details(conversation.id), api.usage(undefined, conversation.id)]).then(([value, states, text]) => {
-      if (owns(operation)) { setLoaded({ graph: value, details: states, usage: text }); setLoading(false); }
-    }).catch(failure => { if (owns(operation)) { setLoaded(null); setError(String(failure)); setLoading(false); } });
+      if (!owns(operation)) return;
+      // 流式输出期间不更新已显示的内容，避免持续刷新闪烁；首次显示照常应用，落定后由下一次观察一次性应用
+      if (states.some(item => item.status === 'streaming')) {
+        setLoaded(current => current ?? { graph: value, details: states, usage: text });
+        setLoading(false);
+        return;
+      }
+      setLoaded({ graph: value, details: states, usage: text });
+      setLoading(false);
+    }).catch(failure => { if (owns(operation)) { setError(String(failure)); setLoading(false); } });
     return () => { request.current += 1; };
   }, [api, conversation.id, revision]);
   const siblings = (message: AssetGraphNode) => graph.nodes.filter(node => node.parentId === message.parentId && node.role === message.role);
@@ -194,7 +202,8 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     if (group) group.open = true;
     element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [graph, loaded, loading, target]);
-  if (loading || !loaded) return <><div className="asset-detail-heading"><h2>{conversation.title}</h2></div>
+  // 后台刷新期间保留已显示内容，不再回到「正在加载对话」空态（流式时页面不闪白）
+  if (!loaded) return <><div className="asset-detail-heading"><h2>{displayConversationTitle(conversation)}</h2></div>
     {error && <p className="asset-error" role="alert">{error}</p>}
     <EmptyState message={loading ? '正在加载对话' : '无法加载对话，请刷新后重试'} /></>;
   const files = (items: AssetAttachment[]) => !!items.length && <details className="asset-attachment-group">
@@ -205,6 +214,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     </summary><div className="asset-file-grid">{items.map(item => <AssetFileCard key={item.id} item={item} onAction={onAction} onConversation={onConversation} showConversation={false} />)}</div>
   </details>;
   const messages = graph.path.map(id => graph.nodes.find(node => node.id === id)!).filter(Boolean);
+  const aiLabel = conversationAiLabel(conversation);
   return <><div className="asset-detail-heading">
     <div className="asset-detail-title" onKeyDown={event => { if (event.key === 'F2' && rename === undefined) { event.preventDefault(); setRename(conversation.title); } }}>{rename !== undefined ? <div className="asset-actions"><input aria-label="本地对话名称" autoFocus value={rename} onChange={event => setRename(event.target.value)}
       onBlur={() => { if (renameCancelled.current) { renameCancelled.current = false; return; } onAction(async () => { if (rename.trim() && rename !== conversation.title) await api.renameConversation(conversation.id, rename.trim()); setRename(undefined); await onRefresh(); }); }}
@@ -242,7 +252,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       const toggleFold = () => setFolded(current => ({ ...current, [message.id]: !(folded[message.id] ?? true) }));
       return <article className={`asset-message asset-message-${message.role}`} key={message.id} data-name="assets.message" data-id={message.id}>
         <div className={`asset-bubble${foldedNow ? ' folded' : ''}`}>
-          <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI应用'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
+          <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : aiLabel}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
             {branchCount > 1 && <div className="asset-branch" aria-label="消息分支"><GitBranch size={14} aria-hidden="true" /><IconButton className="asset-icon-button" aria-label="上一个分支" disabled={branchIndex <= 1} onClick={() => onAction(() => switchBranch(message, -1))}><ArrowLeft size={14} /></IconButton><span>{branchIndex}/{branchCount}</span><IconButton className="asset-icon-button" aria-label="下一个分支" disabled={branchIndex >= branchCount} onClick={() => onAction(() => switchBranch(message, 1))}><ArrowRight size={14} /></IconButton>{known.length < branchCount && <span className="asset-branch-missing">部分分支尚未收纳</span>}</div>}
             <span className="asset-message-tools">
               {foldable && <IconButton className="asset-icon-button" aria-label={foldedNow ? '展开消息' : '折叠消息'} onClick={toggleFold}>{foldedNow ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</IconButton>}
@@ -273,9 +283,9 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       const anchor = group[0];
       const active = !!activeMessageId && group.some(message => message.id === activeMessageId);
       return <div key={anchor.id} className={`asset-message-rail-pill${anchor.role === 'user' ? ' from-user' : ''}${active ? ' active' : ''}`}>
-        <button type="button" aria-label={`定位到${anchor.role === 'user' ? '我' : 'AI应用'}的消息`} onClick={() => scrollToMessage(anchor.id)} />
+        <button type="button" aria-label={`定位到${anchor.role === 'user' ? '我' : aiLabel}的消息`} onClick={() => scrollToMessage(anchor.id)} />
         <div className="asset-message-rail-preview" role="tooltip">
-          <strong>{anchor.role === 'user' ? '我' : 'AI应用'}{group.length > 1 ? ` · ${group.length} 条消息` : ''}</strong>
+          <strong>{anchor.role === 'user' ? '我' : aiLabel}{group.length > 1 ? ` · ${group.length} 条消息` : ''}</strong>
           <span>{Array.from(anchor.content.replace(/```+\w*\n?/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 160).join('')}</span>
         </div>
       </div>;

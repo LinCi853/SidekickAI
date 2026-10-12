@@ -179,3 +179,17 @@ describe('asset source navigation and prompt examples', () => {
     expect(messages(current).map(node => node.props['data-id'])).toEqual(['A-alternative']);
   });
 });
+
+describe('asset conversation refresh behavior', () => {
+  it('freezes displayed content while the captured stream is still running', async () => {
+    mount('A'); await settleHooks();
+    api.graph.mockResolvedValueOnce({ ...graph('A'), nodes: [{ ...graph('A').nodes[0], content: 'A text streaming' }, graph('A').nodes[1]] });
+    api.details.mockResolvedValueOnce([{ messageId: 'A-message', status: 'streaming', revisions: [] }]);
+    const frozen = mount('A', 1); await settleHooks();
+    expect(nodes(frozen.current).find(node => node.type === 'asset-markdown')!.props.content).toBe('A text');
+    api.graph.mockResolvedValueOnce({ ...graph('A'), nodes: [{ ...graph('A').nodes[0], content: 'A text final' }, graph('A').nodes[1]] });
+    api.details.mockResolvedValueOnce([{ messageId: 'A-message', status: 'complete', revisions: [] }]);
+    const settled = mount('A', 2); await settleHooks();
+    expect(nodes(settled.current).find(node => node.type === 'asset-markdown')!.props.content).toBe('A text final');
+  });
+});

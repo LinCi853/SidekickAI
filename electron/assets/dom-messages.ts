@@ -1,4 +1,5 @@
 import { classifyCapturedNoise } from './noise-classifier.js'
+import { stripToolCallLines } from '../shared/asset-presentation.js'
 import type { AssetObservedMessage } from '../shared/ai-assets.types.js'
 
 const mimoUserSelector = '.bg-mimo-bg-message.whitespace-pre-wrap'
@@ -51,6 +52,32 @@ function stripCodeToolbars(root: Element) {
     if (!words) continue
     pre.setAttribute('data-captured-language', words[1].toLowerCase())
     header.remove()
+  }
+}
+
+// 工具调用卡片（联网搜索的来源计数等）是工具状态，不是页面内容。
+// 先整卡移除带 tool/search-result/sources 签名的容器，再移除「短 token 行 + 来源计数」的芯片行，
+// 散落的计数行由 stripToolCallLines 兜底。
+const toolCallCountLine = /^\s*\d+\s*个(?:来源|网页|搜索结果)\s*$/
+const toolCallSignature = /\d+\s*个(?:来源|网页|搜索结果)/
+const toolCardSelector = '[class*="tool-call" i], [class*="toolcall" i], [class*="tool_call" i], [class*="search-result" i], [class*="source-list" i], [class*="sources" i], [data-testid*="tool" i], [data-testid*="search-result" i]'
+
+function stripToolCallCards(root: Element) {
+  for (const node of Array.from(root.querySelectorAll('*'))) {
+    if (!toolCallSignature.test(node.textContent ?? '') || !node.matches(toolCardSelector)) continue
+    if (node.parentElement?.closest(toolCardSelector)) continue
+    node.remove()
+  }
+  for (const node of Array.from(root.querySelectorAll('*'))) {
+    const children = Array.from(node.children)
+    if (!children.length) continue
+    const texts = children.map(child => child.childElementCount ? '' : (child.textContent ?? '').trim())
+    if (!texts.some(text => toolCallCountLine.test(text))) continue
+    if (!texts.every(text => text && text.length <= 24 && !text.includes('\n') && !/[。！？!?，、]/.test(text))) continue
+    node.remove()
+  }
+  for (const node of Array.from(root.querySelectorAll('*'))) {
+    if (!node.childElementCount && toolCallCountLine.test(node.textContent?.trim() ?? '')) node.remove()
   }
 }
 
@@ -276,7 +303,8 @@ export function readDomConversation(document: Document, hostname: string): DomCo
       if (wenxin && role === 'user') clone.textContent = element.getAttribute('data-query') ?? nodeText(clone)
       if (deepseek && role === 'assistant') stripCodeToolbars(clone)
       clone.querySelectorAll(`${messageThinkingSelector}, ${messageChromeSelector}`).forEach(node => node.remove())
-      const content = nodeText(clone).replace(/\n$/, '')
+      stripToolCallCards(clone)
+      const content = stripToolCallLines(nodeText(clone).replace(/\n$/, ''))
       const noise = classifyCapturedNoise(content)
       if (noise && noise !== 'empty-capture') { rejected.push({ key, reason: noise, content }); return }
       const reasoning = thinking.flatMap(node => {
@@ -308,7 +336,7 @@ export function readDomConversation(document: Document, hostname: string): DomCo
       const status = explicitStatus === 'withdrawn' || explicitStatus === 'stopped' || explicitStatus === 'failed' || explicitStatus === 'streaming'
         ? explicitStatus : streaming ? 'streaming' : 'complete'
       if (!content.trim() && !reasoning.trim() && status === 'complete') return
-      messages.push({ element, observed: { key, role, content, markdownContent: markdown(clone).trim(),
+      messages.push({ element, observed: { key, role, content, markdownContent: stripToolCallLines(markdown(clone).trim()),
         ...(mimoIdentity ? { identityToken: mimoIdentity.token } : {}),
         ...(thinking.length && (!mimo || reasoning.trim()) ? { reasoning } : {}), ...branchIdentity(element), status } })
     })

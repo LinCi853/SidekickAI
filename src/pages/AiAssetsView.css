@@ -76,8 +76,8 @@
 .asset-code-actions > span { flex: 1; }
 .assets-view .asset-code pre { margin: 0; padding: 10px; overflow-x: auto; white-space: pre; overflow-wrap: normal; }
 .asset-code .hljs { background: transparent; color: var(--foreground); padding: 0; }
-.asset-diff del { background: #df524729; color: var(--foreground); text-decoration: line-through; }
-.asset-diff ins { background: #38964c29; color: var(--foreground); text-decoration: none; }
+.asset-diff del { background: color-mix(in srgb, var(--destructive, #b64134) 14%, transparent); color: var(--foreground); text-decoration: line-through; }
+.asset-diff ins { background: color-mix(in srgb, var(--success, #38964c) 14%, transparent); color: var(--foreground); text-decoration: none; }
 .asset-selection-actions { position: fixed; display: flex; gap: 4px; width: fit-content; z-index: 20; padding: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; }
 .asset-context-menu { position: fixed; z-index: 40; display: flex; flex-direction: column; min-width: 150px; padding: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; }
 .asset-context-menu button { justify-content: flex-start; font-size: 12px; white-space: nowrap; }

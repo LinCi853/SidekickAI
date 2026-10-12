@@ -8,6 +8,7 @@ import type {
 } from '../shared/ai-assets.types.js'
 import { repeatedPromptSuggestions, type PromptSample } from '../assets/prompt-suggestions.js'
 import { canonicalWebConversationUrl } from '../assets/conversation-identity.js'
+import { captureLeadingNoiseDifference, captureRevisionSignature } from '../shared/asset-presentation.js'
 import { AssetGraphStore } from './asset-graph-store.js'
 import { classifyCapturedNoise } from '../assets/noise.js'
 import { addedCharacters, countCharacters } from '../assets/text-usage.js'
@@ -99,10 +100,32 @@ export class AiAssetsStore {
     const attachmentColumns = db.prepare('PRAGMA table_info(asset_attachments)').all() as Array<{ name: string }>
     if (!attachmentColumns.some(column => column.name === 'updated_at')) db.exec('ALTER TABLE asset_attachments ADD COLUMN updated_at INTEGER')
     this.graph = new AssetGraphStore(db)
+    this.cleanupNoiseRevisions()
     const seed = db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
     const versions = db.prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
       UNION ALL SELECT message_id AS id, content, reasoning FROM asset_revisions`).all() as Array<{ id: string; content: string; reasoning: string }>
     db.transaction(() => { for (const item of versions) seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning]))) })()
+  }
+
+  /** 收录抖动留下的历史版本不是真实修订：与当前内容仅空白/工具状态行差异、或只是清掉工具卡片残行的，启动时清理 */
+  private cleanupNoiseRevisions(): void {
+    const rows = this.db.prepare(`SELECT r.rowid AS rowid, r.content AS content, r.reasoning AS reasoning,
+      m.content AS current, COALESCE(s.reasoning, '') AS current_reasoning
+      FROM asset_revisions r JOIN messages m ON m.id = r.message_id
+      LEFT JOIN asset_message_state s ON s.message_id = m.id`).all() as Array<{
+      rowid: number; content: string; reasoning: string; current: string; current_reasoning: string }>
+    const remove = this.db.prepare('DELETE FROM asset_revisions WHERE rowid = ?')
+    this.db.transaction(() => {
+      for (const row of rows) {
+        const settled = captureRevisionSignature(row.content) === captureRevisionSignature(row.current)
+          && captureRevisionSignature(row.reasoning) === captureRevisionSignature(row.current_reasoning)
+        const empty = !captureRevisionSignature(row.content) && !captureRevisionSignature(row.reasoning)
+        const noise = captureLeadingNoiseDifference(row.content, row.current)
+          && (captureRevisionSignature(row.reasoning) === captureRevisionSignature(row.current_reasoning)
+            || captureLeadingNoiseDifference(row.reasoning, row.current_reasoning))
+        if (settled || empty || noise) remove.run(row.rowid)
+      }
+    })()
   }
 
   clearData(settingsPath: string, collectionJournalPath?: string): void {
@@ -288,10 +311,17 @@ export class AiAssetsStore {
     const thought = fresh ? addedCharacters(previousReasoning, reasoning) : 0
     const changed = text !== previousText || reasoning !== previousReasoning || status !== previous?.status
     if (!fresh && !changed) return id
+    // 修订只记录真实改写：空白/换行抖动与工具状态行不算差异，清理工具卡片残行也不回填修订
+    const textReal = captureRevisionSignature(text) !== captureRevisionSignature(previousText)
+      && !captureLeadingNoiseDifference(previousText, text)
+    const reasoningReal = captureRevisionSignature(reasoning) !== captureRevisionSignature(previousReasoning)
+      && !captureLeadingNoiseDifference(previousReasoning, reasoning)
+    const rewritten = (textReal && !captureRevisionSignature(text).startsWith(captureRevisionSignature(previousText)))
+      || (reasoningReal && !captureRevisionSignature(reasoning).startsWith(captureRevisionSignature(previousReasoning)))
     const revision = previous && changed && (
-      !text.startsWith(previousText) || !reasoning.startsWith(previousReasoning)
-      || (previous.status === 'complete' && (text !== previousText || reasoning !== previousReasoning))
-      || status === 'withdrawn' || status === 'retained'
+      status === 'withdrawn' || status === 'retained'
+      || rewritten
+      || (previous.status === 'complete' && (textReal || reasoningReal))
     )
     if (revision) this.db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
       .run(randomUUID(), id, previousText, previousReasoning, previous.status ?? 'complete', now)

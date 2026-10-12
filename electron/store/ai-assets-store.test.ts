@@ -67,6 +67,29 @@ describe('AI asset collection', () => {
     expect(store.details(conversationId)[0].revisions).toEqual([])
     expect(store.usage().outputCharacters).toBe(100)
   })
+  it('does not treat whitespace reflow or tool status lines as a revision', () => {
+    const { conversationId } = observe('第一行\n第二行', 'complete')
+    observe('第一行 第二行', 'complete')
+    observe('搜索词\n12个来源\n第一行 第二行', 'complete')
+    observe('第一行 第二行', 'complete')
+    expect(store.details(conversationId)[0].revisions).toEqual([])
+    expect(db.prepare('SELECT content FROM messages WHERE conversation_id = ?').get(conversationId)).toEqual({ content: '第一行 第二行' })
+  })
+  it('keeps a genuine rewrite as a revision', () => {
+    const { conversationId } = observe('旧的回答', 'complete')
+    observe('全新的回答', 'complete')
+    expect(store.details(conversationId)[0].revisions).toMatchObject([{ content: '旧的回答', status: 'complete' }])
+  })
+  it('cleans capture noise revisions at startup while keeping genuine rewrites', () => {
+    const { conversationId } = observe('ANSWER', 'complete')
+    const { id } = db.prepare('SELECT id FROM messages WHERE conversation_id = ?').get(conversationId) as { id: string }
+    const insert = db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
+    insert.run('r1', id, 'ANSWER ', '', 'complete', 1)
+    insert.run('r2', id, '搜索词\nANSWER', '', 'complete', 2)
+    insert.run('r3', id, 'older rewrite', '', 'complete', 3)
+    new AiAssetsStore(db)
+    expect(db.prepare('SELECT id FROM asset_revisions ORDER BY id').all()).toEqual([{ id: 'r3' }])
+  })
   it('excludes deleted API output by both its explicit id and external key before graph reads', () => {
     const api = { id: 'provider-a', type: 'api' as const }
     const conversationId = store.conversation(api, { conversationKey: 'session-a', title: 'API' })
