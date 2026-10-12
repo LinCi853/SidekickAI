@@ -189,7 +189,12 @@ export class AiAssetsStore {
       for (const message of observation.messages) if (message.identityToken && messageIds[message.key])
         this.mimoIdentities.set(`${conversationId}\u0000${message.key}`, message.identityToken)
       if (observation.visitId) this.graph.viewEvent(conversationId, `web:${observation.visitId}`)
-      const title = this.localTitle(conversationId) ?? observation.title ?? '新对话'
+      // 观察未带对话名（SPA 固定平台标题）时保留已有标题，避免把真实名字改回占位
+      const local = this.localTitle(conversationId)
+      const incoming = observation.title.trim()
+      const stored = local || incoming ? undefined
+        : (this.db.prepare('SELECT title FROM conversations WHERE id = ?').get(conversationId) as { title: string } | undefined)?.title
+      const title = local ?? (incoming || stored || '新对话')
       this.db.prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND title != ?').run(title, Date.now(), conversationId, title)
       return { conversationId, messageIds }
     })()

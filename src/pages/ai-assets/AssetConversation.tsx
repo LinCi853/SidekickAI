@@ -12,9 +12,18 @@ import { displayConversationTitle } from './asset-platform';
 import { cleanCapturedCodeToolbar } from '../../../electron/shared/asset-presentation';
 
 const statuses: Record<string, string> = { streaming: '接收中', complete: '已记录', withdrawn: '已撤回，原文保留', retained: '原文保留', stopped: '主动停止', failed: '异常中断' };
-// 长消息默认折叠：字符数阈值（约 30 行），折叠态保留 4 行预览，顶部头部与底部横条都可展开/收起
-const FOLD_THRESHOLD = 2000;
-const FOLD_PREVIEW_CHARS = 600;
+// 长消息默认折叠：只按换行判断（约 18 行以上），折叠态保留 markdown 渲染并向下渐变虚影收尾，
+// 头部工具栏与底部横条都可展开/收起
+const FOLD_LINES = 18;
+// 对话内定位点上限：消息更多时按组取样，保证定位列高度可控且悬停预览不被裁剪
+const RAIL_MAX_PILLS = 32;
+function railGroups(messages: AssetGraphNode[]): AssetGraphNode[][] {
+  if (messages.length <= RAIL_MAX_PILLS) return messages.map(message => [message]);
+  const size = Math.ceil(messages.length / RAIL_MAX_PILLS);
+  const groups: AssetGraphNode[][] = [];
+  for (let index = 0; index < messages.length; index += size) groups.push(messages.slice(index, index + size));
+  return groups;
+}
 function RevisionDifference({ before, after }: { before: string; after: string }) {
   const old = Array.from(before), next = Array.from(after);
   let start = 0, end = 0;
@@ -69,6 +78,35 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     };
   }, [selection]);
   useEffect(() => { setSelection(undefined); }, [graph]);
+  // 右缘消息定位点：滚动跟随高亮当前消息，点击定位到对应消息（是定位，不是筛选）
+  const [activeMessageId, setActiveMessageId] = useState<string>();
+  useEffect(() => {
+    const body = bodyRef.current;
+    // ref 可能被测试替身替换成普通对象，缺少真实元素 API 时不挂滚动跟随
+    if (loading || typeof body?.addEventListener !== 'function' || typeof body?.querySelectorAll !== 'function'
+      || typeof body?.getBoundingClientRect !== 'function' || typeof body?.removeEventListener !== 'function') return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const marks = body.querySelectorAll<HTMLElement>('[data-name="assets.message"]');
+      if (!marks.length) { setActiveMessageId(undefined); return; }
+      const bounds = body.getBoundingClientRect();
+      let current = marks[0].getAttribute('data-id') ?? undefined;
+      for (const mark of marks) {
+        if (mark.getBoundingClientRect().top - bounds.top > 120) break;
+        current = mark.getAttribute('data-id') ?? current;
+      }
+      setActiveMessageId(current);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    body.addEventListener('scroll', schedule, { passive: true });
+    update();
+    return () => { body.removeEventListener('scroll', schedule); if (frame) cancelAnimationFrame(frame); };
+  }, [loading, graph]);
+  const scrollToMessage = (id: string) => {
+    bodyRef.current?.querySelector<HTMLElement>(`[data-name="assets.message"][data-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
   const readSelection = () => {
     const value = window.getSelection();
     if (!value?.anchorNode || !value.focusNode || !value.rangeCount || !bodyRef.current?.contains(value.anchorNode) || !bodyRef.current.contains(value.focusNode) || !value.toString()) { setSelection(undefined); return; }
@@ -199,13 +237,12 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
       const known = siblings(message);
       const branchCount = Math.max(message.branchCount ?? 1, known.length);
       const branchIndex = message.branchIndex ?? known.findIndex(node => node.id === message.id) + 1;
-      const foldable = content.length > FOLD_THRESHOLD;
+      const foldable = content.split('\n').length >= FOLD_LINES;
       const foldedNow = foldable && (folded[message.id] ?? true);
       const toggleFold = () => setFolded(current => ({ ...current, [message.id]: !(folded[message.id] ?? true) }));
-      const foldPreview = content.replace(/\s+/g, ' ').trim().slice(0, FOLD_PREVIEW_CHARS);
       return <article className={`asset-message asset-message-${message.role}`} key={message.id} data-name="assets.message" data-id={message.id}>
         <div className={`asset-bubble${foldedNow ? ' folded' : ''}`}>
-          <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
+          <header><strong>{message.role === 'user' ? '我' : message.role === 'system' ? '系统提示' : 'AI应用'}</strong><span className={`asset-status ${detail?.status ?? 'complete'}`}>{statuses[detail?.status ?? 'complete']}</span>{message.locallyEdited && <span>本地编辑</span>}
             {branchCount > 1 && <div className="asset-branch" aria-label="消息分支"><GitBranch size={14} aria-hidden="true" /><IconButton className="asset-icon-button" aria-label="上一个分支" disabled={branchIndex <= 1} onClick={() => onAction(() => switchBranch(message, -1))}><ArrowLeft size={14} /></IconButton><span>{branchIndex}/{branchCount}</span><IconButton className="asset-icon-button" aria-label="下一个分支" disabled={branchIndex >= branchCount} onClick={() => onAction(() => switchBranch(message, 1))}><ArrowRight size={14} /></IconButton>{known.length < branchCount && <span className="asset-branch-missing">部分分支尚未收纳</span>}</div>}
             <span className="asset-message-tools">
               {foldable && <IconButton className="asset-icon-button" aria-label={foldedNow ? '展开消息' : '折叠消息'} onClick={toggleFold}>{foldedNow ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</IconButton>}
@@ -216,7 +253,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
             </span>
             <time title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</time></header>
           {foldedNow ? <>
-              <div className="asset-message-folded" onClick={toggleFold}>{foldPreview}</div>
+              <div className="asset-message-folded" onClick={toggleFold}><AssetMarkdown content={content} onAction={onAction} /></div>
               <button type="button" className="asset-fold-bar" onClick={toggleFold}>展开全部<ChevronDown size={14} aria-hidden="true" /></button>
             </>
             : <>
@@ -231,6 +268,19 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     })}
     {files(attachments.filter(item => item.conversationId === conversation.id && (!item.messageId || !graph.nodes.some(node => node.id === item.messageId))))}
   </div>
+  {messages.length > 1 && <nav className="asset-message-rail" aria-label="对话内快速切换">
+    {railGroups(messages).map(group => {
+      const anchor = group[0];
+      const active = !!activeMessageId && group.some(message => message.id === activeMessageId);
+      return <div key={anchor.id} className={`asset-message-rail-pill${anchor.role === 'user' ? ' from-user' : ''}${active ? ' active' : ''}`}>
+        <button type="button" aria-label={`定位到${anchor.role === 'user' ? '我' : 'AI应用'}的消息`} onClick={() => scrollToMessage(anchor.id)} />
+        <div className="asset-message-rail-preview" role="tooltip">
+          <strong>{anchor.role === 'user' ? '我' : 'AI应用'}{group.length > 1 ? ` · ${group.length} 条消息` : ''}</strong>
+          <span>{Array.from(anchor.content.replace(/```+\w*\n?/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 160).join('')}</span>
+        </div>
+      </div>;
+    })}
+  </nav>}
   <ConfirmDialog open={!!pendingDelete} title={pendingDelete === 'conversation' ? '删除对话' : '删除消息'} message="仅删除本地内容并建立排除标记，避免自动收纳补回；原网页不受影响，已保存的资料原件保留。" variant="danger" onCancel={() => setPendingDelete(undefined)} onConfirm={() => onAction(async () => { if (pendingDelete === 'conversation') await api.deleteConversation(conversation.id); else if (pendingDelete) await api.deleteMessage(pendingDelete); setPendingDelete(undefined); await onRefresh(); })} />
   </>;
 }

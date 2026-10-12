@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetObservedMessage, AssetObservationReceipt } from '../shared/ai-assets.types.js'
 import { stableWebConversationUrl } from './conversation-identity.js'
+import { isPlatformDefaultTitle, titleFromMessageContent } from './conversation-title.js'
 import { readDomConversation } from './dom-messages.js'
 
 export async function startAiAssetCollector(): Promise<void> {
@@ -47,6 +48,8 @@ function collectAiAssets(): () => void {
   let awaitingRouteContent: { shape: string; elements: Element[] } | undefined
   let draftTransition: { key: string; messages: Map<string, AssetObservedMessage> } | undefined
   const aliases = new Map<string, string>()
+  // 平台固定标题（智谱清言等）下观察不带名字：从首条用户消息推导一次，会话内保持稳定
+  const derivedTitles = new Map<string, string>()
   type Original = {
     input: AssetAttachmentInput; url?: string; blob?: Blob; id?: string; ready?: Promise<void>
     inputUsers?: Map<string, string>; associating?: boolean; retired?: boolean; ownsTransfer?: boolean; transferId?: string
@@ -86,10 +89,15 @@ function collectAiAssets(): () => void {
     }
     return undefined
   }
+  // document.title 为平台固定名（智谱清言等）时不算对话名，交给首条用户消息推导
+  const observedTitle = (): string => {
+    const raw = (document.title ?? '').trim()
+    return raw && !isPlatformDefaultTitle(location.hostname, raw) ? raw : ''
+  }
   const context = () => {
     const url = location.href
     return { conversationKey: stableWebConversationUrl(url) ?? `document:${documentKey}`,
-      title: domConversationTitle() ?? document.title, url }
+      title: domConversationTitle() ?? observedTitle(), url }
   }
   const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
   const active = (entry: Original) => !stopped && !entry.retired && !suppressed.has(entry.input.conversationKey)
@@ -237,6 +245,11 @@ function collectAiAssets(): () => void {
     awaitingRouteContent = undefined
     lastMessageShape = shape
     lastMessageElements = found.map(message => message.element)
+    if (!source.title && !derivedTitles.has(source.conversationKey)) {
+      const derived = titleFromMessageContent(found.find(message => message.observed.role === 'user')?.observed.content ?? '')
+      if (derived) derivedTitles.set(source.conversationKey, derived)
+    }
+    if (!source.title) source = { ...source, title: derivedTitles.get(source.conversationKey) ?? '' }
     const next = new Map(found.map(message => [message.observed.key, message.observed]))
     if (source.conversationKey.startsWith('document:') && found.length) documentMessages = next
     const transition = draftTransition
@@ -375,7 +388,7 @@ function collectAiAssets(): () => void {
       if (entry.ownsTransfer) void cancelOriginal({ id: entry.id, transferId: entry.transferId })
       entry.ownsTransfer = false
     }
-    originals.clear(); pendingInputs.clear(); documentMessages.clear(); aliases.clear()
+    originals.clear(); pendingInputs.clear(); documentMessages.clear(); aliases.clear(); derivedTitles.clear()
     for (const cancel of retryWaits) cancel()
     window.removeEventListener('popstate', navigation)
     window.removeEventListener('hashchange', navigation)

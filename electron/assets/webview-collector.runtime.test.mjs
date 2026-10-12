@@ -176,6 +176,17 @@ test('retries an unchanged observation after a rejected write with a natural tim
   assert.equal(await f.page.evaluate(() => window.port.accepted.length), 1)
 })
 
+test('derives a stable conversation title from the first user message when the page title is empty', async t => {
+  const f = await fixture(t)
+  await f.page.evaluate(() => { document.title = '' })
+  await f.addUser('u2', 'Second input')
+  const observed = await f.calls('ai-assets:observe')
+  assert.equal(observed.at(-1).args[0].title, 'Input')
+  await f.addUser('u3', 'Third input')
+  const again = await f.calls('ai-assets:observe')
+  assert.equal(again.at(-1).args[0].title, 'Input')
+})
+
 test('serializes every observed revision and caps retry backoff', async t => {
   const f = await fixture(t, { failures: 6, holdObserve: 1 })
   await f.page.evaluate(() => { document.querySelector('[data-message-id="u1"]').textContent = 'Revised input' })

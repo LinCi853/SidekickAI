@@ -28,7 +28,7 @@
 .asset-conversation-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted-foreground); }
 .asset-conversation-meta > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .asset-conversation-meta time { flex: none; }
-.asset-conversation-detail { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.asset-conversation-detail { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .asset-detail-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 14px; padding: 9px 14px; border-bottom: 1px solid var(--border); flex: none; }
 .asset-detail-title { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .asset-detail-title h2 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
@@ -39,13 +39,13 @@
 .asset-operation-menu summary:hover { background: var(--muted); color: var(--foreground); }
 .asset-operation-menu > div { position: absolute; right: 0; top: 32px; min-width: 145px; display: flex; flex-direction: column; padding: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; box-shadow: 0 6px 18px #0002; z-index: 15; }
 .asset-operation-menu > div button { justify-content: flex-start; font-size: 12px; white-space: nowrap; }
-.asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 4px 14px 16px; }
+.asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 4px 26px 16px 14px; }
 .asset-message { display: flex; min-width: 0; margin: 8px 0; }
 .asset-message-user { justify-content: flex-end; }
-.asset-bubble { min-width: 0; max-width: min(78%, 900px); border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 8px 12px 9px; overflow-wrap: anywhere; }
-.asset-message-user .asset-bubble { background: var(--accent-10); border-color: transparent; border-top-right-radius: 4px; }
+.asset-bubble { --asset-bubble-bg: var(--card); min-width: 0; max-width: min(78%, 900px); border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 8px 12px 9px; overflow-wrap: anywhere; }
+.asset-message-user .asset-bubble { --asset-bubble-bg: color-mix(in srgb, var(--accent-bright) 7%, var(--card)); background: var(--asset-bubble-bg); border-top-right-radius: 4px; }
 .asset-message-assistant .asset-bubble, .asset-message-system .asset-bubble { border-top-left-radius: 4px; }
-.asset-message-system .asset-bubble { background: var(--muted); }
+.asset-message-system .asset-bubble { --asset-bubble-bg: var(--muted); background: var(--muted); }
 .asset-message header { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; font-size: 11px; color: var(--muted-foreground); }
 .asset-message header strong { color: var(--foreground); }
 .asset-message-tools { display: inline-flex; gap: 2px; margin-left: auto; visibility: hidden; }
@@ -157,25 +157,32 @@
 .asset-conversation-rename { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .asset-conversation-rename input { flex: 1; min-width: 0; min-height: 28px; padding: 4px 7px; font-size: 12px; color: var(--foreground); background: var(--background); border: 1px solid var(--accent-bright); border-radius: 4px; outline: 0; }
 
-/* 右缘快速切换（参考 Codex）：细条气泡，当前对话加长高亮，悬停极简预览。
-   注意 rail 不能设 overflow 滚动容器，否则悬停预览会被裁剪到不可见。 */
-.asset-quick-rail { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; z-index: 10; padding: 4px 2px; }
-.asset-quick-pill { position: relative; display: flex; justify-content: flex-end; }
-.asset-quick-pill > button { width: 20px; height: 12px; padding: 0; border: 0; background: transparent; cursor: pointer; position: relative; }
-.asset-quick-pill > button::after { content: ''; position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 14px; height: 3px; border-radius: 2px; background: var(--border); transition: width .12s ease, background .12s ease; }
-.asset-quick-pill.active > button::after { width: 22px; background: var(--accent-bright); }
-/* 鼠标进入切换列：其余细条收短，悬停项加长，相邻项产生动态对比 */
-.asset-quick-rail:hover .asset-quick-pill > button::after { width: 10px; }
-.asset-quick-rail:hover .asset-quick-pill.active > button::after { width: 16px; }
-.asset-quick-rail .asset-quick-pill:hover > button::after, .asset-quick-rail .asset-quick-pill > button:focus-visible::after { width: 24px; background: var(--muted-foreground); }
-.asset-quick-preview { display: none; position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 7px 10px; min-width: 140px; max-width: 240px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; z-index: 30; pointer-events: none; }
-.asset-quick-pill:hover .asset-quick-preview, .asset-quick-pill > button:focus-visible ~ .asset-quick-preview { display: flex; }
-.asset-quick-preview strong { font-size: 12px; font-weight: 500; color: var(--foreground); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.asset-quick-preview > span { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 对话内右缘快速切换（参考 Codex）：每条消息一个定位点（超出 32 条按组取样），滚动跟随高亮当前消息，
+   悬停显示两行内容预览，相邻点略微浮起强调鼠标位置。rail 不设 overflow 滚动容器，否则悬停预览会被裁剪到不可见。 */
+.asset-message-rail { position: absolute; right: 6px; top: 92px; bottom: 18px; display: flex; flex-direction: column; align-items: flex-end; justify-content: safe center; gap: 3px; z-index: 10; padding: 4px 2px; }
+.asset-message-rail-pill { position: relative; display: flex; justify-content: flex-end; opacity: .55; transition: transform .12s ease, opacity .12s ease; }
+.asset-message-rail-pill.from-user { opacity: .8; }
+.asset-message-rail-pill.active { opacity: 1; }
+.asset-message-rail-pill > button { width: 18px; height: 8px; padding: 0; border: 0; background: transparent; cursor: pointer; position: relative; }
+.asset-message-rail-pill > button::after { content: ''; position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 8px; height: 3px; border-radius: 2px; background: var(--border); transition: width .12s ease, background .12s ease; }
+.asset-message-rail-pill.from-user > button::after { background: color-mix(in srgb, var(--foreground) 38%, transparent); }
+.asset-message-rail-pill.active > button::after { width: 14px; background: var(--accent-bright); }
+/* 鼠标进入定位列：其余点收暗，悬停点加长提亮，相邻点浮起形成动态对比 */
+.asset-message-rail:hover .asset-message-rail-pill { opacity: .4; }
+.asset-message-rail:hover .asset-message-rail-pill.from-user { opacity: .55; }
+.asset-message-rail .asset-message-rail-pill:hover, .asset-message-rail .asset-message-rail-pill:has(> button:focus-visible) { opacity: 1; transform: translateY(-1px); }
+.asset-message-rail .asset-message-rail-pill:hover > button::after, .asset-message-rail .asset-message-rail-pill:has(> button:focus-visible) > button::after { width: 20px; background: var(--muted-foreground); }
+.asset-message-rail-pill:has(+ .asset-message-rail-pill:hover), .asset-message-rail-pill:has(+ .asset-message-rail-pill > button:focus-visible),
+.asset-message-rail-pill:hover + .asset-message-rail-pill, .asset-message-rail-pill > button:focus-visible + .asset-message-rail-pill { opacity: .85; transform: translateY(-1px); }
+.asset-message-rail-preview { display: none; position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 7px 10px; width: max-content; max-width: min(260px, calc(100vw - 64px)); background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; z-index: 30; pointer-events: none; }
+.asset-message-rail-pill:hover .asset-message-rail-preview, .asset-message-rail-pill:has(> button:focus-visible) .asset-message-rail-preview { display: flex; }
+.asset-message-rail-preview strong { font-size: 11px; font-weight: 500; color: var(--muted-foreground); }
+.asset-message-rail-preview > span { font-size: 12px; color: var(--foreground); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 
-/* 折叠消息：4 行预览 + 顶部/底部展开收起横条 */
-.asset-message-folded { margin: 2px 0 0; padding: 6px 9px; border-radius: 6px; background: var(--muted); color: var(--muted-foreground); font-size: 12px; line-height: 1.65; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.asset-message-folded:hover { color: var(--foreground); }
+/* 折叠消息：保留 markdown 渲染，向下渐变虚影收尾；点击折叠区或底部横条展开，头部工具栏亦可切换 */
+.asset-message-folded { position: relative; max-height: 240px; margin: 2px 0 0; overflow: hidden; border-radius: 6px; cursor: pointer; }
+.asset-message-folded .asset-markdown { pointer-events: none; }
+.asset-message-folded::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 92px; background: linear-gradient(to bottom, transparent, var(--asset-bubble-bg) 88%); pointer-events: none; }
 .asset-fold-bar { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; min-height: 26px; margin: 6px 0 0; padding: 3px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); font-size: 11px; cursor: pointer; }
 .asset-fold-bar:hover { background: var(--muted); color: var(--foreground); }
 .asset-bubble.folded { padding-bottom: 7px; }

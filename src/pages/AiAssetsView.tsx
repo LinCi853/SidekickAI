@@ -36,7 +36,6 @@ export default function AiAssetsView() {
   const api = requireElectron().aiAssets;
   const promptApi = requireElectron().prompt;
   const searchRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const navigationRevision = useRef(-1);
   const sourceRevision = useRef(0);
   const importMenuRef = useRef<HTMLDetailsElement>(null);
@@ -206,13 +205,6 @@ export default function AiAssetsView() {
     setSelected(id); setCategory('conversations'); setListOpen(false);
     setConversationTarget(target ? { ...target, revision: ++sourceRevision.current } : undefined);
   };
-  // 右缘气泡切换：打开对话并把左侧列表滚动到对应条目（是定位，不是筛选）
-  const switchFromRail = (id: string) => {
-    openConversation(id);
-    requestAnimationFrame(() => {
-      listRef.current?.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
-    });
-  };
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (hasOverlay() || event.defaultPrevented || event.repeat || event.isComposing) return;
@@ -278,8 +270,8 @@ export default function AiAssetsView() {
         <div className="asset-list-heading"><span>{visibleConversations.length} 个对话{selectedIds.length ? ` · 已选 ${selectedIds.length}` : ''}</span><details ref={importMenuRef} className="asset-operation-menu asset-import-menu"><summary aria-label="导入对话" title="导入对话"><Upload size={15} /></summary><div>
           {([['json', 'JSON'], ['md', 'Markdown'], ['deepseek', 'DeepSeek']] as const).map(([format, label]) => <Button key={format} variant="ghost" onClick={() => { if (importMenuRef.current) importMenuRef.current.open = false; void run(async () => { const result = await importConversation(format, 'imported'); if (result.ok) await refresh(); else if (!result.canceled) throw new Error('导入失败'); }); }}>导入 {label}</Button>)}
         </div></details><IconButton className="asset-list-close asset-icon-button" aria-label="关闭对话列表" onClick={() => setListOpen(false)}><X size={15} /></IconButton></div>
-        <div className="asset-conversation-list" ref={listRef}>{!visibleConversations.length && <EmptyState message={query ? '没有匹配的对话' : '交流记录会自动保存在这里'} />}
-        {visibleConversations.map((item, index) => <div key={item.id} className="asset-conversation-row" data-row-id={item.id}>{selecting && <input type="checkbox" aria-label={`选择对话 ${item.title || '未命名对话'}`} checked={selectedIds.includes(item.id)} onChange={() => toggleSelection(item.id)} />}
+        <div className="asset-conversation-list">{!visibleConversations.length && <EmptyState message={query ? '没有匹配的对话' : '交流记录会自动保存在这里'} />}
+        {visibleConversations.map((item, index) => <div key={item.id} className="asset-conversation-row">{selecting && <input type="checkbox" aria-label={`选择对话 ${item.title || '未命名对话'}`} checked={selectedIds.includes(item.id)} onChange={() => toggleSelection(item.id)} />}
           {renaming?.id === item.id ? <div className="asset-conversation-rename"><input aria-label="重命名对话" autoFocus value={renaming.value} onChange={event => setRenaming({ id: item.id, value: event.target.value })}
             onBlur={() => { if (renameCancelled.current) { renameCancelled.current = false; return; } saveConversationRename(); }}
             onKeyDown={event => { if (event.key === 'Enter') saveConversationRename(); else if (event.key === 'Escape') { renameCancelled.current = true; setRenaming(undefined); } }} /></div>
@@ -290,16 +282,7 @@ export default function AiAssetsView() {
         </div>
         {totalUsage && <div className="asset-total-usage" data-name="assets.total-usage" title={`全部对话累计 Unicode 字符（含空白与标点）：输入 ${totalUsage.inputCharacters.toLocaleString()} · 思考 ${totalUsage.reasoningCharacters.toLocaleString()} · 输出 ${totalUsage.outputCharacters.toLocaleString()}`}><span>总字符</span><strong>{totalUsage.totalCharacters.toLocaleString()}</strong></div>}
       </aside><main className="asset-conversation-detail"><AssetConversation conversation={conversations.find(item => item.id === selected)} revision={revision}
-        attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main>
-        <div className="asset-quick-rail" role="navigation" aria-label="快速切换对话">
-          {visibleConversations.map(item => <div key={item.id} className={`asset-quick-pill${selected === item.id ? ' active' : ''}`}>
-            <button type="button" aria-label={`切换到 ${displayConversationTitle(item)}`} onClick={() => switchFromRail(item.id)} />
-            <div className="asset-quick-preview" role="tooltip">
-              <strong>{displayConversationTitle(item)}</strong>
-              <span>{conversationPlatform(item)} · 浏览 {views[item.id] ?? 0} · {new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</span>
-            </div>
-          </div>)}
-        </div></div>}
+        attachments={attachments.filter(item => !isAssetInterfaceImage(item))} settings={settings} branchRequest={branchRequest} target={conversationTarget} onAction={operation => void run(operation)} onRefresh={refresh} onPrompt={makePrompt} onConversation={openConversation} /></main></div>}
     {menu && <div className="asset-context-menu" role="menu" aria-label="对话操作菜单" style={{ left: menu.left, top: menu.top }}>
       <Button variant="ghost" role="menuitem" onClick={() => { const id = menu.id; setMenu(undefined); openConversation(id); }}>打开</Button>
       <Button variant="ghost" role="menuitem" disabled={!menuConversation} onClick={() => { const item = menuConversation; setMenu(undefined); if (item) setRenaming({ id: item.id, value: item.title ?? '' }); }}>重命名</Button>
