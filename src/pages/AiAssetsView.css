@@ -39,7 +39,7 @@
 .asset-operation-menu summary:hover { background: var(--muted); color: var(--foreground); }
 .asset-operation-menu > div { position: absolute; right: 0; top: 32px; min-width: 145px; display: flex; flex-direction: column; padding: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 5px; box-shadow: 0 6px 18px #0002; z-index: 15; }
 .asset-operation-menu > div button { justify-content: flex-start; font-size: 12px; white-space: nowrap; }
-.asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 4px 26px 16px 14px; }
+.asset-chat-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 4px 14px 16px 26px; }
 .asset-message { display: flex; min-width: 0; margin: 8px 0; }
 .asset-message-user { justify-content: flex-end; }
 .asset-bubble { --asset-bubble-bg: var(--card); min-width: 0; max-width: min(78%, 900px); border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 8px 12px 9px; overflow-wrap: anywhere; }
@@ -129,7 +129,7 @@
   .asset-topbar .titlebar-actions { gap: 0; }
   .asset-detail-heading { padding: 8px 10px; }
   .asset-detail-heading .asset-usage { width: 100%; font-size: 10px; }
-  .asset-chat-scroll { padding: 2px 8px 12px; }
+  .asset-chat-scroll { padding: 2px 8px 12px 26px; }
   .asset-bubble { max-width: 88%; padding: 8px 10px; }
   .asset-file-list, .asset-prompt-body { padding: 10px; }
   .asset-attachment-group > summary { gap: 5px; }
@@ -157,24 +157,27 @@
 .asset-conversation-rename { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .asset-conversation-rename input { flex: 1; min-width: 0; min-height: 28px; padding: 4px 7px; font-size: 12px; color: var(--foreground); background: var(--background); border: 1px solid var(--accent-bright); border-radius: 4px; outline: 0; }
 
-/* 对话内右缘快速切换（参考 Codex）：每条消息一个定位点（超出 32 条按组取样），滚动跟随高亮当前消息，
-   悬停显示两行内容预览，相邻点略微浮起强调鼠标位置。rail 不设 overflow 滚动容器，否则悬停预览会被裁剪到不可见。 */
-.asset-message-rail { position: absolute; right: 6px; top: 92px; bottom: 18px; display: flex; flex-direction: column; align-items: flex-end; justify-content: safe center; gap: 3px; z-index: 10; padding: 4px 2px; }
-.asset-message-rail-pill { position: relative; display: flex; justify-content: flex-end; opacity: .55; transition: transform .12s ease, opacity .12s ease; }
-.asset-message-rail-pill.from-user { opacity: .8; }
-.asset-message-rail-pill.active { opacity: 1; }
+/* 对话内消息定位列（聊天区左缘）：每条消息一根灰色短横线（超出 32 条按组取样），滚动跟随高亮当前消息，
+   悬停向右浮出两行内容预览，相邻点略微浮起强调鼠标位置。
+   明暗与收放只作用在横线伪元素上，预览卡片不参与任何透明度体系（直接切换，任何时刻不透明）；
+   rail 不设 overflow 滚动容器，否则悬停预览会被裁剪到不可见。 */
+.asset-message-rail { position: absolute; left: 4px; top: 92px; bottom: 18px; display: flex; flex-direction: column; align-items: flex-start; justify-content: safe center; gap: 3px; z-index: 10; padding: 4px 2px; }
+.asset-message-rail-pill { position: relative; display: flex; justify-content: flex-start; transition: transform .12s ease; }
 .asset-message-rail-pill > button { width: 18px; height: 8px; padding: 0; border: 0; background: transparent; cursor: pointer; position: relative; }
-.asset-message-rail-pill > button::after { content: ''; position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 8px; height: 3px; border-radius: 2px; background: var(--border); transition: width .12s ease, background .12s ease; }
-.asset-message-rail-pill.from-user > button::after { background: color-mix(in srgb, var(--foreground) 38%, transparent); }
-.asset-message-rail-pill.active > button::after { width: 14px; background: var(--accent-bright); }
-/* 鼠标进入定位列：其余点收暗，悬停点加长提亮，相邻点浮起形成动态对比 */
-.asset-message-rail:hover .asset-message-rail-pill { opacity: .4; }
-.asset-message-rail:hover .asset-message-rail-pill.from-user { opacity: .55; }
-.asset-message-rail .asset-message-rail-pill:hover, .asset-message-rail .asset-message-rail-pill:has(> button:focus-visible) { opacity: 1; transform: translateY(-1px); }
-.asset-message-rail .asset-message-rail-pill:hover > button::after, .asset-message-rail .asset-message-rail-pill:has(> button:focus-visible) > button::after { width: 20px; background: var(--muted-foreground); }
+.asset-message-rail-pill > button::after { content: ''; position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 8px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--foreground) 38%, transparent); opacity: .8; transition: width .12s ease, background .12s ease, opacity .12s ease; }
+.asset-message-rail-pill.from-user > button::after { background: color-mix(in srgb, var(--foreground) 58%, transparent); }
+.asset-message-rail-pill.active > button::after { width: 14px; background: var(--accent-bright); opacity: 1; }
+/* 鼠标进入定位列：其余横线收暗，激活横线保持可辨 */
+.asset-message-rail:hover .asset-message-rail-pill > button::after { opacity: .35; }
+.asset-message-rail:hover .asset-message-rail-pill.active > button::after { opacity: .75; }
+/* 悬停/聚焦的横线加长提亮，对应药丸略微浮起；相邻药丸一并浮起形成动态对比 */
+.asset-message-rail .asset-message-rail-pill:hover > button::after, .asset-message-rail .asset-message-rail-pill:has(> button:focus-visible) > button::after { width: 20px; background: var(--muted-foreground); opacity: 1; }
+.asset-message-rail:hover .asset-message-rail-pill:hover > button::after, .asset-message-rail:hover .asset-message-rail-pill:has(> button:focus-visible) > button::after { opacity: 1; }
+.asset-message-rail .asset-message-rail-pill:hover, .asset-message-rail .asset-message-rail-pill:has(> button:focus-visible) { transform: translateY(-1px); }
 .asset-message-rail-pill:has(+ .asset-message-rail-pill:hover), .asset-message-rail-pill:has(+ .asset-message-rail-pill > button:focus-visible),
-.asset-message-rail-pill:hover + .asset-message-rail-pill, .asset-message-rail-pill > button:focus-visible + .asset-message-rail-pill { opacity: .85; transform: translateY(-1px); }
-.asset-message-rail-preview { display: none; position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 7px 10px; width: max-content; max-width: min(260px, calc(100vw - 64px)); background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; z-index: 30; pointer-events: none; }
+.asset-message-rail-pill:hover + .asset-message-rail-pill, .asset-message-rail-pill > button:focus-visible + .asset-message-rail-pill { transform: translateY(-1px); }
+/* 悬停预览：白色卡片向右浮出，直接切换不做过场透明，底色始终不透明 */
+.asset-message-rail-preview { display: none; position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 7px 10px; width: max-content; max-width: min(260px, calc(100vw - 64px)); background-color: var(--card, #ffffff); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px #0002; z-index: 30; pointer-events: none; }
 .asset-message-rail-pill:hover .asset-message-rail-preview, .asset-message-rail-pill:has(> button:focus-visible) .asset-message-rail-preview { display: flex; }
 .asset-message-rail-preview strong { font-size: 11px; font-weight: 500; color: var(--muted-foreground); }
 .asset-message-rail-preview > span { font-size: 12px; color: var(--foreground); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
