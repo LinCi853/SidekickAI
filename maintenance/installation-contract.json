@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "productId": "sidekickai",
+  "edition": "concept",
+  "licenses": [
+    { "id": "mit-license", "title": "MIT 开源许可", "defaultOpen": true, "file": "LICENSE" }
+  ],
+  "features": [],
+  "contentDescription": "白板和其他内置工具随本体安装",
+  "guide": { "label": "安装完成后打开使用指南", "description": "介绍窗口布局与常用快捷键，可稍后在菜单中再次打开" },
+  "options": [
+    { "id": "autoLaunch", "label": "开机自启", "description": "登录 Windows 后自动在后台启动", "type": "boolean", "page": "behavior", "defaultValue": false },
+    { "id": "logLevel", "label": "日志级别", "description": "决定记录多少运行日志", "type": "choice", "page": "logging", "defaultValue": "info",
+      "choices": [
+        { "value": "error", "label": "仅错误" },
+        { "value": "warn", "label": "警告及以上" },
+        { "value": "info", "label": "常规信息" },
+        { "value": "debug", "label": "调试" }
+      ]
+    },
+    { "id": "usageTracking", "label": "使用统计", "description": "匿名收集使用数据以改进产品", "type": "boolean", "page": "behavior", "defaultValue": true }
+  ]
+}

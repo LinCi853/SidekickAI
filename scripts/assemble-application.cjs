@@ -11,6 +11,25 @@ const MAX_RESULT_BYTES = 4 * 1024 * 1024
 const MAX_APPLICATION_MANIFEST_BYTES = 4 * 1024 * 1024
 const MAX_CONFIGURATION_BYTES = 32 * 1024
 const CONFIGURATION_PATH = 'inputs/installation-configuration.json'
+const PRODUCT_PATH = 'inputs/product-descriptor.json'
+
+function readProductDescriptor(root) {
+  const file = path.join(root, 'maintenance/distribution-product.json')
+  if (!fs.existsSync(file)) return null
+  u.assertFile(file)
+  if (fs.statSync(file).size > 32 * 1024) throw new Error('Product descriptor exceeds its size limit')
+  const raw = fs.readFileSync(file)
+  if (!raw.length || raw.length > 32 * 1024) throw new Error('Product descriptor exceeds its size limit')
+  const document = JSON.parse(raw.toString('utf8'))
+  if (document.schemaVersion !== 1 || document.productId !== 'sidekickai' || !document.editions?.concept
+    || document.icon !== 'resources/product-icon.ico') throw new Error('Invalid application distribution product')
+  return { document, sha256: u.hash(runtime.canonicalJson(document)), originalSha256: u.hash(raw) }
+}
+
+function assertProductUnchanged(product, root) {
+  const current = readProductDescriptor(root)
+  if (current?.originalSha256 !== product?.originalSha256) throw new Error('Product descriptor changed during assembly')
+}
 
 function readInstallationConfiguration(root, toolkit) {
   const file = path.join(root, 'maintenance/installation-configuration.json')
@@ -101,7 +120,10 @@ function inputIdentity(payloads, edition, productVersion) {
 
 function validateResult(result, toolkit, output, identity) {
   toolkitApi.fields(result, ['interfaceVersion', 'toolkitVersion', 'edition', 'mode', 'productVersion', 'authority',
-    'issuerKeyId', 'issuerFingerprint', 'inputs', 'artifacts'], ['schemaVersion', 'toolkitManifestSha256', 'publicIdentity', 'verified', 'installationConfigurationSha256'])
+    'issuerKeyId', 'issuerFingerprint', 'inputs', 'artifacts'], ['schemaVersion', 'toolkitManifestSha256', 'publicIdentity', 'verified', 'installationConfigurationSha256', 'productId', 'productDescriptorSha256'])
+  if (result.productId !== identity.productId || result.productDescriptorSha256 !== identity.productDescriptorSha256) {
+    throw new Error('Assembled product descriptor does not match its requested identity')
+  }
   if (!result || result.interfaceVersion !== toolkitApi.INTERFACE_VERSION || result.toolkitVersion !== toolkit.reference.toolkitVersion
     || result.edition !== identity.edition || result.mode !== 'offline' || result.authority !== 'self-built'
     || result.productVersion !== identity.productVersion || typeof result.issuerKeyId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(result.issuerKeyId)
@@ -141,6 +163,17 @@ function validateResult(result, toolkit, output, identity) {
 
 function retainedInputs(directory, input) {
   const files = []
+  if (input.productDescriptorSha256 !== undefined) {
+    const file = path.join(directory, ...PRODUCT_PATH.split('/'))
+    u.assertFile(file)
+    if (fs.statSync(file).size > 32 * 1024) throw new Error('Retained product descriptor exceeds its size limit')
+    const bytes = fs.readFileSync(file)
+    if (bytes.length > 32 * 1024) throw new Error('Retained product descriptor exceeds its size limit')
+    const document = JSON.parse(bytes.toString('utf8'))
+    if (document.productId !== input.productId || u.hash(runtime.canonicalJson(document)) !== input.productDescriptorSha256
+      || !bytes.equals(Buffer.from(runtime.canonicalJson(document) + '\n'))) throw new Error('Retained product descriptor differs from the request')
+    files.push({ path: PRODUCT_PATH, file, architecture: null, size: bytes.length, sha256: u.hash(bytes) })
+  }
   for (const arch of require('./application-packaging.cjs').validateArchitectures(Object.keys(input.inputs))) {
     const manifestPath = 'inputs/' + arch + '/application.manifest.json'
     const manifestFile = path.join(directory, ...manifestPath.split('/'))
@@ -176,20 +209,24 @@ function retainedInputs(directory, input) {
 async function assemble({ root, output, payloads, edition, productVersion, toolkit, toolkitOptions = {}, invokeOptions = {}, identityStore }) {
   toolkit ||= await preflight({ root, toolkitOptions, invokeOptions })
   const configuration = readInstallationConfiguration(root, toolkit)
+  const product = readProductDescriptor(root)
   const input = inputIdentity(payloads, edition, productVersion)
   const source = { edition, productVersion, inputs: input.inputs,
+    ...(product ? { productId: product.document.productId, productDescriptorSha256: product.sha256 } : {}),
     ...(configuration ? { installationConfigurationSha256: configuration.sha256 } : {}) }
   const directory = path.resolve(output, 'installers')
   if (fs.existsSync(directory)) throw new Error('Installer assembly output already exists')
   const request = { schemaVersion: 1, toolkitDirectory: toolkit.directory, toolkitVersion: toolkit.reference.toolkitVersion,
     edition, mode: 'offline', authority: 'self-built', payloads: input.manifests,
     identityStore: path.resolve(identityStore || path.join(root, 'local/self-build-identity.json')), outputDirectory: directory,
+    ...(product ? { productDescriptor: product.document } : {}),
     ...(configuration ? { installationConfiguration: configuration.value } : {}) }
   fs.mkdirSync(output, { recursive: true })
   const requestFile = path.resolve(output, 'assembly-request.json')
   fs.writeFileSync(requestFile, JSON.stringify(request, null, 2) + '\n', { flag: 'wx' })
   console.log('[assembly] Building self-built offline installers with pinned binary components')
   const response = invoke(toolkit, ['assemble', '--request', requestFile], invokeOptions)
+  assertProductUnchanged(product, root)
   assertConfigurationUnchanged(configuration, root)
   const resultFile = path.join(directory, 'assembly-result.json')
   if (!response || response.schemaVersion !== 1 || typeof response.outputDirectory !== 'string' || typeof response.resultFile !== 'string'
@@ -219,6 +256,7 @@ async function assemble({ root, output, payloads, edition, productVersion, toolk
   if (!fs.readFileSync(resultFile).equals(resultBytes)) throw new Error('Assembly result changed during verification')
   assertConfigurationUnchanged(configuration, root)
   u.assertUnchanged(input.fingerprint, u.fingerprint(path.dirname(input.files[0]), input.files))
+  assertProductUnchanged(product, root)
   return { installers, retainedInputs: retained, preparedToolkit: toolkit, result, resultFile, resultSha256: u.hash(resultBytes), toolkit: {
     toolkitVersion: toolkit.reference.toolkitVersion, interfaceVersion: toolkitApi.INTERFACE_VERSION,
     ...(toolkit.reference.archive.path ? { archivePath: toolkit.reference.archive.path } : { archiveUrl: toolkit.reference.archive.url }),
@@ -234,6 +272,8 @@ function verifyCollected(assembled, directory, options = {}, collection = null) 
   const before = snapshot()
   if (collection?.collectionFingerprint) u.assertUnchanged(collection.collectionFingerprint, before)
   const source = { edition: assembled.result.edition, productVersion: assembled.result.productVersion, inputs: assembled.result.inputs,
+    ...(assembled.result.productDescriptorSha256 !== undefined ? { productId: assembled.result.productId,
+      productDescriptorSha256: assembled.result.productDescriptorSha256 } : {}),
     ...(assembled.result.installationConfigurationSha256 !== undefined ? { installationConfigurationSha256: assembled.result.installationConfigurationSha256 } : {}) }
   const checked = invoke(assembled.preparedToolkit, ['verify', '--toolkit', assembled.preparedToolkit.directory, '--result', resultFile], options)
   validateResult(checked, assembled.preparedToolkit, directory, source)

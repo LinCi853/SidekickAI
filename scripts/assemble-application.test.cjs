@@ -254,6 +254,36 @@ test('single native payload assembly retains, collects and verifies only its req
   assert.equal(assembly.verifyCollected(assembled, collection.directory, { spawn: runner.spawn }, collection).verified, true)
 })
 
+test('application product descriptors bind requests, results and retained collection inputs', async t => {
+  const value = await context(t, true)
+  fs.mkdirSync(path.join(value.root, 'maintenance'), { recursive: true })
+  const descriptor = { schemaVersion: 1, productId: 'sidekickai', icon: 'resources/product-icon.ico', editions: { concept: {} } }
+  fs.writeFileSync(path.join(value.root, 'maintenance/distribution-product.json'), JSON.stringify(descriptor))
+  const runner = mockAssembler(value.toolkit, { assemble({ request }) { assert.deepEqual(request.productDescriptor, descriptor) } })
+  const assembled = await assembly.assemble(optionsFor(value, runner.spawn))
+  assert.equal(assembled.result.productId, 'sidekickai')
+  assert.equal(assembled.retainedInputs.filter(file => file.path === 'inputs/product-descriptor.json').length, 1)
+  const collection = collect(value, assembled, 'product')
+  assert.equal(assembly.verifyCollected(assembled, collection.directory, { spawn: runner.spawn }, collection).verified, true)
+  fs.writeFileSync(path.join(collection.directory, 'inputs/product-descriptor.json'), JSON.stringify({ ...descriptor, icon: 'other.ico' }))
+  assert.throws(() => assembly.verifyCollected(assembled, collection.directory, { spawn: runner.spawn }), /descriptor/)
+})
+
+test('application assembly refuses changed descriptor sources and mismatched signed identities', async t => {
+  for (const kind of ['source', 'identity']) {
+    const value = await context(t, true)
+    const file = path.join(value.root, 'maintenance/distribution-product.json')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    const descriptor = { schemaVersion: 1, productId: 'sidekickai', icon: 'resources/product-icon.ico', editions: { concept: {} } }
+    fs.writeFileSync(file, JSON.stringify(descriptor))
+    const runner = mockAssembler(value.toolkit, { assemble({ result }) {
+      if (kind === 'source') fs.writeFileSync(file, JSON.stringify({ ...descriptor, name: 'Changed' }))
+      else result.productDescriptorSha256 = '0'.repeat(64)
+    } })
+    await assert.rejects(() => assembly.assemble(optionsFor(value, runner.spawn)), /descriptor/)
+  }
+})
+
 test('installer result paths reject escape, duplicate names, non-files and linked directories', async t => {
   const value = await context(t, true)
   const output = path.join(value.root, 'result')

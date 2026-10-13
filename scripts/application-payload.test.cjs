@@ -37,6 +37,12 @@ test('standard payloads contain the native runtime at the ZIP root and an unsign
     const zip = new AdmZip(artifact.path)
     const files = zip.getEntries().filter(entry => !entry.isDirectory)
     assert.ok(files.some(entry => entry.entryName === 'SidekickAI.exe'))
+    assert.deepEqual(zip.readFile('resources/product-icon.ico'), fs.readFileSync(path.resolve(__dirname, '../resources/icons/icon.ico')))
+    const installation = JSON.parse(zip.readFile('resources/installation-contract.json'))
+    assert.equal(installation.productId, 'sidekickai')
+    assert.equal(installation.edition, 'concept')
+    assert.equal(installation.licenses[0].body, fs.readFileSync(path.resolve(__dirname, '../LICENSE'), 'utf8'))
+    assert.equal(installation.guide.label, '安装完成后打开使用指南')
     assert.equal(files.length, manifest.files.length)
     for (const file of manifest.files) {
       const bytes = zip.readFile(file.path)

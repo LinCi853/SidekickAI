@@ -83,8 +83,27 @@ function packApplicationPayload({ source, output, architecture, edition = applic
   const before = application.applicationFingerprint(source)
   const verified = application.verifyRuntime(source, architecture, { edition, productVersion })
   const nativeFiles = application.verifyNativeFiles(source, architecture)
-  const files = runtime.fileInventory(source, { validate: validatePayloadPath })
-  const packed = runtime.archiveFiles(source, archive, files)
+  const iconPath = 'resources/product-icon.ico'
+  const iconSource = path.resolve(__dirname, '../resources/icons/icon.ico')
+  fs.mkdirSync(output, { recursive: true })
+  const staged = fs.mkdtempSync(path.join(output, '.payload-icons-'))
+  let files, packed
+  const iconSha256 = u.sha256(iconSource)
+  const installContract = require('./application-install-contract.cjs').installationContract(edition)
+  try {
+    fs.cpSync(source, staged, { recursive: true })
+    u.assertUnchanged(before, application.applicationFingerprint(staged))
+    const iconTarget = path.join(staged, iconPath)
+    if (fs.existsSync(iconTarget) && u.sha256(iconTarget) !== iconSha256) throw new Error('Application product icon differs from the project asset')
+    if (!fs.existsSync(iconTarget)) fs.copyFileSync(iconSource, iconTarget, fs.constants.COPYFILE_EXCL)
+    const contractTarget = path.join(staged, 'resources/installation-contract.json')
+    if (fs.existsSync(contractTarget) && !fs.readFileSync(contractTarget).equals(installContract)) throw new Error('Application installation contract differs from the project input')
+    if (!fs.existsSync(contractTarget)) fs.writeFileSync(contractTarget, installContract, { flag: 'wx' })
+    files = runtime.fileInventory(staged, { validate: validatePayloadPath })
+    packed = runtime.archiveFiles(staged, archive, files)
+    if (u.sha256(iconSource) !== iconSha256) throw new Error('Application product icon changed during packaging')
+    if (!require('./application-install-contract.cjs').installationContract(edition).equals(installContract)) throw new Error('Application installation contract changed during packaging')
+  } finally { fs.rmSync(staged, { recursive: true, force: true }) }
   const manifest = validateManifest({ schemaVersion: 1, kind: 'application-payload', edition, productVersion, architecture,
     archive: { file: path.basename(archive), size: packed.size, sha256: packed.sha256 }, files })
   u.assertUnchanged(before, application.applicationFingerprint(source))

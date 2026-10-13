@@ -216,4 +216,7 @@ test('public source fingerprints cover application configuration and ignore priv
   fs.mkdirSync(path.join(root, 'maintenance'))
   fs.writeFileSync(path.join(root, 'maintenance/distribution-toolkit.json'), '{}')
   assert.notEqual(build.captureInputs(root).fingerprint, previous.fingerprint)
+  const configured = build.captureInputs(root)
+  fs.writeFileSync(path.join(root, 'maintenance/distribution-product.json'), '{"icon":"resources/product-icon.ico"}')
+  assert.notEqual(build.captureInputs(root).fingerprint, configured.fingerprint)
 })

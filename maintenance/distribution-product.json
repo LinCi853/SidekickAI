@@ -1,0 +1,96 @@
+{
+  "editions": {
+    "concept": {
+      "cloudResources": false,
+      "dataDirectories": [
+        "sidekickai-opensource"
+      ],
+      "directory": "SidekickAI-Concept",
+      "label": "概念版",
+      "legacyDirectories": [
+        "SidekickAI-OpenSource"
+      ],
+      "legacyExecutable": "SidekickAI-OpenSource.exe",
+      "packageKinds": [
+        "installer",
+        "portable"
+      ],
+      "packageName": "sidekickai-opensource",
+      "registryKey": "SidekickAI-OpenSource",
+      "requiredFiles": [
+        "SidekickAI.exe",
+        "resources/app.asar",
+        "resources/LICENSE.application.txt",
+        "LICENSE.electron.txt",
+        "LICENSES.chromium.html",
+        "chrome_100_percent.pak",
+        "chrome_200_percent.pak",
+        "resources.pak",
+        "icudtl.dat",
+        "snapshot_blob.bin",
+        "v8_context_snapshot.bin",
+        "ffmpeg.dll",
+        "libEGL.dll",
+        "libGLESv2.dll",
+        "d3dcompiler_47.dll",
+        "vk_swiftshader.dll",
+        "vk_swiftshader_icd.json",
+        "vulkan-1.dll",
+        "locales/en-US.pak",
+        "locales/zh-CN.pak",
+        "locales/zh-TW.pak"
+      ]
+    },
+    "community": {
+      "cloudResources": true,
+      "dataDirectories": [
+        "sidekick-ai",
+        "ai-window",
+        "SidekickAI"
+      ],
+      "directory": "SidekickAI",
+      "label": "社区版",
+      "legacyDirectories": [],
+      "legacyExecutable": "SidekickAI.exe",
+      "packageKinds": [
+        "installer"
+      ],
+      "packageName": "sidekick-ai",
+      "registryKey": "SidekickAI",
+      "requiredFiles": [
+        "SidekickAI.exe",
+        "resources/app.asar",
+        "chrome_100_percent.pak",
+        "chrome_200_percent.pak",
+        "resources.pak",
+        "icudtl.dat",
+        "snapshot_blob.bin",
+        "v8_context_snapshot.bin",
+        "ffmpeg.dll",
+        "libEGL.dll",
+        "libGLESv2.dll",
+        "d3dcompiler_47.dll",
+        "vk_swiftshader.dll",
+        "vk_swiftshader_icd.json",
+        "vulkan-1.dll",
+        "locales/en-US.pak",
+        "locales/zh-CN.pak",
+        "locales/zh-TW.pak",
+        "resources/License.txt",
+        "resources/native-observation/SidekickObservation.exe",
+        "resources/native-observation/SidekickObservation.exe.config",
+        "resources/native-observation/manifest.json"
+      ]
+    }
+  },
+  "executable": "SidekickAI.exe",
+  "name": "SidekickAI",
+  "displayName": "工百窗",
+  "arpDisplayName": "工百窗",
+  "publisher": "LinCi853",
+  "productId": "sidekickai",
+  "purposePrefix": "sidekickai",
+  "schemaVersion": 1,
+  "identityCarrier": "electron-asar",
+  "icon": "resources/product-icon.ico"
+}

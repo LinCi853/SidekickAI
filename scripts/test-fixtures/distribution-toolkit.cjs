@@ -145,9 +145,16 @@ function assemblyResult(request, toolkit) {
     artifacts: [],
   }
   fs.mkdirSync(request.outputDirectory)
+  if (request.productDescriptor !== undefined) {
+    const canonical = require('../application-runtime.cjs').canonicalJson(request.productDescriptor)
+    fs.mkdirSync(path.join(request.outputDirectory, 'inputs'), { recursive: true })
+    fs.writeFileSync(path.join(request.outputDirectory, 'inputs/product-descriptor.json'), canonical + '\n')
+    result.productId = request.productDescriptor.productId
+    result.productDescriptorSha256 = u.hash(canonical)
+  }
   if (request.installationConfiguration !== undefined) {
     const bytes = Buffer.from(require('../application-runtime.cjs').canonicalJson(request.installationConfiguration) + '\n')
-    fs.mkdirSync(path.join(request.outputDirectory, 'inputs'))
+    fs.mkdirSync(path.join(request.outputDirectory, 'inputs'), { recursive: true })
     fs.writeFileSync(path.join(request.outputDirectory, 'inputs/installation-configuration.json'), bytes)
     result.installationConfigurationSha256 = u.hash(bytes)
   }
