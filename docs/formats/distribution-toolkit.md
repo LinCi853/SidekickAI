@@ -24,7 +24,7 @@
 
 组件引用默认从 `maintenance/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，使同一归档可从明确的其他位置取得；版本、大小与摘要以消费端代码内固定值为准，环境变量不改变信任锚。任一身份字段不一致，都会在读取归档、下载、使用缓存或运行组件之前失败。缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
 
-当前消费端只接受 `scripts/distribution-toolkit-release.cjs` 固定的 1.3.5：121,614,340 字节，SHA-256 为 `a1e640478cfe807b449bcc8e484d63422eaf42409c79945bc8120271bf9ed39a`。接受新的组件发行版须审查并更新源码固定值及引用；不提供跳过固定值校验的开关。
+当前消费端只接受 `scripts/distribution-toolkit-release.cjs` 固定的 1.3.5：121,615,823 字节，SHA-256 为 `0feb0acdbc8e96cd2e6e13cb0432d56b76d5ee9711083485bb99f959d9233552`。接受新的组件发行版须审查并更新源码固定值及引用；不提供跳过固定值校验的开关。
 
 下载与缓存复用均核对 ZIP 大小、摘要、完整条目及逐文件内容。构建前后重新核对引用和组件字节。缓存位于 `build/component-cache/distribution-toolkit`，不包含自建私钥。
 
