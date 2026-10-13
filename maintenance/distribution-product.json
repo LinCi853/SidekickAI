@@ -92,5 +92,17 @@
   "purposePrefix": "sidekickai",
   "schemaVersion": 1,
   "identityCarrier": "electron-asar",
-  "icon": "resources/product-icon.ico"
+  "icon": "resources/product-icon.ico",
+  "dataProbe": {
+    "required": [
+      "settings.db"
+    ],
+    "anyOf": [
+      "chat.db",
+      "whiteboard.db",
+      "notes.db",
+      "injection-history.json"
+    ]
+  },
+  "appExportHook": "--export-user-data"
 }
