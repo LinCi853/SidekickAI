@@ -90,7 +90,8 @@ export function getProxyDispatcher(): Dispatcher | undefined {
   const proxyUrl = (cfg.customProxy || '').trim()
   if (!proxyUrl) return undefined
   try {
-    const opts: ConstructorParameters<typeof ProxyAgent>[0] = { uri: proxyUrl }
+    // undici 8 forwards plain HTTP absolutely unless forced; keep the CONNECT transport this product shipped with.
+    const opts: ConstructorParameters<typeof ProxyAgent>[0] = { uri: proxyUrl, proxyTunnel: true }
     if (cfg.proxyUsername) {
       opts.token = `Basic ${Buffer.from(`${cfg.proxyUsername}:${cfg.proxyPassword || ''}`).toString('base64')}`
     }

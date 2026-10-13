@@ -126,8 +126,9 @@ export async function withPublicResponse<T>(
     const requestUrl = new URL(destination.url)
     const hostname = destination.url.hostname.replace(/^\[|\]$/g, '')
     if (proxy) requestUrl.hostname = destination.family === 6 ? `[${destination.address}]` : destination.address
+    // undici 8 forwards plain HTTP absolutely unless forced; keep the proxy a tunnel to the checked address.
     const dispatcher = proxy ? new ProxyAgent({ uri: proxy.href, token: await proxyAuthorization(session, proxy),
-      requestTls: { servername: isIP(hostname) ? undefined : hostname } }) : new Agent({ connect: { lookup: (_hostname, options, callback) => {
+      proxyTunnel: true, requestTls: { servername: isIP(hostname) ? undefined : hostname } }) : new Agent({ connect: { lookup: (_hostname, options, callback) => {
       if (options.all) callback(null, [{ address: destination.address, family: destination.family }])
       else callback(null, destination.address, destination.family)
     } } })
