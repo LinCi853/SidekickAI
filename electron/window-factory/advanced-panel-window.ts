@@ -54,9 +54,8 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   // 单例检查：已存在则聚焦并通知渲染层切换 tab/provider
   const existing = windowState.advancedPanelWindow
   if (existing && !existing.isDestroyed()) {
-    if (existing.isMinimized()) existing.restore()
-    if (!existing.isVisible()) existing.show()
-    existing.focus()
+    // 经焦点服务唤出（采集本轮归还目标），不走裸 show/focus
+    void Promise.resolve(focusManager.show(existing))
     // 通知渲染层切换到指定 tab/provider
     if (!existing.webContents.isDestroyed()) {
       existing.webContents.send(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, {
@@ -153,14 +152,16 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     shown = true
     const currentMinWidth = getAdvancedPanelMinWidth(getUiScaleFromSettings())
     win.setMinimumSize(currentMinWidth, ADVANCED_PANEL_MIN_HEIGHT)
-    win.show()
-    // 先 show 再 maximize，避免在 show:false 窗口上调用 maximize 导致 DWM 状态异常
-    if (pendingMaximize && !win.isMaximized()) {
-      win.maximize()
-    }
-    win.moveTop()
-    win.focus()
-    safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
+    // 经焦点服务唤出：采集本轮归还目标（关闭面板时交还给唤出前的窗口）
+    void Promise.resolve(focusManager.show(win)).then(() => {
+      if (win.isDestroyed()) return
+      // 先 show 再 maximize，避免在 show:false 窗口上调用 maximize 导致 DWM 状态异常
+      if (pendingMaximize && !win.isMaximized()) {
+        win.maximize()
+      }
+      win.moveTop()
+      safeLogWindowTrace(ADVANCED_PANEL_WINDOW_ID, 'create')
+    })
   }
 
   win.once('ready-to-show', showOnce)
@@ -221,18 +222,14 @@ export async function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptio
 export function showAdvancedPanelWindow(): void {
   const win = windowState.advancedPanelWindow
   if (!win || win.isDestroyed()) return
-  if (win.isMinimized()) win.restore()
-  if (!win.isVisible()) win.show()
-  win.focus()
+  void Promise.resolve(focusManager.show(win))
 }
 
 /** 聚焦 进阶面板（仅聚焦，不创建） */
 export function focusAdvancedPanelWindow(): void {
   const win = windowState.advancedPanelWindow
   if (!win || win.isDestroyed()) return
-  if (win.isMinimized()) win.restore()
-  if (!win.isVisible()) win.show()
-  win.focus()
+  void Promise.resolve(focusManager.show(win))
 }
 
 /**

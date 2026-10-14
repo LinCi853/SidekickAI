@@ -46,6 +46,7 @@ import { windowStore } from './store/window-store.js';
 import { isTrackedFullscreen } from './utils/fullscreen-tracker.js';
 import { createMainWindow, createBrowserWindow, createChatWindow, showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showSettingsWindow, showHistoryDownloadWindow, openAdvancedPanelWindow, toggleAdvancedPanelWindow, showOnboardingWindow, setOnboardingLifecycleCallbacks, getSenderWindow, findWindowIdByWin, } from './window-factory.js';
 import { initAppFocusTracker } from './voice/preview-window.js';
+import { warmWin32ForegroundBridge } from './utils/win32-foreground.js';
 import { peekSttEngine, startBackgroundVoiceGated, stopBackgroundVoiceGated, toggleVoiceRecordingGated, } from './modules/wiring/voice.js';
 import { createTray, hasTray } from './window/tray.js';
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js';
@@ -135,6 +136,8 @@ app.whenReady().then(async () => {
     const showGuideRequested = process.argv.includes('--show-guide');
     const skipGuideRequested = process.argv.includes('--skip-guide');
     initAppFocusTracker();
+    // 预热前台窗口读写桥（常驻 PowerShell 会话），让首次热键唤出避开 Add-Type 冷启动
+    warmWin32ForegroundBridge();
     installRendererContentSecurity(session.defaultSession);
     installApplicationPermissions(session.defaultSession, (contents, permission, details) =>
         allowWhiteboardClipboard({ permission, senderId: contents.id, hostId: windowState.advancedPanelWindow?.webContents.id,
@@ -329,13 +332,11 @@ app.whenReady().then(async () => {
             createMainWindow();
             return;
         }
-        if (win.isMinimized())
-            win.restore();
-        win.setSkipTaskbar(false);
-        if (!win.isVisible())
-            win.show();
-        win.focus();
-        win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN);
+        // 统一经焦点服务唤出（采集本轮归还目标 + 代际管理），不走裸 show/focus
+        void Promise.resolve(applicationFocus.show(win)).then(() => {
+            if (!win.isDestroyed())
+                win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN);
+        });
     });
     registerProfileIPC();
     registerBaseChatIpc();

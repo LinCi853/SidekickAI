@@ -13,6 +13,7 @@ import { showNotification } from './notify.js'
 import { destroyTray } from './window/tray.js'
 import { clearPreviewHideTimer } from './voice/preview-window.js'
 import { clearClipboardRestoreTimer } from './voice/clipboard-paste.js'
+import { disposeWin32ForegroundBridge } from './utils/win32-foreground.js'
 
 /**
  * 启动后延迟检测 uiohook 健康度。
@@ -79,4 +80,6 @@ export function cleanupOnQuit(deps: LifecycleDeps): void {
   destroyTray()
   clearClipboardRestoreTimer()
   clearPreviewHideTimer()
+  // 终止常驻前台窗口读写桥
+  disposeWin32ForegroundBridge()
 }

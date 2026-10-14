@@ -66,10 +66,11 @@ export function createTray(): void {
             createMainWindow()
             return
           }
-          focusManager.show(win)
-          if (!win.isDestroyed()) {
-            win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
-          }
+          void Promise.resolve(focusManager.show(win)).then(() => {
+            if (!win.isDestroyed()) {
+              win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+            }
+          })
         },
       },
       {
@@ -77,17 +78,16 @@ export function createTray(): void {
         click: () => {
           const win = windowState.mainWindow
           if (!win || win.isDestroyed()) return
-          const workArea = screen.getPrimaryDisplay().workArea
-          const defaultWidth = 420
-          const defaultHeight = 820
-          const x = Math.round(workArea.x + workArea.width - defaultWidth - 20)
-          const y = Math.round(workArea.y + 20)
-          if (win.isMaximized()) win.unmaximize()
-          if (win.isMinimized()) win.restore()
-          win.setSkipTaskbar(false)
-          if (!win.isVisible()) win.show()
-          win.setBounds({ x, y, width: defaultWidth, height: defaultHeight })
-          win.focus()
+          void Promise.resolve(focusManager.show(win)).then(() => {
+            if (win.isDestroyed()) return
+            const workArea = screen.getPrimaryDisplay().workArea
+            const defaultWidth = 420
+            const defaultHeight = 820
+            const x = Math.round(workArea.x + workArea.width - defaultWidth - 20)
+            const y = Math.round(workArea.y + 20)
+            if (win.isMaximized()) win.unmaximize()
+            win.setBounds({ x, y, width: defaultWidth, height: defaultHeight })
+          })
         },
       },
       { type: 'separator' },
@@ -111,10 +111,11 @@ export function createTray(): void {
       if (win.isVisible()) {
         focusManager.hide(win)
       } else {
-        focusManager.show(win)
-        if (!win.isDestroyed()) {
-          win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
-        }
+        void Promise.resolve(focusManager.show(win)).then(() => {
+          if (!win.isDestroyed()) {
+            win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+          }
+        })
       }
     })
 
