@@ -15,13 +15,20 @@ const statuses: Record<string, string> = { streaming: '接收中', complete: '�
 // 长消息默认折叠：只按换行判断（约 18 行以上），折叠态保留 markdown 渲染并向下渐变虚影收尾，
 // 头部工具栏与底部横条都可展开/收起
 const FOLD_LINES = 18;
-// 对话内定位点上限：消息更多时按组取样，保证定位列高度可控且悬停预览不被裁剪
+// 对话内定位点：以「我发送的消息」为一组——一条用户消息与其后的 AI 回复合为一轮，
+// 定位按轮次而不是逐条消息；轮次超出上限时按轮次合并取样，保证定位列高度可控且悬停预览不被裁剪
 const RAIL_MAX_PILLS = 32;
 function railGroups(messages: AssetGraphNode[]): AssetGraphNode[][] {
-  if (messages.length <= RAIL_MAX_PILLS) return messages.map(message => [message]);
-  const size = Math.ceil(messages.length / RAIL_MAX_PILLS);
+  const turns: AssetGraphNode[][] = [];
+  for (const message of messages) {
+    const current = turns[turns.length - 1];
+    if (!current || message.role === 'user') turns.push([message]);
+    else current.push(message);
+  }
+  if (turns.length <= RAIL_MAX_PILLS) return turns;
+  const size = Math.ceil(turns.length / RAIL_MAX_PILLS);
   const groups: AssetGraphNode[][] = [];
-  for (let index = 0; index < messages.length; index += size) groups.push(messages.slice(index, index + size));
+  for (let index = 0; index < turns.length; index += size) groups.push(turns.slice(index, index + size).flat());
   return groups;
 }
 function RevisionDifference({ before, after }: { before: string; after: string }) {
@@ -214,6 +221,7 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     </summary><div className="asset-file-grid">{items.map(item => <AssetFileCard key={item.id} item={item} onAction={onAction} onConversation={onConversation} showConversation={false} />)}</div>
   </details>;
   const messages = graph.path.map(id => graph.nodes.find(node => node.id === id)!).filter(Boolean);
+  const rail = railGroups(messages);
   const aiLabel = conversationAiLabel(conversation);
   return <><div className="asset-detail-heading">
     <div className="asset-detail-title" onKeyDown={event => { if (event.key === 'F2' && rename === undefined) { event.preventDefault(); setRename(conversation.title); } }}>{rename !== undefined ? <div className="asset-actions"><input aria-label="本地对话名称" autoFocus value={rename} onChange={event => setRename(event.target.value)}
@@ -278,8 +286,8 @@ function ConversationDetail({ conversation, revision, attachments, settings, bra
     })}
     {files(attachments.filter(item => item.conversationId === conversation.id && (!item.messageId || !graph.nodes.some(node => node.id === item.messageId))))}
   </div>
-  {messages.length > 1 && <nav className="asset-message-rail" aria-label="对话内快速切换">
-    {railGroups(messages).map(group => {
+  {rail.length > 1 && <nav className="asset-message-rail" aria-label="对话内快速切换">
+    {rail.map(group => {
       const anchor = group[0];
       const active = !!activeMessageId && group.some(message => message.id === activeMessageId);
       return <div key={anchor.id} className={`asset-message-rail-pill${anchor.role === 'user' ? ' from-user' : ''}${active ? ' active' : ''}`}>

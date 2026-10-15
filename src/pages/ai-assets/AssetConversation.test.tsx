@@ -193,3 +193,24 @@ describe('asset conversation refresh behavior', () => {
     expect(nodes(settled.current).find(node => node.type === 'asset-markdown')!.props.content).toBe('A text final');
   });
 });
+
+describe('message rail turn grouping', () => {
+  const node = (id: string, role: string): any => ({ id, conversationId: 'A', sourceKey: id, versionKey: '', role, content: `${id} content`, createdAt: 1, locallyEdited: false });
+  const turnGraph = (path: Array<[string, string]>): AssetConversationGraph => ({ nodes: path.map(([id, role]) => node(id, role)), path: path.map(([id]) => id), sourcePath: [] });
+  const railPills = (view: { current: unknown }) => nodes(view.current).filter(node => typeof node.props?.className === 'string' && node.props.className.includes('asset-message-rail-pill'));
+
+  it('anchors each rail pill on a sent message together with its replies', async () => {
+    api.graph.mockResolvedValueOnce(turnGraph([['u1', 'user'], ['a1', 'assistant'], ['a2', 'assistant'], ['u2', 'user'], ['a3', 'assistant']]));
+    const view = mount('A'); await settleHooks();
+    const pills = railPills(view);
+    expect(pills).toHaveLength(2);
+    expect(pills.map(pill => pill.key)).toEqual(['u1', 'u2']);
+    expect(pills.every(pill => pill.props.className.includes('from-user'))).toBe(true);
+  });
+
+  it('omits the rail when the conversation holds a single turn', async () => {
+    api.graph.mockResolvedValueOnce(turnGraph([['u1', 'user'], ['a1', 'assistant']]));
+    const view = mount('A'); await settleHooks();
+    expect(railPills(view)).toEqual([]);
+  });
+});
