@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import WindowResizeHandles from '../../components/WindowResizeHandles'
+import ShortcutHelp from '../../components/ShortcutHelp'
 import { IconButton, PinToggleButton } from '../../components/ui'
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow'
 import { useWindowMaximizedAndPinned } from '../../hooks/useWindowMaximizedAndPinned'
@@ -19,7 +20,7 @@ export default function DataExportWindow() {
   const [message, setMessage] = useState('')
   const passwordInput = useRef<HTMLInputElement>(null)
   const busy = exporting || importing
-  useEscToCloseWindow()
+  useEscToCloseWindow({ windowControls: true })
   useEffect(() => { if (importNeedsPassword) passwordInput.current?.focus() }, [importNeedsPassword])
 
   const handleExport = async () => {
@@ -151,6 +152,8 @@ export default function DataExportWindow() {
         </section>
         {message && <p role="status" data-name="data-export.status">{message}</p>}
       </div>
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
     </div>
   </>
 }

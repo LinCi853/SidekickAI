@@ -31,6 +31,8 @@ import WhiteboardView from './WhiteboardView';
 import NotesView from './NotesView';
 import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
+import ShortcutHelp from '../components/ShortcutHelp';
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
 import './ChatBubble.css';
 import './AdvancedPanelView.css';
 
@@ -146,13 +148,26 @@ export default function AdvancedPanelView() {
   // 注意：切换范围只含已启用模块的 tab（availableTabs），避免切到已关闭模块导致空白
   const tabOrder: TabKey[] = availableTabs;
   const tabSwitchRef = useRef(true);
+  const [tabSwitchShortcuts, setTabSwitchShortcuts] = useState(true);
   useEffect(() => {
-    void getAppSettings().then((cfg) => { tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false; }).catch(() => {});
+    void getAppSettings().then((cfg) => {
+      tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false;
+      setTabSwitchShortcuts(cfg.advancedPanelTabSwitchShortcuts !== false);
+    }).catch(() => {});
     const off = onAppSettingsChanged((cfg) => {
       tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false;
+      setTabSwitchShortcuts(cfg.advancedPanelTabSwitchShortcuts !== false);
     });
     return off;
   }, []);
+
+  // 注册即声明：上方实现的面板标签切换键位 + 自定义 Ctrl+W 关窗
+  useRegisterShortcutDocs('advanced-panel', [
+    { id: 'advanced-panel.tab-switch', keys: 'Ctrl + 1/2/3 或 Alt + 1/2/3', action: '切换到第 N 个面板标签（按已启用模块顺序）', category: 'page', disabled: !tabSwitchShortcuts },
+    { id: 'advanced-panel.tab-cycle', keys: 'Ctrl + Tab / Ctrl + Shift + Tab', action: '向前/向后循环面板标签', category: 'page', disabled: !tabSwitchShortcuts },
+    { id: 'window.close', keys: 'Ctrl + W', action: '关闭面板窗口', category: 'page' },
+  ]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!tabSwitchRef.current) return;
@@ -203,7 +218,7 @@ export default function AdvancedPanelView() {
       void beforeLeaveRef.current(close).catch((error) => console.error('[AdvancedPanel] close failed:', error));
     } else close();
   }, []);
-  useEscToCloseWindow({ ctrlW: false, onEsc: (event) => { event.preventDefault(); handleClose(); return true; } });
+  useEscToCloseWindow({ ctrlW: false, windowControls: true, onEsc: (event) => { event.preventDefault(); handleClose(); return true; } });
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'w') {
@@ -310,6 +325,8 @@ export default function AdvancedPanelView() {
             .catch(() => {});
         }}
       />
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
       <WindowResizeHandles />
     </div>
   );

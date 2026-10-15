@@ -10,6 +10,7 @@ import { useToast } from '../hooks/useToast';
 import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
 import { Button, IconButton, EmptyState, ConfirmDialog } from '../components/ui';
 import PromptEditorForm from '../components/PromptEditorForm';
+import ShortcutHelp from '../components/ShortcutHelp';
 import './PromptLibraryView.css';
 
 export interface PromptLibraryViewProps {
@@ -185,5 +186,7 @@ export default function PromptLibraryView({ embedded = false, query = '', draft,
     </div>
     <ConfirmDialog open={deleteOpen} title="删除提示词" message={`确认删除「${editor.title}」？`} confirmLabel="删除" variant="danger" onConfirm={handleDelete} onCancel={() => setDeleteOpen(false)} />
     <div role="status" className={`prompt-toast app-toast${toast !== null ? ' is-open' : ''}`} data-name="prompts.toast">{toast ?? ''}</div>
+    {/* 快捷键说明（` / ~ / ? 呼出；嵌入形态由宿主窗口统一挂载，避免双重监听） */}
+    {!embedded && <ShortcutHelp />}
   </>;
 }

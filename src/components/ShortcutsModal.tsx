@@ -1,56 +1,40 @@
 /* =====================================================================
-   components/ShortcutsModal.tsx —— 快捷键查看弹窗
-   点击底栏「快捷键」按钮打开，展示所有可用快捷键。
-   关键设计：使用 CSS grid 三段式布局（hotkey | action | scope badge），
-   兼容窄窗口（QQ 风格窄长窗口下也不会把中文挤成竖排）。
+   components/ShortcutsModal.tsx —— 快捷键速查弹窗（扁平列表，颜色分两类）
+   所有页面均可呼出（` / ~ / ?，或页面内按钮，或 webview 焦点时主进程
+   openShortcuts 转发）。内容来自快捷键注册表（store/useShortcutDocStore）：
+   各行为实现在注册键位时已一并声明说明，页面打开时完成扫描、数据常备，
+   弹窗只读快照渲染。
 
-   前 3 项（全局热键）支持动态化：通过 hotkeys prop 反映用户自定义的 accelerator
-   与启用状态。已禁用的热键以灰显样式标记。全部静态数据来自
-   lib/shortcut-reference.ts（与使用指南共享的单一事实来源）。
+   展示规则：
+   - 仅两类：全局 / 页面内，只用键位颜色区分（全局 accent、页面内 info），
+     不加分类行、不加 badge 列
+   - 全局条目排前、页面条目在后；禁用条目灰显并标注「已禁用」
+   - 头部徽标标明当前页面（内容随页面实时变化）
    ===================================================================== */
 
 import './ShortcutsModal.css';
-import type { HotkeyConfig } from '../lib/electron-api';
+import { useMemo } from 'react';
 import { IconButton } from './ui';
 import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
-import { GLOBAL_HOTKEY_META, APP_SHORTCUTS, formatAcc } from '../lib/shortcut-reference';
+import { useShortcutDocStore, selectShortcutDocs } from '../store/useShortcutDocStore';
+import { getShortcutPageId, SHORTCUT_PAGE_TITLES } from '../lib/shortcut-reference';
+import type { ShortcutPageId } from '../lib/shortcut-reference';
 
 export interface ShortcutsModalProps {
   open: boolean;
   onClose: () => void;
-  /** 当前全局热键配置（动态渲染前 3 项；不传则用默认值） */
-  hotkeys?: HotkeyConfig[];
+  /** 页面 ID（默认按当前 URL 推导；测试或特殊场景可显式传入） */
+  pageId?: ShortcutPageId;
 }
 
-/** 范围文本 → badge 颜色 class（视觉区隔） */
-function scopeClass(scope: string): string {
-  if (scope === '全局') return 'shortcuts-scope-badge is-global';
-  if (scope === '窗口内') return 'shortcuts-scope-badge is-window';
-  return 'shortcuts-scope-badge is-app';
-}
-
-export default function ShortcutsModal({ open, onClose, hotkeys }: ShortcutsModalProps) {
+export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModalProps) {
   // ESC 关闭快捷键说明面板
   useEscToCloseOverlay(open, onClose);
 
-  // 前 3 项：根据 hotkeys prop 动态生成（自定义 accelerator + 启用状态）
-  const globalItems = GLOBAL_HOTKEY_META.map((g) => {
-    const cfg = hotkeys?.find((h) => h.action === g.action);
-    const keys = cfg ? formatAcc(cfg.accelerator) : g.fallbackKeys;
-    const enabled = cfg?.enabled ?? true;
-    return {
-      keys,
-      action: g.actionText,
-      scope: '全局',
-      note: g.note,
-      disabled: !enabled,
-    };
-  });
-
-  // 后 12 项：硬编码应用内 / 窗口内快捷键
-  const appItems = APP_SHORTCUTS.map((s) => ({ ...s, disabled: false }));
-
-  const allItems = [...globalItems, ...appItems];
+  const resolvedPageId = pageId ?? getShortcutPageId();
+  const pageTitle = SHORTCUT_PAGE_TITLES[resolvedPageId];
+  const sources = useShortcutDocStore((s) => s.sources);
+  const docs = useMemo(() => selectShortcutDocs(sources), [sources]);
 
   return (
     <div
@@ -62,12 +46,17 @@ export default function ShortcutsModal({ open, onClose, hotkeys }: ShortcutsModa
       <div
         className="shortcuts-modal"
         role="dialog"
-        aria-label="快捷键"
+        aria-label={`快捷键（${pageTitle}）`}
         data-name="component.shortcuts-modal.modal"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shortcuts-header" data-name="component.shortcuts-modal.modal-header">
-          <h2 data-name="component.shortcuts-modal.title">快捷键</h2>
+          <h2 data-name="component.shortcuts-modal.title">
+            快捷键
+            <span className="shortcuts-page-badge" data-name="component.shortcuts-modal.page-badge">
+              {pageTitle}
+            </span>
+          </h2>
           <IconButton
             type="button"
             variant="close"
@@ -92,25 +81,27 @@ export default function ShortcutsModal({ open, onClose, hotkeys }: ShortcutsModa
         </div>
         <div className="shortcuts-body" data-name="component.shortcuts-modal.modal-body">
           <div className="shortcuts-list" role="list" data-name="component.shortcuts-modal.list">
-            {allItems.map((s, idx) => (
+            {docs.map((s) => (
               <div
                 className={`shortcuts-item${s.disabled ? ' is-disabled' : ''}`}
                 role="listitem"
-                key={`${s.keys}-${idx}`}
-                data-name={`component.shortcuts-modal.item-${idx + 1}`}
-                data-index={idx + 1}
-                data-id={s.keys}
+                key={s.id}
+                data-name={`component.shortcuts-modal.item-${s.id}`}
+                data-id={s.id}
+                data-category={s.category}
               >
-                <div className="shortcuts-keys" data-name={`component.shortcuts-modal.item-keys-${idx + 1}`}>{s.keys}</div>
-                <div className="shortcuts-action" data-name={`component.shortcuts-modal.item-action-${idx + 1}`}>
-                  <span className="shortcuts-action-text" data-name={`component.shortcuts-modal.item-action-text-${idx + 1}`}>
-                    {s.action}
-                    {s.disabled && <span className="shortcuts-disabled-tag" data-name={`component.shortcuts-modal.item-disabled-tag-${idx + 1}`}>（已禁用）</span>}
-                  </span>
-                  {s.note && <div className="shortcuts-note" data-name={`component.shortcuts-modal.item-note-${idx + 1}`}>{s.note}</div>}
+                <div
+                  className={`shortcuts-keys is-${s.category}`}
+                  data-name={`component.shortcuts-modal.item-keys-${s.id}`}
+                >
+                  {s.keys}
                 </div>
-                <div className="shortcuts-scope" data-name={`component.shortcuts-modal.item-scope-${idx + 1}`}>
-                  <span className={scopeClass(s.scope)} data-name={`component.shortcuts-modal.item-scope-badge-${idx + 1}`}>{s.scope}</span>
+                <div className="shortcuts-action" data-name={`component.shortcuts-modal.item-action-${s.id}`}>
+                  <span className="shortcuts-action-text" data-name={`component.shortcuts-modal.item-action-text-${s.id}`}>
+                    {s.action}
+                    {s.disabled && <span className="shortcuts-disabled-tag" data-name={`component.shortcuts-modal.item-disabled-tag-${s.id}`}>（已禁用）</span>}
+                  </span>
+                  {s.note && <div className="shortcuts-note" data-name={`component.shortcuts-modal.item-note-${s.id}`}>{s.note}</div>}
                 </div>
               </div>
             ))}

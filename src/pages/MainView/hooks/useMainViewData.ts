@@ -6,13 +6,12 @@ import {
   onWindowShown,
   onWindowHidden,
   onAppSettingsChanged,
-  getHotkeys,
   ALL_TOP_BAR_BUTTON_GROUPS,
 } from '../../../lib/electron-api';
 import { useTabStore } from '../../../store/useTabStore';
 import { useThemeStore } from '../../../store/useThemeStore';
 import { focusInputInWebview, type WebviewLike } from '../../../hooks/useWebViewControl';
-import type { AIPlatform, HotkeyConfig, TopBarButtonGroup } from '../../../lib/electron-api';
+import type { AIPlatform, TopBarButtonGroup } from '../../../lib/electron-api';
 
 /**
  * Manages platform loading/filtering, app settings, window lifecycle events,
@@ -32,7 +31,6 @@ export function useMainViewData() {
   const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([...ALL_TOP_BAR_BUTTON_GROUPS]);
 
   // UI state
-  const [hotkeys, setHotkeys] = useState<HotkeyConfig[]>([]);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(
@@ -77,14 +75,6 @@ export function useMainViewData() {
     });
     return () => { offHidden(); };
   }, []);
-
-  // Load hotkeys for ShortcutsModal
-  useEffect(() => {
-    if (!shortcutsOpen) return;
-    getHotkeys()
-      .then((list) => setHotkeys(list))
-      .catch((e) => console.error('加载全局热键失败（ShortcutsModal）:', e));
-  }, [shortcutsOpen]);
 
   // Filter platforms
   const filterPlatforms = useCallback(
@@ -230,7 +220,6 @@ export function useMainViewData() {
     appClickBehavior,
     topBarVisibleButtons,
     // UI
-    hotkeys,
     shortcutsOpen,
     setShortcutsOpen,
     drawerOpen,

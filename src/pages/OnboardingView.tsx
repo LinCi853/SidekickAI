@@ -37,6 +37,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useModuleStore } from '../store/useModuleStore';
 import { useUiVersionStore } from '../store/useUiVersionStore';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
+import ShortcutHelp from '../components/ShortcutHelp';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { readUserUiScale } from '../lib/oxy-design-system';
 import { PAGES, TOTAL_PAGES } from './onboarding/onboardingData';
@@ -336,6 +337,8 @@ export default function OnboardingView() {
           )}
         </div>
       </footer>
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../ho
 import { createPlatformSettingsActions } from '../../hooks/platform-settings-actions';
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import StandaloneWindowHeader from '../../components/StandaloneWindowHeader';
+import ShortcutHelp from '../../components/ShortcutHelp';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
 import Toggle from '../../components/ui/Toggle';
 import { SectionTitle, FormRow, Combobox } from '../../components/ui';
@@ -56,7 +57,7 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
 ];
 
 export default function SettingsView() {
-  useEscToCloseWindow();
+  useEscToCloseWindow({ windowControls: true });
 
   const [activeCategory, setActiveCategory] = useState<CategoryId>('appearance');
 
@@ -446,6 +447,8 @@ export default function SettingsView() {
         profileId={editorProfileId}
         mode={editorMode}
       />
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
     </>
   );
 }

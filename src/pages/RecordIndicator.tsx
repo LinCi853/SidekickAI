@@ -10,6 +10,7 @@
    ===================================================================== */
 
 import { useEffect, useRef, useState } from 'react';
+import ShortcutHelp from '../components/ShortcutHelp';
 import {
   enumerateInputDevices,
   getVoiceConfig,
@@ -338,6 +339,8 @@ export default function RecordIndicator() {
           {isRecording && <span className="label-rec" data-name="record-indicator.label-rec">REC</span>}
         </div>
       </div>
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
     </div>
   );
 }

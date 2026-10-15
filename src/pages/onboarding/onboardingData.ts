@@ -21,6 +21,16 @@ export const PAGES = [
 
 export const TOTAL_PAGES = PAGES.length;
 
+/** 使用指南「上手动作」页展示的高频主窗口操作（教学内容，与快捷键注册表独立维护） */
+export const ONBOARDING_HIGH_FREQ: Array<{ keys: string; action: string; scope: string }> = [
+  { keys: 'Alt + 1~9', action: '切换到第 N 个标签', scope: '窗口内' },
+  { keys: 'Ctrl + Tab / Ctrl + Shift + Tab', action: '向前/向后循环切换标签', scope: '窗口内' },
+  { keys: 'Ctrl + T', action: '脱离当前标签为独立窗口', scope: '窗口内' },
+  { keys: 'Ctrl + W', action: '关闭当前标签', scope: '窗口内' },
+  { keys: 'F10', action: '切换主题', scope: '应用内' },
+  { keys: 'F12', action: '切换当前窗口置顶', scope: '应用内' },
+];
+
 /** 全局热键 → 展示（动态读取用户自定义 accelerator 与启用状态） */
 export function resolveHotkey(hotkeys: HotkeyConfig[], action: HotkeyAction, fallback: string): {
   keys: string;

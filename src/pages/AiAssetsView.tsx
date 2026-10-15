@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Files, List, MessageSquare, RefreshCw, Search, SquareLibrary, Upload, X } from 'lucide-react';
 import WindowResizeHandles from '../components/WindowResizeHandles';
+import ShortcutHelp from '../components/ShortcutHelp';
 import StandaloneWindowHeader from '../components/StandaloneWindowHeader';
 import { Button, ConfirmDialog, EmptyState, IconButton } from '../components/ui';
 import PromptLibraryView from './PromptLibraryView';
@@ -10,7 +11,9 @@ import AssetCollectionStatus from './ai-assets/AssetCollectionStatus';
 import AssetSettingsPanel from '../components/AssetSettingsPanel';
 import Modal from '../components/ui/Modal';
 import { useAssetSettings } from '../hooks/useAssetSettings';
-import { normalizeAssetAccelerator } from '../../electron/shared/asset-settings';
+import { normalizeAssetAccelerator, ASSET_SHORTCUT_LABELS } from '../../electron/shared/asset-settings';
+import { formatAcc } from '../lib/shortcut-reference';
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
 import { listConversations, importConversation, onConversationPersisted } from '../lib/electron-api';
 import { requireElectron } from '../lib/electron-api/core';
 import type { Conversation, PromptExample } from '../lib/electron-api';
@@ -226,6 +229,15 @@ export default function AiAssetsView() {
       title: Array.from(content.trim().split('\n')[0]).slice(0, 48).join('') || '对话提示词' });
     setCategory('prompts'); setQuery(''); setListOpen(false);
   };
+  // 注册即声明：AI资产局部快捷键（用户在设置中录制的键位）随设置实时重新注册
+  useRegisterShortcutDocs('asset-local-shortcuts', (Object.keys(ASSET_SHORTCUT_LABELS) as Array<keyof typeof ASSET_SHORTCUT_LABELS>)
+    .filter((key) => settings.localShortcuts[key])
+    .map((key) => ({
+      id: `asset.local.${key}`,
+      keys: formatAcc(settings.localShortcuts[key]),
+      action: ASSET_SHORTCUT_LABELS[key],
+      category: 'page' as const,
+    })));
   return <><WindowResizeHandles /><div ref={rootRef} className="assets-view app-shell app-view-root" data-name="assets.container">
     <StandaloneWindowHeader title="AI资产" className="asset-topbar" dataNamePrefix="assets.topbar" leading={<>
       {category === 'conversations' && <IconButton className="asset-list-toggle asset-icon-button" aria-label="打开对话列表" aria-expanded={listOpen} aria-controls="asset-conversations" onClick={() => setListOpen(value => !value)}><List size={16} /></IconButton>}
@@ -295,5 +307,5 @@ export default function AiAssetsView() {
       message={<>{pendingCleanup?.ids.length} 项：{pendingCleanup?.names.slice(0, 4).join('、')}{(pendingCleanup?.names.length ?? 0) > 4 ? '…' : ''}。{pendingCleanup?.kind === 'files'
         ? '将删除这些资料记录和不再被其他资料引用的原件，无法撤销；保留对话、模板及共享原件。已清理的资料不会自动重新收纳。'
         : '将删除这些对话及消息，无法撤销；保留已保存的模板和本机原件，原网页再次出现时不自动收回。'}{cleanupError && <><br /><span role="alert" className="asset-error">{cleanupError}</span></>}</>} />
-  </div></>;
+  </div><ShortcutHelp /></>;
 }

@@ -17,6 +17,7 @@ import { useProfileStore } from '../../store/useProfileStore';
 import { hasOverlay } from '../../hooks/useEscToCloseWindow';
 import { maximizeToggleWindow } from '../../lib/electron-api';
 import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl';
+import { useRegisterShortcutDocs } from '../../store/useShortcutDocStore';
 
 const LONG_PRESS_MS = 500;
 
@@ -29,6 +30,17 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar: () => void) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
+
+  // 注册即声明：本 hook 实现的键位在此登记说明
+  useRegisterShortcutDocs('main-keyboard', [
+    { id: 'main.tab-detach', keys: 'Ctrl + T', action: '脱离当前标签为独立窗口', category: 'page' },
+    { id: 'main.tab-close', keys: 'Ctrl + W', action: '关闭当前标签', category: 'page' },
+    { id: 'main.page-back', keys: 'F4', action: '后退（当前标签）', category: 'page' },
+    { id: 'main.page-refresh', keys: 'F5', action: '刷新当前标签', category: 'page' },
+    { id: 'main.page-focus-input', keys: 'F6', action: '聚焦 AI 输入框 / 取消聚焦（循环）', category: 'page' },
+    { id: 'window.maximize', keys: 'F11', action: '切换最大化/还原', category: 'page' },
+    { id: 'main.bottom-bar', keys: '长按 Tab', action: '呼出 / 收起底栏', category: 'page' },
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

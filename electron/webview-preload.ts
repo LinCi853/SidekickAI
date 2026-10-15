@@ -8,8 +8,10 @@
 
 import { startAiAssetCollector } from './assets/webview-collector.js'
 import { installFileDropCapture } from './preload/file-drop.js'
+import { installFocusReporter } from './preload/focus-reporter.js'
 
 installFileDropCapture('guest')
+installFocusReporter()
 
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', () => { void startAiAssetCollector().catch(error => console.warn('[ai-assets] Collector unavailable:', error)) }, { once: true })

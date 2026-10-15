@@ -12,7 +12,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useHotkeys } from '../hooks/useHotkeys';
 import WindowResizeHandles from '../components/WindowResizeHandles';
 import SettingsPanel from '../components/SettingsPanel';
-import ShortcutsModal from '../components/ShortcutsModal';
+import ShortcutHelp from '../components/ShortcutHelp';
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
 import { IconButton, TitleBar, PinToggleButton } from '../components/ui';
 import { GearIcon } from '../components/icons';
 import { useProfileStore } from '../store/useProfileStore';
@@ -24,12 +25,10 @@ import {
   closeCurrentWindow,
   isWindowMaximized,
   pinCurrentWindow,
-  getHotkeys,
   listAIPlatforms,
 } from '../lib/electron-api';
-import type { Profile, HotkeyConfig } from '../lib/electron-api';
+import type { Profile } from '../lib/electron-api';
 import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } from '../lib/webview';
-import { useShortcutsToggle } from '../hooks/useShortcutsToggle';
 import { useIsNarrow } from '../hooks/useIsNarrow';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
 import { injectionManager } from '../lib/injection-manager';
@@ -57,26 +56,16 @@ export default function StandaloneView() {
   const [titleDraft, setTitleDraft] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  // ShortcutsModal 动态渲染全局热键（自定义 accelerator + 启用状态）
-  const [hotkeys, setHotkeys] = useState<HotkeyConfig[]>([]);
   // 长宽自适应：< 600px 视为窄屏（导航/工具按钮隐藏）
   const isNarrow = useIsNarrow();
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const webviewRef = useRef<WebviewElement | null>(null);
 
-  useHotkeys({});
+  // 单标签窗口：不登记标签切换键位说明
+  useHotkeys({ registerTabDocs: false });
 
-  // 反引号(` ~) / ? 呼出快捷键说明窗口（与主进程 before-input-event 拦截分支对应）
-  useShortcutsToggle(isShortcutsOpen, setIsShortcutsOpen);
-
-  // ShortcutsModal 打开时加载最新全局热键配置（自定义 accelerator + 启用状态）
-  useEffect(() => {
-    if (!isShortcutsOpen) return;
-    getHotkeys()
-      .then((list) => setHotkeys(list))
-      .catch((e) => console.error('加载全局热键失败（ShortcutsModal）:', e));
-  }, [isShortcutsOpen]);
+  // 快捷键说明窗口：` / ~ / ? 与主进程 openShortcuts 转发由 ShortcutHelp 内部处理
 
   // 同步初始最大化态
   useEffect(() => {
@@ -230,6 +219,7 @@ export default function StandaloneView() {
   // ESC / Ctrl+W 关窗：浮窗（设置面板/快捷键说明）由 useEscToCloseOverlay 统一处理；
   // onEsc 仅处理标题编辑态退出（非浮窗）；否则关闭窗口
   useEscToCloseWindow({
+    docs: { escNote: '标题编辑时先退出编辑' },
     onEsc: (e) => {
       // 标题编辑时退出编辑
       if (isEditingTitle) {
@@ -240,6 +230,12 @@ export default function StandaloneView() {
       return false;
     },
   });
+
+  // 注册即声明：本窗口的 F12 置顶与双击标题编辑
+  useRegisterShortcutDocs('standalone-window', [
+    { id: 'window.always-on-top', keys: 'F12', action: '切换窗口置顶', category: 'page', note: '最大化/全屏时不可用' },
+    { id: 'standalone.window-retitle', keys: '双击标题', action: '编辑标签标题', category: 'page' },
+  ]);
 
   const startEditTitle = useCallback(() => {
     if (!activeTab) return;
@@ -443,10 +439,9 @@ export default function StandaloneView() {
         <WindowResizeHandles />
       </div>
       <SettingsPanel open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      <ShortcutsModal
+      <ShortcutHelp
         open={isShortcutsOpen}
-        onClose={() => setIsShortcutsOpen(false)}
-        hotkeys={hotkeys}
+        onOpenChange={setIsShortcutsOpen}
       />
     </>
   );

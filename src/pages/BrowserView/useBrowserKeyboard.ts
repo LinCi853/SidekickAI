@@ -20,6 +20,9 @@ import { onWebviewHotkey, clearAllNavHistory, clearAllDownloads, validateWebview
 import type { WebviewHotkeyPayload } from '../../../electron/shared/types';
 import type { WebviewElement } from '../../lib/webview';
 import { leaseWebviewLifecycle, matchesWebviewHotkeyTarget, type WebviewLifecycleLease } from '../../lib/webview-lifecycle';
+import { formatAcc } from '../../lib/shortcut-reference';
+import { useRegisterShortcutDocs } from '../../store/useShortcutDocStore';
+import type { ShortcutDoc } from '../../store/useShortcutDocStore';
 
 export interface BrowserKeyboardOptions {
   /** 聚焦地址栏回调 */
@@ -72,13 +75,17 @@ export interface BrowserKeyboardOptions {
   enabled?: boolean;
 }
 
-/** 快捷键定义：accelerator（渲染层匹配）+ action（主进程转发）+ handler */
+/** 快捷键定义：accelerator（渲染层匹配）+ action（主进程转发）+ handler。
+ *  doc 为注册即声明的说明，由 buildBrowserShortcutDocs 从本表派生注册进
+ *  快捷键注册表——键位与说明单一来源，不会漂移。 */
 interface BrowserShortcutDef {
   accelerator: string;
   /** 主进程 WEBVIEW_HOTKEY 转发的 action；纯渲染层快捷键省略 */
   action?: string;
   /** 执行动作（data 为转发 payload.data） */
   handler: (data?: unknown) => void;
+  /** 注册即声明：说明文字（同动作多键自动合并展示） */
+  doc?: { text: string; note?: string };
 }
 
 /**
@@ -118,64 +125,64 @@ export function buildShortcutDefs(o: BrowserKeyboardOptions): BrowserShortcutDef
 
   const defs: BrowserShortcutDef[] = [
     // ===== 标签操作 =====
-    { accelerator: 'Ctrl+T', action: 'detachCurrent', handler: () => store().newTab() },
-    { accelerator: 'Ctrl+W', action: 'closeTab', handler: () => { const id = store().activeTabId; if (id) void store().closeTab(id); } },
-    { accelerator: 'Ctrl+Tab', action: 'cycleTab', handler: (d) => cycleTab(Boolean((d as { reverse?: boolean } | undefined)?.reverse)) },
-    { accelerator: 'Ctrl+Shift+Tab', handler: () => cycleTab(true) },
-    { accelerator: 'Alt+1', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 0) },
-    { accelerator: 'Alt+2', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 1) },
-    { accelerator: 'Alt+3', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 2) },
-    { accelerator: 'Alt+4', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 3) },
-    { accelerator: 'Alt+5', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 4) },
-    { accelerator: 'Alt+6', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 5) },
-    { accelerator: 'Alt+7', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 6) },
-    { accelerator: 'Alt+8', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 7) },
-    { accelerator: 'Alt+9', action: 'switchTab', handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 8) },
-    { accelerator: 'Ctrl+Shift+T', action: 'reopenClosed', handler: () => reopenClosed() },
+    { accelerator: 'Ctrl+T', action: 'detachCurrent', doc: { text: '新建标签页' }, handler: () => store().newTab() },
+    { accelerator: 'Ctrl+W', action: 'closeTab', doc: { text: '关闭当前标签' }, handler: () => { const id = store().activeTabId; if (id) void store().closeTab(id); } },
+    { accelerator: 'Ctrl+Tab', action: 'cycleTab', doc: { text: '循环切换到下一个标签' }, handler: (d) => cycleTab(Boolean((d as { reverse?: boolean } | undefined)?.reverse)) },
+    { accelerator: 'Ctrl+Shift+Tab', doc: { text: '循环切换到上一个标签' }, handler: () => cycleTab(true) },
+    { accelerator: 'Alt+1', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 0) },
+    { accelerator: 'Alt+2', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 1) },
+    { accelerator: 'Alt+3', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 2) },
+    { accelerator: 'Alt+4', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 3) },
+    { accelerator: 'Alt+5', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 4) },
+    { accelerator: 'Alt+6', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 5) },
+    { accelerator: 'Alt+7', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 6) },
+    { accelerator: 'Alt+8', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 7) },
+    { accelerator: 'Alt+9', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 8) },
+    { accelerator: 'Ctrl+Shift+T', action: 'reopenClosed', doc: { text: '重新打开已关闭的标签' }, handler: () => reopenClosed() },
 
     // ===== 导航 / 加载 =====
-    { accelerator: 'Ctrl+L', action: 'focusAddressBar', handler: () => o.onFocusAddressBar() },
-    { accelerator: 'Alt+D', action: 'focusAddressBar', handler: () => o.onFocusAddressBar() },
-    { accelerator: 'Ctrl+R', action: 'navRefresh', handler: () => o.onRefresh() },
-    { accelerator: 'F5', action: 'navRefresh', handler: () => o.onRefresh() },
-    { accelerator: 'Ctrl+Shift+R', action: 'forceRefresh', handler: () => o.onForceRefresh() },
-    { accelerator: 'Ctrl+F5', action: 'forceRefresh', handler: () => o.onForceRefresh() },
-    { accelerator: 'Alt+ArrowLeft', action: 'navBack', handler: () => o.onGoBack() },
-    { accelerator: 'Alt+ArrowRight', action: 'navForward', handler: () => o.onGoForward() },
-    { accelerator: 'F6', action: 'focusCycle', handler: () => o.onFocusCycle?.() },
-    { accelerator: 'Escape', handler: () => handleEscape() },
+    { accelerator: 'Ctrl+L', action: 'focusAddressBar', doc: { text: '聚焦地址栏' }, handler: () => o.onFocusAddressBar() },
+    { accelerator: 'Alt+D', action: 'focusAddressBar', doc: { text: '聚焦地址栏' }, handler: () => o.onFocusAddressBar() },
+    { accelerator: 'Ctrl+R', action: 'navRefresh', doc: { text: '刷新当前页面' }, handler: () => o.onRefresh() },
+    { accelerator: 'F5', action: 'navRefresh', doc: { text: '刷新当前页面' }, handler: () => o.onRefresh() },
+    { accelerator: 'Ctrl+Shift+R', action: 'forceRefresh', doc: { text: '强制刷新（清除缓存）' }, handler: () => o.onForceRefresh() },
+    { accelerator: 'Ctrl+F5', action: 'forceRefresh', doc: { text: '强制刷新（清除缓存）' }, handler: () => o.onForceRefresh() },
+    { accelerator: 'Alt+ArrowLeft', action: 'navBack', doc: { text: '后退' }, handler: () => o.onGoBack() },
+    { accelerator: 'Alt+ArrowRight', action: 'navForward', doc: { text: '前进' }, handler: () => o.onGoForward() },
+    { accelerator: 'F6', action: 'focusCycle', doc: { text: '聚焦循环（地址栏 → 页面可输入 → 不聚焦）' }, handler: () => o.onFocusCycle?.() },
+    { accelerator: 'Escape', doc: { text: '全屏时退出全屏，否则停止加载' }, handler: () => handleEscape() },
 
     // ===== 浏览器功能 =====
-    { accelerator: 'Ctrl+D', action: 'addBookmark', handler: () => o.onAddBookmark?.() },
-    { accelerator: 'Ctrl+H', action: 'openHistory', handler: () => openInternal('history') },
-    { accelerator: 'Ctrl+J', action: 'openDownloads', handler: () => openInternal('downloads') },
-    { accelerator: 'Ctrl+K', action: 'focusSearch', handler: () => o.onFocusSearch?.() },
-    { accelerator: 'Ctrl+E', action: 'focusSearch', handler: () => o.onFocusSearch?.() },
-    { accelerator: 'Ctrl+Shift+B', action: 'toggleBookmarkBar', handler: () => o.onToggleBookmarkBar?.() },
-    { accelerator: 'Ctrl+Shift+Delete', action: 'clearBrowsingData', handler: () => clearBrowsingData() },
-    { accelerator: 'Ctrl+F', action: 'findInPage', handler: () => o.onFindInPage?.() },
-    { accelerator: 'Ctrl+P', action: 'print', handler: () => o.onPrint?.() },
-    { accelerator: 'Ctrl+S', action: 'savePageAs', handler: () => o.onSaveAsPage?.() },
-    { accelerator: 'Ctrl+U', action: 'viewSource', handler: () => o.onViewSource?.() },
+    { accelerator: 'Ctrl+D', action: 'addBookmark', doc: { text: '添加当前页面到书签' }, handler: () => o.onAddBookmark?.() },
+    { accelerator: 'Ctrl+H', action: 'openHistory', doc: { text: '打开历史' }, handler: () => openInternal('history') },
+    { accelerator: 'Ctrl+J', action: 'openDownloads', doc: { text: '打开下载' }, handler: () => openInternal('downloads') },
+    { accelerator: 'Ctrl+K', action: 'focusSearch', doc: { text: '聚焦地址栏并进入搜索模式' }, handler: () => o.onFocusSearch?.() },
+    { accelerator: 'Ctrl+E', action: 'focusSearch', doc: { text: '聚焦地址栏并进入搜索模式' }, handler: () => o.onFocusSearch?.() },
+    { accelerator: 'Ctrl+Shift+B', action: 'toggleBookmarkBar', doc: { text: '显示/隐藏书签栏' }, handler: () => o.onToggleBookmarkBar?.() },
+    { accelerator: 'Ctrl+Shift+Delete', action: 'clearBrowsingData', doc: { text: '清除浏览数据（历史与下载）' }, handler: () => clearBrowsingData() },
+    { accelerator: 'Ctrl+F', action: 'findInPage', doc: { text: '页内查找' }, handler: () => o.onFindInPage?.() },
+    { accelerator: 'Ctrl+P', action: 'print', doc: { text: '打印当前页面' }, handler: () => o.onPrint?.() },
+    { accelerator: 'Ctrl+S', action: 'savePageAs', doc: { text: '另存为当前页面' }, handler: () => o.onSaveAsPage?.() },
+    { accelerator: 'Ctrl+U', action: 'viewSource', doc: { text: '查看网页源代码' }, handler: () => o.onViewSource?.() },
 
     // ===== 缩放 =====
-    { accelerator: 'Ctrl+0', action: 'zoomReset', handler: () => o.onZoomReset?.() },
-    { accelerator: 'Ctrl+=', action: 'zoomIn', handler: () => o.onZoomIn?.() },
-    { accelerator: 'Ctrl+Plus', action: 'zoomIn', handler: () => o.onZoomIn?.() },
-    { accelerator: 'Ctrl+-', action: 'zoomOut', handler: () => o.onZoomOut?.() },
+    { accelerator: 'Ctrl+0', action: 'zoomReset', doc: { text: '重置页面缩放' }, handler: () => o.onZoomReset?.() },
+    { accelerator: 'Ctrl+=', action: 'zoomIn', doc: { text: '放大页面缩放' }, handler: () => o.onZoomIn?.() },
+    { accelerator: 'Ctrl+Plus', action: 'zoomIn', doc: { text: '放大页面缩放' }, handler: () => o.onZoomIn?.() },
+    { accelerator: 'Ctrl+-', action: 'zoomOut', doc: { text: '缩小页面缩放' }, handler: () => o.onZoomOut?.() },
 
     // ===== 窗口 / 系统级 =====
-    { accelerator: 'F11', handler: () => { console.log('[fullscreen-keyboard] F11 pressed, calling onToggleFullscreen'); o.onToggleFullscreen?.(); } },
-    { accelerator: 'F12', handler: () => o.onToggleDevTools() },
+    { accelerator: 'F11', doc: { text: '切换沉浸式全屏' }, handler: () => { console.log('[fullscreen-keyboard] F11 pressed, calling onToggleFullscreen'); o.onToggleFullscreen?.(); } },
+    { accelerator: 'F12', doc: { text: '打开/关闭开发者工具' }, handler: () => o.onToggleDevTools() },
 
     // ===== 云电脑模式 =====
     // Ctrl+Alt+C：进入/退出云电脑模式。渲染层 keydown（宿主聚焦）经通用注册表匹配；
     // webview 聚焦时主进程转发 action（uiohook 兜底通道 + guest 拦截双通道去重）；
     // onWebviewHotkey 中 toggleCloudPc 不受 enabled 限制（云电脑模式下也能退出）。
-    { accelerator: 'Ctrl+Alt+C', action: 'toggleCloudPc', handler: () => o.onToggleCloudPc?.() },
+    { accelerator: 'Ctrl+Alt+C', action: 'toggleCloudPc', doc: { text: '进入/退出云电脑模式' }, handler: () => o.onToggleCloudPc?.() },
 
     // ===== 手柄/键盘空间导航（等效主窗口 Ctrl+G） =====
-    { accelerator: 'Ctrl+G', action: 'toggleSpatialNav', handler: () => o.onToggleSpatialNav?.() },
+    { accelerator: 'Ctrl+G', action: 'toggleSpatialNav', doc: { text: '切换手柄/键盘空间导航' }, handler: () => o.onToggleSpatialNav?.() },
   ];
 
   function switchByIndex(index: number): void {
@@ -204,9 +211,72 @@ export function buildShortcutDefs(o: BrowserKeyboardOptions): BrowserShortcutDef
   return defs;
 }
 
+/**
+ * 从 defs 表派生快捷键说明（与键位实现同源，不会漂移）。
+ * 相同动作文案的多个 accelerator 合并为一条（如 Ctrl+R / F5），
+ * Alt+1~9 合并为一段；云电脑模式下除 Ctrl+Alt+C 外全部灰显
+ * （键位直通远端，本地不再生效）。
+ * @param isCloudPc 当前是否处于云电脑模式
+ */
+export function buildBrowserShortcutDocs(isCloudPc = false): ShortcutDoc[] {
+  const noop = (): void => {};
+  const defs = buildShortcutDefs({
+    onFocusAddressBar: noop,
+    onRefresh: noop,
+    onForceRefresh: noop,
+    onGoBack: noop,
+    onGoForward: noop,
+    onStopLoading: noop,
+    onMaximize: noop,
+    onToggleDevTools: noop,
+  });
+
+  // 展示键位：Ctrl+Plus 视为 Ctrl+=，方向键用箭头符号
+  const displayKey = (accelerator: string): string => {
+    const normalized = accelerator.replace(/Plus$/i, '=');
+    return formatAcc(normalized).replace('ArrowLeft', '←').replace('ArrowRight', '→');
+  };
+
+  const merged = new Map<string, { id: string; text: string; keys: string[]; isCloudToggle: boolean }>();
+  for (const def of defs) {
+    if (!def.doc) continue;
+    const normalizedAcc = def.accelerator.replace(/Plus$/i, '=');
+    let item = merged.get(def.doc.text);
+    if (!item) {
+      const slug = (def.action ?? normalizedAcc).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      item = { id: `browser.${slug}`, text: def.doc.text, keys: [], isCloudToggle: def.action === 'toggleCloudPc' };
+      merged.set(def.doc.text, item);
+    }
+    const display = displayKey(def.accelerator);
+    if (!item.keys.includes(display)) item.keys.push(display);
+  }
+
+  const docs: ShortcutDoc[] = [];
+  for (const item of merged.values()) {
+    // Alt+1..Alt+9 全齐时合并为一段展示
+    const altDigits = item.keys.filter((k) => /^Alt \+ [1-9]$/.test(k));
+    const keys = altDigits.length === 9
+      ? [...item.keys.filter((k) => !/^Alt \+ [1-9]$/.test(k)), 'Alt + 1~9'].join(' / ')
+      : item.keys.join(' / ');
+    docs.push({
+      id: item.id,
+      keys,
+      action: item.text,
+      category: 'page',
+      note: item.isCloudToggle && isCloudPc ? '云电脑模式下唯一保留的本地快捷键' : undefined,
+      // 云电脑模式下键位直通远端：除 Ctrl+Alt+C 外全部灰显
+      disabled: isCloudPc && !item.isCloudToggle,
+    });
+  }
+  return docs;
+}
+
 export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
   const optsRef = useRef(opts);
   optsRef.current = opts;
+
+  // 注册即声明：defs 表自带 doc，挂载即登记进注册表（云电脑模式下实时灰显）
+  useRegisterShortcutDocs('browser-defs', buildBrowserShortcutDocs(opts.enabled === false));
 
   // 每次渲染重建 defs（闭包持有最新 opts），useShortcutRegistry 用 ref 持有最新列表
   const defs = buildShortcutDefs(opts);

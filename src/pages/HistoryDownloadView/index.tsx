@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import WindowResizeHandles from '@/components/WindowResizeHandles';
+import ShortcutHelp from '@/components/ShortcutHelp';
 import StandaloneWindowHeader from '@/components/StandaloneWindowHeader';
 import { SegmentedControl } from '@/components/ui';
 import { useEscToCloseWindow } from '@/hooks/useEscToCloseWindow';
@@ -96,6 +97,8 @@ export default function HistoryDownloadView() {
           )}
         </div>
       </div>
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
     </>
   );
 }

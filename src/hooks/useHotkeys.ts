@@ -14,10 +14,13 @@ import { useEffect, useRef } from 'react';
 import { useTabStore } from '../store/useTabStore';
 import { registerHotkey, unregisterHotkey } from '../lib/electron-api';
 import { isTypingTarget } from '../lib/shared-utils';
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
 
 export interface UseHotkeysOptions {
   /** 全局热键配置 —— accelerator → 触发回调 */
   globalHotkeys?: Record<string, () => void>;
+  /** 注册即声明：是否登记标签切换键位说明（单标签窗口传 false） */
+  registerTabDocs?: boolean;
 }
 
 /**
@@ -27,7 +30,13 @@ export interface UseHotkeysOptions {
  * 在 Electron 渲染进程内通常可正常工作。
  */
 export function useHotkeys(options: UseHotkeysOptions = {}): void {
-  const { globalHotkeys } = options;
+  const { globalHotkeys, registerTabDocs = true } = options;
+
+  // 注册即声明：本 hook 实现的标签切换键位
+  useRegisterShortcutDocs('main-tabs', registerTabDocs ? [
+    { id: 'main.tab-switch', keys: 'Alt + 1~9', action: '切换到第 N 个标签', category: 'page' },
+    { id: 'main.tab-cycle', keys: 'Ctrl + Tab / Ctrl + Shift + Tab', action: '向前/向后循环切换标签', category: 'page' },
+  ] : []);
 
   // 窗口内快捷键 —— React keydown 监听
   useEffect(() => {

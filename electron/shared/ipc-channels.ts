@@ -349,6 +349,9 @@ export const IPC_CHANNELS = {
   // 载荷：{ action: 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme' | 'navBack' | 'navForward' | 'navRefresh' | 'newTab' | 'closeTab', data?: unknown }
   WEBVIEW_HOTKEY: 'webview:hotkey',
   WEBVIEW_VALIDATE_HOTKEY_TARGET: 'webview:validate-hotkey-target',
+  // guest → 主进程：访客页焦点是否处于可编辑元素（webview-preload 在 focusin/focusout 时 sendSync 上报）
+  // 载荷：boolean。主进程缓存后供 before-input-event 同步查询，输入中的字符键（? / `）放行给页面
+  WEBVIEW_FOCUS_EDITABLE: 'webview:focus-editable',
   // 主→渲染：webview 弹窗 URL 转发（主进程拦截 window.open / target="_blank" 后，
   // 将 URL 发回渲染层，由渲染层在当前 webview 内导航，避免弹出独立窗口）
   // 载荷：{ url: string, webContentsId: number }

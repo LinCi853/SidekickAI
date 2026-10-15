@@ -34,6 +34,7 @@ import { generateUniqueName } from '../../../electron/shared/naming';
 import { useToast } from '../../hooks/useToast';
 import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
 import Button from '../../components/ui/Button';
+import ShortcutHelp from '../../components/ShortcutHelp';
 import '../PromptLibraryView.css';
 import { parseEditorOpts } from './editorOpts.js';
 import { hostnameFromUrl, matchDomain, isValidHexColor, buildProfilePatch } from './domain.js';
@@ -100,6 +101,8 @@ export default function AiAppEditor() {
 
   // ESC / Ctrl+W 关窗：屏蔽规则表单打开时 ESC 优先关闭表单，否则关闭窗口
   useEscToCloseWindow({
+    windowControls: true,
+    docs: { escNote: '规则表单打开时先关闭表单' },
     onEsc: () => {
       if (showRuleForm) {
         setShowRuleForm(false);
@@ -560,6 +563,8 @@ export default function AiAppEditor() {
           </div>
         )}
       </div>
+      {/* 快捷键说明（` / ~ / ? 呼出） */}
+      <ShortcutHelp />
     </>
   );
 }

@@ -24,7 +24,7 @@ import {
   reportTabEnsureAndDetachResult,
 } from '../../lib/electron-api';
 import type { Profile } from '../../lib/electron-api';
-import ShortcutsModal from '../../components/ShortcutsModal';
+import ShortcutHelp from '../../components/ShortcutHelp';
 import DrawerPanel from '../../components/DrawerPanel';
 import WindowResizeHandles from '../../components/WindowResizeHandles';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -42,7 +42,6 @@ import TopBar from './TopBar';
 import TabBar from './TabBar';
 import { useTabContextMenu } from './useTabContextMenu';
 import { useMainViewKeyboard } from './useMainViewKeyboard';
-import { useShortcutsToggle } from '../../hooks/useShortcutsToggle';
 import FileDropOverlay from './FileDropOverlay';
 import InjectionPreviewModal from '../../components/InjectionPreviewModal';
 
@@ -98,7 +97,6 @@ export default function MainView() {
   // Extracted hooks
   const {
     platforms,
-    hotkeys,
     shortcutsOpen,
     setShortcutsOpen,
     drawerOpen,
@@ -179,7 +177,7 @@ export default function MainView() {
   // Keyboard shortcuts
   useHotkeys({});
   useMainViewKeyboard(bottomBarExpanded, toggleBottomBar);
-  useShortcutsToggle(shortcutsOpen, setShortcutsOpen);
+  // ` / ~ / ? 呼出快捷键说明由 ShortcutHelp 内部处理（窗口焦点 + webview 转发双通道）
 
   // D3: focusAiInputTrigger 变化时聚焦当前激活标签的 AI 输入框
   useEffect(() => {
@@ -536,10 +534,9 @@ export default function MainView() {
           onOpenPromptLibrary={() => void openPromptWindow()}
         />
 
-        <ShortcutsModal
+        <ShortcutHelp
           open={shortcutsOpen}
-          onClose={() => setShortcutsOpen(false)}
-          hotkeys={hotkeys}
+          onOpenChange={setShortcutsOpen}
         />
 
         <WindowResizeHandles />

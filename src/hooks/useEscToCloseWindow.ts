@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { closeCurrentWindow } from '@/lib/electron-api';
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
 
 /* =====================================================================
    全局浮窗栈：管理同时打开的多个浮窗的 ESC 优先级
@@ -41,20 +42,28 @@ export function hasOverlay(): boolean {
  * 监听注册在 window 的 keydown 捕获阶段，优先于子组件响应，
  * 保证即使焦点在子元素上也能稳定拦截 Ctrl+W。
  *
+ * 注册即声明：本 hook 实现的 Esc / Ctrl+W 在此登记说明；windowControls 为
+ * true 时一并登记主进程窗口级拦截（window-events.attachWindowHotkeyInterceptor）
+ * 实现的 F11 / F12——仅在该窗口确实挂了拦截器时开启。
+ *
  * @param opts.onEsc   自定义 ESC 拦截回调，返回 true 表示已处理（如退出标题编辑），不关窗
  * @param opts.ctrlW   是否启用 Ctrl+W 关窗，默认 true
+ * @param opts.windowControls 是否登记 F11/F12 窗口控制说明（默认 false）
+ * @param opts.docs    覆盖默认说明文字（各窗口 Esc/Ctrl+W 语义有差异时）
  */
 export function useEscToCloseWindow(opts: {
   onEsc?: (e: KeyboardEvent) => boolean;
   ctrlW?: boolean;
+  windowControls?: boolean;
+  docs?: { escAction?: string; escNote?: string; ctrlWAction?: string };
 } = {}): void {
-  const { onEsc, ctrlW = true } = opts;
+  const { onEsc, ctrlW = true, windowControls = false, docs } = opts;
   const onEscRef = useRef(onEsc);
   onEscRef.current = onEsc;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // ESC：浮窗栈非空时由栈顶浮窗处理（已在 capture 阶段先于本监听器执行并 stopImmediatePropagation）
+      // ESC：浮窗栈非空时由栈顶浮窗的 onClose 先执行（不关窗）
       // 能到达这里说明栈空或栈顶浮窗未处理（如输入框焦点时跳过）
       if (e.key === 'Escape') {
         const target = e.target as HTMLElement;
@@ -81,6 +90,16 @@ export function useEscToCloseWindow(opts: {
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [ctrlW]);
+
+  // 注册即声明：本 hook 与主进程窗口级拦截实现的键位
+  useRegisterShortcutDocs('window-behavior', [
+    { id: 'window.esc', keys: 'Esc', action: docs?.escAction ?? '关闭窗口（浮窗打开时先关闭浮窗）', category: 'page', note: docs?.escNote },
+    ...(ctrlW ? [{ id: 'window.close', keys: 'Ctrl + W', action: docs?.ctrlWAction ?? '关闭窗口', category: 'page' as const }] : []),
+    ...(windowControls ? [
+      { id: 'window.maximize', keys: 'F11', action: '切换最大化/还原', category: 'page' as const },
+      { id: 'window.always-on-top', keys: 'F12', action: '切换窗口置顶', category: 'page' as const, note: '最大化/全屏时不可用' },
+    ] : []),
+  ]);
 }
 
 /**

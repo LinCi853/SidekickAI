@@ -5,6 +5,7 @@ const fixture = vi.hoisted(() => ({
   browser: true,
   forward: true,
   targetAvailable: true,
+  editable: false,
   window: null as any,
   maximize: vi.fn(),
   exitCloud: vi.fn(),
@@ -13,6 +14,7 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('./renderer-loader.js', () => ({ isBrowserWindowContents: () => fixture.browser }))
 vi.mock('./window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
+vi.mock('./webview-focus.js', () => ({ isGuestFocusEditable: () => fixture.editable }))
 vi.mock('../utils/cloud-pc.js', () => ({ isCloudPc: () => fixture.cloud, forceExitCloudPc: fixture.exitCloud }))
 vi.mock('../utils/browser-hotkey-fallback.js', () => ({ tryForward: () => fixture.forward }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
@@ -42,6 +44,7 @@ beforeEach(() => {
   fixture.browser = true
   fixture.forward = true
   fixture.targetAvailable = true
+  fixture.editable = false
   parent = { id: 11, send: vi.fn(), isDestroyed: () => false }
   handlers = []
   guest = { id: 12, isDestroyed: () => false, isFocused: () => true, on: (_event: string, handler: any) => handlers.push(handler) }
@@ -89,10 +92,46 @@ describe('guest input behavior contract', () => {
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'cycleTab', data: { reverse: true } }))
   })
 
-  it('opens shortcuts for the physical backquote key', () => {
+  it('opens shortcuts for the physical backquote key outside browser windows', () => {
+    fixture.browser = false
     const event = press(String.fromCharCode(96), 'Backquote')
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'openShortcuts' }))
+  })
+
+  it('passes the page question mark through in browser windows', () => {
+    const event = press('?', 'Slash', ['shift'])
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(parent.send).not.toHaveBeenCalled()
+  })
+
+  it('passes the backquote through in browser windows', () => {
+    const event = press(String.fromCharCode(96), 'Backquote')
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(parent.send).not.toHaveBeenCalled()
+  })
+
+  it('opens shortcuts for the question mark outside browser windows while not typing', () => {
+    fixture.browser = false
+    const event = press('?', 'Slash', ['shift'])
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'openShortcuts' }))
+  })
+
+  it('passes the question mark through to page input while typing', () => {
+    fixture.browser = false
+    fixture.editable = true
+    const event = press('?', 'Slash', ['shift'])
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(parent.send).not.toHaveBeenCalled()
+  })
+
+  it('passes the backquote through to page input while typing', () => {
+    fixture.browser = false
+    fixture.editable = true
+    const event = press(String.fromCharCode(96), 'Backquote')
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(parent.send).not.toHaveBeenCalled()
   })
 
   it('consumes a browser fullscreen duplicate without invoking maximize', () => {

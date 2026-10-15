@@ -12,6 +12,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { isCloudPc, forceExitCloudPc } from '../utils/cloud-pc.js'
 import { tryForward } from '../utils/browser-hotkey-fallback.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
+import { isGuestFocusEditable } from './webview-focus.js'
 import { findWindowIdByWin } from './window-utils.js'
 import { windowStore } from '../store/window-store.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
@@ -32,6 +33,8 @@ interface HotkeyCtx {
   hasShift: boolean
   hasMeta: boolean
   isBrowser: boolean
+  /** 访客页焦点是否在可编辑元素（输入中） */
+  focusEditable: boolean
   wc: Electron.WebContents
   parentWebContents: Electron.WebContents
   win: Electron.BrowserWindow
@@ -60,6 +63,8 @@ interface HotkeyDef {
    * undefined — 所有窗口通用
    */
   condition?: 'only' | 'never'
+  /** 焦点在页面可编辑元素（输入中）时放行给页面，不拦截——用于会产生字符的按键 */
+  passWhenTyping?: boolean
   /** 此快捷键需在 tryForward 去重后才执行（与 uiohook 兜底通道协同） */
   tryFwd?: boolean
   /** 日志消息模板（{0} 替换为按键组合） */
@@ -161,11 +166,11 @@ const commonHotkeys: HotkeyDef[] = [
   { key: '-', ctrl: true, condition: 'only', log: 'Ctrl+- → 页面缩小', action: () => ({ action: 'zoomOut' }) },
   { key: '0', ctrl: true, condition: 'only', log: 'Ctrl+0 → 重置缩放', action: () => ({ action: 'zoomReset' }) },
 
-  // 反引号(`) 呼出快捷键说明窗口
-  { key: '`', keyAlt: '~', code: 'Backquote', log: '` → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
+  // 反引号(`) 呼出快捷键说明窗口（仅非浏览器窗口；浏览器窗口内按键属于页面）
+  { key: '`', keyAlt: '~', code: 'Backquote', condition: 'never', passWhenTyping: true, log: '` → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
 
-  // Shift+? 呼出快捷键说明窗口
-  { key: '?', shift: true, log: '? → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
+  // Shift+? 呼出快捷键说明窗口（仅非浏览器窗口；浏览器窗口内 ? 属于页面，如 YouTube/GitHub 快捷键）
+  { key: '?', shift: true, condition: 'never', passWhenTyping: true, log: '? → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
 ]
 
 /** 浏览器窗口专用快捷键（非浏览器窗口不匹配，按键穿透到页面） */
@@ -221,7 +226,8 @@ function findMatch(
   defs: HotkeyDef[],
   ctx: HotkeyCtx,
 ): HotkeyDef | undefined {
-  return defs.find((d) => matchHotkey(d, ctx))
+  // 输入中的字符键（passWhenTyping）放行给页面输入，不作为快捷键
+  return defs.find((d) => !(d.passWhenTyping && ctx.focusEditable) && matchHotkey(d, ctx))
 }
 
 // ── 主处理器 ──────────────────────────────────────────────────────────────
@@ -268,7 +274,7 @@ export function attachWebviewHotkeyRouter(
 
     const ctx: HotkeyCtx = {
       mods, key, code, hasCtrl, hasAlt, hasShift, hasMeta,
-      isBrowser, wc, parentWebContents, win,
+      isBrowser, focusEditable: isGuestFocusEditable(wc), wc, parentWebContents, win,
     }
 
     // Ctrl+Alt+C：进入/退出云电脑模式（最高优先级，云电脑模式下同样可用——

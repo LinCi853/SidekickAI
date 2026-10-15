@@ -8,6 +8,7 @@ import { safeReloadWebview, type WebviewElement } from '../../../lib/webview';
 import { focusInputInWebview } from '../../../hooks/useWebViewControl';
 import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms';
 import { leaseWebviewLifecycle, matchesWebviewHotkeyTarget, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle';
+import { useRegisterShortcutDocs } from '../../../store/useShortcutDocStore';
 
 /**
  * Dispatches webview hotkey events (forwarded from main process) to the appropriate handlers.
@@ -21,6 +22,14 @@ export function useWebviewHotkeyDispatch(
   setShortcutsOpen: (open: boolean) => void,
   activeTabDomReadyRef: React.MutableRefObject<boolean>,
 ) {
+  // 注册即声明：主进程 webview 拦截 + 本 dispatch 实现的键位在此登记说明
+  useRegisterShortcutDocs('main-webview-hotkeys', [
+    { id: 'main.page-force-refresh', keys: 'Ctrl + Shift + R / Ctrl + F5', action: '强制刷新（清除缓存）', category: 'page' },
+    { id: 'main.page-theme', keys: 'F10', action: '切换主题', category: 'page' },
+    { id: 'window.always-on-top', keys: 'F12', action: '切换当前窗口置顶', category: 'page', note: '最大化/全屏时不可用' },
+    { id: 'main.page-spatial-nav', keys: 'Ctrl + G', action: '切换手柄/键盘空间导航', category: 'page' },
+  ]);
+
   useEffect(() => {
     let active = true;
     const pending = new Set<WebviewLifecycleLease>();

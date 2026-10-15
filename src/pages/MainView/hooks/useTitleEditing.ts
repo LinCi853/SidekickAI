@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Profile } from '../../../lib/electron-api';
+import { useRegisterShortcutDocs } from '../../../store/useShortcutDocStore';
 
 interface Tab {
   id: string;
@@ -20,6 +21,11 @@ export function useTitleEditing(
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 注册即声明：标签标题编辑交互（TabBar 双击触发）
+  useRegisterShortcutDocs('title-editing', [
+    { id: 'main.tab-retitle', keys: '双击标签标题', action: '编辑标签标题', category: 'page' },
+  ]);
 
   const startEditTitle = useCallback(() => {
     const active = tabs.find((t) => t.id === activeTabId);

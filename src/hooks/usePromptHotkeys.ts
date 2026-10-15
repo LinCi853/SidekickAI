@@ -12,6 +12,8 @@ import { usePromptStore } from '../store/usePromptStore';
 import { getHotkeys } from '../lib/electron-api';
 import { keyEventToAccelerator, detectPromptHotkeyConflicts } from '../lib/prompt-hotkey';
 import { isTypingTarget } from '../lib/shared-utils';
+import { registerShortcutDocs, unregisterShortcutDocs } from '../store/useShortcutDocStore';
+import { formatAcc } from '../lib/shortcut-reference';
 import type { PromptTemplate } from '../lib/electron-api';
 import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
 
@@ -69,6 +71,15 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
         map.set(p.hotkey, p);
       }
       hotkeyMapRef.current = map;
+
+      // 注册即声明：实际生效的提示词快捷键登记进注册表（弹窗实时展示）
+      registerShortcutDocs('prompt-hotkeys', Array.from(map.entries()).map(([acc, p]) => ({
+        id: `prompt.${p.id}`,
+        keys: formatAcc(acc),
+        action: `插入提示词「${p.title}」`,
+        category: 'page' as const,
+        note: '短时间内的第二次按下跳过预览直接插入',
+      })));
     };
 
     void rebuildMap();
@@ -81,6 +92,7 @@ export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void
     return () => {
       cancelled = true;
       unsub();
+      unregisterShortcutDocs('prompt-hotkeys');
     };
   }, []);
 

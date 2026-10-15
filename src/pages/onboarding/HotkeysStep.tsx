@@ -9,8 +9,8 @@
 
 import type { HotkeyConfig } from '../../lib/electron-api';
 import { Toggle } from '../../components/ui';
-import { APP_SHORTCUTS, GLOBAL_HOTKEY_META, ONBOARDING_SHORTCUT_KEYS } from '../../lib/shortcut-reference';
-import { resolveHotkey } from './onboardingData';
+import { GLOBAL_HOTKEY_META } from '../../lib/shortcut-reference';
+import { ONBOARDING_HIGH_FREQ, resolveHotkey } from './onboardingData';
 
 interface HotkeysStepProps {
   hotkeys: HotkeyConfig[];
@@ -25,7 +25,7 @@ export default function HotkeysStep({
   onTogglePanelHotkey,
   onToggleVoiceHotkey,
 }: HotkeysStepProps) {
-  const frequentShortcuts = APP_SHORTCUTS.filter((s) => ONBOARDING_SHORTCUT_KEYS.includes(s.keys));
+  const frequentShortcuts = ONBOARDING_HIGH_FREQ;
 
   return (
     <div className="onboarding-page" data-name="onboarding.page-actions">
