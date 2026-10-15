@@ -20,6 +20,12 @@ vi.mock('./usePlatformUrlConfig', () => ({ usePlatformUrlConfig: () => ({ profil
 vi.mock('./useEscToCloseWindow', () => ({ useEscToCloseWindow: vi.fn() }));
 vi.mock('../components/StandaloneWindowHeader', () => ({ default: 'window-header' }));
 vi.mock('../store/useModuleStore', () => ({ useModuleStore: Object.assign(vi.fn(), { getState: () => ({ isEnabled: () => true }) }) }));
+vi.mock('../store/useUiVersionStore', () => ({
+  useUiVersionStore: Object.assign(
+    (selector: (s: { version: string }) => unknown) => selector({ version: 'classic' }),
+    { getState: () => ({ version: 'classic' }) },
+  ),
+}));
 vi.mock('../store/useTabStore', () => ({ useTabStore: (select: any) => select({ tabs: [], activeTabId: null }) }));
 import SettingsPanel from '../components/SettingsPanel';
 import SettingsView from '../pages/SettingsView';

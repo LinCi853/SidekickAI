@@ -41,4 +41,11 @@ describe('buildSpatialNavScript', () => {
     const script = buildSpatialNavScript()
     expect(script).toContain('cursor')
   })
+
+  it('should prefer input boxes for initial focus', () => {
+    const script = buildSpatialNavScript()
+    expect(script).toContain('pickInitialFocus')
+    expect(script).toContain('isEditable')
+    expect(script).toContain('viewportScore')
+  })
 })

@@ -51,6 +51,8 @@ export interface AppSettings {
   onboardingCompleted: boolean
   /** 顶栏可自定义显隐的按钮组（appSwitcher/menu/刷新/最小化/最大化/关闭始终显示） */
   topBarVisibleButtons: TopBarButtonGroup[]
+  /** 主窗口侧边菜单显示的入口（网格布局，可在设置中勾选） */
+  drawerMenuItems: DrawerMenuItem[]
   /** 点击已打开应用时的行为：switch=切换到该标签（默认）/ close=关闭该标签 */
   appClickBehavior: 'switch' | 'close'
   /** 弹窗白名单：URL 前缀数组，匹配的 URL 允许弹独立 BrowserWindow（登录/OAuth/验证页等） */
@@ -129,6 +131,37 @@ export const ALL_TOP_BAR_BUTTON_GROUPS: TopBarButtonGroup[] = [
   'navHome',
   'themeToggle',
   'pinToggle',
+]
+
+/** 主窗口侧边菜单可显隐的入口 */
+export type DrawerMenuItem =
+  | 'advancedPanel'
+  | 'promptLibrary'
+  | 'settings'
+  | 'network'
+  | 'modules'
+  | 'manage'
+  | 'backup'
+  | 'logs'
+  | 'detach'
+  | 'onboarding'
+  | 'shortcuts'
+  | 'themeToggle'
+
+/** 全部侧边菜单入口（默认全选） */
+export const ALL_DRAWER_MENU_ITEMS: DrawerMenuItem[] = [
+  'advancedPanel',
+  'promptLibrary',
+  'settings',
+  'network',
+  'modules',
+  'manage',
+  'backup',
+  'logs',
+  'detach',
+  'onboarding',
+  'shortcuts',
+  'themeToggle',
 ]
 
 /** Main-process snapshots from a verified native file drop. */

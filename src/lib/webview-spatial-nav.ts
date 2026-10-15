@@ -106,6 +106,61 @@ export function buildSpatialNavScript(): string {
       return true;
     }
 
+    // 元素在视口内的可见面积（0 = 完全不在视口）
+    function viewportScore(el) {
+      var r = el.getBoundingClientRect();
+      var vw = window.innerWidth || 1;
+      var vy = window.innerHeight || 1;
+      var x1 = Math.max(0, r.left);
+      var y1 = Math.max(0, r.top);
+      var x2 = Math.min(vw, r.right);
+      var y2 = Math.min(vy, r.bottom);
+      if (x2 <= x1 || y2 <= y1) return 0;
+      return (x2 - x1) * (y2 - y1);
+    }
+
+    // 文本输入类元素：textarea / contenteditable / 文本型 input / role=textbox
+    function isEditable(el) {
+      if (!el || !el.tagName) return false;
+      var tag = el.tagName.toLowerCase();
+      if (tag === 'textarea') return true;
+      if (el.isContentEditable) return true;
+      if (el.getAttribute && el.getAttribute('role') === 'textbox') return true;
+      if (tag === 'input') {
+        var type = (el.getAttribute && el.getAttribute('type') || el.type || 'text').toLowerCase();
+        return type === 'text' || type === 'search' || type === 'email' || type === 'url' ||
+          type === 'tel' || type === 'password' || type === 'number' || type === '';
+      }
+      return false;
+    }
+
+    // 初始焦点：优先视口内输入框 > 视口内其它可交互元素 > 最近可交互元素
+    function pickInitialFocus(els) {
+      if (!els || !els.length) return null;
+      // 已有焦点则沿用（用户刚点过的输入框）
+      var active = document.activeElement;
+      if (active && els.indexOf(active) !== -1) return active;
+
+      var best = null, bestScore = -1;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var area = viewportScore(el);
+        if (area <= 0) continue; // 初始焦点不绑视口外元素（避免左上角不可见位）
+        var r = el.getBoundingClientRect();
+        // 极小元素（跳转链接/图标占位）不作初始焦点
+        if (r.width < 16 || r.height < 16) continue;
+        // 输入框权重远高于普通按钮/链接
+        var score = area * (isEditable(el) ? 100 : 1);
+        // 同分偏向更靠下（聊天输入框多在底部）
+        score += Math.min(r.top, 2000) * 0.01;
+        if (score > bestScore) { bestScore = score; best = el; }
+      }
+      if (best) return best;
+
+      // 视口内无候选时，取第一个可交互元素（允许滚动过去）
+      return els[0];
+    }
+
     function getFocusables() {
       // 扩大选区：原生可交互元素 + ARIA role + 常见可点击容器 + 有事件属性的元素
       var sel = 'a[href], button:not([disabled]), input:not([disabled]), ' +
@@ -336,7 +391,8 @@ export function buildSpatialNavScript(): string {
         createCursor();
         var els = getFocusables();
         console.log('[spatial-nav] 找到可交互元素:', els.length);
-        if (els.length) highlight(els[0]);
+        var initial = pickInitialFocus(els);
+        if (initial) highlight(initial);
         if (!polling) { polling = true; pollGamepad(); }
       } else {
         if (frame !== null) cancelAnimationFrame(frame);

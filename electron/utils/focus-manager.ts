@@ -87,14 +87,28 @@ export function untrack(win: BrowserWindow): void {
 const delay = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms) })
 
 /** 采集到的句柄是否就是本窗口自己（自己不能作为收起后的归还目标） */
-function isSelfHandle(win: BrowserWindow, handle: number): boolean {
+function getOwnHandle(win: BrowserWindow): number | null {
   try {
     const buf = win.getNativeWindowHandle()
-    const own = buf.length >= 8 ? Number(buf.readBigUInt64LE(0)) : buf.readUInt32LE(0)
-    return own === handle
+    return buf.length >= 8 ? Number(buf.readBigUInt64LE(0)) : buf.readUInt32LE(0)
+  } catch {
+    return null
+  }
+}
+
+function isSelfHandle(win: BrowserWindow, handle: number): boolean {
+  try {
+    return getOwnHandle(win) === handle
   } catch {
     return false
   }
+}
+
+/** 通知 window-events 的 reapplyAlwaysOnTop：本次置顶是抢焦点需要，短时间内不要还原 */
+function markPinHold(win: BrowserWindow): void {
+  try {
+    ;(win as unknown as { __markUserPinAction?: () => void }).__markUserPinAction?.()
+  } catch { /* ignore */ }
 }
 
 /**
@@ -190,12 +204,25 @@ function scheduleActivationCheck(win: BrowserWindow, generation: number): void {
  */
 function activateWithSteal(win: BrowserWindow): void {
   if (win.isMinimized()) win.restore()
+  // 标记为用户置顶动作：阻止 window-events.reapplyAlwaysOnTop 在 show/focus 上立刻把 topmost 撤掉
+  markPinHold(win)
   const wasTopmost = win.isAlwaysOnTop()
   try { win.setAlwaysOnTop(true) } catch { /* ignore */ }
   win.show()
-  try { win.setAlwaysOnTop(wasTopmost) } catch { /* ignore */ }
   win.moveTop()
   win.focus()
+  // 强制系统级前台：Electron focus() 在前台锁定时常被拒，走 user32 SetForegroundWindow
+  const own = getOwnHandle(win)
+  if (own != null) {
+    void setForegroundHandle(own).then((ok) => {
+      if (!ok) console.warn('[focus-manager] SetForegroundWindow 夺焦点失败:', own)
+    })
+  }
+  // topmost 保持到系统完成 z-order/激活后再还原，立刻还原会前功尽弃
+  setTimeout(() => {
+    if (win.isDestroyed()) return
+    try { win.setAlwaysOnTop(wasTopmost) } catch { /* ignore */ }
+  }, ACTIVATION_RETRY_DELAY_MS)
 }
 
 /**

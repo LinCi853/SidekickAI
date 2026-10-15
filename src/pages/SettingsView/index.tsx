@@ -27,6 +27,8 @@ import AppearanceSection from '../../components/SettingsPanel/sections/Appearanc
 import GeneralSection from '../../components/SettingsPanel/sections/GeneralSection';
 import HotkeySection from '../../components/SettingsPanel/sections/HotkeySection';
 import TopBarSection from '../../components/SettingsPanel/sections/TopBarSection';
+import DrawerMenuSection from '../../components/SettingsPanel/sections/DrawerMenuSection';
+import { useUiVersionStore } from '../../store/useUiVersionStore';
 import AiAppSection from '../../components/SettingsPanel/sections/AiAppSection';
 import ProviderSection from '../../components/SettingsPanel/sections/ProviderSection';
 import VoiceSection from '../../components/SettingsPanel/sections/VoiceSection';
@@ -60,6 +62,7 @@ export default function SettingsView() {
   useEscToCloseWindow({ windowControls: true });
 
   const [activeCategory, setActiveCategory] = useState<CategoryId>('appearance');
+  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
 
   // ===== 状态 hook =====
   const app = useAppSettings(true);
@@ -130,6 +133,20 @@ export default function SettingsView() {
     setThresholdDraft(String(clamped));
     if (clamped !== app.altSpaceResetThreshold) {
       void handleAltSpaceThresholdChange(clamped);
+    }
+  };
+
+  const handleToggleDrawerMenuItem = async (item: import('../../lib/electron-api').DrawerMenuItem) => {
+    const current = app.drawerMenuItems;
+    const next = current.includes(item)
+      ? current.filter((g) => g !== item)
+      : [...current, item];
+    app.setDrawerMenuItems(next);
+    try {
+      await updateAppSettings({ drawerMenuItems: next });
+    } catch (e) {
+      console.error('[SettingsView] 切换侧边菜单入口失败:', e);
+      app.setDrawerMenuItems(current);
     }
   };
 
@@ -241,10 +258,18 @@ export default function SettingsView() {
               }}
               onChange={handleGeneralChange}
             />
-            <TopBarSection
-              visibleButtons={app.topBarVisibleButtons}
-              onToggle={handleToggleTopBarButton}
-            />
+            {!isOxy && (
+              <>
+                <TopBarSection
+                  visibleButtons={app.topBarVisibleButtons}
+                  onToggle={handleToggleTopBarButton}
+                />
+                <DrawerMenuSection
+                  visibleItems={app.drawerMenuItems}
+                  onToggle={handleToggleDrawerMenuItem}
+                />
+              </>
+            )}
             <HotkeySection
               hotkeys={hotkeys.hotkeys}
               drafts={hotkeys.drafts}
@@ -418,7 +443,7 @@ export default function SettingsView() {
             </section>
             {/* 下载与缓存清理 */}
             <StorageSection />
-            <LogFolderSection />
+            {!isOxy && <LogFolderSection />}
           </>
         )}
 

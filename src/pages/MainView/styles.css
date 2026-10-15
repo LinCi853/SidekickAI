@@ -69,24 +69,29 @@
   -webkit-app-region: drag;
   app-region: drag;
 }
-.top-bar-title {
+/* 标题外层：绝对居中 */
+.top-bar-title-box {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+  max-width: 92%;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.top-bar-title {
+  display: block;
   font-family: var(--font-sans);
   font-size: var(--text-base, 13px);
   font-weight: 600;
   color: var(--foreground);
   white-space: nowrap;
   cursor: text;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
   padding: var(--space-0-5) var(--space-1);
   border-radius: 6px;
   border: 1px solid transparent;
   transition: border-color var(--duration-fast), color var(--duration-fast);
-  max-width: 92%;
+  max-width: 100%;
   max-height: calc(var(--titlebar-h) - var(--space-1-75));
   box-sizing: border-box;
   overflow: hidden;
@@ -95,6 +100,13 @@
 .top-bar-title:hover {
   color: var(--accent-bright);
   background: transparent;
+}
+/* 内置应用不可重命名：去掉编辑暗示，双击时由 toast 提示 */
+.top-bar-title.is-locked {
+  cursor: default;
+}
+.top-bar-title.is-locked:hover {
+  color: var(--foreground);
 }
 /* 标题编辑态紧凑模式：空间不足时隐藏导航按钮组 + 部分右侧操作按钮，
    标题输入区脱离绝对居中，占满顶栏中间区域，避免输入框被挤压。 */
@@ -720,9 +732,11 @@
   padding: 0 var(--space-1);
   gap: var(--space-0-25);
 }
+.main-view[data-viewport="narrow"] .top-bar-title-box {
+  max-width: 55%;
+}
 .main-view[data-viewport="narrow"] .top-bar-title {
   font-size: var(--text-xs);
-  max-width: 55%;
 }
 /* 窄屏 .nav-btn / .win-btn 覆盖已删除：TopBar 已迁移到 IconButton */
 .main-view[data-viewport="narrow"] .tab-bar {

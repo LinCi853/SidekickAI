@@ -1,4 +1,5 @@
 import type { AppSettings } from '../shared/api/settings.api.js'
+import { ALL_DRAWER_MENU_ITEMS, ALL_TOP_BAR_BUTTON_GROUPS } from '../shared/api/settings.api.js'
 
 export type DefaultAppSettings = AppSettings
 
@@ -25,7 +26,8 @@ export function getDefaultAppSettings(isPortable: boolean): DefaultAppSettings {
     themeMode: 'light',
     startupOpen: 'lastConversation',
     onboardingCompleted: false,
-    topBarVisibleButtons: ['navBack', 'navForward', 'navHome', 'pinToggle'],
+    topBarVisibleButtons: [...ALL_TOP_BAR_BUTTON_GROUPS],
+    drawerMenuItems: [...ALL_DRAWER_MENU_ITEMS],
     appClickBehavior: 'switch',
     cacheAutoClean: 'never',
     lastCacheCleanAt: 0,

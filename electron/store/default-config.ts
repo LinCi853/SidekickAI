@@ -19,7 +19,7 @@ import { IPHONE_VIEWPORT } from '../presets/devices.js'
 import type { VoiceConfig } from './voice-store.js'
 
 // Block Rules 预置数据量大，独立成文件（block-rules-preset.ts），此处路由导出
-export { BLOCK_RULES } from './block-rules-preset.js'
+export { BLOCK_RULES, RETIRED_BUILTIN_RULE_IDS } from './block-rules-preset.js'
 
 // =============================================================================
 // 路由器核心

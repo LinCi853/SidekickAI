@@ -13,6 +13,7 @@ import { SectionTitle, FormRow, Combobox } from '../../ui';
 import type { ComboboxOption } from '../../ui';
 import StorageSection from './StorageSection';
 import LogFolderSection from './LogFolderSection';
+import { useUiVersionStore } from '../../../store/useUiVersionStore';
 import ProxySection from './ProxySection';
 import CookieSection from './CookieSection';
 import type { ProxySettings } from '../types';
@@ -48,6 +49,7 @@ export default function AdvancedSection({
   compact = false,
 }: AdvancedSectionProps) {
   const [collapsed, setCollapsed] = useState(true);
+  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
 
   // ===== 默认 UA 预设 =====
   const desktopPresets = useMemo(() => presets.filter((p) => p.platform === 'desktop'), [presets]);
@@ -154,7 +156,7 @@ export default function AdvancedSection({
 
           {/* 下载与缓存清理 */}
           <StorageSection />
-          <LogFolderSection />
+          {!isOxy && <LogFolderSection />}
 
           {/* 区域与代理（compact 模式下由独立分类承载，不在此渲染） */}
           {!compact && proxy && onProxyChange && (

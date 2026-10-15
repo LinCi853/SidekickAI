@@ -45,6 +45,8 @@ build/native-test-evidence.json
 # ============================================================
 .app-data/
 .app-data-installed/
+.app-data.instance/
+deliverables/
 local/
 .dsh-shots/
 

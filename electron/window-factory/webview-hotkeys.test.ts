@@ -92,6 +92,22 @@ describe('guest input behavior contract', () => {
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'cycleTab', data: { reverse: true } }))
   })
 
+  it('allows auto-repeat for tab-switch keys (hold Ctrl+Tab / Alt+1)', () => {
+    const heldTab = press('Tab', 'Tab', ['control'], { isAutoRepeat: true })
+    expect(heldTab.preventDefault).toHaveBeenCalledOnce()
+    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'cycleTab' }))
+
+    parent.send.mockClear()
+    const heldDigit = press('1', 'Digit1', ['alt'], { isAutoRepeat: true })
+    expect(heldDigit.preventDefault).toHaveBeenCalledOnce()
+    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'switchTab' }))
+
+    parent.send.mockClear()
+    const heldOther = press('w', 'KeyW', ['control'], { isAutoRepeat: true })
+    expect(heldOther.preventDefault).not.toHaveBeenCalled()
+    expect(parent.send).not.toHaveBeenCalled()
+  })
+
   it('hold backquote opens shortcuts in every window (keydown)', () => {
     fixture.browser = false
     const event = press(String.fromCharCode(96), 'Backquote')

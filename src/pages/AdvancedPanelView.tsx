@@ -31,6 +31,7 @@ import WhiteboardView from './WhiteboardView';
 import NotesView from './NotesView';
 import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
 import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
+import { useShortcutRegistry, type ShortcutEntry } from '../hooks/useShortcutRegistry';
 import ShortcutHelp from '../components/ShortcutHelp';
 import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
 import './ChatBubble.css';
@@ -168,35 +169,38 @@ export default function AdvancedPanelView() {
     { id: 'window.close', keys: 'Ctrl + W', action: '关闭面板窗口', category: 'page' },
   ]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!tabSwitchRef.current) return;
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        const idx = Number(e.key) - 1;
-        const next = availableTabs[idx];
-        if (next) { e.preventDefault(); requestTab(next); }
-        return;
-      }
-      if (!e.ctrlKey || e.altKey || e.metaKey) return;
-
-      if (e.key === 'Tab') {
-        e.preventDefault();
+  // 面板标签切换并入 useShortcutRegistry（与浏览器/主窗同一层）；allowRepeat 支持连按/长按
+  useShortcutRegistry(
+    useMemo(() => {
+      if (!tabSwitchShortcuts) return [];
+      const entries: ShortcutEntry[] = [];
+      const pick = (index: number) => {
+        const next = availableTabs[index];
+        if (next) requestTab(next);
+      };
+      const cycle = (reverse: boolean) => {
         const currentIndex = tabOrder.indexOf(activeTab);
-        const nextIndex = e.shiftKey
+        const nextIndex = reverse
           ? (currentIndex - 1 + tabOrder.length) % tabOrder.length
           : (currentIndex + 1) % tabOrder.length;
         if (tabOrder[nextIndex]) requestTab(tabOrder[nextIndex]);
-        return;
-      }
-
-      if (e.shiftKey) return;
-      const idx = Number(e.key) - 1;
-      const next = availableTabs[idx];
-      if (next) { e.preventDefault(); requestTab(next); }
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [activeTab, availableTabs, requestTab]);
+      };
+      availableTabs.forEach((_tab, i) => {
+        if (i > 8) return;
+        const n = i + 1;
+        entries.push(
+          { accelerator: `Alt+${n}`, allowRepeat: true, handler: (e) => { e.preventDefault(); pick(i); } },
+          { accelerator: `Ctrl+${n}`, allowRepeat: true, handler: (e) => { e.preventDefault(); pick(i); } },
+        );
+      });
+      entries.push(
+        { accelerator: 'Ctrl+Tab', allowRepeat: true, handler: (e) => { e.preventDefault(); cycle(false); } },
+        { accelerator: 'Ctrl+Shift+Tab', allowRepeat: true, handler: (e) => { e.preventDefault(); cycle(true); } },
+      );
+      return entries;
+    }, [tabSwitchShortcuts, availableTabs, requestTab, activeTab, tabOrder]),
+    { capture: true, ignoreRepeat: true },
+  );
 
   // 初始化时若 URL 指定了 provider，切换 chat tab 并选中该 provider
   useEffect(() => {

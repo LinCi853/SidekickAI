@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Profile } from '../../../lib/electron-api';
+import { useToast } from '../../../hooks/useToast';
 import { useRegisterShortcutDocs } from '../../../store/useShortcutDocStore';
 
 interface Tab {
@@ -21,21 +22,32 @@ export function useTitleEditing(
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const { toast: titleToast, showToast: showTitleToast } = useToast(2500);
 
-  // 注册即声明：标签标题编辑交互（TabBar 双击触发）
+  // 注册即声明：标签标题编辑交互（顶栏标题双击触发）
   useRegisterShortcutDocs('title-editing', [
     { id: 'main.tab-retitle', keys: '双击标签标题', action: '编辑标签标题', category: 'page' },
   ]);
+
+  const canRenameTitle = useMemo(() => {
+    const active = tabs.find((t) => t.id === activeTabId);
+    if (!active) return false;
+    const profile = profiles.find((p) => p.id === active.profileId);
+    return !profile?.isBuiltIn;
+  }, [tabs, activeTabId, profiles]);
 
   const startEditTitle = useCallback(() => {
     const active = tabs.find((t) => t.id === activeTabId);
     if (!active) return;
     const profile = profiles.find((p) => p.id === active.profileId);
-    if (profile?.isBuiltIn) return;
+    if (profile?.isBuiltIn) {
+      showTitleToast('内置应用不可重命名');
+      return;
+    }
     setTitleDraft(active.title);
     setIsEditingTitle(true);
     requestAnimationFrame(() => titleInputRef.current?.select());
-  }, [tabs, activeTabId, profiles]);
+  }, [tabs, activeTabId, profiles, showTitleToast]);
 
   const commitTitle = useCallback(() => {
     if (!isEditingTitle) return;
@@ -70,5 +82,7 @@ export function useTitleEditing(
     titleInputRef,
     startEditTitle,
     commitTitle,
+    titleToast,
+    canRenameTitle,
   };
 }

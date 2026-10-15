@@ -37,6 +37,7 @@ import type {
   AppSettings,
   PlatformCapabilities,
   TopBarButtonGroup,
+  DrawerMenuItem,
   InjectionRecord,
   SimilarInjectionResult,
   Note,
@@ -60,8 +61,8 @@ import type {
   ModuleStateChangedPayload,
 } from '../../../electron/shared/types';
 
-// ALL_TOP_BAR_BUTTON_GROUPS 是 const 值，必须用普通 import（非 import type）才能 re-export
-import { ALL_TOP_BAR_BUTTON_GROUPS } from '../../../electron/shared/types';
+// ALL_TOP_BAR_BUTTON_GROUPS / ALL_DRAWER_MENU_ITEMS 是 const 值，必须用普通 import（非 import type）才能 re-export
+import { ALL_TOP_BAR_BUTTON_GROUPS, ALL_DRAWER_MENU_ITEMS } from '../../../electron/shared/types';
 
 /** 暴露到 window.electron 的完整 API */
 export type {
@@ -96,6 +97,7 @@ export type {
   AppSettings,
   PlatformCapabilities,
   TopBarButtonGroup,
+  DrawerMenuItem,
   InjectionRecord,
   SimilarInjectionResult,
   Note,
@@ -122,6 +124,7 @@ export type {
 /** 全部顶栏按钮组（默认全选，供设置/引导页默认值使用） */
 export {
   ALL_TOP_BAR_BUTTON_GROUPS,
+  ALL_DRAWER_MENU_ITEMS,
 };
 
 /** 全局 Window 扩展 —— 声明 window.electron 由 preload 注入 */

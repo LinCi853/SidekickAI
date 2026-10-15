@@ -52,6 +52,8 @@ export interface TopBarData {
   appClickBehavior: 'switch' | 'close';
   /** 当前激活标签对应的 profileId（透传给 AppSwitcher，用于 close 模式二次确认） */
   activeProfileId: string | null;
+  /** 当前标题是否可双击重命名（内置应用不可重命名） */
+  canRenameTitle: boolean;
 }
 
 export interface TopBarActions {
@@ -100,6 +102,7 @@ export default function TopBar({ data, actions }: TopBarProps) {
     onAppClick,
     appClickBehavior,
     activeProfileId,
+    canRenameTitle,
   } = data;
   const {
     startEditTitle,
@@ -283,14 +286,18 @@ export default function TopBar({ data, actions }: TopBarProps) {
             data-name="main.top-bar.title-input"
           />
         ) : (
-          <span
-            className="top-bar-title"
-            title="双击重命名"
-            onDoubleClick={startEditTitle}
-            data-name="main.top-bar.title"
+          <div
+            className="top-bar-title-box"
+            data-name="main.top-bar.title-box"
           >
-            {activeTitle}
-          </span>
+            <span
+              className={`top-bar-title${canRenameTitle ? '' : ' is-locked'}`}
+              onDoubleClick={startEditTitle}
+              data-name="main.top-bar.title"
+            >
+              {activeTitle}
+            </span>
+          </div>
         )}
       </div>
 

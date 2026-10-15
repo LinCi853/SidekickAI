@@ -86,6 +86,8 @@ interface BrowserShortcutDef {
   handler: (data?: unknown) => void;
   /** 注册即声明：说明文字（同动作多键自动合并展示） */
   doc?: { text: string; note?: string };
+  /** 允许 auto-repeat（切标签连按/长按） */
+  allowRepeat?: boolean;
 }
 
 /**
@@ -127,17 +129,17 @@ export function buildShortcutDefs(o: BrowserKeyboardOptions): BrowserShortcutDef
     // ===== 标签操作 =====
     { accelerator: 'Ctrl+T', action: 'detachCurrent', doc: { text: '新建标签页' }, handler: () => store().newTab() },
     { accelerator: 'Ctrl+W', action: 'closeTab', doc: { text: '关闭当前标签' }, handler: () => { const id = store().activeTabId; if (id) void store().closeTab(id); } },
-    { accelerator: 'Ctrl+Tab', action: 'cycleTab', doc: { text: '循环切换到下一个标签' }, handler: (d) => cycleTab(Boolean((d as { reverse?: boolean } | undefined)?.reverse)) },
-    { accelerator: 'Ctrl+Shift+Tab', doc: { text: '循环切换到上一个标签' }, handler: () => cycleTab(true) },
-    { accelerator: 'Alt+1', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 0) },
-    { accelerator: 'Alt+2', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 1) },
-    { accelerator: 'Alt+3', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 2) },
-    { accelerator: 'Alt+4', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 3) },
-    { accelerator: 'Alt+5', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 4) },
-    { accelerator: 'Alt+6', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 5) },
-    { accelerator: 'Alt+7', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 6) },
-    { accelerator: 'Alt+8', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 7) },
-    { accelerator: 'Alt+9', action: 'switchTab', doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 8) },
+    { accelerator: 'Ctrl+Tab', action: 'cycleTab', allowRepeat: true, doc: { text: '循环切换到下一个标签' }, handler: (d) => cycleTab(Boolean((d as { reverse?: boolean } | undefined)?.reverse)) },
+    { accelerator: 'Ctrl+Shift+Tab', allowRepeat: true, doc: { text: '循环切换到上一个标签' }, handler: () => cycleTab(true) },
+    { accelerator: 'Alt+1', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 0) },
+    { accelerator: 'Alt+2', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 1) },
+    { accelerator: 'Alt+3', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 2) },
+    { accelerator: 'Alt+4', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 3) },
+    { accelerator: 'Alt+5', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 4) },
+    { accelerator: 'Alt+6', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 5) },
+    { accelerator: 'Alt+7', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 6) },
+    { accelerator: 'Alt+8', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 7) },
+    { accelerator: 'Alt+9', action: 'switchTab', allowRepeat: true, doc: { text: '切换到第 N 个标签' }, handler: (d) => switchByIndex((d as { index?: number } | undefined)?.index ?? 8) },
     { accelerator: 'Ctrl+Shift+T', action: 'reopenClosed', doc: { text: '重新打开已关闭的标签' }, handler: () => reopenClosed() },
 
     // ===== 导航 / 加载 =====
@@ -287,6 +289,7 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
   useShortcutRegistry(
     defs.map((d) => ({
       accelerator: d.accelerator,
+      allowRepeat: d.allowRepeat,
       handler: (e: KeyboardEvent) => {
         e.preventDefault();
         d.handler();
@@ -317,6 +320,17 @@ export function useBrowserKeyboard(opts: BrowserKeyboardOptions): void {
       }
     };
     const offHotkey = onWebviewHotkey(payload => {
+      // 切标签不能按“仍停留在原 tab”校验，连按时 activeTabId 已变会被整段丢弃。
+      // 窗口级动作（主题/速览/新建/地址栏等）不依赖 guest 代数，直接分发。
+      if (payload.action === 'cycleTab' || payload.action === 'switchTab'
+        || payload.action === 'toggleTheme' || payload.action === 'openShortcuts'
+        || payload.action === 'closeShortcuts' || payload.action === 'newTab'
+        || payload.action === 'reopenClosed' || payload.action === 'focusAddressBar'
+        || payload.action === 'toggleBookmarkBar' || payload.action === 'openHistory'
+        || payload.action === 'openDownloads') {
+        dispatch(payload);
+        return;
+      }
       const target = payload.target;
       if (!target) { dispatch(payload); return; }
       const store = useBrowserTabStore.getState();

@@ -11,6 +11,8 @@ import {
   getVoiceConfig,
   setVoiceConfig,
   ALL_TOP_BAR_BUTTON_GROUPS,
+  ALL_DRAWER_MENU_ITEMS,
+  type DrawerMenuItem,
 } from '../lib/electron-api';
 import type {
   AppSettings,
@@ -266,6 +268,12 @@ export interface TopBarSettingsState {
   update: (patch: Partial<AppSettings>) => Promise<void>;
 }
 
+export interface DrawerMenuSettingsState {
+  drawerMenuItems: DrawerMenuItem[];
+  setDrawerMenuItems: Dispatch<SetStateAction<DrawerMenuItem[]>>;
+  load: () => Promise<void>;
+}
+
 export function useTopBarSettings(enabled: boolean): TopBarSettingsState {
   const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([
     ...ALL_TOP_BAR_BUTTON_GROUPS,
@@ -345,6 +353,9 @@ export interface AppSettingsState {
   // 顶栏
   topBarVisibleButtons: TopBarButtonGroup[];
   setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>;
+  // 侧边菜单
+  drawerMenuItems: DrawerMenuItem[];
+  setDrawerMenuItems: Dispatch<SetStateAction<DrawerMenuItem[]>>;
   // 其他
   altSpaceResetThreshold: number;
   setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>;
@@ -360,6 +371,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
   const proxy = useProxySettings(enabled);
   const platform = usePlatformSettings(enabled);
   const topBar = useTopBarSettings(enabled);
+  const drawer = useDrawerMenuSettings(enabled);
 
   const load = useCallback(async () => {
     await Promise.all([
@@ -368,8 +380,9 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
       proxy.load(),
       platform.load(),
       topBar.load(),
+      drawer.load(),
     ]);
-  }, [appearance.load, general.load, proxy.load, platform.load, topBar.load]);
+  }, [appearance.load, general.load, proxy.load, platform.load, topBar.load, drawer.load]);
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
     await updateAppSettings(patch);
@@ -381,9 +394,47 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
     ...proxy,
     ...platform,
     ...topBar,
+    ...drawer,
     load,
     update,
   };
+}
+
+/* =====================================================================
+   useDrawerMenuSettings —— 侧边菜单入口显隐
+   ===================================================================== */
+
+const LEGACY_DRAWER_ITEMS: DrawerMenuItem[] = ['advancedPanel', 'onboarding', 'shortcuts', 'settings', 'promptLibrary', 'themeToggle'];
+const NEW_DRAWER_ITEMS = ALL_DRAWER_MENU_ITEMS.filter((id) => !LEGACY_DRAWER_ITEMS.includes(id));
+
+function normalizeDrawerMenuItems(list: unknown): DrawerMenuItem[] {
+  if (!Array.isArray(list) || list.length === 0) return [...ALL_DRAWER_MENU_ITEMS];
+  const valid = list.filter((id): id is DrawerMenuItem => ALL_DRAWER_MENU_ITEMS.includes(id as DrawerMenuItem));
+  if (valid.length === 0) return [...ALL_DRAWER_MENU_ITEMS];
+  const isLegacy = valid.every((id) => LEGACY_DRAWER_ITEMS.includes(id)) && !valid.some((id) => NEW_DRAWER_ITEMS.includes(id));
+  return isLegacy ? [...valid, ...NEW_DRAWER_ITEMS] : valid;
+}
+
+export function useDrawerMenuSettings(enabled: boolean): DrawerMenuSettingsState {
+  const [drawerMenuItems, setDrawerMenuItems] = useState<DrawerMenuItem[]>([
+    ...ALL_DRAWER_MENU_ITEMS,
+  ]);
+
+  const load = useCallback(async () => {
+    try {
+      const cfg = await getAppSettings();
+      const list = cfg.drawerMenuItems;
+      setDrawerMenuItems(normalizeDrawerMenuItems(list));
+    } catch (e) {
+      console.error('[useDrawerMenuSettings] 加载失败:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (enabled) void load();
+  }, [enabled, load]);
+
+  return { drawerMenuItems, setDrawerMenuItems, load };
 }
 
 /* =====================================================================

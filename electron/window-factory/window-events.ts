@@ -107,6 +107,10 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
  */
 export function setupBoundsTracking(win: BrowserWindow, windowId: string): void {
   let pendingTimer: NodeJS.Timeout | undefined
+  // 与 setupMaximizeSync 一致：用户置顶操作后 2s 内不自动覆盖，
+  // 否则 focus-manager 的短暂置顶抢焦点会被 show/focus 上的 reapply 立刻取消。
+  let lastPinActionAt = 0
+  ;(win as any).__markUserPinAction = () => { lastPinActionAt = Date.now() }
   win.once('closed', () => {
     if (!pendingTimer) return
     clearTimeout(pendingTimer)
@@ -141,6 +145,8 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
   // 进入时主动取消，退出时不自动恢复（用户需手动按 F12 重新置顶）。
   const reapplyAlwaysOnTop = () => {
     if (win.isMaximized() || isTrackedFullscreen(windowId)) return
+    // 用户主动操作后 2s 内不自动覆盖，避免 focus-manager 抢焦点被 show/focus 立刻撤销
+    if (Date.now() - lastPinActionAt < 2000) return
     const state = windowStore.getOrDefault(windowId)
     if (state.alwaysOnTop && !win.isAlwaysOnTop()) {
       win.setAlwaysOnTop(true, 'screen-saver')

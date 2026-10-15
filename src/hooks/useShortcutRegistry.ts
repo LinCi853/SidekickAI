@@ -9,6 +9,7 @@
    ===================================================================== */
 
 import { useEffect, useRef, useCallback } from 'react'
+import { isTypingTarget } from '../lib/shared-utils'
 
 export type ShortcutHandler = (event: KeyboardEvent) => void
 
@@ -37,8 +38,14 @@ export interface ShortcutEntry {
   holdMs?: number
   /** 按住开始回调（keydown 命中即触发，可 preventDefault；用于按住录音等） */
   onHoldStart?: (event: KeyboardEvent) => void
-  /** 按住结束回调（对应 keyup 触发；用于松开结束录音等） */
-  onHoldEnd?: () => void
+  /** 按住结束回调（对应 keyup 触发；用于松开结束录音、关闭速览等） */
+  onHoldEnd?: (event: KeyboardEvent) => void
+  /** 允许键盘 auto-repeat 触发（切标签等需连按/长按）；全局 ignoreRepeat 时仍放行本条 */
+  allowRepeat?: boolean
+  /** 物理键 code 匹配（如 Backquote），与 event.key 解耦；设置后仍要求修饰键匹配 */
+  code?: string
+  /** 焦点在可编辑元素时跳过（不影响输入） */
+  ignoreWhenTyping?: boolean
 }
 
 /** 修饰键名 → 是否为修饰键 */
@@ -161,17 +168,32 @@ export function useShortcutRegistry(
   const heldAccelerators = useRef(new Set<string>())
   // hold 定时器：accelerator → timer
   const holdTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  // 最新 shortcuts 的 action 映射（keyup 处理用）
-  const holdMetaRef = useRef(new Map<string, { accelerator: string; onHoldEnd?: () => void }>())
+  // hold 状态：accelerator → onHoldEnd + 物理 code（keyup 匹配用）
+  const holdMetaRef = useRef(new Map<string, { accelerator: string; code?: string; onHoldEnd?: (event: KeyboardEvent) => void }>())
+  /** 修饰键是否与 accelerator 声明一致（不比对主键；主键可由 code 锁定） */
+  const modifiersMatch = useCallback((event: KeyboardEvent, accelerator: string) => {
+    const parsed = parseAccelerator(accelerator)
+    return event.ctrlKey === parsed.ctrl
+      && event.altKey === parsed.alt
+      && event.shiftKey === parsed.shift
+      && event.metaKey === parsed.meta
+  }, [])
 
   // 稳定的 keydown 处理函数（依赖数组为空，引用永久稳定）
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // 长按自动重复：可选忽略（避免按住快捷键持续触发）
-    if (ignoreRepeat && event.repeat) return
+    // 长按自动重复：默认忽略；条目声明 allowRepeat 则放行（切标签连按/长按）
     const list = shortcutsRef.current
     for (const entry of list) {
       if (entry.enabled === false) continue
-      if (!matchAccelerator(event, entry.accelerator)) continue
+      if (ignoreRepeat && event.repeat && !entry.allowRepeat) continue
+      if (entry.ignoreWhenTyping && isTypingTarget(event.target)) continue
+      if (entry.code) {
+        // 物理键锁定：只比 code + 修饰键（兼容布局下 event.key 漂移，如 ` / ~）
+        if (event.code !== entry.code) continue
+        if (!modifiersMatch(event, entry.accelerator)) continue
+      } else if (!matchAccelerator(event, entry.accelerator)) {
+        continue
+      }
 
       console.log('[shortcut-registry] matched:', entry.accelerator, 'handler exists:', !!entry.handler)
 
@@ -179,7 +201,11 @@ export function useShortcutRegistry(
       if (entry.holdMs != null || entry.onHoldStart || entry.onHoldEnd) {
         if (!event.repeat) {
           heldAccelerators.current.add(entry.accelerator)
-          holdMetaRef.current.set(entry.accelerator, { accelerator: entry.accelerator, onHoldEnd: entry.onHoldEnd })
+          holdMetaRef.current.set(entry.accelerator, {
+            accelerator: entry.accelerator,
+            code: entry.code,
+            onHoldEnd: entry.onHoldEnd,
+          })
           if (entry.onHoldStart) entry.onHoldStart(event)
         }
         if (entry.holdMs != null && !holdTimers.current.has(entry.accelerator)) {
@@ -195,28 +221,30 @@ export function useShortcutRegistry(
       entry.handler?.(event)
       return
     }
-  }, [ignoreRepeat])
+  }, [ignoreRepeat, modifiersMatch])
 
-  // keyup：hold 模式松开处理（按主键匹配，因修饰键可能先松开）
+  // keyup：hold 模式松开处理（code 优先，兼容 event.key 漂移；修饰键可能先松开）
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const held = heldAccelerators.current
     if (held.size === 0) return
     const normKey = event.key.toLowerCase()
     for (const accelerator of Array.from(held)) {
+      const meta = holdMetaRef.current.get(accelerator)
       const parsed = parseAccelerator(accelerator)
-      if (parsed.key && parsed.key === normKey) {
-        const meta = holdMetaRef.current.get(accelerator)
-        // 取消未达标的长按计时
-        const timer = holdTimers.current.get(accelerator)
-        if (timer) {
-          clearTimeout(timer)
-          holdTimers.current.delete(accelerator)
-        }
-        held.delete(accelerator)
-        holdMetaRef.current.delete(accelerator)
-        meta?.onHoldEnd?.()
-        return
+      const hit = meta?.code
+        ? event.code === meta.code
+        : (parsed.key === normKey)
+      if (!hit) continue
+      // 取消未达标的长按计时
+      const timer = holdTimers.current.get(accelerator)
+      if (timer) {
+        clearTimeout(timer)
+        holdTimers.current.delete(accelerator)
       }
+      held.delete(accelerator)
+      holdMetaRef.current.delete(accelerator)
+      meta?.onHoldEnd?.(event)
+      return
     }
   }, [])
 

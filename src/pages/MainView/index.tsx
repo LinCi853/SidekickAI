@@ -117,6 +117,8 @@ export default function MainView() {
     titleInputRef,
     startEditTitle,
     commitTitle,
+    titleToast,
+    canRenameTitle,
   } = useTitleEditing(tabs, activeTabId, profiles, renameTab, updateProfile);
 
   const {
@@ -384,7 +386,7 @@ export default function MainView() {
     isTabDomReady: (tabId: string) => tabId === activeTabId ? activeTabDomReadyRef.current : true,
   });
 
-  const statusToast = homepageToast ?? downloadToast;
+  const statusToast = titleToast ?? homepageToast ?? downloadToast;
 
   return (
     <>
@@ -415,6 +417,7 @@ export default function MainView() {
             onAppClick: handleAppClick,
             appClickBehavior,
             activeProfileId: activeTab?.profileId ?? null,
+            canRenameTitle,
           }}
           actions={{
             startEditTitle,
@@ -578,7 +581,7 @@ export default function MainView() {
             style={{
               position: 'fixed',
               left: '50%',
-              bottom: 'calc(var(--space-12, 48px) + var(--space-2, 8px))',
+              top: 'calc(var(--titlebar-h, 44px) + var(--space-2, 8px))',
               transform: 'translateX(-50%)',
               padding: '8px 16px',
               background: 'var(--card, #fff)',

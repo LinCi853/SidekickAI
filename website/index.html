@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="工百窗 / SidekickAI — 免费、功能丰富、上限极高、无缝融入电脑使用的 AI 入门工具。把 AI 网页、对话、笔记和白板放在桌面上。" />
+  <title>工百窗 SidekickAI — 桌面上的 AI 交互窗口</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="shell header-inner">
+      <a class="brand" href="#top" aria-label="工百窗首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="2" y="3" width="16" height="16" rx="4" fill="#4f46e5"/>
+            <rect x="10" y="9" width="16" height="16" rx="4" fill="#6366f1" opacity="0.85"/>
+            <rect x="7" y="6" width="16" height="16" rx="4" stroke="#ffffff" stroke-width="1.4" fill="none" opacity="0.9"/>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <strong>工百窗</strong>
+          <span>SidekickAI</span>
+        </span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#craft">特色</a>
+        <a href="#privacy">本地安全</a>
+        <a href="#promise">维护承诺</a>
+        <a href="#download">下载</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-ghost" href="https://github.com/LinCi853/SidekickAI" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn-primary" href="#download">下载</a>
+      </div>
+      <button class="nav-toggle" type="button" aria-label="打开菜单" aria-expanded="false">
+        <span></span><span></span>
+      </button>
+    </div>
+    <div class="mobile-nav" hidden>
+      <a href="#features">功能</a>
+      <a href="#craft">特色</a>
+      <a href="#privacy">本地安全</a>
+      <a href="#promise">维护承诺</a>
+      <a href="#download">下载</a>
+      <a href="https://github.com/LinCi853/SidekickAI" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="shell hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="dot"></span>
+            开源免费 · MIT · Windows
+          </p>
+          <h1>桌面上的<br /><em>AI 交互窗口</em></h1>
+          <p class="lead">
+            工百窗是 AI 执行框架之外、面向人的交互窗口：
+            把 AI 网页、对话、笔记和白板放在桌面上，让提问、记录和整理自然衔接。
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="#download">下载 SidekickAI</a>
+            <a class="btn btn-secondary btn-lg" href="#features">了解功能</a>
+          </div>
+          <p class="hero-meta">支持 Windows x64 / ARM64 · 安装版与绿色版 · 三年维护承诺</p>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="desk-stage">
+            <div class="win win-main">
+              <div class="win-bar">
+                <span class="win-dots"><i></i><i></i><i></i></span>
+                <span class="win-title">工百窗</span>
+                <span class="win-chip">Oxy</span>
+              </div>
+              <div class="win-body">
+                <aside class="win-side">
+                  <div class="side-item active"></div>
+                  <div class="side-item"></div>
+                  <div class="side-item"></div>
+                  <div class="side-item"></div>
+                </aside>
+                <div class="win-content">
+                  <div class="chat-line you"></div>
+                  <div class="chat-line ai"></div>
+                  <div class="chat-line ai short"></div>
+                  <div class="chat-input"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="win win-float win-notes">
+              <div class="win-bar slim">
+                <span class="win-dots"><i></i><i></i><i></i></span>
+                <span class="win-title">笔记</span>
+              </div>
+              <div class="notes-body">
+                <div class="note-line w80"></div>
+                <div class="note-line w60"></div>
+                <div class="note-line w90"></div>
+                <div class="note-check"></div>
+                <div class="note-line w45"></div>
+              </div>
+            </div>
+
+            <div class="win win-float win-board">
+              <div class="win-bar slim">
+                <span class="win-dots"><i></i><i></i><i></i></span>
+                <span class="win-title">白板</span>
+              </div>
+              <div class="board-body">
+                <div class="board-node n1"></div>
+                <div class="board-node n2"></div>
+                <div class="board-node n3"></div>
+                <div class="board-link l1"></div>
+                <div class="board-link l2"></div>
+              </div>
+            </div>
+
+            <div class="glow glow-a"></div>
+            <div class="glow glow-b"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pillars -->
+    <section class="pillars">
+      <div class="shell">
+        <div class="pillar-grid">
+          <article class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h10M4 17h14"/></svg>
+            </div>
+            <h2>以简驭繁</h2>
+            <p>所有功能尽可能由快捷键驱动，主页面保持极简。更优 Oxy Design System 帮你简化大部分操作。</p>
+          </article>
+          <article class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M9 12h6M12 9v6"/></svg>
+            </div>
+            <h2>随时唤出</h2>
+            <p>全局快捷键随时唤出使用，关闭后自动还原原来的窗口。全屏游戏中也可使用。</p>
+          </article>
+          <article class="pillar">
+            <div class="pillar-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V8a4 4 0 0 1 8 0v2"/></svg>
+            </div>
+            <h2>本地安全</h2>
+            <p>对话、提示词和资料全部保存在本机，不上传云端。备份导出可选密码加密。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section features" id="features">
+      <div class="shell">
+        <header class="section-head">
+          <p class="section-kicker">主要功能</p>
+          <h2 class="section-title">把 AI 用法收进一扇窗</h2>
+          <p class="section-desc">从多账号网页到本地笔记，覆盖提问、记录、整理的完整链路。</p>
+        </header>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="feature-tag">01</div>
+            <h3>AI 网页与多账号</h3>
+            <p>集中打开常用 AI 网页，为不同账号保留独立的登录环境，比分别开多个浏览器更省资源。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-tag">02</div>
+            <h3>自定义 API 对话</h3>
+            <p>接入自己的模型服务，管理对话并保存聊天记录，按需选择服务商与接口配置。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-tag">03</div>
+            <h3>AI 资产</h3>
+            <p>统一整理对话、提示词和资料，查看思考与历史修订，保存常用模板并快速调用。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-tag">04</div>
+            <h3>本地笔记</h3>
+            <p>记录文字、任务列表、代码和图片，搜索笔记内容，并把内容发送到 AI 或存为提示词。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-tag">05</div>
+            <h3>白板</h3>
+            <p>用无限画布整理想法、绘图和放置截图，管理多块白板，思路展开不再受文档限制。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-tag">06</div>
+            <h3>窗口与快捷键</h3>
+            <p>快速唤出、切换和置顶窗口，自定义常用操作的快捷键，几乎所有页面都有统一键位。</p>
+          </article>
+          <article class="feature-card feature-card-wide">
+            <div class="feature-tag">07</div>
+            <h3>备份与恢复</h3>
+            <p>导出本地资料，在需要时恢复配置和已保存内容。备份涵盖登录信息和历史记录，支持可选密码加密。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Craft -->
+    <section class="section craft" id="craft">
+      <div class="shell craft-inner">
+        <div class="craft-copy">
+          <p class="section-kicker">特色能力</p>
+          <h2 class="section-title">像原生应用一样使用 AI 网页</h2>
+          <ul class="craft-list">
+            <li>
+              <strong>隔离与收纳</strong>
+              <span>每个网页保留独立的登录信息和打开记录，多个 AI 网页收纳在同一应用内。</span>
+            </li>
+            <li>
+              <strong>广告干扰</strong>
+              <span>内置网页广告干扰，AI 网页体验接近原生应用。</span>
+            </li>
+            <li>
+              <strong>快捷键覆盖完整</strong>
+              <span>几乎所有页面都提供统一、符合直觉的快捷键。</span>
+            </li>
+            <li>
+              <strong>备份还原</strong>
+              <span>备份导出涵盖登录信息和历史记录，支持可选密码加密。</span>
+            </li>
+          </ul>
+        </div>
+        <div class="craft-panel" aria-hidden="true">
+          <div class="mini-window">
+            <div class="mini-bar"><span></span><span></span><span></span></div>
+            <div class="mini-grid">
+              <div class="mini-cell c1">
+                <div class="mini-line"></div>
+                <div class="mini-line short"></div>
+              </div>
+              <div class="mini-cell c2">
+                <div class="mini-line"></div>
+                <div class="mini-line short"></div>
+              </div>
+              <div class="mini-cell c3">
+                <div class="mini-line"></div>
+                <div class="mini-line short"></div>
+              </div>
+              <div class="mini-cell c4">
+                <div class="kbd">Ctrl</div>
+                <div class="kbd">Space</div>
+              </div>
+            </div>
+          </div>
+          <p class="craft-caption">多网页收纳 · 独立登录 · 全局快捷键</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy -->
+    <section class="section privacy" id="privacy">
+      <div class="shell">
+        <header class="section-head">
+          <p class="section-kicker">数据与使用</p>
+          <h2 class="section-title">资料留在本机，用起来才安心</h2>
+        </header>
+        <div class="privacy-grid">
+          <article class="privacy-card">
+            <h3>本地保存</h3>
+            <p>对话资产、笔记、白板、提示词和设置保存在本机。已保存内容可离线使用。</p>
+          </article>
+          <article class="privacy-card">
+            <h3>按需联网</h3>
+            <p>AI 网页和远程模型服务需要网络及相应账号或接口配置；第三方条件由服务方决定。</p>
+          </article>
+          <article class="privacy-card">
+            <h3>透明收纳</h3>
+            <p>启用 AI 资产后，支持的页面与 API 对话会持续收纳内容；网页范围取决于页面实际加载内容。</p>
+          </article>
+        </div>
+        <p class="privacy-note">
+          资料只自动保存用户上传、粘贴或拖入的附件。「仅导出对话 JSON」不包含原件，迁移全部资料请使用完整备份。
+        </p>
+      </div>
+    </section>
+
+    <!-- Promise -->
+    <section class="section promise" id="promise">
+      <div class="shell">
+        <div class="promise-band">
+          <div class="promise-copy">
+            <p class="section-kicker light">三年维护承诺</p>
+            <h2>持续维护概念版三年</h2>
+            <p>
+              2026 年 9 月 3 日至 2029 年 9 月 3 日。维护重点是修复影响使用的问题、保持工具兼容性，并持续改进已有功能的使用体验。
+            </p>
+          </div>
+          <div class="promise-timeline" aria-hidden="true">
+            <div class="tl-point">
+              <span class="tl-year">2026.09</span>
+              <span class="tl-label">承诺起点</span>
+            </div>
+            <div class="tl-track"><div class="tl-fill"></div></div>
+            <div class="tl-point">
+              <span class="tl-year">2029.09</span>
+              <span class="tl-label">承诺终点</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download -->
+    <section class="section download" id="download">
+      <div class="shell">
+        <header class="section-head">
+          <p class="section-kicker">下载与安装</p>
+          <h2 class="section-title">选择适合你的方式</h2>
+          <p class="section-desc">可下载版本均为正式版，支持 Windows x64 与 ARM64。下载后可按同一发布页的 SHA-256 校验核对文件。</p>
+        </header>
+
+        <div class="download-grid">
+          <article class="download-card">
+            <div class="download-icon" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4v10m0 0 4-4m-4 4-4-4"/><path d="M5 18h14"/></svg>
+            </div>
+            <h3>安装版</h3>
+            <p>安装后，从开始菜单或桌面快捷方式打开工百窗。官方独立构建的可选二进制产物。</p>
+            <a class="btn btn-primary" href="https://github.com/LinCi853/SidekickAI/releases" target="_blank" rel="noopener">前往发布页</a>
+          </article>
+          <article class="download-card">
+            <div class="download-icon" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h16v10H4z"/><path d="M8 8V6h8v2"/><path d="M10 13h4"/></svg>
+            </div>
+            <h3>绿色版</h3>
+            <p>完整解压到安全目录后，直接运行对应架构目录中的 SidekickAI.exe。也可从源码构建。</p>
+            <a class="btn btn-secondary" href="https://github.com/LinCi853/SidekickAI/releases" target="_blank" rel="noopener">前往发布页</a>
+          </article>
+        </div>
+
+        <div class="build-note">
+          <p>
+            自行构建使用独立身份，不代表官方发行。安装、卸载与独立恢复附件由私有分发工作区维护；任何人都可使用组件、自研安装卸载器，或只使用绿色版。
+          </p>
+          <div class="build-links">
+            <a href="https://github.com/LinCi853/SidekickAI/blob/main/docs/formats/distribution-toolkit.md" target="_blank" rel="noopener">二进制组件说明</a>
+            <a href="https://github.com/LinCi853/SidekickAI/blob/main/docs/formats/SKSETUP3.md" target="_blank" rel="noopener">SKSETUP3 格式</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <div class="footer-brand">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+              <rect x="2" y="3" width="16" height="16" rx="4" fill="#4f46e5"/>
+              <rect x="10" y="9" width="16" height="16" rx="4" fill="#6366f1" opacity="0.85"/>
+              <rect x="7" y="6" width="16" height="16" rx="4" stroke="#ffffff" stroke-width="1.4" fill="none" opacity="0.9"/>
+            </svg>
+          </span>
+          <span class="brand-text">
+            <strong>工百窗</strong>
+            <span>SidekickAI</span>
+          </span>
+        </div>
+        <p>免费、功能丰富、上限极高、无缝融入电脑使用的 AI 入门工具。</p>
+      </div>
+      <div class="footer-cols">
+        <div>
+          <h4>产品</h4>
+          <a href="#features">功能</a>
+          <a href="#craft">特色</a>
+          <a href="#download">下载</a>
+        </div>
+        <div>
+          <h4>社区</h4>
+          <a href="https://github.com/LinCi853/SidekickAI/issues" target="_blank" rel="noopener">Issues</a>
+          <a href="https://github.com/LinCi853/SidekickAI/blob/main/CHANGELOG.md" target="_blank" rel="noopener">更新日志</a>
+          <a href="https://github.com/LinCi853/SidekickAI/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">贡献指南</a>
+        </div>
+        <div>
+          <h4>规范</h4>
+          <a href="https://github.com/LinCi853/SidekickAI/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+          <a href="https://github.com/LinCi853/SidekickAI/blob/main/SECURITY.md" target="_blank" rel="noopener">安全策略</a>
+        </div>
+      </div>
+    </div>
+    <div class="shell footer-bottom">
+      <p>© 2026 LinCi853 · MIT License</p>
+      <p>工百窗是用户侧工具，不隶属于所接入的 AI 服务。第三方商标归各自权利人所有。</p>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

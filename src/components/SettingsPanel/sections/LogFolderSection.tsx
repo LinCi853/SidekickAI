@@ -2,15 +2,21 @@ import { useRef, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { openLogsFolder } from '../../../lib/electron-api';
 import { Button, SectionTitle } from '../../ui';
-import { logDateRange } from '../../../../electron/shared/log-export';
+import { localLogDate, logDateRange } from '../../../../electron/shared/log-export';
+
+/** 近 N 天导出范围（默认 30 天） */
+function recentRange(days = 30): { startDate: string; endDate: string } {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - (days - 1));
+  return { startDate: localLogDate(start), endDate: localLogDate(end) };
+}
 
 export default function LogFolderSection() {
   const pending = useRef(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
-  const [range, setRange] = useState('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [range, setRange] = useState<'recent' | 'all'>('recent');
   const [notice, setNotice] = useState('');
 
   const openFolder = async () => {
@@ -20,10 +26,10 @@ export default function LogFolderSection() {
     setError('');
     setNotice('');
     try {
-      const options = range === 'all' ? {} : { startDate, endDate };
-      try { logDateRange(options); } catch { setError('请填写有效的日期范围，开始日期不能晚于结束日期'); return; }
+      const options = range === 'all' ? {} : recentRange(30);
+      try { logDateRange(options); } catch { setError('日期范围无效'); return; }
       const result = await openLogsFolder(options);
-      setNotice(result?.warnings ? `已导出，${result.warnings} 个来源未能读取，详情见导出清单` : '已按日期保存并打开日志文件夹');
+      setNotice(result?.warnings ? `已导出，${result.warnings} 个来源未能读取` : '已保存并打开日志文件夹');
     } catch {
       setError('日志导出或打开失败，请检查日志目录后重试');
     } finally {
@@ -35,16 +41,20 @@ export default function LogFolderSection() {
   return (
     <section data-name="settings.advanced.logs.section">
       <SectionTitle>日志</SectionTitle>
-      <p className="section-hint">导出登录、窗口、启动、点击及现存运行和维护日志，每次独立保存。旧维护日志按文件修改日期筛选。</p>
       <div className="log-export-controls">
-        <label>导出范围 <select aria-label="日志导出范围" value={range} disabled={opening} onChange={event => setRange(event.target.value)}><option value="all">全部现存日志</option><option value="dates">指定日期</option></select></label>
-        {range === 'dates' && <><label>开始日期 <input type="date" aria-label="日志开始日期" value={startDate} disabled={opening} onChange={event => setStartDate(event.target.value)} /></label>
-          <label>结束日期 <input type="date" aria-label="日志结束日期" value={endDate} disabled={opening} onChange={event => setEndDate(event.target.value)} /></label></>}
+        <label>
+          <select aria-label="日志导出范围" value={range} disabled={opening}
+            onChange={event => setRange(event.target.value as 'recent' | 'all')}
+            data-name="settings.advanced.logs.range">
+            <option value="recent">近 30 天</option>
+            <option value="all">全部</option>
+          </select>
+        </label>
       </div>
       <Button type="button" variant="outline" disabled={opening} onClick={() => void openFolder()}
         data-name="settings.advanced.logs.open-folder" aria-busy={opening}>
         <FolderOpen size={16} aria-hidden="true" />
-        <span>导出并打开日志文件夹</span>
+        <span>导出并打开</span>
       </Button>
       {error && <p className="section-hint" role="alert" data-name="settings.advanced.logs.error">{error}</p>}
       {notice && <p className="section-hint" role="status">{notice}</p>}

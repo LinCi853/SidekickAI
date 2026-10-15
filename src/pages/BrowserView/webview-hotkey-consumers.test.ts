@@ -6,8 +6,8 @@ import { deferred, settleHooks } from '../../hooks/draft-hook-test-harness';
 const harness = await vi.hoisted(async () => (await import('../../hooks/draft-hook-test-harness')).createHookHarness());
 const state = vi.hoisted(() => ({
   listeners: new Set<(payload: WebviewHotkeyPayload) => void>(), validate: vi.fn(), close: vi.fn(), focus: vi.fn(),
-  browser: { activeTabId: 'first', windowId: 'browser-window', profileId: 'profile', tabs: [{ id: 'first', profileId: 'profile' }, { id: 'second', profileId: 'profile' }] },
-  main: { activeTabId: 'first', windowId: 'main', tabs: [{ id: 'first', profileId: 'profile' }, { id: 'second', profileId: 'profile' }] },
+  browser: { activeTabId: 'first', windowId: 'browser-window', profileId: 'profile', tabs: [{ id: 'first', profileId: 'profile' }, { id: 'second', profileId: 'profile' }], switchTab: vi.fn() },
+  main: { activeTabId: 'first', windowId: 'main', tabs: [{ id: 'first', profileId: 'profile' }, { id: 'second', profileId: 'profile' }], setActiveTab: vi.fn() },
 }));
 vi.mock('react', async () => ({ ...await vi.importActual('react'), ...harness.react }));
 vi.mock('../../hooks/useShortcutRegistry', () => ({ useShortcutRegistry: vi.fn() }));
@@ -98,5 +98,18 @@ describe.each(['main', 'browser'] as const)('%s forwarded target validation', ki
   it('handles a rejected or synchronously unavailable validation without dispatch', async () => {
     mountConsumer(kind, webviewFixture()); state.validate.mockImplementation(() => { throw new Error('Unavailable'); });
     emit(payload(kind)); await settleHooks(); expect(state.close).not.toHaveBeenCalled();
+  });
+
+  it('dispatches cycleTab immediately without same-tab target validation', async () => {
+    // 连按：第二下时 activeTabId 可能已切走，不得因 target 校验丢弃
+    mountConsumer(kind, webviewFixture());
+    const target = { webContentsId: 7, documentGeneration: 2, url: 'https://fixture.test/page', tabId: 'first', profileId: 'profile', windowId: kind === 'main' ? 'main' : 'browser-window' };
+    emit({ action: 'cycleTab', data: { reverse: false }, target });
+    emit({ action: 'cycleTab', data: { reverse: false }, target });
+    emit({ action: 'switchTab', data: { index: 1 }, target });
+    await settleHooks();
+    expect(state.validate).not.toHaveBeenCalled();
+    if (kind === 'main') expect(state.main.setActiveTab).toHaveBeenCalledTimes(3);
+    else expect(state.browser.switchTab).toHaveBeenCalledTimes(3);
   });
 });

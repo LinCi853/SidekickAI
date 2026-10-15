@@ -20,4 +20,32 @@ describe('AI asset shortcut settings presentation', () => {
     const html = renderToStaticMarkup(<HotkeySection hotkeys={[configs[1]]} drafts={{ toggleAiAssets: '' }} savingAction={null} feedback={{}} setDrafts={vi.fn()} handleSaveHotkey={vi.fn()} />)
     expect(html).toContain('type="checkbox" disabled=""')
   })
+  it('hides fallback warning when registrationReason is intentionally empty (system reserved key)', () => {
+    const html = renderToStaticMarkup(
+      <HotkeySection
+        hotkeys={[{ ...configs[0], registration: 'fallback' as const, registrationReason: undefined }]}
+        drafts={{ toggleMainWindow: 'Alt+Space' }}
+        savingAction={null}
+        feedback={{}}
+        setDrafts={vi.fn()}
+        handleSaveHotkey={vi.fn()}
+      />,
+    )
+    expect(html).not.toContain('系统快捷键注册未成功')
+    expect(html).not.toContain('建议更换组合键')
+    expect(html).toContain('已启用')
+  })
+  it('shows fallback warning when registrationReason is provided', () => {
+    const html = renderToStaticMarkup(
+      <HotkeySection
+        hotkeys={[{ ...configs[0], accelerator: 'Alt+Q', registration: 'fallback' as const, registrationReason: '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。' }]}
+        drafts={{ toggleMainWindow: 'Alt+Q' }}
+        savingAction={null}
+        feedback={{}}
+        setDrafts={vi.fn()}
+        handleSaveHotkey={vi.fn()}
+      />,
+    )
+    expect(html).toContain('建议更换组合键')
+  })
 })

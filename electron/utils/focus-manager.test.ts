@@ -86,6 +86,8 @@ describe('归还目标只来自本轮采集', () => {
     expect(fixture.getForegroundHandle).toHaveBeenCalledWith(120)
     // show 自身 + 未聚焦时的立即抢焦点各调用一次
     expect(win.show).toHaveBeenCalledTimes(2)
+    // show 抢焦点可能对自身句柄调用 setForegroundHandle，交还断言只看 hide 之后
+    fixture.setForegroundHandle.mockClear()
 
     // 收起后自然落点 = 唤出前采集的 4242 → 不做强制恢复
     fixture.getForegroundHandle.mockResolvedValue(4242)
@@ -98,6 +100,7 @@ describe('归还目标只来自本轮采集', () => {
     const win = makeWindow()
     track(win)
     await show(win)
+    fixture.setForegroundHandle.mockClear()
 
     fixture.getForegroundHandle.mockResolvedValue(7777)
     hide(win)
@@ -112,6 +115,7 @@ describe('归还目标只来自本轮采集', () => {
     // 与 getNativeWindowHandle 的 9999 相同
     fixture.getForegroundHandle.mockResolvedValue(9999)
     await show(win)
+    fixture.setForegroundHandle.mockClear()
 
     fixture.getForegroundHandle.mockResolvedValue(7777)
     hide(win)
@@ -124,6 +128,7 @@ describe('归还目标只来自本轮采集', () => {
     track(win)
     fixture.getForegroundHandle.mockResolvedValue(null)
     await show(win)
+    fixture.setForegroundHandle.mockClear()
 
     fixture.getForegroundHandle.mockResolvedValue(7777)
     hide(win)
@@ -139,14 +144,17 @@ describe('代际取消与 close 交还', () => {
     await show(win)
     hide(win)              // 安排 60ms 后交还
     await show(win)        // 新唤出 → 代际递增，旧交还作废
+    fixture.setForegroundHandle.mockClear()
     await vi.advanceTimersByTimeAsync(2000)
-    expect(fixture.setForegroundHandle).not.toHaveBeenCalled()
+    // 激活重试会对自身句柄夺焦点；本用例只禁止交还旧的 4242
+    expect(fixture.setForegroundHandle).not.toHaveBeenCalledWith(4242)
   })
 
   it('close 销毁窗口后仍把前台交还给唤出前窗口', async () => {
     const win = makeWindow()
     track(win)
     await show(win)
+    fixture.setForegroundHandle.mockClear()
 
     fixture.getForegroundHandle.mockResolvedValue(7777)
     close(win)

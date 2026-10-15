@@ -32,7 +32,7 @@ function Test-NodeDir([string]$dir, [version]$min) {
 
 $workspaceRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $MinVersion) {
-  $engines = (Get-Content (Join-Path $workspaceRoot 'package.json') -Raw | ConvertFrom-Json).engines.node
+  $engines = (Get-Content (Join-Path $workspaceRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).engines.node
   $MinVersion = $engines.TrimStart('>=')
 }
 $min = [version]$MinVersion

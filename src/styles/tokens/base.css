@@ -198,7 +198,7 @@
 
   /* 语义化布局尺寸（固定值不随 UI 档位变化） */
   --dropdown-max-h: min(360px, calc(100vh - var(--titlebar-h) - var(--space-4)));
-  --drawer-w: 280px;
+  --drawer-w: 264px;
   --touch-target: 44px;
   --toast-offset: calc(var(--space-12) + var(--space-2));
 

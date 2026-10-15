@@ -11,13 +11,14 @@
    （见 MainView/index.tsx 的 onWebviewHotkey 监听）。
    ===================================================================== */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTabStore } from '../../store/useTabStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { hasOverlay } from '../../hooks/useEscToCloseWindow';
 import { maximizeToggleWindow } from '../../lib/electron-api';
 import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl';
 import { useRegisterShortcutDocs } from '../../store/useShortcutDocStore';
+import { useShortcutRegistry, type ShortcutEntry } from '../../hooks/useShortcutRegistry';
 
 const LONG_PRESS_MS = 500;
 
@@ -28,8 +29,23 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar: () => void) {
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
+  // 长按 Tab 切换底栏：与 ~ 速览同属 useShortcutRegistry hold 语义
+  const tabHoldShortcuts = useMemo<ShortcutEntry[]>(() => [
+    {
+      accelerator: 'Tab',
+      ignoreWhenTyping: true,
+      holdMs: LONG_PRESS_MS,
+      onHoldStart: (e) => {
+        // 拦下默认焦点切换（短按/长按都不要把 Tab 漏给页面元素）
+        e.preventDefault();
+      },
+      handler: () => toggleBottomBar(),
+      onHoldEnd: (e) => {
+        e.preventDefault();
+      },
+    },
+  ], [toggleBottomBar]);
+  useShortcutRegistry(tabHoldShortcuts, { capture: true, ignoreRepeat: true });
 
   // 注册即声明：本 hook 实现的键位在此登记说明
   useRegisterShortcutDocs('main-keyboard', [
@@ -44,9 +60,9 @@ export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar:
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat) return;
       // ===== Alt+1~9：切换到第 N 个可见标签（渲染层兜底） =====
       // 主进程 before-input-event 仅在 webview 焦点时拦截；焦点在顶栏/设置/输入框时不触发。
+      // 允许 auto-repeat，支持按住连切。
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         let n: number | null = null;
         if (e.code.startsWith('Digit')) {
@@ -66,6 +82,9 @@ export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar:
           return;
         }
       }
+
+      // 其余应用键忽略长按连发（避免按住 F6 等持续触发）
+      if (e.repeat) return;
 
       // ===== F6：AI 输入框 ↔ 取消聚焦 循环（渲染层兜底） =====
       // 焦点在输入框时 → 取消聚焦；焦点不在输入框时 → 聚焦 AI 输入框
@@ -137,32 +156,8 @@ export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar:
           return;
         }
       }
+    };
 
-      // ===== 长按 Tab 切换底栏（已展开则收起，已收起则展开） =====
-      if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return;
-      if (isTypingTarget(e.target)) return;
-      if (longPressTimerRef.current) return;
-      longPressTriggeredRef.current = false;
-      longPressTimerRef.current = setTimeout(() => {
-        longPressTriggeredRef.current = true;
-        // 切换底栏（已展开则收起，已收起则展开）
-        toggleBottomBar();
-      }, LONG_PRESS_MS);
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-      if (longPressTriggeredRef.current) {
-        e.preventDefault();
-        longPressTriggeredRef.current = false;
-      } else if (!isTypingTarget(e.target)) {
-        // 短按 Tab：阻止默认焦点切换行为（防止焦点泄漏到隐藏的抽屉/设置面板）
-        e.preventDefault();
-      }
-    };
     // ESC 关闭底栏（已展开时）；浮窗栈非空时让浮窗优先处理（如快捷键说明/设置面板/抽屉）
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || isTypingTarget(e.target) || !bottomBarExpanded) return;
@@ -171,13 +166,10 @@ export function useMainViewKeyboard(bottomBarExpanded: boolean, toggleBottomBar:
       toggleBottomBar();
     };
     window.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('keydown', handleEsc, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
-      window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('keydown', handleEsc, true);
-      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     };
   }, [bottomBarExpanded, toggleBottomBar]);
 }

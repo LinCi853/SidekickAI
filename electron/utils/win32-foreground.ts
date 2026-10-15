@@ -29,6 +29,11 @@ public class SidekickForeground {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 }
 '@
 Write-Output 'READY'
@@ -43,7 +48,24 @@ while ($true) {
   } elseif ($parts[0] -eq 'S') {
     $h = [IntPtr]::new([int64]$parts[2])
     if ([SidekickForeground]::IsIconic($h)) { [SidekickForeground]::ShowWindow($h, 9) | Out-Null }
+    # Alt 技巧：模拟一次 Alt 按下/抬起，解除前台锁定对 SetForegroundWindow 的拒绝
+    [SidekickForeground]::keybd_event(0x12, 0, 0, 0)
+    [SidekickForeground]::keybd_event(0x12, 0, 2, 0)
     $ok = [SidekickForeground]::SetForegroundWindow($h)
+    if (-not $ok) {
+      # AttachThreadInput 兜底：挂到当前前台线程输入队列后再抢前台
+      $fg = [SidekickForeground]::GetForegroundWindow()
+      $fgPid = 0
+      $fgThread = [SidekickForeground]::GetWindowThreadProcessId($fg, [ref]$fgPid)
+      $curThread = [SidekickForeground]::GetCurrentThreadId()
+      $attached = $false
+      if ($fgThread -ne 0 -and $fgThread -ne $curThread) {
+        $attached = [SidekickForeground]::AttachThreadInput($fgThread, $curThread, $true)
+      }
+      [SidekickForeground]::BringWindowToTop($h) | Out-Null
+      $ok = [SidekickForeground]::SetForegroundWindow($h)
+      if ($attached) { [SidekickForeground]::AttachThreadInput($fgThread, $curThread, $false) | Out-Null }
+    }
     if ($ok) { Write-Output ('S:' + $parts[1] + ':1') } else { Write-Output ('S:' + $parts[1] + ':0') }
   } elseif ($parts[0] -eq 'Q') {
     break

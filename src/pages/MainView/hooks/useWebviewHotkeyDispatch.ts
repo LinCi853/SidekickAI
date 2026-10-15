@@ -119,6 +119,15 @@ export function useWebviewHotkeyDispatch(
       }
     };
     const off = onWebviewHotkey(payload => {
+      // 切标签是「离开当前 tab」的动作，不能按“仍停留在原 tab”校验，
+      // 否则连按 Ctrl+Tab / Alt+1~9 会因 activeTabId 已变而被丢弃。
+      // 窗口级动作（主题/速览/新建）同样不依赖 guest 代数，直接分发。
+      if (payload.action === 'cycleTab' || payload.action === 'switchTab'
+        || payload.action === 'toggleTheme' || payload.action === 'openShortcuts'
+        || payload.action === 'closeShortcuts' || payload.action === 'newTab') {
+        dispatch(payload);
+        return;
+      }
       const target = payload.target;
       if (!target) { dispatch(payload); return; }
       const store = useTabStore.getState();

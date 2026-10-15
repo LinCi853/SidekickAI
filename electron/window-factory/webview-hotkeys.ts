@@ -40,6 +40,21 @@ interface HotkeyCtx {
   win: Electron.BrowserWindow
 }
 
+/** 切标签组合：Ctrl+Tab / Ctrl+Shift+Tab / Alt+1~9（Numpad 同）——允许 auto-repeat 连切 */
+function isTabSwitchInput(input: { key?: string; code?: string; modifiers?: string[] }): boolean {
+  const mods = input.modifiers || []
+  const hasAlt = mods.includes('alt')
+  const hasCtrl = mods.includes('control') || mods.includes('ctrl')
+  const hasMeta = mods.includes('meta') || mods.includes('command')
+  if (hasMeta) return false
+  if (input.key === 'Tab' && hasCtrl && !hasAlt) return true
+  if (hasAlt && !hasCtrl) {
+    const m = (input.code || '').match(/^(?:Digit|Numpad)([1-9])$/)
+    return !!m
+  }
+  return false
+}
+
 interface HotkeyDef {
   /** 首选按键标识（Electron input.key 值，如 'F5', 'Tab', 'Escape'） */
   key: string
@@ -254,7 +269,9 @@ export function attachWebviewHotkeyRouter(
       else if (input.type === 'keyUp') onCtrlKeyChange(false)
     }
     if (input.code !== 'Backquote' && input.type !== 'keyDown') return
-    if (input.type === 'keyDown' && (input.isAutoRepeat || input.isComposing)) return
+    if (input.type === 'keyDown' && input.isComposing) return
+    // 切标签键允许 auto-repeat（按住 Ctrl+Tab / Alt+1~9 连切）；其余仍吞掉长按重复
+    if (input.type === 'keyDown' && input.isAutoRepeat && !isTabSwitchInput(input)) return
     if (wc.isDestroyed() || parentWebContents.isDestroyed()) return
     const win = BrowserWindow.fromWebContents(parentWebContents)
     if (!win || win.isDestroyed()) return

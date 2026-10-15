@@ -8,7 +8,7 @@
    ===================================================================== */
 
 import { useState, useCallback } from 'react';
-import type { AIPlatform, TopBarButtonGroup } from '../../lib/electron-api';
+import type { AIPlatform, TopBarButtonGroup, DrawerMenuItem } from '../../lib/electron-api';
 import {
   updateAppSettings,
   getAppSettings,
@@ -30,6 +30,8 @@ import AboutSection from './sections/AboutSection';
 import ModuleManagementSection from './sections/ModuleManagementSection';
 import DeveloperOptionsSection from './sections/DeveloperOptionsSection';
 import TopBarSection from './sections/TopBarSection';
+import DrawerMenuSection from './sections/DrawerMenuSection';
+import { useUiVersionStore } from '../../store/useUiVersionStore';
 import AiAppSection from './sections/AiAppSection';
 import ProviderSection from './sections/ProviderSection';
 import PlatformUrlSection from './sections/PlatformUrlSection';
@@ -54,6 +56,7 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
 
   // 供应商编辑状态：编辑时本地强制隐藏侧滑面板，让编辑 Modal 全屏覆盖主窗口
   const [providerEditing, setProviderEditing] = useState(false);
+  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
 
   // 主窗口专属：已打开标签（用于顶栏按钮显隐后同步最小宽度）
   const tabs = useTabStore((s) => s.tabs);
@@ -74,6 +77,21 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
     } catch (e) {
       console.error('[SettingsPanel] 切换平台隐藏状态失败:', e);
       app.setHiddenPlatforms(app.hiddenPlatforms);
+    }
+  };
+
+  /** 切换侧边菜单入口显隐 */
+  const handleToggleDrawerMenuItem = async (item: DrawerMenuItem) => {
+    const current = app.drawerMenuItems;
+    const next = current.includes(item)
+      ? current.filter((g) => g !== item)
+      : [...current, item];
+    app.setDrawerMenuItems(next);
+    try {
+      await updateAppSettings({ drawerMenuItems: next });
+    } catch (e) {
+      console.error('[SettingsPanel] 切换侧边菜单入口失败:', e);
+      app.setDrawerMenuItems(current);
     }
   };
 
@@ -159,10 +177,18 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         onChange={handleGeneralChange}
       />
 
-      <TopBarSection
-        visibleButtons={app.topBarVisibleButtons}
-        onToggle={handleToggleTopBarButton}
-      />
+      {!isOxy && (
+        <>
+          <TopBarSection
+            visibleButtons={app.topBarVisibleButtons}
+            onToggle={handleToggleTopBarButton}
+          />
+          <DrawerMenuSection
+            visibleItems={app.drawerMenuItems}
+            onToggle={handleToggleDrawerMenuItem}
+          />
+        </>
+      )}
 
       <HotkeySection
         hotkeys={hotkeys.hotkeys}

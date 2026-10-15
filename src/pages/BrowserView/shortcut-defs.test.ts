@@ -113,3 +113,18 @@ describe('通用组件长按（hold）能力类型', () => {
     expect(entry.holdMs).toBe(500);
   });
 });
+
+describe('切标签键 allowRepeat（连按/长按轮播）', () => {
+  it('Ctrl+Tab / Ctrl+Shift+Tab / Alt+1~9 声明 allowRepeat', () => {
+    const defs = buildShortcutDefs(baseOpts);
+    const allow = new Set(
+      defs.filter((d) => d.allowRepeat).map((d) => d.accelerator),
+    );
+    expect(allow.has('Ctrl+Tab')).toBe(true);
+    expect(allow.has('Ctrl+Shift+Tab')).toBe(true);
+    for (let n = 1; n <= 9; n += 1) expect(allow.has(`Alt+${n}`)).toBe(true);
+    // 非切标签键不应放行 auto-repeat
+    expect(allow.has('Ctrl+T')).toBe(false);
+    expect(allow.has('Ctrl+W')).toBe(false);
+  });
+});

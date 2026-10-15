@@ -10,7 +10,7 @@ import type { BlockRule } from '../shared/block-rules.types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createCrudStore } from './store-paths.js'
 import { createSqliteJsonStore } from './module-state-store.js'
-import { BLOCK_RULES } from './default-config.js'
+import { BLOCK_RULES, RETIRED_BUILTIN_RULE_IDS } from './default-config.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 
 // 持久化存储实例（写入 block-rules.json）
@@ -124,23 +124,23 @@ export function ensureDefaultBlockRules(): void {
     console.log(`[block-rules-store] 同步 ${updated} 条内置规则修正`)
   }
 
-  // ===== 一次性迁移：强制关闭智谱清言下载屏蔽规则（选择器过于宽泛影响登录） =====
-  // 迁移条件为「规则存在且 enabled」，迁移后 enabled=false，下次启动自动跳过，无需额外标记位
+  // ===== 一次性迁移：关闭会误伤登录/下载 UI 的旧内置规则 =====
+  // 选择器过宽（如 [class*="qrcode"]）会隐藏登录二维码；后续按 AI 应用单独适配。
+  // 迁移条件为「规则存在且 enabled」，迁移后 enabled=false，下次启动自动跳过。
   const currentRules = store.get('rules') as BlockRule[]
-  const needMigrate = currentRules.some(
-    (r) => (r.id === 'builtin-chatglm-download' || r.id === 'builtin-chatglm-download-js') && r.enabled,
-  )
+  const retired = new Set(RETIRED_BUILTIN_RULE_IDS)
+  const needMigrate = currentRules.some((r) => retired.has(r.id) && r.enabled)
   if (needMigrate) {
     let changed = false
     for (const r of currentRules) {
-      if ((r.id === 'builtin-chatglm-download' || r.id === 'builtin-chatglm-download-js') && r.enabled) {
+      if (retired.has(r.id) && r.enabled) {
         r.enabled = false
         changed = true
       }
     }
     if (changed) {
       store.set('rules', currentRules)
-      console.log('[block-rules-store] 一次性迁移：已关闭智谱清言下载屏蔽规则（影响登录）')
+      console.log('[block-rules-store] 一次性迁移：已关闭会误伤登录的旧内置屏蔽规则')
     }
   }
 }
