@@ -29,17 +29,20 @@ vi.mock('../store/useShortcutDocStore', async (importOriginal) => {
 import ShortcutsModal from './ShortcutsModal';
 
 describe('ShortcutsModal', () => {
-  it('renders a flat list with color-only categories and disabled markers', () => {
+  it('renders a flat list with color-only categories and hides disabled entries', () => {
     const html = renderToStaticMarkup(<ShortcutsModal open onClose={() => {}} pageId="settings" />);
     expect(html).toContain('is-global');
     expect(html).toContain('is-page');
     expect(html).toContain('data-category="global"');
     expect(html).toContain('data-category="page"');
-    expect(html).toContain('is-disabled');
-    expect(html).toContain('（已禁用）');
     expect(html).toContain('Alt + Space');
+    expect(html).toContain('呼出 / 关闭快捷键说明');
+    // 已禁用条目不进速查
+    expect(html).not.toContain('is-disabled');
+    expect(html).not.toContain('（已禁用）');
+    expect(html).not.toContain('Esc<');
     // 全局条目排前（颜色即分类，无分类行）
-    expect(html.indexOf('Alt + Space')).toBeLessThan(html.indexOf('Esc<'));
+    expect(html.indexOf('Alt + Space')).toBeLessThan(html.indexOf('呼出 / 关闭快捷键说明'));
   });
 
   it('marks the overlay hidden while closed and shows the page badge', () => {

@@ -8,7 +8,7 @@
    展示规则：
    - 仅两类：全局 / 页面内，只用键位颜色区分（全局 accent、页面内 info），
      不加分类行、不加 badge 列
-   - 全局条目排前、页面条目在后；禁用条目灰显并标注「已禁用」
+   - 全局条目排前、页面条目在后；已禁用条目直接隐藏（速查只看当前生效项）
    - 头部徽标标明当前页面（内容随页面实时变化）
    ===================================================================== */
 
@@ -34,7 +34,10 @@ export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModal
   const resolvedPageId = pageId ?? getShortcutPageId();
   const pageTitle = SHORTCUT_PAGE_TITLES[resolvedPageId];
   const sources = useShortcutDocStore((s) => s.sources);
-  const docs = useMemo(() => selectShortcutDocs(sources), [sources]);
+  const docs = useMemo(
+    () => selectShortcutDocs(sources).filter((s) => !s.disabled),
+    [sources],
+  );
 
   return (
     <div
@@ -83,7 +86,7 @@ export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModal
           <div className="shortcuts-list" role="list" data-name="component.shortcuts-modal.list">
             {docs.map((s) => (
               <div
-                className={`shortcuts-item${s.disabled ? ' is-disabled' : ''}`}
+                className="shortcuts-item"
                 role="listitem"
                 key={s.id}
                 data-name={`component.shortcuts-modal.item-${s.id}`}
@@ -99,7 +102,6 @@ export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModal
                 <div className="shortcuts-action" data-name={`component.shortcuts-modal.item-action-${s.id}`}>
                   <span className="shortcuts-action-text" data-name={`component.shortcuts-modal.item-action-text-${s.id}`}>
                     {s.action}
-                    {s.disabled && <span className="shortcuts-disabled-tag" data-name={`component.shortcuts-modal.item-disabled-tag-${s.id}`}>（已禁用）</span>}
                   </span>
                   {s.note && <div className="shortcuts-note" data-name={`component.shortcuts-modal.item-note-${s.id}`}>{s.note}</div>}
                 </div>

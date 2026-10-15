@@ -642,18 +642,22 @@ export class HotkeyManager {
         registration: this.getEnabled(action) ? registration : undefined,
         registrationReason: this.getEnabled(action) ? conflict
           ? `与「${HOTKEY_LABELS[conflict]}」快捷键重复，请为 AI资产设置独立组合。`
-          : this.registrationReason(registration) : undefined,
+          : this.registrationReason(registration, acc) : undefined,
       }
     })
   }
 
   /** 注册状态的用户可读原因（registered 时为 undefined） */
-  private registrationReason(state: 'registered' | 'fallback' | 'conflict' | 'unavailable' | undefined): string | undefined {
+  private registrationReason(state: 'registered' | 'fallback' | 'conflict' | 'unavailable' | undefined, accelerator?: string): string | undefined {
     switch (state) {
       case 'conflict':
         return '此快捷键由另一个工百窗实例使用或暂时无法取得，请修改组合键或重新启用。'
-      case 'fallback':
-        return '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。'
+      case 'fallback': {
+        const sys = accelerator ? checkSystemHotkeyConflict(accelerator) : null
+        return sys
+          ? `与系统快捷键「${sys.label}」重叠，已通过键盘监听生效；在部分游戏或提权窗口中可能无响应。`
+          : '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。'
+      }
       case 'unavailable':
         return '系统快捷键注册失败，键盘监听兜底也不可用；请更换组合键或重启应用。'
       default:
