@@ -55,6 +55,12 @@ function systemCallbackOf(accelerator: string): () => void {
   return call![1] as () => void
 }
 
+function lastSystemCallbackOf(accelerator: string): () => void {
+  const calls = fixture.globalShortcut.register.mock.calls.filter(([acc]) => acc === accelerator)
+  expect(calls.length, `globalShortcut.register 应已捕获 ${accelerator}`).toBeGreaterThan(0)
+  return calls[calls.length - 1][1] as () => void
+}
+
 function hookHandlerOf(event: 'keydown' | 'keyup'): (e: UiohookEvent) => void {
   const call = fixture.uiohook.on.mock.calls.find(([name]) => name === event)
   expect(call, `uiohook.on('${event}') 应已注册`).toBeTruthy()
@@ -268,6 +274,24 @@ describe('热键双通路分发解耦', () => {
     const fallbackItem = manager.getAllHotkeys().find((h) => h.accelerator === 'Alt+Space')
     expect(fallbackItem?.registration).toBe('fallback')
     expect(fallbackItem?.registrationReason).toContain('兜底')
+  })
+
+  it('重复注册同一组合不得把键占死：先注销自身旧注册再重绑', async () => {
+    const first = vi.fn()
+    await manager.register('Alt+Space', first)
+    expect(manager.registrationStates.get('Alt+Space')).toBe('registered')
+
+    // 第二次注册：Electron 侧已登记 → isRegistered=true，若直接 register 会失败并误标 fallback
+    fixture.globalShortcut.isRegistered.mockReturnValue(true)
+    const second = vi.fn()
+    await manager.register('Alt+Space', second)
+
+    expect(fixture.globalShortcut.unregister).toHaveBeenCalledWith('Alt+Space')
+    expect(manager.registrationStates.get('Alt+Space')).toBe('registered')
+    // 新回调生效，旧回调不再接收
+    lastSystemCallbackOf('Alt+Space')()
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(first).not.toHaveBeenCalled()
   })
 
   it('钩子启动失败且系统注册失败 → 如实标记 unavailable（不得谎报 fallback）', async () => {

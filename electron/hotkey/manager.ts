@@ -245,9 +245,14 @@ export class HotkeyManager {
 
     // Register with the operating system.
     try {
-      // 预检查：若已被占用（本应用或其他应用），记录警告
+      // 已被本应用占用时先注销再重注册：重复 register 会失败并把状态打成 fallback，
+      // 但旧的系统注册仍占着键、旧回调又因 identity 变更被丢弃——键被占且按了没反应。
       if (globalShortcut.isRegistered(accelerator)) {
-        console.warn(`[HotkeyManager] 热键已被占用: ${accelerator}`)
+        if (this.registered.has(accelerator)) {
+          globalShortcut.unregister(accelerator)
+        } else {
+          console.warn(`[HotkeyManager] 热键已被占用: ${accelerator}`)
+        }
       }
       const ok = globalShortcut.register(accelerator, systemCallback)
       if (this.registered.get(accelerator) !== systemCallback) return false
