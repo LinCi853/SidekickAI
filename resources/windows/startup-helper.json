@@ -3,9 +3,9 @@
   "runtime": "net-framework-4",
   "architecture": "anycpu",
   "executable": "SidekickStartup.exe",
-  "sha256": "43d2a065651fdb094c4b2937748f60c3a99d9031ae7006fa24cfd5380cb85301",
+  "sha256": "e252eac3706f9b75dd3c90b5433cc2509eff5766feb4a92be9d36b3756569c96",
   "configSha256": "894fbbdeb71840ee5de8685c45b71865fbeeac25525a6da4d4af2121e540780d",
-  "compilerSha256": "46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00",
+  "compilerSha256": "eca02e6b15cde93009a59a3d129d5a77fb5008f2e1cf62cf573b6737c747ecc3",
   "sourceSha256": "a09a313b634bdaf18b5b0122e51372a32e7674926c5adddb7a77bc857081b65f",
   "sources": [
     {

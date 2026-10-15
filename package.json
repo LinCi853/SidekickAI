@@ -27,6 +27,7 @@
     "test:desktop": "electron-vite build && node scripts/verify-desktop.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "npm run clean:build",
+    "clean:budget": "node scripts/clean-budget.cjs",
     "clean:build": "node -e \"const fs=require('fs');['out'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('[clean] Removed',d)}})\"",
     "product:check": "node packages/product-contract/sync.cjs",
     "product:sync": "node packages/product-contract/sync.cjs --apply",
