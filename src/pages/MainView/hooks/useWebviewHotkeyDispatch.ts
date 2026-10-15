@@ -12,7 +12,7 @@ import { useRegisterShortcutDocs } from '../../../store/useShortcutDocStore';
 
 /**
  * Dispatches webview hotkey events (forwarded from main process) to the appropriate handlers.
- * Handles: switchTab, cycleTab, toggleSpatialNav, openShortcuts, toggleTheme,
+ * Handles: switchTab, cycleTab, toggleSpatialNav, openShortcuts/closeShortcuts, toggleTheme,
  * navBack/Forward/Refresh, detachCurrent, newTab, closeTab.
  */
 export function useWebviewHotkeyDispatch(
@@ -62,6 +62,8 @@ export function useWebviewHotkeyDispatch(
         ).catch((e) => console.warn('[main-view] 操作失败:', e));
       } else if (payload.action === 'openShortcuts') {
         setShortcutsOpen(true);
+      } else if (payload.action === 'closeShortcuts') {
+        setShortcutsOpen(false);
       } else if (payload.action === 'toggleTheme') {
         useThemeStore.getState().toggleTheme();
       } else if (payload.action === 'navBack' || payload.action === 'navForward' || payload.action === 'navRefresh' || payload.action === 'forceRefresh') {

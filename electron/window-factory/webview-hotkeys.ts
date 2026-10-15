@@ -167,10 +167,8 @@ const commonHotkeys: HotkeyDef[] = [
   { key: '0', ctrl: true, condition: 'only', log: 'Ctrl+0 → 重置缩放', action: () => ({ action: 'zoomReset' }) },
 
   // 反引号(`) 呼出快捷键说明窗口（仅非浏览器窗口；浏览器窗口内按键属于页面）
-  { key: '`', keyAlt: '~', code: 'Backquote', condition: 'never', passWhenTyping: true, log: '` → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
 
   // Shift+? 呼出快捷键说明窗口（仅非浏览器窗口；浏览器窗口内 ? 属于页面，如 YouTube/GitHub 快捷键）
-  { key: '?', shift: true, condition: 'never', passWhenTyping: true, log: '? → 切换快捷键窗口', action: () => ({ action: 'openShortcuts' }) },
 ]
 
 /** 浏览器窗口专用快捷键（非浏览器窗口不匹配，按键穿透到页面） */
@@ -255,8 +253,8 @@ export function attachWebviewHotkeyRouter(
       if (input.type === 'keyDown') onCtrlKeyChange(true)
       else if (input.type === 'keyUp') onCtrlKeyChange(false)
     }
-    if (input.type !== 'keyDown') return
-    if (input.isAutoRepeat || input.isComposing) return
+    if (input.code !== 'Backquote' && input.type !== 'keyDown') return
+    if (input.type === 'keyDown' && (input.isAutoRepeat || input.isComposing)) return
     if (wc.isDestroyed() || parentWebContents.isDestroyed()) return
     const win = BrowserWindow.fromWebContents(parentWebContents)
     if (!win || win.isDestroyed()) return
@@ -270,6 +268,16 @@ export function attachWebviewHotkeyRouter(
     const hasMeta = mods.includes('meta') || mods.includes('command')
     const key = input.key
     const code = input.code
+
+    // 按住 ~ 显示速览：keydown 开启，keyup 关闭（全页面统一；输入中放行）
+    if (code === 'Backquote' && !hasCtrl && !hasAlt && !hasMeta && !isGuestFocusEditable(wc)) {
+      e.preventDefault()
+      const action = input.type === 'keyUp' ? 'closeShortcuts' : 'openShortcuts'
+      if (tryForward(action, parentWebContents)) {
+        parentWebContents.send(IPC_CHANNELS.WEBVIEW_HOTKEY, { action, target })
+      }
+      return
+    }
     const isBrowser = isBrowserWindowContents(parentWebContents)
 
     const ctx: HotkeyCtx = {

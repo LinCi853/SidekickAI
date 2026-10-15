@@ -653,10 +653,10 @@ export class HotkeyManager {
       case 'conflict':
         return '此快捷键由另一个工百窗实例使用或暂时无法取得，请修改组合键或重新启用。'
       case 'fallback': {
+        // 系统保留键（如 Alt+Space）走键盘监听是预期行为，不再弹黄字
         const sys = accelerator ? checkSystemHotkeyConflict(accelerator) : null
-        return sys
-          ? `与系统快捷键「${sys.label}」重叠，已通过键盘监听生效；在部分游戏或提权窗口中可能无响应。`
-          : '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。'
+        if (sys) return undefined
+        return '系统快捷键注册未成功，当前通过键盘监听兜底；在部分游戏或提权窗口中可能无响应，建议更换组合键。'
       }
       case 'unavailable':
         return '系统快捷键注册失败，键盘监听兜底也不可用；请更换组合键或重启应用。'

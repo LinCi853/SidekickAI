@@ -268,13 +268,12 @@ describe('热键双通路分发解耦', () => {
     expect(listener).toHaveBeenCalledTimes(4)
   })
 
-  it('getAllHotkeys：系统保留键 fallback 说明已由监听生效且不建议换键', async () => {
+  it('getAllHotkeys：系统保留键 fallback 不弹黄字（钩子生效为预期）', async () => {
     fixture.globalShortcut.register.mockReturnValueOnce(false)
     await manager.register('Alt+Space', vi.fn())
     const fallbackItem = manager.getAllHotkeys().find((h) => h.accelerator === 'Alt+Space')
     expect(fallbackItem?.registration).toBe('fallback')
-    expect(fallbackItem?.registrationReason).toContain('键盘监听生效')
-    expect(fallbackItem?.registrationReason).not.toContain('建议更换')
+    expect(fallbackItem?.registrationReason).toBeUndefined()
   })
 
   it('getAllHotkeys：非系统保留键 fallback 仍建议更换组合', async () => {

@@ -55,7 +55,7 @@ interface TrackedState {
 const states = new Map<BrowserWindow, TrackedState>()
 
 /** 唤出后首次核验焦点是否落下的延迟 */
-const ACTIVATION_CHECK_DELAY_MS = 150
+const ACTIVATION_CHECK_DELAY_MS = 50
 /** 激活重试（moveTop + focus，仅一次）后的复核延迟 */
 const ACTIVATION_RETRY_DELAY_MS = 300
 /** show 采集「唤出前前台窗口」的等待上限；超时/失败降级为自然激活 */
@@ -150,6 +150,8 @@ export async function show(win: BrowserWindow): Promise<void> {
     }
   }
   win.focus()
+  // 键盘钩子/后台热键唤出时 Windows 可能拒绝前台，立即做一次短暂置顶抢焦点
+  if (!win.isFocused()) activateWithSteal(win)
   scheduleActivationCheck(win, generation)
 }
 

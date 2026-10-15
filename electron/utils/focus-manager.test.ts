@@ -84,7 +84,8 @@ describe('归还目标只来自本轮采集', () => {
     track(win)
     await show(win)
     expect(fixture.getForegroundHandle).toHaveBeenCalledWith(120)
-    expect(win.show).toHaveBeenCalledTimes(1)
+    // show 自身 + 未聚焦时的立即抢焦点各调用一次
+    expect(win.show).toHaveBeenCalledTimes(2)
 
     // 收起后自然落点 = 唤出前采集的 4242 → 不做强制恢复
     fixture.getForegroundHandle.mockResolvedValue(4242)
@@ -160,14 +161,17 @@ describe('唤出焦点核验', () => {
     const win = makeWindow()
     track(win)
     await show(win)
+    // 立即抢焦点一次
+    expect(win.moveTop).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(150)
-    expect(win.moveTop).toHaveBeenCalledTimes(1)
-    expect(win.focus).toHaveBeenCalledTimes(2)
+    // 延时核验再抢一次，共两次
+    expect(win.moveTop).toHaveBeenCalledTimes(2)
+    expect(win.focus).toHaveBeenCalledTimes(3)
 
     // 只重试一次：继续未聚焦也不再重试，仅记录
     vi.advanceTimersByTime(300)
-    expect(win.moveTop).toHaveBeenCalledTimes(1)
+    expect(win.moveTop).toHaveBeenCalledTimes(2)
   })
 
   it('show 后已取得焦点 → 不做多余重试', async () => {
@@ -198,8 +202,8 @@ describe('唤出焦点核验', () => {
     hide(win) // 代际递增，show 的激活核验作废
 
     vi.advanceTimersByTime(600)
-    // show 自身的 focus 已调用一次；hide 后核验取消，不得再有 moveTop/重试 focus
-    expect(win.focus).toHaveBeenCalledTimes(1)
-    expect(win.moveTop).not.toHaveBeenCalled()
+    // show 自身 focus + 立即抢焦点 focus；hide 后延时核验取消，不得再有 moveTop
+    expect(win.focus).toHaveBeenCalledTimes(2)
+    expect(win.moveTop).toHaveBeenCalledTimes(1)
   })
 })

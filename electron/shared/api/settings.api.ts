@@ -272,7 +272,7 @@ export type OnUiVersionChangedCallback = (callback: (payload: { uiVersion: 'clas
 
 /** webview 快捷键 action 联合类型（主进程 webview-hotkeys.ts 实际发送的完整集合） */
 export type WebviewHotkeyAction =
-  | 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'toggleTheme'
+  | 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'closeShortcuts' | 'toggleTheme'
   | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab'
   | 'detachCurrent' | 'focusCycle' | 'addBookmark' | 'openHistory'
   | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print'

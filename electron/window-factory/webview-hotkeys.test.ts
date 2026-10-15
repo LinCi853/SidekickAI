@@ -92,35 +92,22 @@ describe('guest input behavior contract', () => {
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'cycleTab', data: { reverse: true } }))
   })
 
-  it('opens shortcuts for the physical backquote key outside browser windows', () => {
+  it('hold backquote opens shortcuts in every window (keydown)', () => {
     fixture.browser = false
     const event = press(String.fromCharCode(96), 'Backquote')
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'openShortcuts' }))
   })
 
-  it('passes the page question mark through in browser windows', () => {
-    const event = press('?', 'Slash', ['shift'])
-    expect(event.preventDefault).not.toHaveBeenCalled()
-    expect(parent.send).not.toHaveBeenCalled()
-  })
-
-  it('passes the backquote through in browser windows', () => {
+  it('hold backquote opens shortcuts in browser windows too', () => {
+    fixture.browser = true
     const event = press(String.fromCharCode(96), 'Backquote')
-    expect(event.preventDefault).not.toHaveBeenCalled()
-    expect(parent.send).not.toHaveBeenCalled()
-  })
-
-  it('opens shortcuts for the question mark outside browser windows while not typing', () => {
-    fixture.browser = false
-    const event = press('?', 'Slash', ['shift'])
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'openShortcuts' }))
   })
 
-  it('passes the question mark through to page input while typing', () => {
+  it('question mark is no longer a shortcuts trigger', () => {
     fixture.browser = false
-    fixture.editable = true
     const event = press('?', 'Slash', ['shift'])
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(parent.send).not.toHaveBeenCalled()
@@ -132,6 +119,13 @@ describe('guest input behavior contract', () => {
     const event = press(String.fromCharCode(96), 'Backquote')
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(parent.send).not.toHaveBeenCalled()
+  })
+
+  it('releasing backquote closes shortcuts (keyup)', () => {
+    fixture.browser = false
+    const event = press(String.fromCharCode(96), 'Backquote', [], { type: 'keyUp' })
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'closeShortcuts' }))
   })
 
   it('consumes a browser fullscreen duplicate without invoking maximize', () => {
