@@ -1,25 +1,32 @@
 // electron/utils/focus-manager.test.ts — 焦点服务回归测试
 //
-// 覆盖 2026-09 game-hotkey audit 指出的窗口路径缺口：
-//   1. 唤出后核验焦点是否真正取得，未取得时一次有界 moveTop+focus 重试；
-//   2. 快速 hide→show 后，旧隐藏的外部焦点恢复被代际取消（迟到的
-//      SetForegroundWindow 不得把焦点抢回外部窗口）；
-//   3. 恢复进程已派生后才唤出：PowerShell 无法中断，show 在其估计完成后
-//      安排晚期重申守卫，夺回被抢走的前台焦点（"收起后再打开不在前台"修复）。
+// 覆盖 2026-10 焦点跳错窗口修复的核心语义：
+//   1. 恢复目标只来自 show() 抢焦点前的本轮采集，绝不复用上一轮句柄；
+//   2. 收起后验证-纠正：自然落点已正确则零干预，不正确才交还一次；
+//   3. 采集失败/目标是自己 → 本轮降级为纯自然激活；
+//   4. 代际取消迟到交还；close 销毁后仍完成交还；
+//   5. 唤出后焦点核验与一次有界重试保留。
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 
 const fixture = vi.hoisted(() => ({
-  exec: vi.fn(),
+  getForegroundHandle: vi.fn(),
+  setForegroundHandle: vi.fn(),
   findWindowIdByWin: vi.fn(() => null),
 }))
-vi.mock('child_process', () => ({ exec: fixture.exec }))
-vi.mock('./window-factory/window-utils.js', () => ({ findWindowIdByWin: fixture.findWindowIdByWin }))
+vi.mock('./win32-foreground.js', () => ({
+  getForegroundHandle: fixture.getForegroundHandle,
+  setForegroundHandle: fixture.setForegroundHandle,
+}))
+vi.mock('../window-factory/window-utils.js', () => ({ findWindowIdByWin: fixture.findWindowIdByWin }))
+vi.mock('./fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 
-import { track, show, hide } from './focus-manager'
+import { track, show, hide, close } from './focus-manager'
 
 function makeWindow(overrides: Partial<Record<string, unknown>> = {}): BrowserWindow {
+  const selfHandle = Buffer.alloc(8)
+  selfHandle.writeBigUInt64LE(9999n)
   const win = {
     isDestroyed: vi.fn(() => false),
     isVisible: vi.fn(() => false),
@@ -30,10 +37,12 @@ function makeWindow(overrides: Partial<Record<string, unknown>> = {}): BrowserWi
     isAlwaysOnTop: vi.fn(() => false),
     setSkipTaskbar: vi.fn(),
     setAlwaysOnTop: vi.fn(),
+    getNativeWindowHandle: vi.fn(() => selfHandle),
     restore: vi.fn(),
     show: vi.fn(),
     hide: vi.fn(),
     minimize: vi.fn(),
+    close: vi.fn(),
     focus: vi.fn(),
     moveTop: vi.fn(),
     maximize: vi.fn(),
@@ -46,31 +55,111 @@ function makeWindow(overrides: Partial<Record<string, unknown>> = {}): BrowserWi
   return win as unknown as BrowserWindow
 }
 
-/** exec 命令分类：GetForegroundWindow = 焦点捕获；SetForegroundWindow = 外部焦点恢复 */
-function execCalls(kind: 'capture' | 'restore'): string[] {
-  return fixture.exec.mock.calls
-    .map(([cmd]) => cmd as string)
-    .filter((cmd) => (kind === 'capture' ? cmd.includes('GetForegroundWindow') : cmd.includes('SetForegroundWindow')))
+/** 触发 track() 注册的 closed 处理器（模拟窗口销毁清理） */
+function fireClosed(win: BrowserWindow): void {
+  const closedHandler = (win.on as ReturnType<typeof vi.fn>).mock.calls
+    .find(([event]) => event === 'closed')?.[1] as (() => void) | undefined
+  closedHandler?.()
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
-  fixture.exec.mockReset()
-  fixture.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (err: unknown, stdout: string) => void) => {
-    cb(null, '4242')
-  })
+  fixture.getForegroundHandle.mockReset()
+  fixture.setForegroundHandle.mockReset()
+  fixture.getForegroundHandle.mockResolvedValue(4242)
+  fixture.setForegroundHandle.mockResolvedValue(true)
   fixture.findWindowIdByWin.mockClear()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+describe('归还目标只来自本轮采集', () => {
+  it('唤出前采集前台窗口；收起后自然落点已正确则零干预', async () => {
+    const win = makeWindow()
+    track(win)
+    await show(win)
+    expect(fixture.getForegroundHandle).toHaveBeenCalledWith(120)
+    expect(win.show).toHaveBeenCalledTimes(1)
+
+    // 收起后自然落点 = 唤出前采集的 4242 → 不做强制恢复
+    fixture.getForegroundHandle.mockResolvedValue(4242)
+    hide(win)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fixture.setForegroundHandle).not.toHaveBeenCalled()
+  })
+
+  it('收起后自然落点不是唤出前窗口 → 交还一次并复核', async () => {
+    const win = makeWindow()
+    track(win)
+    await show(win)
+
+    fixture.getForegroundHandle.mockResolvedValue(7777)
+    hide(win)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fixture.setForegroundHandle).toHaveBeenCalledTimes(1)
+    expect(fixture.setForegroundHandle).toHaveBeenCalledWith(4242)
+  })
+
+  it('采集到的是本窗口自己 → 本轮不强制恢复', async () => {
+    const win = makeWindow()
+    track(win)
+    // 与 getNativeWindowHandle 的 9999 相同
+    fixture.getForegroundHandle.mockResolvedValue(9999)
+    await show(win)
+
+    fixture.getForegroundHandle.mockResolvedValue(7777)
+    hide(win)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fixture.setForegroundHandle).not.toHaveBeenCalled()
+  })
+
+  it('采集失败/超时 → 降级为纯自然激活', async () => {
+    const win = makeWindow()
+    track(win)
+    fixture.getForegroundHandle.mockResolvedValue(null)
+    await show(win)
+
+    fixture.getForegroundHandle.mockResolvedValue(7777)
+    hide(win)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fixture.setForegroundHandle).not.toHaveBeenCalled()
+  })
+})
+
+describe('代际取消与 close 交还', () => {
+  it('快速 hide→show 取消旧的交还', async () => {
+    const win = makeWindow()
+    track(win)
+    await show(win)
+    hide(win)              // 安排 60ms 后交还
+    await show(win)        // 新唤出 → 代际递增，旧交还作废
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fixture.setForegroundHandle).not.toHaveBeenCalled()
+  })
+
+  it('close 销毁窗口后仍把前台交还给唤出前窗口', async () => {
+    const win = makeWindow()
+    track(win)
+    await show(win)
+
+    fixture.getForegroundHandle.mockResolvedValue(7777)
+    close(win)
+    fireClosed(win)        // 状态清理不得取消交还
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fixture.setForegroundHandle).toHaveBeenCalledWith(4242)
+  })
 })
 
 describe('唤出焦点核验', () => {
-  it('show 后未取得焦点 → 一次有界 moveTop+focus 重试', () => {
+  it('show 后未取得焦点 → 一次有界 moveTop+focus 重试', async () => {
     const win = makeWindow()
     track(win)
-    show(win)
+    await show(win)
 
     vi.advanceTimersByTime(150)
     expect(win.moveTop).toHaveBeenCalledTimes(1)
@@ -81,20 +170,20 @@ describe('唤出焦点核验', () => {
     expect(win.moveTop).toHaveBeenCalledTimes(1)
   })
 
-  it('show 后已取得焦点 → 不做多余重试', () => {
+  it('show 后已取得焦点 → 不做多余重试', async () => {
     const win = makeWindow({ isFocused: vi.fn(() => true) })
     track(win)
-    show(win)
+    await show(win)
 
     vi.advanceTimersByTime(600)
     expect(win.moveTop).not.toHaveBeenCalled()
     expect(win.focus).toHaveBeenCalledTimes(1)
   })
 
-  it('可见未聚焦的窗口：只补焦点，不回弹隐藏前 bounds', () => {
+  it('可见未聚焦的窗口：只补焦点，不回弹隐藏前 bounds', async () => {
     const win = makeWindow({ isVisible: vi.fn(() => true) })
     track(win)
-    show(win)
+    await show(win)
     vi.advanceTimersByTime(600)
 
     // bounds 是上次 hide 的快照，可见状态唤出不得用它回弹用户调整
@@ -102,103 +191,15 @@ describe('唤出焦点核验', () => {
     expect(win.focus).toHaveBeenCalled()
   })
 
-  it('旧激活核验被新显隐操作取消（代际失效）', () => {
+  it('旧激活核验被新显隐操作取消（代际失效）', async () => {
     const win = makeWindow()
     track(win)
-    show(win)
+    await show(win)
     hide(win) // 代际递增，show 的激活核验作废
 
     vi.advanceTimersByTime(600)
     // show 自身的 focus 已调用一次；hide 后核验取消，不得再有 moveTop/重试 focus
     expect(win.focus).toHaveBeenCalledTimes(1)
     expect(win.moveTop).not.toHaveBeenCalled()
-  })
-})
-
-describe('外部焦点恢复代际取消', () => {
-  it('快速 hide→show：旧隐藏的恢复被取消，不执行 SetForegroundWindow', async () => {
-    const win = makeWindow()
-    track(win)
-    hide(win)
-    await Promise.resolve() // 等待焦点捕获完成（prevHandle=4242）
-    hide(win) // 此时有 prevHandle，恢复延迟 120ms
-    show(win) // 新唤出 → 旧恢复必须取消
-    vi.advanceTimersByTime(5000)
-
-    expect(execCalls('restore')).toHaveLength(0)
-  })
-
-  it('无新唤出时，旧隐藏的恢复正常执行', async () => {
-    const win = makeWindow()
-    track(win)
-    hide(win)
-    await Promise.resolve()
-    hide(win) // prevHandle=4242 → 安排恢复
-    vi.advanceTimersByTime(5000)
-
-    expect(execCalls('restore')).toHaveLength(1)
-  })
-
-  it('恢复执行前窗口销毁 → 放弃恢复', async () => {
-    const win = makeWindow()
-    track(win)
-    hide(win)
-    await Promise.resolve()
-    hide(win)
-    // 模拟窗口关闭：触发 closed 处理器 → 追踪状态清理 → 代际取消
-    const closedHandler = (win.on as ReturnType<typeof vi.fn>).mock.calls
-      .find(([event]) => event === 'closed')?.[1] as (() => void) | undefined
-    closedHandler?.()
-    vi.advanceTimersByTime(5000)
-
-    expect(execCalls('restore')).toHaveLength(0)
-  })
-})
-
-describe('在途恢复的晚期重申守卫', () => {
-  it('恢复进程已派生后才唤出 → 恢复估计完成后重申前台焦点', async () => {
-    const win = makeWindow()
-    track(win)
-    hide(win)
-    await Promise.resolve() // 焦点捕获完成 → prevHandle=4242
-    hide(win) // 安排恢复（120ms 后派生）
-    vi.advanceTimersByTime(120) // 恢复进程派生，无法取消
-    expect(execCalls('restore')).toHaveLength(1)
-
-    show(win) // 此刻唤出：PowerShell 迟到的 SetForegroundWindow 会抢走焦点
-    vi.advanceTimersByTime(150) // 常规激活核验重试
-    expect(win.moveTop).toHaveBeenCalledTimes(1)
-
-    // 晚期守卫：恢复估计完成（120ms + 3000ms 余量）+ 150ms margin 后重申
-    vi.advanceTimersByTime(3000)
-    expect(win.moveTop).toHaveBeenCalledTimes(2)
-    // 重申走"短暂 topmost"路径，且还原置顶偏好（false）
-    expect(win.setAlwaysOnTop).toHaveBeenCalledWith(true)
-    expect(win.setAlwaysOnTop).toHaveBeenLastCalledWith(false)
-  })
-
-  it('唤出时无在途恢复 → 不安排晚期重申（无多余抢焦点）', () => {
-    const win = makeWindow()
-    track(win)
-    show(win)
-    vi.advanceTimersByTime(6000)
-
-    // 仅常规激活核验的一次重试，没有额外的重申
-    expect(win.moveTop).toHaveBeenCalledTimes(1)
-    expect(win.focus).toHaveBeenCalledTimes(2)
-  })
-
-  it('恢复派生前已唤出（快速 hide→show）→ 恢复被取消且无守卫干扰', async () => {
-    const win = makeWindow()
-    track(win)
-    hide(win)
-    await Promise.resolve()
-    hide(win)
-    show(win) // 派生前唤出 → 代际取消恢复
-    vi.advanceTimersByTime(6000)
-
-    expect(execCalls('restore')).toHaveLength(0)
-    // 仅常规激活核验重试
-    expect(win.moveTop).toHaveBeenCalledTimes(1)
   })
 })

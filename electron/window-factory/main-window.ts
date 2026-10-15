@@ -221,10 +221,8 @@ export function createMainWindow(): void {
         console.warn('[main] 托盘不可用，closeBehavior=minimize 降级为直接关闭')
       } else {
         e.preventDefault()
-        // minimize + skipTaskbar 彻底隐藏：屏幕、Alt+Tab、任务栏均不可见
-        win.minimize()
-        win.setSkipTaskbar(true)
-        win.hide()
+        // minimize + skipTaskbar 彻底隐藏（含把前台交还给唤出前的窗口）
+        focusManager.hide(win)
         console.log('[main] 主窗口隐藏到托盘（closeBehavior=minimize）')
         return
       }
@@ -271,9 +269,14 @@ export function createMainWindow(): void {
  * - 恢复默认尺寸 420×820，居中显示在主屏幕工作区
  * - 保留置顶状态（用户设置）
  */
-export function resetMainWindowToDefault(): void {
+export async function resetMainWindowToDefault(): Promise<void> {
   const win = windowState.mainWindow
   if (!win || win.isDestroyed()) return
+
+  // 先经焦点服务唤出（含本轮归还目标采集）；show 的形态恢复可能重放
+  // 最大化/旧 bounds，因此默认形态在 show 之后显式覆盖
+  await Promise.resolve(focusManager.show(win))
+  if (win.isDestroyed()) return
 
   // 取消全屏和最大化
   if (win.isFullScreen()) win.setFullScreen(false)
@@ -291,11 +294,6 @@ export function resetMainWindowToDefault(): void {
   } catch {
     // 忽略：窗口可能正在切换中
   }
-
-  // 显示并聚焦
-  win.setSkipTaskbar(false)
-  if (!win.isVisible()) win.show()
-  win.focus()
 
   // 持久化新的 bounds
   const state = windowStore.getOrDefault(MAIN_WINDOW_ID)

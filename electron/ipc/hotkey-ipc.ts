@@ -105,7 +105,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       // 连续达到阈值次 Alt+Space：恢复默认窗口位置和大小（防误触）
       if (altSpaceTriggerTimes.length >= altSpaceResetThreshold) {
         altSpaceTriggerTimes = []
-        resetMainWindowToDefault()
+        void resetMainWindowToDefault()
         return
       }
 
@@ -113,20 +113,22 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       const mainWindow = getMainWindow()
       if (!mainWindow) return
       if (!mainWindow.isVisible() || mainWindow.isMinimized()) {
-        // 显示：同步 show + focus（立即生效），唤出后异步核验前台焦点
-        focusManager.show(mainWindow)
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
-        }
+        // 显示：采集唤出前前台窗口 → show + focus，随后通知渲染层
+        void Promise.resolve(focusManager.show(mainWindow)).then(() => {
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+          }
+        })
       } else if (!mainWindow.isFocused()) {
         // 可见但未聚焦：统一经焦点服务补焦点（含前台核验与一次有界重试），
         // 与隐藏/最小化唤出保持同一激活语义
-        focusManager.show(mainWindow)
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
-        }
+        void Promise.resolve(focusManager.show(mainWindow)).then(() => {
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+          }
+        })
       } else {
-        // 隐藏：hide + 异步恢复外部窗口（不阻塞主进程）
+        // 隐藏：hide + 异步把前台交还给唤出前的窗口（不阻塞主进程）
         focusManager.hide(mainWindow)
       }
     },
