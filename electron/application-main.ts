@@ -32,6 +32,9 @@ import { SttEngine } from './stt/engine.js';
 import { IPC_CHANNELS } from './shared/types.js';
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js';
 import { installWebviewFocusTracking } from './window-factory/webview-focus.js';
+// 必须在任何 webview 加载前注册：guest preload 会 sendSync 上报焦点，
+// 主进程若尚未监听会永久阻塞渲染进程（页面白屏）。
+installWebviewFocusTracking();
 import { registerTabIpc } from './ipc/tab-ipc.js';
 import { registerAccumulatedLinksIpc } from './ipc/accumulated-links-ipc.js';
 import { registerHotkeyIpc } from './ipc/hotkey-ipc.js';
@@ -379,7 +382,6 @@ app.whenReady().then(async () => {
         toggleVoiceRecording: toggleVoiceRecordingGated,
     });
     runUiohookHealthCheck(hotkeyManager);
-    installWebviewFocusTracking();
     bindEditionActivation(() => activateApplicationWindow({ current: () => windowState.mainWindow, create: createMainWindow, show: applicationFocus.show }), () => isApplicationWindowLoading(windowState.mainWindow));
     markEditionReady();
     void import('./store/backup-recovery.js').then(({ resumeBackupRecovery }) => resumeBackupRecovery()).catch(error => console.error('[backup] Recovery status failed', error));
