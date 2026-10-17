@@ -7,9 +7,14 @@ import { backupGuardianRequest, initializeBackupGuardian, runBackupGuardian } fr
 import { backupWorkerRequest, initializeBackupWorker, runBackupWorker } from '../packages/backup-core/recovery.js'
 
 app.setName(product.name)
-if (process.platform === 'win32') app.setAppUserModelId(edition.appId)
+if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId(edition.appId)
 app.commandLine.appendSwitch('disable-crashpad')
 app.commandLine.appendSwitch('disable-gpu-sandbox')
+// GPU 显存上限作为保护性天花板（非后台目标）：前台可到数百 MB；
+// 后台靠销毁窗口/guest 释放纹理，不靠把该值压到极低。
+app.commandLine.appendSwitch('force-gpu-mem-available-mb', '256')
+// 允许渲染层在纯后台卸载组件后触发 GC，真正归还 JS 堆
+app.commandLine.appendSwitch('js-flags', '--expose-gc')
 app.commandLine.appendSwitch('disable-features', 'RestrictGamepadAccess')
 if (process.platform === 'linux') app.commandLine.appendSwitch('force-device-scale-factor', '1')
 protocol.registerSchemesAsPrivileged([

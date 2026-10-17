@@ -11,13 +11,14 @@
 //
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { windowState } from '../window-state.js'
 import { detachProfileToBrowserWindow } from '../window-factory/detach-profile.js'
 import { isModuleEnabled } from '../modules/registry.js'
+import { isBackgroundClose } from '../window/window-retirement.js'
 import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import type { WindowManager } from '../window/manager.js'
@@ -78,7 +79,7 @@ export function registerTabIpc(deps: TabIpcDeps, scope?: EffectScope): void {
 
   // 浏览器窗口关闭时，恢复主窗口中该 Profile 的标签
   // v0.0.9：按 parentTabId 精确恢复多标签 URL（不再丢失），清除 detachedWindowId
-  ipcMain.on(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, (_e, payload: {
+  ipcMain.on(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, (e, payload: {
     profileId: string
     url: string
     title: string
@@ -109,9 +110,16 @@ export function registerTabIpc(deps: TabIpcDeps, scope?: EffectScope): void {
     // 通知主窗口渲染层恢复该 Profile 的标签
     mainWindow.webContents.send(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, payload)
 
-    // 将主窗口带到前台并聚焦
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    if (!mainWindow.isVisible()) mainWindow.show()
-    mainWindow.focus()
+    // 将主窗口带到前台并聚焦。
+    // 后台退役/释放关闭时用户不在本应用，只做状态迁移不抢前台。
+    // sender 是浏览器窗口的 webContents；若窗口已销毁（IPC 处理晚于 closed），
+    // 由 browser-window 的 closed 回调兜底 show/focus（其内部同样有 isBackgroundClose 守卫）。
+    const senderWin = BrowserWindow.fromWebContents(e.sender)
+    const backgroundClose = senderWin == null || isBackgroundClose(senderWin)
+    if (!backgroundClose) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (!mainWindow.isVisible()) mainWindow.show()
+      mainWindow.focus()
+    }
   })
 }

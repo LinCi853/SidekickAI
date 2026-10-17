@@ -11,7 +11,6 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 // 首屏关键组件：同步导入，避免 CSS 异步加载导致布局紊乱
 import MainView from './pages/MainView';
-import StandaloneView from './pages/StandaloneView';
 import Button from './components/ui/Button';
 import { useProfileStore } from './store/useProfileStore';
 import { useTabStore } from './store/useTabStore';
@@ -42,8 +41,9 @@ const applicationIconUrl = new URL('./assets/app-icon-64.png', import.meta.url).
 
 /* =====================================================================
    React.lazy 页面组件 —— 辅助窗口按需加载（非首屏，可 lazy）
-   首屏关键路径（MainView / StandaloneView）保持同步导入
+   首屏关键路径 MainView 保持同步导入，其他窗口按路由加载
    ===================================================================== */
+const StandaloneView = lazy(() => import('./pages/StandaloneView'));
 const ChatView = lazy(() => import('./pages/ChatView'));
 const RecordIndicator = lazy(() => import('./pages/RecordIndicator'));
 const AiAssetsView = lazy(() => import('./pages/AiAssetsView'));
@@ -479,5 +479,5 @@ export default function App() {
   if (isChat) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><ChatView windowId={mode === 'chat' ? windowId : undefined} /></Suspense></AppErrorBoundary>;
   if (isBrowser) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><BrowserView /></Suspense></AppErrorBoundary>;
   if (isHistoryDownload) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><HistoryDownloadView /></Suspense></AppErrorBoundary>;
-  return <AppErrorBoundary>{isMain ? <MainView /> : <StandaloneView />}</AppErrorBoundary>;
+  return <AppErrorBoundary>{isMain ? <MainView /> : <Suspense fallback={<LoadingScreen />}><StandaloneView /></Suspense>}</AppErrorBoundary>;
 }

@@ -13,6 +13,9 @@ import {
 } from '../ipc/window-control-ipc.js'
 import { safeLogWindowTrace, findWindowIdByWin } from './window-utils.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { forgetWindow as forgetWindowPriorityState } from '../diagnostics/tab-process-priority.js'
+import { scheduleBackgroundRelease, cancelBackgroundRelease } from '../diagnostics/background-release.js'
+import { reapplyWindowIcon } from './app-icon.js'
 
 /** 获取调用方所在的 BrowserWindow */
 export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow | null {
@@ -25,6 +28,8 @@ export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow |
  * 的 centered70 等策略还原，不需要记忆 bounds。
  */
 export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
+  win.once('ready-to-show', () => reapplyWindowIcon(win))
+  reapplyWindowIcon(win)
   // 重新应用置顶（Windows 上被全屏窗口/任务栏覆盖后常见失效原因）
   // 保护：记录最近一次用户主动设置置顶的时间戳，短时间内不覆盖（避免 focus 事件竞态）
   let lastPinActionAt = 0
@@ -39,10 +44,9 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
     // 用户主动操作后 2 秒内不自动覆盖，防止窗口 focus/restore 竞态
     if (Date.now() - lastPinActionAt < 2000) return
     const state = windowStore.getOrDefault(windowId)
+    // 只补置顶，不在 focus 时强制取消：store 与系统状态短暂不一致时不能抹掉用户偏好
     if (state.alwaysOnTop && !win.isAlwaysOnTop()) {
       win.setAlwaysOnTop(true, 'screen-saver')
-    } else if (!state.alwaysOnTop && win.isAlwaysOnTop()) {
-      win.setAlwaysOnTop(false)
     }
   }
   win.on('show', reapplyAlwaysOnTop)
@@ -88,13 +92,36 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
       win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
     }
   })
-  win.on('minimize', () => safeLogWindowTrace(windowId, 'minimize'))
-  win.on('restore', () => safeLogWindowTrace(windowId, 'restore'))
-  win.on('show', () => safeLogWindowTrace(windowId, 'show'))
+  win.on('minimize', () => {
+    safeLogWindowTrace(windowId, 'minimize')
+    reapplyWindowIcon(win)
+    // 最小化不会触发 hide：必须在此通知渲染层，否则挂后台永不释放
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
+      scheduleBackgroundRelease()
+    }
+  })
+  win.on('restore', () => {
+    safeLogWindowTrace(windowId, 'restore')
+    reapplyWindowIcon(win)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+      cancelBackgroundRelease()
+    }
+  })
+  win.on('show', () => {
+    safeLogWindowTrace(windowId, 'show')
+    reapplyWindowIcon(win)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+      cancelBackgroundRelease()
+    }
+  })
   win.on('hide', () => {
     safeLogWindowTrace(windowId, 'hide')
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
+      scheduleBackgroundRelease()
     }
   })
 }
@@ -106,6 +133,8 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
  * 避免被 Windows 全屏窗口覆盖后失效。
  */
 export function setupBoundsTracking(win: BrowserWindow, windowId: string): void {
+  win.once('ready-to-show', () => reapplyWindowIcon(win))
+  reapplyWindowIcon(win)
   let pendingTimer: NodeJS.Timeout | undefined
   // 与 setupMaximizeSync 一致：用户置顶操作后 2s 内不自动覆盖，
   // 否则 focus-manager 的短暂置顶抢焦点会被 show/focus 上的 reapply 立刻取消。
@@ -148,10 +177,9 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
     // 用户主动操作后 2s 内不自动覆盖，避免 focus-manager 抢焦点被 show/focus 立刻撤销
     if (Date.now() - lastPinActionAt < 2000) return
     const state = windowStore.getOrDefault(windowId)
+    // 只补置顶，不在 focus 时强制取消
     if (state.alwaysOnTop && !win.isAlwaysOnTop()) {
       win.setAlwaysOnTop(true, 'screen-saver')
-    } else if (!state.alwaysOnTop && win.isAlwaysOnTop()) {
-      win.setAlwaysOnTop(false)
     }
   }
   win.on('show', reapplyAlwaysOnTop)
@@ -203,14 +231,36 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
       win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, false)
     }
   })
-  win.on('minimize', () => safeLogWindowTrace(windowId, 'minimize'))
-  win.on('restore', () => safeLogWindowTrace(windowId, 'restore'))
-  win.on('show', () => safeLogWindowTrace(windowId, 'show'))
+  win.on('minimize', () => {
+    safeLogWindowTrace(windowId, 'minimize')
+    reapplyWindowIcon(win)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
+      scheduleBackgroundRelease()
+    }
+  })
+  win.on('restore', () => {
+    safeLogWindowTrace(windowId, 'restore')
+    reapplyWindowIcon(win)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+      cancelBackgroundRelease()
+    }
+  })
+  win.on('show', () => {
+    safeLogWindowTrace(windowId, 'show')
+    reapplyWindowIcon(win)
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
+      cancelBackgroundRelease()
+    }
+  })
   win.on('hide', () => {
     safeLogWindowTrace(windowId, 'hide')
     // 通知渲染层窗口已隐藏，用于自动收起展开的面板（底栏等）
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
+      scheduleBackgroundRelease()
     }
   })
 }
@@ -245,6 +295,12 @@ export function attachDetachedWindowLifecycle(
 
   win.on('focus', () => {
     windowState.lastFocusedWin = win
+    cancelBackgroundRelease()
+  })
+
+  // 失焦即可能已进后台（窗口未 hide 也会），动态调控从这里起算
+  win.on('blur', () => {
+    scheduleBackgroundRelease()
   })
 
   win.on('close', () => {
@@ -262,6 +318,8 @@ export function attachDetachedWindowLifecycle(
 
   win.on('closed', () => {
     windowState.detachedWindows.delete(windowId)
+    // 清理该窗口上报的激活标签，避免残留记录影响 guest 进程优先级判定
+    forgetWindowPriorityState(windowId)
     onClosed?.()
   })
 }

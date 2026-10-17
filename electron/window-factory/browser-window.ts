@@ -14,6 +14,8 @@ import { windowState } from '../window-state.js'
 import { isModuleEnabled } from '../modules/registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { app } from 'electron'
+import { isBackgroundClose, registerWindowRetirement } from '../window/window-retirement.js'
+import { BROWSER_WINDOW_RETIREMENT_SECONDS } from '../shared/background-policy.js'
 import {
   WINDOW_BACKGROUND_COLOR,
   getPreloadPath,
@@ -93,7 +95,7 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     alwaysOnTop: saved?.alwaysOnTop ?? false,
     backgroundColor: WINDOW_BACKGROUND_COLOR,
     title: `工百窗 - ${profile?.name || '浏览器'}`,
-    icon: profileIcon || undefined,
+    icon: profileIcon && !profileIcon.isEmpty() ? profileIcon : undefined,
     webPreferences: createDefaultWebPreferences({
       preload: getPreloadPath(),
       webviewTag: true,
@@ -247,10 +249,12 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
       })
     }
 
-    // 将主窗口带到前台
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    if (!mainWindow.isVisible()) mainWindow.show()
-    mainWindow.focus()
+    // 将主窗口带到前台；后台退役/释放关闭时用户不在本应用，不抢前台
+    if (!isBackgroundClose(win)) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (!mainWindow.isVisible()) mainWindow.show()
+      mainWindow.focus()
+    }
 
     // v0.0.9: 清理主窗口持久化状态（detachedProfiles + detachedWindowId）
     const mainState = windowStore.get(MAIN_WINDOW_ID)
@@ -268,6 +272,8 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     browserWindowStore.delete(windowId)
   })
 
+  // 后台隐藏过久自动关闭，释放该窗口全部 guest（标签状态已持久化）
+  registerWindowRetirement(win, { seconds: BROWSER_WINDOW_RETIREMENT_SECONDS })
   return win
 }
 

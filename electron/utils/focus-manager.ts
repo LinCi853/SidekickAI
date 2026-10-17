@@ -9,7 +9,8 @@
 //   完全交给系统自然激活。旧实现把「上次收起之后」的落点缓存到下次收起时
 //   使用——永远慢一拍，两次收起之间切换过窗口就会把焦点抢回上上个窗口。
 //
-// 隐藏策略：minimize + skipTaskbar + hide，彻底从屏幕/Alt+Tab/任务栏消失。
+// 隐藏策略：skipTaskbar + hide，从屏幕/Alt+Tab/任务栏消失。
+// 不先 minimize：Windows 上 minimize+hide 会使 Chromium 恢复后仍停在隐藏绘制状态。
 //
 // 性能设计：
 //   - 前台窗口读写经 win32-foreground 常驻 PowerShell 桥（毫秒级往返），
@@ -25,6 +26,7 @@
 
 import type { BrowserWindow } from 'electron'
 import { findWindowIdByWin } from '../window-factory/window-utils.js'
+import { windowStore } from '../store/window-store.js'
 import { isTrackedFullscreen } from './fullscreen-tracker.js'
 import { getForegroundHandle, setForegroundHandle } from './win32-foreground.js'
 
@@ -37,7 +39,7 @@ interface TrackedState {
   returnHandle: number | null
   /** 本轮采集是否有效（false = hide/close 不强制恢复，只走自然激活） */
   returnHandleValid: boolean
-  /** 隐藏前是否最大化（frameless 窗口 minimize+hide 往返后 Windows 可能丢失最大化状态） */
+  /** 隐藏前是否最大化 */
   wasMaximized: boolean
   /** 隐藏前是否全屏 */
   wasFullScreen: boolean
@@ -140,6 +142,7 @@ export async function show(win: BrowserWindow): Promise<void> {
   // 可见未聚焦时只补焦点，不做形态恢复（bounds 是上次 hide 时的快照，回弹会撤销用户的调整）
   const wasHidden = !win.isVisible() || win.isMinimized()
   win.setSkipTaskbar(false)
+  // 用户通过系统最小化的窗口仍需 restore；日常收起只 hide，无需还原。
   if (win.isMinimized()) win.restore()
   win.show()
   if (wasHidden) {
@@ -149,7 +152,7 @@ export async function show(win: BrowserWindow): Promise<void> {
       const isFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
       if (!isFs) win.setFullScreen(true)
     } else if (st.wasMaximized) {
-      // 最大化窗口：minimize + hide 往返后，frameless 窗口的原生最大化标记可能丢失，
+      // 最大化窗口：显隐往返后，frameless 窗口的原生最大化标记可能丢失，
       // 表现为恢复后变成普通尺寸（宽度莫名其妙变化）。此处重新最大化。
       if (!win.isMaximized()) win.maximize()
     } else if (st.bounds) {
@@ -206,7 +209,9 @@ function activateWithSteal(win: BrowserWindow): void {
   if (win.isMinimized()) win.restore()
   // 标记为用户置顶动作：阻止 window-events.reapplyAlwaysOnTop 在 show/focus 上立刻把 topmost 撤掉
   markPinHold(win)
-  const wasTopmost = win.isAlwaysOnTop()
+  // 以用户偏好为准：激活瞬间系统 topmost 可能短暂为 false，不能据此取消置顶
+  const wid = findWindowIdByWin(win)
+  const desiredTopmost = (wid ? windowStore.getOrDefault(wid).alwaysOnTop : false) || win.isAlwaysOnTop()
   try { win.setAlwaysOnTop(true) } catch { /* ignore */ }
   win.show()
   win.moveTop()
@@ -221,7 +226,7 @@ function activateWithSteal(win: BrowserWindow): void {
   // topmost 保持到系统完成 z-order/激活后再还原，立刻还原会前功尽弃
   setTimeout(() => {
     if (win.isDestroyed()) return
-    try { win.setAlwaysOnTop(wasTopmost) } catch { /* ignore */ }
+    try { win.setAlwaysOnTop(desiredTopmost) } catch { /* ignore */ }
   }, ACTIVATION_RETRY_DELAY_MS)
 }
 
@@ -255,7 +260,8 @@ async function restoreReturnAsync(handle: number, isCancelled: () => boolean): P
 /**
  * 隐藏窗口并把前台交还给唤出前的外部窗口。
  *
- * 隐藏策略：minimize + skipTaskbar + hide，比 win.hide()（SW_HIDE）更彻底。
+ * 隐藏策略：skipTaskbar + hide；SW_HIDE 同时移除屏幕与 Alt+Tab 中的窗口。
+ * 不先 minimize，避免 Chromium 在还原后保持 hidden、停止产帧。
  * 窗口操作同步执行；交还前台异步执行（fire-and-forget，代际取消）。
  * 本轮没有有效归还目标（唤出采集失败/目标是自己）时不做强制恢复，
  * 交给系统自然激活——自然落点通常就是唤出前的窗口。
@@ -263,7 +269,7 @@ async function restoreReturnAsync(handle: number, isCancelled: () => boolean): P
 export function hide(win: BrowserWindow): void {
   if (win.isDestroyed()) return
   const st = states.get(win) ?? newState()
-  // 记住隐藏前的窗口形态（minimize 之前读取，避免动画中间态）
+  // 记住隐藏前的窗口形态
   st.wasMaximized = win.isMaximized()
   const wid = findWindowIdByWin(win)
   st.wasFullScreen = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
@@ -277,8 +283,7 @@ export function hide(win: BrowserWindow): void {
   st.returnHandle = null
   st.returnHandleValid = false
   states.set(win, st)
-  // 同步隐藏：minimize + skipTaskbar + hide，窗口立即从所有界面消失
-  win.minimize()
+  // 同步隐藏，不产生最小化/还原动画与渲染可见性竞态。
   win.setSkipTaskbar(true)
   win.hide()
   if (shouldRestore && handle != null) {

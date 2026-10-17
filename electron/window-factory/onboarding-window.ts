@@ -5,6 +5,8 @@
 // 单例：windowState.onboardingWindow。已存在则聚焦。
 
 import { BrowserWindow, screen } from 'electron'
+import { registerWindowRetirement } from '../window/window-retirement.js'
+import { windowRetirementSeconds } from '../shared/background-policy.js'
 import { windowState } from '../window-state.js'
 import {
   WINDOW_BACKGROUND_COLOR,
@@ -75,4 +77,6 @@ export function showOnboardingWindow(): void {
     windowState.onboardingWindow = null
     lifecycleCb.onClose?.()
   })
+
+  registerWindowRetirement(win, { seconds: windowRetirementSeconds('onboarding') })
 }

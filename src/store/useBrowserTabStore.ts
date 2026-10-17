@@ -13,6 +13,7 @@ import {
   onMaximizeToggled,
   onPinToggled,
   onToggleFullscreen,
+  pinCurrentWindow,
   queryAllTabs,
   type AllTabsTree,
 } from '../lib/electron-api';
@@ -152,8 +153,7 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
     const internal = ['settings', 'bookmark-manager', 'history', 'downloads', 'view-source', 'print-preview'];
     const existing = get().tabs.find((t) => t.url === url && !internal.includes(t.source));
     if (existing) {
-      set({ activeTabId: existing.id });
-      get().persist();
+      get().switchTab(existing.id);
       return existing.id;
     }
     return get().newTab(url, opts);
@@ -175,6 +175,8 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
         const profile = useProfileStore.getState().profiles.find((p) => p.id === current.profileId);
         const blankTab: BrowserTabState = {
           ...target,
+          // 新页面使用新身份，避免沿用旧页面的运行状态。
+          id: crypto.randomUUID(),
           source: 'initial',
           url: profile?.browserHomePage || '',
           title: profile?.name || '新标签',
@@ -186,12 +188,16 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
           canGoForward: false,
           favicon: undefined,
         };
-        return { tabs: current.tabs.map((tab) => (tab.id === tabId ? blankTab : tab)), activeTabId: tabId };
+        return {
+          tabs: current.tabs.map((tab) => (tab.id === tabId ? blankTab : tab)),
+          activeTabId: blankTab.id,
+        };
       }
       const newTabs = current.tabs.filter((tab) => tab.id !== tabId);
+      const activeTabId = current.activeTabId === tabId ? newTabs[newTabs.length - 1]?.id ?? null : current.activeTabId;
       return {
         tabs: newTabs,
-        activeTabId: current.activeTabId === tabId ? newTabs[newTabs.length - 1]?.id ?? null : current.activeTabId,
+        activeTabId,
       };
     });
     if (!closedTab) return;
@@ -210,6 +216,9 @@ export const useBrowserTabStore = create<BrowserTabStoreState>((set, get) => ({
   switchTab: (tabId: string) => {
     set({ activeTabId: tabId });
     get().persist();
+    if (get().alwaysOnTop) {
+      pinCurrentWindow(true).catch(() => { /* 置顶补强失败不影响切标签 */ });
+    }
   },
 
   navigateTab: (tabId: string, url: string) => {

@@ -36,6 +36,85 @@ function privateDirectory(prefix) {
   return fs.mkdtempSync(path.join(root, 'build', prefix))
 }
 
+test('working-set bridge reclaims its own child and rejects forged process identities', { skip: !windows, timeout: 20000 }, async () => {
+  const { createInterface } = require('node:readline')
+  const child = spawn(process.execPath, ['-e', "global.keep=Buffer.alloc(96*1024*1024,7);process.stdout.write('ready');process.stdin.resume()"], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
+  let bridge
+  let lines
+  const waiting = new Map()
+  try {
+    await new Promise((resolve, reject) => { child.stdout.once('data', resolve); child.once('error', reject) })
+    const started = pid => Number(BigInt(invoke({ operation: 'inspect', pid }).value.started) / 10000n - 11644473600000n)
+    const rootStart = started(process.pid), childStart = started(child.pid)
+    bridge = spawn(executable, inputArguments({ operation: 'foreground-bridge' }), { windowsHide: true, detached: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    lines = createInterface({ input: bridge.stdout })
+    const ready = new Promise(resolve => lines.on('line', line => { if (line === 'READY') resolve(); else { const [,id,value] = line.split(':'); waiting.get(Number(id))?.(value) } }))
+    await ready
+    const consoleChildren = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command',
+      `@(Get-CimInstance Win32_Process -Filter "ParentProcessId=${bridge.pid} AND Name='conhost.exe'").Count`],
+      { encoding: 'utf8', windowsHide: true, timeout: 10000 })
+    assert.equal(consoleChildren.status, 0, consoleChildren.stderr)
+    assert.equal(Number(consoleChildren.stdout.trim()), 0, 'Detached native bridge must not allocate a console host')
+    let id = 0
+    const trim = (pid, creation, rootPid = process.pid, creationRoot = rootStart, backgroundWindow) => new Promise((resolve, reject) => {
+      const request = ++id
+      const timer = setTimeout(() => { waiting.delete(request); reject(new Error('Native trim timed out')) }, 3000)
+      waiting.set(request, value => { clearTimeout(timer); waiting.delete(request); resolve(value) })
+      bridge.stdin.write(`T:${request}:${pid}:${creation}:${48*1048576}:15000:${rootPid}:${creationRoot}${backgroundWindow === undefined ? '' : ':' + backgroundWindow}\n`)
+    })
+    assert.equal(await trim(child.pid, childStart + 10000), '0', 'reused or forged target must be rejected')
+    assert.equal(await trim(child.pid, childStart, child.pid, childStart), '0', 'root must be the bridge parent')
+    assert.equal(await trim(child.pid, childStart, process.pid, rootStart + 10000), '0', 'root creation time must match')
+    for (const handle of [0, -1, 1, 'not-a-window']) assert.equal(await trim(child.pid, childStart, process.pid, rootStart, handle), '0', 'invalid or unowned HWND cannot bypass global input idle')
+    const bridgeWorkingSet = () => {
+      const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${bridge.pid}).WorkingSet64`],
+        { encoding: 'utf8', windowsHide: true, timeout: 10000 })
+      assert.equal(result.status, 0, result.stderr)
+      const bytes = Number(result.stdout.trim())
+      assert(Number.isFinite(bytes) && bytes > 0)
+      return bytes
+    }
+    const bridgeBefore = bridgeWorkingSet()
+    const reclaimed = (await trim(child.pid, childStart)).split(',').map(Number)
+    assert.equal(reclaimed.length, 3, 'own idle child must be eligible while another application is foreground')
+    assert(reclaimed.every(value => Number.isFinite(value) && value >= 0))
+    assert(reclaimed[0] - reclaimed[1] > 8 * 1048576, 'native empty-working-set must release resident pages')
+    const bridgeAfter = bridgeWorkingSet()
+    assert(bridgeBefore - bridgeAfter > 4 * 1048576, 'globally idle bridge must reclaim its own resident runtime pages too')
+  } finally {
+    lines?.close()
+    for (const process of [bridge, child]) if (process && process.exitCode === null) {
+      const closed = new Promise(resolve => process.once('close', resolve))
+      process.kill()
+      await closed
+    }
+  }
+})
+
+test('detached bridge exits on parent pipe EOF instead of remaining orphaned', { skip: !windows, timeout: 10000 }, async () => {
+  const { createInterface } = require('node:readline')
+  const bridge = spawn(executable, inputArguments({ operation: 'foreground-bridge' }),
+    { windowsHide: true, detached: true, stdio: ['pipe', 'pipe', 'pipe'] })
+  const lines = createInterface({ input: bridge.stdout })
+  const closed = new Promise(resolve => bridge.once('close', (code, signal) => resolve({ code, signal })))
+  try {
+    await new Promise((resolve, reject) => {
+      bridge.once('error', reject)
+      lines.once('line', line => line === 'READY' ? resolve() : reject(new Error('Detached bridge failed: ' + line)))
+      bridge.once('exit', code => reject(new Error('Bridge exited before READY: ' + code)))
+    })
+    bridge.stdin.end()
+    const result = await Promise.race([closed, new Promise((_, reject) => {
+      const timer = setTimeout(() => reject(new Error('Detached bridge survived parent pipe closure')), 3000)
+      timer.unref()
+    })])
+    assert.deepEqual(result, { code: 0, signal: null })
+  } finally {
+    lines.close()
+    if (bridge.exitCode === null) { bridge.kill(); await closed }
+  }
+})
+
 test('compiled identity and session match standalone checks under the same process', { skip: !windows }, () => {
   const measurements = []
   for (let round = 0; round < 3; round++) {
@@ -190,7 +269,7 @@ test('cache miss reuses fully verified packaged helper bytes', { skip: !windows 
   try {
     for (const relative of ['resources/windows', 'tools/startup-helper', 'scripts']) fs.mkdirSync(path.join(fixtureRoot, relative), { recursive: true })
     for (const name of names) fs.copyFileSync(path.join(output.directory, name), path.join(fixtureRoot, 'resources/windows', name))
-    for (const relative of ['tools/startup-helper/StartupHelper.cs', 'tools/startup-helper/NativeInventory.cs', 'scripts/build-startup-helper.cjs']) {
+    for (const relative of ['tools/startup-helper/StartupHelper.cs', 'tools/startup-helper/NativeInventory.cs', 'tools/startup-helper/ForegroundBridge.cs', 'scripts/build-startup-helper.cjs']) {
       fs.copyFileSync(path.join(root, relative), path.join(fixtureRoot, relative))
     }
     const result = build({ root: fixtureRoot })

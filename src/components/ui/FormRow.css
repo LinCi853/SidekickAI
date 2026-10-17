@@ -68,6 +68,20 @@
   flex: 0 1 auto;
   max-width: 220px;
 }
+.form-row-control select.input-underline {
+  width: auto;
+  flex: 0 1 auto;
+  min-width: 96px;
+  max-width: 180px;
+  cursor: pointer;
+  color-scheme: light;
+}
+html[data-theme="dark"] .form-row-control select.input-underline {
+  color-scheme: dark;
+}
+.form-row-control .btn-outline {
+  flex: none;
+}
 .form-row-control .combobox .combobox-trigger {
   width: auto;
 }

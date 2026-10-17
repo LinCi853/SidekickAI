@@ -93,6 +93,8 @@ export interface TabStoreState {
   getActiveTab: () => TabState | null;
   /** 标记/取消标记 tab 为窄屏自动移动端切换状态 */
   setTabAutoMobile: (tabId: string, autoMobile: boolean, originalDevicePreset?: string) => void;
+  /** 更新标签 audible 状态（webview media 事件驱动，不持久化） */
+  updateAudible: (tabId: string, audible: boolean) => void;
   /** 已脱离到浏览器窗口的 Profile id 集合 */
   detachedProfiles: Set<string>;
   /** 添加脱离 Profile */
@@ -195,14 +197,12 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
     // 已存在同 profileId 的标签则激活（不传 url 时按 profile 匹配，支持首页和浏览中页面）
     const existing = tabs.find((t) => t.profileId === profile.id);
     if (existing && !url) {
-      set({ activeTabId: existing.id });
-      get().persist();
+      get().setActiveTab(existing.id);
       return;
     }
     // 传 url 时：如果已有同 profileId + 同 url 的标签则激活，否则新建
     if (existing && url && existing.url === url) {
-      set({ activeTabId: existing.id });
-      get().persist();
+      get().setActiveTab(existing.id);
       return;
     }
     const tab: TabState = {
@@ -219,10 +219,10 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
     } catch (e) {
       console.error('[useTabStore.addTab] setupSession 失败:', e);
     }
-    set({
-      tabs: [...tabs, tab],
+    set((current) => ({
+      tabs: [...current.tabs, { ...tab, order: current.tabs.length }],
       activeTabId: tab.id,
-    });
+    }));
     get().persist();
   },
 
@@ -231,9 +231,10 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
       const newTabs = current.tabs
         .filter((tab) => tab.id !== tabId)
         .map((tab, index) => ({ ...tab, order: index }));
+      const activeTabId = current.activeTabId === tabId ? newTabs[0]?.id ?? null : current.activeTabId;
       return {
         tabs: newTabs,
-        activeTabId: current.activeTabId === tabId ? newTabs[0]?.id ?? null : current.activeTabId,
+        activeTabId,
       };
     });
     get().persist();
@@ -242,6 +243,10 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   setActiveTab: (tabId) => {
     set({ activeTabId: tabId });
     get().persist();
+    // 切换标签后 webview 抢焦点可能让系统 topmost 短暂丢失，按偏好补一次置顶
+    if (get().alwaysOnTop) {
+      pinCurrentWindow(true).catch(() => { /* 置顶补强失败不影响切标签 */ });
+    }
   },
 
   renameTab: async (tabId, title) => {
@@ -398,6 +403,13 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   getActiveTab: () => {
     const { tabs, activeTabId } = get();
     return tabs.find((t) => t.id === activeTabId) ?? null;
+  },
+
+  updateAudible: (tabId, audible) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, audible } : t)),
+    }));
+    // audible 变化不触发持久化（高频且衍生状态）
   },
 
   setTabAutoMobile: (tabId, autoMobile, originalDevicePreset) => {

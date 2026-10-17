@@ -4,6 +4,7 @@ import { resolve } from 'path'
 import { compilationInputs } from './scripts/compilation-inputs'
 import { excalidrawClipboardFeedback } from './scripts/excalidraw-clipboard-feedback'
 import { rendererSecurity } from './scripts/renderer-security'
+import { standalonePreloads } from './scripts/standalone-preloads'
 
 // 空模块路径：用于 alias 排除不需要的传递依赖
 const emptyMod = resolve(__dirname, 'src/lib/_empty.ts')
@@ -38,6 +39,7 @@ export default defineConfig({
   preload: {
     // Preload 脚本入口（contextBridge 暴露 API 到渲染进程）
     build: {
+      externalizeDeps: false,
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
@@ -49,7 +51,7 @@ export default defineConfig({
         },
       },
     },
-    plugins: [externalizeDepsPlugin(), compilationInputs(__dirname, 'preload')],
+    plugins: [standalonePreloads(__dirname)],
   },
   renderer: {
     // 渲染进程（React UI），复用现有 src/ 目录
@@ -60,13 +62,8 @@ export default defineConfig({
           index: resolve(__dirname, 'src/index.html'),
         },
         output: {
-          // 渲染层按依赖拆分 chunk：避免单文件过大 + 提升缓存命中
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
-            'vendor-excalidraw': ['@excalidraw/excalidraw'],
-            'vendor-highlight': ['highlight.js'],
-            'vendor-markdown': ['react-markdown', 'remark-gfm', 'rehype-highlight'],
-          },
+          // Let Rollup separate shared runtime from lazy feature dependencies.
+          // Named vendor groups previously pulled whiteboard code into the entry.
         },
       },
     },

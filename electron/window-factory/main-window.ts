@@ -10,6 +10,7 @@ import { isImportingData } from '../store/import-guard.js'
 import { windowState } from '../window-state.js'
 import * as focusManager from '../utils/focus-manager.js'
 import { getAppSettings } from '../store/app-settings-store.js'
+import { forgetWindow as forgetPriorityWindow } from '../diagnostics/tab-process-priority.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import {
   __dirname,
@@ -221,7 +222,7 @@ export function createMainWindow(): void {
         console.warn('[main] 托盘不可用，closeBehavior=minimize 降级为直接关闭')
       } else {
         e.preventDefault()
-        // minimize + skipTaskbar 彻底隐藏（含把前台交还给唤出前的窗口）
+        // 隐藏并移除任务栏入口（含把前台交还给唤出前的窗口）
         focusManager.hide(win)
         console.log('[main] 主窗口隐藏到托盘（closeBehavior=minimize）')
         return
@@ -246,6 +247,7 @@ export function createMainWindow(): void {
 
   win.on('closed', () => {
     windowState.mainWindow = null
+    forgetPriorityWindow(MAIN_WINDOW_ID)
     // 数据导入中不退出（窗口已销毁但导入流程未完成，由导入流程控制重启）
     if (isImportingData) {
       console.log('[main] 主窗口关闭但数据导入中，跳过退出')

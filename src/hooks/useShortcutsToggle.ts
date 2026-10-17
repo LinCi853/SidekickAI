@@ -18,11 +18,12 @@ export function useShortcutsToggle(open: boolean, setOpen: (v: boolean) => void)
       ignoreWhenTyping: true,
       onHoldStart: (e) => {
         e.preventDefault();
-        if (!open) setOpen(true);
+        setOpen(true);
       },
       onHoldEnd: (e) => {
         e.preventDefault();
-        if (open) setOpen(false);
+        // 注册表保留按下时的结束回调，不能依赖那个时刻的打开状态。
+        setOpen(false);
       },
     },
   ], [open, setOpen]);

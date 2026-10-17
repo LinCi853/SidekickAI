@@ -17,6 +17,6 @@ export function attachWebviewAntiDetection(parentWebContents: Electron.WebConten
     webPreferences.preload = webviewPreload
     webPreferences.contextIsolation = true
     webPreferences.nodeIntegration = false
-    webPreferences.sandbox = false
+    webPreferences.sandbox = true
   })
 }

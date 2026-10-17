@@ -180,6 +180,10 @@
 .tab-bar.is-collapsible:not(.is-expanded) .tab-indicator.active {
   animation: tab-indicator-breath 3.6s ease-in-out infinite;
 }
+/* 静态高亮保留当前标签提示，低内存模式无需为装饰条持续合成整窗。 */
+.main-view[data-low-memory="true"] .tab-bar.is-collapsible:not(.is-expanded) .tab-indicator.active {
+  animation: none;
+}
 /* 收起态透明 hover 检测区：在红线下方延伸 12px，让 2px 红线易于悬停 */
 .tab-bar.is-collapsible:not(.is-expanded)::before {
   content: '';

@@ -107,6 +107,8 @@ export interface AppSettings {
   whiteboardSidebarCollapsed: boolean
   /** 浏览器标签累积持久化模式：memory=内存模式（默认，主窗口关闭清空）/ persistent=持久化到磁盘 */
   browserTabPersistence: 'memory' | 'persistent'
+  /** 开发者选项：空闲回收与后台冷标签卸载 */
+  lowMemoryMode: boolean
   /** 默认搜索引擎配置（G1：地址栏非 URL 输入时使用，urlTemplate 使用 {query} 占位符） */
   defaultSearchEngine: {
     name: string
@@ -115,54 +117,9 @@ export interface AppSettings {
 }
 
 /** 顶栏可显隐的按钮组标识（appSwitcher/menu/刷新始终显示，不在此列） */
-export type TopBarButtonGroup =
-  | 'uaToggle'
-  | 'navBack'
-  | 'navForward'
-  | 'navHome'
-  | 'themeToggle'
-  | 'pinToggle'
-
-/** 全部可自定义的顶栏按钮组（默认全选；appSwitcher/menu/刷新始终显示） */
-export const ALL_TOP_BAR_BUTTON_GROUPS: TopBarButtonGroup[] = [
-  'uaToggle',
-  'navBack',
-  'navForward',
-  'navHome',
-  'themeToggle',
-  'pinToggle',
-]
-
-/** 主窗口侧边菜单可显隐的入口 */
-export type DrawerMenuItem =
-  | 'advancedPanel'
-  | 'promptLibrary'
-  | 'settings'
-  | 'network'
-  | 'modules'
-  | 'manage'
-  | 'backup'
-  | 'logs'
-  | 'detach'
-  | 'onboarding'
-  | 'shortcuts'
-  | 'themeToggle'
-
-/** 全部侧边菜单入口（默认全选） */
-export const ALL_DRAWER_MENU_ITEMS: DrawerMenuItem[] = [
-  'advancedPanel',
-  'promptLibrary',
-  'settings',
-  'network',
-  'modules',
-  'manage',
-  'backup',
-  'logs',
-  'detach',
-  'onboarding',
-  'shortcuts',
-  'themeToggle',
-]
+export type { TopBarButtonGroup, DrawerMenuItem, SettingsCategory } from './settings-options.js'
+export { ALL_TOP_BAR_BUTTON_GROUPS, ALL_DRAWER_MENU_ITEMS } from './settings-options.js'
+import type { TopBarButtonGroup, DrawerMenuItem } from './settings-options.js'
 
 /** Main-process snapshots from a verified native file drop. */
 export interface LocalFilesDroppedEvent {

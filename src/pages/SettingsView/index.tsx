@@ -10,6 +10,7 @@ import {
   updateAppSettings,
   getAppSettings,
   setMinimumSize,
+  onSettingsNavigate,
 } from '../../lib/electron-api';
 import { useTabStore } from '../../store/useTabStore';
 import { useModuleStore } from '../../store/useModuleStore';
@@ -47,6 +48,17 @@ import './index.css';
 
 type CategoryId = 'appearance' | 'ai' | 'voice' | 'network' | 'advanced' | 'modules' | 'developer' | 'about';
 
+const CATEGORY_IDS: CategoryId[] = ['appearance', 'ai', 'voice', 'network', 'advanced', 'modules', 'developer', 'about'];
+
+function parseCategory(value: string | null | undefined): CategoryId | null {
+  return value && (CATEGORY_IDS as string[]).includes(value) ? (value as CategoryId) : null;
+}
+
+function readInitialCategory(): CategoryId {
+  const search = typeof window !== 'undefined' ? window.location?.search : undefined;
+  return parseCategory(search ? new URLSearchParams(search).get('category') : null) ?? 'appearance';
+}
+
 const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
   { id: 'appearance', label: '外观与交互', icon: '◐' },
   { id: 'ai', label: 'AI 服务', icon: '◆' },
@@ -61,8 +73,21 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
 export default function SettingsView() {
   useEscToCloseWindow({ windowControls: true });
 
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('appearance');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>(readInitialCategory);
   const isOxy = useUiVersionStore((s) => s.version === 'oxy');
+
+  // 单例窗口复用时切换到请求的分类
+  useEffect(() => {
+    try {
+      return onSettingsNavigate(({ category }) => {
+        const next = parseCategory(category);
+        if (next) setActiveCategory(next);
+      });
+    } catch {
+      // 非 Electron 测试环境无 window.electron，跳过监听
+      return undefined;
+    }
+  }, []);
 
   // ===== 状态 hook =====
   const app = useAppSettings(true);
@@ -443,7 +468,7 @@ export default function SettingsView() {
             </section>
             {/* 下载与缓存清理 */}
             <StorageSection />
-            {!isOxy && <LogFolderSection />}
+                        {!isOxy && <LogFolderSection />}
           </>
         )}
 
@@ -453,7 +478,9 @@ export default function SettingsView() {
 
 {activeCategory === 'developer' && (
   <DeveloperOptionsSection
-    disableAllBlockRules={app.disableAllBlockRules}
+    lowMemoryMode={app.lowMemoryMode}
+        onChangeLowMemoryMode={(enabled) => app.update({ lowMemoryMode: enabled })}
+        disableAllBlockRules={app.disableAllBlockRules}
     onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
   />
 )}

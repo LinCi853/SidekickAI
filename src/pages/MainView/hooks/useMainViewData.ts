@@ -26,6 +26,7 @@ export function useMainViewData() {
 
   // Settings state
   const [isTabBarCollapsed, setIsTabBarCollapsed] = useState(true);
+  const [lowMemoryMode, setLowMemoryMode] = useState(false);
   const [enterToSend, setEnterToSend] = useState(true);
   const [appClickBehavior, setAppClickBehavior] = useState<'switch' | 'close'>('switch');
   const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([...ALL_TOP_BAR_BUTTON_GROUPS]);
@@ -132,6 +133,7 @@ export function useMainViewData() {
         if (appResult.status === 'fulfilled') {
           const appCfg = appResult.value;
           setIsTabBarCollapsed(appCfg.tabBarCollapsed ?? true);
+          setLowMemoryMode(appCfg.lowMemoryMode === true);
           setEnterToSend(appCfg.enterToSend ?? true);
           setTopBarVisibleButtons(appCfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
           setAppClickBehavior(appCfg.appClickBehavior ?? 'switch');
@@ -165,6 +167,7 @@ export function useMainViewData() {
             setHiddenPlatforms(cfg.hiddenPlatforms ?? []);
             setHideForeignModels(cfg.hideForeignModels ?? true);
             setIsTabBarCollapsed(cfg.tabBarCollapsed ?? true);
+            setLowMemoryMode(cfg.lowMemoryMode === true);
             setEnterToSend(cfg.enterToSend ?? true);
             setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
             setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
@@ -182,6 +185,7 @@ export function useMainViewData() {
   useEffect(() => {
     const off = onAppSettingsChanged((cfg) => {
       setIsTabBarCollapsed(cfg.tabBarCollapsed ?? true);
+      setLowMemoryMode(cfg.lowMemoryMode === true);
       setEnterToSend(cfg.enterToSend ?? true);
       setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
       setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
@@ -200,6 +204,7 @@ export function useMainViewData() {
         const foreignChanged = (cfg.hideForeignModels ?? true) !== hideForeignModels;
         if (foreignChanged) setHideForeignModels(cfg.hideForeignModels ?? true);
         setIsTabBarCollapsed(cfg.tabBarCollapsed ?? true);
+        setLowMemoryMode(cfg.lowMemoryMode === true);
         setEnterToSend(cfg.enterToSend ?? true);
         setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
         setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
@@ -216,6 +221,7 @@ export function useMainViewData() {
     hideForeignModels,
     // Settings
     isTabBarCollapsed,
+    lowMemoryMode,
     enterToSend,
     appClickBehavior,
     topBarVisibleButtons,

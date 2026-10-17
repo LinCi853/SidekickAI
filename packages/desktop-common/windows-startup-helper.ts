@@ -3,12 +3,16 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 
 const CONFIGURATION = '<?xml version="1.0" encoding="utf-8"?><configuration><startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8"/></startup><runtime><loadFromRemoteSources enabled="false"/></runtime></configuration>\n'
-const OPERATIONS = new Set(['session', 'inspect', 'inspect-image', 'inventory', 'prepare-session'])
+const OPERATIONS = new Set(['session', 'inspect', 'inspect-image', 'inventory', 'prepare-session', 'foreground-bridge'])
 const digest = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex')
 
 export function windowsStartupHelper(resourcesPath: string, input: Record<string, unknown>): { executable: string; args: string[] } {
+  return windowsStartupHelperAtDirectory(path.join(resourcesPath, 'windows'), input)
+}
+
+/** Development cache uses the same integrity checks as packaged resources. */
+export function windowsStartupHelperAtDirectory(directory: string, input: Record<string, unknown>): { executable: string; args: string[] } {
   if (typeof input.operation !== 'string' || !OPERATIONS.has(input.operation)) throw new Error('Unsupported Windows startup operation')
-  const directory = path.join(resourcesPath, 'windows')
   const read = (name: string): Buffer => {
     const file = path.join(directory, name), stat = fs.lstatSync(file)
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1024 * 1024) throw new Error('Invalid Windows startup helper resource')

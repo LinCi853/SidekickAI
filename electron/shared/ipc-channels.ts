@@ -337,6 +337,9 @@ export const IPC_CHANNELS = {
   AI_APP_EDITOR_OPEN: 'ai-app-editor:open',
   // 设置独立窗口（单例）
   SETTINGS_WINDOW_OPEN: 'settings-window:open',
+  // 主进程 → 设置窗口渲染：单例窗口复用时通知切换到指定分类
+  // 载荷：{ category: SettingsCategory }
+  SETTINGS_WINDOW_NAVIGATE: 'settings-window:navigate',
   // 历史记录与下载管理独立窗口（单例）
   HISTORY_DOWNLOAD_OPEN: 'history-download:open',
   // 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
@@ -502,6 +505,10 @@ export const IPC_CHANNELS = {
   ACCUMULATED_LINK_CLEAR: 'accumulated-link:clear',
   // Shared guest identity for collection, downloads and shortcuts.
   WINDOW_REGISTER_WEBVIEW: 'window:registerWebview',
+  // 渲染→主：休眠记录数量与快照磁盘占用
+  TAB_HIBERNATE_STATS: 'tab-hibernate:stats',
+  // 渲染→主：同步各窗口当前激活/有声的标签，主进程据此调整 guest 进程优先级
+  TAB_PRIORITY_SYNC: 'tab-priority:sync',
   // ===== 模块管理（插件系统：插件市场 / 开发者选项） =====
   // 渲染→主：列出全部模块信息（含状态）
   MODULE_LIST: 'module:list',

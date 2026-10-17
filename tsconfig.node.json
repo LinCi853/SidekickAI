@@ -21,6 +21,8 @@
   "include": [
     "electron.vite.config.ts",
     "scripts/compilation-inputs.ts",
+    "scripts/standalone-preloads.ts",
+    "scripts/standalone-preloads.test.ts",
     "scripts/excalidraw-clipboard-feedback.ts",
     "scripts/excalidraw-feedback.test.ts",
     "scripts/renderer-security.ts",

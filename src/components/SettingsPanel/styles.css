@@ -1046,8 +1046,30 @@
   margin-top: var(--space-6);
 }
 
+/* 紧凑提示文本：不占额外段间距、单行不换行（用于按钮组上方的一行确认说明） */
+.settings-section-hint.is-compact {
+  padding: 0;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+/* 确认操作按钮行：横向并排、宽度自适应内容，避免继承纵向堆叠导致按钮撑满后被拆成两行 */
+.confirm-action-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.confirm-action-row > button {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* 下载目录值（截断显示，等宽字体） */
 .settings-storage-dir-value {
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1099,6 +1121,7 @@
 .block-rule-form-stack {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-1);
 }
 
@@ -1305,7 +1328,3 @@
   border-color: var(--accent-light);
   color: var(--accent-light-foreground);
 }
-.log-export-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0; }
-.log-export-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.log-export-controls select, .log-export-controls input { color: inherit; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; max-width: 100%; color-scheme: light; }
-html[data-theme="dark"] .log-export-controls input, html[data-theme="dark"] .log-export-controls select { color-scheme: dark; }

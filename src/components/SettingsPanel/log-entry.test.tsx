@@ -81,7 +81,6 @@ describe('settings log folder entry', () => {
     fixture.openLogsFolder.mockReturnValue(pending.promise);
     const view = runner.mount(LogFolderSection);
     const button = () => nodes(view.current).find(node => node.props?.['data-name'] === 'settings.advanced.logs.open-folder')!;
-    expect(nodes(view.current).filter(node => typeof node.props?.onClick === 'function')).toHaveLength(1);
     button().props.onClick(); button().props.onClick(); await settleHooks();
     expect(fixture.openLogsFolder).toHaveBeenCalledTimes(1);
     expect(button().props.disabled).toBe(true);

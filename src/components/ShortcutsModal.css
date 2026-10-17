@@ -17,12 +17,17 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
+  /* 淡出后停止绘制，避免关闭的全屏模糊层持续占用合成资源。 */
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              visibility 0s var(--duration-normal);
 }
 .shortcuts-overlay.is-open {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+  transition-delay: 0s;
 }
 .shortcuts-modal {
   width: min(620px, 92vw);

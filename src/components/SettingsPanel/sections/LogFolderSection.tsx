@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { openLogsFolder } from '../../../lib/electron-api';
-import { Button, SectionTitle } from '../../ui';
+import { Button, FormRow, SectionTitle } from '../../ui';
+import SegmentedControl from '../../ui/SegmentedControl';
 import { localLogDate, logDateRange } from '../../../../electron/shared/log-export';
 
 /** 近 N 天导出范围（默认 30 天） */
@@ -41,23 +42,33 @@ export default function LogFolderSection() {
   return (
     <section data-name="settings.advanced.logs.section">
       <SectionTitle>日志</SectionTitle>
-      <div className="log-export-controls">
-        <label>
-          <select aria-label="日志导出范围" value={range} disabled={opening}
-            onChange={event => setRange(event.target.value as 'recent' | 'all')}
-            data-name="settings.advanced.logs.range">
-            <option value="recent">近 30 天</option>
-            <option value="all">全部</option>
-          </select>
-        </label>
-      </div>
-      <Button type="button" variant="outline" disabled={opening} onClick={() => void openFolder()}
-        data-name="settings.advanced.logs.open-folder" aria-busy={opening}>
-        <FolderOpen size={16} aria-hidden="true" />
-        <span>导出并打开</span>
-      </Button>
-      {error && <p className="section-hint" role="alert" data-name="settings.advanced.logs.error">{error}</p>}
-      {notice && <p className="section-hint" role="status">{notice}</p>}
+      <FormRow label="导出范围">
+        <SegmentedControl
+          value={range}
+          options={[
+            { value: 'recent' as const, label: '近 30 天' },
+            { value: 'all' as const, label: '全部' },
+          ]}
+          onChange={(v) => setRange(v)}
+          disabled={opening}
+          name="日志导出范围"
+          className="seg-control-row"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          className="btn-outline-sm"
+          disabled={opening}
+          onClick={() => void openFolder()}
+          data-name="settings.advanced.logs.open-folder"
+          aria-busy={opening}
+        >
+          <FolderOpen size={16} aria-hidden="true" />
+          <span>导出并打开</span>
+        </Button>
+      </FormRow>
+      {error && <p className="feedback-text fail" role="alert" data-name="settings.advanced.logs.error">{error}</p>}
+      {notice && <p className="feedback-text ok" role="status">{notice}</p>}
     </section>
   );
 }

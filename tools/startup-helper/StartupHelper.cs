@@ -37,7 +37,10 @@ public static class StartupHelper {
     }
 
     public static int Main(string[] args) {
-        Console.OutputEncoding = new UTF8Encoding(false);
+        // Pipe streams work in a detached process without a console code page.
+        // Console.OutputEncoding would call SetConsoleOutputCP and fail there.
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true });
+        Console.SetIn(new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false), false));
         try {
             if (args.Length != 1 || args[0].Length > 24000) throw new InvalidOperationException("Invalid startup request");
             var bytes = Convert.FromBase64String(args[0]);
@@ -46,6 +49,7 @@ public static class StartupHelper {
             if (request == null) throw new InvalidOperationException("Invalid startup request");
             object result;
             switch (Text(request, "operation")) {
+                case "foreground-bridge": return ForegroundBridge.Run();
                 case "session": {
                     var identity = Identity(Integer(request, "pid"), true);
                     if (identity == null) throw new InvalidOperationException("Application process has exited");

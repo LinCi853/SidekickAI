@@ -9,6 +9,10 @@ import { type WebPreferences } from 'electron'
  * 所有窗口共享 contextIsolation / nodeIntegration / sandbox / backgroundThrottling 默认值，
  * 各窗口通过 opts 指定 preload 路径与 webviewTag 开关。
  * 若需额外字段（如 additionalArguments），调用方可展开后覆盖。
+ *
+ * backgroundThrottling 保持开启：窗口隐藏或被遮挡时后台页面的定时器与合成帧降频，
+ * 降低多开场景的持续 CPU 占用。代价是隐藏窗口里的轮询/动画会降频（全局默认，影响所有窗口），
+ * 需要实时出帧的窗口（语音预览窗）单独覆盖为 false。
  */
 export function createDefaultWebPreferences(opts: {
   preload: string
@@ -17,8 +21,8 @@ export function createDefaultWebPreferences(opts: {
   return {
     contextIsolation: true,
     nodeIntegration: false,
-    sandbox: false,
-    backgroundThrottling: false,
+    sandbox: true,
+    backgroundThrottling: true,
     webviewTag: opts.webviewTag ?? false,
     preload: opts.preload,
   }

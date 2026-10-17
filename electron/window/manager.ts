@@ -13,6 +13,9 @@ import { getPreset } from '../store/preset-store.js'
 import { applyProxyToSession, applyRegionBasedProxy } from '../store/proxy-helper.js'
 import { copySessionCookies } from '../store/cookie-copy.js'
 import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../window-factory/helpers.js'
+import { registerWindowRetirement } from './window-retirement.js'
+import { getAppWindowIcon, reapplyWindowIcon } from '../window-factory/app-icon.js'
+import { BROWSER_WINDOW_RETIREMENT_SECONDS } from '../shared/background-policy.js'
 
 /** Profile 窗口最小宽度 */
 const PROFILE_WINDOW_MIN_WIDTH = 240
@@ -117,6 +120,7 @@ export class WindowManager {
 
       // 创建窗口
       const win = new BrowserWindow({
+        icon: getAppWindowIcon(),
         width: profile.width,
         height: profile.height,
         x: profile.x,
@@ -139,6 +143,10 @@ export class WindowManager {
       })
 
       this.windows.set(profileId, win)
+      win.on('minimize', () => reapplyWindowIcon(win))
+      win.on('restore', () => reapplyWindowIcon(win))
+      // 后台闲置自动关闭，释放该 profile 窗口的 guest
+      registerWindowRetirement(win, { seconds: BROWSER_WINDOW_RETIREMENT_SECONDS })
 
       // 设置 webContents UA（与 session UA 一致）
       win.webContents.setUserAgent(profile.userAgent)

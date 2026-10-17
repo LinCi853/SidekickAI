@@ -25,6 +25,30 @@ export { useHotkeys, usePresets } from './useSettingsHotkeys';
 export type { HotkeysState, PresetsState } from './useSettingsHotkeys';
 
 /* =====================================================================
+   useTabMemorySettings —— 开发者低内存模式
+   ===================================================================== */
+
+export interface TabMemorySettingsState {
+  lowMemoryMode: boolean;
+  setLowMemoryMode: Dispatch<SetStateAction<boolean>>;
+  load: () => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>;
+}
+export function useTabMemorySettings(enabled: boolean): TabMemorySettingsState {
+  const [lowMemoryMode, setLowMemoryMode] = useState(false);
+  const load = useCallback(async () => {
+    try { setLowMemoryMode((await getAppSettings()).lowMemoryMode === true); }
+    catch (error) { console.error(error); }
+  }, []);
+  useEffect(() => { if (enabled) void load(); }, [enabled, load]);
+  const update = useCallback(async (patch: Partial<AppSettings>) => {
+    await updateAppSettings(patch);
+    if (patch.lowMemoryMode !== undefined) setLowMemoryMode(patch.lowMemoryMode);
+  }, []);
+  return { lowMemoryMode, setLowMemoryMode, load, update };
+}
+
+/* =====================================================================
    useAppearanceSettings —— 外观设置（tabBarCollapsed / uiScale）
    ===================================================================== */
 
@@ -359,6 +383,8 @@ export interface AppSettingsState {
   // 其他
   altSpaceResetThreshold: number;
   setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>;
+  lowMemoryMode: boolean;
+  setLowMemoryMode: Dispatch<SetStateAction<boolean>>;
   // 加载与持久化
   load: () => Promise<void>;
   /** 更新单个或多个字段并持久化到主进程 */
@@ -372,6 +398,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
   const platform = usePlatformSettings(enabled);
   const topBar = useTopBarSettings(enabled);
   const drawer = useDrawerMenuSettings(enabled);
+  const tabMemory = useTabMemorySettings(enabled);
 
   const load = useCallback(async () => {
     await Promise.all([
@@ -381,12 +408,13 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
       platform.load(),
       topBar.load(),
       drawer.load(),
+      tabMemory.load(),
     ]);
-  }, [appearance.load, general.load, proxy.load, platform.load, topBar.load, drawer.load]);
+  }, [appearance.load, general.load, proxy.load, platform.load, topBar.load, drawer.load, tabMemory.load]);
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-  }, []);
+    await tabMemory.update(patch);
+  }, [tabMemory.update]);
 
   return {
     ...appearance,
@@ -395,6 +423,7 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
     ...platform,
     ...topBar,
     ...drawer,
+    ...tabMemory,
     load,
     update,
   };

@@ -43,6 +43,7 @@ export const appSettingsApi = {
     openExportWindow: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_EXPORT_WINDOW),
     // 缓存清理：清理缓存数据（仅缓存类目录与 session cache，保留登录态）
     cleanCache: () => ipcRenderer.invoke(IPC_CHANNELS.APP_CLEAN_CACHE),
+    // 纯后台时裁剪本应用各进程工作集
     // 缓存清理：估算当前缓存体积（字节）
     estimateCacheSize: () => ipcRenderer.invoke(IPC_CHANNELS.APP_ESTIMATE_CACHE_SIZE),
     // 下载：选择下载目录（弹出系统目录选择对话框）
@@ -70,6 +71,11 @@ export const appSettingsApi = {
   },
   runtimeProcesses: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.RUNTIME_PROCESSES_GET),
+    syncPriority: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.TAB_PRIORITY_SYNC, payload),
+  },
+  // 历史休眠数据：只保留只读统计。
+  tabHibernation: {
+    stats: () => ipcRenderer.invoke(IPC_CHANNELS.TAB_HIBERNATE_STATS),
   },
   // 引导 API（首次启动引导窗 + 重新查看入口）
   onboarding: {

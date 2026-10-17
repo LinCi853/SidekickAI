@@ -23,7 +23,7 @@ import { seedFromInstallConfig } from './store/install-config-seed.js';
 import { registerProxyAuthHandler } from './store/proxy-helper.js';
 import { initChatStore, getChatStore, closeChatStore } from './store/chat-store.js';
 import { isImportingData } from './store/import-guard.js';
-import { registerBaseChatIpc, registerUsageTraceIpc } from './ai/handler.js';
+import { registerBaseChatIpc, registerUsageTraceIpc, hasActiveAssetStreams } from './ai/handler.js';
 import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js';
 import { WindowManager } from './window/manager.js';
 import { FingerprintEngine } from './fingerprint/engine.js';
@@ -44,7 +44,11 @@ import { registerOnboardingIpc } from './ipc/onboarding-ipc.js';
 import { promptAccessibilityPermission } from './utils/permission-manager.js';
 import { registerPlatformInfoIPC } from './utils/platform-info.js';
 import { registerRuntimeProcessesIPC } from './diagnostics/runtime-processes.js';
-import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache } from './utils/download-handler.js';
+import { registerTabHibernationIPC } from './store/tab-hibernate-store.js';
+import { createResidentMemoryMonitor } from './diagnostics/resident-memory-monitor.js';
+import { registerTabProcessPriorityIPC, forgetWindow as forgetPriorityWindow } from './diagnostics/tab-process-priority.js';
+import { EffectScope } from './modules/effect-scope.js';
+import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache, hasActiveDownloads } from './utils/download-handler.js';
 import { windowState } from './window-state.js';
 import { windowStore } from './store/window-store.js';
 import { isTrackedFullscreen } from './utils/fullscreen-tracker.js';
@@ -58,7 +62,11 @@ import { BUILTIN_MODULES } from './modules/manifests.js';
 import { initEnabledModules, registerModule, isModuleEnabled } from './modules/registry.js';
 import { registerModuleIpc } from './ipc/module-ipc.js';
 import { closeModuleStateDb } from './store/module-state-store.js';
-import { closeAssetCollectionJournal, stopAssetRetention } from './assets/asset-ipc.js';
+import { closeAssetCollectionJournal, stopAssetRetention, hasWebOriginalTransfers } from './assets/asset-ipc.js';
+import { hasLinkedOriginalTransfers } from './assets/api-originals.js';
+import { hasActiveAssetImports } from './assets/import-activity.js';
+import { hasActiveBackupExports } from './store/backup-activity.js';
+import { hasActiveBackupOperations } from './store/backup/activity.js';
 import { registerVoiceConfigIPC } from './store/voice-store.js';
 import { registerAIProviderIPC } from './store/ai-provider-store.js';
 import { registerPromptIPC } from './store/prompt-store.js';
@@ -79,6 +87,9 @@ process.on('uncaughtException', (err) => {
 });
 let fingerprintEngine: FingerprintEngine;
 let hotkeyManager: HotkeyManager;
+/** 休眠快照保留清理器：应用退出前停止定时器 */
+/** 内存预算监控器：应用退出前停止定时器 */
+let residentMemoryMonitor: ReturnType<typeof createResidentMemoryMonitor> | undefined;
 app.whenReady().then(async () => {
     if (startupRestore.error) {
         dialog.showErrorBox('应用数据操作未完成', startupRestore.error);
@@ -244,8 +255,8 @@ app.whenReady().then(async () => {
             return;
         showAiAppEditorWindow(opts);
     });
-    ipcMain.handle(IPC_CHANNELS.SETTINGS_WINDOW_OPEN, () => {
-        showSettingsWindow();
+    ipcMain.handle(IPC_CHANNELS.SETTINGS_WINDOW_OPEN, (_e, category?: import('./shared/api/settings-options.js').SettingsCategory) => {
+        showSettingsWindow(category);
     });
     ipcMain.handle(IPC_CHANNELS.ADVANCED_PANEL_OPEN, (_e, providerId?: string) => {
         openAdvancedPanelWindow(providerId ? { providerId, initialTab: 'chat' } : undefined);
@@ -264,6 +275,19 @@ app.whenReady().then(async () => {
     catch (e) {
         console.warn('[main] 同步自启动设置失败:', e);
     }
+    // Attach before the first window loads so even early autoplay is observed.
+    residentMemoryMonitor = createResidentMemoryMonitor(() => {
+      if (isImportingData || hasActiveDownloads() || hasActiveAssetStreams()
+        || hasActiveAssetImports() || hasActiveBackupExports() || hasActiveBackupOperations()
+        || hasWebOriginalTransfers() || hasLinkedOriginalTransfers()) return true;
+      const preview = windowState.previewWindow;
+      if (preview && !preview.isDestroyed() && preview.isVisible()) return true;
+      return BrowserWindow.getAllWindows().some(win => {
+        if (win.isDestroyed()) return false;
+        const id = findWindowIdByWin(win);
+        return isCloudPc(win.webContents.id) || win.isFullScreen() || (id ? isTrackedFullscreen(id) : false);
+      });
+    }, () => getAppSettings().lowMemoryMode === true);
     createMainWindow();
     try {
         const mw = windowState.mainWindow;
@@ -373,6 +397,8 @@ app.whenReady().then(async () => {
     registerApplicationUpdates();
     registerPlatformInfoIPC();
     registerRuntimeProcessesIPC();
+    registerTabProcessPriorityIPC();
+    registerTabHibernationIPC(new EffectScope('tab-hibernation', 'tab-hibernation'));
     registerHotkeyIpc({
         hotkeyManager,
         getMainWindow: () => windowState.mainWindow,
@@ -458,6 +484,7 @@ app.on('before-quit', (event) => {
 app.on('will-quit', () => {
     cleanupOnQuit({ hotkeyManager, sttEngine: peekSttEngine() });
     stopAssetRetention();
+    residentMemoryMonitor?.stop();
     closeAssetCollectionJournal();
     closeChatStore();
     closeModuleStateDb();

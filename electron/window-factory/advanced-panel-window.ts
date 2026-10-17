@@ -15,6 +15,8 @@
 // 依赖关系：advanced-panel-window → helpers（无循环依赖）。
 
 import { BrowserWindow, screen } from 'electron'
+import { registerWindowRetirement } from '../window/window-retirement.js'
+import { windowRetirementSeconds } from '../shared/background-policy.js'
 import { windowStore } from '../store/window-store.js'
 import { windowState } from '../window-state.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
@@ -190,6 +192,7 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   win.on('resize', syncNormalBounds)
   win.on('move', syncNormalBounds)
 
+  registerWindowRetirement(win, { seconds: windowRetirementSeconds('advanced-panel') })
   return win
 }
 

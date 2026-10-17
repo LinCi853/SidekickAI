@@ -17,6 +17,13 @@ import { browserDownloadStore } from '../store/browser-download-store.js'
 import { containedDownloadPath, safeDownloadFilename } from '../security/download-path.js'
 import { installProfilePermissions } from '../security/session-permissions.js'
 
+const activeDownloads = new Set<DownloadItem>()
+
+/** Protect live transfers, including paused items and the save dialog. */
+export function hasActiveDownloads(): boolean {
+  return activeDownloads.size > 0
+}
+
 /**
  * 为指定 session 注册 will-download 监听。
  *
@@ -42,6 +49,8 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
   const resolvedProfileId = profileId || 'default'
 
   ses.on('will-download', async (_e, item: DownloadItem) => {
+    activeDownloads.add(item)
+    item.once('done', () => activeDownloads.delete(item))
     const settings = getAppSettings()
     const dir = settings.downloadDir || app.getPath('downloads')
     const filename = safeDownloadFilename(item.getFilename())
@@ -58,6 +67,7 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
           defaultPath: containedDownloadPath(dir, filename),
         })
         if (result.canceled || !result.filePath) {
+          activeDownloads.delete(item)
           item.cancel()
           return
         }
@@ -65,6 +75,7 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
         item.setSavePath(savePath)
       } catch (err) {
         console.error('[download-handler] 保存对话框失败:', err)
+        activeDownloads.delete(item)
         item.cancel()
         return
       }
@@ -245,7 +256,11 @@ export async function maybeAutoCleanCache(): Promise<void> {
 
   try {
     const { cleanCacheData } = await import('../store/cache-maintenance.js')
-    const result = await cleanCacheData()
+    // 休眠快照保留策略取自设置，避免自动清缓存用默认值剪掉用户保留的记录
+    const result = await cleanCacheData({
+      retentionDays: 7,
+      maxCount: 40,
+    })
     updateAppSettings({ lastCacheCleanAt: now })
     console.log('[download-handler] 自动缓存清理完成，已清理:', result.cleanedBytes, '字节')
   } catch (e) {

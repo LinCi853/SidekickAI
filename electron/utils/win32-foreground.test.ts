@@ -30,6 +30,8 @@ const fixture = vi.hoisted(() => {
   const children: FakeChild[] = []
   return {
     children,
+    metrics: vi.fn(),
+    owner: vi.fn(),
     spawn: vi.fn(() => {
       const child = new FakeChild()
       children.push(child)
@@ -38,6 +40,8 @@ const fixture = vi.hoisted(() => {
   }
 })
 vi.mock('child_process', () => ({ spawn: fixture.spawn }))
+vi.mock('electron', () => ({ app: { isPackaged: false, getAppPath: () => '/foreground-test-no-resources', getAppMetrics: fixture.metrics } }))
+vi.mock('../diagnostics/resident-process-ownership.js', () => ({ backgroundWindowForProcess: fixture.owner }))
 
 /** 每个用例加载全新模块实例（模块级单例状态不跨用例泄漏） */
 async function load() {
@@ -134,5 +138,29 @@ describe('超时与异常路径', () => {
     expect(child.kill).toHaveBeenCalled()
     await expect(m.getForegroundHandle()).resolves.toBeNull()
     expect(fixture.spawn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('后台窗口工作集请求', () => {
+  const metrics = () => [{ pid: 2, creationTime: 1000, type: 'Tab' }, { pid: process.pid, creationTime: 500, type: 'Browser' }]
+  const window = () => ({ getNativeWindowHandle: () => { const bytes = Buffer.alloc(8); bytes.writeBigUInt64LE(4242n); return bytes } }) as Electron.BrowserWindow
+  it('requires live renderer ownership before sending a native background-window guard', async () => {
+    const m = await load(), owner = window()
+    fixture.metrics.mockReturnValue(metrics()); fixture.owner.mockReturnValue(owner)
+    m.markForegroundActivity()
+    await expect(m.trimWorkingSet(2, 1000, 48 * 1048576, 15000)).resolves.toBeNull()
+    const pending = m.trimWorkingSet(2, 1000, 48 * 1048576, 15000, owner)
+    const child = fixture.children[0]
+    expect(child.stdin.write).toHaveBeenCalledWith(`T:1:2:1000:50331648:15000:${process.pid}:500:4242\n`, expect.any(Function))
+    child.stdout.emit('data', Buffer.from('T:1:100000000,1000000,10\n'))
+    await expect(pending).resolves.toEqual({ beforeBytes: 100000000, afterBytes: 1000000, durationMs: 10 })
+  })
+  it('rejects changed ownership and shared-process types without a native request', async () => {
+    const m = await load(), owner = window()
+    fixture.metrics.mockReturnValue(metrics()); fixture.owner.mockReturnValue(null)
+    await expect(m.trimWorkingSet(2, 1000, 48 * 1048576, 15000, owner)).resolves.toBeNull()
+    fixture.metrics.mockReturnValue([{ ...metrics()[0], type: 'GPU' }, metrics()[1]]); fixture.owner.mockReturnValue(owner)
+    await expect(m.trimWorkingSet(2, 1000, 48 * 1048576, 15000, owner)).resolves.toBeNull()
+    expect(fixture.spawn).not.toHaveBeenCalled()
   })
 })

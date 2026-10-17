@@ -15,12 +15,34 @@ const destinationProfile = path.join(evidence, 'destination')
 const backup = path.join(evidence, 'backup.sabackup')
 const password = 'disposable-verification-password'
 const content = 'A local note saved immediately before quitting.'
-const report = { checks: [], pageErrors: [], blockedRequests: [], uncaught: [] }
+const report = { checks: [], stages: [], pageErrors: [], blockedRequests: [], uncaught: [] }
 let activeApp
+const closedApps = new WeakSet()
+
+function checkpoint(stage) {
+  report.stages.push({ stage, at: new Date().toISOString() })
+  fs.writeFileSync(path.join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n')
+}
 
 fs.writeFileSync(bootstrap, `
-const { app } = require('electron');
+const { app, dialog } = require('electron');
 const fs = require('node:fs');
+// Playwright prepends inspector switches to argv. Recovery helpers need the
+// application entry in argv[1], as in an ordinary development launch.
+process.argv = [process.argv[0], ${JSON.stringify(bootstrap)}, ...process.argv.slice(1).filter(value => value !== ${JSON.stringify(bootstrap)} && !/^--(?:inspect(?:-brk)?|remote-debugging-port)(?:=|$)/.test(value))];
+if (process.argv.includes('--backup-snapshot-result')) {
+  // Observe the real background result and dismiss its informational dialog
+  // in this disposable profile. The public export may legitimately restart.
+  const recordResult = options => {
+    fs.writeFileSync(process.env.VERIFY_RECOVERY_FILE, JSON.stringify({ pid: process.pid, ...options }));
+    setTimeout(() => app.quit(), 2000);
+  };
+  dialog.showMessageBox = async options => {
+    recordResult(options);
+    return { response: 0, checkboxChecked: false };
+  };
+  dialog.showErrorBox = (title, detail) => recordResult({ type: 'error', title, detail });
+}
 app.setAppPath(${JSON.stringify(root)});
 app.setLoginItemSettings = () => {};
 app.relaunch = () => fs.writeFileSync(process.env.VERIFY_RELAUNCH_FILE, 'requested');
@@ -38,6 +60,7 @@ require(${JSON.stringify(path.join(root, 'out/main/index.cjs'))});
 `)
 
 async function launch(profile, label) {
+  checkpoint('launch ' + label)
   const env = {
     ...process.env,
     SIDEKICK_DATA_DIR: profile,
@@ -45,6 +68,7 @@ async function launch(profile, label) {
     VERIFY_RELAUNCH_FILE: path.join(evidence, `${label}-relaunch.txt`),
     VERIFY_EXCEPTION_FILE: path.join(evidence, `${label}-exception.log`),
     VERIFY_REQUEST_FILE: path.join(evidence, 'blocked-requests.log'),
+    VERIFY_RECOVERY_FILE: path.join(evidence, `${label}-recovery.json`),
   }
   for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'LIB', 'LIBPATH']) delete env[key]
   const app = await electron.launch({
@@ -55,6 +79,7 @@ async function launch(profile, label) {
     timeout: 30000,
   })
   activeApp = app
+  app.once('close', () => closedApps.add(app))
   const log = fs.createWriteStream(path.join(evidence, `${label}.log`))
   app.process().stdout.on('data', data => log.write(data))
   app.process().stderr.on('data', data => log.write(data))
@@ -66,12 +91,29 @@ async function launch(profile, label) {
 }
 
 async function close(app) {
-  await app.close()
-  activeApp = null
+  if (closedApps.has(app)) {
+    if (activeApp === app) activeApp = null
+    return
+  }
+  checkpoint('closing application')
+  let timer
+  try {
+    await Promise.race([
+      app.close(),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Application cleanup exceeded 15 seconds')), 15000) }),
+    ])
+  } catch (error) {
+    const child = app.process()
+    if (child.exitCode === null && child.signalCode === null) child.kill()
+    throw error
+  } finally {
+    clearTimeout(timer)
+    if (activeApp === app) activeApp = null
+  }
 }
 
-async function waitUntil(predicate, message) {
-  const deadline = Date.now() + 10000
+async function waitUntil(predicate, message, milliseconds = 10000) {
+  const deadline = Date.now() + milliseconds
   while (Date.now() < deadline) {
     if (await predicate()) return
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -107,9 +149,8 @@ async function verify() {
   let { app, page } = await launch(sourceProfile, 'source-write')
   const navigation = await page.evaluate(async () => {
     const api = window.electron
-    if ((await api.modules.list()).find(module => module.id === 'browser')?.enabled) {
-      throw new Error('The browser module must start disabled in a fresh profile')
-    }
+    const browser = (await api.modules.list()).find(module => module.id === 'browser')
+    if (!browser || browser.enabled !== browser.defaultEnabled) throw new Error('A fresh browser module must match its declared default')
     const entry = { id: 'verification-history', url: 'https://example.invalid/local', title: 'Local history', timestamp: 1 }
     await api.navHistory.record('verification-profile', entry)
     for (const enabled of [true, false]) {
@@ -160,11 +201,24 @@ async function verify() {
     const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/V5kAAAAASUVORK5CYII='
     return { note: await window.electron.notes.saveImage(png), board: await window.electron.whiteboard.saveImage(png) }
   })
+  checkpoint('exporting encrypted backup')
   const exported = await page.evaluate(async input => window.electron.appSettings.exportData(input.backup,
     { basicData: true, cookies: false, indexedDB: false, cache: false, voiceAssets: false }, { password: input.password }), { backup, password })
-  assert(exported.success, exported.error)
+    .catch(error => ({ success: false, error: error.message }))
+  report.exported = exported
+  checkpoint('encrypted export returned')
+  if (!exported.success) {
+    const resultFile = path.join(evidence, 'source-restart-recovery.json')
+    await waitUntil(() => fs.existsSync(resultFile), 'Encrypted export failed without a verified background result: ' + exported.error, 60000)
+    report.recoveryResult = JSON.parse(fs.readFileSync(resultFile, 'utf8'))
+    assert.equal(report.recoveryResult.title, '备份已保存', report.recoveryResult.detail)
+    assert(fs.existsSync(backup), 'Background export did not publish the archive')
+    await waitUntil(() => closedApps.has(app), 'Background export application did not exit after its result', 15000)
+    activeApp = null
+    ;({ app, page } = await launch(sourceProfile, 'source-after-export'))
+  }
   assertRecords(await readRecords(page, board.id))
-  report.checks.push('encrypted export leaves live stores usable')
+  report.checks.push('encrypted export completes and application stores remain usable')
   const wrongPassword = await page.evaluate(file => window.electron.appSettings.importDataDecrypted(file, 'incorrect-password'), backup)
   assert.equal(wrongPassword.success, false)
   assertRecords(await readRecords(page, board.id))
@@ -178,6 +232,7 @@ async function verify() {
   report.checks.push('corrupt archives and incorrect passwords preserve current data')
   await close(app)
 
+  checkpoint('restoring encrypted backup')
   ;({ app, page } = await launch(destinationProfile, 'restore'))
   await page.evaluate(() => window.electron.notes.save({ id: 'destination-record', content: 'Original destination record' }))
   const closed = app.waitForEvent('close', { timeout: 10000 })
@@ -215,7 +270,12 @@ verify().then(() => { report.ok = true }).catch(error => {
   report.error = error.stack
   process.exitCode = 1
 }).finally(async () => {
-  if (activeApp) await activeApp.close().catch(() => {})
+  checkpoint('verification complete; cleaning up')
+  if (activeApp) await close(activeApp).catch(error => {
+    report.cleanupError = error.stack
+    report.ok = false
+    process.exitCode = 1
+  })
   for (const file of fs.readdirSync(evidence).filter(file => file.endsWith('-exception.log'))) {
     report.uncaught.push(fs.readFileSync(path.join(evidence, file), 'utf8'))
   }

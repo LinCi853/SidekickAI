@@ -5,16 +5,16 @@ import Chip from '../../ui/Chip';
 /** 侧边菜单入口的紧凑标签 */
 const DRAWER_ITEM_LABELS: Record<DrawerMenuItem, string> = {
   advancedPanel: '进阶面板',
-  promptLibrary: '提示词',
+  promptLibrary: 'AI资产',
   settings: '设置',
-  network: '网络',
-  modules: '模块',
-  manage: '管理',
-  backup: '备份',
+  network: '网络与代理',
+  modules: '模块管理',
+  manage: 'AI 应用管理',
+  backup: '备份与导入',
   logs: '日志',
-  detach: '独立窗口',
-  onboarding: '指南',
-  shortcuts: '快捷键',
+  detach: '浏览器打开',
+  onboarding: '使用指南',
+  shortcuts: '快捷键查看',
   themeToggle: '主题',
 };
 

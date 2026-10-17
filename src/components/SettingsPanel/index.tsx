@@ -287,10 +287,13 @@ export default function SettingsPanel({ open, onClose, onOpenShortcuts }: Settin
         onProxyChange={handleProxyChange}
       />
 
+
       <ModuleManagementSection />
 
       <DeveloperOptionsSection
         active={open && !providerEditing}
+        lowMemoryMode={app.lowMemoryMode}
+        onChangeLowMemoryMode={(enabled) => app.update({ lowMemoryMode: enabled })}
         disableAllBlockRules={app.disableAllBlockRules}
         onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
       />

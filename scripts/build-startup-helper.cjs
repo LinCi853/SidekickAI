@@ -12,7 +12,7 @@ const CONFIGURATION = Buffer.from('<?xml version="1.0" encoding="utf-8"?><config
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
 const digestFile = file => digest(fs.readFileSync(file))
 const SOURCE_FILES = ['resources/windows/' + SCRIPT, 'tools/startup-helper/StartupHelper.cs',
-  'tools/startup-helper/NativeInventory.cs', 'scripts/build-startup-helper.cjs']
+  'tools/startup-helper/NativeInventory.cs', 'tools/startup-helper/ForegroundBridge.cs', 'scripts/build-startup-helper.cjs']
 const sourceInputs = root => SOURCE_FILES.map(relative => ({ path: relative, sha256: digestFile(path.join(root, relative)) }))
 const quote = value => "'" + value.replaceAll("'", "''") + "'"
 

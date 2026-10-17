@@ -100,10 +100,18 @@ export function openAiAppEditor(opts: {
   return api.openAiAppEditor(opts);
 }
 
-/** 打开设置独立窗口（单例，左导航+右内容布局） */
-export function openSettingsWindow(): Promise<void> {
+/** 打开设置独立窗口（单例，左导航+右内容布局）。可选 category：打开后定位到指定分类 */
+export function openSettingsWindow(category?: import('../../../electron/shared/api/settings-options').SettingsCategory): Promise<void> {
   const api = requireElectron();
-  return api.openSettingsWindow();
+  return api.openSettingsWindow(category);
+}
+
+/** 监听设置窗口单例复用时的分类切换通知 */
+export function onSettingsNavigate(
+  callback: (payload: { category: import('../../../electron/shared/api/settings-options').SettingsCategory }) => void,
+): () => void {
+  const api = requireElectron();
+  return api.onSettingsNavigate(callback);
 }
 
 /**

@@ -10,7 +10,7 @@
    - 所有状态通过 useTabStore 持久化（bounds / tabs / activeTabId / alwaysOnTop / bottomBarExpanded / bottomBarHeight）
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   openSettingsWindow,
   openHistoryWindow,
@@ -22,6 +22,8 @@ import {
   onChatRequestConfig,
   onTabEnsureAndDetach,
   reportTabEnsureAndDetachResult,
+  onDownloadUpdated,
+  listBrowserDownloads,
 } from '../../lib/electron-api';
 import type { Profile } from '../../lib/electron-api';
 import ShortcutHelp from '../../components/ShortcutHelp';
@@ -58,6 +60,9 @@ import { useWindowMinWidth } from './hooks/useWindowMinWidth';
 import { useOxyTheme } from './hooks/useOxyTheme';
 import { useToast } from '../../hooks/useToast';
 import { formatWindowTitle } from '../../lib/window-title';
+import { useTabProcessPriority } from '../../hooks/useTabProcessPriority';
+
+
 
 export default function MainView() {
   // Store state
@@ -104,6 +109,7 @@ export default function MainView() {
     isNarrow,
     isDarkTheme,
     isTabBarCollapsed,
+    lowMemoryMode,
     enterToSend,
     appClickBehavior,
     topBarVisibleButtons,
@@ -338,6 +344,67 @@ export default function MainView() {
     [tabs, detachedProfiles],
   );
 
+  // 标签容器：委托媒体事件，供进程优先级保护使用。
+  const tabsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // 出声或下载中的标签保持常规优先级。
+  const downloadingProfileIdsRef = useRef<Set<string>>(new Set());
+  const [downloadTick, setDownloadTick] = useState(0);
+  useEffect(() => {
+    const off = onDownloadUpdated((record) => {
+      const set = downloadingProfileIdsRef.current;
+      if (record.state === 'progressing') set.add(record.profileId);
+      else set.delete(record.profileId);
+      setDownloadTick((t) => t + 1);
+    });
+    listBrowserDownloads()
+      .then((records) => {
+        const set = downloadingProfileIdsRef.current;
+        set.clear();
+        for (const r of records) {
+          if (r.state === 'progressing') set.add(r.profileId);
+        }
+        setDownloadTick((t) => t + 1);
+      })
+      .catch(() => { /* 下载记录不可用时不做豁免 */ });
+    return off;
+  }, []);
+
+  // webview media 事件（委托到容器）：驱动标签 audible 状态
+  useEffect(() => {
+    const container = tabsContainerRef.current;
+    if (!container) return;
+    const findTabId = (e: Event): string | null => {
+      const el = (e.target as HTMLElement | null)?.closest?.('webview');
+      return el?.getAttribute?.('data-tab-id') ?? null;
+    };
+    const handleStarted = (e: Event) => {
+      const tabId = findTabId(e);
+      if (tabId) useTabStore.getState().updateAudible(tabId, true);
+    };
+    const handlePaused = (e: Event) => {
+      const tabId = findTabId(e);
+      if (tabId) useTabStore.getState().updateAudible(tabId, false);
+    };
+    container.addEventListener('media-started-playing', handleStarted);
+    container.addEventListener('media-paused', handlePaused);
+    return () => {
+      container.removeEventListener('media-started-playing', handleStarted);
+      container.removeEventListener('media-paused', handlePaused);
+    };
+  }, []);
+
+  useTabProcessPriority({
+    windowId: 'main',
+    tabs,
+    activeTabId,
+    isProtected: useCallback((tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab) return false;
+      if (tab.audible === true && tab.muted !== true) return true;
+      return downloadingProfileIdsRef.current.has(tab.profileId);
+    }, [tabs, downloadTick]),
+  });
   const handleAppClick = useCallback(
     (profile: Profile) => {
       const existingTab = tabs.find((t) => t.profileId === profile.id);
@@ -392,6 +459,7 @@ export default function MainView() {
     <>
       <div
         className="main-view app-shell"
+        data-low-memory={lowMemoryMode}
         data-viewport={isNarrow ? 'narrow' : 'wide'}
         data-oxy={isOxy ? 'true' : undefined}
         data-name="main.main-view.container"
@@ -459,7 +527,7 @@ export default function MainView() {
           }}
         />
 
-        <div className="webview-container" data-name="main.main-view.webview-container">
+        <div className="webview-container" ref={tabsContainerRef} data-name="main.main-view.webview-container">
           {visibleTabs.map((tab) => {
             const profile = getProfile(tab.profileId);
             if (!profile) return null;

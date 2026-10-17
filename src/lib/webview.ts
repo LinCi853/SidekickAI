@@ -4,6 +4,12 @@
    与 viewport + window.open 拦截脚本，保持注入内容与原实现逐字一致。
    ===================================================================== */
 
+export interface WebviewCaptureImage {
+  toDataURL(): string;
+  toPNG(): Buffer;
+  getSize(): { width: number; height: number };
+}
+
 /** 复用 React 内置 HTMLWebViewElement，并显式声明本组件使用的方法（兼容不同 @types/react 版本） */
 export interface WebviewElement extends HTMLWebViewElement {
   /** 设置 src 属性触发导航（DOM 属性变化，不经过 GUEST_VIEW_MANAGER_CALL IPC，可用于 guest 进程崩溃后恢复） */
@@ -21,7 +27,7 @@ export interface WebviewElement extends HTMLWebViewElement {
   /** 获取 guest webContents id（webview attach 后可用；未 attach 时调用会抛错） */
   getWebContentsId(): number;
   /** 截图当前页面（需求 12：截图到白板）。返回 NativeImage，调用 toDataURL() 转 base64，getSize() 获取原始尺寸 */
-  capturePage(): Promise<{ toDataURL(): string; toPNG(): Buffer; getSize(): { width: number; height: number } }>;
+  capturePage(): Promise<WebviewCaptureImage>;
   /** 打开 DevTools（检查） */
   openDevTools(): void;
   /** 关闭 DevTools */

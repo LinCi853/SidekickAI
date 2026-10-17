@@ -31,8 +31,12 @@ import { useBrowserInit } from './hooks/useBrowserInit.js';
 import { useBrowserNavigation } from './hooks/useBrowserNavigation.js';
 import { useBrowserWebview } from './hooks/useBrowserWebview.js';
 import { useBrowserShortcuts } from './hooks/useBrowserShortcuts.js';
+import { useTabProcessPriority } from '../../hooks/useTabProcessPriority';
+import { useBrowserTabStore } from '../../store/useBrowserTabStore';
+import { useEffect, useCallback, useState } from 'react';
 import './styles.css';
 import '../HistoryDownloadView/styles.css';
+
 
 export default function BrowserView() {
   const {
@@ -48,6 +52,9 @@ export default function BrowserView() {
     addressBarRef,
     webviewContainerRef,
   } = useBrowserInit();
+
+  // 浏览器窗口 id（用于同步 guest 进程优先级）
+  const browserWindowId = useBrowserTabStore((state) => state.windowId);
 
   const navigation = useBrowserNavigation({
     activeTabId,
@@ -97,6 +104,16 @@ export default function BrowserView() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
+  useTabProcessPriority({
+    windowId: browserWindowId,
+    tabs,
+    activeTabId,
+    // 媒体标签保持常规优先级。
+    isProtected: useCallback((tabId: string) => {
+      const tab = tabs.find((item) => item.id === tabId);
+      return tab?.audible === true && tab?.muted !== true;
+    }, [tabs]),
+  });
   // 主题色
   const platformDef = activeProfile?.aiPlatformId
     ? AI_PLATFORMS.find((p) => p.id === activeProfile.aiPlatformId)

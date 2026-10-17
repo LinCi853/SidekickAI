@@ -118,10 +118,10 @@ export default function AboutSection() {
           </button>
         ) : (
           <div className="block-rule-form-stack" data-name="settings.about.clear-confirm">
-            <div className="settings-section-hint" data-name="settings.about.clear-confirm-hint">
+            <div className="settings-section-hint is-compact" data-name="settings.about.clear-confirm-hint">
               确认清除？不可恢复。
             </div>
-            <div className="block-rule-form-stack" data-name="settings.about.clear-confirm-actions">
+            <div className="confirm-action-row" data-name="settings.about.clear-confirm-actions">
               <button
                 type="button"
                 className="btn-outline btn-outline-sm"

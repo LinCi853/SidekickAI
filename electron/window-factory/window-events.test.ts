@@ -7,12 +7,18 @@ const fixture = vi.hoisted(() => ({
   state: { isMaximized: false, bounds: {} },
   save: vi.fn(),
 }))
-vi.mock('electron', () => ({ BrowserWindow: {} }))
+vi.mock('electron', () => ({ BrowserWindow: {}, app: { isPackaged: true, getPath: () => 'fixture' } }))
 vi.mock('../store/window-store.js', () => ({ windowStore: { getOrDefault: () => fixture.state, save: fixture.save } }))
 vi.mock('../window-state.js', () => ({ windowState: { boundsSaveTimers: fixture.timers } }))
 vi.mock('../ipc/window-control-ipc.js', () => ({ setAlwaysOnTopForWindow: vi.fn(), toggleMaximizeForWindow: vi.fn() }))
 vi.mock('./window-utils.js', () => ({ safeLogWindowTrace: vi.fn(), findWindowIdByWin: vi.fn() }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
+// window-events 在窗口关闭时清理 guest 优先级状态，对应模块在此仅作桩
+vi.mock('../diagnostics/tab-process-priority.js', () => ({ forgetWindow: vi.fn() }))
+vi.mock('../diagnostics/background-release.js', () => ({
+  scheduleBackgroundRelease: vi.fn(),
+  cancelBackgroundRelease: vi.fn(),
+}))
 
 import { setupBoundsTracking } from './window-events.js'
 

@@ -11,6 +11,8 @@ import { getPreloadPath } from './paths.js'
 import { loadRenderer } from './renderer-loader.js'
 import { setupBoundsTracking, attachWindowHotkeyInterceptor } from './window-events.js'
 import { safeLogWindowTrace } from './window-utils.js'
+import { registerWindowRetirement } from '../window/window-retirement.js'
+import { windowRetirementSeconds } from '../shared/background-policy.js'
 
 /**
  * 创建单例弹出窗口的通用工厂。
@@ -123,6 +125,9 @@ export function createSingletonPopupWindow(opts: {
   win.on('closed', () => {
     opts.setWindow(null)
   })
+
+  // 设置/弹窗类窗口后台闲置后自动关闭（主窗口除外）
+  registerWindowRetirement(win, { seconds: windowRetirementSeconds(opts.windowId) })
 
   return win
 }

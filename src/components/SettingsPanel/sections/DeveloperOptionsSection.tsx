@@ -17,6 +17,8 @@ import './ModuleManagementSection.css';
 
 export interface DeveloperOptionsSectionProps {
   active?: boolean;
+  lowMemoryMode: boolean;
+  onChangeLowMemoryMode: (enabled: boolean) => Promise<void>;
   /** 广告屏蔽规则开关状态（true=已禁用） */
   disableAllBlockRules: boolean;
   onToggleDisableAllBlockRules: () => void;
@@ -24,6 +26,8 @@ export interface DeveloperOptionsSectionProps {
 
 export default function DeveloperOptionsSection({
   active = true,
+  lowMemoryMode,
+  onChangeLowMemoryMode,
   disableAllBlockRules,
   onToggleDisableAllBlockRules,
 }: DeveloperOptionsSectionProps) {
@@ -119,6 +123,16 @@ export default function DeveloperOptionsSection({
           {errorMsg ?? okMsg}
         </p>
       )}
+
+      <FormRow label="低内存模式" mutedLabel>
+        <Toggle checked={lowMemoryMode}
+          onChange={(enabled) => {
+            setErrorMsg(null);
+            void onChangeLowMemoryMode(enabled).catch(() => setErrorMsg("低内存模式设置失败，请重试"));
+          }}
+          aria-label="低内存模式"
+          data-name="settings.developer.low-memory-mode-toggle" />
+      </FormRow>
 
       {/* 开发者向设置：启用广告屏蔽规则 */}
       <FormRow label="启用广告屏蔽规则" mutedLabel>

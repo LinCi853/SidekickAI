@@ -11,6 +11,7 @@ import type { PromptTemplate } from '../chat.types.js'
 import type { AiAssetsAPI } from '../ai-assets.types.js'
 import type { UpdatesAPI } from '../../updates/types.js'
 import type { RuntimeProcessesAPI } from '../runtime-processes.js'
+import type { TabHibernationAPI } from '../tab-hibernation.types.js'
 import type { WebviewHotkeyPayload, WebviewHotkeyTarget } from './settings.api.js'
 
 /** 模块管理 API（插件市场 / 开发者选项） */
@@ -55,6 +56,8 @@ export interface ElectronAPI {
   /** 平台能力查询（设置页显示权限状态） */
   platformCapabilities: PlatformCapabilitiesAPI
   runtimeProcesses: RuntimeProcessesAPI
+  /** 标签休眠（内存转存储）：休眠元数据与占位快照 */
+  tabHibernation: TabHibernationAPI
   /** 主进程 → 渲染层：拦截 webview 弹窗后新建标签页 */
   onNewTab: (callback: (url: string, windowId: string) => void) => () => void
   /**
@@ -115,8 +118,12 @@ export interface ElectronAPI {
     profileId?: string
     mode?: 'edit' | 'create'
   }) => Promise<void>
-  /** 打开设置独立窗口（单例，左导航+右内容布局） */
-  openSettingsWindow: () => Promise<void>
+  /** 打开设置独立窗口（单例，左导航+右内容布局）。可选 category：打开后定位到指定分类 */
+  openSettingsWindow: (category?: import('./settings-options.js').SettingsCategory) => Promise<void>
+  /** 主→渲染：设置窗口单例复用时通知切换分类 */
+  onSettingsNavigate: (
+    callback: (payload: { category: import('./settings-options.js').SettingsCategory }) => void,
+  ) => () => void
   /** 打开历史记录与下载管理独立窗口（单例，导航历史 + 下载管理） */
   openHistoryDownloadWindow: () => Promise<void>
   /**

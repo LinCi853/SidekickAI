@@ -49,6 +49,12 @@ export function createHookHarness() {
       if (!previous || !sameDeps(previous.deps, deps)) slots[index] = { callback, deps };
       return (slots[index] as { callback: T }).callback;
     },
+    useMemo<T>(factory: () => T, deps?: readonly unknown[]) {
+      const index = cursor++;
+      const previous = slots[index] as { value: T; deps?: readonly unknown[] } | undefined;
+      if (!previous || !sameDeps(previous.deps, deps)) slots[index] = { value: factory(), deps };
+      return (slots[index] as { value: T }).value;
+    },
     useEffect(effect: () => void | (() => void), deps?: readonly unknown[]) {
       const index = cursor++;
       const previous = slots[index] as EffectSlot | undefined;

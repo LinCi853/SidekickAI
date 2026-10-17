@@ -135,8 +135,6 @@ export default function StorageSection() {
           name="自动清理"
           className="seg-control-row"
         />
-      </FormRow>
-      <div className="block-rule-form-stack" data-name="settings.storage.cache-actions">
         <button
           type="button"
           className="btn-outline btn-outline-sm"
@@ -146,14 +144,13 @@ export default function StorageSection() {
         >
           {cleaning ? '清理中…' : '立即清理'}
         </button>
-        {cleanFeedback && (
-          <span className="feedback-text ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</span>
-        )}
-      </div>
+      </FormRow>
+      {cleanFeedback && (
+        <p className="feedback-text ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</p>
+      )}
 
       <SectionTitle className="section-title-spacer">下载</SectionTitle>
-      <div className="about-row" data-name="settings.storage.download-dir-row">
-        <span data-name="settings.storage.download-dir-label">下载目录</span>
+      <FormRow label="下载目录">
         <span
           className="settings-storage-dir-value"
           title={downloadDir || '系统下载目录'}
@@ -161,20 +158,6 @@ export default function StorageSection() {
         >
           {downloadDir || '系统下载目录'}
         </span>
-      </div>
-      <FormRow label="下载行为">
-        <SegmentedControl
-          value={downloadBehavior}
-          options={[
-            { value: 'ask' as const, label: '每次询问' },
-            { value: 'auto' as const, label: '自动保存到目录' },
-          ]}
-          onChange={(v) => void handleBehaviorChange(v)}
-          name="下载行为"
-          className="seg-control-row"
-        />
-      </FormRow>
-      <div className="block-rule-form-stack" data-name="settings.storage.download-actions">
         <button
           type="button"
           className="btn-outline btn-outline-sm"
@@ -192,7 +175,19 @@ export default function StorageSection() {
         >
           打开目录
         </button>
-      </div>
+      </FormRow>
+      <FormRow label="下载行为">
+        <SegmentedControl
+          value={downloadBehavior}
+          options={[
+            { value: 'ask' as const, label: '每次询问' },
+            { value: 'auto' as const, label: '自动保存到目录' },
+          ]}
+          onChange={(v) => void handleBehaviorChange(v)}
+          name="下载行为"
+          className="seg-control-row"
+        />
+      </FormRow>
     </section>
   );
 }

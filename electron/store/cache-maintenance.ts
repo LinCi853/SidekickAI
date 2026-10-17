@@ -14,6 +14,8 @@ import {
   getDataDir,
   getDirSize,
 } from './session-dirs.js';
+import { tabHibernationStore } from './tab-hibernate-store.js';
+import type { TabHibernationPruneResult } from '../shared/tab-hibernation.types.js';
 
 /**
  * 估算当前缓存总体积（字节）。
@@ -78,7 +80,9 @@ export function estimateCacheSize(): number {
  * 注意：调用前需确保所有 webview 的关键页面上已加载完成（避免清理 SW 导致当前会话异常）。
  * 若 webview 正在使用，清理后下次导航会重新生成缓存，无副作用。
  */
-export async function cleanCacheData(): Promise<{ cleanedBytes: number }> {
+export async function cleanCacheData(
+  policy: { retentionDays: number; maxCount: number } = { retentionDays: 7, maxCount: 40 },
+): Promise<{ cleanedBytes: number }> {
   const dataDir = getDataDir();
   const cleanedBytes = estimateCacheSize();
   console.log('[cache-maintenance] 开始清理缓存，当前体积:', formatBytes(cleanedBytes));
@@ -138,6 +142,32 @@ export async function cleanCacheData(): Promise<{ cleanedBytes: number }> {
     } catch { /* ignore */ }
   }
 
+  // 4. 休眠占位快照：属于页面内容而非 Chromium 缓存，只在超过保留策略时清理。
+  //    这里顺手按当前设置执行一次保留策略，避免手动清缓存后仍留着过期快照。
+  try {
+    const removed = pruneTabHibernationSnapshots(policy);
+    if (removed.removed > 0) {
+      console.log('[cache-maintenance] 清理休眠占位快照:', removed.removed,
+        '其中超期', removed.expired, '孤儿', removed.orphans);
+    }
+  } catch (err) {
+    console.warn('[cache-maintenance] 清理休眠占位快照失败:', err);
+  }
+
   console.log('[cache-maintenance] 缓存清理完成，已清理:', formatBytes(cleanedBytes));
   return { cleanedBytes };
+}
+
+/**
+ * 按传入的保留策略执行一次休眠快照清理。
+ * 保留参数由调用方从应用设置读取（本模块不反向依赖设置存储，避免引入依赖环）。
+ *
+ * @param policy 保留天数与最大张数
+ * @param now 时间基准（便于测试）
+ */
+export function pruneTabHibernationSnapshots(
+  policy: { retentionDays: number; maxCount: number } = { retentionDays: 7, maxCount: 40 },
+  now = Date.now(),
+): TabHibernationPruneResult {
+  return tabHibernationStore.prune(policy, now)
 }

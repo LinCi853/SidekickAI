@@ -1,5 +1,5 @@
 import type { AppSettings } from '../shared/api/settings.api.js'
-import { ALL_TOP_BAR_BUTTON_GROUPS } from '../shared/api/settings.api.js'
+import { ALL_TOP_BAR_BUTTON_GROUPS } from '../shared/api/settings-options.js'
 import { getDefaultAppSettings } from './app-settings-defaults.js'
 import { getAppSettingsTable } from './module-state-store.js'
 import { isPortableMode } from './store-paths.js'
@@ -20,6 +20,12 @@ const choices: Partial<Record<keyof AppSettings, readonly string[]>> = {
 
 let cache: AppSettings | null = null
 
+/** 必须为非负整数的设置项（毫秒/分钟/次数/上限类数值不接受小数） */
+const integerKeys: ReadonlySet<keyof AppSettings> = new Set([
+  'altSpaceResetThreshold',
+  'chatInputCursorPos',
+])
+
 function isValid(key: keyof AppSettings, value: unknown, defaults: AppSettings): boolean {
   const allowed = choices[key]
   if (allowed) return typeof value === 'string' && allowed.includes(value)
@@ -35,9 +41,9 @@ function isValid(key: keyof AppSettings, value: unknown, defaults: AppSettings):
   }
   if (typeof fallback === 'number') {
     return typeof value === 'number' && Number.isFinite(value) && value >= 0
-      && (key !== 'altSpaceResetThreshold' || (Number.isInteger(value) && value >= 1))
+      && (!integerKeys.has(key) || Number.isInteger(value))
+      && (key !== 'altSpaceResetThreshold' || value >= 1)
       && (!key.endsWith('Width') || value > 0)
-      && (key !== 'chatInputCursorPos' || Number.isInteger(value))
   }
   return typeof value === typeof fallback
 }

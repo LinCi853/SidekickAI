@@ -10,9 +10,18 @@ export const bootstrapApi = {
   }) => {
     return ipcRenderer.invoke(IPC_CHANNELS.AI_APP_EDITOR_OPEN, opts)
   },
-  /** 打开设置独立窗口（单例） */
-  openSettingsWindow: () => {
-    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_WINDOW_OPEN)
+  /** 打开设置独立窗口（单例）；可选 category：打开后定位到指定分类 */
+  openSettingsWindow: (category?: import('../shared/api/settings-options.js').SettingsCategory) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_WINDOW_OPEN, category)
+  },
+  /** 主→渲染：设置窗口单例复用时通知切换分类 */
+  onSettingsNavigate: (
+    callback: (payload: { category: import('../shared/api/settings-options.js').SettingsCategory }) => void,
+  ) => {
+    const handler = (_e: unknown, payload: { category: import('../shared/api/settings-options.js').SettingsCategory }) =>
+      callback(payload)
+    ipcRenderer.on(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, handler)
   },
   /** 打开历史记录与下载管理独立窗口（单例） */
   openHistoryDownloadWindow: () => {

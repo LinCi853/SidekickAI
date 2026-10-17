@@ -3,6 +3,7 @@ import { isModuleEnabled } from '../modules/registry.js'
 import { setAssetNavigation } from '../assets/navigation.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { AssetNavigation } from '../shared/ai-assets.types.js'
+import type { SettingsCategory } from '../shared/api/settings-options.js'
 import {
   PROMPT_WINDOW_ID,
   createSingletonPopupWindow,
@@ -88,11 +89,11 @@ export function showDataExportWindow(): void {
 
 /**
  * 创建/显示设置独立窗口（单例）。
- * 左导航+右内容布局，5 类分组：外观与交互、AI服务、网络与隐私、高级、关于。
- * 已存在则聚焦，不重复打开。
+ * 左导航+右内容布局，分类：外观与交互、AI 服务、语音、网络与隐私、高级、模块管理、开发者选项、关于。
+ * 已存在则聚焦并可切换到指定分类。
  */
-export function showSettingsWindow(): void {
-  createSingletonPopupWindow({
+export function showSettingsWindow(category?: SettingsCategory): void {
+  const win = createSingletonPopupWindow({
     width: 760,
     height: 600,
     minWidth: 600,
@@ -102,5 +103,8 @@ export function showSettingsWindow(): void {
     mode: 'settings',
     getExisting: () => windowState.settingsWindow,
     setWindow: (win) => { windowState.settingsWindow = win },
+    extraQuery: category ? { category } : undefined,
   })
+  // 单例复用时通知切换分类；新建窗口也发一次（渲染层已挂载则立即生效，未挂载则由 URL query 兜底）
+  if (category) win.webContents.send(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, { category })
 }

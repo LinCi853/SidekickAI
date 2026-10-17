@@ -165,6 +165,62 @@ describe('代际取消与 close 交还', () => {
 })
 
 describe('唤出焦点核验', () => {
+  it('直接隐藏并移除任务栏入口，不进入会阻断 Chromium 绘帧的最小化状态', async () => {
+    const win = makeWindow({ isFocused: vi.fn(() => true) })
+    track(win)
+    hide(win)
+    expect(win.minimize).not.toHaveBeenCalled()
+    expect(win.setSkipTaskbar).toHaveBeenCalledWith(true)
+    expect(win.hide).toHaveBeenCalledOnce()
+    await show(win)
+    expect(win.setSkipTaskbar).toHaveBeenLastCalledWith(false)
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.show).toHaveBeenCalledOnce()
+  })
+
+  it('系统最小化的窗口仍先还原再显示', async () => {
+    const win = makeWindow({ isMinimized: vi.fn(() => true), isFocused: vi.fn(() => true) })
+    track(win)
+    await show(win)
+    expect(win.restore).toHaveBeenCalledOnce()
+    expect(win.restore).toHaveBeenCalledBefore(win.show as ReturnType<typeof vi.fn>)
+  })
+
+  it('仍恢复隐藏前的最大化形态', async () => {
+    let maximized = true
+    const win = makeWindow({ isMaximized: vi.fn(() => maximized), isFocused: vi.fn(() => true) })
+    track(win)
+    hide(win)
+    maximized = false
+    await show(win)
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.maximize).toHaveBeenCalledOnce()
+  })
+
+  it('窗口已被其他入口显示时不再还原或回弹旧形态', async () => {
+    let visible = false
+    const win = makeWindow({ isVisible: vi.fn(() => visible), isFocused: vi.fn(() => true) })
+    track(win)
+    hide(win)
+    visible = true
+    await show(win)
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.setBounds).not.toHaveBeenCalled()
+  })
+
+  it('还原被隐藏的全屏窗口时保留全屏形态', async () => {
+    let fullscreen = true
+    const win = makeWindow({ isFullScreen: vi.fn(() => fullscreen), isFocused: vi.fn(() => true) })
+    track(win)
+    hide(win)
+    fullscreen = false
+    await show(win)
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.setFullScreen).toHaveBeenCalledWith(true)
+    expect(win.maximize).not.toHaveBeenCalled()
+    expect(win.setBounds).not.toHaveBeenCalled()
+  })
+
   it('show 后未取得焦点 → 一次有界 moveTop+focus 重试', async () => {
     const win = makeWindow()
     track(win)

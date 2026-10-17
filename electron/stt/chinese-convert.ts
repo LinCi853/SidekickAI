@@ -6,10 +6,10 @@
  *
  * 使用 opencc-js 做转换：
  * - 词典精确：基于 OpenCC 官方词典，转换准确率接近 100%
- * - 体积小：opencc-js 懒加载词典，初始包 < 50KB
+ * - 按需加载单向词典，启动时不加载完整双向词库
  *
  * opencc-js v1.4.0 API：
- *   import OpenCC from 'opencc-js'
+ *   const OpenCC = require('opencc-js/t2cn')
  *   const converter = OpenCC.Converter({ from: 'tw', to: 'cn' })
  *   converter('漢語') === '汉语'
  *
@@ -17,7 +17,8 @@
  * - 仅对包含中文字符的文本做转换（其他语言不处理）
  * - 转换失败时回退原文，不影响识别结果
  */
-import OpenCC from 'opencc-js'
+import { createRequire } from 'node:module'
+const require = createRequire(import.meta.url)
 
 // opencc-js 暴露两种方式：
 // 1) 默认导出：import OpenCC from 'opencc-js'   → OpenCC.Converter
@@ -35,7 +36,9 @@ let cachedConverter: ConverterFn | null = null
  * 取到 Converter 工厂函数（兼容默认导出 / 命名导出）
  */
 function resolveConverterFactory(): ConverterFactory | null {
-  const def = OpenCC as unknown as OpenCCLike
+  // Load only the traditional-to-simplified dictionary when conversion is requested.
+  const OpenCC: OpenCCLike = require('opencc-js/t2cn')
+  const def = OpenCC
   if (def && typeof def.Converter === 'function') return def.Converter.bind(def)
   // 兜底：从模块 namespace 取
   const mod = (OpenCC as unknown as { Converter?: ConverterFactory })

@@ -7,7 +7,9 @@ const runner = await vi.hoisted(async () => {
   const { createHookHarness } = await import('../../../hooks/draft-hook-test-harness');
   return createHookHarness();
 });
-const api = vi.hoisted(() => ({ getRuntimeProcesses: vi.fn() }));
+const api = vi.hoisted(() => ({
+  getRuntimeProcesses: vi.fn(),
+}));
 vi.mock('react', () => runner.react);
 vi.mock('../../../lib/electron-api', () => api);
 vi.mock('../../ui', () => ({ SectionTitle: 'section-title', IconButton: 'icon-button' }));
@@ -44,7 +46,8 @@ describe('running process settings', () => {
     expect(text(view.current)).toContain('Fixture A');
     expect(text(view.current)).toContain('123');
     expect(text(view.current)).toContain('2.3%');
-    expect(text(view.current)).toContain('1.0 MB');
+    expect(text(view.current)).toContain('1.0 MiB');
+    expect(text(view.current)).toContain('列表总占用 1.0 MiB');
     await vi.advanceTimersByTimeAsync(2000);
     expect(api.getRuntimeProcesses).toHaveBeenCalledTimes(2);
     visibility.hidden = true; visibility.dispatchEvent(new Event('visibilitychange'));
@@ -110,4 +113,21 @@ describe('running process settings', () => {
     expect(api.getRuntimeProcesses).toHaveBeenCalledTimes(2);
     expect(text(view.current)).toContain('Fixture A');
   });
+
+  it('sums every process once regardless of its associated pages and does not treat unavailable memory as zero', async () => {
+    api.getRuntimeProcesses.mockResolvedValue({ ...snapshot, processes: [
+      { ...snapshot.processes[0], targets: [...snapshot.processes[0].targets, { webContentsId: 3, kind: 'subframe', title: 'Same process frame', windowTitle: '' }] },
+      { ...snapshot.processes[0], pid: 456, role: 'gpu', memoryBytes: 2 * 1048576 },
+      { ...snapshot.processes[0], pid: 789, role: 'main', memoryBytes: null },
+    ] });
+    const view = runner.mount(() => RuntimeProcessesSection({}));
+    await settleHooks();
+    expect(text(view.current)).toContain('列表总占用 ≥ 3.0 MiB');
+    expect(text(view.current)).toContain('1 项未获取');
+    expect(text(view.current)).toContain('不含原生辅助程序');
+    api.getRuntimeProcesses.mockResolvedValue({ ...snapshot, processes: [{ ...snapshot.processes[0], memoryBytes: null }] });
+    refreshButton(view.current).props.onClick(); await settleHooks();
+    expect(text(view.current)).toContain('列表总占用 --');
+  });
+
 });

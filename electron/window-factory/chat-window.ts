@@ -16,6 +16,8 @@ import {
 import { buildWindowConfig } from './window-config-builder.js'
 import { calculateChatWindowMinWidth, getUiScaleFromSettings, CHAT_WINDOW_MIN_HEIGHT } from './window-size-helpers.js'
 import { isModuleEnabled } from '../modules/registry.js'
+import { registerWindowRetirement } from '../window/window-retirement.js'
+import { windowRetirementSeconds } from '../shared/background-policy.js'
 
 /**
  * 创建自定义对话窗口（API 直连模式）
@@ -97,6 +99,7 @@ export function createChatWindow(): BrowserWindow | null {
   windowState.detachedWindows.set(CHAT_WINDOW_ID, win)
   attachDetachedWindowLifecycle(win, CHAT_WINDOW_ID)
 
+  registerWindowRetirement(win, { seconds: windowRetirementSeconds('chat') })
   return win
 }
 

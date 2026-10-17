@@ -9,7 +9,7 @@ import { cookieHelperRequestPath, initializeCookieHelper } from '../packages/bac
 
 const applicationName = edition.packageName
 app.setName(product.name)
-if (process.platform === 'win32') app.setAppUserModelId(edition.appId)
+if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId(edition.appId)
 
 if (app.isPackaged) delete process.env.ELECTRON_RENDERER_URL
 export const runtimePaths = resolveRuntimePaths({

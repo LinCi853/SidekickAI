@@ -31,6 +31,7 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   write('electron/shared/used.mjs', 'first shared source')
   write('scripts/excalidraw-clipboard-feedback.ts', 'first clipboard adapter')
   write('scripts/renderer-security.ts', 'first renderer policy adapter')
+  write('scripts/standalone-preloads.ts', 'first sandbox preload compiler')
   write('scripts/build-startup-helper.cjs', 'startup recipe')
   write('tools/startup-helper/StartupHelper.cs', 'startup driver')
   let builds = 0

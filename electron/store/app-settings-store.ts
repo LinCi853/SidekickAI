@@ -490,7 +490,12 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
   // 缓存清理：清理缓存数据（仅缓存类目录与 session cache，保留登录态）
   ipcMain.handle(IPC_CHANNELS.APP_CLEAN_CACHE, async () => {
     const { cleanCacheData } = await import('./cache-maintenance.js')
-    const result = await cleanCacheData()
+    // 休眠快照的保留策略来自设置，此处一并传入，使保留策略与设置页显示一致
+    const current = getAppSettings()
+    const result = await cleanCacheData({
+      retentionDays: 7,
+      maxCount: 40,
+    })
     // 更新上次清理时间戳
     updateAppSettings({ lastCacheCleanAt: Date.now() })
     return result

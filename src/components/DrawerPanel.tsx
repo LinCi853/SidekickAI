@@ -9,7 +9,6 @@ import { useUiVersionStore } from '../store/useUiVersionStore';
 import { useTabStore } from '../store/useTabStore';
 import {
   openAdvancedPanelWindow,
-  openAiAppEditor,
   openExportWindow,
   openPromptWindow,
   openSettingsWindow,
@@ -189,7 +188,7 @@ export default function DrawerPanel({
           <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
         </svg>
       ),
-      onClick: () => run(() => openPromptWindow(), '打开提示词'),
+      onClick: () => run(() => openPromptWindow(), '打开 AI资产'),
       visible: promptEnabled,
     },
     {
@@ -215,7 +214,7 @@ export default function DrawerPanel({
           <circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
       ),
-      onClick: () => run(() => openSettingsWindow(), '打开网络设置'),
+      onClick: () => run(() => openSettingsWindow('network'), '打开网络设置'),
     },
     {
       id: 'modules',
@@ -228,7 +227,7 @@ export default function DrawerPanel({
           <rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" />
         </svg>
       ),
-      onClick: () => run(() => openSettingsWindow(), '打开模块管理'),
+      onClick: () => run(() => openSettingsWindow('modules'), '打开模块管理'),
     },
     {
       id: 'manage',
@@ -241,7 +240,7 @@ export default function DrawerPanel({
           <path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
       ),
-      onClick: () => run(() => openAiAppEditor({ mode: 'create' }), '打开应用管理'),
+      onClick: () => run(() => openSettingsWindow('ai'), '打开应用管理'),
     },
     {
       id: 'backup',

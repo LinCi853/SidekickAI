@@ -16,7 +16,7 @@ import { useEnterToSendFlag } from './hooks/useEnterToSendFlag';
 
 /* =====================================================================
    WebviewTab —— 单个标签的 webview（自管理指纹注入与导航）
-   所有标签的 webview 始终挂载，仅通过 display 切换可见性，保留页面状态。
+   webview 首次选中时加载，此后保持挂载，仅切换可见性以保留运行状态。
    具体职责已拆分至 src/pages/MainView/hooks/ 下的独立 hook。
    ===================================================================== */
 

@@ -30,6 +30,10 @@ export interface TabState {
   kind?: 'home'
   /** 已脱离到浏览器窗口的 windowId（null=未脱离；非空时主窗口隐藏该标签，标签栏仅在管理面板展示派生子标签） */
   detachedWindowId?: string | null
+  /** 页面当前是否在播放音频（webview media 事件驱动，不持久化） */
+  audible?: boolean
+  /** 是否被用户主动静音（audible 为页面实际在播放音频） */
+  muted?: boolean
 }
 
 /** 窗口持久化状态：主窗口 + 每个脱离的独立窗口各一份 */

@@ -1,7 +1,7 @@
-// electron/utils/win32-foreground.ts — Windows 前台窗口读写（常驻 PowerShell 桥）
+// electron/utils/win32-foreground.ts — Windows 前台窗口读写与自身工作集回收（原生桥）
 //
 // 把 user32 的 GetForegroundWindow / SetForegroundWindow 封装为毫秒级往返：
-// 启动时拉起一个常驻 PowerShell 会话（Add-Type 预载 P/Invoke），之后每次
+// 启动时复用经过校验的原生启动助手（开发环境可降级 PowerShell），之后每次
 // 读/写前台只需一次 stdin/stdout 行交换，不再每次派生新进程（冷启动
 // 300ms~1s，且 capture/restore 两个进程并发时完成顺序不可控）。
 //
@@ -17,6 +17,11 @@
 // 调用方（focus-manager）据此跳过强制焦点恢复，交回系统自然激活。
 
 import { spawn, type ChildProcess } from 'child_process'
+import { app, type BrowserWindow } from 'electron'
+import path from 'node:path'
+import { existsSync } from 'node:fs'
+import { windowsStartupHelper, windowsStartupHelperAtDirectory } from '../../packages/desktop-common/windows-startup-helper'
+import { backgroundWindowForProcess } from '../diagnostics/resident-process-ownership.js'
 
 /** 常驻会话脚本：Add-Type 完成后按行读取 stdin 并分发 G/S/Q 命令 */
 const BRIDGE_SCRIPT = `
@@ -73,6 +78,9 @@ while ($true) {
 }
 `
 
+let lastReclaimActivityAt = Date.now()
+export function markForegroundActivity(): void { lastReclaimActivityAt = Date.now() }
+
 const REQUEST_TIMEOUT_MS = 2000
 
 let child: ChildProcess | null = null
@@ -83,7 +91,7 @@ const pending = new Map<number, { resolve: (value: string | null) => void; timer
 
 function handleLine(line: string): void {
   const [kind, idText, value] = line.replace(/\r$/, '').split(':')
-  if (kind !== 'G' && kind !== 'S') return
+  if (kind !== 'G' && kind !== 'S' && kind !== 'T') return
   const entry = pending.get(Number(idText))
   if (!entry) return
   pending.delete(Number(idText))
@@ -106,8 +114,17 @@ function startBridge(): boolean {
   try {
     // -EncodedCommand（UTF-16LE Base64）传脚本，绕开命令行引号转义问题
     const encoded = Buffer.from(BRIDGE_SCRIPT, 'utf16le').toString('base64')
-    const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+    const devCache = path.join(app.getAppPath(), 'build/native-startup')
+    const resources = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources')
+    let native = existsSync(path.join(resources, 'windows/SidekickStartup.exe'))
+      ? windowsStartupHelper(resources, { operation: 'foreground-bridge' }) : null
+    if (!app.isPackaged && existsSync(path.join(devCache, 'SidekickStartup.exe'))) native = windowsStartupHelperAtDirectory(devCache, { operation: 'foreground-bridge' })
+    if (!native && app.isPackaged) throw new Error('Packaged foreground helper is missing')
+    const proc = spawn(native?.executable ?? 'powershell.exe', native?.args ?? ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
       windowsHide: true,
+      // A detached native pipe server does not allocate a hidden conhost.
+      // The explicit Q/kill cleanup and parent-identity guard still apply.
+      detached: !!native,
       stdio: ['pipe', 'pipe', 'ignore'],
     })
     child = proc
@@ -136,7 +153,7 @@ function startBridge(): boolean {
   }
 }
 
-function request(kind: 'G' | 'S', hwnd: number, timeoutMs: number): Promise<string | null> {
+function request(kind: 'G' | 'S' | 'T', hwnd: number | string, timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
     if (!startBridge() || !child) {
       resolve(null)
@@ -148,7 +165,7 @@ function request(kind: 'G' | 'S', hwnd: number, timeoutMs: number): Promise<stri
       resolve(null)
     }, timeoutMs)
     pending.set(id, { resolve, timer })
-    const line = kind === 'G' ? `G:${id}\n` : `S:${id}:${hwnd}\n`
+    const line = kind === 'G' ? `G:${id}\n` : `${kind}:${id}:${hwnd}\n`
     child.stdin?.write(line, (err) => {
       if (err) {
         clearTimeout(timer)
@@ -186,4 +203,30 @@ export function disposeWin32ForegroundBridge(): void {
   if (!proc) return
   try { proc.stdin?.write('Q\n') } catch { /* ignore */ }
   try { proc.kill() } catch { /* ignore */ }
+}
+
+export interface WorkingSetTrimResult { beforeBytes: number; afterBytes: number; durationMs: number }
+export async function trimWorkingSet(pid: number, creationTime: number, maxBytes: number, idleMs: number, backgroundWindow?: BrowserWindow): Promise<WorkingSetTrimResult | null> {
+  if (!Number.isInteger(pid) || pid <= 0 || !Number.isFinite(creationTime) || !Number.isSafeInteger(maxBytes) || maxBytes < 48 * 1024 * 1024 || idleMs < 15000) return null
+  if (!backgroundWindow && Date.now() - lastReclaimActivityAt < idleMs) return null
+  const metrics = app.getAppMetrics()
+  const target = metrics.find(metric => metric.pid === pid && metric.creationTime === creationTime)
+  const browser = metrics.find(metric => metric.type === 'Browser' && metric.pid === process.pid)
+  if (!target || !browser) return null
+  let handle: number | undefined
+  if (backgroundWindow) {
+    if (target.type !== 'Tab' || backgroundWindowForProcess(pid) !== backgroundWindow) return null
+    try {
+      const bytes = backgroundWindow.getNativeWindowHandle()
+      handle = bytes.length >= 8 ? Number(bytes.readBigUInt64LE()) : bytes.readUInt32LE()
+      if (!Number.isSafeInteger(handle) || handle <= 0) return null
+    } catch { return null }
+  } else if (Date.now() - lastReclaimActivityAt < idleMs) return null
+  const args = [pid, creationTime, maxBytes, idleMs, browser.pid, browser.creationTime]
+  if (handle !== undefined) args.push(handle)
+  const value = await request('T', args.join(':'), REQUEST_TIMEOUT_MS)
+  if (!value || value === '0') return null
+  const values = value.split(',').map(Number)
+  if (values.length !== 3 || values.some(n => !Number.isFinite(n) || n < 0)) return null
+  return { beforeBytes: values[0], afterBytes: values[1], durationMs: values[2] }
 }
