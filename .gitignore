@@ -152,6 +152,9 @@ scripts/windows-executable-signing.cjs
 !scripts/standalone-preloads.test.ts
 !scripts/compilation-inputs.ts
 !scripts/windows-executable-signing.cjs
+# electron.vite.config.ts 直接 import 的构建插件，缺了它 CI 的 npm run build 会直接起不来
+!scripts/excalidraw-clipboard-feedback.ts
+!scripts/excalidraw-feedback.test.ts
 # 鏃х増鍒嗗彂宸ュ叿鍖呭彧淇濈暀鏈湴锛涗粨鍐呭彧閽夊綋鍓嶇増
 vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.2-*.zip
 vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.3-*.zip
