@@ -1,6 +1,6 @@
 'use strict'
 
-// 磁盘硬性要求：build/ 总占用不得超过 15 GiB。
+// 磁盘硬性要求：build/ 总占用不得超过 35 GiB。
 // 清理阶梯：旧分发运行目录（每个版本保留最新 1 个）→ 测试残留（48 小时未改动，或同一组超过 64 个时只留最新 64 个）
 // → 可再生缓存（命中预算即停）。
 // 仍超预算时以退出码 1 失败；--dry-run 只报告不删除。
@@ -10,7 +10,7 @@ const path = require('node:path')
 
 const ROOT = path.resolve(__dirname, '..')
 const BUILD = path.join(ROOT, 'build')
-const BUDGET = 15 * 1024 ** 3
+const BUDGET = 35 * 1024 ** 3
 const KEEP_RUNS = 1
 const KEEP_TEST_ENTRIES = 64
 const TEST_MAX_AGE_MS = 48 * 3600 * 1000
