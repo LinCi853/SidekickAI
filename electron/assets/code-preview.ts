@@ -1,6 +1,24 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { app, shell } from 'electron'
+
+const PAGE_TTL_MS = 2 * 60 * 60 * 1000
+
+async function pruneStalePages(root: string): Promise<void> {
+  let entries: string[]
+  try { entries = await readdir(root) } catch { return }
+  const cutoff = Date.now() - PAGE_TTL_MS
+  for (const name of entries) {
+    if (!name.startsWith('page-')) continue
+    const target = path.join(root, name)
+    try {
+      const info = await stat(target)
+      if (info.mtimeMs > cutoff) continue
+      await rm(target, { recursive: true, force: true })
+    } catch { /* locked or raced */ }
+  }
+}
+
 export function codePreviewDocument(content: string, language: 'html' | 'css' | 'javascript'): string {
   if (language === 'html') return content
   const body = '<main><h1>网页代码预览</h1><p>这是用于样式和脚本预览的本地页面。</p><div class="card"><h2>示例内容</h2><button>示例按钮</button><input placeholder="示例输入框"></div><div id="app"></div><div id="root"></div></main>'
@@ -12,6 +30,7 @@ export async function previewAssetCode(content: string, language: 'html' | 'css'
   try {
     const root = path.join(app.getPath('temp'), 'sidekickai-code-preview')
     await mkdir(root, { recursive: true })
+    await pruneStalePages(root)
     const directory = await mkdtemp(path.join(root, 'page-'))
     const file = path.join(directory, 'index.html')
     await writeFile(file, codePreviewDocument(content, language), 'utf8')

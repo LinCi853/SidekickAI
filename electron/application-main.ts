@@ -49,6 +49,7 @@ import { createResidentMemoryMonitor } from './diagnostics/resident-memory-monit
 import { registerTabProcessPriorityIPC, forgetWindow as forgetPriorityWindow } from './diagnostics/tab-process-priority.js';
 import { EffectScope } from './modules/effect-scope.js';
 import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache, hasActiveDownloads } from './utils/download-handler.js';
+import { sweepStaleRuntimeTemp } from './utils/temp-hygiene.js';
 import { windowState } from './window-state.js';
 import { windowStore } from './store/window-store.js';
 import { isTrackedFullscreen } from './utils/fullscreen-tracker.js';
@@ -377,6 +378,7 @@ app.whenReady().then(async () => {
     });
     attachDownloadHandlersForAllProfiles();
     void maybeAutoCleanCache();
+    void sweepStaleRuntimeTemp(app.getPath('temp')).catch(error => console.warn('[temp] sweep failed:', error));
     registerProxyAuthHandler();
     registerWindowControlIpc({
         windowManager,

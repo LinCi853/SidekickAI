@@ -9,6 +9,7 @@ import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 import type { AssetAttachmentInput, AssetCollectionIssue, AssetObservation } from '../shared/ai-assets.types.js'
 import { OriginalVault } from './original-vault.js'
 import { attachmentFileName, createAttachmentCopy } from './attachment-file.js'
+import { scheduleAttachmentCopyExpiry } from '../utils/temp-hygiene.js'
 import { acquireLinkedOriginal, stopLinkedOriginalTransfers, hasLinkedOriginalTransfers } from './api-originals.js'
 import { getAssetSettings, updateAssetSettings } from './settings.js'
 import { previewAssetCode } from './code-preview.js'
@@ -472,6 +473,8 @@ export function registerAiAssetIpc(): void {
         return { ok: false, error: '无法创建文件副本，请检查临时目录的空间和权限后重试，或导出到其他文件夹' }
       }
       shell.showItemInFolder(copy)
+      // 资源管理器需要副本在场才能高亮；稍后回收，避免 %TEMP%\sidekickai-asset-* 堆积。
+      scheduleAttachmentCopyExpiry(path.dirname(copy))
       return { ok: true }
     } catch (error) { return { ok: false, error: String(error) } } })
   })
