@@ -2,26 +2,22 @@
 # Dependencies
 # ============================================================
 node_modules/
-# 本项目统一使用 npm（package-lock.json 为唯一事实源）
-# 忽略其他包管理器误生成的锁文件
-pnpm-lock.yaml
+# 鏈」鐩粺涓€浣跨敤 npm锛坧ackage-lock.json 涓哄敮涓€浜嬪疄婧愶級
+# 蹇界暐鍏朵粬鍖呯鐞嗗櫒璇敓鎴愮殑閿佹枃浠?pnpm-lock.yaml
 bun.lock
 bun.lockb
 
 # ============================================================
 # Build Outputs
 # ============================================================
-# electron-vite 中间产物（主/preload/渲染层编译输出）
+# electron-vite 涓棿浜х墿锛堜富/preload/娓叉煋灞傜紪璇戣緭鍑猴級
 out/
-# electron-builder 标准安装包输出（NSIS exe）
-dist/
-# electron-builder 便携版输出
-dist-portable/
-# 发布产物归档目录（安装包 + 便携版，由 launch.bat [2] 生成）
-release/
+# electron-builder 鏍囧噯瀹夎鍖呰緭鍑猴紙NSIS exe锛?dist/
+# electron-builder 渚挎惡鐗堣緭鍑?dist-portable/
+# 鍙戝竷浜х墿褰掓。鐩綍锛堝畨瑁呭寘 + 渚挎惡鐗堬紝鐢?launch.bat [2] 鐢熸垚锛?release/
 target-check/
 build/cargo-targets/
-# 构建候选、组件缓存与打包锁（launch.bat 与构建脚本生成，非源码）
+# 鏋勫缓鍊欓€夈€佺粍浠剁紦瀛樹笌鎵撳寘閿侊紙launch.bat 涓庢瀯寤鸿剼鏈敓鎴愶紝闈炴簮鐮侊級
 build/distribution-runs/
 build/component-cache/
 build/shared-components/
@@ -56,8 +52,7 @@ local/
 *.log
 *.log.*
 chk-*.txt
-# 临时调试输出（asar 列表、运行时 stdout/stderr 捕获）
-asar-list.txt
+# 涓存椂璋冭瘯杈撳嚭锛坅sar 鍒楄〃銆佽繍琛屾椂 stdout/stderr 鎹曡幏锛?asar-list.txt
 sidekick-stdout.txt
 sidekick-stderr.txt
 
@@ -70,9 +65,9 @@ sidekick-stderr.txt
 Thumbs.db
 
 # ============================================================
-# Dev / Design Documents (开发需求、设计文档、原型)
+# Dev / Design Documents (寮€鍙戦渶姹傘€佽璁℃枃妗ｃ€佸師鍨?
 # ============================================================
-# 仅保留源码 + README + LICENSE；其余文档/测试/设计稿一律不入库
+# 浠呬繚鐣欐簮鐮?+ README + LICENSE锛涘叾浣欐枃妗?娴嬭瘯/璁捐绋夸竴寰嬩笉鍏ュ簱
 .trae/
 .uploads/
 .claude/
@@ -85,7 +80,7 @@ ai-window-uiux-v2/
 /website/
 tests/
 showcase.html
-# 根目录散落 .md 不入库（仅以下开源基建文件例外）
+# 鏍圭洰褰曟暎钀?.md 涓嶅叆搴擄紙浠呬互涓嬪紑婧愬熀寤烘枃浠朵緥澶栵級
 /*.md
 !README.md
 !CHANGELOG.md
@@ -102,13 +97,15 @@ showcase.html
 # Misc
 # ============================================================
 *.asar
-# 临时构建验证脚本（一次性调试，非产品代码）
+# 涓存椂鏋勫缓楠岃瘉鑴氭湰锛堜竴娆℃€ц皟璇曪紝闈炰骇鍝佷唬鐮侊級
 build/test-*.mjs
-# 一次性 PoC / 调试实验脚本（验证完毕，未入库）
+# 涓€娆℃€?PoC / 璋冭瘯瀹為獙鑴氭湰锛堥獙璇佸畬姣曪紝鏈叆搴擄級
 scripts/poc/
-# 测试/测量/本地工具脚本不入库（源码仓只保留发行构建链）
+# 娴嬭瘯/娴嬮噺/鏈湴宸ュ叿鑴氭湰涓嶅叆搴擄紙婧愮爜浠撳彧淇濈暀鍙戣鏋勫缓閾撅級
 scripts/*.test.*
+!scripts/architecture-check.test.mjs
 scripts/verify-*
+!scripts/verify-packaged-native.cjs
 scripts/measure-*
 scripts/memory-*
 scripts/prepare-resident-*
@@ -122,33 +119,22 @@ scripts/bootstrap/
 scripts/workspace-menu.cjs
 scripts/dev.mjs
 scripts/clean-temp.cjs
-scripts/check-node-version.cjs
-scripts/local-build-config.cjs
-scripts/shared-source.cjs
-scripts/oxy-build-config.cjs
 scripts/gen-application-icon.cjs
 scripts/renderer-security.ts
-scripts/architecture-*
-scripts/build-backup-cli.cjs
-scripts/build-cache.cjs
-scripts/build-startup-helper.cjs
-scripts/build-tool-inputs.cjs
-scripts/build-evidence.cjs
 scripts/gen-data-name-lookup.cjs
 scripts/prepare-startup-helper.cjs
 scripts/standalone-preloads.*
 scripts/excalidraw-*
 scripts/compilation-inputs.ts
 scripts/windows-executable-signing.cjs
-# 旧版分发工具包只保留本地；仓内只钉当前版
+# 鏃х増鍒嗗彂宸ュ叿鍖呭彧淇濈暀鏈湴锛涗粨鍐呭彧閽夊綋鍓嶇増
 vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.2-*.zip
 vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.3-*.zip
 
 # ============================================================
-# IDE / Tool local state (workspace 元数据 / 会话计划稿，IDE 会不断改)
+# IDE / Tool local state (workspace 鍏冩暟鎹?/ 浼氳瘽璁″垝绋匡紝IDE 浼氫笉鏂敼)
 # ============================================================
-# 均为本地工具运行时元数据，不入库（防止误提交内部链接/会话内容）
-.tokeny/
+# 鍧囦负鏈湴宸ュ叿杩愯鏃跺厓鏁版嵁锛屼笉鍏ュ簱锛堥槻姝㈣鎻愪氦鍐呴儴閾炬帴/浼氳瘽鍐呭锛?.tokeny/
 .zcode/
 .zcodeignore
 .mimocode/
@@ -161,14 +147,14 @@ vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.3-*.zip
 /tools/backup-recovery-native/
 
 # ============================================================
-# Non-Windows platforms (已移除，仅保留 Windows 桌面端)
+# Non-Windows platforms (宸茬Щ闄わ紝浠呬繚鐣?Windows 妗岄潰绔?
 # ============================================================
 mobile/
 launch.sh
 build/entitlements.mac.plist
 resources/icons/icon.icns
 scripts/notarize.cjs
-# 已废弃的移动端源码（本地保留作参考，不入库；代码引用已移除）
+# 宸插簾寮冪殑绉诲姩绔簮鐮侊紙鏈湴淇濈暀浣滃弬鑰冿紝涓嶅叆搴擄紱浠ｇ爜寮曠敤宸茬Щ闄わ級
 src/components/MobileTabBar/
 src/components/MobileVoiceButton/
 src/lib/mobile-api/
