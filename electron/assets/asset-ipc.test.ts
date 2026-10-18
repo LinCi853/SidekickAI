@@ -91,14 +91,23 @@ beforeEach(async () => {
   state.record = { id: 'file-a', sourceId: 'profile-a', status: 'saved', name: 'original.bin', ...original }
   registerAiAssetIpc()
 })
+const isFixtureRoot = (candidate: string) => candidate.length > 0
+  && path.dirname(candidate) === path.resolve('build') && path.basename(candidate).startsWith('asset-ipc-test-')
 afterEach(async () => {
-  stopAssetRetention()
-  vi.useRealTimers()
-  state.enabled = false; for (const observer of state.observers) observer()
-  closeAssetCollectionJournal()
-  for (let attempt = 0; hasWebOriginalTransfers() && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 1))
-  if (path.dirname(state.root) !== path.resolve('build') || !path.basename(state.root).startsWith('asset-ipc-test-')) throw new Error('Unexpected fixture path')
-  await rm(state.root, { recursive: true, force: true })
+  const root = state.root
+  try {
+    stopAssetRetention()
+    vi.useRealTimers()
+    state.enabled = false; for (const observer of state.observers) observer()
+    closeAssetCollectionJournal()
+    for (let attempt = 0; hasWebOriginalTransfers() && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 1))
+  } finally {
+    // 先清理再断言：早期实现把路径安全断言放在 rm 之前，
+    // 用例内抛错时整轮清理被跳过，build/ 下会堆积夹具目录。
+    const safe = isFixtureRoot(root)
+    if (safe) await rm(root, { recursive: true, force: true })
+    if (!safe) throw new Error('Unexpected fixture path')
+  }
 })
 
 describe('asset original admission and recovery', () => {

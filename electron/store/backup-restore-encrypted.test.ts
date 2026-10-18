@@ -107,9 +107,9 @@ describe('加密备份回环（exportAllData + importAllDataDecrypted）', () =>
     expect(await exportAllData(plainZip, { basicData: true, cookies: false, indexedDB: false, cache: false }))
       .toMatchObject({ success: true })
     expect(fs.readFileSync(plainZip).subarray(0, 2).toString('ascii')).toBe('PK')
-    // 加密解密器对非 SABK 文件按"密码错误或损坏"拒绝，不做部分导入
+    // 加密解密器对非 SABK 文件如实提示格式不符，不做部分导入
     const refused = await importAllDataDecrypted(plainZip, PASSWORD)
-    expect(refused).toMatchObject({ success: false, error: '密码错误或文件损坏' })
+    expect(refused).toMatchObject({ success: false, error: '该文件不是加密备份，请改用普通导入（无需密码）' })
 
     // 加密备份直接走 importAllData（无密码）→ 提示需要密码
     const backup = path.join(root, 'backup.sabackup')

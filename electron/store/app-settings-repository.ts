@@ -3,6 +3,7 @@ import { ALL_TOP_BAR_BUTTON_GROUPS } from '../shared/api/settings-options.js'
 import { getDefaultAppSettings } from './app-settings-defaults.js'
 import { getAppSettingsTable } from './module-state-store.js'
 import { isPortableMode } from './store-paths.js'
+import { resetLowMemoryModeForTest, setLowMemoryMode } from './low-memory-mode.js'
 
 const choices: Partial<Record<keyof AppSettings, readonly string[]>> = {
   proxyMode: ['system', 'direct', 'custom'],
@@ -83,14 +84,18 @@ export function readSettingsRaw(): AppSettings {
       cache = defaults
     }
   }
+  // 低内存开关供窗口退役定时器高频读取，缓存在无依赖模块里，避免每次深拷贝全量设置。
+  setLowMemoryMode(cache.lowMemoryMode)
   return structuredClone(cache)
 }
 
 export function writeSettingsRaw(next: AppSettings): void {
   getAppSettingsTable().set('appSettings', JSON.stringify(next))
   cache = structuredClone(next)
+  setLowMemoryMode(cache.lowMemoryMode)
 }
 
 export function resetSettingsCacheForTest(): void {
   cache = null
+  resetLowMemoryModeForTest()
 }

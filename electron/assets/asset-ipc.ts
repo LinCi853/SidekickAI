@@ -94,7 +94,11 @@ export function registerAiAssetIpc(): void {
     broadcastAiAssetState()
   }
   observeModuleState(syncCollection)
-  syncCollection()
+  // 注意：syncCollection() 必须在下面 observationJournal 重建之后调用。
+  // 它内部会 start() 日志，而 start() 会 mkdirSync + new Database()；
+  // 若在重建之前调用，用的是上一轮已 close 的实例，会在旧库路径上把
+  // 刚清理掉的数据目录重新创建出来（测试夹具里表现为目录复活，
+  // 真实场景下对应"关停采集后又有一次早到的同步"）。
   const vault = new OriginalVault(path.join(app.getPath('userData'), 'ai-assets'), path.join(app.getPath('userData'), '.ai-assets-pending'))
   let attachmentAccess = 0
   const accessing = async <T>(operation: () => Promise<T>): Promise<T> => {
@@ -190,9 +194,8 @@ export function registerAiAssetIpc(): void {
     committed: broadcast,
   })
   setAssetCollectionJournal(observationJournal)
-  if (assetEnabled && !hasActiveBackupExports() && !isImportingData) {
-    try { observationJournal.start() } catch (error) { console.warn('[ai-assets] Collection journal is unavailable:', error) }
-  }
+  // 新 journal 就位后再同步一次采集状态（含首次 start）
+  syncCollection()
   ipcMain.handle(ipc.ASSET_AUTHORIZE, event => {
     try {
       source(event)

@@ -13,6 +13,7 @@ import { setupBoundsTracking, attachWindowHotkeyInterceptor } from './window-eve
 import { safeLogWindowTrace } from './window-utils.js'
 import { registerWindowRetirement } from '../window/window-retirement.js'
 import { windowRetirementSeconds } from '../shared/background-policy.js'
+import { isLowMemoryMode } from '../store/low-memory-mode.js'
 
 /**
  * 创建单例弹出窗口的通用工厂。
@@ -127,7 +128,9 @@ export function createSingletonPopupWindow(opts: {
   })
 
   // 设置/弹窗类窗口后台闲置后自动关闭（主窗口除外）
-  registerWindowRetirement(win, { seconds: windowRetirementSeconds(opts.windowId) })
+  registerWindowRetirement(win, {
+    seconds: () => windowRetirementSeconds(opts.windowId, isLowMemoryMode()),
+  })
 
   return win
 }

@@ -99,24 +99,28 @@ export default function AboutSection() {
 
       <SectionTitle className="section-title-spacer">数据管理</SectionTitle>
       <div className="block-rule-form-stack" data-name="settings.about.data-management-stack">
-        <button
-          type="button"
-          className="btn-outline btn-outline-sm"
-          onClick={() => void handleOpenExportWindow()}
-          data-name="settings.about.export-button"
-        >
-          数据迁移
-        </button>
-        {!confirming ? (
+        {/* 两个按钮都很短，横向并排；此前塞进纵向堆叠容器，被拆成两行 */}
+        <div className="confirm-action-row" data-name="settings.about.data-management-actions">
           <button
             type="button"
-            className="btn-primary-flat is-danger"
-            onClick={() => setConfirming(true)}
-            data-name="settings.about.clear-data-button"
+            className="btn-outline btn-outline-sm"
+            onClick={() => void handleOpenExportWindow()}
+            data-name="settings.about.export-button"
           >
-            清除所有数据
+            数据迁移
           </button>
-        ) : (
+          {!confirming && (
+            <button
+              type="button"
+              className="btn-primary-flat is-danger"
+              onClick={() => setConfirming(true)}
+              data-name="settings.about.clear-data-button"
+            >
+              清除所有数据
+            </button>
+          )}
+        </div>
+        {confirming && (
           <div className="block-rule-form-stack" data-name="settings.about.clear-confirm">
             <div className="settings-section-hint is-compact" data-name="settings.about.clear-confirm-hint">
               确认清除？不可恢复。

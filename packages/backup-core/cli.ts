@@ -16,6 +16,14 @@ function value(args: string[], key: string): string | undefined {
   return next
 }
 function required(args: string[], key: string): string { const item = value(args, key); if (!item) throw new Error(`Required argument: ${key}`); return item }
+/**
+ * Only a GCM authentication failure (decryptFileStream returning null) maps to a password error.
+ * Archive format errors — unsupported compression method, declared expansion over the limit — keep
+ * their own text so a repacked but valid backup is never reported as a wrong password.
+ */
+async function decryptPayload(file: string, output: string, password: string): Promise<void> {
+  if (await decryptFileStream(file, output, password) === null) throw new Error('Password is incorrect or the encrypted archive is corrupt.')
+}
 async function passwordInput(args: string[]): Promise<string | undefined> {
   if (!args.includes('--password-stdin')) return undefined
   const chunks: Buffer[] = []
@@ -60,7 +68,7 @@ export async function runBackupCli(args: string[]): Promise<unknown> {
         if (!password) throw new Error('Encrypted backup requires --password-stdin.')
         checkDiskSpace([{ path: directory, bytes: fs.statSync(file).size, purpose: '独立解密' }])
         input = path.join(directory, 'decrypted.zip')
-        if (!await decryptFileStream(file, input, password)) throw new Error('Password is incorrect or the encrypted archive is corrupt.')
+        await decryptPayload(file, input, password)
       } else if (command === 'decrypt') throw new Error('Input is not an encrypted SABK backup.')
       const target = command === 'restore' || command === 'decrypt' ? path.resolve(required(args, '--target')) : undefined
       if (target && fs.existsSync(target)) throw new Error('Independent restore and decrypt require a new destination.')

@@ -137,6 +137,27 @@ describe('guest input behavior contract', () => {
     expect(parent.send).not.toHaveBeenCalled()
   })
 
+  it('leaves editing and search chords to the page while the input is focused', () => {
+    // 在 AI 输入框里打字时，Ctrl+A/C/V/F/X 这类组合必须留给页面，
+    // 不能被应用抢走（此前 passWhenTyping 从未被任何快捷键使用）。
+    fixture.browser = false
+    fixture.editable = true
+    for (const [key, code] of [['f', 'KeyF'], ['e', 'KeyE'], ['k', 'KeyK'], ['p', 'KeyP'], ['g', 'KeyG']] as const) {
+      parent.send.mockClear()
+      const event = press(key, code, ['ctrl'])
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(parent.send).not.toHaveBeenCalled()
+    }
+  })
+
+  it('still runs those chords when the page focus is not an editable field', () => {
+    fixture.browser = false
+    fixture.editable = false
+    const event = press('f', 'KeyF', ['ctrl'])
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'findInPage' }))
+  })
+
   it('releasing backquote closes shortcuts (keyup)', () => {
     fixture.browser = false
     const event = press(String.fromCharCode(96), 'Backquote', [], { type: 'keyUp' })

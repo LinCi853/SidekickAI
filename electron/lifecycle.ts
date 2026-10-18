@@ -14,6 +14,7 @@ import { destroyTray } from './window/tray.js'
 import { clearPreviewHideTimer } from './voice/preview-window.js'
 import { clearClipboardRestoreTimer } from './voice/clipboard-paste.js'
 import { disposeWin32ForegroundBridge } from './utils/win32-foreground.js'
+import { flushWindowStateNow } from './store/window-store.js'
 
 /**
  * 启动后延迟检测 uiohook 健康度。
@@ -65,6 +66,8 @@ export function cleanupOnQuit(deps: LifecycleDeps): void {
   ;(app as unknown as { isQuitting: boolean }).isQuitting = true
   for (const timer of windowState.boundsSaveTimers.values()) clearTimeout(timer)
   windowState.boundsSaveTimers.clear()
+  // 窗口状态是 100ms 合并落盘的：退出前必须落地，否则最后一次标签/窗口状态会丢
+  flushWindowStateNow()
   hotkeyManager?.unregisterAll()
   sttEngine?.cleanup()
   cleanupActiveStreams()

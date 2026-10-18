@@ -7,6 +7,7 @@
 import { BrowserWindow, screen } from 'electron'
 import { registerWindowRetirement } from '../window/window-retirement.js'
 import { windowRetirementSeconds } from '../shared/background-policy.js'
+import { isLowMemoryMode } from '../store/low-memory-mode.js'
 import { windowState } from '../window-state.js'
 import {
   WINDOW_BACKGROUND_COLOR,
@@ -78,5 +79,7 @@ export function showOnboardingWindow(): void {
     lifecycleCb.onClose?.()
   })
 
-  registerWindowRetirement(win, { seconds: windowRetirementSeconds('onboarding') })
+  registerWindowRetirement(win, {
+    seconds: () => windowRetirementSeconds('onboarding', isLowMemoryMode()),
+  })
 }

@@ -253,7 +253,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   cancelStream: async () => {
-    const convId = get().currentConversationId;
+    // 流式状态由 streamingConversationId 跟踪；用户切到别的会话后
+    // currentConversationId 已变，用它取消会打空，旧流继续在后台跑并写库。
+    const convId = get().streamingConversationId ?? get().currentConversationId;
     if (convId) {
       await cancelChat(convId);
     }
@@ -271,7 +273,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         createdAt: Date.now(),
       };
       set((s) => ({
-        messages: [...s.messages, assistantMsg],
+        // 只在「正在显示的就是流所属会话」时才把部分内容并入当前消息列表；
+        // 否则会串到用户此刻正在看的另一个会话里。
+        messages: s.currentConversationId === convId ? [...s.messages, assistantMsg] : s.messages,
         streaming: false,
         streamingText: '',
         // 标记已固化，onChatStreamEnd 收到回调时不重复追加
@@ -330,7 +334,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const offEnd = onChatStreamEnd((info) => {
       // 异会话的结束：仅复位流式状态，避免切换会话后 streaming 永不复位
       if (info.conversationId !== get().streamingConversationId) {
-        set({ streaming: false, streamingText: '', streamingConversationId: null });
+        // streamFinalized 必须一起复位，否则会残留到下一次流，让失败分支误判"已固化"而吞掉错误。
+        set({ streaming: false, streamingText: '', streamingConversationId: null, streamFinalized: false });
         return;
       }
       const state = get();

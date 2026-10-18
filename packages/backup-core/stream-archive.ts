@@ -6,12 +6,33 @@ import { pipeline } from 'node:stream/promises'
 import * as yauzl from 'yauzl'
 import * as yazl from 'yazl'
 import { BACKUP_FORMAT, BACKUP_FORMAT_VERSION, normalizeEdition, parseBackupManifest, safeBackupPath, validateSnapshots } from './format.js'
+import { SABK_MAX_PLAINTEXT_BYTES } from './file-crypto.js'
 import { assertOrdinaryPath, checkAbort, checkDiskSpace, flushFile, MAX_BACKUP_BYTES, MAX_BACKUP_ENTRIES, MAX_MANIFEST_BYTES, STREAM_BUFFER_BYTES } from './io.js'
 import type { BackupManifest } from './types.js'
 
 export interface ArchiveEntry { archivePath: string; sourcePath: string; size: number; sha256: string }
 export interface ArchiveProgress { signal?: AbortSignal; cancelled?: () => boolean; onBytes?: (bytes: number, total: number) => void }
 interface IndexedArchive { zip: yauzl.ZipFile; entries: yauzl.Entry[]; total: number }
+
+// ZIP 压缩方式白名单：STORED (0) 与 DEFLATE (8)。未知压缩方式必须显式拒绝，
+// 否则失败会推迟到 OpenReadStream，并被调用方误报为密码错误或文件损坏。
+const SUPPORTED_COMPRESSION_METHODS: readonly number[] = [0, 8]
+
+/** 归档格式层错误：调用方据此把它与 SABK 认证失败（密码错误）区分开。 */
+export class UnsupportedCompressionError extends Error {
+  constructor(readonly fileName: string, readonly compressionMethod: number) {
+    super(`不支持的压缩方式：${fileName}（压缩方式 ${compressionMethod}，仅支持 STORED (0) 与 DEFLATE (8)）。`)
+    this.name = 'UnsupportedCompressionError'
+  }
+}
+
+/** 声明展开体积超过 SABK 明文上限；这是索引阶段的校验，不读取任何条目数据。 */
+export class BackupExpansionLimitError extends Error {
+  constructor(readonly declaredBytes: number) {
+    super(`备份内容超出支持的大小上限：声明展开合计 ${declaredBytes} 字节，上限 ${SABK_MAX_PLAINTEXT_BYTES} 字节。`)
+    this.name = 'BackupExpansionLimitError'
+  }
+}
 
 const crcTable = new Uint32Array(256)
 for (let index = 0; index < 256; index++) {
@@ -89,7 +110,9 @@ async function indexArchive(file: string, options: ArchiveProgress): Promise<Ind
       zip.on('entry', (entry: yauzl.Entry) => {
         try {
           checkAbort(options.signal, options.cancelled)
-          if (entries.length >= MAX_BACKUP_ENTRIES || !entry.canDecodeFileData()) throw new Error(`Unsupported backup entry: ${entry.fileName}`)
+          if (entries.length >= MAX_BACKUP_ENTRIES) throw new Error(`Unsupported backup entry: ${entry.fileName}`)
+          if (!SUPPORTED_COMPRESSION_METHODS.includes(entry.compressionMethod)) throw new UnsupportedCompressionError(entry.fileName, entry.compressionMethod)
+          if (!entry.canDecodeFileData()) throw new Error(`Unsupported backup entry: ${entry.fileName}`)
           entries.push(entry)
           zip.readEntry()
         } catch (error) { reject(error) }
@@ -97,6 +120,10 @@ async function indexArchive(file: string, options: ArchiveProgress): Promise<Ind
       zip.readEntry()
     })
     const total = validateNames(entries.map(entry => ({ name: entry.fileName, directory: entry.fileName.endsWith('/'), size: entry.uncompressedSize, mode: entry.externalFileAttributes >>> 16 })))
+    // 展开量上限只作用在读取侧：小于 4 GiB 的恶意归档可以声明任意展开量，
+    // 必须在解压前按累计声明值拦截。写入侧的上限由导出流程自己决定
+    // （加密导出受 SABK 限制，未加密 ZIP64 允许更大，见 FORMAT.md）。
+    if (total > SABK_MAX_PLAINTEXT_BYTES) throw new BackupExpansionLimitError(total)
     return { zip, entries, total }
   } catch (error) { zip.close(); throw error }
 }

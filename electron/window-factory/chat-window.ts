@@ -18,6 +18,7 @@ import { calculateChatWindowMinWidth, getUiScaleFromSettings, CHAT_WINDOW_MIN_HE
 import { isModuleEnabled } from '../modules/registry.js'
 import { registerWindowRetirement } from '../window/window-retirement.js'
 import { windowRetirementSeconds } from '../shared/background-policy.js'
+import { isLowMemoryMode } from '../store/low-memory-mode.js'
 
 /**
  * 创建自定义对话窗口（API 直连模式）
@@ -99,7 +100,9 @@ export function createChatWindow(): BrowserWindow | null {
   windowState.detachedWindows.set(CHAT_WINDOW_ID, win)
   attachDetachedWindowLifecycle(win, CHAT_WINDOW_ID)
 
-  registerWindowRetirement(win, { seconds: windowRetirementSeconds('chat') })
+  registerWindowRetirement(win, {
+    seconds: () => windowRetirementSeconds('chat', isLowMemoryMode()),
+  })
   return win
 }
 

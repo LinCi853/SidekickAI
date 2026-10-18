@@ -19,6 +19,16 @@ import type { CustomAIProvider, CustomAIProviderInput, ChatMessage } from '../sh
 const DEFAULT_MAX_TOKENS = 2048
 /** Provider 连通性测试超时（毫秒） */
 const PROVIDER_TEST_TIMEOUT_MS = 15000
+/**
+ * 流式请求建连超时（毫秒）：provider 迟迟不返回响应头时失败，
+ * 避免 UI 永远停在「正在生成」。与 testProvider 保持同一量级。
+ */
+const STREAM_HEADERS_TIMEOUT_MS = 30_000
+/**
+ * 流式空闲超时（毫秒）：两个数据块之间超过该时长即视为连接已停摆。
+ * 思考型模型首字可能较慢，故留出比建连更宽裕的余量。
+ */
+const STREAM_IDLE_TIMEOUT_MS = 120_000
 /** 错误日志截断长度（API 错误响应体较长，保留 500 字符） */
 const ERROR_LOG_MAX_LEN = 500
 /** 错误日志截断长度（SSE 单行解析失败，保留 200 字符） */
@@ -197,6 +207,8 @@ export async function streamChat(
 ): Promise<void> {
   const { onDelta, onDone, onError, onUsage, onReasoningDelta } = callbacks
   let fullText = ''
+  /** 是否已收到 finish_reason（OpenAI 兼容服务的完成标记） */
+  let sawFinishReason = false
   // token 用量（流式过程中累积，onDone 前回调）
   let promptTokens = 0
   let completionTokens = 0
@@ -252,6 +264,8 @@ export async function streamChat(
       headers,
       body,
       signal: options.signal,
+      headersTimeout: STREAM_HEADERS_TIMEOUT_MS,
+      bodyTimeout: STREAM_IDLE_TIMEOUT_MS,
       dispatcher: getProxyDispatcher(),
     })
 
@@ -266,9 +280,8 @@ export async function streamChat(
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
 
-    for await (const chunk of response.body) {
+    streamLoop: for await (const chunk of response.body) {
       buffer += decoder.decode(chunk, { stream: true })
-
       // 按行分割处理
       let newlineIdx: number
       while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
@@ -329,17 +342,23 @@ export async function streamChat(
               promptTokens = json.usage.prompt_tokens || promptTokens
               completionTokens = json.usage.completion_tokens || completionTokens
             }
-            // finish_reason 存在表示结束（部分兼容服务不发 [DONE]）
-            if (json.choices?.[0]?.finish_reason) {
-              reportUsage()
-              onDone(fullText)
-              return
-            }
+            // finish_reason 表示「本段生成已完成」，但部分兼容服务会在每一帧
+            // 都带上它。因此只记录标记，等本帧无新增内容时才真正收尾；
+            // 若下一帧还有内容，说明该服务属于「每帧都带 finish_reason」的写法。
+            const finishReason = json.choices?.[0]?.finish_reason
+            if (finishReason) sawFinishReason = true
+            if (finishReason && !delta) break streamLoop
           }
 
       }
     }
 
+    if (sawFinishReason) {
+      // 兼容不发 [DONE]、只给 finish_reason 的服务
+      reportUsage()
+      onDone(fullText)
+      return
+    }
     reportUsage()
     throw new Error('响应未提供完成标记，已收到的内容已保留')
   } catch (err) {

@@ -96,11 +96,12 @@ export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDrop
     var dt = new DataTransfer();
     for (var i = 0; i < fileObjs.length; i++) dt.items.add(fileObjs[i]);
     var ev = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt });
-    // 候选集：平台自定义 + 启发式英文关键字 + 通用输入区
+    // 候选集：平台自定义 + 启发式英文关键字。
+    // 注意：不要包含 form / textarea —— 它们几乎存在于每个页面，
+    // 会让 dispatched 恒 > 0，把"没人接收"误判成"已导入"，第三层 paste 兜底也就永远走不到。
     var selectorParts = [
       '[class*="drop" i], [class*="upload" i], [class*="attach" i]',
-      '[data-testid*="drop" i], [data-testid*="upload" i]',
-      'form, [contenteditable="true"], textarea'
+      '[data-testid*="drop" i], [data-testid*="upload" i]'
     ];
     if (dropZoneSelector) selectorParts.unshift(dropZoneSelector);
     var candidates = document.querySelectorAll(selectorParts.join(', '));
@@ -135,13 +136,15 @@ export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDrop
     return dispatched > 0;
   }
 
-  // 6. 主流程：三层兜底
-  Promise.all(filesPayload.map(dataUrlToFile)).then(function(fileObjs) {
+  // 6. 主流程：三层兜底。
+  //    返回结果对象（executeJavaScript 会等待该 Promise），宿主据此决定提示文案，
+  //    不再出现「派发失败但仍提示已导入」。postMessage 保留给旧宿主作为兼容通道。
+  return Promise.all(filesPayload.map(dataUrlToFile)).then(function(fileObjs) {
     var valid = fileObjs.filter(function(f) { return f !== null; });
     if (valid.length === 0) {
       console.error('[FileDrop] 无有效文件');
       window.postMessage({ type: 'ai-file-drop-result', success: false, error: 'no-valid-files' }, '*');
-      return;
+      return { success: false, error: 'no-valid-files' };
     }
 
     // 第一层：input[type=file]
@@ -151,7 +154,7 @@ export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDrop
       console.log('[FileDrop] 通过 input[type=file] 派发', valid.length, '个文件，成功:', ok);
       if (ok) {
         window.postMessage({ type: 'ai-file-drop-result', success: true, method: 'input' }, '*');
-        return;
+        return { success: true, method: 'input' };
       }
     }
 
@@ -160,7 +163,7 @@ export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDrop
     console.log('[FileDrop] 派发 drop 事件到候选区域，成功:', ok2);
     if (ok2) {
       window.postMessage({ type: 'ai-file-drop-result', success: true, method: 'drop' }, '*');
-      return;
+      return { success: true, method: 'drop' };
     }
 
     // 第三层：合成 paste 事件（智谱/豆包/Kimi 等支持粘贴图片的兜底）
@@ -168,14 +171,16 @@ export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDrop
     console.log('[FileDrop] 派发 paste 事件到输入区，成功:', ok3);
     if (ok3) {
       window.postMessage({ type: 'ai-file-drop-result', success: true, method: 'paste' }, '*');
-      return;
+      return { success: true, method: 'paste' };
     }
 
     console.warn('[FileDrop] 所有派发方式均未成功');
     window.postMessage({ type: 'ai-file-drop-result', success: false, error: 'no-target-found' }, '*');
+    return { success: false, error: 'no-target-found' };
   }).catch(function(e) {
     console.error('[FileDrop] 主流程失败:', e);
     window.postMessage({ type: 'ai-file-drop-result', success: false, error: String(e) }, '*');
+    return { success: false, error: String(e) };
   });
 })(${payload}, ${JSON.stringify(fileInputSelector)}, ${JSON.stringify(dropZoneSelector)});
   `.trim();

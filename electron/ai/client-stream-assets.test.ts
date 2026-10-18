@@ -34,4 +34,45 @@ describe('reasoning and interrupted streams', () => {
     expect(error).toHaveBeenCalled()
     expect(done).not.toHaveBeenCalled()
   })
+  it('keeps reading when a compatible gateway repeats finish_reason on every frame', async () => {
+    // 部分中转/自建网关每帧都带 finish_reason；首帧即收尾会把回复截断成空。
+    response([
+      { choices: [{ delta: { content: '你好' }, finish_reason: 'stop' }] },
+      { choices: [{ delta: { content: '，世界' }, finish_reason: 'stop' }] },
+      { choices: [{ delta: {}, finish_reason: 'stop' }] },
+    ])
+    const output = vi.fn(), done = vi.fn(), error = vi.fn()
+    await streamChat(provider, [], { onDelta: output, onDone: done, onError: error })
+    expect(output.mock.calls.map(call => call[0]).join('')).toBe('你好，世界')
+    expect(done).toHaveBeenCalledWith('你好，世界')
+    expect(error).not.toHaveBeenCalled()
+  })
+  it('completes on finish_reason alone for services that never send [DONE]', async () => {
+    response([
+      { choices: [{ delta: { content: '完整回复' } }] },
+      { choices: [{ delta: {}, finish_reason: 'stop' }] },
+    ])
+    const done = vi.fn(), error = vi.fn()
+    await streamChat(provider, [], { onDelta: vi.fn(), onDone: done, onError: error })
+    expect(done).toHaveBeenCalledWith('完整回复')
+    expect(error).not.toHaveBeenCalled()
+  })
+  it('keeps the payload when a usage-only frame carries an empty choices array', async () => {
+    response([
+      { choices: [{ delta: { content: '回复' } }] },
+      { choices: [], usage: { prompt_tokens: 7, completion_tokens: 3 } },
+      '[DONE]',
+    ])
+    const done = vi.fn(), usage = vi.fn(), error = vi.fn()
+    await streamChat(provider, [], { onDelta: vi.fn(), onDone: done, onError: error, onUsage: usage })
+    expect(done).toHaveBeenCalledWith('回复')
+    expect(usage).toHaveBeenCalledWith({ promptTokens: 7, completionTokens: 3 })
+  })
+  it('applies a connect and idle timeout to the streaming request', async () => {
+    response([{ choices: [{ delta: { content: 'ok' } }] }, '[DONE]'])
+    await streamChat(provider, [], { onDelta: vi.fn(), onDone: vi.fn(), onError: vi.fn() })
+    const options = request.mock.calls.at(-1)![1]
+    expect(options.headersTimeout).toBeGreaterThan(0)
+    expect(options.bodyTimeout).toBeGreaterThan(options.headersTimeout)
+  })
 })

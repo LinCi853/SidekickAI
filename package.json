@@ -54,7 +54,8 @@
     "build:candidate:payload": "node scripts/build-distribution.cjs --mode payload",
     "versions:check": "node scripts/sync-versions.cjs --check",
     "test:tooling": "node --test scripts/workspace-menu.test.cjs scripts/shared-source.test.cjs scripts/sync-versions.test.cjs scripts/product-version.test.cjs scripts/local-build-config.test.cjs scripts/incremental-build.test.cjs scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs",
-    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test"
+    "test:backup": "vitest run --root packages/backup-core",
+    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test && npm run test:backup"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

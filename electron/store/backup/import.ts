@@ -9,6 +9,7 @@ import { getDataDir } from './paths.js'
 import { inspectBackup, readImportBackup } from '../../../packages/backup-core/import.js'
 import { importAdapter } from './transfer-adapter.js'
 import { prepareRestoreDirectory, queuePreparedRestore, cancelPreparedRestore } from '../../../packages/backup-core/transaction.js'
+import { flushWindowStateNow } from '../window-store.js'
 import type { ImportResult } from './types.js'
 
 
@@ -33,6 +34,9 @@ async function restoreBackup(filePath: string, password?: string, fingerprint?: 
 
 
       releaseHandoff = await prepareDataRestoreHandoff()
+      // 交接已完成（渲染层已把窗口状态交上来），但 window-store 的落盘是 100ms 合并批次，
+      // 下面直接 app.exit(0) 不走 will-quit，不在这里落地就会丢掉最后一批窗口状态。
+      flushWindowStateNow()
       queuePreparedRestore(root, staged, decision.mode)
       try { app.relaunch() }
       catch (error) {
@@ -59,6 +63,10 @@ async function restoreBackup(filePath: string, password?: string, fingerprint?: 
 }
 
 export async function importAllDataDecrypted(filePath: string, password: string, fingerprint?: string): Promise<ImportResult> {
-  if (!isSabkEncrypted(filePath)) return { success: false, error: '密码错误或文件损坏' }
+  // 走「加密备份」入口却拿到明文包：如实说明格式不符，
+  // 不要让用户以为是密码记错或文件损坏。
+  if (!isSabkEncrypted(filePath)) {
+    return { success: false, error: '该文件不是加密备份，请改用普通导入（无需密码）' }
+  }
   return runBackupOperation('restore', () => restoreBackup(filePath, password, fingerprint))
 }

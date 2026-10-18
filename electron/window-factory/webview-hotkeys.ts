@@ -143,7 +143,7 @@ const commonHotkeys: HotkeyDef[] = [
   { key: 'w', ctrl: true, toLower: true, log: 'Ctrl+W → 关闭当前标签', action: () => ({ action: 'closeTab' }) },
 
   // Ctrl+G：切换手柄/键盘空间导航模式
-  { key: 'g', ctrl: true, toLower: true, log: 'Ctrl+G → 切换空间导航模式', action: () => ({ action: 'toggleSpatialNav' }) },
+  { key: 'g', ctrl: true, toLower: true, passWhenTyping: true, log: 'Ctrl+G → 切换空间导航模式', action: () => ({ action: 'toggleSpatialNav' }) },
 
   // Ctrl+D：添加当前页面到书签
   { key: 'd', ctrl: true, toLower: true, log: 'Ctrl+D → 添加书签', action: () => ({ action: 'addBookmark' }) },
@@ -155,23 +155,23 @@ const commonHotkeys: HotkeyDef[] = [
   { key: 'j', ctrl: true, toLower: true, log: 'Ctrl+J → 打开下载', action: () => ({ action: 'openDownloads' }) },
 
   // Ctrl+K / Ctrl+E：聚焦地址栏并进入搜索模式
-  { key: 'k', ctrl: true, toLower: true, log: `Ctrl+K → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
-  { key: 'e', ctrl: true, toLower: true, log: `Ctrl+E → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
+  { key: 'k', ctrl: true, toLower: true, passWhenTyping: true, log: `Ctrl+K → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
+  { key: 'e', ctrl: true, toLower: true, passWhenTyping: true, log: `Ctrl+E → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
 
   // Ctrl+Shift+Del：清除浏览数据
   { key: 'Delete', ctrl: true, shift: true, log: 'Ctrl+Shift+Del → 清除浏览数据', action: () => ({ action: 'clearBrowsingData' }) },
 
   // Ctrl+F：页内查找
-  { key: 'f', ctrl: true, toLower: true, log: 'Ctrl+F → 页内查找', action: () => ({ action: 'findInPage' }) },
+  { key: 'f', ctrl: true, toLower: true, passWhenTyping: true, log: 'Ctrl+F → 页内查找', action: () => ({ action: 'findInPage' }) },
 
   // Ctrl+P：打印当前页面
-  { key: 'p', ctrl: true, toLower: true, log: 'Ctrl+P → 打印', action: () => ({ action: 'print' }) },
+  { key: 'p', ctrl: true, toLower: true, passWhenTyping: true, log: 'Ctrl+P → 打印', action: () => ({ action: 'print' }) },
 
   // Ctrl+S：另存为当前页面（仅浏览器窗口；AI 应用窗口保留页面自身行为）
-  { key: 's', ctrl: true, toLower: true, condition: 'only', log: 'Ctrl+S → 另存为当前页面', action: () => ({ action: 'savePageAs' }) },
+  { key: 's', ctrl: true, toLower: true, condition: 'only', passWhenTyping: true, log: 'Ctrl+S → 另存为当前页面', action: () => ({ action: 'savePageAs' }) },
 
   // Ctrl+U：查看网页源代码（仅浏览器窗口）
-  { key: 'u', ctrl: true, toLower: true, condition: 'only', log: 'Ctrl+U → 查看网页源代码', action: () => ({ action: 'viewSource' }) },
+  { key: 'u', ctrl: true, toLower: true, condition: 'only', passWhenTyping: true, log: 'Ctrl+U → 查看网页源代码', action: () => ({ action: 'viewSource' }) },
 
   // Ctrl+= / Ctrl+- / Ctrl+0：页面缩放（仅浏览器窗口）
   {

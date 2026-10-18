@@ -111,6 +111,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     currentConversationId,
     messages,
     streaming,
+    streamingConversationId,
     streamError,
     initProviders,
     initConversations,
@@ -131,6 +132,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     currentConversationId: s.currentConversationId,
     messages: s.messages,
     streaming: s.streaming,
+    streamingConversationId: s.streamingConversationId,
     streamError: s.streamError,
     initProviders: s.initProviders,
     initConversations: s.initConversations,
@@ -567,7 +569,9 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                       onContinue={continueGeneration}
                     />
                   ))}
-                  {streaming && (
+                  {/* 流式气泡只属于它自己的会话：切到别的会话时不能在这里继续渲染，
+                      否则在 A 生成、B 正在显示的情况下，气泡会挂到 B 上（取消也会误伤）。 */}
+                  {streaming && streamingConversationId === currentConversationId && (
                     <StreamingMessageBubble
                       conversationId={currentConversationId ?? ''}
                       endRef={messagesEndRef}

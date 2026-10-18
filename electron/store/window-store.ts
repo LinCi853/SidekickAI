@@ -30,17 +30,42 @@ const store = createSqliteJsonStore<WindowStateStore>({
  * 高频窗口状态合并落盘（毫秒）：states 是整库单条 JSON（所有窗口 + 全部标签），
  * 标签标题变化、防抖 resize、最大化等热路径每次都全量序列化写库会让主进程
  * 在多标签场景持续做无谓大 JSON 写。内存写入即时生效（get 读缓存对象），
- * 磁盘写入合并到 100ms 批次；异常退出最多丢最近 100ms 的窗口状态，可接受。
+ * 磁盘写入合并到 100ms 批次；退出前由 flushWindowStateNow() 兜底落盘。
  */
 const WINDOW_STATE_FLUSH_DELAY_MS = 100
 let flushTimer: NodeJS.Timeout | undefined
+/** 自上次落盘以来是否有未写入的改动 */
+let pendingStateWrite = false
 
 function scheduleFlush(): void {
+  pendingStateWrite = true
   if (flushTimer) return
   flushTimer = setTimeout(() => {
     flushTimer = undefined
-    store.set('states', store.get('states'))
+    flushWindowStateNow()
   }, WINDOW_STATE_FLUSH_DELAY_MS)
+  // 不要让这个合并定时器拖住事件循环退出
+  flushTimer.unref?.()
+}
+
+/**
+ * 立即把合并中的窗口状态写入磁盘。
+ *
+ * 正常退出（app.quit）与强制退出都会走到这里，避免 100ms 窗口内的最后一次
+ * 标签/窗口状态变更随进程结束丢失。无改动时不产生写库。
+ */
+export function flushWindowStateNow(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = undefined
+  }
+  if (!pendingStateWrite) return
+  pendingStateWrite = false
+  try {
+    store.set('states', store.get('states'))
+  } catch (error) {
+    console.error('[window-store] 窗口状态写入失败:', error)
+  }
 }
 
 /** 主窗口默认 id */

@@ -15,7 +15,8 @@ import { isModuleEnabled } from '../modules/registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { app } from 'electron'
 import { isBackgroundClose, registerWindowRetirement } from '../window/window-retirement.js'
-import { BROWSER_WINDOW_RETIREMENT_SECONDS } from '../shared/background-policy.js'
+import { browserWindowRetirementSeconds } from '../shared/background-policy.js'
+import { isLowMemoryMode } from '../store/low-memory-mode.js'
 import {
   WINDOW_BACKGROUND_COLOR,
   getPreloadPath,
@@ -273,7 +274,9 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
   })
 
   // 后台隐藏过久自动关闭，释放该窗口全部 guest（标签状态已持久化）
-  registerWindowRetirement(win, { seconds: BROWSER_WINDOW_RETIREMENT_SECONDS })
+  registerWindowRetirement(win, {
+    seconds: () => browserWindowRetirementSeconds(isLowMemoryMode()),
+  })
   return win
 }
 

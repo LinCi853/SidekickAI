@@ -4,8 +4,9 @@
 // 只负责次窗口生命周期；主窗口及其已加载网页保持运行态。
 import { BrowserWindow } from 'electron'
 import { windowState } from '../window-state.js'
-import { BACKGROUND_RELEASE_DELAY_MS } from '../shared/background-policy.js'
+import { backgroundReleaseDelayMs } from '../shared/background-policy.js'
 import { isWindowAudible, markBackgroundClose } from '../window/window-retirement.js'
+import { isLowMemoryMode } from '../store/low-memory-mode.js'
 
 export interface BackgroundReleaseResult {
   windowsClosed: number
@@ -50,18 +51,19 @@ export function releaseBackgroundMemory(): BackgroundReleaseResult {
 /**
  * 进入后台后延迟评估次窗口释放。
  * 「后台」= 应用内没有焦点窗口（含被其它程序挡住、未最小化的情形）。
- * 延迟期内若重新获得焦点则取消。
+ * 延迟期内若重新获得焦点则取消。未显式传入时按低内存模式分档（15 / 30 分钟）。
  */
-export function scheduleBackgroundRelease(delayMs = BACKGROUND_RELEASE_DELAY_MS): void {
+export function scheduleBackgroundRelease(delayMs?: number): void {
   cancelBackgroundRelease()
-  console.log(`[background-release] 已计划 ${Math.round(delayMs / 60_000)} 分钟后评估后台释放`)
+  const effectiveDelayMs = delayMs ?? backgroundReleaseDelayMs(isLowMemoryMode())
+  console.log(`[background-release] 已计划 ${Math.round(effectiveDelayMs / 60_000)} 分钟后评估后台释放`)
   releaseTimer = setTimeout(() => {
     releaseTimer = null
     const focused = BrowserWindow.getFocusedWindow()
     if (focused && !focused.isDestroyed()) return
     console.log('[background-release] 检测到应用无焦点，开始释放')
     releaseBackgroundMemory()
-  }, delayMs)
+  }, effectiveDelayMs)
 }
 
 export function cancelBackgroundRelease(): void {

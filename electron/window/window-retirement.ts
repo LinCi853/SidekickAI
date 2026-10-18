@@ -5,12 +5,19 @@
 import { app, BrowserWindow, powerMonitor, webContents } from 'electron'
 
 export interface WindowRetirementOptions {
-  /** 闲置秒数，到点关闭 */
-  seconds: number
+  /**
+   * 闲置秒数，到点关闭。低内存模式档由调用方计算后传入；
+   * 传函数则每次设截止期时求值，便于开关即时生效。
+   */
+  seconds: number | (() => number)
   /** 返回 false 则永不退役（置顶、模态、导入中等） */
   eligible?: (win: BrowserWindow) => boolean
   /** 关闭前自定义清理；返回 false 则放弃本次关闭 */
   prepareClose?: (win: BrowserWindow) => Promise<boolean> | boolean
+}
+
+function resolveRetirementSeconds(options: WindowRetirementOptions): number {
+  return typeof options.seconds === 'function' ? options.seconds() : options.seconds
 }
 
 const tracked = new Map<BrowserWindow, { options: WindowRetirementOptions; deadline: number | null; paused: boolean }>()
@@ -68,7 +75,7 @@ function tick(): void {
       continue
     }
     if (entry.deadline == null) {
-      entry.deadline = now + entry.options.seconds * 1000
+      entry.deadline = now + resolveRetirementSeconds(entry.options) * 1000
       continue
     }
     if (now < entry.deadline) continue
@@ -98,7 +105,7 @@ export function registerWindowRetirement(win: BrowserWindow, options: WindowReti
     // 窗口状态仍在变化说明上次后台关闭被页面拦下，撤销标记
     backgroundClosing.delete(win)
     const entry = tracked.get(win)
-    if (entry) entry.deadline = isEligible(win, entry.options) ? Date.now() + entry.options.seconds * 1000 : null
+    if (entry) entry.deadline = isEligible(win, entry.options) ? Date.now() + resolveRetirementSeconds(entry.options) * 1000 : null
   }
   win.on('hide', refresh)
   win.on('minimize', refresh)

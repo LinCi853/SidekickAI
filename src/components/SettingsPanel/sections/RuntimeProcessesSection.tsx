@@ -87,6 +87,9 @@ export default function RuntimeProcessesSection({ active = true }: { active?: bo
         </time>}
       </div>
       {error && <p className="section-hint" role="alert">进程信息读取失败</p>}
+      {snapshot && <p className="section-hint" data-name="settings.developer.processes.scope">
+        列表总占用为上方各进程专用工作集之和，不含原生辅助程序（如启动助手）。
+      </p>}
       <div className="runtime-process-scroll" tabIndex={0} aria-label="运行进程列表">
         <table className="runtime-process-table" aria-label="运行进程" aria-busy={refreshing}>
           <colgroup><col className="process-role-column" /><col /><col className="process-pid-column" /><col className="process-cpu-column" /><col className="process-memory-column" /></colgroup>

@@ -37,6 +37,11 @@ const windowState = vi.hoisted(() => ({
 }))
 vi.mock('../window-state.js', () => ({ windowState }))
 
+const settings = vi.hoisted(() => ({ lowMemoryMode: false }))
+vi.mock('../store/low-memory-mode.js', () => ({
+  isLowMemoryMode: () => settings.lowMemoryMode === true,
+}))
+
 function makeWin(id: string, options: { visible?: boolean; minimized?: boolean; audible?: boolean } = {}): FakeWin {
   const win: FakeWin = {
     id,
@@ -67,6 +72,7 @@ beforeEach(() => {
   focusedWindow = null
   windowState.mainWindow = null
   windowState.previewWindow = null
+  settings.lowMemoryMode = false
 })
 
 afterEach(() => {
@@ -108,10 +114,21 @@ describe('closeSecondaryWindows', () => {
 })
 
 describe('scheduleBackgroundRelease', () => {
-  it('waits thirty minutes by default before releasing', () => {
+  it('waits thirty minutes by default when low memory mode is off', () => {
     const hidden = makeWin('hidden')
+    settings.lowMemoryMode = false
     scheduleBackgroundRelease()
     vi.advanceTimersByTime(29 * 60_000)
+    expect(hidden.close).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(60_000)
+    expect(hidden.close).toHaveBeenCalled()
+  })
+
+  it('waits fifteen minutes when low memory mode is on', () => {
+    const hidden = makeWin('hidden')
+    settings.lowMemoryMode = true
+    scheduleBackgroundRelease()
+    vi.advanceTimersByTime(14 * 60_000)
     expect(hidden.close).not.toHaveBeenCalled()
     vi.advanceTimersByTime(60_000)
     expect(hidden.close).toHaveBeenCalled()

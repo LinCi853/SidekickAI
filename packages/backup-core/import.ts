@@ -19,6 +19,15 @@ export interface ImportPreparation { tempRoot?: string; signal?: AbortSignal; on
 
 export function backupFingerprint(file: string): string { return sha256FileSync(file) }
 
+/**
+ * 只有 SABK 的 GCM 认证失败（decryptFileStream 返回 null）才映射为“密码错误或文件损坏”。
+ * 压缩方式不受支持、声明展开体积超限等归档格式错误由 stream-archive 直接抛出，必须保留原文：
+ * 否则一个由 7-Zip/unzip/Compress-Archive 重新打包的合法备份会被误报为密码错误。
+ */
+async function decryptPayload(file: string, output: string, password: string, signal?: AbortSignal): Promise<void> {
+  if (await decryptFileStream(file, output, password, { signal }) === null) throw new Error('密码错误或文件损坏')
+}
+
 export async function readImportBackup(adapter: ImportAdapter, file: string, directory: string, password?: string, expectedFingerprint?: string, preparation: ImportPreparation = {}): Promise<PreparedBackup> {
   const fingerprint = await hashFile(file, preparation.signal)
   if (expectedFingerprint && fingerprint !== expectedFingerprint) throw new Error('备份文件已变化，请重新检查并确认导入。')
@@ -34,7 +43,7 @@ export async function readImportBackup(adapter: ImportAdapter, file: string, dir
       temporary = fs.mkdtempSync(path.join(temporaryRoot, 'sidekick-backup-decrypt-'))
       createPrivateDirectory(temporary)
       input = path.join(temporary, 'payload.zip')
-      if (!await decryptFileStream(file, input, password, { signal: preparation.signal })) throw new Error('密码错误或文件损坏')
+      await decryptPayload(file, input, password, preparation.signal)
     }
     const manifest = await readStreamingArchive(input, { extractTo: directory, allowLegacy: true, signal: preparation.signal, onBytes: preparation.onProgress })
     const decision = classifyBackup(manifest, adapter.edition)

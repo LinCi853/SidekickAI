@@ -15,7 +15,8 @@ import { copySessionCookies } from '../store/cookie-copy.js'
 import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../window-factory/helpers.js'
 import { registerWindowRetirement } from './window-retirement.js'
 import { getAppWindowIcon, reapplyWindowIcon } from '../window-factory/app-icon.js'
-import { BROWSER_WINDOW_RETIREMENT_SECONDS } from '../shared/background-policy.js'
+import { browserWindowRetirementSeconds } from '../shared/background-policy.js'
+import { isLowMemoryMode } from '../store/low-memory-mode.js'
 
 /** Profile 窗口最小宽度 */
 const PROFILE_WINDOW_MIN_WIDTH = 240
@@ -146,7 +147,9 @@ export class WindowManager {
       win.on('minimize', () => reapplyWindowIcon(win))
       win.on('restore', () => reapplyWindowIcon(win))
       // 后台闲置自动关闭，释放该 profile 窗口的 guest
-      registerWindowRetirement(win, { seconds: BROWSER_WINDOW_RETIREMENT_SECONDS })
+      registerWindowRetirement(win, {
+        seconds: () => browserWindowRetirementSeconds(isLowMemoryMode()),
+      })
 
       // 设置 webContents UA（与 session UA 一致）
       win.webContents.setUserAgent(profile.userAgent)

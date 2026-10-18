@@ -13,12 +13,24 @@ function recentRange(days = 30): { startDate: string; endDate: string } {
   return { startDate: localLogDate(start), endDate: localLogDate(end) };
 }
 
+/** 指定日期是否可用：两端都填写且起始早于结束（后者按次日 0 点计算） */
+function isValidCustomRange(startDate: string, endDate: string): boolean {
+  if (!startDate || !endDate) return false;
+  try { logDateRange({ startDate, endDate }); return true; } catch { return false; }
+}
+
 export default function LogFolderSection() {
   const pending = useRef(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
-  const [range, setRange] = useState<'recent' | 'all'>('recent');
+  const [range, setRange] = useState<'recent' | 'all' | 'custom'>('recent');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [notice, setNotice] = useState('');
+
+  const customValid = isValidCustomRange(startDate, endDate);
+  const dateInvalid = range === 'custom' && !!startDate && !!endDate && !customValid;
+  const exportDisabled = opening || (range === 'custom' && !customValid);
 
   const openFolder = async () => {
     if (pending.current) return;
@@ -27,8 +39,8 @@ export default function LogFolderSection() {
     setError('');
     setNotice('');
     try {
-      const options = range === 'all' ? {} : recentRange(30);
-      try { logDateRange(options); } catch { setError('日期范围无效'); return; }
+      const options = range === 'all' ? {} : range === 'custom' ? { startDate, endDate } : recentRange(30);
+      try { logDateRange(options); } catch { setError(range === 'custom' ? '开始日期不能晚于结束日期' : '日期范围无效'); return; }
       const result = await openLogsFolder(options);
       setNotice(result?.warnings ? `已导出，${result.warnings} 个来源未能读取` : '已保存并打开日志文件夹');
     } catch {
@@ -48,8 +60,9 @@ export default function LogFolderSection() {
           options={[
             { value: 'recent' as const, label: '近 30 天' },
             { value: 'all' as const, label: '全部' },
+            { value: 'custom' as const, label: '指定日期' },
           ]}
-          onChange={(v) => setRange(v)}
+          onChange={(v) => { setRange(v); setError(''); setNotice(''); }}
           disabled={opening}
           name="日志导出范围"
           className="seg-control-row"
@@ -58,7 +71,7 @@ export default function LogFolderSection() {
           type="button"
           variant="outline"
           className="btn-outline-sm"
-          disabled={opening}
+          disabled={exportDisabled}
           onClick={() => void openFolder()}
           data-name="settings.advanced.logs.open-folder"
           aria-busy={opening}
@@ -67,6 +80,32 @@ export default function LogFolderSection() {
           <span>导出并打开</span>
         </Button>
       </FormRow>
+      {range === 'custom' && (
+        <FormRow label="导出日期">
+          <input
+            type="date"
+            className="input-underline"
+            value={startDate}
+            max={endDate || undefined}
+            onChange={(e) => { setStartDate(e.target.value); setError(''); setNotice(''); }}
+            disabled={opening}
+            aria-label="导出开始日期"
+            data-name="settings.advanced.logs.start-date"
+          />
+          <span className="form-row-hint" aria-hidden="true">至</span>
+          <input
+            type="date"
+            className="input-underline"
+            value={endDate}
+            min={startDate || undefined}
+            onChange={(e) => { setEndDate(e.target.value); setError(''); setNotice(''); }}
+            disabled={opening}
+            aria-label="导出结束日期"
+            data-name="settings.advanced.logs.end-date"
+          />
+        </FormRow>
+      )}
+      {dateInvalid && <p className="feedback-text fail" data-name="settings.advanced.logs.date-error">开始日期不能晚于结束日期</p>}
       {error && <p className="feedback-text fail" role="alert" data-name="settings.advanced.logs.error">{error}</p>}
       {notice && <p className="feedback-text ok" role="status">{notice}</p>}
     </section>

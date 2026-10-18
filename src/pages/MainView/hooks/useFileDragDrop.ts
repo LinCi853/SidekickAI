@@ -7,6 +7,20 @@ import { buildFileDropScript, type DroppedFileInfo } from '../file-drop-script';
 import type { WebviewElement } from '../../../lib/webview';
 import type { AIPlatform } from '../../../lib/electron-api';
 
+/** chat file-drop 脚本回执：成功/失败都由 guest 侧返回，避免"没导入却提示已导入" */
+export interface FileDropResult { success?: boolean; method?: string; error?: string }
+
+/** 把 guest 侧错误码翻译成用户能看懂的原因。
+ *  只翻译白名单错误码：guest 返回的任意字符串不能直接进提示，
+ *  否则页面内部异常（栈、内部 API 名）会外泄到界面，也可被用来伪造提示文案。 */
+export function describeFileDropFailure(error?: string): string {
+  switch (error) {
+    case 'no-valid-files': return '文件无法读取，未导入';
+    case 'no-target-found': return '未找到可接收文件的输入区域，请手动拖入或粘贴';
+    default: return '导入失败，请手动拖入或粘贴';
+  }
+}
+
 /**
  * Manages file drag-and-drop import from OS into the active webview,
  * plus download-done toast notifications.
@@ -77,8 +91,14 @@ export function useFileDragDrop(platforms: AIPlatform[]) {
           ? { fileInputSelector: platformNow.fileInputSelector, dropZoneSelector: platformNow.dropZoneSelector }
           : undefined;
         const script = buildFileDropScript(fileInfos, dropOptions);
-        await wv.executeJavaScript(script);
-        showDownloadToast(`已导入 ${fileInfos.length} 个文件到当前应用`);
+        // 脚本返回 Promise<{success, method|error}>；executeJavaScript 会等待它，
+        // 因此「派发失败」不会再被当成「已导入」。
+        const result = await wv.executeJavaScript(script) as FileDropResult | undefined;
+        if (result?.success) {
+          showDownloadToast(`已导入 ${fileInfos.length} 个文件到当前应用`);
+        } else {
+          showDownloadToast(describeFileDropFailure(result?.error));
+        }
       } catch (err) {
         console.error('[MainView] 文件拖拽导入失败:', err);
         showDownloadToast('导入失败');
