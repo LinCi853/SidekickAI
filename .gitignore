@@ -81,13 +81,8 @@ Thumbs.db
 _fixes/
 ai-window-uiux/
 ai-window-uiux-v2/
-/docs/*
-!/docs/formats/
-/docs/formats/*
-!/docs/formats/SKSETUP3.md
-!/docs/formats/distribution-toolkit.md
-!/docs/handoffs/
-!/docs/handoffs/**
+/docs/
+/website/
 tests/
 showcase.html
 # 根目录散落 .md 不入库（仅以下开源基建文件例外）
@@ -111,6 +106,43 @@ showcase.html
 build/test-*.mjs
 # 一次性 PoC / 调试实验脚本（验证完毕，未入库）
 scripts/poc/
+# 测试/测量/本地工具脚本不入库（源码仓只保留发行构建链）
+scripts/*.test.*
+scripts/verify-*
+scripts/measure-*
+scripts/memory-*
+scripts/prepare-resident-*
+scripts/resident-*
+scripts/startup-cost-fixture.cjs
+scripts/probe-*
+scripts/repro-*
+scripts/fixtures/
+scripts/test-fixtures/
+scripts/bootstrap/
+scripts/workspace-menu.cjs
+scripts/dev.mjs
+scripts/clean-temp.cjs
+scripts/check-node-version.cjs
+scripts/local-build-config.cjs
+scripts/shared-source.cjs
+scripts/oxy-build-config.cjs
+scripts/gen-application-icon.cjs
+scripts/renderer-security.ts
+scripts/architecture-*
+scripts/build-backup-cli.cjs
+scripts/build-cache.cjs
+scripts/build-startup-helper.cjs
+scripts/build-tool-inputs.cjs
+scripts/build-evidence.cjs
+scripts/gen-data-name-lookup.cjs
+scripts/prepare-startup-helper.cjs
+scripts/standalone-preloads.*
+scripts/excalidraw-*
+scripts/compilation-inputs.ts
+scripts/windows-executable-signing.cjs
+# 旧版分发工具包只保留本地；仓内只钉当前版
+vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.2-*.zip
+vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.3-*.zip
 
 # ============================================================
 # IDE / Tool local state (workspace 元数据 / 会话计划稿，IDE 会不断改)
