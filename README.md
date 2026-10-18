@@ -6,7 +6,9 @@
 
 默认AI应用 DeepSeek，原生软件体验。
 
-<img src="media/readme/demo-doc-to-ai-2p5x.gif" width="560" alt="上手总览：复制文档、唤起工百窗、粘贴给 AI、收起等待、唤起查看 AI 结果">
+<p align="center">
+  <img src="media/readme/demo-doc-to-ai-2p5x.gif" width="560" alt="上手总览：复制文档、唤起工百窗、粘贴给 AI、收起等待、唤起查看 AI 结果">
+</p>
 
 这是一份送给用户的礼物，用最纯粹的原始定义做最极致的工具。软件免费提供，采用 MIT 许可，你可以自由使用、修改和分享。概念版专心做好工具，独立维护版本，所有公开发布均为正式版。
 
@@ -20,7 +22,9 @@
 - **窗口与快捷键**：快速唤出、切换和置顶窗口，自定义常用操作的快捷键。
 - **备份与恢复**：导出本地资料，在需要时恢复配置和已保存内容。
 
-<img src="media/readme/demo-multi-account.gif" width="560" alt="多账号隔离：同一应用内切换不同 AI 账号，各自保留独立登录信息与历史记录">
+<p align="center">
+  <img src="media/readme/demo-multi-account.gif" width="560" alt="多账号隔离：同一应用内切换不同 AI 账号，各自保留独立登录信息与历史记录">
+</p>
 
 ## 特色功能
 
