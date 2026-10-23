@@ -129,7 +129,7 @@ function help(context) {
       '完整包使用本机自建身份；local/self-build-identity.json 用于后续同身份构建，请保留且勿公开。',
       'SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE 只选择引用 JSON 位置；版本、大小与摘要以代码内固定值为准，环境变量不改变信任锚。',
       '完整包构建不会执行安装。'] : []),
-    ...(context.editionId === 'concept' ? ['maintenance/installation-configuration.json 可设置安装默认值，需工具包支持配置接口；示例见同目录 .example.json。'] : []),
+    ...(context.editionId === 'concept' ? ['contracts/installation-configuration.json 可设置安装默认值，需工具包支持配置接口；示例见同目录 .example.json。'] : []),
     '--dry-run 只显示目录、环境和参数，不运行命令；不带操作时预览各菜单。',
     '生成的文件保存在本机，不会自动上传或替换已有安装。',
   ].join('\n')

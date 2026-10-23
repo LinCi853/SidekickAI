@@ -6,7 +6,7 @@ const runtime = require('./application-runtime.cjs')
 const u = require('./build-utils.cjs')
 
 function installationContract(edition, root = path.resolve(__dirname, '..')) {
-  const file = path.join(root, 'maintenance/installation-contract.json')
+  const file = path.join(root, 'contracts/installation-contract.json')
   u.assertFile(file)
   if (fs.statSync(file).size > 256 * 1024) throw new Error('Application installation contract exceeds its byte limit')
   const value = JSON.parse(fs.readFileSync(file, 'utf8'))

@@ -1,6 +1,6 @@
 # 二进制待组装包接口
 
-应用侧 `maintenance/distribution-product.json` 提供名称、发布者和图标引用，`maintenance/installation-contract.json` 提供功能、选项、默认值、默认内容和指南文字，并通过本仓 `LICENSE` 读取应用许可正文。标准载荷导出为 `resources/installation-contract.json`，随载荷清单及正文签名保留；不需要修改私有平台源码。未提供协议的产品使用空协议列表，维护向导自动省去许可页面，缺失的项目内容不由模板代填。
+应用侧 `contracts/distribution-product.json` 提供名称、发布者和图标引用，`contracts/installation-contract.json` 提供功能、选项、默认值、默认内容和指南文字，并通过本仓 `LICENSE` 读取应用许可正文。标准载荷导出为 `resources/installation-contract.json`，随载荷清单及正文签名保留；不需要修改私有平台源码。未提供协议的产品使用空协议列表，维护向导自动省去许可页面，缺失的项目内容不由模板代填。
 
 当前固定工具包为 1.3.5，应用合同必须随每份载荷提供，双架构内容一致。应用侧包装保留产品描述符、原始载荷和配置输入，成品移动后仍可通过同一二进制入口复验。
 
@@ -22,7 +22,7 @@
 | archive.size | 正整数 | ZIP 原始字节数，须与消费端代码内固定值一致 |
 | archive.sha256 | 字符串 | ZIP 原始字节 SHA-256，小写十六进制 64 字符，须与消费端代码内固定值一致 |
 
-组件引用默认从 `maintenance/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，使同一归档可从明确的其他位置取得；版本、大小与摘要以消费端代码内固定值为准，环境变量不改变信任锚。任一身份字段不一致，都会在读取归档、下载、使用缓存或运行组件之前失败。缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
+组件引用默认从 `contracts/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，使同一归档可从明确的其他位置取得；版本、大小与摘要以消费端代码内固定值为准，环境变量不改变信任锚。任一身份字段不一致，都会在读取归档、下载、使用缓存或运行组件之前失败。缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
 
 当前消费端只接受 `scripts/distribution-toolkit-release.cjs` 固定的 1.3.5：121,634,222 字节，SHA-256 为 `68381b06de4fccffce7a9a4192d56b315149f52d36594954ce838fe4fec23b06`。接受新的组件发行版须审查并更新源码固定值及引用；不提供跳过固定值校验的开关。
 
@@ -93,7 +93,7 @@ assemble 的请求为以下对象，所有路径是绝对路径，outputDirector
 
 产品版本从两份一致的标准载荷取得，并与实际软件归档交叉核对；工具包版本不覆盖应用版本。标准载荷清单最多 4 MiB。输出正文包含对应架构卸载器、独立恢复程序及其运行时，由组装器核验、注入并生成本地证明。原始标准载荷保持不变。
 
-工程可提供 `maintenance/installation-configuration.json`，由调用包装传入二进制组件。格式见同目录的 `installation-configuration.example.json`。声明 `installationConfigurationVersion: 1` 的工具包支持覆盖 `autoLaunch`（布尔值）、`logLevel`（debug、info、warn、error）和 `usageTracking`（布尔值）的默认值；可只指定部分选项，最大 32 KiB。未知字段、选项和值均被拒绝。用户仍可在向导中调整最终值，修复时保留已有配置。
+工程可提供 `contracts/installation-configuration.json`，由调用包装传入二进制组件。格式见同目录的 `installation-configuration.example.json`。声明 `installationConfigurationVersion: 1` 的工具包支持覆盖 `autoLaunch`（布尔值）、`logLevel`（debug、info、warn、error）和 `usageTracking`（布尔值）的默认值；可只指定部分选项，最大 32 KiB。未知字段、选项和值均被拒绝。用户仍可在向导中调整最终值，修复时保留已有配置。
 
 配置接口在 1.2.0 中可省略；当前消费端仍只接受上述固定发行版。传入配置要求固定工具包声明兼容能力，不支持时须在编译应用前停止。新增选项、信任、身份或执行逻辑需要升级组件。应用版本及默认值的兼容调整可复用同一工具包，无需安装器源码。
 

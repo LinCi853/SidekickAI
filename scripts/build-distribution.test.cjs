@@ -122,12 +122,12 @@ test('native application resources are prepared before capture and omitted from 
 
 test('candidates retain both native payload manifests, one green archive per architecture and immutable copies', async t => {
   const root = temporary(t)
-  fs.mkdirSync(path.join(root, 'maintenance'))
+  fs.mkdirSync(path.join(root, 'contracts'), { recursive: true })
   fs.mkdirSync(path.join(root, 'packages/product-contract'), { recursive: true })
   fs.writeFileSync(path.join(root, 'packages/product-contract/manifest.json'), JSON.stringify({ editions: { concept, community } }))
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: concept.version }))
   fs.writeFileSync(path.join(root, 'product-edition.json'), JSON.stringify({ edition: 'concept' }))
-  fs.writeFileSync(path.join(root, 'maintenance/shared-source.json'), JSON.stringify({ schemaVersion: 1, files: {} }))
+  fs.writeFileSync(path.join(root, 'contracts/shared-source.json'), JSON.stringify({ schemaVersion: 1, files: {} }))
   const payloads = []
   for (const architecture of ['x64', 'arm64']) {
     const source = await createRuntime(root, architecture)
@@ -213,10 +213,10 @@ test('public source fingerprints cover application configuration and ignore priv
     assert.notEqual(build.captureInputs(root).fingerprint, previous.fingerprint)
   }
   const previous = build.captureInputs(root)
-  fs.mkdirSync(path.join(root, 'maintenance'))
-  fs.writeFileSync(path.join(root, 'maintenance/distribution-toolkit.json'), '{}')
+  fs.mkdirSync(path.join(root, 'contracts'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'contracts/distribution-toolkit.json'), '{}')
   assert.notEqual(build.captureInputs(root).fingerprint, previous.fingerprint)
   const configured = build.captureInputs(root)
-  fs.writeFileSync(path.join(root, 'maintenance/distribution-product.json'), '{"icon":"resources/product-icon.ico"}')
+  fs.writeFileSync(path.join(root, 'contracts/distribution-product.json'), '{"icon":"resources/product-icon.ico"}')
   assert.notEqual(build.captureInputs(root).fingerprint, configured.fingerprint)
 })

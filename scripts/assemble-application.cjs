@@ -14,7 +14,7 @@ const CONFIGURATION_PATH = 'inputs/installation-configuration.json'
 const PRODUCT_PATH = 'inputs/product-descriptor.json'
 
 function readProductDescriptor(root) {
-  const file = path.join(root, 'maintenance/distribution-product.json')
+  const file = path.join(root, 'contracts/distribution-product.json')
   if (!fs.existsSync(file)) return null
   u.assertFile(file)
   if (fs.statSync(file).size > 32 * 1024) throw new Error('Product descriptor exceeds its size limit')
@@ -32,7 +32,7 @@ function assertProductUnchanged(product, root) {
 }
 
 function readInstallationConfiguration(root, toolkit) {
-  const file = path.join(root, 'maintenance/installation-configuration.json')
+  const file = path.join(root, 'contracts/installation-configuration.json')
   if (!fs.existsSync(file)) return null
   u.assertFile(file)
   const raw = fs.readFileSync(file)
@@ -53,7 +53,7 @@ function readInstallationConfiguration(root, toolkit) {
 
 function assertConfigurationUnchanged(configuration, root) {
   if (!configuration) {
-    if (fs.existsSync(path.join(root, 'maintenance/installation-configuration.json'))) {
+    if (fs.existsSync(path.join(root, 'contracts/installation-configuration.json'))) {
       throw new Error('Installation configuration changed during assembly')
     }
     return

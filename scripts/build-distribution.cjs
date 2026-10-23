@@ -43,7 +43,7 @@ function modePackages(mode, edition) {
 function captureInputs(root = ROOT) {
   const inputs = ['src', 'electron', 'scripts', 'packages', 'plugins', 'resources', 'tools/startup-helper',
     'package.json', 'package-lock.json', 'electron-builder.yml', 'electron-builder.portable.yml', 'electron.vite.config.ts', 'tsconfig.json', 'tsconfig.node.json',
-    'LICENSE', 'product-edition.json', 'maintenance/shared-source.json', 'maintenance/component-contract.json', 'maintenance/distribution-toolkit.json', 'maintenance/distribution-product.json', 'maintenance/installation-contract.json', 'maintenance/installation-configuration.json', 'build/License.txt']
+    'LICENSE', 'product-edition.json', 'contracts/shared-source.json', 'contracts/component-contract.json', 'contracts/distribution-toolkit.json', 'contracts/distribution-product.json', 'contracts/installation-contract.json', 'contracts/installation-configuration.json', 'build/License.txt']
   const excluded = new Set(['node_modules', 'target', 'dist', 'gen', '.git'])
   const files = []
   const collect = file => {
@@ -185,7 +185,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
       ...(productDescriptorSha256 === undefined ? {} : { productId: assembled.result.productId, productDescriptorSha256 }),
       ...(configurationSha256 === undefined ? {} : { installationConfigurationSha256: configurationSha256 }) }
   } else if (artifacts.assembly) throw new Error('Unexpected installer assembly candidates')
-  const shared = JSON.parse(fs.readFileSync(path.join(root, 'maintenance/shared-source.json'), 'utf8'))
+  const shared = JSON.parse(fs.readFileSync(path.join(root, 'contracts/shared-source.json'), 'utf8'))
   const manifest = { schemaVersion: 1, status: 'candidate', softwareId: 'sidekickai', edition: artifacts.edition, version: artifacts.version,
     generatedAt: new Date().toISOString(), architectures: artifacts.architectures,
     sourceInputs: artifacts.inputs, sharedSource: shared, artifacts: files, architectureEvidence: [],

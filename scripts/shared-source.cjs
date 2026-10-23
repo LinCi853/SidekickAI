@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const root = path.resolve(__dirname, '..')
-const manifestPath = 'maintenance/shared-source.json'
+const manifestPath = 'contracts/shared-source.json'
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
 
 function resolveFile(workspace, relative) {

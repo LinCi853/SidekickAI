@@ -84,7 +84,7 @@ function validateReference(reference, options = {}) {
 
 function readReference(root, options = {}) {
   const file = path.resolve(options.referenceFile || options.env?.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE
-    || process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE || path.join(root, 'maintenance/distribution-toolkit.json'))
+    || process.env.SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE || path.join(root, 'contracts/distribution-toolkit.json'))
   if (!fs.existsSync(file)) throw new Error('安装维护待组装包尚未配置；请提供发布清单 SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE。')
   u.assertFile(file)
   if (fs.statSync(file).size > MAX_MANIFEST_BYTES) throw new Error('Distribution toolkit reference exceeds its size limit')

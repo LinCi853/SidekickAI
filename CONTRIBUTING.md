@@ -16,7 +16,7 @@
 
 ## 公共源码与文档
 
-产品版本以当前工作区 package.json 为准；共用品牌与路线身份由 packages/product-contract 管理。涉及共享软件代码时，核对 maintenance/shared-source.json，并通过已有产品和共享检查；不要覆盖其他工作区的修改。
+产品版本以当前工作区 package.json 为准；共用品牌与路线身份由 packages/product-contract 管理。涉及共享软件代码时，核对 contracts/shared-source.json，并通过已有产品和共享检查；不要覆盖其他工作区的修改。
 
 本仓构建双架构绿色版和逐架构标准应用载荷 ZIP，载荷随附文件清单、大小与 SHA-256。完整包入口通过固定版本与摘要的二进制待组装包生成 x64、ARM64 离线安装器，为与自建版本区分，官方发布采用密钥加密软件；自建版本的具体操作由 launch.bat 菜单提供，接口见 [二进制组件说明](media/formats/distribution-toolkit.md)。自行构建身份保留在忽略的本地目录，不能提交或公开；安装、卸载与恢复不依赖构建机上的身份文件。
 

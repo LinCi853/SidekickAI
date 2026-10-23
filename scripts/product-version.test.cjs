@@ -51,7 +51,7 @@ test('concept accepts numbered releases and rejects prerelease labels before wri
 })
 
 test('shared source never pins edition-specific product version files', () => {
-  const shared = require('../maintenance/shared-source.json')
+  const shared = require('../contracts/shared-source.json')
   const pinned = new Set(Object.keys(shared.files))
   assert(!pinned.has('package.json'))
   assert(!pinned.has('package-lock.json'))
