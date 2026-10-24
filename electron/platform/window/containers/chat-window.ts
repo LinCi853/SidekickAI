@@ -16,6 +16,7 @@ import {
 import { buildWindowConfig } from '../window-config-builder.js'
 import { calculateChatWindowMinWidth, getUiScaleFromSettings, CHAT_WINDOW_MIN_HEIGHT } from '../window-size-helpers.js'
 import { isModuleEnabled } from '../../../modules/registry.js'
+import { registerOwnedWindow } from '../../../modules/target-registry.js'
 import { registerWindowRetirement } from '../window-retirement.js'
 import { windowRetirementSeconds } from '../../../shared/background-policy.js'
 import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
@@ -103,6 +104,7 @@ export function createChatWindow(): BrowserWindow | null {
   registerWindowRetirement(win, {
     seconds: () => windowRetirementSeconds('chat', isLowMemoryMode()),
   })
+  registerOwnedWindow(win, 'custom-chat')
   return win
 }
 

@@ -254,3 +254,13 @@ class TargetRegistryImpl {
 
 /** 单例 */
 export const targetRegistry = new TargetRegistryImpl()
+
+/**
+ * Registers a module-owned window and releases its record when the window closes,
+ * so the residual scan can read window ownership from this ledger.
+ */
+export function registerOwnedWindow(win: BrowserWindow, ownerModule: string): void {
+  const targetId = `window-${win.id}`
+  targetRegistry.register({ targetId, type: 'window', nativeId: String(win.id), ownerModule })
+  win.once('closed', () => targetRegistry.unregister(targetId))
+}

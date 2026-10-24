@@ -23,6 +23,7 @@ export function showHistoryDownloadWindow(): void {
     title: '工百窗 - 历史记录与下载管理',
     windowId: HISTORY_DOWNLOAD_WINDOW_ID,
     mode: 'history-download',
+    ownerModule: 'browser',
     getExisting: () => windowState.historyDownloadWindow,
     setWindow: (win) => { windowState.historyDownloadWindow = win },
   })

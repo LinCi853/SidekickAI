@@ -12,6 +12,7 @@ import { profileStore } from './profile-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../platform/window/window-state.js'
 import { isModuleEnabled } from '../modules/registry.js'
+import { registerOwnedWindow } from '../modules/target-registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { app } from 'electron'
 import { isBackgroundClose, registerWindowRetirement } from '../platform/window/window-retirement.js'
@@ -277,6 +278,7 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
   registerWindowRetirement(win, {
     seconds: () => browserWindowRetirementSeconds(isLowMemoryMode()),
   })
+  registerOwnedWindow(win, 'browser')
   return win
 }
 

@@ -1,4 +1,4 @@
-// electron/window-factory/singleton-popup.ts — 单例弹出窗口工厂
+// electron/platform/window/singleton-popup.ts — 单例弹出窗口工厂
 //
 // 从 helpers.ts 抽离：创建单例弹出窗口的通用工厂。
 
@@ -14,6 +14,7 @@ import { safeLogWindowTrace } from './window-utils.js'
 import { registerWindowRetirement } from './window-retirement.js'
 import { windowRetirementSeconds } from '../../shared/background-policy.js'
 import { isLowMemoryMode } from '../../store/low-memory-mode.js'
+import { registerOwnedWindow } from '../../modules/target-registry.js'
 
 /**
  * 创建单例弹出窗口的通用工厂。
@@ -38,6 +39,8 @@ export function createSingletonPopupWindow(opts: {
   title: string
   windowId: string
   mode: string
+  /** Module that owns this window; recorded in the target ledger for residual scans. */
+  ownerModule?: string
   extraQuery?: Record<string, string>
   getExisting: () => BrowserWindow | null | undefined
   setWindow: (win: BrowserWindow | null) => void
@@ -91,6 +94,7 @@ export function createSingletonPopupWindow(opts: {
 
   // 4. 缓存单例引用
   opts.setWindow(win)
+  if (opts.ownerModule) registerOwnedWindow(win, opts.ownerModule)
 
   // 5. 加载渲染进程
   loadRenderer(win, opts.windowId, opts.mode, opts.extraQuery)

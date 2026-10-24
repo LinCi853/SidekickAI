@@ -85,8 +85,6 @@ export interface ModuleManifest {
   entries: string[]
   /** 启用时注册的热键描述 */
   hotkeys: string[]
-  /** URL markers the residual scan uses to find windows owned by this module. */
-  windowMarkers?: string[]
   /** 启用回调：只允许注册 IPC/协议/热键/store 等副作用 */
   init?: () => void | Promise<void>
   /** 禁用回调：逆序撤销 init 的全部副作用（11.10 零残留硬保证） */

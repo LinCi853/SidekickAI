@@ -26,6 +26,7 @@ export function showPromptWindow(request: AssetNavigation = {}): void {
     title: '工百窗 - AI资产',
     windowId: PROMPT_WINDOW_ID,
     mode: 'prompts',
+    ownerModule: 'prompt-library',
     getExisting: () => windowState.promptWindow,
     setWindow: (win) => { windowState.promptWindow = win },
   })

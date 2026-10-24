@@ -15,6 +15,7 @@ import { app, BrowserWindow, screen } from 'electron'
 import { IPC_CHANNELS } from '../../../shared/types.js'
 import { windowState } from '../../../platform/window/window-state.js'
 import { getPreloadPath, loadRenderer } from '../../../platform/window/helpers.js'
+import { registerOwnedWindow } from '../../target-registry.js'
 
 /** 后台语音预览窗自动隐藏延迟（毫秒）— 识别完成后多留一段时间 */
 const PREVIEW_HIDE_DELAY_MS = 5000
@@ -127,6 +128,7 @@ function createRecordIndicatorWindow(): BrowserWindow {
   win.on('closed', () => {
     if (windowState.previewWindow === win) windowState.previewWindow = null
   })
+  registerOwnedWindow(win, 'voice')
 
   return win
 }

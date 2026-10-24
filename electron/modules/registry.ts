@@ -53,22 +53,6 @@ export function runResidualScan(): ResidualScanResult {
   const disabled = listModuleInfos()
     .filter((m) => !m.enabled)
     .map((m) => m.id)
-  // Check module-owned windows declared by each manifest.
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed()) continue
-    let url = ''
-    try {
-      url = win.webContents.getURL()
-    } catch {
-      continue
-    }
-    for (const m of listManifests()) {
-      if (isModuleEnabled(m.id) || !m.windowMarkers?.length) continue
-      if (m.windowMarkers.some((marker) => url.includes(marker))) {
-        violations.push('模块 ' + m.id + ' 已关闭但仍存在窗口: ' + url)
-      }
-    }
-  }
   // A disabled voice module must release its hotkey.
   const hm = getHotkeyManagerInstance()
   if (hm && !isModuleEnabled('voice') && hm.voiceUnregisterFn) {
