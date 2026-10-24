@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { NavHistoryEntry } from '../shared/types.js'
-import { navHistoryStore } from '../store/nav-history-store.js'
+import { navHistoryStore } from '../browser/nav-history-store.js'
 
 /** Navigation history is shared by main windows and optional browser windows. */
 export function registerNavHistoryIpc(): void {

@@ -1,7 +1,7 @@
 import { BrowserWindow, systemPreferences, type Session, type WebContents } from 'electron'
 import { readProfile } from '../../store/profile-repository.js'
 import { isPortableMode } from '../../store/store-paths.js'
-import { getRecordByWebContentsId } from '../../window-factory/webview-registry.js'
+import { browserPorts } from '../browser-port.js'
 import { isTrustedRendererUrl } from './trusted-renderer.js'
 
 const configuredSessions = new WeakSet<Session>()
@@ -30,7 +30,7 @@ export function installProfilePermissions(session: Session, profileId: string): 
     // 免管理员（便携）安装无法注册防火墙兜底规则：拒绝媒体捕获，WebRTC 不建立
     // 媒体通道也就不绑定 UDP 端口，从源头避免网络弹窗；代价是内嵌页面的语音/视频降级。
     if (isPortableMode() && permission === 'media') return false
-    const record = getRecordByWebContentsId(contents.id)
+    const record = browserPorts().webviews.getRecordByWebContentsId(contents.id)
     if (record && record.profileId !== profileId || contents.getType() === 'webview' && !record) return false
     const profile = readProfile(profileId)
     if (!profile) return false

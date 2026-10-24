@@ -5,7 +5,7 @@ const test = vi.hoisted(() => ({ windows: [] as any[], focused: null as any, sta
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => test.windows, getFocusedWindow: () => test.focused }, screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) } }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: test.state }))
 vi.mock('../window-factory.js', () => ({ createMainWindow: test.createMain, createChatWindow: test.createChat, createAdvancedPanelWindow: test.createPanel, showHistoryWindow: vi.fn(), showPromptWindow: vi.fn(), showDataExportWindow: vi.fn(), showSettingsWindow: test.showSettings, showOnboardingWindow: vi.fn(), showAiAppEditorWindow: vi.fn(), createBrowserWindow: test.createBrowser, showHistoryDownloadWindow: vi.fn() }))
-vi.mock('./browser-window-store.js', () => ({ browserWindowStore: { get: () => test.browserState } }))
+vi.mock('../browser/browser-window-store.js', () => ({ browserWindowStore: { get: () => test.browserState } }))
 import { captureBackupWindows, restoreBackupWindows } from './backup-recovery-windows.js'
 
 function window(id: number, visible = true) {

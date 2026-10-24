@@ -9,8 +9,7 @@
 
 import { session, type Session } from 'electron'
 import type { Profile } from '../../shared/types.js'
-import { profileStore } from '../../store/profile-store.js'
-import { getPreset } from '../../store/preset-store.js'
+import { browserPorts } from '../browser-port.js'
 import { applyProxyToSession, applyRegionBasedProxy } from '../../store/proxy-helper.js'
 import { copySessionCookies } from '../../store/cookie-copy.js'
 
@@ -64,7 +63,7 @@ export function applyClientHintsInterceptor(
  */
 export async function setupSession(profileId: string, clientHints: ClientHintsRegistry): Promise<void> {
   try {
-    const profile = profileStore.get(profileId)
+    const profile = browserPorts().profiles.get(profileId)
     if (!profile) {
       throw new Error(`Profile 不存在: ${profileId}`)
     }
@@ -102,7 +101,7 @@ export async function setupSession(profileId: string, clientHints: ClientHintsRe
  */
 export async function setupBrowserSession(profileId: string, clientHints: ClientHintsRegistry): Promise<void> {
   try {
-    const profile = profileStore.get(profileId)
+    const profile = browserPorts().profiles.get(profileId)
     if (!profile) {
       throw new Error(`Profile 不存在: ${profileId}`)
     }
@@ -116,7 +115,7 @@ export async function setupBrowserSession(profileId: string, clientHints: Client
 
     // 2. 设置桌面端 UA（浏览器窗口默认桌面端）
     const desktopPreset = profile.aiDesktopPreset
-      ? getPreset(profile.aiDesktopPreset)
+      ? browserPorts().presets.get(profile.aiDesktopPreset)
       : null
     const desktopUA = desktopPreset?.userAgent || profile.userAgent
     if (desktopUA) {
@@ -151,7 +150,7 @@ export async function setupBrowserSession(profileId: string, clientHints: Client
  */
 export function buildClientHints(profile: Profile): ClientHints {
   const preset =
-    profile.devicePreset !== 'custom' ? getPreset(profile.devicePreset) : null
+    profile.devicePreset !== 'custom' ? browserPorts().presets.get(profile.devicePreset) : null
 
   // 仅当当前 UA 与预设 UA 一致时，才使用预设的品牌列表
   if (preset && preset.userAgent === profile.userAgent) {

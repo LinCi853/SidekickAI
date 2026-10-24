@@ -24,7 +24,7 @@
     },
     {
       "from": "electron/assets/asset-ipc.ts",
-      "to": "electron/store/profile-store.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
@@ -39,7 +39,7 @@
     },
     {
       "from": "electron/ipc/window-control-ipc.ts",
-      "to": "electron/store/profile-store.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
@@ -64,7 +64,7 @@
     },
     {
       "from": "electron/store/app-settings-store.ts",
-      "to": "electron/store/profile-store.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "dynamic"
     },
     {
@@ -134,7 +134,7 @@
     },
     {
       "from": "electron/store/cache-maintenance.ts",
-      "to": "electron/store/profile-store.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
@@ -143,8 +143,8 @@
       "kind": "value"
     },
     {
-      "from": "electron/store/profile-store.ts",
-      "to": "electron/utils/download-handler.ts",
+      "from": "electron/browser/profile-store.ts",
+      "to": "electron/browser/download-handler.ts",
       "kind": "dynamic"
     },
     {
@@ -154,21 +154,21 @@
     },
     {
       "from": "electron/store/proxy-helper.ts",
-      "to": "electron/store/profile-store.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/utils/download-handler.ts",
+      "from": "electron/browser/download-handler.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/utils/download-handler.ts",
-      "to": "electron/store/profile-store.ts",
+      "from": "electron/browser/download-handler.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/utils/download-handler.ts",
+      "from": "electron/browser/download-handler.ts",
       "to": "electron/store/cache-maintenance.ts",
       "kind": "dynamic"
     },
@@ -184,7 +184,7 @@
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/browser-window.ts",
+      "to": "electron/browser/browser-window.ts",
       "kind": "value"
     },
     {
@@ -199,7 +199,7 @@
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/history-download-window.ts",
+      "to": "electron/browser/history-download-window.ts",
       "kind": "value"
     },
     {
@@ -238,28 +238,28 @@
       "kind": "dynamic"
     },
     {
-      "from": "electron/window-factory/browser-window.ts",
-      "to": "electron/store/profile-store.ts",
+      "from": "electron/browser/browser-window.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/browser-window.ts",
+      "from": "electron/browser/browser-window.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/browser-window.ts",
+      "from": "electron/browser/browser-window.ts",
       "to": "electron/modules/registry.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/browser-window.ts",
+      "from": "electron/browser/browser-window.ts",
       "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/browser-window.ts",
-      "to": "electron/window-factory/detach-profile.ts",
+      "from": "electron/browser/browser-window.ts",
+      "to": "electron/browser/detach-profile.ts",
       "kind": "value"
     },
     {
@@ -278,8 +278,8 @@
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/detach-profile.ts",
-      "to": "electron/store/profile-store.ts",
+      "from": "electron/browser/detach-profile.ts",
+      "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
@@ -289,7 +289,7 @@
     },
     {
       "from": "electron/platform/window/helpers.ts",
-      "to": "electron/window-factory/webview-hotkeys.ts",
+      "to": "electron/browser/webview-hotkeys.ts",
       "kind": "value"
     },
     {
@@ -303,7 +303,7 @@
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/history-download-window.ts",
+      "from": "electron/browser/history-download-window.ts",
       "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
@@ -343,7 +343,7 @@
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/webview-hotkeys.ts",
+      "from": "electron/browser/webview-hotkeys.ts",
       "to": "electron/ipc/window-control-ipc.ts",
       "kind": "value"
     },

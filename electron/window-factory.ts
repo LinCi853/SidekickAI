@@ -15,10 +15,10 @@
 
 export { getSenderWindow, loadRenderer, getFormBounds, findWindowIdByWin } from './platform/window/helpers.js'
 export { createMainWindow } from './platform/window/main-window.js'
-export { createBrowserWindow, toggleBrowserWindow } from './window-factory/browser-window.js'
+export { createBrowserWindow, toggleBrowserWindow } from './browser/browser-window.js'
 export { createChatWindow } from './platform/window/containers/chat-window.js'
 export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showDataExportWindow, showSettingsWindow } from './platform/window/containers/popup-windows.js'
-export { showHistoryDownloadWindow } from './window-factory/history-download-window.js'
+export { showHistoryDownloadWindow } from './browser/history-download-window.js'
 export {
   createAdvancedPanelWindow,
   openAdvancedPanelWindow,

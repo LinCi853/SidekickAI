@@ -8,8 +8,8 @@ vi.mock('./module-state-store', () => ({ createSqliteJsonStore: () => ({
   get: (key: keyof typeof memory) => memory[key],
   set: (key: keyof typeof memory, value: never) => { memory[key] = value },
 }) }))
-vi.mock('./preset-store', () => ({ getPreset: () => ({ viewport: { width: 393, height: 852 }, devicePixelRatio: 3, language: 'zh-CN', timezone: 'Asia/Shanghai' }) }))
-import { ensureDefaultProfiles, profileStore } from './profile-store'
+vi.mock('../browser/preset-store', () => ({ getPreset: () => ({ viewport: { width: 393, height: 852 }, devicePixelRatio: 3, language: 'zh-CN', timezone: 'Asia/Shanghai' }) }))
+import { ensureDefaultProfiles, profileStore } from '../browser/profile-store'
 
 describe('persisted platform upgrade', () => {
   beforeEach(() => { memory.profiles = []; memory.version = 1 })

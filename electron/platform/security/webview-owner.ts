@@ -1,12 +1,12 @@
 import { BrowserWindow, session, webContents, type IpcMainInvokeEvent, type WebContents } from 'electron'
-import { getRecordByWebContentsId } from '../../window-factory/webview-registry.js'
+import { browserPorts } from '../browser-port.js'
 import { findWindowIdByWin } from '../window/window-utils.js'
 import { windowState } from '../window/window-state.js'
 import { assertTrustedRenderer } from './trusted-renderer.js'
 
 export function assertOwnedWebview(host: WebContents, guest: WebContents): void {
   const window = BrowserWindow.fromWebContents(host)
-  const record = getRecordByWebContentsId(guest.id)
+  const record = browserPorts().webviews.getRecordByWebContentsId(guest.id)
   if (!window || window.isDestroyed() || guest.isDestroyed() || guest.getType() !== 'webview'
     || guest.hostWebContents !== host || !record || record.windowId !== findWindowIdByWin(window)
     || guest.session !== session.fromPartition(`persist:${record.profileId}`)) {
@@ -29,7 +29,7 @@ export function ownedProfileSession(event: IpcMainInvokeEvent, partition: unknow
   const window = BrowserWindow.fromWebContents(event.sender)
   if (windowState.browserWindowsByProfile.get(profileId) === window) return session.fromPartition(partition)
   for (const guest of webContents.getAllWebContents()) {
-    if (guest.isDestroyed() || guest.hostWebContents !== event.sender || getRecordByWebContentsId(guest.id)?.profileId !== profileId) continue
+    if (guest.isDestroyed() || guest.hostWebContents !== event.sender || browserPorts().webviews.getRecordByWebContentsId(guest.id)?.profileId !== profileId) continue
     assertOwnedWebview(event.sender, guest)
     return guest.session
   }

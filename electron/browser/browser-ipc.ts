@@ -1,4 +1,4 @@
-// electron/ipc/browser-ipc.ts — 浏览器窗口 IPC 注册
+// electron/browser/browser-ipc.ts — 浏览器窗口 IPC 注册
 //
 // v0.0.9：多标签浏览器窗口相关 IPC handler。
 // 包含：窗口状态 CRUD / 标签操作 / 外部打开 / 搜索历史 / 下载 / 导航历史
@@ -15,7 +15,7 @@ import fs from 'fs'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { ownedProfileSession, ownedWebContents } from '../platform/security/webview-owner.js'
 import { httpUrl, withPublicResponse } from '../platform/security/public-request.js'
-import { createPdfPreview, readPdfPreview, deletePdfPreview } from '../utils/pdf-protocol.js'
+import { createPdfPreview, readPdfPreview, deletePdfPreview } from './pdf-protocol.js'
 import { openNativeFile } from '../platform/security/native-file.js'
 
 import type {
@@ -25,8 +25,8 @@ import type {
   SearchHistoryEntry,
 } from '../shared/types.js'
 import type { BookmarkInput, BookmarkFilter, BookmarkPatch } from '../shared/bookmark.types.js'
-import { browserWindowStore } from '../store/browser-window-store.js'
-import { bookmarkStore } from '../store/bookmark-store.js'
+import { browserWindowStore } from './browser-window-store.js'
+import { bookmarkStore } from './bookmark-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../platform/window/window-state.js'
 import { findWindowIdByWin } from '../window-factory.js'

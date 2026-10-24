@@ -7,8 +7,8 @@ const downloadItems: EventEmitter[] = []
 const state = vi.hoisted(() => ({ settings: { downloadDir: 'E:/fixture/downloads', downloadBehavior: 'auto' }, dialog: vi.fn(), add: vi.fn(), update: vi.fn() }))
 vi.mock('electron', () => ({ app: { getPath: () => 'E:/fixture/default-downloads' }, BrowserWindow: { getAllWindows: () => [] }, dialog: { showSaveDialog: state.dialog }, session: {} }))
 vi.mock('../store/app-settings-store.js', () => ({ getAppSettings: () => state.settings, updateAppSettings: vi.fn() }))
-vi.mock('../store/profile-store.js', () => ({ profileStore: { list: () => [] } }))
-vi.mock('../store/browser-download-store.js', () => ({ browserDownloadStore: { add: state.add, update: state.update } }))
+vi.mock('./profile-store.js', () => ({ profileStore: { list: () => [] } }))
+vi.mock('./browser-download-store.js', () => ({ browserDownloadStore: { add: state.add, update: state.update } }))
 vi.mock('../platform/security/session-permissions.js', () => ({ installProfilePermissions: vi.fn() }))
 import { attachDownloadHandler, hasActiveDownloads } from './download-handler.js'
 

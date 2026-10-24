@@ -19,7 +19,7 @@ import os from 'os'
 import { BrowserWindow, ipcMain, webContents } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { TabPrioritySync } from '../shared/runtime-processes.js'
-import { getRecordByWebContentsId } from '../window-factory/webview-registry.js'
+import { browserPorts } from '../platform/browser-port.js'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 
 /** 后台档：非活跃 guest 使用，低于常规优先级 */
@@ -70,7 +70,7 @@ function collectOccupancy(): Map<number, ProcessOccupancy> {
         occupancy.carriesWindow = true
         continue
       }
-      const record = getRecordByWebContentsId(contents.id)
+      const record = browserPorts().webviews.getRecordByWebContentsId(contents.id)
       // 未注册的 guest 保持常规优先级，注册回调里会再收敛
       if (!record?.tabId) continue
       occupancy.guestPriorities.push(targetPriority(record.tabId))

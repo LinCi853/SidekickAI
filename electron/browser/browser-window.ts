@@ -1,4 +1,4 @@
-// electron/window-factory/browser-window.ts — 多标签浏览器窗口创建
+// electron/browser/browser-window.ts — 多标签浏览器窗口创建
 //
 // v0.0.9：Chrome 风格多标签浏览器窗口。
 //   - 默认最大化，还原尺寸 1280×800
@@ -7,8 +7,8 @@
 //   - 加载 mode='browser' 渲染进程
 
 import { BrowserWindow, ipcMain, nativeImage, screen } from 'electron'
-import { browserWindowStore } from '../store/browser-window-store.js'
-import { profileStore } from '../store/profile-store.js'
+import { browserWindowStore } from './browser-window-store.js'
+import { profileStore } from './profile-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../platform/window/window-state.js'
 import { isModuleEnabled } from '../modules/registry.js'
@@ -21,13 +21,13 @@ import {
   WINDOW_BACKGROUND_COLOR,
   getPreloadPath,
   attachWebviewPopupInterceptor,
-  attachWebviewAntiDetection,
   loadRenderer,
   createDefaultWebPreferences,
   attachDetachedWindowLifecycle,
   safeLogWindowTrace,
   setupBoundsTracking,
 } from '../platform/window/helpers.js'
+import { attachWebviewAntiDetection } from './webview-anti-detection.js'
 import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import { trackFullscreen, isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { buildWindowConfig } from '../platform/window/window-config-builder.js'

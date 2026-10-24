@@ -1,4 +1,4 @@
-// electron/ipc/browser-tab-audio-ipc.ts — 浏览器标签音频 IPC（v0.0.9）
+// electron/browser/browser-tab-audio-ipc.ts — 浏览器标签音频 IPC（v0.0.9）
 //
 // 当前实现：webview 的 media-started-playing / media-paused 事件可在渲染层
 // 直接监听（BrowserWebviewTab.tsx），setAudioMuted 也是 webview DOM 方法可直接调用。

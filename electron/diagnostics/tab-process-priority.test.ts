@@ -31,8 +31,8 @@ vi.mock('electron', () => ({
 
 const records = new Map<number, { tabId: string }>()
 
-vi.mock('../window-factory/webview-registry.js', () => ({
-  getRecordByWebContentsId: (id: number) => records.get(id) ?? null,
+vi.mock('../platform/browser-port.js', () => ({
+  browserPorts: () => ({ webviews: { getRecordByWebContentsId: (id: number) => records.get(id) ?? null } }),
 }))
 
 vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: () => {} }))

@@ -1,4 +1,4 @@
-// electron/store/nav-history-store.ts — 导航历史追踪器（SQLite 持久化 + 内存双写）
+// electron/browser/nav-history-store.ts — 导航历史追踪器（SQLite 持久化 + 内存双写）
 //
 // 追踪每个 Profile 在主窗口中的导航历史。
 // 当用户脱离标签为浏览器窗口时，历史可被传递给新窗口作为初始标签（clear 清除避免重复）。
@@ -12,7 +12,7 @@
 
 import { randomUUID } from 'crypto'
 import type { NavHistoryEntry } from '../shared/types.js'
-import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from './store-paths.js'
+import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from '../store/store-paths.js'
 import type Database from 'better-sqlite3'
 
 /** 全局记录条数上限（超出按 timestamp 淘汰最旧） */

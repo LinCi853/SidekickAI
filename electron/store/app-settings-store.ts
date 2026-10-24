@@ -81,10 +81,10 @@ export async function clearAllData(): Promise<void> {
     () => import('./module-state-store.js').then(m => m.closeModuleStateDb()).catch(() => {}),
     () => import('./notes-db.js').then(m => m.closeNotesDb()).catch(() => {}),
     () => import('./whiteboard-db.js').then(m => m.closeWhiteboardDb()).catch(() => {}),
-    () => import('./nav-history-store.js').then(m => m.closeNavHistoryStore()).catch(() => {}),
-    () => import('./bookmark-store.js').then(m => m.closeBookmarkStore()).catch(() => {}),
+    () => import('../browser/nav-history-store.js').then(m => m.closeNavHistoryStore()).catch(() => {}),
+    () => import('../browser/bookmark-store.js').then(m => m.closeBookmarkStore()).catch(() => {}),
     () => import('./search-history-store.js').then(m => m.closeSearchHistoryStore()).catch(() => {}),
-    () => import('./browser-download-store.js').then(m => m.closeBrowserDownloadStore()).catch(() => {}),
+    () => import('../browser/browser-download-store.js').then(m => m.closeBrowserDownloadStore()).catch(() => {}),
     () => import('./accumulated-links-store.js').then(m => m.accumulatedLinksStore.close()).catch(() => {}),
   ]
   for (const close of sqliteClosures) {
@@ -95,7 +95,7 @@ export async function clearAllData(): Promise<void> {
   //    每个会话独立清理 cookies/localStorage/IndexedDB/cache/auth，删除登录痕迹
   const sessionsToClean: Electron.Session[] = [session.defaultSession]
   try {
-    const { profileStore } = await import('./profile-store.js')
+    const { profileStore } = await import('../browser/profile-store.js')
     for (const profile of profileStore.list()) {
       try {
         sessionsToClean.push(session.fromPartition(`persist:${profile.id}`))
@@ -533,20 +533,20 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
   })
 
   ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE, async event =>
-    (await import('../utils/file-drop-handler.js')).prepareFileDrop(event))
+    (await import('../browser/file-drop-handler.js')).prepareFileDrop(event))
   ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE, async (event, input: unknown) =>
-    (await import('../utils/file-drop-handler.js')).captureFileDrop(event, input))
+    (await import('../browser/file-drop-handler.js')).captureFileDrop(event, input))
   ipcMain.handle(IPC_CHANNELS.WEBVIEW_FILE_DROP, async (event, input: unknown) =>
-    (await import('../utils/file-drop-handler.js')).readDroppedFiles(event, input))
+    (await import('../browser/file-drop-handler.js')).readDroppedFiles(event, input))
   ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_OPEN, async (event, input: unknown) =>
-    (await import('../utils/file-drop-handler.js')).openDroppedFiles(event, input))
+    (await import('../browser/file-drop-handler.js')).openDroppedFiles(event, input))
 
   // ===== 每应用浏览器窗口脱离/回归快捷键 =====
   // 保存/清除指定 Profile 的浏览器窗口快捷键，并重注册全局快捷键
   ipcMain.handle(
     IPC_CHANNELS.PROFILE_SHORTCUT_SET,
     async (_e, { profileId, accelerator }: { profileId: string; accelerator: string | null }) => {
-      const { profileStore } = await import('./profile-store.js')
+      const { profileStore } = await import('../browser/profile-store.js')
       const updated = await profileStore.update(profileId, {
         browserWindowShortcut: accelerator || undefined,
       })
@@ -580,7 +580,7 @@ export async function reregisterProfileShortcuts(): Promise<void> {
   const toRegister: Array<{ accelerator: string; profileId: string }> = []
 
   try {
-    const { profileStore } = await import('./profile-store.js')
+    const { profileStore } = await import('../browser/profile-store.js')
     for (const profile of profileStore.list()) {
       const acc = profile.browserWindowShortcut
       if (!acc) continue

@@ -8,11 +8,10 @@
 //   - renderer-loader.ts        渲染进程 URL 构建与加载
 //   - singleton-popup.ts        单例弹出窗口工厂
 //   - window-utils.ts           痕迹记录 / 表单尺寸 / UA 解析 / 窗口 ID 反查
-//   - webview-hotkeys.ts        webview 应用内快捷键路由
-//   - webview-anti-detection.ts webview 反检测 preload 注入
 //
 // 本文件保留 webview 弹窗拦截器（attachWebviewPopupInterceptor）本身，并作为
 // 向后兼容的聚合入口，re-export 上述模块的全部导出。
+// webview 快捷键路由与反检测由浏览器域（electron/browser/）实现，经 browser-port 注入。
 //
 // 拆分原则：
 //   - helpers.ts 不 import 任何窗口创建函数（避免循环依赖）。
@@ -24,8 +23,8 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { accumulatedLinksStore } from '../../store/accumulated-links-store.js'
 import { getAppSettings } from '../../store/app-settings-store.js'
 import { allowRemoteNavigation } from '../security/trusted-renderer.js'
+import { browserPorts } from '../browser-port.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
-import { attachWebviewHotkeyRouter } from '../../window-factory/webview-hotkeys.js'
 
 // —— 常量 ——
 export {
@@ -64,12 +63,6 @@ export {
   resolveUserAgent,
   findWindowIdByWin,
 } from './window-utils.js'
-
-// —— webview 快捷键路由 ——
-export { attachWebviewHotkeyRouter } from '../../window-factory/webview-hotkeys.js'
-
-// —— webview 反检测 ——
-export { attachWebviewAntiDetection } from '../../window-factory/webview-anti-detection.js'
 
 /** 从完整 URL 提取 origin 前缀（scheme + host + '/'），用于日志 */
 function extractUrlOrigin(url: string): string {
@@ -234,9 +227,9 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
     })
 
     // 3. before-input-event：应用内快捷键统一处理（主进程兜底，确保 webview 焦点时可用）。
-    //    已抽离到 webview-hotkeys.ts 的 attachWebviewHotkeyRouter。
+    //    实现由浏览器域注入（browser/webview-hotkeys.ts 的 hotkeyRouter），
     //    通过回调同步 Ctrl 按下/释放状态，供上方 setWindowOpenHandler 的 Ctrl+click 放行判断。
-    attachWebviewHotkeyRouter(wc, parentWebContents, (pressed) => {
+    browserPorts().attach.hotkeyRouter(wc, parentWebContents, (pressed) => {
       ctrlPressed = pressed
     })
   })

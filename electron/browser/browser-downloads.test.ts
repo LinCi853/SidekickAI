@@ -13,9 +13,10 @@ vi.mock('electron', () => ({
 }));
 vi.mock('crypto', () => ({ randomUUID: () => `download-${++state.serial}` }));
 vi.mock('../store/app-settings-repository.js', () => ({ readSettingsRaw: () => ({ downloadDir: 'E:/fixture' }) }));
-vi.mock('../store/browser-download-store.js', () => ({ browserDownloadStore: { add: state.add, update: state.update } }));
+vi.mock('./browser-download-store.js', () => ({ browserDownloadStore: { add: state.add, update: state.update } }));
 vi.mock('../store/profile-repository.js', () => ({ readProfile: () => ({ aiPlatformUrl: 'https://fixture.test/' }) }));
-vi.mock('../platform/security/trusted-renderer.js', () => ({ isTrustedRendererUrl: () => false }));
+vi.mock('../platform/security/trusted-renderer.js', () => ({ isTrustedRendererUrl: () => false }))
+vi.mock('../platform/browser-port.js', () => ({ browserPorts: () => ({ webviews: { getRecordByWebContentsId: (id: number) => state.records.get(id) } }) }));
 vi.mock('./webview-registry.js', () => ({ getRecordByWebContentsId: (id: number) => state.records.get(id) }));
 vi.mock('../platform/window/window-state.js', () => ({ windowState: { browserWindowsByProfile: state.byProfile } }));
 vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: (win: object) => state.ids.get(win) }));

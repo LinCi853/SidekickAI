@@ -11,7 +11,7 @@
 import { session, app, net, type Session } from 'electron'
 import { ProxyAgent, type Dispatcher } from 'undici'
 import { getAppSettings, type AppSettings } from './app-settings-store.js'
-import { profileStore } from './profile-store.js'
+import { profileStore } from '../browser/profile-store.js'
 import type { Profile, ProfileProxyConfig } from '../shared/types.js'
 
 /** 代理连通性测试 URL */

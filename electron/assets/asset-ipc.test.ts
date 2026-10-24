@@ -35,7 +35,7 @@ vi.mock('../store/chat-store.js', () => ({
     },
   }),
 }))
-vi.mock('../store/profile-store.js', () => ({ profileStore: { list: () => [{ id: 'profile-a', name: 'Account A', isAIPlatform: true }] } }))
+vi.mock('../browser/profile-store.js', () => ({ profileStore: { list: () => [{ id: 'profile-a', name: 'Account A', isAIPlatform: true }] } }))
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => state.enabled, observeModuleState: (callback: () => void) => state.observers.push(callback) }))
 vi.mock('./settings.js', () => ({ getAssetSettings: () => ({}), updateAssetSettings: () => ({}) }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))

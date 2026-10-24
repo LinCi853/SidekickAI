@@ -7,14 +7,14 @@
 import { session } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { profileStore } from './profile-store.js';
+import { profileStore } from '../browser/profile-store.js';
 import { formatBytes } from './backup-restore.js';
 import {
   PARTITION_CACHE_DIRS,
   getDataDir,
   getDirSize,
 } from './session-dirs.js';
-import { tabHibernationStore } from './tab-hibernate-store.js';
+import { tabHibernationStore } from '../browser/tab-hibernate-store.js';
 import type { TabHibernationPruneResult } from '../shared/tab-hibernation.types.js';
 
 /**

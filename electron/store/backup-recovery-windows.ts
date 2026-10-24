@@ -2,7 +2,7 @@ import { BrowserWindow, screen, type Rectangle } from 'electron'
 import { windowState } from '../platform/window/window-state.js'
 import { createMainWindow, createChatWindow, createAdvancedPanelWindow, showHistoryWindow, showPromptWindow, showDataExportWindow, showSettingsWindow, showOnboardingWindow, showAiAppEditorWindow } from '../window-factory.js'
 import { createBrowserWindow, showHistoryDownloadWindow } from '../window-factory.js'
-import { browserWindowStore } from './browser-window-store.js'
+import { browserWindowStore } from '../browser/browser-window-store.js'
 
 type EditorOptions = { platformId?: string; profileId?: string; mode?: 'edit' | 'create' }
 type Target = { kind: string; id?: string; editor?: EditorOptions; profileId?: string; panel?: { initialTab: string; providerId?: string } }

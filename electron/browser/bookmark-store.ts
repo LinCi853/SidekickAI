@@ -1,11 +1,11 @@
-// electron/store/bookmark-store.ts — 浏览器书签 SQLite 持久化（v0.0.9）
+// electron/browser/bookmark-store.ts — 浏览器书签 SQLite 持久化（v0.0.9）
 //
 // 全局书签（跨所有 AI 应用汇聚），记录来源应用信息（profileId + profileName
 // 快照 + aiPlatformId + platformName 快照）。独立 SQLite 数据库（bookmarks.db）。
 // 仿 search-history-store.ts 模式。
 
 import type { Bookmark, BookmarkInput, BookmarkFilter, BookmarkPatch } from '../shared/bookmark.types.js'
-import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from './store-paths.js'
+import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from '../store/store-paths.js'
 import type Database from 'better-sqlite3'
 
 function initSchema(db: Database.Database): void {

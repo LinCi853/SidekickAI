@@ -1,10 +1,10 @@
-// electron/store/browser-window-store.ts — 浏览器窗口状态持久化
+// electron/browser/browser-window-store.ts — 浏览器窗口状态持久化
 //
 // 独立于 WindowStore（存储 WindowStateData），存储 BrowserWindowState。
 // 文件名：browser-windows.json
 
 import type { BrowserWindowState } from '../shared/types.js'
-import { createSqliteJsonStore } from './module-state-store.js'
+import { createSqliteJsonStore } from '../store/module-state-store.js'
 
 type BrowserWindowStateStore = {
   states: Record<string, BrowserWindowState>

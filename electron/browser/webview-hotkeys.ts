@@ -1,4 +1,4 @@
-// electron/window-factory/webview-hotkeys.ts — webview 应用内快捷键路由
+// electron/browser/webview-hotkeys.ts — webview 应用内快捷键路由
 //
 // 从 helpers.ts 的 attachWebviewPopupInterceptor 中抽离的 before-input-event 处理器。
 // F12 直接在主进程执行窗口控制；其余快捷键通过 IPC WEBVIEW_HOTKEY 转发渲染层执行。

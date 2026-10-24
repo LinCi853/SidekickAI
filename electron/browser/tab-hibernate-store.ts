@@ -11,7 +11,7 @@ import type {
   TabHibernationPrunePolicy,
   TabHibernationPruneResult,
 } from '../shared/tab-hibernation.types.js'
-import { createSqliteJsonStore } from './module-state-store.js'
+import { createSqliteJsonStore } from '../store/module-state-store.js'
 
 const ASSETS_DIR_NAME = 'tab-hibernation'
 

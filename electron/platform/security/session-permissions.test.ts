@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({ profile: vi.fn(), record: vi.fn(), window: vi.
 vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: state.window }, systemPreferences: { getMediaAccessStatus: state.media } }))
 vi.mock('../../store/profile-repository.js', () => ({ readProfile: state.profile }))
 vi.mock('../../store/store-paths.js', () => ({ isPortableMode: () => false }))
-vi.mock('../../window-factory/webview-registry.js', () => ({ getRecordByWebContentsId: state.record }))
+vi.mock('../browser-port.js', () => ({ browserPorts: () => ({ webviews: { getRecordByWebContentsId: state.record } }) }))
 vi.mock('./trusted-renderer.js', () => ({ isTrustedRendererUrl: (value: string) => value.split('?')[0] === 'file:///E:/app/index.html' }))
 import { installApplicationPermissions, installProfilePermissions } from './session-permissions.js'
 

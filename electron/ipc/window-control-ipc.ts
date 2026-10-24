@@ -14,7 +14,7 @@
 import { ipcMain, session, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
-import { profileStore } from '../store/profile-store.js'
+import { profileStore } from '../browser/profile-store.js'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { createMaximizeManager } from '../platform/window/window-maximize-manager.js'
 import {
@@ -22,10 +22,10 @@ import {
   type WindowStateData,
 } from '../shared/types.js'
 import type { WindowManager } from '../platform/window/containers/profile-window.js'
-import type { FingerprintEngine } from '../fingerprint/engine.js'
+import type { FingerprintEngine } from '../browser/fingerprint.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
-import { validateWebviewHotkeyTarget } from '../window-factory/webview-hotkey-target.js'
-import { registerWindowWebview } from '../window-factory/webview-registry.js'
+import { validateWebviewHotkeyTarget } from '../browser/webview-hotkey-target.js'
+import { registerWindowWebview } from '../browser/webview-registry.js'
 import type { WebviewRegistration } from '../shared/api/profile-window.api.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */

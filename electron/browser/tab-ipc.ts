@@ -1,4 +1,4 @@
-// electron/ipc/tab-ipc.ts — 标签相关 IPC 注册
+// electron/browser/tab-ipc.ts — 标签相关 IPC 注册
 //
 // 包含：
 //   - 标签 CRUD（TAB_UPDATE_TITLE / TAB_UPDATE_URL / TAB_UPDATE_HOME_URL）
@@ -14,9 +14,9 @@
 import { ipcMain, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
-import { profileStore } from '../store/profile-store.js'
+import { profileStore } from './profile-store.js'
 import { windowState } from '../platform/window/window-state.js'
-import { detachProfileToBrowserWindow } from '../window-factory/detach-profile.js'
+import { detachProfileToBrowserWindow } from './detach-profile.js'
 import { isModuleEnabled } from '../modules/registry.js'
 import { isBackgroundClose } from '../platform/window/window-retirement.js'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'

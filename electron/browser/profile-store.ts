@@ -1,4 +1,4 @@
-// electron/store/profile-store.ts — Profile 持久化存储 + IPC 注册
+// electron/browser/profile-store.ts — Profile 持久化存储 + IPC 注册
 //
 // 持久化到 SQLite settings.db（profiles 表，createSqliteJsonStore）。
 // 每个 Profile 是一个完整的「虚拟浏览器身份」，包含 UA / 指纹 / 窗口配置。
@@ -10,11 +10,11 @@ import type { Profile } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { generateUniqueName } from '../shared/naming.js'
-import { getDefaultProfileParams, createDefaultProfileParams } from './default-config.js'
+import { getDefaultProfileParams, createDefaultProfileParams } from '../store/default-config.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { hasQianwenProfile, upgradeAIPlatformProfile } from '../presets/platform-profile-upgrade.js'
 import { getPreset } from './preset-store.js'
-import { profileRepository as store, readProfile } from './profile-repository.js'
+import { profileRepository as store, readProfile } from '../store/profile-repository.js'
 
 // Windows Chrome 125 默认 UA 已迁移到 default-config.ts
 
@@ -239,7 +239,7 @@ export function registerProfileIPC(): void {
     const profile = profileStore.create(partial)
     // 为新 profile 的 partition 挂载 will-download 监听（与 main.ts 启动时批量挂载保持一致）
     try {
-      const { attachDownloadHandler } = await import('../utils/download-handler.js')
+      const { attachDownloadHandler } = await import('./download-handler.js')
       attachDownloadHandler(session.fromPartition(`persist:${profile.id}`), profile.id)
     } catch (err) {
       console.warn('[profile-store] 新 profile 挂载下载监听失败:', err)

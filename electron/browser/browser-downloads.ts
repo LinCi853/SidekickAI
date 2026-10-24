@@ -1,7 +1,7 @@
 import { BrowserWindow, session, dialog, app, type DownloadItem, type WebContents } from 'electron'
 import { randomUUID } from 'crypto'
 import { readSettingsRaw } from '../store/app-settings-repository.js'
-import { browserDownloadStore } from '../store/browser-download-store.js'
+import { browserDownloadStore } from './browser-download-store.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { consumeAskSavePath } from '../utils/ask-save-path.js'
 import { getRecordByWebContentsId } from './webview-registry.js'

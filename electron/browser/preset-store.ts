@@ -8,9 +8,9 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { DevicePreset } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createCrudStore } from './store-paths.js'
-import { createSqliteJsonStore } from './module-state-store.js'
-import { PRESETS, PRESETS_VERSION, getDefault } from './default-config.js'
+import { createCrudStore } from '../store/store-paths.js'
+import { createSqliteJsonStore } from '../store/module-state-store.js'
+import { PRESETS, PRESETS_VERSION, getDefault } from '../store/default-config.js'
 
 // 持久化存储实例（写入 presets.json）
 const store = createSqliteJsonStore<{ presets: DevicePreset[]; version: number }>({

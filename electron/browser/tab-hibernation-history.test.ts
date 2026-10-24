@@ -6,7 +6,7 @@ import type { TabHibernationEntry } from '../shared/tab-hibernation.types.js'
 const assetsDir = path.join(os.tmpdir(), `sidekick-hibernate-test-${process.pid}`)
 vi.mock('electron', () => ({ app: { getPath: () => assetsDir } }))
 const memoryStore = new Map<string, unknown>()
-vi.mock('./module-state-store.js', () => ({
+vi.mock('../store/module-state-store.js', () => ({
   createSqliteJsonStore: (options: { defaults: Record<string, unknown> }) => ({
     get: (key: string) => memoryStore.get(key) ?? options.defaults[key],
     set: (key: string, value: unknown) => memoryStore.set(key, value),

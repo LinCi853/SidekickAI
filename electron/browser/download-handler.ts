@@ -1,4 +1,4 @@
-// electron/utils/download-handler.ts — 下载事件处理 + 缓存自动清理
+// electron/browser/download-handler.ts — 下载事件处理 + 缓存自动清理
 //
 // 提供：
 //   - attachDownloadHandler(ses)：为指定 session 注册 will-download 监听
@@ -12,8 +12,8 @@ import { app, BrowserWindow, dialog, session, type Session, type DownloadItem } 
 import { randomUUID } from 'crypto'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { getAppSettings, updateAppSettings } from '../store/app-settings-store.js'
-import { profileStore } from '../store/profile-store.js'
-import { browserDownloadStore } from '../store/browser-download-store.js'
+import { profileStore } from './profile-store.js'
+import { browserDownloadStore } from './browser-download-store.js'
 import { containedDownloadPath, safeDownloadFilename } from '../platform/security/download-path.js'
 import { installProfilePermissions } from '../platform/security/session-permissions.js'
 

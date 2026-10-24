@@ -1,7 +1,7 @@
 /* =====================================================================
    hooks/useOpenShortcutsForward.ts —— 接住主进程转发的速览开/关
    webview 获得焦点时，按住/松开 ~ 不进入渲染层 keydown/keyup，由主进程
-   before-input-event（electron/window-factory/webview-hotkeys.ts）拦截后
+   before-input-event（electron/browser/webview-hotkeys.ts）拦截后
    经 WEBVIEW_HOTKEY IPC 以 action: 'openShortcuts' | 'closeShortcuts' 转发。
    ===================================================================== */
 

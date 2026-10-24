@@ -1,4 +1,4 @@
-// electron/fingerprint/engine.ts — 指纹引擎
+// electron/browser/fingerprint.ts — 指纹引擎
 //
 // 根据 Profile 配置生成 preload 注入脚本（IIFE 字符串），覆盖
 // Canvas / WebGL / AudioContext / Navigator / ClientHints / Font / WebRTC 指纹，
@@ -8,7 +8,7 @@
 // 由设备预设保证）+ 确定性（同一 Profile 每次启动指纹值相同，由 seed + mulberry32 PRNG 保证）。
 
 import type { Profile, DevicePreset, FingerprintMode } from '../shared/types.js'
-import { getPreset } from '../store/preset-store.js'
+import { getPreset } from './preset-store.js'
 
 // ============================================================================
 // 常量池

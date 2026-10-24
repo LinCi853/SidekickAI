@@ -8,10 +8,10 @@
 // session 级设置（UA / 代理 / Client Hints）在 ../session.ts，本文件只负责窗口。
 
 import { BrowserWindow, session, type WebContents } from 'electron'
-import type { FingerprintEngine } from '../../../fingerprint/engine.js'
+import type { FingerprintEngine } from '../../../browser/fingerprint.js'
 import type { Profile } from '../../../shared/types.js'
-import { profileStore } from '../../../store/profile-store.js'
-import { getPreset } from '../../../store/preset-store.js'
+import { profileStore } from '../../../browser/profile-store.js'
+import { getPreset } from '../../../browser/preset-store.js'
 import { applyProxyToSession } from '../../../store/proxy-helper.js'
 import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../helpers.js'
 import { buildWindowConfig } from '../window-config-builder.js'

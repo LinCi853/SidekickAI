@@ -1,4 +1,4 @@
-// electron/window-factory/webview-anti-detection.ts — webview 反检测
+// electron/browser/webview-anti-detection.ts — webview 反检测
 //
 // 从 helpers.ts 抽离：为窗口的 webContents 注册 <webview> 反检测 preload 注入。
 

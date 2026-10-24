@@ -9,8 +9,8 @@ const state = vi.hoisted(() => ({ handlers: new Map<string, (...args: any[]) => 
 vi.mock('electron', () => ({ ipcMain: { handle: (channel: string, handler: (...args: any[]) => any) => state.handlers.set(channel, handler) },
   shell: { openExternal: state.openExternal }, app: { getPath: () => state.temporary }, protocol: {},
   BrowserWindow: { fromWebContents: () => ({ isDestroyed: () => false }) }, dialog: { showSaveDialogSync: state.showSave }, screen: {} }))
-vi.mock('../store/browser-window-store.js', () => ({ browserWindowStore: {} }))
-vi.mock('../store/bookmark-store.js', () => ({ bookmarkStore: {} }))
+vi.mock('./browser-window-store.js', () => ({ browserWindowStore: {} }))
+vi.mock('./bookmark-store.js', () => ({ bookmarkStore: {} }))
 vi.mock('../store/window-store.js', () => ({ windowStore: {}, MAIN_WINDOW_ID: 'main' }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: {} }))
 vi.mock('../window-factory.js', () => ({ findWindowIdByWin: () => 'window-a' }))
@@ -22,7 +22,7 @@ vi.mock('../platform/security/webview-owner.js', () => ({
   ownedProfileSession: (event: any, partition: string) => { if (!event.trusted || partition !== 'persist:profile-a') throw new Error('unowned'); return {} },
 }))
 import { registerBrowserIpc } from './browser-ipc.js'
-import { createPdfPreview, readPdfPreview } from '../utils/pdf-protocol.js'
+import { createPdfPreview, readPdfPreview } from './pdf-protocol.js'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 
 let event: any

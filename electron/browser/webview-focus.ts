@@ -1,4 +1,4 @@
-// electron/window-factory/webview-focus.ts — 访客页焦点状态缓存
+// electron/browser/webview-focus.ts — 访客页焦点状态缓存
 //
 // webview-preload 在 focusin/focusout 时通过 sendSync 上报「焦点是否在可编辑元素」，
 // 主进程按 guest webContents 缓存，供 before-input-event 在按键瞬间同步查询：

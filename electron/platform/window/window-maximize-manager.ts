@@ -16,7 +16,7 @@
 
 import { screen, type BrowserWindow } from 'electron'
 import { windowStore } from '../../store/window-store.js'
-import { browserWindowStore } from '../../store/browser-window-store.js'
+import { browserPorts } from '../browser-port.js'
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { ADVANCED_PANEL_WINDOW_ID } from './constants.js'
 
@@ -252,7 +252,7 @@ export class WindowMaximizeManager {
  */
 export function inferRestoreStrategy(windowId: string): RestoreStrategy {
   // 浏览器窗口的持久化状态在 browserWindowStore 中
-  if (browserWindowStore.get(windowId) !== null) {
+  if (browserPorts().browserWindows.get(windowId) !== null) {
     return 'centered70'
   }
   // 进阶面板窗口：与浏览器窗口同步，取消最大化时还原为工作区居中 70%

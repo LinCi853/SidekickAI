@@ -32,9 +32,9 @@ vi.mock('electron', () => ({
 vi.mock('../store/window-store.js', () => ({
   windowStore: { getOrDefault: runtime.getOrDefault, save: runtime.save },
 }))
-vi.mock('../store/profile-store.js', () => ({ profileStore: { get: () => ({ name: 'App' }) } }))
+vi.mock('./profile-store.js', () => ({ profileStore: { get: () => ({ name: 'App' }) } }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: { mainWindow: runtime.mainWindow } }))
-vi.mock('../window-factory/detach-profile.js', () => ({ detachProfileToBrowserWindow: vi.fn() }))
+vi.mock('./detach-profile.js', () => ({ detachProfileToBrowserWindow: vi.fn() }))
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => true }))
 vi.mock('../platform/window/window-retirement.js', () => ({ isBackgroundClose: runtime.isBackgroundClose }))
 vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))

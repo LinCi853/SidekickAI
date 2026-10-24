@@ -1,4 +1,4 @@
-// electron/window-factory/history-download-window.ts — 历史记录与下载管理独立窗口
+// electron/browser/history-download-window.ts — 历史记录与下载管理独立窗口
 //
 // 单例独立窗口：左侧切换「导航历史 / 下载管理」，右侧展示对应面板。
 // 导航历史持久化（SQLite），下载管理复用 browser-download-store。

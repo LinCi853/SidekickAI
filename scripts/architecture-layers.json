@@ -13,6 +13,11 @@
       "level": 1
     },
     {
+      "path": "electron/browser/",
+      "level": 2,
+      "domain": "browser"
+    },
+    {
       "path": "electron/platform/window/containers/",
       "level": 2,
       "domain": "containers",
@@ -45,7 +50,9 @@
     "Level 0 files are exempt from layer rules in both directions.",
     "Level 2 entries may declare domain and allowedDomains; level 2 to level 2 edges are only allowed when the target domain is listed.",
     "The operations domain (updates, diagnostics) stays physically in place; prefixes record its level only.",
-    "electron/window-factory/app-icon.ts is level 1 while its test carries an uncommitted local edit; the rest of electron/window-factory/ is the pending browser domain and stays unmapped until it moves.",
-    "electron/platform/window/containers/ still imports the plugin registry; electron/modules/ has no prefix yet, so these edges stay unconstrained until the modules phase records its level and the crossings are replaced by injected capabilities."
+    "electron/window-factory/ now only holds app-icon.ts at level 1; the browser domain moved to electron/browser/.",
+    "electron/platform/window/containers/ and electron/browser/ still import the plugin registry; electron/modules/ has no prefix yet, so these edges stay unconstrained until the modules phase records its level and the crossings are replaced by injected capabilities.",
+    "L1 window, security and diagnostics services read browser data through electron/platform/browser-port.ts; application-main installs the browser implementations before any window is created, so reads never reach into electron/browser/ directly.",
+    "Profile and preset persistence serve both settings UI and browser identities; they live in the browser domain and are exposed to L1 through the browser port."
   ]
 }

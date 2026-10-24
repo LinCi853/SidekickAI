@@ -1,10 +1,10 @@
-// electron/store/browser-download-store.ts — 浏览器下载记录 SQLite 持久化
+// electron/browser/browser-download-store.ts — 浏览器下载记录 SQLite 持久化
 //
 // 浏览器窗口下载管理：记录下载进度、完成状态、文件路径。
 // 独立 SQLite 数据库（browser-downloads.db）。
 
 import type { BrowserDownloadRecord } from '../shared/types.js'
-import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from './store-paths.js'
+import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from '../store/store-paths.js'
 import type Database from 'better-sqlite3'
 
 function initSchema(db: Database.Database): void {

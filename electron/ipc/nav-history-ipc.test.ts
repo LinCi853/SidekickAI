@@ -9,13 +9,13 @@ vi.mock('electron', () => ({
   ipcMain: { handle: (name: string, handler: (...args: unknown[]) => unknown) => fixture.handlers.set(name, handler) },
 }))
 
-let store: typeof import('../store/nav-history-store.js')
+let store: typeof import('../browser/nav-history-store.js')
 beforeEach(async () => {
   vi.resetModules()
   vi.stubEnv('ELECTRON_RENDERER_URL', '')
   fixture.directory = fs.mkdtempSync(path.join(os.tmpdir(), 'standalone-navigation-'))
   fixture.handlers.clear()
-  store = await import('../store/nav-history-store.js')
+  store = await import('../browser/nav-history-store.js')
 })
 afterEach(() => {
   store.closeNavHistoryStore()

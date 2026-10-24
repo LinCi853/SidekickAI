@@ -1,4 +1,4 @@
-// electron/window-factory/detach-profile.ts - 标签脱离核心逻辑（共享）
+// electron/browser/detach-profile.ts - 标签脱离核心逻辑（共享）
 //
 // 将主窗口（或任意源窗口）中指定 Profile 的标签脱离为独立浏览器窗口。
 // 语义：主窗口隐藏该 Profile 的全部标签（标记 detachedProfiles + detachedWindowId），
@@ -13,9 +13,9 @@
 
 import { randomUUID } from 'crypto'
 import { windowStore } from '../store/window-store.js'
-import { browserWindowStore } from '../store/browser-window-store.js'
-import { navHistoryStore } from '../store/nav-history-store.js'
-import { profileStore } from '../store/profile-store.js'
+import { browserWindowStore } from './browser-window-store.js'
+import { navHistoryStore } from './nav-history-store.js'
+import { profileStore } from './profile-store.js'
 import { windowState } from '../platform/window/window-state.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { BrowserWindowState, BrowserTabState } from '../shared/browser.types.js'
