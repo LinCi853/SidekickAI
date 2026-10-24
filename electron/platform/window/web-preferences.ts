@@ -1,4 +1,4 @@
-// electron/window-factory/web-preferences.ts — 统一 webPreferences 配置
+// electron/platform/window/web-preferences.ts — 统一 webPreferences 配置
 //
 // 从 helpers.ts 抽离：所有窗口共享的 webPreferences 默认配置块。
 

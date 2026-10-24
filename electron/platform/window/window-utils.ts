@@ -1,4 +1,4 @@
-// electron/window-factory/window-utils.ts — 窗口杂项工具
+// electron/platform/window/window-utils.ts — 窗口杂项工具
 //
 // 从 helpers.ts 抽离：窗口痕迹记录、表单默认尺寸、User-Agent 解析、窗口 ID 反查。
 

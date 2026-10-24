@@ -1,4 +1,4 @@
-// electron/window-factory/window-config-builder.ts — 跨平台 BrowserWindow 配置构建器
+// electron/platform/window/window-config-builder.ts — 跨平台 BrowserWindow 配置构建器
 //
 // 统一处理 Windows DWM 专属字段、macOS 交通灯/毛玻璃、Linux 透明窗限制、
 // hasShadow 平台差异。所有 createXxxWindow 函数应通过 buildWindowConfig(config)

@@ -16,7 +16,7 @@ import { applyProxyToSession } from '../../../store/proxy-helper.js'
 import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../helpers.js'
 import { buildWindowConfig } from '../window-config-builder.js'
 import { registerWindowRetirement } from '../window-retirement.js'
-import { getAppWindowIcon, reapplyWindowIcon } from '../../../window-factory/app-icon.js'
+import { getAppWindowIcon, reapplyWindowIcon } from '../app-icon.js'
 import { browserWindowRetirementSeconds } from '../../../shared/background-policy.js'
 import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
 import {

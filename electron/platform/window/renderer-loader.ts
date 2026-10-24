@@ -1,4 +1,4 @@
-// electron/window-factory/renderer-loader.ts — 渲染进程加载
+// electron/platform/window/renderer-loader.ts — 渲染进程加载
 //
 // 从 helpers.ts 抽离：渲染进程 URL 构建、浏览器窗口判断、页面加载。
 

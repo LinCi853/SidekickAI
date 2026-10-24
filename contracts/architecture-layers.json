@@ -26,10 +26,6 @@
       ]
     },
     {
-      "path": "electron/window-factory/app-icon.ts",
-      "level": 1
-    },
-    {
       "path": "electron/updates/",
       "level": 1
     },
@@ -48,9 +44,9 @@
     "Level 0 files are exempt from layer rules in both directions.",
     "Level 2 entries may declare domain and allowedDomains; level 2 to level 2 edges are only allowed when the target domain is listed.",
     "The operations domain (updates, diagnostics) stays physically in place; prefixes record its level only.",
-    "electron/window-factory/ now only holds app-icon.ts at level 1; the browser domain moved to electron/browser/.",
+    "All window factories live in electron/platform/window/ (level 1, containers subdomain level 2); the former electron/window-factory/ directory is gone.",
     "electron/modules/plugins/ is level 3: every built-in plugin keeps its wiring and plugin-owned implementations in one subdirectory. The plugin framework files at the top of electron/modules/ carry no layer prefix; cross-layer traffic there stays visible in the baseline until those files are split.",
     "L1 window, security and diagnostics services read browser data through electron/platform/browser-port.ts; application-main installs the browser implementations before any window is created, so reads never reach into electron/browser/ directly.",
-    "Profile and preset persistence serve both settings UI and browser identities; they live in the browser domain and are exposed to L1 through the browser port."
+    "Profile, preset, search history, block rules, cookie copying and login traces are browser-domain persistence; they live in electron/browser/ and reach L1 only through the browser port."
   ]
 }

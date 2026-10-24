@@ -1,4 +1,4 @@
-// electron/window-factory/paths.ts — 路径工具
+// electron/platform/window/paths.ts — 路径工具
 //
 // 从 helpers.ts 抽离：__dirname / isDev / preload 路径获取。
 //

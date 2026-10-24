@@ -1,15 +1,23 @@
-// electron/window-factory/app-icon.test.ts
+// electron/platform/window/app-icon.test.ts
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const fixture = vi.hoisted(() => ({
-  exists: true,
-  empty: false,
-  lastPath: '' as string,
-  setIcon: vi.fn(),
-}))
+// Repository root of the checkout under test, so the fixture layout follows the
+// real directory name instead of a fixed development path.
+const fixture = vi.hoisted(() => {
+  const { fileURLToPath } = require('node:url') as typeof import('node:url')
+  const path = require('node:path') as typeof import('node:path')
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+  return {
+    exists: true,
+    empty: false,
+    lastPath: '' as string,
+    setIcon: vi.fn(),
+    repoRoot,
+  }
+})
 
 vi.mock('electron', () => ({
-  app: { isPackaged: false, getAppPath: () => 'E:/SidekickAI/out/main' },
+  app: { isPackaged: false, getAppPath: () => `${fixture.repoRoot}/out/main` },
   nativeImage: {
     createFromPath: (file: string) => {
       fixture.lastPath = file
@@ -21,9 +29,9 @@ vi.mock('electron', () => ({
 vi.mock('node:fs', () => ({
   default: {
     existsSync: (p: string) => {
-      // emulate repo layout: only E:/SidekickAI/resources/icons/icon.ico exists
+      // emulate repo layout: only <repoRoot>/resources/icons/icon.ico exists
       const normalized = String(p).replace(/\\/g, '/')
-      return fixture.exists && normalized.endsWith('SidekickAI/resources/icons/icon.ico')
+      return fixture.exists && normalized.endsWith(`${fixture.repoRoot.replace(/\\/g, '/')}/resources/icons/icon.ico`)
     },
   },
 }))
@@ -44,7 +52,7 @@ describe('app-icon', () => {
     expect(fixture.lastPath.replace(/\\/g, '/')).toContain('resources/icons/icon.ico')
     // walk-up must discover the repository root above out/main
     const candidates = mod.listWindowIconCandidates().map(p => p.replace(/\\/g, '/'))
-    expect(candidates.some(p => p.includes('SidekickAI/resources/icons/icon.ico'))).toBe(true)
+    expect(candidates.some(p => p.includes(`${fixture.repoRoot.replace(/\\/g, '/')}/resources/icons/icon.ico`))).toBe(true)
   })
 
   it('returns undefined when every candidate is empty', async () => {

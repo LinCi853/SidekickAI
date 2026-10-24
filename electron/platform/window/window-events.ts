@@ -1,4 +1,4 @@
-// electron/window-factory/window-events.ts — 窗口生命周期事件
+// electron/platform/window/window-events.ts — 窗口生命周期事件
 //
 // 从 helpers.ts 抽离：bounds 持久化、maximize/alwaysOnTop 事件同步、
 // 脱离窗口生命周期、窗口级 F11/F12 快捷键拦截、sender 窗口反查。
@@ -15,7 +15,7 @@ import { safeLogWindowTrace, findWindowIdByWin } from './window-utils.js'
 import { isTrackedFullscreen } from '../../utils/fullscreen-tracker.js'
 import { forgetWindow as forgetWindowPriorityState } from '../../diagnostics/tab-process-priority.js'
 import { scheduleBackgroundRelease, cancelBackgroundRelease } from '../../diagnostics/background-release.js'
-import { reapplyWindowIcon } from '../../window-factory/app-icon.js'
+import { reapplyWindowIcon } from './app-icon.js'
 
 /** 获取调用方所在的 BrowserWindow */
 export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow | null {

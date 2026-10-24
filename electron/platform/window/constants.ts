@@ -1,4 +1,4 @@
-// electron/window-factory/constants.ts — 窗口工厂常量
+// electron/platform/window/constants.ts — 窗口工厂常量
 //
 // 从 helpers.ts 抽离的常量：窗口统一背景色 + 各独立窗口 ID。
 

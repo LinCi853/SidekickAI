@@ -8,11 +8,11 @@ const sourceRoots = ['electron', 'src', 'packages', 'scripts']
 const normalize = file => file.replaceAll('\\', '/')
 const productionFile = file => /\.(?:[cm]?js|jsx|tsx?)$/.test(file) && !/\.(?:test|spec|d)\./.test(file)
 
-/** Layer map used by the architecture gate; see scripts/architecture-layers.json. */
+/** Layer map used by the architecture gate; see contracts/architecture-layers.json. */
 export const emptyLayers = { prefixes: [], exemptions: [] }
 
 export function loadLayerMap(workspace = root) {
-  const file = path.join(workspace, 'scripts/architecture-layers.json')
+  const file = path.join(workspace, 'contracts/architecture-layers.json')
   if (!fs.existsSync(file)) return emptyLayers
   const map = JSON.parse(fs.readFileSync(file, 'utf8'))
   return {

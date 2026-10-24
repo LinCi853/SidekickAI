@@ -4,7 +4,7 @@
 //   - toggleMainWindow（默认 Alt+Space）：切换主窗口显隐
 //   - toggleDetachedWindows（默认 Alt+Q）：切换所有脱离窗口显隐
 //
-// 置顶切换由应用内 F12 处理（window-factory/helpers.ts），不再注册全局热键。
+// 置顶切换由应用内 F12 处理（platform/window/helpers.ts），不再注册全局热键。
 //
 // 持久化到 electron-store（hotkey.json），支持从旧版 hotkey.toggle 迁移。
 //

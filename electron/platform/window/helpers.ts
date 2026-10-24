@@ -1,4 +1,4 @@
-// electron/window-factory/helpers.ts — 窗口创建辅助函数 + 常量（聚合入口）
+// electron/platform/window/helpers.ts — 窗口创建辅助函数 + 常量（聚合入口）
 //
 // 从原 window-factory.ts 抽离的纯辅助函数已按职责拆分为多个模块：
 //   - constants.ts              窗口背景色 + 独立窗口 ID

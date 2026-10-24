@@ -1,4 +1,4 @@
-// electron/window-factory/app-icon.ts — 应用窗口图标解析
+// electron/platform/window/app-icon.ts — 应用窗口图标解析
 //
 // Windows 任务栏显示的是窗口 HICON。路径错误或空 NativeImage 会让任务栏
 // 变成系统默认的白色文档图标（窗口存在时就会如此，与是否最小化无关）。
