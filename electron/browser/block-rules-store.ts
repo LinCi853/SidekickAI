@@ -1,4 +1,4 @@
-// block-rules-store.ts — 页面组件屏蔽规则持久化存储 + IPC 注册
+// electron/browser/block-rules-store.ts — 页面组件屏蔽规则持久化存储 + IPC 注册
 //
 // 持久化到 SQLite settings.db（rules 表，createSqliteJsonStore）。
 // 首次启动自动填充预置规则（按平台域名匹配常见屏蔽目标）。
@@ -8,9 +8,9 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { BlockRule } from '../shared/block-rules.types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import { createCrudStore } from './store-paths.js'
-import { createSqliteJsonStore } from './module-state-store.js'
-import { BLOCK_RULES, RETIRED_BUILTIN_RULE_IDS } from './default-config.js'
+import { createCrudStore } from '../store/store-paths.js'
+import { createSqliteJsonStore } from '../store/module-state-store.js'
+import { BLOCK_RULES, RETIRED_BUILTIN_RULE_IDS } from './block-rules-preset.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 
 // 持久化存储实例（写入 block-rules.json）

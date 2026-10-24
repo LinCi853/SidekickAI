@@ -35,7 +35,7 @@ import {
   createSingletonHolder,
 } from './store-paths.js'
 import { WindowTraceStore } from './window-trace-store.js'
-import { LoginTraceStore } from './login-trace-store.js'
+import { LoginTraceStore } from '../browser/login-trace-store.js'
 import { ConversationStore } from './conversation-store.js'
 import { UsageTraceStore } from './usage-trace-store.js'
 import { AiAssetsStore } from './ai-assets-store.js'

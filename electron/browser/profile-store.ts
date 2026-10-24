@@ -14,7 +14,7 @@ import { getDefaultProfileParams, createDefaultProfileParams } from '../store/de
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { hasQianwenProfile, upgradeAIPlatformProfile } from '../presets/platform-profile-upgrade.js'
 import { getPreset } from './preset-store.js'
-import { profileRepository as store, readProfile } from '../store/profile-repository.js'
+import { profileRepository as store, readProfile } from './profile-repository.js'
 
 // Windows Chrome 125 默认 UA 已迁移到 default-config.ts
 

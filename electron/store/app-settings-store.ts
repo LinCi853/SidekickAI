@@ -83,7 +83,7 @@ export async function clearAllData(): Promise<void> {
     () => import('../modules/plugins/whiteboard/whiteboard-db.js').then(m => m.closeWhiteboardDb()).catch(() => {}),
     () => import('../browser/nav-history-store.js').then(m => m.closeNavHistoryStore()).catch(() => {}),
     () => import('../browser/bookmark-store.js').then(m => m.closeBookmarkStore()).catch(() => {}),
-    () => import('./search-history-store.js').then(m => m.closeSearchHistoryStore()).catch(() => {}),
+    () => import('../browser/search-history-store.js').then(m => m.closeSearchHistoryStore()).catch(() => {}),
     () => import('../browser/browser-download-store.js').then(m => m.closeBrowserDownloadStore()).catch(() => {}),
     () => import('./accumulated-links-store.js').then(m => m.accumulatedLinksStore.close()).catch(() => {}),
   ]

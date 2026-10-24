@@ -4,7 +4,7 @@
 // 使 L1 的窗口、安全与诊断服务可以读取浏览器数据，而不反向依赖 L2。
 // 装配必须先于读取：application-main 在启动早期调用 installBrowserPorts。
 
-import type { WebContents } from 'electron'
+import type { Session, WebContents } from 'electron'
 import type { BrowserWindowState, DevicePreset, Profile } from '../shared/types.js'
 import type { WebviewRegistration } from '../shared/api/profile-window.api.js'
 
@@ -20,6 +20,11 @@ export interface BrowserWindowStatePort {
   get(id: string): BrowserWindowState | null
 }
 
+export interface BrowserSessionPort {
+  /** Copies every cookie from the main-window session to a browser-window session. */
+  copyCookies(source: Session, target: Session): Promise<void>
+}
+
 export interface WebviewRecordPort {
   getRecordByWebContentsId(webContentsId: number): (WebviewRegistration & { registeredAt: number }) | null
 }
@@ -33,6 +38,7 @@ export interface BrowserPorts {
   profiles: BrowserProfilePort
   presets: BrowserPresetPort
   browserWindows: BrowserWindowStatePort
+  sessions: BrowserSessionPort
   webviews: WebviewRecordPort
   attach: WebviewAttachPort
 }

@@ -26,7 +26,7 @@ before(async () => {
   const output = await build({ stdin: { contents: bytes.toString() + '\nexport { AI_PLATFORMS } from "../../../electron/presets/ai-platforms.ts"; export { injectTextToWebview, triggerSendInWebview } from "../../hooks/useWebViewControl.ts"', loader: 'ts', resolveDir: path.dirname(source) },
     bundle: true, write: false, platform: 'browser', format: 'iife', globalName: 'EnterContract' })
   bundle = output.outputFiles[0].text
-  const blocker = await build({ stdin: { contents: "export { BLOCK_RULES } from './electron/store/block-rules-preset.ts'; export { buildBlockerScript } from './src/lib/webview-blocker.ts'", resolveDir: root },
+  const blocker = await build({ stdin: { contents: "export { BLOCK_RULES } from './electron/browser/block-rules-preset.ts'; export { buildBlockerScript } from './src/lib/webview-blocker.ts'", resolveDir: root },
     bundle: true, write: false, platform: 'browser', format: 'iife', globalName: 'BlockContract' })
   blockerBundle = blocker.outputFiles[0].text
   browser = await chromium.launch({ channel: 'chrome', headless: false })

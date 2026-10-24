@@ -1,4 +1,4 @@
-// electron/store/login-trace-store.ts — 平台登录痕迹 SQLite 持久化
+// electron/browser/login-trace-store.ts — 平台登录痕迹 SQLite 持久化
 //
 // 从 chat-store.ts 拆分出来的职责子模块，仅负责 login_traces 表的 CRUD。
 // 表结构（CREATE TABLE login_traces ...）仍由 ChatStore.initSchema 统一维护，

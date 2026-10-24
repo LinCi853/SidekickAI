@@ -7,6 +7,7 @@ import { installBrowserPorts } from '../platform/browser-port.js'
 import { browserWindowStore } from './browser-window-store.js'
 import { profileStore } from './profile-store.js'
 import { presetStore } from './preset-store.js'
+import { copySessionCookies } from './cookie-copy.js'
 import { attachWebviewAntiDetection } from './webview-anti-detection.js'
 import { attachWebviewHotkeyRouter } from './webview-hotkeys.js'
 import { getRecordByWebContentsId } from './webview-registry.js'
@@ -16,6 +17,7 @@ export function installBrowserDomainPorts(): void {
     profiles: profileStore,
     presets: presetStore,
     browserWindows: browserWindowStore,
+    sessions: { copyCookies: copySessionCookies },
     webviews: { getRecordByWebContentsId },
     attach: {
       hotkeyRouter: attachWebviewHotkeyRouter,

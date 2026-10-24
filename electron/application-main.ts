@@ -12,7 +12,7 @@ import { installApplicationPermissions } from './platform/security/session-permi
 import { installRendererContentSecurity } from './platform/security/renderer-csp.js';
 import path from 'path';
 import { registerProfileIPC, ensureDefaultProfiles, } from './browser/profile-store.js';
-import { registerBlockRulesIPC, ensureDefaultBlockRules, } from './store/block-rules-store.js';
+import { registerBlockRulesIPC, ensureDefaultBlockRules, } from './browser/block-rules-store.js';
 import { registerPresetsIPC, ensureDefaultPresets, } from './browser/preset-store.js';
 import { registerPdfProtocol } from './browser/pdf-protocol.js';
 import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js';
@@ -25,7 +25,7 @@ import { initChatStore, getChatStore, closeChatStore } from './store/chat-store.
 import { isImportingData } from './store/import-guard.js';
 import { registerBaseChatIpc, registerUsageTraceIpc } from './store/chat-ipc.js';
 import { hasActiveAssetStreams } from './assets/asset-stream-activity.js';
-import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js';
+import { registerNavHistoryIpc } from './browser/nav-history-ipc.js';
 import { WindowManager } from './platform/window/containers/profile-window.js';
 import { FingerprintEngine } from './browser/fingerprint.js';
 import { HotkeyManager } from './platform/hotkey/manager.js';

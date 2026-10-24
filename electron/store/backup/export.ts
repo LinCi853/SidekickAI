@@ -12,7 +12,7 @@ import { closeWhiteboardDb } from '../../modules/plugins/whiteboard/whiteboard-d
 import { closeNotesDb } from '../../modules/plugins/notes/notes-db.js'
 import { closeBookmarkStore } from '../../browser/bookmark-store.js'
 import { closeModuleStateDb } from '../module-state-store.js'
-import { closeSearchHistoryStore } from '../search-history-store.js'
+import { closeSearchHistoryStore } from '../../browser/search-history-store.js'
 import { closeBrowserDownloadStore } from '../../browser/browser-download-store.js'
 import { closeNavHistoryStore } from '../../browser/nav-history-store.js'
 import { accumulatedLinksStore } from '../accumulated-links-store.js'

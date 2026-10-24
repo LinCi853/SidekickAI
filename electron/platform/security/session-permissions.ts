@@ -1,5 +1,4 @@
 import { BrowserWindow, systemPreferences, type Session, type WebContents } from 'electron'
-import { readProfile } from '../../store/profile-repository.js'
 import { isPortableMode } from '../../store/store-paths.js'
 import { browserPorts } from '../browser-port.js'
 import { isTrustedRendererUrl } from './trusted-renderer.js'
@@ -32,7 +31,7 @@ export function installProfilePermissions(session: Session, profileId: string): 
     if (isPortableMode() && permission === 'media') return false
     const record = browserPorts().webviews.getRecordByWebContentsId(contents.id)
     if (record && record.profileId !== profileId || contents.getType() === 'webview' && !record) return false
-    const profile = readProfile(profileId)
+    const profile = browserPorts().profiles.get(profileId)
     if (!profile) return false
     const expected = [profile.aiPlatformUrl, profile.browserHomePage].map(webOrigin).filter(Boolean)
     const current = webOrigin(contents.getURL()), requester = webOrigin(details.requestingUrl)

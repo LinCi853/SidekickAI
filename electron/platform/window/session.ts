@@ -11,7 +11,6 @@ import { session, type Session } from 'electron'
 import type { Profile } from '../../shared/types.js'
 import { browserPorts } from '../browser-port.js'
 import { applyProxyToSession, applyRegionBasedProxy } from '../../store/proxy-helper.js'
-import { copySessionCookies } from '../../store/cookie-copy.js'
 
 /** Client Hints 头配置（供 webRequest 拦截器注入） */
 export interface ClientHints {
@@ -111,7 +110,7 @@ export async function setupBrowserSession(profileId: string, clientHints: Client
 
     // 1. Cookie 复制：从主窗口 session 继承登录态
     const sourceSession = session.fromPartition(`persist:${profileId}`)
-    await copySessionCookies(sourceSession, ses)
+    await browserPorts().sessions.copyCookies(sourceSession, ses)
 
     // 2. 设置桌面端 UA（浏览器窗口默认桌面端）
     const desktopPreset = profile.aiDesktopPreset

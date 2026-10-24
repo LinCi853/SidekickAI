@@ -1,10 +1,10 @@
-// electron/store/search-history-store.ts — 搜索历史 SQLite 持久化
+// electron/browser/search-history-store.ts — 搜索历史 SQLite 持久化
 //
 // 浏览器窗口地址栏搜索记录 + 自动补全。
 // 独立 SQLite 数据库（search-history.db）。
 
 import type { SearchHistoryEntry } from '../shared/types.js'
-import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from './store-paths.js'
+import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from '../store/store-paths.js'
 import type Database from 'better-sqlite3'
 
 function initSchema(db: Database.Database): void {

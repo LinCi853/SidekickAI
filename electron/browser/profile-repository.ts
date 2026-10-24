@@ -1,5 +1,5 @@
 import type { Profile } from '../shared/types.js'
-import { createSqliteJsonStore } from './module-state-store.js'
+import { createSqliteJsonStore } from '../store/module-state-store.js'
 
 export const profileRepository = createSqliteJsonStore<{ profiles: Profile[]; version: number }>({
   tableName: 'profiles',

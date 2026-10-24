@@ -1,7 +1,7 @@
-// electron/store/block-rules-preset.ts — 预置屏蔽规则数据
+// electron/browser/block-rules-preset.ts — 预置屏蔽规则数据
 //
 // 从 default-config.ts 拆出的纯数据文件：预置屏蔽规则（id 使用固定值便于幂等填充）。
-// 仍经由 default-config.ts 路由导出，消费方导入路径不变。
+// 属于浏览器域：屏蔽规则只作用于内嵌页面，由 block-rules-store.ts 直接消费。
 //
 // 现阶段只保留「基础且百分百是广告」的类名/ID 选择器。
 // 各 AI 应用的下载横幅、扫码区等后续按应用单独适配，不再用宽泛选择器一刀切

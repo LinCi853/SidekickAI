@@ -1,4 +1,4 @@
-// electron/store/cookie-copy.ts — Session Cookie 复制工具
+// electron/browser/cookie-copy.ts — Session Cookie 复制工具
 //
 // 从源 session 复制全部 Cookie 到目标 session。
 // 用于浏览器窗口（persist:${profileId}-browser）从主窗口 session（persist:${profileId}）
