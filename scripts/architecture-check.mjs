@@ -8,6 +8,35 @@ const sourceRoots = ['electron', 'src', 'packages', 'scripts']
 const normalize = file => file.replaceAll('\\', '/')
 const productionFile = file => /\.(?:[cm]?js|jsx|tsx?)$/.test(file) && !/\.(?:test|spec|d)\./.test(file)
 
+/** Layer map used by the architecture gate; see scripts/architecture-layers.json. */
+export const emptyLayers = { prefixes: [], exemptions: [] }
+
+export function loadLayerMap(workspace = root) {
+  const file = path.join(workspace, 'scripts/architecture-layers.json')
+  if (!fs.existsSync(file)) return emptyLayers
+  const map = JSON.parse(fs.readFileSync(file, 'utf8'))
+  return {
+    prefixes: (map.prefixes ?? []).map(entry => ({
+      path: normalize(entry.path),
+      level: entry.level,
+      domain: entry.domain ?? null,
+      allowedDomains: entry.allowedDomains ?? [],
+    })),
+    exemptions: (map.exemptions ?? []).map(normalize),
+  }
+}
+
+/** Resolves a file to its layer entry, or null when the path has no constraint. */
+export function layerResolver(layers = emptyLayers) {
+  const prefixes = [...layers.prefixes].sort((a, b) => b.path.length - a.path.length)
+  const exemptions = layers.exemptions ?? []
+  const matches = (file, entry) => file === entry || file.startsWith(entry.endsWith('/') ? entry : `${entry}/`)
+  return file => {
+    if (exemptions.some(entry => matches(file, entry))) return { level: 0, domain: null, allowedDomains: [] }
+    return prefixes.find(entry => matches(file, entry.path)) ?? null
+  }
+}
+
 export function readWorkspace(workspace = root) {
   const files = new Map()
   const visit = directory => {
@@ -39,7 +68,7 @@ export function dependencyGraph(files) {
   }
   const edges = []
   const resolve = (from, specifier) => {
-    const aliases = { '@/': 'src/', '@shared/': 'electron/shared/', '@main/': 'electron/', '@lib/': 'src/lib/', '@hooks/': 'src/hooks/', '@store/': 'src/store/', '@components/': 'src/components/' }
+    const aliases = { '@/': 'src/', '@shared/': 'electron/shared/', '@main/': 'electron/', '@lib/': 'src/lib/', '@hooks/': 'src/hooks/', '@store/': 'src/store/', '@components/': 'src/components/', '@styles/': 'src/styles/' }
     for (const [alias, directory] of Object.entries(aliases)) {
       if (specifier.startsWith(alias)) specifier = path.join(root, directory, specifier.slice(alias.length))
     }
@@ -113,12 +142,16 @@ export function cycleEdges(edges, kinds) {
   }
 }
 
-export function checkArchitecture(files, baseline) {
+export function checkArchitecture(files, baseline, layers = emptyLayers) {
   const edges = dependencyGraph(files)
   const eager = cycleEdges(edges, ['value'])
   const loaded = cycleEdges(edges, ['value', 'dynamic'])
   const allowedCycles = new Set(baseline.cycleEdges.map(edge => `${edge.from}|${edge.to}|${edge.kind}`))
   const allowedCrossings = new Set(baseline.processCrossings.map(edge => `${edge.from}|${edge.to}`))
+  const allowedLayerCrossings = new Set((baseline.layerCrossings ?? []).map(edge => `${edge.from}|${edge.to}`))
+  const resolveLayer = layerResolver(layers)
+  const layerCrossings = new Set()
+  const mappedFiles = new Set()
   const violations = []
   for (const edge of loaded.edges) {
     if (!allowedCycles.has(`${edge.from}|${edge.to}|${edge.kind}`)) violations.push(`New dependency cycle: ${edge.from} -> ${edge.to}`)
@@ -130,6 +163,28 @@ export function checkArchitecture(files, baseline) {
     }
     if (['electron/modules/runtime-state.ts', 'electron/store/app-settings-defaults.ts'].includes(edge.from)) violations.push(`State/defaults import runtime behavior: ${edge.from} -> ${edge.to}`)
     if (edge.from === 'electron/store/app-settings-repository.ts' && /\/(?:hotkey|window|window-factory|ipc)\//.test(edge.to)) violations.push(`Settings persistence depends on desktop behavior: ${edge.to}`)
+  }
+  for (const [file] of files) {
+    const layer = resolveLayer(file)
+    if (layer && layer.level > 0) mappedFiles.add(file)
+  }
+  for (const edge of edges.filter(edge => edge.kind !== 'type')) {
+    const from = resolveLayer(edge.from), to = resolveLayer(edge.to)
+    if (!from || !to || from.level === 0 || to.level === 0) continue
+    const layerCrossing = from.level < to.level
+    const domainCrossing = from.level === 2 && to.level === 2 && from.domain !== to.domain
+      && !(from.allowedDomains ?? []).includes(to.domain)
+    if (!layerCrossing && !domainCrossing) continue
+    const key = `${edge.from}|${edge.to}`
+    layerCrossings.add(key)
+    if (allowedLayerCrossings.has(key)) continue
+    violations.push(domainCrossing
+      ? `Layer 2 domain crossing: ${edge.from} -> ${edge.to} (${from.domain} may not depend on ${to.domain})`
+      : `Layer crossing: ${edge.from} -> ${edge.to} (L${from.level} imports L${to.level})`)
+  }
+  const currentLayerCrossings = new Set(layerCrossings)
+  for (const entry of baseline.layerCrossings ?? []) {
+    if (!currentLayerCrossings.has(`${entry.from}|${entry.to}`)) violations.push(`Stale layer crossing: ${entry.from} -> ${entry.to}`)
   }
   for (const [file, source] of files) {
     if (['electron/modules/registry.ts', 'electron/modules/runtime-state.ts'].includes(file)) continue
@@ -143,16 +198,34 @@ export function checkArchitecture(files, baseline) {
     }
     visit(tree)
   }
-  return { files: files.size, edgeCounts: Object.fromEntries(['value', 'dynamic', 'type'].map(kind => [kind, edges.filter(edge => edge.kind === kind).length])), eagerCycles: eager.components, loadedCycles: loaded.components, violations: [...new Set(violations)] }
+  return {
+    files: files.size,
+    edgeCounts: Object.fromEntries(['value', 'dynamic', 'type'].map(kind => [kind, edges.filter(edge => edge.kind === kind).length])),
+    eagerCycles: eager.components,
+    loadedCycles: loaded.components,
+    mappedFiles: mappedFiles.size,
+    layerCrossings: [...layerCrossings].sort().map(key => {
+      const [from, to] = key.split('|')
+      return { from, to }
+    }),
+    violations: [...new Set(violations)],
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const baseline = JSON.parse(fs.readFileSync(path.join(root, 'scripts/architecture-baseline.json'), 'utf8'))
-  const result = checkArchitecture(readWorkspace(), baseline)
-  if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2))
+  const baselineFile = path.join(root, 'scripts/architecture-baseline.json')
+  const baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8'))
+  const layers = loadLayerMap()
+  const result = checkArchitecture(readWorkspace(), baseline, layers)
+  if (process.argv.includes('--prune-layer-baseline')) {
+    const previous = baseline.layerCrossings ?? []
+    const next = { ...baseline, layerCrossings: result.layerCrossings }
+    fs.writeFileSync(baselineFile, `${JSON.stringify(next, null, 2)}\n`)
+    console.log(`Layer baseline pruned: ${previous.length} -> ${next.layerCrossings.length} entries`)
+  } else if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2))
   else {
-    console.log(`Architecture: ${result.files} files; ${result.eagerCycles.length} eager cycles; ${result.loadedCycles.length} cycles including dynamic loading`)
+    console.log(`Architecture: ${result.files} files; ${result.eagerCycles.length} eager cycles; ${result.loadedCycles.length} cycles including dynamic loading; ${result.mappedFiles} layered files; ${result.layerCrossings.length} layer crossings`)
     for (const violation of result.violations) console.error(violation)
   }
-  if (result.violations.length) process.exitCode = 1
+  if (!process.argv.includes('--prune-layer-baseline') && result.violations.length) process.exitCode = 1
 }

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "levels": {
+    "0": "assembly: entrypoints and wiring allowed to reference any layer",
+    "1": "foundation services: platform capabilities and operations domains",
+    "2": "window containers and the embedded browser domain",
+    "3": "plugin framework and module-internal plugins"
+  },
+  "defaultLevel": null,
+  "prefixes": [
+    {
+      "path": "electron/hotkey/",
+      "level": 1
+    },
+    {
+      "path": "electron/security/",
+      "level": 1
+    },
+    {
+      "path": "electron/updates/",
+      "level": 1
+    },
+    {
+      "path": "electron/diagnostics/",
+      "level": 1
+    }
+  ],
+  "exemptions": [
+    "electron/main.ts",
+    "electron/application-main.ts",
+    "electron/lifecycle.ts",
+    "electron/window-factory.ts",
+    "electron/modules/manifests.ts"
+  ],
+  "notes": [
+    "A file with no matching prefix has no layer constraint; the check reports mapped coverage so gaps stay visible.",
+    "Level 0 files are exempt from layer rules in both directions.",
+    "Level 2 entries may declare domain and allowedDomains; level 2 to level 2 edges are only allowed when the target domain is listed.",
+    "The operations domain (updates, diagnostics) stays physically in place; prefixes record its level only."
+  ]
+}
