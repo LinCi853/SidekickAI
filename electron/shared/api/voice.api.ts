@@ -44,8 +44,11 @@ export interface AudioDeviceInfo {
   groupId: string
 }
 
-/** 语音输入配置（引擎选择 + 后台发送行为等全局设置） */
-export interface VoiceConfig {
+/**
+ * 语音输入（STT）配置：引擎选择、上屏行为与麦克风设备，由 voice 插件拥有。
+ * 持久化在 settings.db 的 voice_config 表。
+ */
+export interface VoiceSettings {
   /**
    * 语音识别完成后的上屏方式：
    * - 'auto'（默认）：识别完成后自动注入/粘贴上屏（前台注入 webview，后台 Ctrl+V 粘贴）
@@ -92,10 +95,25 @@ export interface VoiceConfig {
   localExePath: string
   /** 本地识别：启动参数（模型路径等） */
   localArgs: string
-  // ===== v0.5.2 regress-2：TTS（语音合成）独立配置 =====
+}
+
+/**
+ * 语音合成（TTS）配置，由 tts 插件拥有。
+ * 持久化在 settings.db 的 tts_config 表；旧 voice_config 中的 TTS 字段一次性迁移。
+ */
+export interface TtsSettings {
   /** TTS 引擎模式：disable=关闭 / ai=自定义 AI 接入 */
+  ttsMode: 'disable' | 'ai'
+  /** TTS 服务商标识（存储 provider UUID） */
+  ttsProvider: string
+}
+
+/**
+ * 渲染层使用的合并视图：voice 与 tts 两个存储合并后的配置。
+ * TTS 字段保持可选，兼容只读取语音字段的调用方。
+ */
+export interface VoiceConfig extends VoiceSettings {
   ttsMode?: 'disable' | 'ai'
-  /** TTS 服务商标识（独立存储，存储 provider UUID） */
   ttsProvider?: string
 }
 

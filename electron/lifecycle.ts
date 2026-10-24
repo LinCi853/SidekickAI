@@ -2,7 +2,7 @@
 
 import { app } from 'electron'
 import { isImportingData } from './store/import-guard.js'
-import { cleanupActiveStreams } from './ai/handler.js'
+import { abortAllAssetStreams } from './assets/asset-stream-activity.js'
 import { getAppSettings } from './store/app-settings-store.js'
 import { getChatStore } from './store/chat-store.js'
 import { windowState } from './platform/window/window-state.js'
@@ -70,7 +70,7 @@ export function cleanupOnQuit(deps: LifecycleDeps): void {
   flushWindowStateNow()
   hotkeyManager?.unregisterAll()
   sttEngine?.cleanup()
-  cleanupActiveStreams()
+  abortAllAssetStreams()
   // 使用统计：记录退出时间（在 closeChatStore 之前调用，确保 db 仍可用）
   try {
     if (!isImportingData && getAppSettings().usageTrackingEnabled) {

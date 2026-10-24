@@ -16,6 +16,7 @@ import { previewAssetCode } from './code-preview.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { cleanSelectedAttachments, recoverSelectedCleanup } from './selected-cleanup.js'
 import { hasActiveAssetImports } from './import-activity.js'
+import { hasActiveAssetStreams } from './asset-stream-activity.js'
 import { hasActiveBackupExports } from '../store/backup-activity.js'
 import { hasActiveBackupOperations } from '../store/backup/activity.js'
 import { isImportingData } from '../store/import-guard.js'
@@ -106,15 +107,11 @@ export function registerAiAssetIpc(): void {
     attachmentAccess += 1
     try { return await operation() } finally { attachmentAccess -= 1 }
   }
-  let activeStreams: (() => boolean) | undefined
-  const prepareCleanup = async () => {
-    activeStreams ??= (await import('../ai/handler.js')).hasActiveAssetStreams
-  }
-  const cleanupBusy = () => !activeStreams || activeStreams() || attachmentAccess > 0 || hasWebOriginalTransfers() || hasLinkedOriginalTransfers()
+  const cleanupBusy = () => hasActiveAssetStreams() || attachmentAccess > 0 || hasWebOriginalTransfers() || hasLinkedOriginalTransfers()
     || hasActiveAssetImports() || hasActiveBackupExports() || hasActiveBackupOperations()
   stopAssetRetention()
   retention = createAttachmentRetention({ userData: app.getPath('userData'), settings: getAssetSettings,
-    assets: () => getChatStore().assets, prepare: prepareCleanup, busy: cleanupBusy,
+    assets: () => getChatStore().assets, busy: cleanupBusy,
     changed: () => broadcastToAllWindows(ipc.CHAT_CONVERSATION_PERSISTED, { sourceId: 'local' }, 'assets'),
     publish: status => broadcastToAllWindows(ipc.ASSET_RETENTION_STATUS_CHANGED, status, 'assets') })
   void retention.tick()
@@ -421,7 +418,6 @@ export function registerAiAssetIpc(): void {
     local(event)
     if (!['files', 'conversations'].includes(kind) || !Array.isArray(ids) || !ids.length || ids.length > 10000
       || ids.some(id => typeof id !== 'string' || !id || id.length > 200) || new Set(ids).size !== ids.length) throw new Error('Invalid asset selection')
-    await prepareCleanup()
     if (cleanupBusy())
       throw new Error('请等待响应、导入、备份和原件传输完成后再清理')
     const assets = getChatStore().assets

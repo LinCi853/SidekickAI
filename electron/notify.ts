@@ -1,6 +1,6 @@
 // electron/notify.ts — 系统通知工具
 //
-// 封装 Electron Notification，供主进程各模块（ai/handler、stt/engine、main）统一调用。
+// 封装 Electron Notification，供主进程各模块（store/chat-ipc、modules/plugins/custom-chat/chat-ipc、stt/engine、main）统一调用。
 // 通知由主进程发起，渲染层无需改动。Notification.isSupported() 为 false 时降级到 console.log。
 
 import { Notification } from 'electron'

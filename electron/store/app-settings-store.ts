@@ -24,6 +24,7 @@ import { applicationLogSources } from '../diagnostics/log-sources.js'
 import type { LogExportOptions } from '../shared/log-export.js'
 import { setRuntimeLogLevel } from '../diagnostics/application-log.js'
 import { applyUiThemeBroadcast } from '../theme/native-theme-source.js'
+import { abortAllAssetStreams } from '../assets/asset-stream-activity.js'
 
 /** 读取应用设置 */
 export function getAppSettings(): AppSettings {
@@ -63,8 +64,7 @@ export async function clearAllData(): Promise<void> {
 
   // 2. 中止活跃 AI 流式请求（避免 fetch 阻塞进程退出）
   try {
-    const { cleanupActiveStreams } = await import('../ai/handler.js')
-    cleanupActiveStreams()
+    abortAllAssetStreams()
   } catch (err) {
     console.warn('[app-settings] 中止 AI 流失败:', err)
   }

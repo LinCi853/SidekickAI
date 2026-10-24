@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const fixture = vi.hoisted(() => ({ recognize: vi.fn(), cancel: vi.fn(async () => {}), stop: vi.fn(async () => new Float32Array(1600)) }))
 vi.mock('electron', () => ({ BrowserWindow: { getFocusedWindow: () => null } }))
 vi.mock('../audio/capture.js', () => ({ AudioCapture: class { start = async () => {}; stop = fixture.stop; cancel = fixture.cancel } }))
-vi.mock('../../../../store/voice-store.js', () => ({ getVoiceConfig: () => ({ sttMode: 'ai', aiProvider: 'fixture' }) }))
+vi.mock('../config-store.js', () => ({ getVoiceSettings: () => ({ sttMode: 'ai', aiProvider: 'fixture' }) }))
 vi.mock('../../../../store/ai-provider-store.js', () => ({ aiProviderStore: { get: () => ({ id: 'fixture', apiKey: 'fixture', sttModel: 'whisper-1', apiEndpoint: 'https://fixture' }) }, deriveAudioEndpoint: () => 'https://fixture' }))
 vi.mock('./ai-whisper.js', () => ({ recognizeWithOpenAiWhisper: fixture.recognize }))
 vi.mock('./ai-mimo.js', () => ({ recognizeWithMimoAsr: vi.fn() }))

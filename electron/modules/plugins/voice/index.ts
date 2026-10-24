@@ -7,8 +7,8 @@
 
 import { EffectScope } from '../../effect-scope.js'
 import { SttEngine } from './stt/engine.js'
-import { registerVoiceIpc } from '../../../ipc/voice-ipc.js'
-import { updateVoiceConfig } from '../../../store/voice-store.js'
+import { registerVoiceIpc } from './voice-ipc.js'
+import { updateVoiceSettings } from './config-store.js'
 import {
   startBackgroundVoice as startBackgroundVoiceImpl,
   stopBackgroundVoice as stopBackgroundVoiceImpl,
@@ -113,7 +113,7 @@ export async function teardownVoiceModule(): Promise<void> {
 
 export function clearVoiceData(): void {
   // 重置 STT 相关配置字段（保留 TTS 字段，由 tts 模块负责）
-  updateVoiceConfig({
+  updateVoiceSettings({
     confirmMode: 'auto',
     inputMethod: 'layered',
     enterToSend: false,

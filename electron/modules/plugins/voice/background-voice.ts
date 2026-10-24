@@ -14,7 +14,7 @@
 // 是无参函数，main.ts 用箭头包装本模块的 (sttEngine) 签名。
 
 import { IPC_CHANNELS } from '../../../shared/types.js'
-import { getVoiceConfig } from '../../../store/voice-store.js'
+import { getVoiceSettings, type VoiceSettings } from './config-store.js'
 import type { SttEngine } from './stt/engine.js'
 import { windowState } from '../../../platform/window/window-state.js'
 import {
@@ -134,7 +134,7 @@ export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
     console.log('[voice] 检测到早前错误，跳过转写：', earlyError)
   }
 
-  const config = getVoiceConfig()
+  const config = getVoiceSettings()
 
   try {
     const text = await sttEngine.stop()
@@ -160,7 +160,7 @@ export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
  * 把识别文本上屏（前台注入 / 后台键入或粘贴 / 剪贴板）。
  * builtin 与非 builtin 模式共用此路径，确保上屏行为一致。
  */
-function deliverVoiceText(text: string, config: ReturnType<typeof getVoiceConfig>): void {
+function deliverVoiceText(text: string, config: VoiceSettings): void {
   if (!text || !text.trim()) return
   const appIsFocused = hasAppFocusedWindow()
   console.log(`[voice] 自动上屏：appIsFocused=${appIsFocused}，confirmMode=${config.confirmMode}，inputMethod=${config.inputMethod}`)

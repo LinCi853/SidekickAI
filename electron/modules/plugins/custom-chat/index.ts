@@ -9,7 +9,7 @@
 import { IPC_CHANNELS } from '../../../shared/types.js'
 import { EffectScope } from '../../effect-scope.js'
 import { registerAIProviderIPC, ensureDefaultProviders } from '../../../store/ai-provider-store.js'
-import { registerAIChatIPC, cleanupActiveStreams } from '../../../ai/handler.js'
+import { registerAIChatIPC, cleanupActiveStreams } from './chat-ipc.js'
 import { getChatStore } from '../../../store/chat-store.js'
 import { BrowserWindow } from 'electron'
 

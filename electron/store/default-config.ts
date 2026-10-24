@@ -16,7 +16,6 @@
 import type { DevicePreset, PromptTemplate, Profile, FingerprintConfig } from '../shared/types.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { IPHONE_VIEWPORT } from '../presets/devices.js'
-import type { VoiceConfig } from './voice-store.js'
 
 // Block Rules 预置数据量大，独立成文件（block-rules-preset.ts），此处路由导出
 export { BLOCK_RULES, RETIRED_BUILTIN_RULE_IDS } from './block-rules-preset.js'
@@ -318,26 +317,6 @@ export function getDefaultProfileParams(): DefaultProfileParams[] {
       webrtc: 'real',
     },
   }))
-}
-
-// =============================================================================
-// VoiceConfig（语音配置默认值）
-// =============================================================================
-
-/** 语音配置默认值 */
-export const VOICE_CONFIG: VoiceConfig = {
-  confirmMode: 'auto',
-  inputMethod: 'layered',
-  enterToSend: false,
-  sttMode: 'ai',
-  aiProvider: '',
-  language: 'zh',
-  localExePath: '',
-  localArgs: '',
-  inputDeviceId: '',
-  inputDeviceList: [],
-  ttsMode: 'disable',
-  ttsProvider: '',
 }
 
 // =============================================================================

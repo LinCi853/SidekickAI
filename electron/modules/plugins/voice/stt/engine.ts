@@ -10,7 +10,7 @@
 import { BrowserWindow } from 'electron'
 import { AudioCapture } from '../audio/capture.js'
 import { IPC_CHANNELS } from '../../../../shared/types.js'
-import { getVoiceConfig } from '../../../../store/voice-store.js'
+import { getVoiceSettings } from '../config-store.js'
 import { aiProviderStore, deriveAudioEndpoint } from '../../../../store/ai-provider-store.js'
 import { SAMPLE_RATE } from './constants.js'
 import { recognizeWithMimoAsr } from './ai-mimo.js'
@@ -176,7 +176,7 @@ export class SttEngine {
     }
 
     // 读取语音配置，根据 sttMode 选择引擎
-    const config = getVoiceConfig()
+    const config = getVoiceSettings()
     console.log('[SttEngine] 当前识别模式:', config.sttMode)
 
     // ---- 引擎选择 ----

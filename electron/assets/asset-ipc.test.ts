@@ -39,7 +39,7 @@ vi.mock('../browser/profile-store.js', () => ({ profileStore: { list: () => [{ i
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => state.enabled, observeModuleState: (callback: () => void) => state.observers.push(callback) }))
 vi.mock('./settings.js', () => ({ getAssetSettings: () => ({}), updateAssetSettings: () => ({}) }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))
-vi.mock('../ai/handler.js', () => ({ hasActiveAssetStreams: () => state.busy }))
+vi.mock('./asset-stream-activity.js', () => ({ hasActiveAssetStreams: () => state.busy }))
 vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => {
   if (event.sender.getType() !== 'window' || event.senderFrame !== event.sender.mainFrame) throw new Error('Unauthorized host')
 } }))

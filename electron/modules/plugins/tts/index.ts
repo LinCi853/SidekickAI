@@ -6,8 +6,8 @@
 // 已迁移到统一注入管线（EffectScope）。
 
 import { EffectScope } from '../../effect-scope.js'
-import { registerTtsTestIpc } from '../../../ipc/voice-ipc.js'
-import { updateVoiceConfig } from '../../../store/voice-store.js'
+import { registerTtsTestIpc } from './test-ipc.js'
+import { updateTtsSettings } from './config-store.js'
 
 /** 模块级 EffectScope */
 const scope = new EffectScope('tts', 'tts')
@@ -24,6 +24,6 @@ export async function teardownTtsModule(): Promise<void> {
 }
 
 export function clearTtsData(): void {
-  updateVoiceConfig({ ttsMode: 'disable', ttsProvider: '' })
+  updateTtsSettings({ ttsMode: 'disable', ttsProvider: '' })
   console.log('[wiring:tts] 数据已清除')
 }

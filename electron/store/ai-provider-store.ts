@@ -413,7 +413,7 @@ export function ensureDefaultProviders(): void {
 /**
  * 注册 AI Provider CRUD IPC 处理器。
  * 必须在 app.whenReady() 后调用（safeStorage 依赖）。
- * 注意：AI_PROVIDER_TEST / AI_PROVIDER_LIST_MODELS 在 ai/handler.ts 中注册（需要调用 API 客户端）。
+ * 注意：AI_PROVIDER_TEST / AI_PROVIDER_LIST_MODELS 在 modules/plugins/custom-chat/chat-ipc.ts 中注册（需要调用 API 客户端）。
  *
  * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
  */

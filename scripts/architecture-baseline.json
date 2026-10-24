@@ -8,21 +8,6 @@
       "kind": "value"
     },
     {
-      "from": "electron/ai/handler.ts",
-      "to": "electron/store/app-settings-store.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/ai/handler.ts",
-      "to": "electron/ai/client.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/ai/handler.ts",
-      "to": "electron/assets/asset-ipc.ts",
-      "kind": "value"
-    },
-    {
       "from": "electron/assets/asset-ipc.ts",
       "to": "electron/browser/profile-store.ts",
       "kind": "value"
@@ -31,11 +16,6 @@
       "from": "electron/assets/asset-ipc.ts",
       "to": "electron/modules/registry.ts",
       "kind": "value"
-    },
-    {
-      "from": "electron/assets/asset-ipc.ts",
-      "to": "electron/ai/handler.ts",
-      "kind": "dynamic"
     },
     {
       "from": "electron/ipc/window-control-ipc.ts",
@@ -50,11 +30,6 @@
     {
       "from": "electron/modules/hotkey-sync.ts",
       "to": "electron/store/app-settings-store.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/ai/handler.ts",
       "kind": "dynamic"
     },
     {

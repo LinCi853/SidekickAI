@@ -13,17 +13,13 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [], fromWebContents: () => undefined },
   dialog: {},
 }))
-vi.mock('../store/chat-store.js', async original => ({ ...await original<any>(), getChatStore: () => fixture.store }))
-vi.mock('../store/ai-provider-store.js', () => ({ aiProviderStore: { get: () => ({ id: 'provider', name: 'Fixture', protocol: 'openai' }) } }))
-vi.mock('../store/app-settings-store.js', () => ({ getAppSettings: () => ({}) }))
-vi.mock('../modules/plugins/prompt-library/injection-history-store.js', () => ({ injectionHistoryStore: {} }))
-vi.mock('../notify.js', () => ({ showNotification: vi.fn() }))
-vi.mock('../assets/asset-ipc.js', () => ({ registerAiAssetIpc: vi.fn() }))
-vi.mock('../assets/import-activity.js', () => ({ runAssetImport: vi.fn() }))
-vi.mock('./client.js', () => ({ streamChat: fixture.stream, testProvider: vi.fn(), listModels: vi.fn() }))
-import { ChatStore } from '../store/chat-store'
-import { registerAIChatIPC, cleanupActiveStreams } from './handler'
-import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
+vi.mock('../../../store/chat-store.js', async original => ({ ...await original<any>(), getChatStore: () => fixture.store }))
+vi.mock('../../../store/ai-provider-store.js', () => ({ aiProviderStore: { get: () => ({ id: 'provider', name: 'Fixture', protocol: 'openai' }) } }))
+vi.mock('../../../notify.js', () => ({ showNotification: vi.fn() }))
+vi.mock('../../../ai/client.js', () => ({ streamChat: fixture.stream, testProvider: vi.fn(), listModels: vi.fn() }))
+import { ChatStore } from '../../../store/chat-store'
+import { registerAIChatIPC, cleanupActiveStreams } from './chat-ipc'
+import { IPC_CHANNELS as ipc } from '../../../shared/ipc-channels'
 
 beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks(); fixture.handlers.clear()
