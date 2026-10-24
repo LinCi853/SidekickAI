@@ -16,12 +16,12 @@ import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { assertTrustedRenderer } from '../security/trusted-renderer.js'
-import { createMaximizeManager } from '../window-factory/window-maximize-manager.js'
+import { createMaximizeManager } from '../platform/window/window-maximize-manager.js'
 import {
   IPC_CHANNELS,
   type WindowStateData,
 } from '../shared/types.js'
-import type { WindowManager } from '../window/manager.js'
+import type { WindowManager } from '../platform/window/containers/profile-window.js'
 import type { FingerprintEngine } from '../fingerprint/engine.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { validateWebviewHotkeyTarget } from '../window-factory/webview-hotkey-target.js'

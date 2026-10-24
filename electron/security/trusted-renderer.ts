@@ -1,7 +1,7 @@
 import { app, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { __dirname as mainDirectory } from '../window-factory/paths.js'
+import { __dirname as mainDirectory } from '../platform/window/paths.js'
 
 /** Only the application document receives host capabilities, regardless of window mode. */
 export function isTrustedRendererUrl(value: string): boolean {

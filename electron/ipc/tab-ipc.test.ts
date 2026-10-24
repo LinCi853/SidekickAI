@@ -33,10 +33,10 @@ vi.mock('../store/window-store.js', () => ({
   windowStore: { getOrDefault: runtime.getOrDefault, save: runtime.save },
 }))
 vi.mock('../store/profile-store.js', () => ({ profileStore: { get: () => ({ name: 'App' }) } }))
-vi.mock('../window-state.js', () => ({ windowState: { mainWindow: runtime.mainWindow } }))
+vi.mock('../platform/window/window-state.js', () => ({ windowState: { mainWindow: runtime.mainWindow } }))
 vi.mock('../window-factory/detach-profile.js', () => ({ detachProfileToBrowserWindow: vi.fn() }))
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => true }))
-vi.mock('../window/window-retirement.js', () => ({ isBackgroundClose: runtime.isBackgroundClose }))
+vi.mock('../platform/window/window-retirement.js', () => ({ isBackgroundClose: runtime.isBackgroundClose }))
 vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
 
 import { registerTabIpc } from './tab-ipc.js'

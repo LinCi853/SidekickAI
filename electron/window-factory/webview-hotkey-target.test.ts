@@ -7,7 +7,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => lookup.contents.get(id) },
 }))
 vi.mock('./webview-registry.js', () => ({ getRecordByWebContentsId: () => lookup.record }))
-vi.mock('./window-utils.js', () => ({ findWindowIdByWin: () => 'main' }))
+vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: () => 'main' }))
 import { captureWebviewHotkeyTarget, trackWebviewHotkeyTarget, validateWebviewHotkeyTarget } from './webview-hotkey-target.js'
 
 function page() {

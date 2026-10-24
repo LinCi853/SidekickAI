@@ -4,11 +4,11 @@
 // 导航历史持久化（SQLite），下载管理复用 browser-download-store。
 // 已存在则聚焦，不重复打开。参考 showHistoryWindow / showSettingsWindow 模式。
 
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import {
   HISTORY_DOWNLOAD_WINDOW_ID,
   createSingletonPopupWindow,
-} from './helpers.js'
+} from '../platform/window/helpers.js'
 
 /**
  * 创建/显示历史记录与下载管理独立窗口（单例）。

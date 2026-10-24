@@ -44,7 +44,7 @@ vi.mock('../../store/whiteboard-db.js', () => ({
   closeWhiteboardDb: fixture.closeWhiteboard,
 }))
 vi.mock('../../window-factory.js', () => ({ openAdvancedPanelWindow: vi.fn() }))
-vi.mock('../../window-state.js', () => ({ windowState: { advancedPanelWindow: null } }))
+vi.mock('../../platform/window/window-state.js', () => ({ windowState: { advancedPanelWindow: null } }))
 
 import { initNotesModule, teardownNotesModule, clearNotesData } from './notes.js'
 import { initWhiteboardModule, teardownWhiteboardModule, clearWhiteboardData } from './whiteboard.js'

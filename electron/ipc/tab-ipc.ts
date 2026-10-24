@@ -15,13 +15,13 @@ import { ipcMain, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import { detachProfileToBrowserWindow } from '../window-factory/detach-profile.js'
 import { isModuleEnabled } from '../modules/registry.js'
-import { isBackgroundClose } from '../window/window-retirement.js'
+import { isBackgroundClose } from '../platform/window/window-retirement.js'
 import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import { IPC_CHANNELS } from '../shared/types.js'
-import type { WindowManager } from '../window/manager.js'
+import type { WindowManager } from '../platform/window/containers/profile-window.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */
 export interface TabIpcDeps {

@@ -25,7 +25,7 @@ import { initChatStore, getChatStore, closeChatStore } from './store/chat-store.
 import { isImportingData } from './store/import-guard.js';
 import { registerBaseChatIpc, registerUsageTraceIpc, hasActiveAssetStreams } from './ai/handler.js';
 import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js';
-import { WindowManager } from './window/manager.js';
+import { WindowManager } from './platform/window/containers/profile-window.js';
 import { FingerprintEngine } from './fingerprint/engine.js';
 import { HotkeyManager } from './hotkey/manager.js';
 import { SttEngine } from './stt/engine.js';
@@ -50,14 +50,14 @@ import { registerTabProcessPriorityIPC, forgetWindow as forgetPriorityWindow } f
 import { EffectScope } from './modules/effect-scope.js';
 import { attachDownloadHandlersForAllProfiles, maybeAutoCleanCache, hasActiveDownloads } from './utils/download-handler.js';
 import { sweepStaleRuntimeTemp } from './utils/temp-hygiene.js';
-import { windowState } from './window-state.js';
+import { windowState } from './platform/window/window-state.js';
 import { windowStore } from './store/window-store.js';
 import { isTrackedFullscreen } from './utils/fullscreen-tracker.js';
 import { createMainWindow, createBrowserWindow, createChatWindow, showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showSettingsWindow, showHistoryDownloadWindow, openAdvancedPanelWindow, toggleAdvancedPanelWindow, showOnboardingWindow, setOnboardingLifecycleCallbacks, getSenderWindow, findWindowIdByWin, } from './window-factory.js';
 import { initAppFocusTracker } from './voice/preview-window.js';
 import { warmWin32ForegroundBridge } from './utils/win32-foreground.js';
 import { peekSttEngine, startBackgroundVoiceGated, stopBackgroundVoiceGated, toggleVoiceRecordingGated, } from './modules/wiring/voice.js';
-import { createTray, hasTray } from './window/tray.js';
+import { createTray, hasTray } from './platform/window/tray.js';
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js';
 import { BUILTIN_MODULES } from './modules/manifests.js';
 import { initEnabledModules, registerModule, isModuleEnabled } from './modules/registry.js';

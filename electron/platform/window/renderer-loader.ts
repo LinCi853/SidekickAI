@@ -4,7 +4,7 @@
 
 import { BrowserWindow } from 'electron'
 import path from 'path'
-import { windowState } from '../window-state.js'
+import { windowState } from './window-state.js'
 import { __dirname } from './paths.js'
 
 /**

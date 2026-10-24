@@ -26,14 +26,14 @@ import {
   syncBrowserProfileShortcuts,
 } from '../modules/wiring/hotkey-sync.js'
 import type { HotkeyManager } from '../hotkey/manager.js'
-import { resetMainWindowToDefault } from '../window-factory/main-window.js'
+import { resetMainWindowToDefault } from '../platform/window/main-window.js'
 import { getAppSettings } from '../store/app-settings-store.js'
 import * as focusManager from '../utils/focus-manager.js'
 
-import { showPromptWindow } from '../window-factory/popup-windows.js'
+import { showPromptWindow } from '../platform/window/containers/popup-windows.js'
 import { getAssetSettings } from '../assets/settings.js'
 import { normalizeAssetAccelerator, validateAssetAccelerator } from '../shared/asset-settings.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 
 /** 进阶面板是否可用（内置模块或插件声明了 advancedPanelTab 的已启用模块） */

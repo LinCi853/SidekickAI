@@ -15,9 +15,9 @@
 //   5. 通过 IPC 通知渲染层状态变化
 
 import { screen, type BrowserWindow } from 'electron'
-import { windowStore } from '../store/window-store.js'
-import { browserWindowStore } from '../store/browser-window-store.js'
-import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import { windowStore } from '../../store/window-store.js'
+import { browserWindowStore } from '../../store/browser-window-store.js'
+import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { ADVANCED_PANEL_WINDOW_ID } from './constants.js'
 
 /** 窗口尺寸（位置 + 大小） */

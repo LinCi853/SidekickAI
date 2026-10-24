@@ -7,7 +7,7 @@ import { assertTrustedRenderer } from '../security/trusted-renderer.js'
 import { assertOwnedWebview } from '../security/webview-owner.js'
 import { openNativeFile, readNativeFile } from '../security/native-file.js'
 import { createLocalPreview } from './pdf-protocol.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 
 export interface DroppedFile {
   filename: string

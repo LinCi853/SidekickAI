@@ -5,9 +5,9 @@
 // 单例：windowState.onboardingWindow。已存在则聚焦。
 
 import { BrowserWindow, screen } from 'electron'
-import { registerWindowRetirement } from '../window/window-retirement.js'
-import { windowRetirementSeconds } from '../shared/background-policy.js'
-import { isLowMemoryMode } from '../store/low-memory-mode.js'
+import { registerWindowRetirement } from '../window-retirement.js'
+import { windowRetirementSeconds } from '../../../shared/background-policy.js'
+import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
 import { windowState } from '../window-state.js'
 import {
   WINDOW_BACKGROUND_COLOR,
@@ -15,8 +15,8 @@ import {
   getPreloadPath,
   createDefaultWebPreferences,
   loadRenderer,
-} from './helpers.js'
-import { buildWindowConfig } from './window-config-builder.js'
+} from '../helpers.js'
+import { buildWindowConfig } from '../window-config-builder.js'
 
 /** 引导窗口生命周期回调（由 main.ts 注册，用于暂停/恢复全局热键） */
 let lifecycleCb: { onShow?: () => void; onClose?: () => void } = {}

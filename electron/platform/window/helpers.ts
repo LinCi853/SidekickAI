@@ -20,12 +20,12 @@
 //     从 ./helpers.js import 所需辅助函数与常量。
 //   - 全局可变窗口状态通过 ../window-state.js 的 windowState 对象共享。
 
-import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { accumulatedLinksStore } from '../store/accumulated-links-store.js'
-import { getAppSettings } from '../store/app-settings-store.js'
-import { allowRemoteNavigation } from '../security/trusted-renderer.js'
+import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
+import { accumulatedLinksStore } from '../../store/accumulated-links-store.js'
+import { getAppSettings } from '../../store/app-settings-store.js'
+import { allowRemoteNavigation } from '../../security/trusted-renderer.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
-import { attachWebviewHotkeyRouter } from './webview-hotkeys.js'
+import { attachWebviewHotkeyRouter } from '../../window-factory/webview-hotkeys.js'
 
 // —— 常量 ——
 export {
@@ -66,10 +66,10 @@ export {
 } from './window-utils.js'
 
 // —— webview 快捷键路由 ——
-export { attachWebviewHotkeyRouter } from './webview-hotkeys.js'
+export { attachWebviewHotkeyRouter } from '../../window-factory/webview-hotkeys.js'
 
 // —— webview 反检测 ——
-export { attachWebviewAntiDetection } from './webview-anti-detection.js'
+export { attachWebviewAntiDetection } from '../../window-factory/webview-anti-detection.js'
 
 /** 从完整 URL 提取 origin 前缀（scheme + host + '/'），用于日志 */
 function extractUrlOrigin(url: string): string {

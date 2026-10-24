@@ -86,7 +86,7 @@ export function buildWindowConfig(
   }
 
   // hasShadow 平台差异：mac/Windows 需要 true（立体感 + 圆角阴影），Linux false
-  result.hasShadow = linux ? false : true
+  result.hasShadow ??= linux ? false : true
 
   return result
 }

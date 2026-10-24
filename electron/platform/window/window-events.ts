@@ -4,18 +4,18 @@
 // 脱离窗口生命周期、窗口级 F11/F12 快捷键拦截、sender 窗口反查。
 
 import { BrowserWindow } from 'electron'
-import { windowStore } from '../store/window-store.js'
-import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { windowState } from '../window-state.js'
+import { windowStore } from '../../store/window-store.js'
+import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
+import { windowState } from './window-state.js'
 import {
   setAlwaysOnTopForWindow,
   toggleMaximizeForWindow,
-} from '../ipc/window-control-ipc.js'
+} from '../../ipc/window-control-ipc.js'
 import { safeLogWindowTrace, findWindowIdByWin } from './window-utils.js'
-import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
-import { forgetWindow as forgetWindowPriorityState } from '../diagnostics/tab-process-priority.js'
-import { scheduleBackgroundRelease, cancelBackgroundRelease } from '../diagnostics/background-release.js'
-import { reapplyWindowIcon } from './app-icon.js'
+import { isTrackedFullscreen } from '../../utils/fullscreen-tracker.js'
+import { forgetWindow as forgetWindowPriorityState } from '../../diagnostics/tab-process-priority.js'
+import { scheduleBackgroundRelease, cancelBackgroundRelease } from '../../diagnostics/background-release.js'
+import { reapplyWindowIcon } from '../../window-factory/app-icon.js'
 
 /** 获取调用方所在的 BrowserWindow */
 export function getSenderWindow(e: Electron.IpcMainInvokeEvent): BrowserWindow | null {

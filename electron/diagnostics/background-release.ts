@@ -3,9 +3,9 @@
 // 应用长时间整体无焦点后：关闭已隐藏/最小化的次窗口，释放其渲染进程。
 // 只负责次窗口生命周期；主窗口及其已加载网页保持运行态。
 import { BrowserWindow } from 'electron'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import { backgroundReleaseDelayMs } from '../shared/background-policy.js'
-import { isWindowAudible, markBackgroundClose } from '../window/window-retirement.js'
+import { isWindowAudible, markBackgroundClose } from '../platform/window/window-retirement.js'
 import { isLowMemoryMode } from '../store/low-memory-mode.js'
 
 export interface BackgroundReleaseResult {

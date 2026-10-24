@@ -19,7 +19,7 @@ vi.mock('./win32-foreground.js', () => ({
   getForegroundHandle: fixture.getForegroundHandle,
   setForegroundHandle: fixture.setForegroundHandle,
 }))
-vi.mock('../window-factory/window-utils.js', () => ({ findWindowIdByWin: fixture.findWindowIdByWin }))
+vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: fixture.findWindowIdByWin }))
 vi.mock('./fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 
 import { track, show, hide, close } from './focus-manager'

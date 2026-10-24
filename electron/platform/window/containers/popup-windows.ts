@@ -1,13 +1,13 @@
 import { windowState } from '../window-state.js'
-import { isModuleEnabled } from '../modules/registry.js'
-import { setAssetNavigation } from '../assets/navigation.js'
-import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import type { AssetNavigation } from '../shared/ai-assets.types.js'
-import type { SettingsCategory } from '../shared/api/settings-options.js'
+import { isModuleEnabled } from '../../../modules/registry.js'
+import { setAssetNavigation } from '../../../assets/navigation.js'
+import { IPC_CHANNELS } from '../../../shared/ipc-channels.js'
+import type { AssetNavigation } from '../../../shared/ai-assets.types.js'
+import type { SettingsCategory } from '../../../shared/api/settings-options.js'
 import {
   PROMPT_WINDOW_ID,
   createSingletonPopupWindow,
-} from './helpers.js'
+} from '../helpers.js'
 
 /** The legacy search action opens the shared asset window. */
 export function showHistoryWindow(): void {

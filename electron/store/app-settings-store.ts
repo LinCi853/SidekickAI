@@ -483,7 +483,7 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
 
   // 数据迁移：打开数据导出独立窗口（单例）
   ipcMain.handle(IPC_CHANNELS.APP_OPEN_EXPORT_WINDOW, async () => {
-    const { showDataExportWindow } = await import('../window-factory/popup-windows.js')
+    const { showDataExportWindow } = await import('../platform/window/containers/popup-windows.js')
     showDataExportWindow()
   })
 

@@ -12,8 +12,8 @@ const fixture = vi.hoisted(() => ({
   top: vi.fn(),
 }))
 
-vi.mock('./renderer-loader.js', () => ({ isBrowserWindowContents: () => fixture.browser }))
-vi.mock('./window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
+vi.mock('../platform/window/renderer-loader.js', () => ({ isBrowserWindowContents: () => fixture.browser }))
+vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
 vi.mock('./webview-focus.js', () => ({ isGuestFocusEditable: () => fixture.editable }))
 vi.mock('../utils/cloud-pc.js', () => ({ isCloudPc: () => fixture.cloud, forceExitCloudPc: fixture.exitCloud }))
 vi.mock('../utils/browser-hotkey-fallback.js', () => ({ tryForward: () => fixture.forward }))

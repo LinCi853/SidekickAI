@@ -28,7 +28,7 @@ import type { BookmarkInput, BookmarkFilter, BookmarkPatch } from '../shared/boo
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { bookmarkStore } from '../store/bookmark-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import { findWindowIdByWin } from '../window-factory.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import type { EffectScope } from '../modules/effect-scope.js'

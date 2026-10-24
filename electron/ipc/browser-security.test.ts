@@ -12,7 +12,7 @@ vi.mock('electron', () => ({ ipcMain: { handle: (channel: string, handler: (...a
 vi.mock('../store/browser-window-store.js', () => ({ browserWindowStore: {} }))
 vi.mock('../store/bookmark-store.js', () => ({ bookmarkStore: {} }))
 vi.mock('../store/window-store.js', () => ({ windowStore: {}, MAIN_WINDOW_ID: 'main' }))
-vi.mock('../window-state.js', () => ({ windowState: {} }))
+vi.mock('../platform/window/window-state.js', () => ({ windowState: {} }))
 vi.mock('../window-factory.js', () => ({ findWindowIdByWin: () => 'window-a' }))
 vi.mock('../utils/cloud-pc.js', () => ({ enterCloudPc: vi.fn(), exitCloudPc: vi.fn() }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))

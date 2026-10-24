@@ -14,7 +14,7 @@
 //     读取处使用非空断言（!），与原逻辑等价（不会在未初始化时调用）。
 
 import type { BrowserWindow } from 'electron'
-import type { WindowManager } from './window/manager.js'
+import type { WindowManager } from './containers/profile-window.js'
 
 export const windowState = {
   // 主 UI 窗口（多标签）

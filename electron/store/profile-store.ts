@@ -257,7 +257,7 @@ export function registerProfileIPC(): void {
   ipcMain.handle(ipc.PROFILE_DELETE, async (_e, id: string) => {
     // 1. 关闭可能打开的 BrowserWindow（动态 import 避免循环依赖）
     try {
-      const { windowState } = await import('../window-state.js')
+      const { windowState } = await import('../platform/window/window-state.js')
       await windowState.windowManager?.closeProfile(id)
     } catch (err) {
       console.warn('[profile-store] 关闭 Profile 窗口失败:', err)

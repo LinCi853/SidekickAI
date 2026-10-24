@@ -1,7 +1,7 @@
 import { BrowserWindow, session, webContents, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { getRecordByWebContentsId } from '../window-factory/webview-registry.js'
-import { findWindowIdByWin } from '../window-factory/window-utils.js'
-import { windowState } from '../window-state.js'
+import { findWindowIdByWin } from '../platform/window/window-utils.js'
+import { windowState } from '../platform/window/window-state.js'
 import { assertTrustedRenderer } from './trusted-renderer.js'
 
 export function assertOwnedWebview(host: WebContents, guest: WebContents): void {

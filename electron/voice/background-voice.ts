@@ -16,7 +16,7 @@
 import { IPC_CHANNELS } from '../shared/types.js'
 import { getVoiceConfig } from '../store/voice-store.js'
 import type { SttEngine } from '../stt/engine.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import {
   showPreview,
   showPartialText,

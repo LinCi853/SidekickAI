@@ -25,7 +25,7 @@
 //   focusManager.hide(win)                  // 热键隐藏：同步隐藏 + 异步交还前台
 
 import type { BrowserWindow } from 'electron'
-import { findWindowIdByWin } from '../window-factory/window-utils.js'
+import { findWindowIdByWin } from '../platform/window/window-utils.js'
 import { windowStore } from '../store/window-store.js'
 import { isTrackedFullscreen } from './fullscreen-tracker.js'
 import { getForegroundHandle, setForegroundHandle } from './win32-foreground.js'

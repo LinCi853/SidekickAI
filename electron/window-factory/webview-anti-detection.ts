@@ -2,7 +2,7 @@
 //
 // 从 helpers.ts 抽离：为窗口的 webContents 注册 <webview> 反检测 preload 注入。
 
-import { getWebviewPreloadPath } from './paths.js'
+import { getWebviewPreloadPath } from '../platform/window/paths.js'
 
 /**
  * 为窗口的 webContents 注册 <webview> 反检测 preload 注入。

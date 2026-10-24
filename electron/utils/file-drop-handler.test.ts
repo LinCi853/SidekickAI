@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events'
 
 const windows = vi.hoisted(() => new Map<string, any>())
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() }, BrowserWindow: { fromWebContents: (sender: any) => sender.window } }))
-vi.mock('../window-state.js', () => ({ windowState: { browserWindowsByProfile: windows } }))
+vi.mock('../platform/window/window-state.js', () => ({ windowState: { browserWindowsByProfile: windows } }))
 vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => {
   if (!event.sender.trusted || event.senderFrame !== event.sender.mainFrame) throw new Error('untrusted')
 } }))

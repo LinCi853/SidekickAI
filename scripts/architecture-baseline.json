@@ -79,7 +79,7 @@
     },
     {
       "from": "electron/store/app-settings-store.ts",
-      "to": "electron/window-factory/popup-windows.ts",
+      "to": "electron/platform/window/containers/popup-windows.ts",
       "kind": "dynamic"
     },
     {
@@ -174,12 +174,12 @@
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/main-window.ts",
+      "to": "electron/platform/window/main-window.ts",
       "kind": "value"
     },
     {
@@ -189,12 +189,12 @@
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/chat-window.ts",
+      "to": "electron/platform/window/containers/chat-window.ts",
       "kind": "value"
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/popup-windows.ts",
+      "to": "electron/platform/window/containers/popup-windows.ts",
       "kind": "value"
     },
     {
@@ -204,36 +204,36 @@
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/advanced-panel-window.ts",
+      "to": "electron/platform/window/containers/advanced-panel-window.ts",
       "kind": "value"
     },
     {
       "from": "electron/window-factory.ts",
-      "to": "electron/window-factory/onboarding-window.ts",
+      "to": "electron/platform/window/containers/onboarding-window.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/advanced-panel-window.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/containers/advanced-panel-window.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/advanced-panel-window.ts",
-      "to": "electron/window-factory/window-size-helpers.ts",
+      "from": "electron/platform/window/containers/advanced-panel-window.ts",
+      "to": "electron/platform/window/window-size-helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/advanced-panel-window.ts",
+      "from": "electron/platform/window/containers/advanced-panel-window.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/advanced-panel-window.ts",
+      "from": "electron/platform/window/containers/advanced-panel-window.ts",
       "to": "electron/modules/registry.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/advanced-panel-window.ts",
+      "from": "electron/platform/window/containers/advanced-panel-window.ts",
       "to": "electron/modules/registry.ts",
       "kind": "dynamic"
     },
@@ -254,7 +254,7 @@
     },
     {
       "from": "electron/window-factory/browser-window.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
@@ -263,17 +263,17 @@
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/chat-window.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/containers/chat-window.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/chat-window.ts",
-      "to": "electron/window-factory/window-size-helpers.ts",
+      "from": "electron/platform/window/containers/chat-window.ts",
+      "to": "electron/platform/window/window-size-helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/chat-window.ts",
+      "from": "electron/platform/window/containers/chat-window.ts",
       "to": "electron/modules/registry.ts",
       "kind": "value"
     },
@@ -283,63 +283,63 @@
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/helpers.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/helpers.ts",
       "to": "electron/window-factory/webview-hotkeys.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/helpers.ts",
-      "to": "electron/window-factory/window-events.ts",
+      "from": "electron/platform/window/helpers.ts",
+      "to": "electron/platform/window/window-events.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/helpers.ts",
-      "to": "electron/window-factory/singleton-popup.ts",
+      "from": "electron/platform/window/helpers.ts",
+      "to": "electron/platform/window/singleton-popup.ts",
       "kind": "value"
     },
     {
       "from": "electron/window-factory/history-download-window.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/main-window.ts",
+      "from": "electron/platform/window/main-window.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/main-window.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/main-window.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/main-window.ts",
-      "to": "electron/window-factory/window-size-helpers.ts",
+      "from": "electron/platform/window/main-window.ts",
+      "to": "electron/platform/window/window-size-helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/onboarding-window.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/containers/onboarding-window.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/popup-windows.ts",
+      "from": "electron/platform/window/containers/popup-windows.ts",
       "to": "electron/modules/registry.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/popup-windows.ts",
-      "to": "electron/window-factory/helpers.ts",
+      "from": "electron/platform/window/containers/popup-windows.ts",
+      "to": "electron/platform/window/helpers.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/singleton-popup.ts",
-      "to": "electron/window-factory/window-events.ts",
+      "from": "electron/platform/window/singleton-popup.ts",
+      "to": "electron/platform/window/window-events.ts",
       "kind": "value"
     },
     {
@@ -348,12 +348,12 @@
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/window-events.ts",
+      "from": "electron/platform/window/window-events.ts",
       "to": "electron/ipc/window-control-ipc.ts",
       "kind": "value"
     },
     {
-      "from": "electron/window-factory/window-size-helpers.ts",
+      "from": "electron/platform/window/window-size-helpers.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     }

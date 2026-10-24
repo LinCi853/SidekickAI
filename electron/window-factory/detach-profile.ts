@@ -16,11 +16,11 @@ import { windowStore } from '../store/window-store.js'
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { navHistoryStore } from '../store/nav-history-store.js'
 import { profileStore } from '../store/profile-store.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { BrowserWindowState, BrowserTabState } from '../shared/browser.types.js'
 import type { BrowserWindow } from 'electron'
-import type { WindowManager } from '../window/manager.js'
+import type { WindowManager } from '../platform/window/containers/profile-window.js'
 
 /** 脱离所需依赖（windowManager 与 createBrowserWindow 由 main.ts 注入，避免循环引用） */
 export interface DetachProfileDeps {

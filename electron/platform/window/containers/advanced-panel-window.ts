@@ -15,11 +15,11 @@
 // 依赖关系：advanced-panel-window → helpers（无循环依赖）。
 
 import { BrowserWindow, screen } from 'electron'
-import { registerWindowRetirement } from '../window/window-retirement.js'
-import { windowRetirementSeconds } from '../shared/background-policy.js'
-import { windowStore } from '../store/window-store.js'
+import { registerWindowRetirement } from '../window-retirement.js'
+import { windowRetirementSeconds } from '../../../shared/background-policy.js'
+import { windowStore } from '../../../store/window-store.js'
 import { windowState } from '../window-state.js'
-import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import { IPC_CHANNELS } from '../../../shared/ipc-channels.js'
 import {
   WINDOW_BACKGROUND_COLOR,
   ADVANCED_PANEL_WINDOW_ID,
@@ -29,17 +29,17 @@ import {
   safeLogWindowTrace,
   attachWindowHotkeyInterceptor,
   loadRenderer,
-} from './helpers.js'
-import { buildWindowConfig } from './window-config-builder.js'
+} from '../helpers.js'
+import { buildWindowConfig } from '../window-config-builder.js'
 import {
   getAdvancedPanelMinWidth,
   getUiScaleFromSettings,
   ADVANCED_PANEL_MIN_HEIGHT,
-} from './window-size-helpers.js'
-import { getAppSettings } from '../store/app-settings-store.js'
-import { isLowMemoryMode } from '../store/low-memory-mode.js'
-import { isModuleEnabled } from '../modules/registry.js'
-import * as focusManager from '../utils/focus-manager.js'
+} from '../window-size-helpers.js'
+import { getAppSettings } from '../../../store/app-settings-store.js'
+import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
+import { isModuleEnabled } from '../../../modules/registry.js'
+import * as focusManager from '../../../utils/focus-manager.js'
 
 /** 渲染层加载 URL 时附加的 query 参数（仅生产环境 loadFile 路径使用） */
 interface AdvancedPanelWindowOptions {
@@ -209,7 +209,7 @@ export async function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptio
   let pluginAvailable = false
   try {
     // 动态导入避免循环依赖
-    const { listModuleInfos } = await import('../modules/registry.js')
+    const { listModuleInfos } = await import('../../../modules/registry.js')
     pluginAvailable = listModuleInfos().some(
       (m) => m.enabled && !!m.advancedPanelTab,
     )

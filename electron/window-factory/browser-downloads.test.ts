@@ -17,8 +17,8 @@ vi.mock('../store/browser-download-store.js', () => ({ browserDownloadStore: { a
 vi.mock('../store/profile-repository.js', () => ({ readProfile: () => ({ aiPlatformUrl: 'https://fixture.test/' }) }));
 vi.mock('../security/trusted-renderer.js', () => ({ isTrustedRendererUrl: () => false }));
 vi.mock('./webview-registry.js', () => ({ getRecordByWebContentsId: (id: number) => state.records.get(id) }));
-vi.mock('../window-state.js', () => ({ windowState: { browserWindowsByProfile: state.byProfile } }));
-vi.mock('./window-utils.js', () => ({ findWindowIdByWin: (win: object) => state.ids.get(win) }));
+vi.mock('../platform/window/window-state.js', () => ({ windowState: { browserWindowsByProfile: state.byProfile } }));
+vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: (win: object) => state.ids.get(win) }));
 
 import { registerBrowserDownloads } from './browser-downloads';
 import { markAskSavePath } from '../utils/ask-save-path';

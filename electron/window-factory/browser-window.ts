@@ -10,11 +10,11 @@ import { BrowserWindow, ipcMain, nativeImage, screen } from 'electron'
 import { browserWindowStore } from '../store/browser-window-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
-import { windowState } from '../window-state.js'
+import { windowState } from '../platform/window/window-state.js'
 import { isModuleEnabled } from '../modules/registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { app } from 'electron'
-import { isBackgroundClose, registerWindowRetirement } from '../window/window-retirement.js'
+import { isBackgroundClose, registerWindowRetirement } from '../platform/window/window-retirement.js'
 import { browserWindowRetirementSeconds } from '../shared/background-policy.js'
 import { isLowMemoryMode } from '../store/low-memory-mode.js'
 import {
@@ -27,10 +27,10 @@ import {
   attachDetachedWindowLifecycle,
   safeLogWindowTrace,
   setupBoundsTracking,
-} from './helpers.js'
+} from '../platform/window/helpers.js'
 import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import { trackFullscreen, isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
-import { buildWindowConfig } from './window-config-builder.js'
+import { buildWindowConfig } from '../platform/window/window-config-builder.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'
 import { registerBrowserDownloads } from './browser-downloads.js'

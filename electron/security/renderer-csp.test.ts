@@ -7,7 +7,7 @@ import type { Session } from 'electron'
 
 const state = vi.hoisted(() => ({ app: { isPackaged: true } }))
 vi.mock('electron', () => ({ app: state.app, BrowserWindow: {} }))
-vi.mock('../window-factory/paths.js', () => ({ __dirname: 'E:/fixture/app/main' }))
+vi.mock('../platform/window/paths.js', () => ({ __dirname: 'E:/fixture/app/main' }))
 import { installRendererContentSecurity } from './renderer-csp.js'
 import { RENDERER_CONTENT_SECURITY_POLICY, rendererContentSecurityPolicy } from '../shared/renderer-csp.mjs'
 

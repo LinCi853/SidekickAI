@@ -1,37 +1,36 @@
-// electron/window/manager.ts — 多 Profile 窗口管理器
+// electron/platform/window/containers/profile-window.ts — 多 Profile 独立窗口
 //
 // 核心机制：每个 Profile 用独立 session.partition（persist:${profileId}），
 // 实现 Cookie / Storage / Cache / UA / 指纹的完全隔离。
 // 通过 BrowserWindow + session.webRequest 拦截 Client Hints 头，保证 UA 一致性。
 // 移动端 Profile 启用设备模拟，指纹通过 dom-ready 后 executeJavaScript 注入（MVP）。
+//
+// session 级设置（UA / 代理 / Client Hints）在 ../session.ts，本文件只负责窗口。
 
 import { BrowserWindow, session, type WebContents } from 'electron'
-import type { FingerprintEngine } from '../fingerprint/engine.js'
-import type { Profile } from '../shared/types.js'
-import { profileStore } from '../store/profile-store.js'
-import { getPreset } from '../store/preset-store.js'
-import { applyProxyToSession, applyRegionBasedProxy } from '../store/proxy-helper.js'
-import { copySessionCookies } from '../store/cookie-copy.js'
-import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../window-factory/helpers.js'
-import { registerWindowRetirement } from './window-retirement.js'
-import { getAppWindowIcon, reapplyWindowIcon } from '../window-factory/app-icon.js'
-import { browserWindowRetirementSeconds } from '../shared/background-policy.js'
-import { isLowMemoryMode } from '../store/low-memory-mode.js'
+import type { FingerprintEngine } from '../../../fingerprint/engine.js'
+import type { Profile } from '../../../shared/types.js'
+import { profileStore } from '../../../store/profile-store.js'
+import { getPreset } from '../../../store/preset-store.js'
+import { applyProxyToSession } from '../../../store/proxy-helper.js'
+import { WINDOW_BACKGROUND_COLOR, getWebviewPreloadPath } from '../helpers.js'
+import { buildWindowConfig } from '../window-config-builder.js'
+import { registerWindowRetirement } from '../window-retirement.js'
+import { getAppWindowIcon, reapplyWindowIcon } from '../../../window-factory/app-icon.js'
+import { browserWindowRetirementSeconds } from '../../../shared/background-policy.js'
+import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
+import {
+  applyClientHintsInterceptor,
+  buildClientHints,
+  setupBrowserSession,
+  setupSession,
+  type ClientHints,
+} from '../session.js'
 
 /** Profile 窗口最小宽度 */
 const PROFILE_WINDOW_MIN_WIDTH = 240
 /** Profile 窗口最小高度 */
 const PROFILE_WINDOW_MIN_HEIGHT = 320
-
-/** Client Hints 头配置（供 webRequest 拦截器注入） */
-interface ClientHints {
-  /** Sec-CH-UA 品牌列表，如 `"Google Chrome";v="125", "Chromium";v="125"` */
-  secChUa: string
-  /** Sec-CH-UA-Mobile，`?0` 桌面 / `?1` 移动 */
-  secChUaMobile: string
-  /** Sec-CH-UA-Platform，如 `"Windows"` */
-  secChUaPlatform: string
-}
 
 /**
  * 多 Profile 窗口管理器
@@ -96,31 +95,14 @@ export class WindowManager {
       await applyProxyToSession(ses, profile)
 
       // 计算 Client Hints 并缓存（供 webRequest 拦截器读取）
-      const hints = this.buildClientHints(profile)
+      const hints = buildClientHints(profile)
       this.clientHints.set(profileId, hints)
 
       // 拦截请求头，注入 Sec-CH-UA 系列 Client Hints（保证 UA 一致性）
-      // Safari 类预设（brands 为空，secChUa 为空字符串）不发任何 Sec-CH-UA-* 头，
-      // 真实 Safari 也不发这些头。若强行注入 Mobile/Platform 而无 Sec-CH-UA 主头，
-      // 服务端（如 DeepSeek）会检测到客户端不一致并跳回首页/登录。
-      ses.webRequest.onBeforeSendHeaders((details, callback) => {
-        const h = this.clientHints.get(profileId)
-        if (h && h.secChUa) {
-          details.requestHeaders['Sec-CH-UA'] = h.secChUa
-          details.requestHeaders['Sec-CH-UA-Mobile'] = h.secChUaMobile
-          details.requestHeaders['Sec-CH-UA-Platform'] = h.secChUaPlatform
-        } else if (h && !h.secChUa) {
-          // Safari 类预设：删除所有可能存在的 Sec-CH-UA-* 头
-          delete details.requestHeaders['Sec-CH-UA']
-          delete details.requestHeaders['Sec-CH-UA-Mobile']
-          delete details.requestHeaders['Sec-CH-UA-Platform']
-          delete details.requestHeaders['Sec-CH-UA-Full-Version-List']
-        }
-        callback({ requestHeaders: details.requestHeaders })
-      })
+      applyClientHintsInterceptor(ses, profileId, this.clientHints)
 
       // 创建窗口
-      const win = new BrowserWindow({
+      const win = new BrowserWindow(buildWindowConfig({
         icon: getAppWindowIcon(),
         width: profile.width,
         height: profile.height,
@@ -141,7 +123,7 @@ export class WindowManager {
           sandbox: false,
           nodeIntegration: false,
         },
-      })
+      }))
 
       this.windows.set(profileId, win)
       win.on('minimize', () => reapplyWindowIcon(win))
@@ -250,7 +232,7 @@ export class WindowManager {
       const profile = profileStore.get(profileId)
       if (profile) {
         const updatedProfile: Profile = { ...profile, userAgent: ua }
-        this.clientHints.set(profileId, this.buildClientHints(updatedProfile))
+        this.clientHints.set(profileId, buildClientHints(updatedProfile))
         // 持久化 UA 变更
         profileStore.update(profileId, { userAgent: ua })
       }
@@ -300,7 +282,7 @@ export class WindowManager {
           viewport: preset.viewport,
           devicePixelRatio: preset.devicePixelRatio,
         }
-        this.clientHints.set(profileId, this.buildClientHints(updatedProfile))
+        this.clientHints.set(profileId, buildClientHints(updatedProfile))
 
         // 更新设备模拟（已禁用：enableDeviceEmulation 在部分 Windows 上崩溃）
 
@@ -362,127 +344,18 @@ export class WindowManager {
 
   /**
    * 为嵌入式 webview 准备 session（单页架构专用）。
-   *
-   * 与 openProfile 不同，此方法不创建 BrowserWindow，只设置 session 级
-   * UA + 代理 + Client Hints 拦截器。渲染进程的 <webview> 使用相同
-   * partition（persist:${profileId}）即可继承这些设置，保证首屏即
-   * 使用正确 UA，无需 dom-ready 后再 setUserAgent + reload。
+   * session 级 UA + 代理 + Client Hints 拦截器见 ../session.ts。
    */
   async setupSession(profileId: string): Promise<void> {
-    try {
-      const profile = profileStore.get(profileId)
-      if (!profile) {
-        throw new Error(`Profile 不存在: ${profileId}`)
-      }
-
-      const partition = `persist:${profileId}`
-      const ses = session.fromPartition(partition)
-
-      // 设置 session 级 UA
-      if (profile.userAgent) {
-        ses.setUserAgent(profile.userAgent)
-      }
-
-      // 设置代理（Profile.proxyConfig > Profile.proxy > 全局 AppSettings）
-      await applyProxyToSession(ses, profile)
-
-      // 计算 Client Hints 并缓存（供 webRequest 拦截器读取）
-      const hints = this.buildClientHints(profile)
-      this.clientHints.set(profileId, hints)
-
-      // 拦截请求头，注入 Sec-CH-UA 系列 Client Hints（保证 UA 一致性）
-      // Safari 类预设（brands 为空，secChUa 为空字符串）不发任何 Sec-CH-UA-* 头，
-      // 真实 Safari 也不发这些头。若强行注入 Mobile/Platform 而无 Sec-CH-UA 主头，
-      // 服务端（如 DeepSeek）会检测到客户端不一致并跳回首页/登录。
-      ses.webRequest.onBeforeSendHeaders((details, callback) => {
-        const h = this.clientHints.get(profileId)
-        if (h && h.secChUa) {
-          details.requestHeaders['Sec-CH-UA'] = h.secChUa
-          details.requestHeaders['Sec-CH-UA-Mobile'] = h.secChUaMobile
-          details.requestHeaders['Sec-CH-UA-Platform'] = h.secChUaPlatform
-        } else if (h && !h.secChUa) {
-          // Safari 类预设：删除所有可能存在的 Sec-CH-UA-* 头
-          delete details.requestHeaders['Sec-CH-UA']
-          delete details.requestHeaders['Sec-CH-UA-Mobile']
-          delete details.requestHeaders['Sec-CH-UA-Platform']
-          delete details.requestHeaders['Sec-CH-UA-Full-Version-List']
-        }
-        callback({ requestHeaders: details.requestHeaders })
-      })
-    } catch (err) {
-      console.error(`[WindowManager] setupSession 失败 (${profileId}):`, err)
-      throw new Error(
-        `setupSession 失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
+    return setupSession(profileId, this.clientHints)
   }
 
   /**
    * 为浏览器窗口准备独立 session（persist:${profileId}-browser）。
-   *
-   * 与 setupSession 的区别：
-   *   - 使用独立 partition（与主窗口隔离）
-   *   - 从主窗口 session 复制 Cookie（继承登录态）
-   *   - 默认使用桌面端 UA（浏览器窗口是桌面尺寸）
-   *   - 使用 region 感知代理（cn 直连 / global 系统代理）
+   * Cookie 复制 / 桌面端 UA / region 代理见 ../session.ts。
    */
   async setupBrowserSession(profileId: string): Promise<void> {
-    try {
-      const profile = profileStore.get(profileId)
-      if (!profile) {
-        throw new Error(`Profile 不存在: ${profileId}`)
-      }
-
-      const browserPartition = `persist:${profileId}-browser`
-      const ses = session.fromPartition(browserPartition)
-
-      // 1. Cookie 复制：从主窗口 session 继承登录态
-      const sourceSession = session.fromPartition(`persist:${profileId}`)
-      await copySessionCookies(sourceSession, ses)
-
-      // 2. 设置桌面端 UA（浏览器窗口默认桌面端）
-      // 查找桌面端预设
-      const desktopPreset = profile.aiDesktopPreset
-        ? getPreset(profile.aiDesktopPreset)
-        : null
-      const desktopUA = desktopPreset?.userAgent || profile.userAgent
-      if (desktopUA) {
-        ses.setUserAgent(desktopUA)
-      }
-
-      // 3. Client Hints（桌面端）
-      const desktopProfile: Profile = {
-        ...profile,
-        userAgent: desktopUA,
-        platform: 'desktop',
-        devicePreset: profile.aiDesktopPreset || profile.devicePreset,
-      }
-      const hints = this.buildClientHints(desktopProfile)
-      this.clientHints.set(`${profileId}-browser`, hints)
-
-      ses.webRequest.onBeforeSendHeaders((details, callback) => {
-        const h = this.clientHints.get(`${profileId}-browser`)
-        if (h && h.secChUa) {
-          details.requestHeaders['Sec-CH-UA'] = h.secChUa
-          details.requestHeaders['Sec-CH-UA-Mobile'] = h.secChUaMobile
-          details.requestHeaders['Sec-CH-UA-Platform'] = h.secChUaPlatform
-        } else if (h && !h.secChUa) {
-          delete details.requestHeaders['Sec-CH-UA']
-          delete details.requestHeaders['Sec-CH-UA-Mobile']
-          delete details.requestHeaders['Sec-CH-UA-Platform']
-          delete details.requestHeaders['Sec-CH-UA-Full-Version-List']
-        }
-        callback({ requestHeaders: details.requestHeaders })
-      })
-
-      // 4. Region 感知代理
-      await applyRegionBasedProxy(ses, profile)
-    } catch (err) {
-      console.error(`[WindowManager] setupBrowserSession 失败 (${profileId}):`, err)
-      throw new Error(
-        `setupBrowserSession 失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
+    return setupBrowserSession(profileId, this.clientHints)
   }
 
   // ------------------------------------------------------------------------
@@ -553,60 +426,6 @@ export class WindowManager {
 </html>`
     // encodeURIComponent 保证特殊字符安全嵌入 data URI
     return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
-  }
-
-  /**
-   * 构建 Client Hints 头
-   * - 当前 UA 与预设 UA 一致时，使用预设的品牌列表（保证一致性）
-   * - UA 自定义时，从 UA 字符串推导
-   */
-  private buildClientHints(profile: Profile): ClientHints {
-    const preset =
-      profile.devicePreset !== 'custom' ? getPreset(profile.devicePreset) : null
-
-    // 仅当当前 UA 与预设 UA 一致时，才使用预设的品牌列表
-    if (preset && preset.userAgent === profile.userAgent) {
-      return {
-        secChUa: preset.brands
-          .map((b) => `"${b.brand}";v="${b.version}"`)
-          .join(', '),
-        secChUaMobile: preset.chMobile ? '?1' : '?0',
-        secChUaPlatform: `"${preset.chPlatform}"`,
-      }
-    }
-
-    return this.deriveClientHintsFromUA(profile.userAgent, profile.platform)
-  }
-
-  /** 从 UA 字符串推导 Client Hints（用于自定义 UA） */
-  private deriveClientHintsFromUA(
-    ua: string,
-    platform: Profile['platform'],
-  ): ClientHints {
-    const isMobile =
-      platform === 'mobile' || /Mobile|Mobi|Android|iPhone|iPad/i.test(ua)
-
-    // 推导 Sec-CH-UA-Platform
-    let chPlatform = 'Windows'
-    if (/Windows NT/i.test(ua)) chPlatform = 'Windows'
-    else if (/Macintosh|Mac OS X/i.test(ua)) chPlatform = 'macOS'
-    else if (/Android/i.test(ua)) chPlatform = 'Android'
-    else if (/iPhone|iPad|iPod/i.test(ua)) chPlatform = 'iOS'
-    else if (/Linux/i.test(ua)) chPlatform = 'Linux'
-
-    // 推导 Sec-CH-UA 品牌列表（仅 Chrome 系浏览器携带此头）
-    let secChUa = ''
-    const chromeMatch = /Chrome\/(\d+)/.exec(ua)
-    if (chromeMatch) {
-      const v = chromeMatch[1]
-      secChUa = `"Google Chrome";v="${v}", "Chromium";v="${v}", "Not.A/Brand";v="24"`
-    }
-
-    return {
-      secChUa,
-      secChUaMobile: isMobile ? '?1' : '?0',
-      secChUaPlatform: `"${chPlatform}"`,
-    }
   }
 
   /**

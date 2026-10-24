@@ -3,7 +3,7 @@
 // 从 helpers.ts 抽离：创建单例弹出窗口的通用工厂。
 
 import { BrowserWindow, screen } from 'electron'
-import { windowStore } from '../store/window-store.js'
+import { windowStore } from '../../store/window-store.js'
 import { buildWindowConfig } from './window-config-builder.js'
 import { WINDOW_BACKGROUND_COLOR } from './constants.js'
 import { createDefaultWebPreferences } from './web-preferences.js'
@@ -11,9 +11,9 @@ import { getPreloadPath } from './paths.js'
 import { loadRenderer } from './renderer-loader.js'
 import { setupBoundsTracking, attachWindowHotkeyInterceptor } from './window-events.js'
 import { safeLogWindowTrace } from './window-utils.js'
-import { registerWindowRetirement } from '../window/window-retirement.js'
-import { windowRetirementSeconds } from '../shared/background-policy.js'
-import { isLowMemoryMode } from '../store/low-memory-mode.js'
+import { registerWindowRetirement } from './window-retirement.js'
+import { windowRetirementSeconds } from '../../shared/background-policy.js'
+import { isLowMemoryMode } from '../../store/low-memory-mode.js'
 
 /**
  * 创建单例弹出窗口的通用工厂。

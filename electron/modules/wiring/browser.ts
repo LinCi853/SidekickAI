@@ -13,7 +13,7 @@ import { searchHistoryStore, closeSearchHistoryStore } from '../../store/search-
 import { browserDownloadStore, closeBrowserDownloadStore } from '../../store/browser-download-store.js'
 import { closeBookmarkStore } from '../../store/bookmark-store.js'
 import { browserWindowStore } from '../../store/browser-window-store.js'
-import { windowState } from '../../window-state.js'
+import { windowState } from '../../platform/window/window-state.js'
 import { resolveSqlitePath } from '../../store/store-paths.js'
 import fs from 'fs'
 

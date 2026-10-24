@@ -3,10 +3,10 @@
 // 从 helpers.ts 抽离：窗口痕迹记录、表单默认尺寸、User-Agent 解析、窗口 ID 反查。
 
 import { BrowserWindow } from 'electron'
-import { getChatStore } from '../store/chat-store.js'
-import { type WindowTraceAction, type ChatWindowConfig } from '../shared/types.js'
-import { windowState } from '../window-state.js'
-import { MAIN_WINDOW_ID } from '../store/window-store.js'
+import { getChatStore } from '../../store/chat-store.js'
+import { type WindowTraceAction, type ChatWindowConfig } from '../../shared/types.js'
+import { windowState } from './window-state.js'
+import { MAIN_WINDOW_ID } from '../../store/window-store.js'
 import {
   HISTORY_WINDOW_ID,
   PROMPT_WINDOW_ID,

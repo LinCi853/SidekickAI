@@ -17,7 +17,7 @@ import { registerPromptIpc } from '../../ipc/prompt-ipc.js'
 import { registerInjectionIpc } from '../../ai/handler.js'
 import { injectionHistoryStore } from '../../store/injection-history-store.js'
 import { showPromptWindow } from '../../window-factory.js'
-import { windowState } from '../../window-state.js'
+import { windowState } from '../../platform/window/window-state.js'
 
 /** Module-owned effects. */
 const scope = new EffectScope('prompt-library', 'prompt-library')

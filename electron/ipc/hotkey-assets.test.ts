@@ -37,12 +37,12 @@ vi.mock('../modules/wiring/hotkey-sync.js', () => ({
   setAdvancedPanelAvailability: vi.fn(), setAdvancedPanelCallback: vi.fn(), setBrowserAvailability: vi.fn(),
   syncAdvancedPanelHotkey: vi.fn(), syncBrowserProfileShortcuts: vi.fn(),
 }))
-vi.mock('../window-factory/main-window.js', () => ({ resetMainWindowToDefault: vi.fn() }))
+vi.mock('../platform/window/main-window.js', () => ({ resetMainWindowToDefault: vi.fn() }))
 vi.mock('../store/app-settings-store.js', () => ({ getAppSettings: () => ({ altSpaceResetThreshold: 3 }) }))
 vi.mock('../utils/focus-manager.js', () => ({ show: state.showMain, hide: state.hideMain }))
-vi.mock('../window-factory/popup-windows.js', () => ({ showPromptWindow: state.showAssets }))
+vi.mock('../platform/window/containers/popup-windows.js', () => ({ showPromptWindow: state.showAssets }))
 vi.mock('../assets/settings.js', () => ({ getAssetSettings: () => ({ localShortcuts: { search: 'Ctrl+F' } }) }))
-vi.mock('../window-state.js', () => ({ windowState: { get promptWindow() { return state.prompt } } }))
+vi.mock('../platform/window/window-state.js', () => ({ windowState: { get promptWindow() { return state.prompt } } }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: state.broadcast }))
 import { HotkeyManager } from '../hotkey/manager'
 import { registerHotkeyIpc } from './hotkey-ipc'

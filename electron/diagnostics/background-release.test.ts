@@ -35,7 +35,7 @@ const windowState = vi.hoisted(() => ({
   mainWindow: null as unknown,
   previewWindow: null as unknown,
 }))
-vi.mock('../window-state.js', () => ({ windowState }))
+vi.mock('../platform/window/window-state.js', () => ({ windowState }))
 
 const settings = vi.hoisted(() => ({ lowMemoryMode: false }))
 vi.mock('../store/low-memory-mode.js', () => ({
@@ -63,7 +63,7 @@ function makeWin(id: string, options: { visible?: boolean; minimized?: boolean; 
 
 const { closeSecondaryWindows, scheduleBackgroundRelease, cancelBackgroundRelease } =
   await import('./background-release.js')
-const { isBackgroundClose } = await import('../window/window-retirement.js')
+const { isBackgroundClose } = await import('../platform/window/window-retirement.js')
 
 beforeEach(() => {
   vi.useFakeTimers()
