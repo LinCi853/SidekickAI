@@ -9,7 +9,7 @@ import {
   isLargeModuleInstalledByManifestFile,
   saveModuleState,
 } from '../store/module-state-store.js'
-import { getHotkeyManagerInstance } from '../hotkey/manager.js'
+import { getHotkeyManagerInstance } from '../platform/hotkey/manager.js'
 import { syncAdvancedPanelHotkey, syncBrowserProfileShortcuts } from './wiring/hotkey-sync.js'
 import { targetRegistry } from './target-registry.js'
 import { getModuleRuntime, setModuleRuntime, isModuleEnabled } from './runtime-state.js'

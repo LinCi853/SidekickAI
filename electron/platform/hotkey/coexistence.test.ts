@@ -27,8 +27,8 @@ vi.mock('./store.js', () => ({
   DEFAULT_HOTKEYS: { toggleMainWindow: 'Alt+Space', toggleDetachedWindows: 'Alt+Q', backgroundVoice: 'Alt+V' },
   HOTKEY_LABELS: {}, TRIGGER_DEBOUNCE_MS: 200, hotkeyStore: { get() {}, set() {} }, storeKey: (action: string) => action, enabledStoreKey: (action: string) => action,
 }))
-vi.mock('../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback() {} }))
-vi.mock('../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
+vi.mock('../../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback() {} }))
+vi.mock('../../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
 
 beforeEach(() => {
   fixture.contexts = []; fixture.owners.clear(); fixture.reserved = false; fixture.nativeError = false

@@ -1,11 +1,11 @@
-// electron/hotkey/voice-hotkey.ts — 语音热键（自 manager.ts 拆分的功能簇）
+// electron/platform/hotkey/voice-hotkey.ts — 语音热键（自 manager.ts 拆分的功能簇）
 //
 // 包含：注册/注销语音热键（Alt+V hold-to-record）、按下态维护与释放、
 // keyup 丢失时的 500ms 轮询兜底。
 // 全部为函数式实现：第一参数 host 为 HotkeyManager 实例，
 // 通过 VoiceHost 协作接口访问 manager 的字段与方法。
 
-import type { HotkeyOwnership, HotkeyLease } from '../../packages/desktop-common/hotkey-ownership.js'
+import type { HotkeyOwnership, HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
 import { parseAccelerator } from './accelerator.js'
 
 /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut） */

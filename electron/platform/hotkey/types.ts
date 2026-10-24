@@ -1,4 +1,4 @@
-// electron/hotkey/types.ts — 热键相关类型定义
+// electron/platform/hotkey/types.ts — 热键相关类型定义
 
 /** 内置热键动作标识 */
 export type HotkeyAction =

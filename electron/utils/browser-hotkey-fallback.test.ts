@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../hotkey/uiohook.js', () => ({ UiohookKey: { F11: 87, C: 46, P: 25 } }))
+vi.mock('../platform/hotkey/uiohook.js', () => ({ UiohookKey: { F11: 87, C: 46, P: 25 } }))
 import { dispatchBrowserHotkeyFallback, matchBrowserHotkeyFallback, setBrowserHotkeyFallback, tryForward, type BrowserHotkeyFallbackEvent } from './browser-hotkey-fallback'
 
 const event = (keycode: number, modifiers: Partial<BrowserHotkeyFallbackEvent> = {}): BrowserHotkeyFallbackEvent => ({

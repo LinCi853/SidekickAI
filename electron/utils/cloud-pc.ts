@@ -15,7 +15,7 @@
 
 import type { BrowserWindow } from 'electron'
 import { exec } from 'child_process'
-import type { HotkeyManager } from '../hotkey/manager.js'
+import type { HotkeyManager } from '../platform/hotkey/manager.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { findWindowIdByWin } from '../platform/window/window-utils.js'
 import { isTrackedFullscreen } from './fullscreen-tracker.js'

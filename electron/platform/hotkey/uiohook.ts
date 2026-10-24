@@ -1,4 +1,4 @@
-// electron/hotkey/uiohook.ts — uiohook-napi 动态加载
+// electron/platform/hotkey/uiohook.ts — uiohook-napi 动态加载
 
 import { createRequire } from 'module'
 import type { UiohookEvent, UiohookModule } from './types.js'

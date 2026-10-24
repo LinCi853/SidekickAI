@@ -5,7 +5,7 @@ vi.mock('electron', () => ({ app: { setLoginItemSettings: runtime.login } }))
 vi.mock('./store-paths.js', () => ({ isPortableMode: () => runtime.portable, getStoreCwd: vi.fn() }))
 vi.mock('./module-state-store.js', () => ({ getAppSettingsTable: vi.fn() }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: vi.fn() }))
-vi.mock('../hotkey/manager.js', () => ({ getHotkeyManagerInstance: vi.fn() }))
+vi.mock('../platform/hotkey/manager.js', () => ({ getHotkeyManagerInstance: vi.fn() }))
 import { applyAutoLaunchSetting, updateAppSettings } from './app-settings-store'
 
 beforeEach(() => { runtime.portable = true; runtime.login.mockReset() })

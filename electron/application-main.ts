@@ -27,7 +27,7 @@ import { registerBaseChatIpc, registerUsageTraceIpc, hasActiveAssetStreams } fro
 import { registerNavHistoryIpc } from './ipc/nav-history-ipc.js';
 import { WindowManager } from './platform/window/containers/profile-window.js';
 import { FingerprintEngine } from './fingerprint/engine.js';
-import { HotkeyManager } from './hotkey/manager.js';
+import { HotkeyManager } from './platform/hotkey/manager.js';
 import { SttEngine } from './stt/engine.js';
 import { IPC_CHANNELS } from './shared/types.js';
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js';

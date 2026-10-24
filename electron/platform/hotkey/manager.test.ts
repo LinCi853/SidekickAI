@@ -1,4 +1,4 @@
-// electron/hotkey/manager.test.ts — HotkeyManager 编排层测试
+// electron/platform/hotkey/manager.test.ts — HotkeyManager 编排层测试
 //
 // 子模块（input-state / coexistence / ownership）各有专项测试；本文件覆盖
 // manager 自身的注册/注销/暂停恢复/语音热键编排流程，globalShortcut 与

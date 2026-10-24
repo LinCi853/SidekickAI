@@ -29,7 +29,7 @@ vi.mock('../store/module-state-store.js', () => ({
   saveModuleState: vi.fn(),
 }))
 
-vi.mock('../hotkey/manager.js', () => ({
+vi.mock('../platform/hotkey/manager.js', () => ({
   getHotkeyManagerInstance: vi.fn(() => null),
 }))
 

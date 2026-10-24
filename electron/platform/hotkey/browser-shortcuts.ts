@@ -1,11 +1,11 @@
-// electron/hotkey/browser-shortcuts.ts — 浏览器窗口全局快捷键（自 manager.ts 拆分的功能簇）
+// electron/platform/hotkey/browser-shortcuts.ts — 浏览器窗口全局快捷键（自 manager.ts 拆分的功能簇）
 //
 // 包含：注册/注销 scope='global' 的浏览器快捷键（globalShortcut 主路径 + uiohook 兜底）。
 // 全部为函数式实现：第一参数 host 为 HotkeyManager 实例，
 // 通过 BrowserShortcutsHost 协作接口访问 manager 的字段与方法。
 
 import { globalShortcut } from 'electron'
-import type { HotkeyOwnership, HotkeyLease } from '../../packages/desktop-common/hotkey-ownership.js'
+import type { HotkeyOwnership, HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
 import { parseAccelerator } from './accelerator.js'
 import type { HotkeyRecordingCallback } from './types.js'
 

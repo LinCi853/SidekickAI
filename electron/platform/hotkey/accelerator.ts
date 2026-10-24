@@ -1,4 +1,4 @@
-// electron/hotkey/accelerator.ts — accelerator 字符串解析（纯函数）
+// electron/platform/hotkey/accelerator.ts — accelerator 字符串解析（纯函数）
 
 import { UiohookKey } from './uiohook.js'
 

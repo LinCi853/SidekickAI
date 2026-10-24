@@ -1,6 +1,6 @@
-// electron/hotkey/store.ts — 热键配置持久化存储（写入 hotkey.json）
+// electron/platform/hotkey/store.ts — 热键配置持久化存储（写入 hotkey.json）
 
-import { createSqliteJsonStore } from '../store/module-state-store.js'
+import { createSqliteJsonStore } from '../../store/module-state-store.js'
 import type { HotkeyAction } from './types.js'
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {

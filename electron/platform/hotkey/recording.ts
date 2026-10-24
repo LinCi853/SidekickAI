@@ -1,4 +1,4 @@
-// electron/hotkey/recording.ts — 热键录制（自 manager.ts 拆分的功能簇）
+// electron/platform/hotkey/recording.ts — 热键录制（自 manager.ts 拆分的功能簇）
 //
 // 包含：开始/停止录制、录制期 uiohook keydown 处理、录制结束恢复、
 // uiohook keycode → Electron 键名反向映射（仅录制簇使用）。
@@ -6,8 +6,8 @@
 // 通过 RecordingHost 协作接口访问 manager 的字段与方法。
 
 import { globalShortcut } from 'electron'
-import type { HotkeyOwnership, HotkeyLease } from '../../packages/desktop-common/hotkey-ownership.js'
-import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
+import type { HotkeyOwnership, HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
+import { checkSystemHotkeyConflict } from '../../shared/system-hotkeys.js'
 import { UiohookKey } from './uiohook.js'
 import type { HotkeyInputState } from './input-state.js'
 import type {
@@ -70,7 +70,7 @@ export function buildUiohookKeyMap(): void {
     ['Backspace', 'Backspace'], ['Delete', 'Delete'], ['Insert', 'Insert'],
     ['Home', 'Home'], ['End', 'End'], ['PageUp', 'PageUp'], ['PageDown', 'PageDown'],
     ['ArrowUp', 'Up'], ['ArrowDown', 'Down'], ['ArrowLeft', 'Left'], ['ArrowRight', 'Right'],
-    ['Equal', '='], ['Minus', '-'], ['Comma', ','], ['Period', '.'],
+    ['Equal', '='], ['Minus', '-'], ['Comma', ','], ['Period', '../../hotkey'],
     ['Slash', '/'], ['Semicolon', ';'], ['Quote', "'"], ['Backquote', '`'],
     ['BracketLeft', '['], ['BracketRight', ']'], ['Backslash', '\\'],
   ]

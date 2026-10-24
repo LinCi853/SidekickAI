@@ -1,4 +1,4 @@
-// electron/hotkey/cloud-pc-keys.ts — 云电脑模式系统级按键分类（Windows VK 码）
+// electron/platform/hotkey/cloud-pc-keys.ts — 云电脑模式系统级按键分类（Windows VK 码）
 
 /** Windows 虚拟键码 */
 const VK_TAB = 9

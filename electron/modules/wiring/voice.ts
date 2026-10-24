@@ -16,7 +16,7 @@ import {
   cancelBackgroundVoice,
 } from '../../voice/background-voice.js'
 import { hidePreview } from '../../voice/preview-window.js'
-import { getHotkeyManagerInstance } from '../../hotkey/manager.js'
+import { getHotkeyManagerInstance } from '../../platform/hotkey/manager.js'
 
 /** 模块级 EffectScope */
 const scope = new EffectScope('voice', 'voice')

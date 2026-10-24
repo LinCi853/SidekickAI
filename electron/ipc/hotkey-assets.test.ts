@@ -21,7 +21,7 @@ vi.mock('../store/module-state-store.js', () => ({ createSqliteJsonStore: ({ def
   state.defaults = defaults
   return { get: (key: string) => state.values.has(key) ? state.values.get(key) : defaults[key], set: (key: string, value: unknown) => { state.values.set(key, value); state.storeWrite(key, value) } }
 } }))
-vi.mock('../hotkey/uiohook.js', () => ({
+vi.mock('../platform/hotkey/uiohook.js', () => ({
   UiohookKey: { Space: 32, Q: 81, A: 65, V: 86, LeftAlt: 56, RightAlt: 584, LeftControl: 29, RightControl: 585, LeftShift: 42, RightShift: 54, LeftMeta: 3675, RightMeta: 3676 },
   EventType: { EVENT_KEY_PRESSED: 7, EVENT_KEY_RELEASED: 8 }, uIOhook: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
   getUiohookAvailability: () => ({ available: false, error: 'Isolated fixture' }),
@@ -44,7 +44,7 @@ vi.mock('../platform/window/containers/popup-windows.js', () => ({ showPromptWin
 vi.mock('../assets/settings.js', () => ({ getAssetSettings: () => ({ localShortcuts: { search: 'Ctrl+F' } }) }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: { get promptWindow() { return state.prompt } } }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: state.broadcast }))
-import { HotkeyManager } from '../hotkey/manager'
+import { HotkeyManager } from '../platform/hotkey/manager'
 import { registerHotkeyIpc } from './hotkey-ipc'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
 

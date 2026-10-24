@@ -1,7 +1,7 @@
 import type { AssetSettings } from '../shared/ai-assets.types.js'
 import { DEFAULT_ASSET_SETTINGS, mergeAssetSettings, normalizeAssetAccelerator } from '../shared/asset-settings.js'
 import { createSqliteJsonStore } from '../store/module-state-store.js'
-import { hotkeyStore } from '../hotkey/store.js'
+import { hotkeyStore } from '../platform/hotkey/store.js'
 const store = createSqliteJsonStore({ tableName: 'asset_preferences', defaults: { settings: DEFAULT_ASSET_SETTINGS } })
 export function getAssetSettings(): AssetSettings { return mergeAssetSettings(DEFAULT_ASSET_SETTINGS, store.get('settings')) }
 export function updateAssetSettings(changes: Partial<AssetSettings>): AssetSettings {

@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fork, type ChildProcess, type ForkOptions } from 'node:child_process'
 import { once } from 'node:events'
 import ts from 'typescript'
-import { canonicalHotkey, HotkeyOwnership } from '../../packages/desktop-common/hotkey-ownership'
+import { canonicalHotkey, HotkeyOwnership } from '../../../packages/desktop-common/hotkey-ownership'
 
 let namespace: string
 const owners: HotkeyOwnership[] = []

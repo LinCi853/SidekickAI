@@ -1,14 +1,14 @@
-// electron/ipc/hotkey-ipc.ts — 热键相关 IPC 注册 + 内置热键回调注册
+// electron/ipc/hotkey-ipc.ts — 热键相关 IPC 注册
 //
 // 包含：
 //   - 热键 CRUD（HOTKEY_REGISTER / HOTKEY_UNREGISTER / HOTKEY_IS_REGISTERED / HOTKEY_GET_ALL / HOTKEY_SET）
-//   - 内置热键回调（toggleMainWindow / toggleDetachedWindows / backgroundVoice 占位）
+//   - 内置热键回调组合（toggleMainWindow / toggleDetachedWindows 由 platform/hotkey/builtin-shortcuts.ts 提供）
 //   - registerDefaultShortcuts：注册 2 个默认内置热键（从持久化配置读取 accelerator）
 //   - registerVoiceHotkey：注册 Alt+V 后台语音热键（hold-to-record，仅 uiohook keydown/keyup）
 //     统一走主进程 SttEngine + 预览窗 + IPC 注入+发送 路径，
 //     语音 UI 始终为独立预览窗（PreviewView），不再使用内嵌浮层。
 //
-// hotkeyCallbacks（原 main.ts 全局变量）迁移到本文件内部，仅 HOTKEY_SET 与默认热键注册使用。
+// hotkeyCallbacks 仅在本文件组合，供 HOTKEY_SET 与默认热键注册使用。
 // 在 app.whenReady 后由 main.ts 调用 registerHotkeyIpc(deps) 完成注册。
 //
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
@@ -25,10 +25,8 @@ import {
   syncAdvancedPanelHotkey,
   syncBrowserProfileShortcuts,
 } from '../modules/wiring/hotkey-sync.js'
-import type { HotkeyManager } from '../hotkey/manager.js'
-import { resetMainWindowToDefault } from '../platform/window/main-window.js'
-import { getAppSettings } from '../store/app-settings-store.js'
-import * as focusManager from '../utils/focus-manager.js'
+import type { HotkeyManager } from '../platform/hotkey/manager.js'
+import { createBuiltinShortcuts } from '../platform/hotkey/builtin-shortcuts.js'
 
 import { showPromptWindow } from '../platform/window/containers/popup-windows.js'
 import { getAssetSettings } from '../assets/settings.js'
@@ -61,10 +59,6 @@ export interface HotkeyIpcDeps {
   toggleVoiceRecording: () => Promise<void>
 }
 
-/** 连续 Alt+Space 触发计数（防误触恢复默认窗口位置）
- *  时间窗口随阈值线性放大（每次 500ms，最小 1500ms），阈值从 AppSettings 读取 */
-let altSpaceTriggerTimes: number[] = []
-
 /**
  * 注册热键相关 IPC handler + 内置热键。
  *
@@ -87,62 +81,22 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   // ===== 内置热键回调 =====
-  // toggleMainWindow：切换主窗口显隐；连续 3 次 Alt+Space 恢复默认窗口位置
-  // toggleDetachedWindows：切换 进阶面板显隐（Alt+Q，单例）
+  // toggleMainWindow / toggleDetachedWindows 由 platform/hotkey/builtin-shortcuts.ts 提供。
   // 声明在 IPC 注册之前：HOTKEY_SET handler 闭包引用此对象，运行时已初始化。
+  const builtinShortcuts = createBuiltinShortcuts({
+    getMainWindow,
+    isAdvancedPanelAvailable,
+    toggleAdvancedPanelWindow,
+  })
   const hotkeyCallbacks: Record<HotkeyAction, () => void> = {
-    toggleMainWindow: () => {
-      const now = Date.now()
-      // 从 AppSettings 动态读取阈值，时间窗口随阈值线性放大
-      const { altSpaceResetThreshold } = getAppSettings()
-      const windowMs = Math.max(1500, altSpaceResetThreshold * 500)
-      // 清理超过时间窗口的旧记录
-      altSpaceTriggerTimes = altSpaceTriggerTimes.filter(
-        (t) => now - t < windowMs,
-      )
-      altSpaceTriggerTimes.push(now)
-
-      // 连续达到阈值次 Alt+Space：恢复默认窗口位置和大小（防误触）
-      if (altSpaceTriggerTimes.length >= altSpaceResetThreshold) {
-        altSpaceTriggerTimes = []
-        void resetMainWindowToDefault()
-        return
-      }
-
-      // 正常切换显隐
-      const mainWindow = getMainWindow()
-      if (!mainWindow) return
-      if (!mainWindow.isVisible() || mainWindow.isMinimized()) {
-        // 显示：采集唤出前前台窗口 → show + focus，随后通知渲染层
-        void Promise.resolve(focusManager.show(mainWindow)).then(() => {
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
-          }
-        })
-      } else if (!mainWindow.isFocused()) {
-        // 可见但未聚焦：统一经焦点服务补焦点（含前台核验与一次有界重试），
-        // 与隐藏/最小化唤出保持同一激活语义
-        void Promise.resolve(focusManager.show(mainWindow)).then(() => {
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
-          }
-        })
-      } else {
-        // 隐藏：hide + 异步把前台交还给唤出前的窗口（不阻塞主进程）
-        focusManager.hide(mainWindow)
-      }
-    },
+    toggleMainWindow: builtinShortcuts.toggleMainWindow,
     toggleAiAssets: () => {
       if (!isModuleEnabled('prompt-library')) return
       const window = windowState.promptWindow
       if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized()) window.close()
       else showPromptWindow()
     },
-    toggleDetachedWindows: () => {
-      // Alt+Q 切换 进阶面板；无可用 tab 模块时已由 hotkey-sync 注销，此处兜底守卫
-      if (!isAdvancedPanelAvailable()) return
-      toggleAdvancedPanelWindow()
-    },
+    toggleDetachedWindows: builtinShortcuts.toggleDetachedWindows,
     // backgroundVoice 由 registerVoiceHotkey 独立处理（uiohook keydown/keyup），
     // 此处仅占位以满足 Record<HotkeyAction, () => void> 类型；HOTKEY_SET 拒绝自定义。
     backgroundVoice: () => {},

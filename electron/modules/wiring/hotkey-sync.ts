@@ -8,7 +8,7 @@
 //
 // 避免循环依赖：可用性判断与回调均通过注入函数提供（由 hotkey-ipc 注入，其已依赖 registry）。
 
-import { getHotkeyManagerInstance } from '../../hotkey/manager.js'
+import { getHotkeyManagerInstance } from '../../platform/hotkey/manager.js'
 
 /** 进阶面板可用性判断（hotkey-ipc 注入：任一 tab 模块启用即 true） */
 let advancedPanelAvailable: () => boolean = () => true

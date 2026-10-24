@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] }, session: {}, dialog: {},
 }))
 vi.mock('./module-state-store.js', () => ({ getAppSettingsTable: vi.fn() }))
-vi.mock('../hotkey/manager.js', () => ({ getHotkeyManagerInstance: vi.fn() }))
+vi.mock('../platform/hotkey/manager.js', () => ({ getHotkeyManagerInstance: vi.fn() }))
 vi.mock('./default-config.js', () => ({ getDefaultAppSettings: () => ({}) }))
 vi.mock('./chat-store.js', () => ({ getChatStore: () => ({ activityLogRecords: fixture.read }) }))
 vi.mock('./activity-log-export.js', () => ({ openActivityLogFolder: fixture.export }))

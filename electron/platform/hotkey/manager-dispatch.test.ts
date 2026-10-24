@@ -1,4 +1,4 @@
-// electron/hotkey/manager-dispatch.test.ts — 双通路分发解耦回归测试
+// electron/platform/hotkey/manager-dispatch.test.ts — 双通路分发解耦回归测试
 //
 // 对应 2026-09 game-hotkey audit 复现的主缺陷：旧实现要求系统回调通过
 // inputState.claim（钩子物理按键状态）校验，钩子无事件/漏事件时
@@ -42,8 +42,8 @@ vi.mock('./store.js', () => ({
   storeKey: (action: string) => `hotkey.${action}`,
   enabledStoreKey: (action: string) => `hotkey.enabled.${action}`,
 }))
-vi.mock('../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback: vi.fn() }))
-vi.mock('../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
+vi.mock('../../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback: vi.fn() }))
+vi.mock('../../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
 
 import { HotkeyManager } from './manager'
 

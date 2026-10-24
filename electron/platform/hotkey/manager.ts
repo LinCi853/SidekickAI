@@ -1,4 +1,4 @@
-// electron/hotkey/manager.ts — 全局热键管理器
+// electron/platform/hotkey/manager.ts — 全局热键管理器
 //
 // 支持 2 个可自定义内置热键：
 //   - toggleMainWindow（默认 Alt+Space）：切换主窗口显隐
@@ -28,12 +28,12 @@
 //   - manager.ts      仅保留 HotkeyManager 类与单例
 
 import { globalShortcut } from 'electron'
-import { HotkeyOwnership, type HotkeyLease } from '../../packages/desktop-common/hotkey-ownership.js'
+import { HotkeyOwnership, type HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
 import { HotkeyInputState } from './input-state.js'
-import { dispatchBrowserHotkeyFallback } from '../utils/browser-hotkey-fallback.js'
-import { checkAccessibilityPermission } from '../utils/permission-manager.js'
-import { checkSystemHotkeyConflict } from '../shared/system-hotkeys.js'
-import { normalizeAssetAccelerator } from '../shared/asset-settings.js'
+import { dispatchBrowserHotkeyFallback } from '../../utils/browser-hotkey-fallback.js'
+import { checkAccessibilityPermission } from '../../utils/permission-manager.js'
+import { checkSystemHotkeyConflict } from '../../shared/system-hotkeys.js'
+import { normalizeAssetAccelerator } from '../../shared/asset-settings.js'
 import { UiohookKey, EventType, uIOhook, getUiohookAvailability } from './uiohook.js'
 import { parseAccelerator } from './accelerator.js'
 import { classifyCloudPcKey } from './cloud-pc-keys.js'
