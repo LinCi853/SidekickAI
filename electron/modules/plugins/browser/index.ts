@@ -31,8 +31,7 @@ export async function initBrowserModule(): Promise<void> {
     getDownloadStore: () => browserDownloadStore,
   }, scope)
   registerBrowserTabAudioIpc({})
-  registerCursorIpc()
-  scope.trackIpc(IPC_CHANNELS.CURSOR_SET)
+  registerCursorIpc(scope)
   scope.ipcHandle(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN, () => {
     showHistoryDownloadWindow()
   })

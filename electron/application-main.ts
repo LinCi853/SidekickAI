@@ -238,7 +238,8 @@ app.whenReady().then(async () => {
     }
     BUILTIN_MODULES.forEach((m) => registerModule(m));
     registerModuleIpc();
-    registerVoiceConfigIPC();
+    // Config facade stays available while voice/tts are disabled; claim it under a non-module owner.
+    registerVoiceConfigIPC(new EffectScope('voice-config', 'voice-config'));
     registerNotesAssetProtocol();
     registerWhiteboardAssetProtocol();
     await initEnabledModules();

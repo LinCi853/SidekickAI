@@ -237,6 +237,32 @@ describe('ModuleRegistry', () => {
       await scope.dispose()
       expect(listIpcChannelsByOwner('notes')).toEqual([])
     })
+
+    it('should report windows declared by a disabled module manifest', async () => {
+      const electron = await import('electron')
+      const state = await import('../store/module-state-store.js')
+      const { BUILTIN_MODULE_INSTALL_DATA } = await import('./builtin-module-data.js')
+      vi.mocked(state.getModuleState).mockImplementation(id =>
+        id === 'browser' ? { id, enabled: false, installed: true, clearedAt: 0, updatedAt: 1 } : null)
+      registry.registerModule({
+        ...BUILTIN_MODULE_INSTALL_DATA.find(module => module.id === 'browser')!,
+        init: vi.fn(),
+      })
+
+      await registry.initEnabledModules()
+
+      vi.mocked(electron.BrowserWindow.getAllWindows).mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { getURL: () => 'app://index.html?mode=browser&id=1' },
+        },
+      ] as unknown as Electron.BrowserWindow[])
+      const result = registry.runResidualScan()
+
+      expect(result.ok).toBe(false)
+      expect(result.violations.join('; ')).toContain('mode=browser')
+      vi.mocked(electron.BrowserWindow.getAllWindows).mockReturnValue([])
+    })
   })
 
   it.each([

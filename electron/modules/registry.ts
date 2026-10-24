@@ -41,14 +41,6 @@ export function listManifests(): ModuleManifest[] {
   return [...manifests.values()]
 }
 
-/** 模块专属窗口路由标记（残留扫描用） */
-const MODULE_WINDOW_MARKERS: Record<string, string[]> = {
-  'custom-chat': ['mode=chat'],
-  'prompt-library': ['mode=prompts'],
-  browser: ['mode=browser', 'mode=history-download'],
-  voice: ['mode=record-indicator'],
-}
-
 export interface ResidualScanResult {
   ok: boolean
   violations: string[]
@@ -61,7 +53,7 @@ export function runResidualScan(): ResidualScanResult {
   const disabled = listModuleInfos()
     .filter((m) => !m.enabled)
     .map((m) => m.id)
-  // Check module-owned windows.
+  // Check module-owned windows declared by each manifest.
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
     let url = ''
@@ -70,10 +62,10 @@ export function runResidualScan(): ResidualScanResult {
     } catch {
       continue
     }
-    for (const [modId, markers] of Object.entries(MODULE_WINDOW_MARKERS)) {
-      if (isModuleEnabled(modId)) continue
-      if (markers.some((mk) => url.includes(mk))) {
-        violations.push('模块 ' + modId + ' 已关闭但仍存在窗口: ' + url)
+    for (const m of listManifests()) {
+      if (isModuleEnabled(m.id) || !m.windowMarkers?.length) continue
+      if (m.windowMarkers.some((marker) => url.includes(marker))) {
+        violations.push('模块 ' + m.id + ' 已关闭但仍存在窗口: ' + url)
       }
     }
   }

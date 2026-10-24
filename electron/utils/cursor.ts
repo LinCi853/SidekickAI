@@ -11,6 +11,7 @@
 import { ipcMain } from 'electron'
 import { exec } from 'child_process'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
+import type { EffectScope } from '../modules/effect-scope.js'
 
 /** 最近一次调用时间（防抖：两次调用间隔 < 80ms 直接忽略） */
 let lastSetAt = 0
@@ -56,9 +57,10 @@ public class CursorWin32 {
   })
 }
 
-/** 注册光标重置 IPC（app.whenReady 后由 main.ts 调用） */
-export function registerCursorIpc(): void {
-  ipcMain.handle(IPC_CHANNELS.CURSOR_SET, (_e, x: number, y: number) => {
-    return setCursorPosition(Number(x) || 0, Number(y) || 0)
-  })
+/** 注册光标重置 IPC；传入 scope 时由模块作用域登记归属并托管生命周期 */
+export function registerCursorIpc(scope?: EffectScope): void {
+  const handler: Parameters<typeof ipcMain.handle>[1] = (_e, x: number, y: number) =>
+    setCursorPosition(Number(x) || 0, Number(y) || 0)
+  if (scope) scope.ipcHandle(IPC_CHANNELS.CURSOR_SET, handler)
+  else ipcMain.handle(IPC_CHANNELS.CURSOR_SET, handler)
 }

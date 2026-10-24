@@ -14,6 +14,8 @@ export interface BuiltinModuleData {
   dependencies: string[]
   entries: string[]
   hotkeys: string[]
+  /** URL markers of windows owned by this module (residual scan). */
+  windowMarkers?: string[]
   /** Optional separate installation component; omitted for bundled tools. */
   installRequired?: boolean
   /** 不可关闭的核心模块；缺省 false */
@@ -56,6 +58,7 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     dependencies: [],
     entries: ['进阶面板「自定义供应商 / 对话」', '独立对话窗口', '设置「供应商」分区'],
     hotkeys: [],
+    windowMarkers: ['mode=chat'],
     required: true,
   },
   {
@@ -69,6 +72,7 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     dependencies: [],
     entries: ['抽屉菜单「AI资产」', 'AI资产窗口', '笔记「存为提示词」'],
     hotkeys: ['提示词注入热键（用户自定义）'],
+    windowMarkers: ['mode=prompts'],
   },
   {
     id: 'voice',
@@ -81,6 +85,7 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     dependencies: [],
     entries: ['后台语音 Alt+V', '设置「语音」分区', '录音指示窗'],
     hotkeys: ['Alt+V（后台语音）'],
+    windowMarkers: ['mode=record-indicator'],
   },
   {
     id: 'tts',
@@ -106,5 +111,6 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
     dependencies: [],
     entries: ['每应用「脱离/回归」快捷键', '标签脱离到浏览器窗口'],
     hotkeys: ['每应用浏览器窗口快捷键（用户配置）'],
+    windowMarkers: ['mode=browser', 'mode=history-download'],
   },
 ]

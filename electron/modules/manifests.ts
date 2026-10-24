@@ -77,6 +77,7 @@ export const BUILTIN_MODULES: ModuleManifest[] = BUILTIN_MODULE_INSTALL_DATA.map
     dependencies: d.dependencies,
     entries: d.entries,
     hotkeys: d.hotkeys,
+    windowMarkers: d.windowMarkers,
     init: w.init,
     teardown: w.teardown,
     clearData: w.clearData,
