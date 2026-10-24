@@ -42,13 +42,7 @@
       "level": 3
     }
   ],
-  "exemptions": [
-    "electron/main.ts",
-    "electron/application-main.ts",
-    "electron/lifecycle.ts",
-    "electron/window-factory.ts",
-    "electron/modules/manifests.ts"
-  ],
+  "exemptions": [],
   "notes": [
     "A file with no matching prefix has no layer constraint; the check reports mapped coverage so gaps stay visible.",
     "Level 0 files are exempt from layer rules in both directions.",
