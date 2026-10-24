@@ -15,8 +15,8 @@ vi.mock('electron', () => ({
   session: { defaultSession: { clearCache: async () => {}, clearAuthCache: async () => {}, clearStorageData: async () => {}, flushStorageData() {}, cookies: { flushStore: async () => {} } } },
 }))
 vi.mock('./chat-store.js', () => ({ closeChatStore() {} }))
-vi.mock('./whiteboard-db.js', () => ({ closeWhiteboardDb() {} }))
-vi.mock('./notes-db.js', () => ({ closeNotesDb() {} }))
+vi.mock('../modules/plugins/whiteboard/whiteboard-db.js', () => ({ closeWhiteboardDb() {} }))
+vi.mock('../modules/plugins/notes/notes-db.js', () => ({ closeNotesDb() {} }))
 vi.mock('../browser/bookmark-store.js', () => ({ closeBookmarkStore() {} }))
 vi.mock('./module-state-store.js', () => ({ closeModuleStateDb() {}, createSqliteJsonStore() {}, clearSqliteStore() {} }))
 vi.mock('../browser/profile-store.js', () => ({ profileStore: { list: () => [] } }))

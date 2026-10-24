@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
 vi.mock('../store/chat-store.js', async original => ({ ...await original<any>(), getChatStore: () => fixture.store }))
 vi.mock('../store/ai-provider-store.js', () => ({ aiProviderStore: { get: () => ({ id: 'provider', name: 'Fixture', protocol: 'openai' }) } }))
 vi.mock('../store/app-settings-store.js', () => ({ getAppSettings: () => ({}) }))
-vi.mock('../store/injection-history-store.js', () => ({ injectionHistoryStore: {} }))
+vi.mock('../modules/plugins/prompt-library/injection-history-store.js', () => ({ injectionHistoryStore: {} }))
 vi.mock('../notify.js', () => ({ showNotification: vi.fn() }))
 vi.mock('../assets/asset-ipc.js', () => ({ registerAiAssetIpc: vi.fn() }))
 vi.mock('../assets/import-activity.js', () => ({ runAssetImport: vi.fn() }))

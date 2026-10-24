@@ -32,8 +32,8 @@ vi.mock('../modules/registry.js', () => ({
   isModuleEnabled: (id: string) => state.modules.has(id), listModuleInfos: () => [],
   observeModuleState: (callback: () => void) => { state.observers.push(callback); return () => {} },
 }))
-vi.mock('../modules/wiring/voice.js', () => ({ syncVoiceHotkeyRegistration: vi.fn() }))
-vi.mock('../modules/wiring/hotkey-sync.js', () => ({
+vi.mock('../modules/plugins/voice/index.js', () => ({ syncVoiceHotkeyRegistration: vi.fn() }))
+vi.mock('../modules/hotkey-sync.js', () => ({
   setAdvancedPanelAvailability: vi.fn(), setAdvancedPanelCallback: vi.fn(), setBrowserAvailability: vi.fn(),
   syncAdvancedPanelHotkey: vi.fn(), syncBrowserProfileShortcuts: vi.fn(),
 }))

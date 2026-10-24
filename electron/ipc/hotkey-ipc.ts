@@ -17,14 +17,14 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type HotkeyAction } from '../shared/types.js'
 import { isModuleEnabled, listModuleInfos, observeModuleState } from '../modules/registry.js'
-import { syncVoiceHotkeyRegistration } from '../modules/wiring/voice.js'
+import { syncVoiceHotkeyRegistration } from '../modules/plugins/voice/index.js'
 import {
   setAdvancedPanelAvailability,
   setAdvancedPanelCallback,
   setBrowserAvailability,
   syncAdvancedPanelHotkey,
   syncBrowserProfileShortcuts,
-} from '../modules/wiring/hotkey-sync.js'
+} from '../modules/hotkey-sync.js'
 import type { HotkeyManager } from '../platform/hotkey/manager.js'
 import { createBuiltinShortcuts } from '../platform/hotkey/builtin-shortcuts.js'
 
@@ -325,7 +325,7 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   // 启动时注册所有 Profile 的浏览器窗口脱离/回归快捷键（浏览器模块关闭时自动跳过/注销）
   void syncBrowserProfileShortcuts()
 
-  // 注册 Alt+V 后台语音热键：由 wiring/voice.syncVoiceHotkeyRegistration 统一处理
+  // 注册 Alt+V 后台语音热键：由 plugins/voice.syncVoiceHotkeyRegistration 统一处理
   // （内部检查语音模块状态 + backgroundVoice 开关，幂等，避免双注册）
   syncVoiceHotkeyRegistration()
 }

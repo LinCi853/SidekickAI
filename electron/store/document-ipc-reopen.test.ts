@@ -8,8 +8,8 @@ vi.mock('electron', () => ({
   app: { getPath: () => runtime.root, isPackaged: false },
   ipcMain: {}, BrowserWindow: {},
 }))
-import { closeNotesDb, getNotesDb, registerNotesIPC } from './notes-db.js'
-import { closeWhiteboardDb, getWhiteboardDb, registerWhiteboardIPC } from './whiteboard-db.js'
+import { closeNotesDb, getNotesDb, registerNotesIPC } from '../modules/plugins/notes/notes-db.js'
+import { closeWhiteboardDb, getWhiteboardDb, registerWhiteboardIPC } from '../modules/plugins/whiteboard/whiteboard-db.js'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 
 const handlers = new Map<string, (...args: any[]) => any>()

@@ -9,11 +9,11 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: runtime.send } }] },
 }))
 let settings: typeof import('./module-state-store')
-let prompts: typeof import('./prompt-store')
+let prompts: typeof import('../modules/plugins/prompt-library/prompt-store')
 beforeEach(async () => {
   vi.resetModules(); runtime.send.mockClear(); vi.stubEnv('ELECTRON_RENDERER_URL', '')
   runtime.directory = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-change-'))
-  settings = await import('./module-state-store'); prompts = await import('./prompt-store')
+  settings = await import('./module-state-store'); prompts = await import('../modules/plugins/prompt-library/prompt-store')
 })
 afterEach(() => { settings.closeModuleStateDb(); fs.rmSync(runtime.directory, { recursive: true, force: true }); vi.unstubAllEnvs() })
 describe('prompt mutation notifications', () => {

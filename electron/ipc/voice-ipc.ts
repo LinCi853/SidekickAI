@@ -19,10 +19,10 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import { updateVoiceConfig } from '../store/voice-store.js'
 import { aiProviderStore, deriveAudioEndpoint } from '../store/ai-provider-store.js'
 import { getProxyDispatcher } from '../store/proxy-helper.js'
-import type { SttEngine } from '../stt/engine.js'
+import type { SttEngine } from '../modules/plugins/voice/stt/engine.js'
 import type { AudioDeviceInfo } from '../shared/api.types.js'
 import type { EffectScope } from '../modules/effect-scope.js'
-import { markRecordingRendererReady } from '../audio/capture.js'
+import { markRecordingRendererReady } from '../modules/plugins/voice/audio/capture.js'
 
 /**
  * 校验 enumerateDevices 返回的设备对象，过滤掉非法项

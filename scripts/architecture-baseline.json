@@ -44,11 +44,11 @@
     },
     {
       "from": "electron/modules/registry.ts",
-      "to": "electron/modules/wiring/hotkey-sync.ts",
+      "to": "electron/modules/hotkey-sync.ts",
       "kind": "value"
     },
     {
-      "from": "electron/modules/wiring/hotkey-sync.ts",
+      "from": "electron/modules/hotkey-sync.ts",
       "to": "electron/store/app-settings-store.ts",
       "kind": "dynamic"
     },

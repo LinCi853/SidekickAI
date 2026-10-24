@@ -6,21 +6,21 @@ import {
   initWhiteboardModule,
   teardownWhiteboardModule,
   clearWhiteboardData,
-} from './wiring/whiteboard.js'
-import { initNotesModule, teardownNotesModule, clearNotesData } from './wiring/notes.js'
+} from './plugins/whiteboard/index.js'
+import { initNotesModule, teardownNotesModule, clearNotesData } from './plugins/notes/index.js'
 import {
   initPromptLibraryModule,
   teardownPromptLibraryModule,
   clearPromptLibraryData,
-} from './wiring/prompt-library.js'
+} from './plugins/prompt-library/index.js'
 import {
   initCustomChatModule,
   teardownCustomChatModule,
   clearCustomChatData,
-} from './wiring/custom-chat.js'
-import { initVoiceModule, teardownVoiceModule, clearVoiceData } from './wiring/voice.js'
-import { initTtsModule, teardownTtsModule, clearTtsData } from './wiring/tts.js'
-import { initBrowserModule, teardownBrowserModule, clearBrowserData } from './wiring/browser.js'
+} from './plugins/custom-chat/index.js'
+import { initVoiceModule, teardownVoiceModule, clearVoiceData } from './plugins/voice/index.js'
+import { initTtsModule, teardownTtsModule, clearTtsData } from './plugins/tts/index.js'
+import { initBrowserModule, teardownBrowserModule, clearBrowserData } from './plugins/browser/index.js'
 
 /** Lifecycle callbacks keyed by module identity. */
 const WIRING: Record<

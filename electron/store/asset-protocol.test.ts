@@ -12,8 +12,8 @@ vi.mock('electron', () => ({
   protocol: { handle: (scheme: string, handler: (request: Request) => Response | Promise<Response>) => { runtime.handlers.set(scheme, handler) } },
 }))
 
-import { registerWhiteboardAssetProtocol, saveImageAsset, WHITEBOARD_ASSET_SCHEME } from './whiteboard-asset-store.js'
-import { registerNotesAssetProtocol, saveNotesImageAsset, NOTES_ASSET_SCHEME } from './notes-asset-store.js'
+import { registerWhiteboardAssetProtocol, saveImageAsset, WHITEBOARD_ASSET_SCHEME } from '../modules/plugins/whiteboard/whiteboard-asset-store.js'
+import { registerNotesAssetProtocol, saveNotesImageAsset, NOTES_ASSET_SCHEME } from '../modules/plugins/notes/notes-asset-store.js'
 
 const PNG_DATA_URL = 'data:image/png;base64,AAECAwQ='
 

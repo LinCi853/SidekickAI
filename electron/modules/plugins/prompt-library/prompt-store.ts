@@ -1,0 +1,207 @@
+// electron/modules/plugins/prompt-library/prompt-store.ts — 提示词模板持久化存储 + IPC 注册
+//
+// 持久化到 SQLite settings.db（prompts 表，createSqliteJsonStore）。
+// 提供模板的 CRUD 接口，供「明输入明注入」功能使用。
+// 首次启动自动填充若干通用预置模板，便于用户即刻体验。
+//
+// 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+
+import { ipcMain, dialog, BrowserWindow } from 'electron'
+import type { EffectScope } from '../../effect-scope.js'
+import { randomUUID } from 'crypto'
+import fs from 'fs'
+import type { PromptTemplate } from '../../../shared/types.js'
+import { IPC_CHANNELS } from '../../../shared/types.js'
+import { createCrudStore } from '../../../store/store-paths.js'
+import { createSqliteJsonStore, getModuleState } from '../../../store/module-state-store.js'
+import { PROMPTS, getDefault } from '../../../store/default-config.js'
+import { runAssetImport } from '../../../assets/import-activity.js'
+import { broadcastToAllWindows } from '../../../shared/broadcast.js'
+import { validatePromptTemplate } from '../../../shared/prompt-template.js'
+
+let changeScheduled = false
+function notifyPromptChanges(): void {
+  if (changeScheduled) return
+  changeScheduled = true
+  queueMicrotask(() => {
+    changeScheduled = false
+    broadcastToAllWindows(IPC_CHANNELS.PROMPT_CHANGED, undefined, 'prompts')
+  })
+}
+
+// 持久化存储实例（写入 prompts.json）
+// 开发环境：写入项目内 .app-data/ 目录，规避 TRAE 沙箱对 AppData\Roaming 的写入限制
+// 生产环境：使用默认 userData 路径
+const store = createSqliteJsonStore<{ prompts: PromptTemplate[]; version: number }>({
+  tableName: 'prompts',
+
+  defaults: { prompts: [], version: 1 },
+})
+
+/**
+ * 提示词模板持久化存储：CRUD 操作
+ *
+ * 标准 list/save/delete 委托给 createCrudStore 工厂；
+ * list 保持按 createdAt 升序、save 始终刷新 updatedAt 等业务规则仍在本类中实现。
+ */
+export class PromptStore {
+  invalidate(): void { store.invalidate() }
+  /** 标准 CRUD 操作集（基于 electron-store 的 prompts 数组） */
+  private crud = createCrudStore<PromptTemplate>({ store, key: 'prompts' })
+
+  /** 读取全部模板（按创建时间升序） */
+  list(): PromptTemplate[] {
+    return [...this.crud.list()].sort((a, b) => a.createdAt - b.createdAt)
+  }
+
+  /**
+   * 新增或更新模板（upsert 语义）。
+   * 按 id 查找：存在则更新（保留 createdAt，刷新 updatedAt）；不存在则新增（补全 id 与时间戳）。
+   */
+  save(template: PromptTemplate): PromptTemplate {
+    validatePromptTemplate(template)
+    return this.persist(template)
+  }
+
+  private persist(template: PromptTemplate): PromptTemplate {
+    const id = template.id || randomUUID()
+    const previous = this.crud.get(id)
+    const toSave: PromptTemplate = { ...previous, ...template, id, createdAt: previous?.createdAt ?? template.createdAt ?? Date.now(), updatedAt: Date.now() }
+    this.crud.save(toSave)
+    notifyPromptChanges()
+    return toSave
+  }
+
+  /** 删除模板 */
+  delete(id: string): void {
+    this.crud.delete(id)
+    notifyPromptChanges()
+  }
+
+  /** 导出全部提示词为 JSON 字符串 */
+  exportPrompts(): string {
+    const prompts = this.list()
+    for (const template of prompts) validatePromptTemplate(template, true)
+    return JSON.stringify({ version: 1, prompts }, null, 2)
+  }
+
+  /**
+   * 导入提示词（合并模式：同 id 覆盖，新 id 新增）。
+   * @returns 新增数与更新数
+   */
+  importPrompts(json: string): { added: number; updated: number } {
+    const data = JSON.parse(json) as { prompts?: unknown[] }
+    if (!data || !Array.isArray(data.prompts)) throw new Error('Invalid prompt import')
+    const incoming = data.prompts
+    for (const template of incoming) validatePromptTemplate(template, true)
+    const existing = new Map(this.list().map((p) => [p.id, p]))
+    let added = 0
+    let updated = 0
+    for (const value of incoming) {
+      const p = value as PromptTemplate
+      if (existing.has(p.id)) updated++
+      else added++
+      const saved = this.persist(p)
+      existing.set(saved.id, saved)
+    }
+    return { added, updated }
+  }
+}
+
+// 单例实例
+export const promptStore = new PromptStore()
+
+/**
+ * 路由：获取默认提示词模板（通过 default-config 路由器）
+ * 从已存储的提示词列表中返回用户偏好的模板，或第一个模板。
+ * 如果存储为空，返回代码中定义的第一个模板。
+ */
+export function getDefaultPrompt(userPreferredId?: string | null): PromptTemplate | Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'> {
+  const stored = promptStore.list()
+  if (stored.length > 0) {
+    return getDefault(stored, userPreferredId)
+  }
+  // 存储为空时，返回代码中定义的第一个模板
+  return PROMPTS[0]
+}
+
+/**
+ * 注册提示词模板 CRUD IPC 处理器。
+ *
+ * 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
+ */
+export function registerPromptIPC(scope?: EffectScope): void {
+  const ipc = IPC_CHANNELS
+
+  // 辅助函数：根据是否有 scope 选择注册方式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handle = scope
+    ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
+    : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
+
+  handle(ipc.PROMPT_LIST, () => promptStore.list())
+  handle(ipc.PROMPT_SAVE, (_e: unknown, template: PromptTemplate) => promptStore.save(template))
+  handle(ipc.PROMPT_DELETE, (_e: unknown, id: string) => promptStore.delete(id))
+
+  // 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件）
+  handle(ipc.PROMPT_EXPORT, async (e: any) => {
+    try {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const { canceled, filePath } = await dialog.showSaveDialog(win!, {
+        title: '导出提示词',
+        defaultPath: 'prompts-backup.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+      if (canceled || !filePath) return { ok: false, canceled: true }
+      const json = promptStore.exportPrompts()
+      fs.writeFileSync(filePath, json, 'utf-8')
+      console.log('[prompt-store] 导出成功:', filePath)
+      return { ok: true, filePath }
+    } catch (err) {
+      console.error('[prompt-store] 导出失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
+
+  // 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库）
+  handle(ipc.PROMPT_IMPORT, (e: any) => runAssetImport(async () => {
+    try {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
+        title: '导入提示词',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+        properties: ['openFile'],
+      })
+      if (canceled || !filePaths?.[0]) return { ok: false, canceled: true }
+      const json = fs.readFileSync(filePaths[0], 'utf-8')
+      const result = promptStore.importPrompts(json)
+      console.log('[prompt-store] 导入成功:', result)
+      return { ok: true, ...result }
+    } catch (err) {
+      console.error('[prompt-store] 导入失败:', err)
+      return { ok: false, error: String(err) }
+    }
+  }))
+}
+
+/**
+ * 首次启动自动填充通用预置模板
+ * 仅在 store 中模板为空时填充。
+ */
+export function ensureDefaultPrompts(): void {
+  const existing = store.get('prompts')
+  if (existing.length > 0 || getModuleState('prompt-library')?.clearedAt) return
+
+  for (const p of PROMPTS) {
+    promptStore.save({
+      id: randomUUID(),
+      title: p.title,
+      content: p.content,
+      category: p.category,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+  }
+
+  console.log(`[prompt-store] 首次启动：填充 ${PROMPTS.length} 条预置提示词模板`)
+}

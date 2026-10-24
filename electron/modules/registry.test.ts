@@ -33,7 +33,7 @@ vi.mock('../platform/hotkey/manager.js', () => ({
   getHotkeyManagerInstance: vi.fn(() => null),
 }))
 
-vi.mock('./wiring/hotkey-sync.js', () => ({
+vi.mock('./hotkey-sync.js', () => ({
   syncAdvancedPanelHotkey: vi.fn(),
   syncBrowserProfileShortcuts: vi.fn(),
 }))

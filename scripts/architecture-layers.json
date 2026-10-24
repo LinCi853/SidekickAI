@@ -36,6 +36,10 @@
     {
       "path": "electron/diagnostics/",
       "level": 1
+    },
+    {
+      "path": "electron/modules/plugins/",
+      "level": 3
     }
   ],
   "exemptions": [
@@ -51,7 +55,7 @@
     "Level 2 entries may declare domain and allowedDomains; level 2 to level 2 edges are only allowed when the target domain is listed.",
     "The operations domain (updates, diagnostics) stays physically in place; prefixes record its level only.",
     "electron/window-factory/ now only holds app-icon.ts at level 1; the browser domain moved to electron/browser/.",
-    "electron/platform/window/containers/ and electron/browser/ still import the plugin registry; electron/modules/ has no prefix yet, so these edges stay unconstrained until the modules phase records its level and the crossings are replaced by injected capabilities.",
+    "electron/modules/plugins/ is level 3: every built-in plugin keeps its wiring and plugin-owned implementations in one subdirectory. The plugin framework files at the top of electron/modules/ stay unconstrained until the shared-base split ends their inversion.",
     "L1 window, security and diagnostics services read browser data through electron/platform/browser-port.ts; application-main installs the browser implementations before any window is created, so reads never reach into electron/browser/ directly.",
     "Profile and preset persistence serve both settings UI and browser identities; they live in the browser domain and are exposed to L1 through the browser port."
   ]
