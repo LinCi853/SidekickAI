@@ -19,7 +19,7 @@ import { windowState } from '../platform/window/window-state.js'
 import { detachProfileToBrowserWindow } from '../window-factory/detach-profile.js'
 import { isModuleEnabled } from '../modules/registry.js'
 import { isBackgroundClose } from '../platform/window/window-retirement.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import type { WindowManager } from '../platform/window/containers/profile-window.js'
 

@@ -12,11 +12,11 @@ import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { markAskSavePath } from '../utils/ask-save-path.js'
 import { enterCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
 import fs from 'fs'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
-import { ownedProfileSession, ownedWebContents } from '../security/webview-owner.js'
-import { httpUrl, withPublicResponse } from '../security/public-request.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
+import { ownedProfileSession, ownedWebContents } from '../platform/security/webview-owner.js'
+import { httpUrl, withPublicResponse } from '../platform/security/public-request.js'
 import { createPdfPreview, readPdfPreview, deletePdfPreview } from '../utils/pdf-protocol.js'
-import { openNativeFile } from '../security/native-file.js'
+import { openNativeFile } from '../platform/security/native-file.js'
 
 import type {
   BrowserWindowState,

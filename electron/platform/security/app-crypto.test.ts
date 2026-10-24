@@ -18,7 +18,7 @@ vi.mock('electron-store', () => {
 })
 
 // Mock module-state-store (app-crypto imports createSqliteJsonStore from here)
-vi.mock('../store/module-state-store.js', () => {
+vi.mock('../../store/module-state-store.js', () => {
   const stores = new Map<string, Record<string, unknown>>()
   return {
     createSqliteJsonStore: vi.fn((opts: { tableName: string }) => {

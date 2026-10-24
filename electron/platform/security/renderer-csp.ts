@@ -1,5 +1,5 @@
 import { app, type Session } from 'electron'
-import { rendererContentSecurityPolicy } from '../shared/renderer-csp.mjs'
+import { rendererContentSecurityPolicy } from '../../shared/renderer-csp.mjs'
 import { isTrustedRendererUrl } from './trusted-renderer.js'
 
 export function installRendererContentSecurity(session: Session): void {

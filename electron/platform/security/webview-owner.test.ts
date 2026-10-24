@@ -3,9 +3,9 @@ const state = vi.hoisted(() => ({ window: { isDestroyed: () => false }, contents
 vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: (host: any) => host.window },
   webContents: { fromId: (id: number) => state.contents.find(item => item.id === id), getAllWebContents: () => state.contents },
   session: { fromPartition: (partition: string) => state.sessions.get(partition) } }))
-vi.mock('../window-factory/webview-registry.js', () => ({ getRecordByWebContentsId: (id: number) => state.records.get(id) }))
-vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
-vi.mock('../platform/window/window-state.js', () => ({ windowState: { browserWindowsByProfile: state.windows } }))
+vi.mock('../../window-factory/webview-registry.js', () => ({ getRecordByWebContentsId: (id: number) => state.records.get(id) }))
+vi.mock('../window/window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
+vi.mock('../window/window-state.js', () => ({ windowState: { browserWindowsByProfile: state.windows } }))
 vi.mock('./trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => { if (!event.trusted) throw new Error('untrusted') } }))
 import { assertOwnedWebview, ownedProfileSession, ownedWebContents } from './webview-owner.js'
 let event: any, guest: any

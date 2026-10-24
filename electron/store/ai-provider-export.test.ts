@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ providers: [] as any[], writes: vi.fn() }))
 vi.mock('electron', () => ({ ipcMain: {}, safeStorage: {}, dialog: {} }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
 vi.mock('./module-state-store.js', () => ({ createSqliteJsonStore: ({ tableName }: { tableName: string }) => ({
   get: (key: string) => tableName === 'app_key' && key === 'key' ? Buffer.alloc(32, 7).toString('base64') : state.providers,
   set: (_key: string, value: any[]) => { state.writes(value); state.providers = value },
@@ -10,7 +10,7 @@ vi.mock('./module-state-store.js', () => ({ createSqliteJsonStore: ({ tableName 
 vi.mock('../utils/permission-manager.js', () => ({ isSafeStorageAvailable: () => false,
   xorDecrypt: () => { throw new Error('Credential requires re-entry') } }))
 import { AIProviderStore } from './ai-provider-store.js'
-import { decryptWithPassword, encryptString } from '../utils/app-crypto.js'
+import { decryptWithPassword, encryptString } from '../platform/security/app-crypto.js'
 
 const password = 'controlled-export-password'
 const provider = (apiKeyCipher: string, id = 'fixture') => ({ id, name: 'Fixture', protocol: 'openai',

@@ -467,7 +467,7 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
 
   // 选文件后立即检测是否 SABK 加密（不进入导入流程）
   ipcMain.handle(IPC_CHANNELS.APP_DETECT_BACKUP_ENCRYPTED, async (_e, filePath: string) => {
-    const { isSabkEncrypted } = await import('../utils/file-crypto.js')
+    const { isSabkEncrypted } = await import('../platform/security/file-crypto.js')
     try {
       return isSabkEncrypted(filePath)
     } catch {

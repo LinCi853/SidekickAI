@@ -35,7 +35,7 @@ vi.mock('../window-factory/webview-registry.js', () => ({
   getRecordByWebContentsId: (id: number) => records.get(id) ?? null,
 }))
 
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: () => {} }))
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: () => {} }))
 
 const { ipcMain } = await import('electron')
 const { applyGuestProcessPriorities, registerTabProcessPriorityIPC, resetTabProcessPriorityForTest } =

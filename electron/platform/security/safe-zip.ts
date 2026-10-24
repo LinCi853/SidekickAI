@@ -1,4 +1,4 @@
-// electron/utils/safe-zip.ts — 安全的 zip 解压（防路径穿越 / 符号链接覆盖）
+// electron/platform/security/safe-zip.ts — 安全的 zip 解压（防路径穿越 / 符号链接覆盖）
 //
 // 为什么需要这层：
 //   adm-zip 存在已知安全问题（GHSA-xcpc-8h2w-3j85 构造 zip 触发 4GB 内存分配；

@@ -15,7 +15,7 @@ import { ipcMain, session, type BrowserWindow, type IpcMainInvokeEvent } from 'e
 import type { EffectScope } from '../modules/effect-scope.js'
 import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../store/profile-store.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { createMaximizeManager } from '../platform/window/window-maximize-manager.js'
 import {
   IPC_CHANNELS,

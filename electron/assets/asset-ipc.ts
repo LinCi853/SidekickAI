@@ -22,9 +22,9 @@ import { isImportingData } from '../store/import-guard.js'
 import { AssetObservationJournal, setAssetCollectionJournal } from './collection-journal.js'
 import { readAttachmentPreview } from './attachment-preview.js'
 import { createAttachmentRetention } from './attachment-retention.js'
-import { withPublicResponse } from '../security/public-request.js'
-import { assertOwnedWebview } from '../security/webview-owner.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { withPublicResponse } from '../platform/security/public-request.js'
+import { assertOwnedWebview } from '../platform/security/webview-owner.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 
 let stopTransfers: (() => void) | undefined
 let transfersActive: () => boolean = () => false

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, webContents, type ProcessMetric } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { RuntimeProcessRole, RuntimeProcessSnapshot, RuntimeProcessTarget } from '../shared/runtime-processes.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { readPrivateWorkingSetBytes } from './private-working-set.js'
 
 function processTargets(): Map<number, RuntimeProcessTarget[]> {

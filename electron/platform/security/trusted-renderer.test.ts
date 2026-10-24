@@ -3,7 +3,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 const runtime = vi.hoisted(() => ({ packaged: true }))
 vi.mock('electron', () => ({ app: { get isPackaged() { return runtime.packaged } }, BrowserWindow: { fromWebContents: (sender: any) => sender.window } }))
-vi.mock('../platform/window/paths.js', () => ({ __dirname: 'E:/fixture/out/main' }))
+vi.mock('../window/paths.js', () => ({ __dirname: 'E:/fixture/out/main' }))
 import { assertTrustedRenderer, isTrustedRendererUrl } from './trusted-renderer.js'
 const document = pathToFileURL(path.resolve('E:/fixture/out/renderer/index.html')).href
 const original = process.env.ELECTRON_RENDERER_URL

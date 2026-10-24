@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { EffectScope } from '../modules/effect-scope.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import type {
   TabHibernationEntry,
   TabHibernationPrunePolicy,

@@ -1,11 +1,11 @@
-// electron/utils/app-crypto.ts — 应用内加密工具
+// electron/platform/security/app-crypto.ts — 应用内加密工具
 //
 // 使用 AES-256-GCM 加密敏感数据（如 API Key），密钥存储在 app-key.json 文件中。
 // 密钥文件与 Profile 等数据同等保护级别，可随数据一起跨设备迁移，
 // 解决 safeStorage 绑定 OS 用户导致跨设备无法解密的问题。
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'crypto'
-import { createSqliteJsonStore } from '../store/module-state-store.js'
+import { createSqliteJsonStore } from '../../store/module-state-store.js'
 
 /** 应用密钥文件结构 */
 interface AppKeyFile {

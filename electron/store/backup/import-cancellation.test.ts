@@ -11,7 +11,7 @@ const fixture = vi.hoisted(() => ({ root: '', release: vi.fn(), resume: vi.fn() 
 vi.mock('electron', () => ({ app: { relaunch: vi.fn(() => { throw new Error('Restart unavailable') }), exit: vi.fn() } }))
 vi.mock('../../edition-runtime.js', () => ({ prepareDataRestoreHandoff: async () => fixture.release }))
 vi.mock('./paths.js', () => ({ getDataDir: () => fixture.root }))
-vi.mock('../../utils/file-crypto.js', () => ({ isSabkEncrypted: () => false }))
+vi.mock('../../platform/security/file-crypto.js', () => ({ isSabkEncrypted: () => false }))
 vi.mock('./transfer-adapter.js', () => ({ importAdapter: () => ({ edition: 'community', defaults: { profile: {}, presets: [] }, validateFull: () => {} }) }))
 vi.mock('../../../packages/backup-core/import.js', () => ({ inspectBackup: vi.fn(), readImportBackup: async (_adapter: unknown, _file: string, staged: string) => {
   fs.writeFileSync(path.join(staged, 'settings.db'), 'incoming')

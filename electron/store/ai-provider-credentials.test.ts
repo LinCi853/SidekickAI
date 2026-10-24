@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ providers: [] as any[], writes: vi.fn() }))
 vi.mock('electron', () => ({ ipcMain: {}, safeStorage: {}, dialog: {} }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
 vi.mock('./module-state-store.js', () => ({ createSqliteJsonStore: () => ({ get: () => state.providers,
   set: (_key: string, value: any[]) => { state.writes(value); state.providers = value } }) }))
 vi.mock('../utils/permission-manager.js', () => ({ isSafeStorageAvailable: () => false,
   xorDecrypt: () => { throw new Error('Credential requires re-entry') } }))
-vi.mock('../utils/app-crypto.js', () => ({ encryptString: (value: string) => `aes:${value}`, decryptString: (value: string) => value.slice(4),
+vi.mock('../platform/security/app-crypto.js', () => ({ encryptString: (value: string) => `aes:${value}`, decryptString: (value: string) => value.slice(4),
   isAesEncrypted: (value: string) => value.startsWith('aes:'), encryptWithPassword: vi.fn(), decryptWithPassword: vi.fn() }))
 import { AIProviderStore, ensureDefaultProviders } from './ai-provider-store.js'
 

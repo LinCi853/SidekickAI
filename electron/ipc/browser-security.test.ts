@@ -16,8 +16,8 @@ vi.mock('../platform/window/window-state.js', () => ({ windowState: {} }))
 vi.mock('../window-factory.js', () => ({ findWindowIdByWin: () => 'window-a' }))
 vi.mock('../utils/cloud-pc.js', () => ({ enterCloudPc: vi.fn(), exitCloudPc: vi.fn() }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => { if (!event.trusted) throw new Error('untrusted') } }))
-vi.mock('../security/webview-owner.js', () => ({
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => { if (!event.trusted) throw new Error('untrusted') } }))
+vi.mock('../platform/security/webview-owner.js', () => ({
   ownedWebContents: (event: any, id: unknown) => { if (!event.trusted || id !== state.guest.id) throw new Error('unowned'); return state.guest },
   ownedProfileSession: (event: any, partition: string) => { if (!event.trusted || partition !== 'persist:profile-a') throw new Error('unowned'); return {} },
 }))

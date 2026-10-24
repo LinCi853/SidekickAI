@@ -7,10 +7,10 @@ import { EventEmitter } from 'node:events'
 const windows = vi.hoisted(() => new Map<string, any>())
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() }, BrowserWindow: { fromWebContents: (sender: any) => sender.window } }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: { browserWindowsByProfile: windows } }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => {
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => {
   if (!event.sender.trusted || event.senderFrame !== event.sender.mainFrame) throw new Error('untrusted')
 } }))
-vi.mock('../security/webview-owner.js', () => ({ assertOwnedWebview: (host: any, guest: any) => {
+vi.mock('../platform/security/webview-owner.js', () => ({ assertOwnedWebview: (host: any, guest: any) => {
   if (guest.hostWebContents !== host || !guest.registered) throw new Error('unregistered')
 } }))
 vi.mock('./pdf-protocol.js', () => ({ createLocalPreview: (bytes: Buffer, name: string) => ({ url: `preview:${name}:${bytes.toString()}`, kind: 'file' }) }))

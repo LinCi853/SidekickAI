@@ -72,12 +72,12 @@ function credentialsForProxy(config: { proxyMode?: string; customProxy?: string;
 async function proxyAuthorization(session: Session, proxy: URL): Promise<string | undefined> {
   const profileId = (session as Session & { __profileId?: string }).__profileId
   if (profileId) {
-    const { readProfile } = await import('../store/profile-repository.js')
+    const { readProfile } = await import('../../store/profile-repository.js')
     const profile = readProfile(profileId)
     if (profile?.proxyConfig) return credentialsForProxy(profile.proxyConfig, proxy)
     if (profile?.proxy?.trim()) return undefined
   }
-  const { readSettingsRaw } = await import('../store/app-settings-repository.js')
+  const { readSettingsRaw } = await import('../../store/app-settings-repository.js')
   return credentialsForProxy(readSettingsRaw(), proxy)
 }
 

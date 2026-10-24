@@ -17,7 +17,7 @@ import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { IPHONE_UA, IPHONE_VIEWPORT } from '../presets/devices.js'
 import { profileStore } from '../store/profile-store.js'
 import { presetStore } from '../store/preset-store.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { derivePlatformGradient } from '../../packages/desktop-common/platform-colors.js'
 
 /**

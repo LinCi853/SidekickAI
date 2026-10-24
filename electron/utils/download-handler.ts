@@ -14,8 +14,8 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import { getAppSettings, updateAppSettings } from '../store/app-settings-store.js'
 import { profileStore } from '../store/profile-store.js'
 import { browserDownloadStore } from '../store/browser-download-store.js'
-import { containedDownloadPath, safeDownloadFilename } from '../security/download-path.js'
-import { installProfilePermissions } from '../security/session-permissions.js'
+import { containedDownloadPath, safeDownloadFilename } from '../platform/security/download-path.js'
+import { installProfilePermissions } from '../platform/security/session-permissions.js'
 
 const activeDownloads = new Set<DownloadItem>()
 

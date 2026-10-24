@@ -20,7 +20,7 @@ import { BrowserWindow, ipcMain, webContents } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import type { TabPrioritySync } from '../shared/runtime-processes.js'
 import { getRecordByWebContentsId } from '../window-factory/webview-registry.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 
 /** 后台档：非活跃 guest 使用，低于常规优先级 */
 const BACKGROUND_PRIORITY = os.constants.priority.PRIORITY_LOW

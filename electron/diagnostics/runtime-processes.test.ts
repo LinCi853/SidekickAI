@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   webContents: { getAllWebContents: () => fixture.contents },
   ipcMain: { handle: fixture.handle },
 }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: fixture.authorize }))
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: fixture.authorize }))
 
 const privateWorkingSet = vi.hoisted(() => ({
   map: new Map<number, number>(),

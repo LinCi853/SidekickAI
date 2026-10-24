@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { assertOrdinaryPath, samePath } from '../../packages/backup-core/io.js'
+import { assertOrdinaryPath, samePath } from '../../../packages/backup-core/io.js'
 
 export interface NativeFile {
   descriptor: number

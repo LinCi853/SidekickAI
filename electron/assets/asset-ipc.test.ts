@@ -40,13 +40,13 @@ vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => state.enabled,
 vi.mock('./settings.js', () => ({ getAssetSettings: () => ({}), updateAssetSettings: () => ({}) }))
 vi.mock('../shared/broadcast.js', () => ({ broadcastToAllWindows: () => {} }))
 vi.mock('../ai/handler.js', () => ({ hasActiveAssetStreams: () => state.busy }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => {
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => {
   if (event.sender.getType() !== 'window' || event.senderFrame !== event.sender.mainFrame) throw new Error('Unauthorized host')
 } }))
-vi.mock('../security/webview-owner.js', () => ({ assertOwnedWebview: (host: any, sender: any) => {
+vi.mock('../platform/security/webview-owner.js', () => ({ assertOwnedWebview: (host: any, sender: any) => {
   if (sender !== state.guest || sender.hostWebContents !== host) throw new Error('Unauthorized guest')
 } }))
-vi.mock('../security/public-request.js', () => ({ withPublicResponse: async (session: any, url: string, signal: AbortSignal, consume: any) => {
+vi.mock('../platform/security/public-request.js', () => ({ withPublicResponse: async (session: any, url: string, signal: AbortSignal, consume: any) => {
   const response = await session.fetch(url, { signal })
   const body = (async function* () {
     const reader = response.body.getReader()

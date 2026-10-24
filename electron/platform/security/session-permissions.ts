@@ -1,7 +1,7 @@
 import { BrowserWindow, systemPreferences, type Session, type WebContents } from 'electron'
-import { readProfile } from '../store/profile-repository.js'
-import { isPortableMode } from '../store/store-paths.js'
-import { getRecordByWebContentsId } from '../window-factory/webview-registry.js'
+import { readProfile } from '../../store/profile-repository.js'
+import { isPortableMode } from '../../store/store-paths.js'
+import { getRecordByWebContentsId } from '../../window-factory/webview-registry.js'
 import { isTrustedRendererUrl } from './trusted-renderer.js'
 
 const configuredSessions = new WeakSet<Session>()

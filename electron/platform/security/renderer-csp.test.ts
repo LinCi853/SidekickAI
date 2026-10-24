@@ -7,9 +7,9 @@ import type { Session } from 'electron'
 
 const state = vi.hoisted(() => ({ app: { isPackaged: true } }))
 vi.mock('electron', () => ({ app: state.app, BrowserWindow: {} }))
-vi.mock('../platform/window/paths.js', () => ({ __dirname: 'E:/fixture/app/main' }))
+vi.mock('../window/paths.js', () => ({ __dirname: 'E:/fixture/app/main' }))
 import { installRendererContentSecurity } from './renderer-csp.js'
-import { RENDERER_CONTENT_SECURITY_POLICY, rendererContentSecurityPolicy } from '../shared/renderer-csp.mjs'
+import { RENDERER_CONTENT_SECURITY_POLICY, rendererContentSecurityPolicy } from '../../shared/renderer-csp.mjs'
 
 const documentUrl = pathToFileURL(path.resolve('E:/fixture/app/renderer/index.html')).href
 function fixture() {
@@ -42,7 +42,7 @@ describe('application document security policy', () => {
   })
 
   it('keeps the file-document fallback identical and limits development sources to safe origins', () => {
-    const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8')
+    const html = readFileSync(new URL('../../../src/index.html', import.meta.url), 'utf8')
     expect(html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1]).toBe(RENDERER_CONTENT_SECURITY_POLICY)
     const policy = rendererContentSecurityPolicy(['https://dev.test:5173/app', 'https://dev.test:5173/', 'file:///private', 'http://user:pass@other.test/', 'invalid'])
     expect(policy).toBe(`${RENDERER_CONTENT_SECURITY_POLICY} wss://dev.test:5173`)
@@ -51,7 +51,7 @@ describe('application document security policy', () => {
 })
 
 describe('synchronous theme startup', () => {
-  const script = readFileSync(new URL('../../src/public/theme-startup.js', import.meta.url), 'utf8')
+  const script = readFileSync(new URL('../../../src/public/theme-startup.js', import.meta.url), 'utf8')
   function run(values: Record<string, string>, dark = false, height = 1080) {
     const attributes: Record<string, string> = {}, styles: Record<string, string> = {}, classes = new Set<string>()
     const html = { setAttribute: (key: string, value: string) => { attributes[key] = value }, style: { setProperty: (key: string, value: string) => { styles[key] = value } },

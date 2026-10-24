@@ -6,7 +6,7 @@ import { expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ proxy: '' }))
 vi.mock('node:dns/promises', () => ({ lookup: vi.fn(async () => [{ address: '8.8.8.8', family: 4 }]) }))
-vi.mock('../store/app-settings-repository.js', () => ({ readSettingsRaw: () => ({ proxyMode: 'custom', customProxy: state.proxy, proxyUsername: 'fixture', proxyPassword: 'controlled' }) }))
+vi.mock('../../store/app-settings-repository.js', () => ({ readSettingsRaw: () => ({ proxyMode: 'custom', customProxy: state.proxy, proxyUsername: 'fixture', proxyPassword: 'controlled' }) }))
 import { withPublicResponse } from './public-request.js'
 
 interface Reply { status?: number; headers?: Record<string, string | string[]>; body: string | Buffer; leaveOpen?: boolean }

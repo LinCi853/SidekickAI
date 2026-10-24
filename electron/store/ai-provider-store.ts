@@ -12,8 +12,8 @@
 import { ipcMain, safeStorage, dialog, type IpcMainInvokeEvent } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { randomUUID } from 'crypto'
-import { FileSelections } from '../security/file-selection.js'
-import { assertTrustedRenderer } from '../security/trusted-renderer.js'
+import { FileSelections } from '../platform/security/file-selection.js'
+import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
@@ -21,7 +21,7 @@ import {
   isSafeStorageAvailable,
   xorDecrypt,
 } from '../utils/permission-manager.js'
-import { encryptString, decryptString, isAesEncrypted, encryptWithPassword, decryptWithPassword } from '../utils/app-crypto.js'
+import { encryptString, decryptString, isAesEncrypted, encryptWithPassword, decryptWithPassword } from '../platform/security/app-crypto.js'
 
 /** 落盘的 Provider 结构（apiKey 为加密后的 base64 字符串） */
 interface PersistedProvider extends Omit<CustomAIProvider, 'apiKey' | 'apiKeyUnavailable'> {

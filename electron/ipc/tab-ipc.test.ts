@@ -37,7 +37,7 @@ vi.mock('../platform/window/window-state.js', () => ({ windowState: { mainWindow
 vi.mock('../window-factory/detach-profile.js', () => ({ detachProfileToBrowserWindow: vi.fn() }))
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => true }))
 vi.mock('../platform/window/window-retirement.js', () => ({ isBackgroundClose: runtime.isBackgroundClose }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
 
 import { registerTabIpc } from './tab-ipc.js'
 import { IPC_CHANNELS } from '../shared/types.js'

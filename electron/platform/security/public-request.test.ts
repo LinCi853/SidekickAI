@@ -2,8 +2,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { text as bodyText } from 'node:stream/consumers'
 const state = vi.hoisted(() => ({ lookup: vi.fn(), request: vi.fn(), agents: [] as any[], proxies: [] as any[], profile: vi.fn(), settings: vi.fn() }))
 vi.mock('node:dns/promises', () => ({ lookup: state.lookup }))
-vi.mock('../store/profile-repository.js', () => ({ readProfile: state.profile }))
-vi.mock('../store/app-settings-repository.js', () => ({ readSettingsRaw: state.settings }))
+vi.mock('../../store/profile-repository.js', () => ({ readProfile: state.profile }))
+vi.mock('../../store/app-settings-repository.js', () => ({ readSettingsRaw: state.settings }))
 vi.mock('undici', async importOriginal => {
   const actual = await importOriginal<typeof import('undici')>()
   return { ...actual, fetch: async (url: unknown, options: unknown) => {

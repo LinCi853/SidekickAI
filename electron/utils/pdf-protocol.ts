@@ -4,7 +4,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { assertOrdinaryPath, createPrivateDirectory, isWithin } from '../../packages/backup-core/io.js'
-import { openNativeFile, readNativeFile, type NativeFile } from '../security/native-file.js'
+import { openNativeFile, readNativeFile, type NativeFile } from '../platform/security/native-file.js'
 
 export const PDF_SCHEME = 'sidekick-pdf'
 const MAX_PREVIEW_BYTES = 100 * 1024 * 1024

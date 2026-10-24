@@ -2,7 +2,7 @@ import { runBackupOperation } from './activity.js'
 import { prepareDataRestoreHandoff } from '../../edition-runtime.js'
 import { app } from 'electron'
 import fs from 'node:fs'
-import { isSabkEncrypted } from '../../utils/file-crypto.js'
+import { isSabkEncrypted } from '../../platform/security/file-crypto.js'
 import { setImportingData, isImportingData } from '../import-guard.js'
 
 import { getDataDir } from './paths.js'

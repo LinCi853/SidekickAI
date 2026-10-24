@@ -23,7 +23,7 @@
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { accumulatedLinksStore } from '../../store/accumulated-links-store.js'
 import { getAppSettings } from '../../store/app-settings-store.js'
-import { allowRemoteNavigation } from '../../security/trusted-renderer.js'
+import { allowRemoteNavigation } from '../security/trusted-renderer.js'
 import { isBrowserWindowContents } from './renderer-loader.js'
 import { attachWebviewHotkeyRouter } from '../../window-factory/webview-hotkeys.js'
 

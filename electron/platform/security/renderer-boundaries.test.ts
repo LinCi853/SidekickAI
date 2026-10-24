@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 describe('renderer capability exposure', () => {
   it('retains named interfaces without exposing arbitrary IPC forwarding', () => {
-    const source = ts.createSourceFile('preload.ts', readFileSync(new URL('../preload.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true)
+    const source = ts.createSourceFile('preload.ts', readFileSync(new URL('../../preload.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true)
     const context: Record<string, unknown> = { ipcRenderer: { invoke: vi.fn(), send: vi.fn(), on: vi.fn(), removeListener: vi.fn() } }
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement)) continue
@@ -27,7 +27,7 @@ describe('renderer capability exposure', () => {
   })
 
   it('loads the initial theme as an external script under a strict script policy', () => {
-    const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8')
+    const html = readFileSync(new URL('../../../src/index.html', import.meta.url), 'utf8')
     const policy = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1]
     expect(policy).toBeDefined()
     const scripts = policy!.split(';').find(directive => directive.trim().startsWith('script-src '))!

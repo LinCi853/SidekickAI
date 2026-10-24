@@ -7,10 +7,10 @@ import { IPC_CHANNELS as ipc } from '../shared/ipc-channels.js'
 
 const runtime = vi.hoisted(() => ({ handlers: new Map<string, (...args: any[]) => any>(), save: vi.fn(), open: vi.fn() }))
 vi.mock('electron', () => ({ ipcMain: { handle: (channel: string, handler: (...args: any[]) => any) => runtime.handlers.set(channel, handler) }, dialog: { showSaveDialog: runtime.save, showOpenDialog: runtime.open }, safeStorage: {} }))
-vi.mock('../security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => { if (!event?.trusted) throw new Error('Untrusted renderer') } }))
+vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: (event: any) => { if (!event?.trusted) throw new Error('Untrusted renderer') } }))
 vi.mock('./module-state-store.js', () => ({ createSqliteJsonStore: () => ({ get: () => [], set() {} }) }))
 vi.mock('../utils/permission-manager.js', () => ({ isSafeStorageAvailable: () => false, xorDecrypt: () => { throw new Error('Legacy credential') } }))
-vi.mock('../utils/app-crypto.js', () => ({ encryptString: (value: string) => value, decryptString: () => '', isAesEncrypted: () => false, encryptWithPassword: () => '', decryptWithPassword: () => '' }))
+vi.mock('../platform/security/app-crypto.js', () => ({ encryptString: (value: string) => value, decryptString: () => '', isAesEncrypted: () => false, encryptWithPassword: () => '', decryptWithPassword: () => '' }))
 import { registerAIProviderIPC } from './ai-provider-store.js'
 
 let root: string

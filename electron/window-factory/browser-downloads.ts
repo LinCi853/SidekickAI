@@ -7,8 +7,8 @@ import { consumeAskSavePath } from '../utils/ask-save-path.js'
 import { getRecordByWebContentsId } from './webview-registry.js'
 import { windowState } from '../platform/window/window-state.js'
 import { findWindowIdByWin } from '../platform/window/window-utils.js'
-import { containedDownloadPath, safeDownloadFilename } from '../security/download-path.js'
-import { installProfilePermissions } from '../security/session-permissions.js'
+import { containedDownloadPath, safeDownloadFilename } from '../platform/security/download-path.js'
+import { installProfilePermissions } from '../platform/security/session-permissions.js'
 
 /** Publishes item progress to browser and download history windows. */
 function broadcastDownloadUpdated(payload: {

@@ -1,4 +1,4 @@
-// electron/utils/safe-zip.test.ts — 安全解压的防护单测
+// electron/platform/security/safe-zip.test.ts — 安全解压的防护单测
 //
 // 覆盖 zip-slip（路径穿越）、绝对路径、盘符、控制字符、符号链接条目与规模上限。
 

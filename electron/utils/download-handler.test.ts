@@ -9,7 +9,7 @@ vi.mock('electron', () => ({ app: { getPath: () => 'E:/fixture/default-downloads
 vi.mock('../store/app-settings-store.js', () => ({ getAppSettings: () => state.settings, updateAppSettings: vi.fn() }))
 vi.mock('../store/profile-store.js', () => ({ profileStore: { list: () => [] } }))
 vi.mock('../store/browser-download-store.js', () => ({ browserDownloadStore: { add: state.add, update: state.update } }))
-vi.mock('../security/session-permissions.js', () => ({ installProfilePermissions: vi.fn() }))
+vi.mock('../platform/security/session-permissions.js', () => ({ installProfilePermissions: vi.fn() }))
 import { attachDownloadHandler, hasActiveDownloads } from './download-handler.js'
 
 function fixture(filename: string) {
