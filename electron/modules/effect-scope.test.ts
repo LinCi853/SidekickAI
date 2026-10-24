@@ -121,6 +121,45 @@ describe('EffectScope', () => {
     })
   })
 
+  describe('IPC channel ledger', () => {
+    it('claims channels registered through the scope', async () => {
+      const { listIpcChannelsByOwner } = await import('./effect-scope.js')
+      const scope = new EffectScope('test', 'test-module')
+
+      scope.ipcHandle('test:handle', vi.fn())
+      scope.ipcOn('test:event', vi.fn())
+      scope.trackIpc('test:tracked')
+
+      expect(listIpcChannelsByOwner('test-module').sort()).toEqual([
+        'test:event',
+        'test:handle',
+        'test:tracked',
+      ])
+    })
+
+    it('releases claims on dispose', async () => {
+      const { listIpcChannelsByOwner } = await import('./effect-scope.js')
+      const scope = new EffectScope('test', 'test-module')
+
+      scope.ipcHandle('test:channel', vi.fn())
+      await scope.dispose()
+
+      expect(listIpcChannelsByOwner('test-module')).toEqual([])
+    })
+
+    it('keeps the first owner when another scope claims the same channel', async () => {
+      const { listIpcChannelsByOwner } = await import('./effect-scope.js')
+      const first = new EffectScope('first', 'module-a')
+      const second = new EffectScope('second', 'module-b')
+
+      first.ipcHandle('shared:channel', vi.fn())
+      second.ipcHandle('shared:channel', vi.fn())
+
+      expect(listIpcChannelsByOwner('module-a')).toEqual(['shared:channel'])
+      expect(listIpcChannelsByOwner('module-b')).toEqual([])
+    })
+  })
+
   describe('dispose', () => {
     it('should dispose all tracked handles', async () => {
       const scope = new EffectScope('test', 'test-module')

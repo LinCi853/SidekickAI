@@ -13,6 +13,7 @@ import { getHotkeyManagerInstance } from '../platform/hotkey/manager.js'
 import { syncAdvancedPanelHotkey, syncBrowserProfileShortcuts } from './hotkey-sync.js'
 import { targetRegistry } from './target-registry.js'
 import { getModuleRuntime, setModuleRuntime, isModuleEnabled } from './runtime-state.js'
+import { listIpcChannelsByOwner } from './effect-scope.js'
 export { isModuleEnabled, isModuleInstalled, assertModuleEnabled } from './runtime-state.js'
 
 /** 注册表：id → manifest */
@@ -54,17 +55,6 @@ export interface ResidualScanResult {
   disabledModules: string[]
 }
 
-/** Built-in module prefixes used by the residual listener scan. */
-const MODULE_IPC_PREFIXES: Record<string, string[]> = {
-  'custom-chat': ['AI_PROVIDER_', 'CHAT_'],
-  'prompt-library': ['PROMPT_', 'INJECTION_'],
-  voice: ['STT_', 'VOICE_'],
-  tts: ['VOICE_TEST_TTS'],
-  browser: ['BROWSER_', 'BOOKMARK_', 'CURSOR_'],
-  whiteboard: ['WHITEBOARD_'],
-  notes: ['NOTES_'],
-}
-
 /** Reports windows, hotkeys, targets and listeners owned by disabled modules. */
 export function runResidualScan(): ResidualScanResult {
   const violations: string[] = []
@@ -104,22 +94,11 @@ export function runResidualScan(): ResidualScanResult {
   } catch {
     // TargetRegistry 可能尚未初始化，忽略
   }
-  // Check registered listeners against built-in module prefixes.
-  try {
-    const { ipcMain } = require('electron')
-    const registeredChannels = ipcMain.eventNames()
-    for (const moduleId of disabled) {
-      const prefixes = MODULE_IPC_PREFIXES[moduleId] ?? []
-      if (prefixes.length === 0) continue
-      for (const channel of registeredChannels) {
-        const channelStr = String(channel)
-        if (prefixes.some((prefix) => channelStr.startsWith(prefix))) {
-          violations.push(`模块 ${moduleId} 已关闭但仍注册了 IPC 通道: ${channelStr}`)
-        }
-      }
+  // Module-scoped handlers must be released during teardown; the ledger records ownership.
+  for (const moduleId of disabled) {
+    for (const channel of listIpcChannelsByOwner(moduleId)) {
+      violations.push(`模块 ${moduleId} 已关闭但仍注册了 IPC 通道: ${channel}`)
     }
-  } catch {
-    // 忽略检查失败
   }
   const result: ResidualScanResult = { ok: violations.length === 0, violations, disabledModules: disabled }
   console.log('[modules] 残留扫描:', result.ok ? '通过' : '发现残留: ' + violations.join('; '))

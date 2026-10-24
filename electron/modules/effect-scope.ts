@@ -50,6 +50,39 @@ function createEffectHandle(params: EffectHandleInternal): EffectHandle {
   }
 }
 
+// ==================== IPC 通道账本 ====================
+//
+// Modules claim every channel they register. The ledger replaces hand-written
+// prefix lists in the residual scan, so ownership follows the wiring instead of
+// drifting when channels are renamed or moved.
+
+/** Global channel → owner map (module id or framework label). */
+const ipcChannelOwners = new Map<string, string>()
+
+/** Records ownership; a conflicting claim is reported and ignored. */
+function claimIpcChannel(channel: string, owner: string): void {
+  const existing = ipcChannelOwners.get(channel)
+  if (existing === undefined) {
+    ipcChannelOwners.set(channel, owner)
+  } else if (existing !== owner) {
+    console.warn(`[effect-scope] 通道 ${channel} 已归属 ${existing}，忽略 ${owner} 的重复登记`)
+  }
+}
+
+/** Releases ownership on dispose, leaving other owners untouched. */
+function releaseIpcChannel(channel: string, owner: string): void {
+  if (ipcChannelOwners.get(channel) === owner) ipcChannelOwners.delete(channel)
+}
+
+/** Channels currently claimed by one owner. */
+export function listIpcChannelsByOwner(owner: string): string[] {
+  const channels: string[] = []
+  for (const [channel, channelOwner] of ipcChannelOwners) {
+    if (channelOwner === owner) channels.push(channel)
+  }
+  return channels
+}
+
 // ==================== EffectScope ====================
 
 /**
@@ -105,19 +138,24 @@ export class EffectScope {
 
   /** 登记 IPC 通道（供 dispose 卸载；重复登记幂等） */
   trackIpc(...channels: string[]): void {
-    for (const ch of channels) this.ipcChannels.add(ch)
+    for (const ch of channels) {
+      this.ipcChannels.add(ch)
+      claimIpcChannel(ch, this.ownerModule)
+    }
   }
 
   /** 直接经作用域注册 handle（天然可卸载） */
   ipcHandle(channel: string, fn: Parameters<typeof ipcMain.handle>[1]): void {
     ipcMain.handle(channel, fn)
     this.ipcChannels.add(channel)
+    claimIpcChannel(channel, this.ownerModule)
   }
 
   /** 直接经作用域注册 on（天然可卸载） */
   ipcOn(channel: string, fn: Parameters<typeof ipcMain.on>[1]): void {
     ipcMain.on(channel, fn)
     this.ipcChannels.add(channel)
+    claimIpcChannel(channel, this.ownerModule)
   }
 
   // ==================== 定时器快捷方法 ====================
@@ -164,6 +202,7 @@ export class EffectScope {
     for (const ch of this.ipcChannels) {
       ipcMain.removeHandler(ch)
       ipcMain.removeAllListeners(ch)
+      releaseIpcChannel(ch, this.ownerModule)
     }
     this.ipcChannels.clear()
 

@@ -214,6 +214,29 @@ describe('ModuleRegistry', () => {
       expect(result.ok).toBe(true)
       expect(result.violations).toHaveLength(0)
     })
+
+    it('should report channels still claimed by a disabled module', async () => {
+      const { EffectScope, listIpcChannelsByOwner } = await import('./effect-scope.js')
+      const state = await import('../store/module-state-store.js')
+      const { BUILTIN_MODULE_INSTALL_DATA } = await import('./builtin-module-data.js')
+      vi.mocked(state.getModuleState).mockImplementation(id =>
+        id === 'notes' ? { id, enabled: false, installed: true, clearedAt: 0, updatedAt: 1 } : null)
+      registry.registerModule({
+        ...BUILTIN_MODULE_INSTALL_DATA.find(module => module.id === 'notes')!,
+        init: vi.fn(),
+      })
+
+      await registry.initEnabledModules()
+
+      const scope = new EffectScope('stale-notes', 'notes')
+      scope.ipcHandle('notes:stale', vi.fn())
+      const result = registry.runResidualScan()
+
+      expect(result.ok).toBe(false)
+      expect(result.violations.join('; ')).toContain('notes:stale')
+      await scope.dispose()
+      expect(listIpcChannelsByOwner('notes')).toEqual([])
+    })
   })
 
   it.each([
