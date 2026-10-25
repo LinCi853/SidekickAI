@@ -45,7 +45,9 @@ vi.mock('./whiteboard/whiteboard-db.js', () => ({
   registerWhiteboardIPC: (scope: any) => scope.ipcHandle('whiteboard:list', () => []),
   closeWhiteboardDb: fixture.closeWhiteboard,
 }))
-vi.mock('../../window-factory.js', () => ({ openAdvancedPanelWindow: vi.fn() }))
+vi.mock('../../platform/window/containers/advanced-panel-window.js', () => ({
+  openAdvancedPanelWindow: vi.fn(),
+}))
 vi.mock('../../platform/window/window-state.js', () => ({
   windowState: { advancedPanelWindow: null },
 }))

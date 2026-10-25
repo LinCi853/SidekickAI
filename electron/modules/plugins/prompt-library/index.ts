@@ -16,7 +16,7 @@ import { registerPromptIPC, promptStore, ensureDefaultPrompts } from './prompt-s
 import { registerPromptIpc } from './prompt-ipc.js'
 import { registerInjectionIpc } from './injection-ipc.js'
 import { injectionHistoryStore } from './injection-history-store.js'
-import { showPromptWindow } from '../../../window-factory.js'
+import { showPromptWindow } from '../../../platform/window/containers/popup-windows.js'
 import { windowState } from '../../../platform/window/window-state.js'
 
 /** Module-owned effects. */

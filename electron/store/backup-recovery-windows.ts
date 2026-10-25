@@ -1,17 +1,18 @@
 import { BrowserWindow, screen, type Rectangle } from 'electron'
 import { windowState } from '../platform/window/window-state.js'
+import { createMainWindow } from '../platform/window/main-window.js'
+import { createChatWindow } from '../platform/window/containers/chat-window.js'
+import { createAdvancedPanelWindow } from '../platform/window/containers/advanced-panel-window.js'
 import {
-  createMainWindow,
-  createChatWindow,
-  createAdvancedPanelWindow,
   showHistoryWindow,
   showPromptWindow,
   showDataExportWindow,
   showSettingsWindow,
-  showOnboardingWindow,
   showAiAppEditorWindow,
-} from '../window-factory.js'
-import { createBrowserWindow, showHistoryDownloadWindow } from '../window-factory.js'
+} from '../platform/window/containers/popup-windows.js'
+import { showOnboardingWindow } from '../platform/window/containers/onboarding-window.js'
+import { createBrowserWindow } from '../browser/browser-window.js'
+import { showHistoryDownloadWindow } from '../browser/history-download-window.js'
 import { browserWindowStore } from '../browser/browser-window-store.js'
 
 type EditorOptions = { platformId?: string; profileId?: string; mode?: 'edit' | 'create' }

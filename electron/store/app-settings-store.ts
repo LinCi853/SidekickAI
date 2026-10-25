@@ -703,7 +703,7 @@ export async function reregisterProfileShortcuts(): Promise<void> {
   for (const { accelerator, profileId } of toRegister) {
     mgr.registerBrowserShortcut(accelerator, () => {
       // ESM 环境中 require 未定义,使用动态 import() 避免闪退
-      import('../window-factory.js')
+      import('../browser/browser-window.js')
         .then(({ toggleBrowserWindow }) => {
           toggleBrowserWindow(profileId)
         })

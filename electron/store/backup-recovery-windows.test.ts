@@ -17,19 +17,25 @@ vi.mock('electron', () => ({
   screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) },
 }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: test.state }))
-vi.mock('../window-factory.js', () => ({
-  createMainWindow: test.createMain,
+vi.mock('../platform/window/main-window.js', () => ({ createMainWindow: test.createMain }))
+vi.mock('../platform/window/containers/chat-window.js', () => ({
   createChatWindow: test.createChat,
+}))
+vi.mock('../platform/window/containers/advanced-panel-window.js', () => ({
   createAdvancedPanelWindow: test.createPanel,
+}))
+vi.mock('../platform/window/containers/popup-windows.js', () => ({
   showHistoryWindow: vi.fn(),
   showPromptWindow: vi.fn(),
   showDataExportWindow: vi.fn(),
   showSettingsWindow: test.showSettings,
-  showOnboardingWindow: vi.fn(),
   showAiAppEditorWindow: vi.fn(),
-  createBrowserWindow: test.createBrowser,
-  showHistoryDownloadWindow: vi.fn(),
 }))
+vi.mock('../platform/window/containers/onboarding-window.js', () => ({
+  showOnboardingWindow: vi.fn(),
+}))
+vi.mock('../browser/browser-window.js', () => ({ createBrowserWindow: test.createBrowser }))
+vi.mock('../browser/history-download-window.js', () => ({ showHistoryDownloadWindow: vi.fn() }))
 vi.mock('../browser/browser-window-store.js', () => ({
   browserWindowStore: { get: () => test.browserState },
 }))

@@ -28,7 +28,7 @@ vi.mock('./browser-window-store.js', () => ({ browserWindowStore: {} }))
 vi.mock('./bookmark-store.js', () => ({ bookmarkStore: {} }))
 vi.mock('../store/window-store.js', () => ({ windowStore: {}, MAIN_WINDOW_ID: 'main' }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: {} }))
-vi.mock('../window-factory.js', () => ({ findWindowIdByWin: () => 'window-a' }))
+vi.mock('../platform/window/helpers.js', () => ({ findWindowIdByWin: () => 'window-a' }))
 vi.mock('../utils/cloud-pc.js', () => ({ enterCloudPc: vi.fn(), exitCloudPc: vi.fn() }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 vi.mock('../platform/security/trusted-renderer.js', () => ({

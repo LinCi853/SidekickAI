@@ -59,7 +59,6 @@ export { createSingletonPopupWindow } from './singleton-popup.js'
 // —— 杂项工具 ——
 export {
   safeLogWindowTrace,
-  getFormBounds,
   resolveUserAgent,
   findWindowIdByWin,
 } from './window-utils.js'

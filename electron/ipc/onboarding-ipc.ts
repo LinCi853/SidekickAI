@@ -12,7 +12,7 @@ import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { windowState } from '../platform/window/window-state.js'
 import { getAppSettings, updateAppSettings } from '../store/app-settings-store.js'
-import { showOnboardingWindow } from '../window-factory.js'
+import { showOnboardingWindow } from '../platform/window/containers/onboarding-window.js'
 
 /** 注册引导相关 IPC handler */
 export function registerOnboardingIpc(): void {

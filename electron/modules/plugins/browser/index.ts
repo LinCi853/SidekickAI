@@ -8,7 +8,8 @@ import { EffectScope } from '../../effect-scope.js'
 import { registerBrowserIpc } from '../../../browser/browser-ipc.js'
 import { registerBrowserTabAudioIpc } from '../../../browser/browser-tab-audio-ipc.js'
 import { registerCursorIpc } from '../../../utils/cursor.js'
-import { createBrowserWindow, showHistoryDownloadWindow } from '../../../window-factory.js'
+import { createBrowserWindow } from '../../../browser/browser-window.js'
+import { showHistoryDownloadWindow } from '../../../browser/history-download-window.js'
 import {
   searchHistoryStore,
   closeSearchHistoryStore,

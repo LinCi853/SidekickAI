@@ -69,20 +69,23 @@ import { sweepStaleRuntimeTemp } from './utils/temp-hygiene.js'
 import { windowState } from './platform/window/window-state.js'
 import { windowStore } from './store/window-store.js'
 import { isTrackedFullscreen } from './utils/fullscreen-tracker.js'
+import { createMainWindow } from './platform/window/main-window.js'
+import { createBrowserWindow } from './browser/browser-window.js'
+import { createChatWindow } from './platform/window/containers/chat-window.js'
 import {
-  createMainWindow,
-  createBrowserWindow,
-  createChatWindow,
   showHistoryWindow,
   showAiAppEditorWindow,
   showSettingsWindow,
+} from './platform/window/containers/popup-windows.js'
+import {
   openAdvancedPanelWindow,
   toggleAdvancedPanelWindow,
+} from './platform/window/containers/advanced-panel-window.js'
+import {
   showOnboardingWindow,
   setOnboardingLifecycleCallbacks,
-  getSenderWindow,
-  findWindowIdByWin,
-} from './window-factory.js'
+} from './platform/window/containers/onboarding-window.js'
+import { getSenderWindow, findWindowIdByWin } from './platform/window/helpers.js'
 import { initAppFocusTracker } from './modules/plugins/voice/preview-window.js'
 import { warmWin32ForegroundBridge } from './utils/win32-foreground.js'
 import {

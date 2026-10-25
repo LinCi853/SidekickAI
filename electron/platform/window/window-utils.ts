@@ -32,22 +32,6 @@ export function safeLogWindowTrace(
   }
 }
 
-/** 根据 windowForm 获取默认窗口尺寸 */
-export function getFormBounds(form?: 'narrow' | 'standard' | 'wide'): {
-  width: number
-  height: number
-} {
-  switch (form) {
-    case 'wide':
-      return { width: 1000, height: 680 }
-    case 'standard':
-      return { width: 720, height: 640 }
-    case 'narrow':
-    default:
-      return { width: 480, height: 760 }
-  }
-}
-
 /** 根据 uaPreset + userAgent 解析最终的 User-Agent 字符串（返回 null 表示用 Electron 默认） */
 export function resolveUserAgent(config: ChatWindowConfig): string | null {
   switch (config.uaPreset) {

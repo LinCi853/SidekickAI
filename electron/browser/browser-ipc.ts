@@ -29,7 +29,7 @@ import { browserWindowStore } from './browser-window-store.js'
 import { bookmarkStore } from './bookmark-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../platform/window/window-state.js'
-import { findWindowIdByWin } from '../window-factory.js'
+import { findWindowIdByWin } from '../platform/window/helpers.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import type { EffectScope } from '../modules/effect-scope.js'
 

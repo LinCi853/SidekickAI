@@ -240,23 +240,6 @@ export async function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptio
 }
 
 /**
- * 显示 进阶面板（仅显示，不创建）。
- * 用于外部调用方需要确保窗口可见但不强制创建的场景。
- */
-export function showAdvancedPanelWindow(): void {
-  const win = windowState.advancedPanelWindow
-  if (!win || win.isDestroyed()) return
-  void Promise.resolve(focusManager.show(win))
-}
-
-/** 聚焦 进阶面板（仅聚焦，不创建） */
-export function focusAdvancedPanelWindow(): void {
-  const win = windowState.advancedPanelWindow
-  if (!win || win.isDestroyed()) return
-  void Promise.resolve(focusManager.show(win))
-}
-
-/**
  * 切换 进阶面板（Alt+Q 入口）。
  * - 窗口存在且可见 → 关闭（destroy），下次 Alt+Q 重新创建并路由到默认 tab
  * - 窗口不存在 → 创建（按用户设置的 defaultAdvancedPanelTab 路由，默认 'chat'）
