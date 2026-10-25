@@ -9,13 +9,13 @@
 
 import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { isCloudPc, forceExitCloudPc } from '../utils/cloud-pc.js'
-import { tryForward } from '../utils/browser-hotkey-fallback.js'
+import { isCloudPc, forceExitCloudPc } from './cloud-pc.js'
+import { tryForward } from '../platform/hotkey/browser-hotkey-fallback.js'
 import { isBrowserWindowContents } from '../platform/window/renderer-loader.js'
 import { isGuestFocusEditable } from './webview-focus.js'
 import { findWindowIdByWin } from '../platform/window/window-utils.js'
 import { windowStore } from '../store/window-store.js'
-import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { isTrackedFullscreen } from '../platform/window/fullscreen-tracker.js'
 import { captureWebviewHotkeyTarget, trackWebviewHotkeyTarget } from './webview-hotkey-target.js'
 import { setAlwaysOnTopForWindow, toggleMaximizeForWindow } from '../ipc/window-control-ipc.js'
 

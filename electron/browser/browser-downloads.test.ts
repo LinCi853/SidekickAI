@@ -48,7 +48,7 @@ vi.mock('../platform/window/window-utils.js', () => ({
 }))
 
 import { registerBrowserDownloads } from './browser-downloads'
-import { markAskSavePath } from '../utils/ask-save-path'
+import { markAskSavePath } from './ask-save-path'
 
 function requestSave(partition = 'persist:profile', url = 'https://fixture.test/file') {
   markAskSavePath(state.sessions.get(partition)! as unknown as Session, url)

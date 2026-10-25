@@ -1,4 +1,4 @@
-// electron/utils/platform-actions.ts — 跨平台系统动作封装
+// electron/platform/platform-actions.ts — 跨平台系统动作封装
 //
 // 将 Windows 专属的模拟按键、剪贴板上屏等动作改造为带平台判断的跨平台实现。
 //   Windows: PowerShell SendKeys（保留原行为，来自 main.ts 的 simulateCtrlV）
@@ -16,7 +16,7 @@ import * as path from 'path'
 import {
   checkAccessibilityPermission,
   promptAccessibilityPermission,
-} from './permission-manager.js'
+} from './security/permission-manager.js'
 
 /** 错误码：macOS 辅助功能权限未授权。调用方可据此跳过重复的"手动粘贴"通知。 */
 export const ERR_MAC_ACCESSIBILITY_DENIED = 'MAC_ACCESSIBILITY_DENIED'

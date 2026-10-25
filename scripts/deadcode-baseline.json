@@ -32,6 +32,18 @@
       "name": "getDefaultMobilePreset"
     },
     {
+      "file": "electron/platform/platform-actions.ts",
+      "name": "getForegroundWindowHandle"
+    },
+    {
+      "file": "electron/platform/platform-actions.ts",
+      "name": "platformActions"
+    },
+    {
+      "file": "electron/platform/platform-actions.ts",
+      "name": "setForegroundWindowByHandle"
+    },
+    {
       "file": "electron/platform/security/file-crypto.ts",
       "name": "decryptFile"
     },
@@ -42,6 +54,10 @@
     {
       "file": "electron/platform/window/app-icon.ts",
       "name": "getLoadedWindowIconSource"
+    },
+    {
+      "file": "electron/platform/window/focus-manager.ts",
+      "name": "untrack"
     },
     {
       "file": "electron/platform/window/helpers.ts",
@@ -170,22 +186,6 @@
     {
       "file": "electron/store/store-paths.ts",
       "name": "getModuleDirname"
-    },
-    {
-      "file": "electron/utils/focus-manager.ts",
-      "name": "untrack"
-    },
-    {
-      "file": "electron/utils/platform-actions.ts",
-      "name": "getForegroundWindowHandle"
-    },
-    {
-      "file": "electron/utils/platform-actions.ts",
-      "name": "platformActions"
-    },
-    {
-      "file": "electron/utils/platform-actions.ts",
-      "name": "setForegroundWindowByHandle"
     },
     {
       "file": "packages/backup-core/context.ts",

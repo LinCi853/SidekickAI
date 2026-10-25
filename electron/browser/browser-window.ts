@@ -31,8 +31,8 @@ import {
   safeLogWindowTrace,
 } from '../platform/window/helpers.js'
 import { attachWebviewAntiDetection } from './webview-anti-detection.js'
-import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
-import { trackFullscreen, isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { isCloudPc, exitCloudPc } from './cloud-pc.js'
+import { trackFullscreen, isTrackedFullscreen } from '../platform/window/fullscreen-tracker.js'
 import { buildWindowConfig } from '../platform/window/window-config-builder.js'
 import { AI_PLATFORMS } from '../shared/presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'

@@ -9,7 +9,7 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { windowState } from './window-state.js'
 import { setAlwaysOnTopForWindow, toggleMaximizeForWindow } from '../../ipc/window-control-ipc.js'
 import { safeLogWindowTrace, findWindowIdByWin } from './window-utils.js'
-import { isTrackedFullscreen } from '../../utils/fullscreen-tracker.js'
+import { isTrackedFullscreen } from './fullscreen-tracker.js'
 import { forgetWindow as forgetWindowPriorityState } from '../../diagnostics/tab-process-priority.js'
 import {
   scheduleBackgroundRelease,

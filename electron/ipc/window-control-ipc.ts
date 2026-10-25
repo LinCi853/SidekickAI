@@ -20,7 +20,7 @@ import { createMaximizeManager } from '../platform/window/window-maximize-manage
 import { IPC_CHANNELS, type WindowStateData } from '../shared/types.js'
 import type { WindowManager } from '../platform/window/containers/profile-window.js'
 import type { FingerprintEngine } from '../browser/fingerprint.js'
-import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { isTrackedFullscreen } from '../platform/window/fullscreen-tracker.js'
 import { validateWebviewHotkeyTarget } from '../browser/webview-hotkey-target.js'
 import { registerWindowWebview } from '../browser/webview-registry.js'
 import type { WebviewRegistration } from '../shared/api/profile-window.api.js'

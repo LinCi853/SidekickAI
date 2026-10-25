@@ -40,8 +40,8 @@ vi.mock('./store.js', () => ({
   storeKey: (action: string) => action,
   enabledStoreKey: (action: string) => action,
 }))
-vi.mock('../../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
-vi.mock('../../utils/browser-hotkey-fallback.js', () => ({
+vi.mock('../security/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
+vi.mock('./browser-hotkey-fallback.js', () => ({
   dispatchBrowserHotkeyFallback: vi.fn(),
 }))
 

@@ -29,8 +29,8 @@ vi.mock('./bookmark-store.js', () => ({ bookmarkStore: {} }))
 vi.mock('../store/window-store.js', () => ({ windowStore: {}, MAIN_WINDOW_ID: 'main' }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: {} }))
 vi.mock('../platform/window/helpers.js', () => ({ findWindowIdByWin: () => 'window-a' }))
-vi.mock('../utils/cloud-pc.js', () => ({ enterCloudPc: vi.fn(), exitCloudPc: vi.fn() }))
-vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
+vi.mock('./cloud-pc.js', () => ({ enterCloudPc: vi.fn(), exitCloudPc: vi.fn() }))
+vi.mock('../platform/window/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 vi.mock('../platform/security/trusted-renderer.js', () => ({
   assertTrustedRenderer: (event: any) => {
     if (!event.trusted) throw new Error('untrusted')

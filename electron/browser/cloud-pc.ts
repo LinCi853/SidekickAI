@@ -1,4 +1,4 @@
-// electron/utils/cloud-pc.ts — 云电脑模式（主进程状态与系统级保障）
+// electron/browser/cloud-pc.ts — 云电脑模式（主进程状态与系统级保障）
 //
 // 云电脑模式：为云电脑/云游戏类网页提供干净的输入直通环境——
 //   - 进入时挂起全部应用级全局热键（复用 HotkeyManager.pauseAllShortcuts，
@@ -18,7 +18,7 @@ import { exec } from 'child_process'
 import type { HotkeyManager } from '../platform/hotkey/manager.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { findWindowIdByWin } from '../platform/window/window-utils.js'
-import { isTrackedFullscreen } from './fullscreen-tracker.js'
+import { isTrackedFullscreen } from '../platform/window/fullscreen-tracker.js'
 
 /** 处于云电脑模式的浏览器窗口（parentWebContents.id） */
 const cloudPcParentIds = new Set<number>()

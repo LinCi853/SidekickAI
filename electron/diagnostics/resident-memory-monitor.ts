@@ -1,5 +1,5 @@
 import { app, BrowserWindow, webContents, type WebContents } from 'electron'
-import { trimWorkingSet, markForegroundActivity } from '../utils/win32-foreground.js'
+import { trimWorkingSet, markForegroundActivity } from '../platform/window/win32-foreground.js'
 import { createResidentMemoryPolicy } from './resident-memory-policy.js'
 import { backgroundWindowForProcess } from './resident-process-ownership.js'
 

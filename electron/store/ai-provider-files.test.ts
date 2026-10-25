@@ -26,7 +26,7 @@ vi.mock('../platform/security/trusted-renderer.js', () => ({
 vi.mock('./module-state-store.js', () => ({
   createSqliteJsonStore: () => ({ get: () => [], set() {} }),
 }))
-vi.mock('../utils/permission-manager.js', () => ({
+vi.mock('../platform/security/permission-manager.js', () => ({
   isSafeStorageAvailable: () => false,
   xorDecrypt: () => {
     throw new Error('Legacy credential')

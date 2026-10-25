@@ -15,7 +15,7 @@ vi.mock('./module-state-store.js', () => ({
     },
   }),
 }))
-vi.mock('../utils/permission-manager.js', () => ({
+vi.mock('../platform/security/permission-manager.js', () => ({
   isSafeStorageAvailable: () => false,
   xorDecrypt: () => {
     throw new Error('Credential requires re-entry')

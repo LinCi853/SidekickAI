@@ -20,7 +20,7 @@ vi.mock('../../ipc/window-control-ipc.js', () => ({
   toggleMaximizeForWindow: vi.fn(),
 }))
 vi.mock('./window-utils.js', () => ({ safeLogWindowTrace: vi.fn(), findWindowIdByWin: vi.fn() }))
-vi.mock('../../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
+vi.mock('./fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 // window-events 在窗口关闭时清理 guest 优先级状态，对应模块在此仅作桩
 vi.mock('../../diagnostics/tab-process-priority.js', () => ({ forgetWindow: vi.fn() }))
 vi.mock('../../diagnostics/background-release.js', () => ({

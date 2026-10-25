@@ -17,7 +17,7 @@ import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
-import { isSafeStorageAvailable, xorDecrypt } from '../utils/permission-manager.js'
+import { isSafeStorageAvailable, xorDecrypt } from '../platform/security/permission-manager.js'
 import {
   encryptString,
   decryptString,

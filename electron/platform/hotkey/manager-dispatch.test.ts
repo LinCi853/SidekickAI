@@ -54,10 +54,10 @@ vi.mock('./store.js', () => ({
   storeKey: (action: string) => `hotkey.${action}`,
   enabledStoreKey: (action: string) => `hotkey.enabled.${action}`,
 }))
-vi.mock('../../utils/browser-hotkey-fallback.js', () => ({
+vi.mock('./browser-hotkey-fallback.js', () => ({
   dispatchBrowserHotkeyFallback: vi.fn(),
 }))
-vi.mock('../../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
+vi.mock('../security/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
 
 import { HotkeyManager } from './manager'
 

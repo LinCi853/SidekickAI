@@ -1,4 +1,4 @@
-// electron/utils/focus-manager.ts — 窗口焦点恢复管理器
+// electron/platform/window/focus-manager.ts — 窗口焦点恢复管理器
 //
 // 统一管理「隐藏/关闭窗口后把前台交还给唤出前的外部窗口」的逻辑。
 // 供所有通过快捷键或托盘切换显隐的窗口使用（主窗口、进阶面板）。
@@ -25,8 +25,8 @@
 //   focusManager.hide(win)                  // 热键隐藏：同步隐藏 + 异步交还前台
 
 import type { BrowserWindow } from 'electron'
-import { findWindowIdByWin } from '../platform/window/window-utils.js'
-import { windowStore } from '../store/window-store.js'
+import { findWindowIdByWin } from './window-utils.js'
+import { windowStore } from '../../store/window-store.js'
 import { isTrackedFullscreen } from './fullscreen-tracker.js'
 import { getForegroundHandle, setForegroundHandle } from './win32-foreground.js'
 

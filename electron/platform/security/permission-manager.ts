@@ -1,4 +1,4 @@
-// electron/utils/permission-manager.ts — 统一权限管理
+// electron/platform/security/permission-manager.ts — 统一权限管理
 //
 // 集中管理 macOS 辅助功能权限检测与申请、safeStorage 后端检测与降级策略。
 // Legacy weak credential protection is intentionally unavailable.

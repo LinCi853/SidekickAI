@@ -12,7 +12,7 @@ import path from 'path'
 import { IPC_CHANNELS } from '../../shared/types.js'
 import { windowState } from './window-state.js'
 import { createMainWindow } from './main-window.js'
-import * as focusManager from '../../utils/focus-manager.js'
+import * as focusManager from './focus-manager.js'
 
 const __dirname = path.dirname(__filename)
 

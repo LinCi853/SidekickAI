@@ -39,7 +39,7 @@ import {
 import { getAppSettings } from '../../../store/app-settings-repository.js'
 import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
 import { isModuleEnabled } from '../../../modules/registry.js'
-import * as focusManager from '../../../utils/focus-manager.js'
+import * as focusManager from '../focus-manager.js'
 
 /** 渲染层加载 URL 时附加的 query 参数（仅生产环境 loadFile 路径使用） */
 interface AdvancedPanelWindowOptions {

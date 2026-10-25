@@ -1,4 +1,4 @@
-// electron/utils/cursor.ts — 系统光标重置（云游戏备用方案）
+// electron/browser/cursor.ts — 系统光标重置（云游戏备用方案）
 //
 // 指针锁定（Pointer Lock）不可用时，云游戏 FPS 场景需要「光标持续居中」：
 // 页面隐藏光标（cursor: none）+ mousemove 计算相对位移，再把系统光标

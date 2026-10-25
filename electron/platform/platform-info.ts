@@ -1,4 +1,4 @@
-// electron/utils/platform-info.ts — 平台能力查询接口
+// electron/platform/platform-info.ts — 平台能力查询接口
 //
 // 提供当前运行平台的能力矩阵（安全存储、全局快捷键、辅助功能权限等），
 // 通过 IPC 暴露给渲染进程，设置页可显示当前权限状态。
@@ -10,7 +10,7 @@ import {
   checkAccessibilityPermission,
   getStorageBackend,
   type StorageBackend,
-} from './permission-manager.js'
+} from './security/permission-manager.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 
 /** 平台能力矩阵 */

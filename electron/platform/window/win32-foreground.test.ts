@@ -1,4 +1,4 @@
-// electron/utils/win32-foreground.test.ts — 常驻 PowerShell 桥协议回归测试
+// electron/platform/window/win32-foreground.test.ts — 常驻 PowerShell 桥协议回归测试
 //
 // 覆盖：请求/响应行协议（带请求 id）、响应拆包粘包、超时与迟到响应丢弃、
 // 进程退出兜底、dispose 清理。spawn 被 mock 为内存假进程。
@@ -50,7 +50,7 @@ vi.mock('electron', () => ({
     getAppMetrics: fixture.metrics,
   },
 }))
-vi.mock('../diagnostics/resident-process-ownership.js', () => ({
+vi.mock('../../diagnostics/resident-process-ownership.js', () => ({
   backgroundWindowForProcess: fixture.owner,
 }))
 

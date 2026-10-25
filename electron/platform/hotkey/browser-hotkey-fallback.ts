@@ -1,4 +1,4 @@
-import { UiohookKey } from '../platform/hotkey/uiohook.js'
+import { UiohookKey } from './uiohook.js'
 
 /** Guest and hook events share a gate owned by the host webContents. */
 const lastForwardedAt = new WeakMap<object, Map<string, number>>()

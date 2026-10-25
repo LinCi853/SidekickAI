@@ -5,16 +5,11 @@ import path from 'node:path'
 import { createCipheriv, randomBytes } from 'node:crypto'
 import Database from 'better-sqlite3'
 import AdmZip from 'adm-zip'
-import {
-  decryptFile,
-  decryptFileStream,
-  encryptFile,
-  encryptFileStream,
-} from '../../packages/backup-core/file-crypto.js'
-import { exportBackup, type ExportAdapter } from '../../packages/backup-core/export.js'
-import { exportTreeDigest } from '../../packages/backup-core/files.js'
-import { validateTransfer } from '../../packages/backup-core/transfer.js'
-import { resumeBackupJob } from '../../packages/backup-core/jobs.js'
+import { decryptFile, decryptFileStream, encryptFile, encryptFileStream } from './file-crypto.js'
+import { exportBackup, type ExportAdapter } from './export.js'
+import { exportTreeDigest } from './files.js'
+import { validateTransfer } from './transfer.js'
+import { resumeBackupJob } from './jobs.js'
 
 let root: string
 const password = 'isolated-backup-password'

@@ -17,12 +17,14 @@ vi.mock('../platform/window/renderer-loader.js', () => ({
 }))
 vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
 vi.mock('./webview-focus.js', () => ({ isGuestFocusEditable: () => fixture.editable }))
-vi.mock('../utils/cloud-pc.js', () => ({
+vi.mock('./cloud-pc.js', () => ({
   isCloudPc: () => fixture.cloud,
   forceExitCloudPc: fixture.exitCloud,
 }))
-vi.mock('../utils/browser-hotkey-fallback.js', () => ({ tryForward: () => fixture.forward }))
-vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
+vi.mock('../platform/hotkey/browser-hotkey-fallback.js', () => ({
+  tryForward: () => fixture.forward,
+}))
+vi.mock('../platform/window/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 vi.mock('../store/window-store.js', () => ({
   windowStore: { getOrDefault: () => ({}), save: vi.fn() },
 }))

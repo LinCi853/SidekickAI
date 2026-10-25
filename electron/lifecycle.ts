@@ -13,7 +13,7 @@ import { showNotification } from './notify.js'
 import { destroyTray } from './platform/window/tray.js'
 import { clearPreviewHideTimer } from './modules/plugins/voice/preview-window.js'
 import { clearClipboardRestoreTimer } from './modules/plugins/voice/clipboard-paste.js'
-import { disposeWin32ForegroundBridge } from './utils/win32-foreground.js'
+import { disposeWin32ForegroundBridge } from './platform/window/win32-foreground.js'
 import { flushWindowStateNow } from './store/window-store.js'
 
 /**

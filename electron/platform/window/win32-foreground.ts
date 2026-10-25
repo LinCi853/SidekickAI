@@ -1,4 +1,4 @@
-// electron/utils/win32-foreground.ts — Windows 前台窗口读写与自身工作集回收（原生桥）
+// electron/platform/window/win32-foreground.ts — Windows 前台窗口读写与自身工作集回收（原生桥）
 //
 // 把 user32 的 GetForegroundWindow / SetForegroundWindow 封装为毫秒级往返：
 // 启动时复用经过校验的原生启动助手（开发环境可降级 PowerShell），之后每次
@@ -23,8 +23,8 @@ import { existsSync } from 'node:fs'
 import {
   windowsStartupHelper,
   windowsStartupHelperAtDirectory,
-} from '../../packages/desktop-common/windows-startup-helper'
-import { backgroundWindowForProcess } from '../diagnostics/resident-process-ownership.js'
+} from '../../../packages/desktop-common/windows-startup-helper'
+import { backgroundWindowForProcess } from '../../diagnostics/resident-process-ownership.js'
 
 /** 常驻会话脚本：Add-Type 完成后按行读取 stdin 并分发 G/S/Q 命令 */
 const BRIDGE_SCRIPT = `

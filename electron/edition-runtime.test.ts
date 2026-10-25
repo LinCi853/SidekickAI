@@ -20,7 +20,7 @@ vi.mock('electron', () => ({
   dialog: { showMessageBox: fixture.warning, showErrorBox: fixture.error },
 }))
 vi.mock('./application-admission.js', () => ({ bindApplicationSession: fixture.bind }))
-vi.mock('./utils/focus-manager.js', () => ({ show: fixture.show }))
+vi.mock('./platform/window/focus-manager.js', () => ({ show: fixture.show }))
 const event = () => ({
   defaultPrevented: false,
   preventDefault() {

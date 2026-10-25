@@ -1,4 +1,4 @@
-// electron/utils/fullscreen-tracker.ts — 全屏状态追踪器
+// electron/platform/window/fullscreen-tracker.ts — 全屏状态追踪器
 //
 // win.isFullScreen() 在 Windows frameless 窗口中不可靠（enter-full-screen
 // 事件已触发但 isFullScreen() 仍返回 false）。本模块通过原生事件维护

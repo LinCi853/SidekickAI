@@ -23,7 +23,7 @@ import type {
 } from '../shared/ai-assets.types.js'
 import { OriginalVault } from './original-vault.js'
 import { attachmentFileName, createAttachmentCopy } from './attachment-file.js'
-import { scheduleAttachmentCopyExpiry } from '../utils/temp-hygiene.js'
+import { scheduleAttachmentCopyExpiry } from './temp-hygiene.js'
 import {
   acquireLinkedOriginal,
   stopLinkedOriginalTransfers,

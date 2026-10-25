@@ -59,8 +59,12 @@ vi.mock('../platform/hotkey/uiohook.js', () => ({
   uIOhook: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
   getUiohookAvailability: () => ({ available: false, error: 'Isolated fixture' }),
 }))
-vi.mock('../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
-vi.mock('../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback: vi.fn() }))
+vi.mock('../platform/security/permission-manager.js', () => ({
+  checkAccessibilityPermission: () => true,
+}))
+vi.mock('../platform/hotkey/browser-hotkey-fallback.js', () => ({
+  dispatchBrowserHotkeyFallback: vi.fn(),
+}))
 vi.mock('../modules/registry.js', () => ({
   isModuleEnabled: (id: string) => state.modules.has(id),
   listModuleInfos: () => [],
@@ -81,7 +85,10 @@ vi.mock('../platform/window/main-window.js', () => ({ resetMainWindowToDefault: 
 vi.mock('../store/app-settings-repository.js', () => ({
   getAppSettings: () => ({ altSpaceResetThreshold: 3 }),
 }))
-vi.mock('../utils/focus-manager.js', () => ({ show: state.showMain, hide: state.hideMain }))
+vi.mock('../platform/window/focus-manager.js', () => ({
+  show: state.showMain,
+  hide: state.hideMain,
+}))
 vi.mock('../platform/window/containers/popup-windows.js', () => ({
   showPromptWindow: state.showAssets,
 }))

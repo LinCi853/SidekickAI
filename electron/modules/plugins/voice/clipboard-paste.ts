@@ -15,8 +15,8 @@ import {
   typeText,
   insertTextLayered,
   ERR_MAC_ACCESSIBILITY_DENIED,
-} from '../../../utils/platform-actions.js'
-import type { InsertTextResult } from '../../../utils/platform-actions.js'
+} from '../../../platform/platform-actions.js'
+import type { InsertTextResult } from '../../../platform/platform-actions.js'
 
 /** 剪贴板恢复定时器（后台粘贴后延迟恢复用户原剪贴板内容） */
 let clipboardRestoreTimer: NodeJS.Timeout | null = null

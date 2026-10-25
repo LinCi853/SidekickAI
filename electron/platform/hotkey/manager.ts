@@ -33,8 +33,8 @@ import {
   type HotkeyLease,
 } from '../../../packages/desktop-common/hotkey-ownership.js'
 import { HotkeyInputState } from './input-state.js'
-import { dispatchBrowserHotkeyFallback } from '../../utils/browser-hotkey-fallback.js'
-import { checkAccessibilityPermission } from '../../utils/permission-manager.js'
+import { dispatchBrowserHotkeyFallback } from './browser-hotkey-fallback.js'
+import { checkAccessibilityPermission } from '../security/permission-manager.js'
 import { checkSystemHotkeyConflict } from '../../shared/system-hotkeys.js'
 import { normalizeAssetAccelerator } from '../../shared/asset-settings.js'
 import { UiohookKey, EventType, uIOhook, getUiohookAvailability } from './uiohook.js'

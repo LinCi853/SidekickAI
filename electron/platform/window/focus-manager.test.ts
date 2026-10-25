@@ -1,4 +1,4 @@
-// electron/utils/focus-manager.test.ts — 焦点服务回归测试
+// electron/platform/window/focus-manager.test.ts — 焦点服务回归测试
 //
 // 覆盖 2026-10 焦点跳错窗口修复的核心语义：
 //   1. 恢复目标只来自 show() 抢焦点前的本轮采集，绝不复用上一轮句柄；

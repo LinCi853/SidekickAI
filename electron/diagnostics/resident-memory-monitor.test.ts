@@ -20,7 +20,7 @@ vi.mock('electron', async () => {
     webContents: { getAllWebContents: fixture.allContents },
   }
 })
-vi.mock('../utils/win32-foreground.js', () => ({
+vi.mock('../platform/window/win32-foreground.js', () => ({
   trimWorkingSet: fixture.trim,
   markForegroundActivity: fixture.activity,
 }))

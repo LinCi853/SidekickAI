@@ -9,8 +9,8 @@
 
 import { ipcMain, shell, BrowserWindow, dialog, screen, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { markAskSavePath } from '../utils/ask-save-path.js'
-import { enterCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
+import { markAskSavePath } from './ask-save-path.js'
+import { enterCloudPc, exitCloudPc } from './cloud-pc.js'
 import fs from 'fs'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { ownedProfileSession, ownedWebContents } from '../platform/security/webview-owner.js'
@@ -30,7 +30,7 @@ import { bookmarkStore } from './bookmark-store.js'
 import { windowStore, MAIN_WINDOW_ID } from '../store/window-store.js'
 import { windowState } from '../platform/window/window-state.js'
 import { findWindowIdByWin } from '../platform/window/helpers.js'
-import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
+import { isTrackedFullscreen } from '../platform/window/fullscreen-tracker.js'
 import type { EffectScope } from '../modules/effect-scope.js'
 
 /** 由 main.ts 注入的依赖（避免循环引用） */

@@ -1,6 +1,6 @@
 import { startEditionSession, markEditionReady, bindEditionActivation } from './edition-runtime.js'
 import { activateApplicationWindow, isApplicationWindowLoading } from './application-activation.js'
-import * as applicationFocus from './utils/focus-manager.js'
+import * as applicationFocus from './platform/window/focus-manager.js'
 import { exportCliRequestPath, startupRestore } from './runtime-environment.js'
 import { restoreBackupCookies } from '../packages/backup-core/sessions.js'
 import {
@@ -18,12 +18,12 @@ import { registerProfileIPC, ensureDefaultProfiles } from './browser/profile-sto
 import { registerBlockRulesIPC, ensureDefaultBlockRules } from './browser/block-rules-store.js'
 import { registerPresetsIPC, ensureDefaultPresets } from './browser/preset-store.js'
 import { registerPdfProtocol } from './browser/pdf-protocol.js'
-import { setCloudPcHotkeyManager, isCloudPc } from './utils/cloud-pc.js'
+import { setCloudPcHotkeyManager, isCloudPc } from './browser/cloud-pc.js'
 import {
   setBrowserHotkeyFallback,
   tryForward,
   matchBrowserHotkeyFallback,
-} from './utils/browser-hotkey-fallback.js'
+} from './platform/hotkey/browser-hotkey-fallback.js'
 import { applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js'
 import { registerAppSettingsIPC } from './ipc/app-settings-ipc.js'
 import { getAppSettings } from './store/app-settings-repository.js'
@@ -50,8 +50,8 @@ import { registerHotkeyIpc } from './ipc/hotkey-ipc.js'
 import { registerSettingsIpc } from './ipc/settings-ipc.js'
 import { registerApplicationUpdates } from './updates/host.js'
 import { registerOnboardingIpc } from './ipc/onboarding-ipc.js'
-import { promptAccessibilityPermission } from './utils/permission-manager.js'
-import { registerPlatformInfoIPC } from './utils/platform-info.js'
+import { promptAccessibilityPermission } from './platform/security/permission-manager.js'
+import { registerPlatformInfoIPC } from './platform/platform-info.js'
 import { registerRuntimeProcessesIPC } from './diagnostics/runtime-processes.js'
 import { registerTabHibernationIPC } from './browser/tab-hibernate-store.js'
 import { createResidentMemoryMonitor } from './diagnostics/resident-memory-monitor.js'
@@ -62,10 +62,10 @@ import {
   maybeAutoCleanCache,
   hasActiveDownloads,
 } from './browser/download-handler.js'
-import { sweepStaleRuntimeTemp } from './utils/temp-hygiene.js'
+import { sweepStaleRuntimeTemp } from './assets/temp-hygiene.js'
 import { windowState } from './platform/window/window-state.js'
 import { windowStore } from './store/window-store.js'
-import { isTrackedFullscreen } from './utils/fullscreen-tracker.js'
+import { isTrackedFullscreen } from './platform/window/fullscreen-tracker.js'
 import { createMainWindow } from './platform/window/main-window.js'
 import { createBrowserWindow } from './browser/browser-window.js'
 import { createChatWindow } from './platform/window/containers/chat-window.js'
@@ -84,7 +84,7 @@ import {
 } from './platform/window/containers/onboarding-window.js'
 import { getSenderWindow, findWindowIdByWin } from './platform/window/helpers.js'
 import { initAppFocusTracker } from './modules/plugins/voice/preview-window.js'
-import { warmWin32ForegroundBridge } from './utils/win32-foreground.js'
+import { warmWin32ForegroundBridge } from './platform/window/win32-foreground.js'
 import {
   peekSttEngine,
   startBackgroundVoiceGated,
