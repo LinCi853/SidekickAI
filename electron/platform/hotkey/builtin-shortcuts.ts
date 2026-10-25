@@ -8,7 +8,7 @@
 
 import type { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
-import { getAppSettings } from '../../store/app-settings-store.js'
+import { getAppSettings } from '../../store/app-settings-repository.js'
 import * as focusManager from '../../utils/focus-manager.js'
 import { resetMainWindowToDefault } from '../window/main-window.js'
 import type { HotkeyAction } from './types.js'

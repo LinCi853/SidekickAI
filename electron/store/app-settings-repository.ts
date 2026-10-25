@@ -1,4 +1,5 @@
 import type { AppSettings } from '../shared/api/settings.api.js'
+export type { AppSettings }
 import { ALL_TOP_BAR_BUTTON_GROUPS } from '../shared/api/settings-options.js'
 import { getDefaultAppSettings } from './app-settings-defaults.js'
 import { getAppSettingsTable } from './module-state-store.js'
@@ -78,6 +79,11 @@ function validated(input: unknown, strict: boolean): Partial<AppSettings> {
 
 export function validateAppSettingsPatch(patch: unknown): Partial<AppSettings> {
   return validated(patch, true)
+}
+
+/** 读取应用设置（跨进程边界共享的只读入口，供两个进程方向的模块使用） */
+export function getAppSettings(): AppSettings {
+  return { ...readSettingsRaw() }
 }
 
 export function readSettingsRaw(): AppSettings {

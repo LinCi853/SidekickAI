@@ -14,7 +14,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../../shared/types.js'
 import { windowState } from '../../../platform/window/window-state.js'
-import { getAppSettings } from '../../../store/app-settings-store.js'
+import { getAppSettings } from '../../../store/app-settings-repository.js'
 import { promptStore } from '../prompt-library/prompt-store.js'
 import type { EffectScope } from '../../effect-scope.js'
 

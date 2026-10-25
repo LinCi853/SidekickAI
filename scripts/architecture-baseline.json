@@ -34,11 +34,6 @@
     },
     {
       "from": "electron/browser/download-handler.ts",
-      "to": "electron/store/app-settings-store.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/browser/download-handler.ts",
       "to": "electron/store/cache-maintenance.ts",
       "kind": "dynamic"
     },
@@ -53,13 +48,23 @@
       "kind": "dynamic"
     },
     {
+      "from": "electron/ipc/profile-shortcut-ipc.ts",
+      "to": "electron/browser/browser-window.ts",
+      "kind": "dynamic"
+    },
+    {
+      "from": "electron/ipc/profile-shortcut-ipc.ts",
+      "to": "electron/browser/profile-store.ts",
+      "kind": "dynamic"
+    },
+    {
       "from": "electron/ipc/window-control-ipc.ts",
       "to": "electron/browser/profile-store.ts",
       "kind": "value"
     },
     {
       "from": "electron/modules/hotkey-sync.ts",
-      "to": "electron/store/app-settings-store.ts",
+      "to": "electron/ipc/profile-shortcut-ipc.ts",
       "kind": "dynamic"
     },
     {
@@ -85,11 +90,6 @@
     {
       "from": "electron/platform/window/containers/advanced-panel-window.ts",
       "to": "electron/platform/window/window-size-helpers.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/platform/window/containers/advanced-panel-window.ts",
-      "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
@@ -133,11 +133,6 @@
       "kind": "value"
     },
     {
-      "from": "electron/platform/window/helpers.ts",
-      "to": "electron/store/app-settings-store.ts",
-      "kind": "value"
-    },
-    {
       "from": "electron/platform/window/main-window.ts",
       "to": "electron/platform/window/helpers.ts",
       "kind": "value"
@@ -145,11 +140,6 @@
     {
       "from": "electron/platform/window/main-window.ts",
       "to": "electron/platform/window/window-size-helpers.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/platform/window/main-window.ts",
-      "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     },
     {
@@ -161,46 +151,6 @@
       "from": "electron/platform/window/window-events.ts",
       "to": "electron/ipc/window-control-ipc.ts",
       "kind": "value"
-    },
-    {
-      "from": "electron/platform/window/window-size-helpers.ts",
-      "to": "electron/store/app-settings-store.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/browser/browser-window.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/browser/profile-store.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/modules/registry.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/platform/window/containers/popup-windows.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/store/backup-restore.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/store/cache-maintenance.ts",
-      "kind": "dynamic"
-    },
-    {
-      "from": "electron/store/app-settings-store.ts",
-      "to": "electron/store/proxy-helper.ts",
-      "kind": "dynamic"
     },
     {
       "from": "electron/store/backup-restore.ts",
@@ -255,11 +205,6 @@
     {
       "from": "electron/store/proxy-helper.ts",
       "to": "electron/browser/profile-store.ts",
-      "kind": "value"
-    },
-    {
-      "from": "electron/store/proxy-helper.ts",
-      "to": "electron/store/app-settings-store.ts",
       "kind": "value"
     }
   ],

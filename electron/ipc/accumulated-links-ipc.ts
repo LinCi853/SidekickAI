@@ -11,7 +11,7 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { accumulatedLinksStore, type AccumulatedLink } from '../store/accumulated-links-store.js'
-import { getAppSettings } from '../store/app-settings-store.js'
+import { getAppSettings } from '../store/app-settings-repository.js'
 
 /** 读取持久化模式开关：true=SQLite / false=内存 */
 function isPersistent(): boolean {

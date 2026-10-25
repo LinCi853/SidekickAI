@@ -27,7 +27,7 @@ vi.mock('./default-config.js', () => ({ getDefaultAppSettings: () => ({}) }))
 vi.mock('./chat-store.js', () => ({ getChatStore: () => ({ activityLogRecords: fixture.read }) }))
 vi.mock('./activity-log-export.js', () => ({ openActivityLogFolder: fixture.export }))
 vi.mock('../diagnostics/log-sources.js', () => ({ applicationLogSources: () => [] }))
-import { registerAppSettingsIPC } from './app-settings-store'
+import { registerAppSettingsIPC } from '../ipc/app-settings-ipc'
 import { appSettingsApi } from '../preload/appSettings'
 import { openLogsFolder } from '../../src/lib/electron-api/settings'
 import { IPC_CHANNELS } from '../shared/ipc-channels'

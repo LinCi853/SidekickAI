@@ -16,8 +16,10 @@ vi.mock('electron', () => ({
   dialog: { showSaveDialog: state.dialog },
   session: {},
 }))
-vi.mock('../store/app-settings-store.js', () => ({
+vi.mock('../store/app-settings-repository.js', () => ({
   getAppSettings: () => state.settings,
+}))
+vi.mock('../store/app-settings-store.js', () => ({
   updateAppSettings: vi.fn(),
 }))
 vi.mock('./profile-store.js', () => ({ profileStore: { list: () => [] } }))

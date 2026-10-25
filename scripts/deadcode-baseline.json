@@ -104,10 +104,6 @@
       "name": "scaleToOxyScale"
     },
     {
-      "file": "electron/store/app-settings-store.ts",
-      "name": "resetSettingsCacheForTest"
-    },
-    {
       "file": "electron/store/backup-restore.ts",
       "name": "PARTITION_CACHE_DIRS"
     },

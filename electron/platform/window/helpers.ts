@@ -21,7 +21,7 @@
 
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { accumulatedLinksStore } from '../../store/accumulated-links-store.js'
-import { getAppSettings } from '../../store/app-settings-store.js'
+import { getAppSettings } from '../../store/app-settings-repository.js'
 import { allowRemoteNavigation } from '../security/trusted-renderer.js'
 import { browserPorts } from '../browser-port.js'
 import { isBrowserWindowContents } from './renderer-loader.js'

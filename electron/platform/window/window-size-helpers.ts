@@ -6,7 +6,7 @@
 // 渲染层应直接 import 共享模块（electron/shared/window-size.ts），
 // 不要 import 本文件（依赖 electron-store 无法在渲染层运行）。
 
-import { getAppSettings } from '../../store/app-settings-store.js'
+import { getAppSettings } from '../../store/app-settings-repository.js'
 import type { UiScale } from '../../shared/window-size.js'
 
 // 重新导出共享纯函数与常量，方便主进程调用方单一 import 来源

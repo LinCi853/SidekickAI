@@ -55,6 +55,6 @@ export async function syncBrowserProfileShortcuts(): Promise<void> {
     console.log('[hotkey-sync] 浏览器模块关闭，每应用浏览器快捷键已全部注销')
     return
   }
-  const { reregisterProfileShortcuts } = await import('../store/app-settings-store.js')
+  const { reregisterProfileShortcuts } = await import('../ipc/profile-shortcut-ipc.js')
   await reregisterProfileShortcuts()
 }

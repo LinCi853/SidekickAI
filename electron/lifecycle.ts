@@ -3,7 +3,7 @@
 import { app } from 'electron'
 import { isImportingData } from './store/import-guard.js'
 import { abortAllAssetStreams } from './assets/asset-stream-activity.js'
-import { getAppSettings } from './store/app-settings-store.js'
+import { getAppSettings } from './store/app-settings-repository.js'
 import { getChatStore } from './store/chat-store.js'
 import { windowState } from './platform/window/window-state.js'
 import { IPC_CHANNELS } from './shared/types.js'

@@ -15,7 +15,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { writeFile, readFile } from 'fs/promises'
 import { getChatStore } from './chat-store.js'
-import { getAppSettings } from './app-settings-store.js'
+import { getAppSettings } from './app-settings-repository.js'
 import { showNotification } from '../notify.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { registerAiAssetIpc } from '../assets/asset-ipc.js'

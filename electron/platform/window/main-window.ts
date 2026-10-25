@@ -8,7 +8,7 @@ import { windowStore, MAIN_WINDOW_ID } from '../../store/window-store.js'
 import { isImportingData } from '../../store/import-guard.js'
 import { windowState } from './window-state.js'
 import * as focusManager from '../../utils/focus-manager.js'
-import { getAppSettings } from '../../store/app-settings-store.js'
+import { getAppSettings } from '../../store/app-settings-repository.js'
 import { forgetWindow as forgetPriorityWindow } from '../../diagnostics/tab-process-priority.js'
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import {

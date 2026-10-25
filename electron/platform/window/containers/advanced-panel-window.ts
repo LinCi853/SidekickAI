@@ -36,7 +36,7 @@ import {
   getUiScaleFromSettings,
   ADVANCED_PANEL_MIN_HEIGHT,
 } from '../window-size-helpers.js'
-import { getAppSettings } from '../../../store/app-settings-store.js'
+import { getAppSettings } from '../../../store/app-settings-repository.js'
 import { isLowMemoryMode } from '../../../store/low-memory-mode.js'
 import { isModuleEnabled } from '../../../modules/registry.js'
 import * as focusManager from '../../../utils/focus-manager.js'

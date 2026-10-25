@@ -10,7 +10,7 @@
 
 import { session, app, net, type Session } from 'electron'
 import { ProxyAgent, type Dispatcher } from 'undici'
-import { getAppSettings, type AppSettings } from './app-settings-store.js'
+import { getAppSettings, type AppSettings } from './app-settings-repository.js'
 import { profileStore } from '../browser/profile-store.js'
 import type { Profile, ProfileProxyConfig } from '../shared/types.js'
 

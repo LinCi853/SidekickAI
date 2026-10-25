@@ -123,7 +123,8 @@ export function registerSettingsIpc(scope?: EffectScope): void {
     assertTrustedRenderer(e)
     const normalized = normalizePopupOrigin(origin)
     if (!normalized) return
-    const { getAppSettings, updateAppSettings } = await import('../store/app-settings-store.js')
+    const { getAppSettings } = await import('../store/app-settings-repository.js')
+    const { updateAppSettings } = await import('../store/app-settings-store.js')
     const cfg = getAppSettings()
     const list = cfg.popupWhitelist ?? []
     if (!list.includes(normalized)) {

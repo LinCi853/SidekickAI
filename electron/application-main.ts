@@ -24,12 +24,9 @@ import {
   tryForward,
   matchBrowserHotkeyFallback,
 } from './utils/browser-hotkey-fallback.js'
-import {
-  registerAppSettingsIPC,
-  getAppSettings,
-  applyAutoLaunchSetting,
-  updateAppSettings,
-} from './store/app-settings-store.js'
+import { applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js'
+import { registerAppSettingsIPC } from './ipc/app-settings-ipc.js'
+import { getAppSettings } from './store/app-settings-repository.js'
 import { setNativeThemeSource } from './theme/native-theme-source.js'
 import { seedFromInstallConfig } from './store/install-config-seed.js'
 import { registerProxyAuthHandler } from './store/proxy-helper.js'

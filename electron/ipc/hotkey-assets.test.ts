@@ -78,7 +78,7 @@ vi.mock('../modules/hotkey-sync.js', () => ({
   syncBrowserProfileShortcuts: vi.fn(),
 }))
 vi.mock('../platform/window/main-window.js', () => ({ resetMainWindowToDefault: vi.fn() }))
-vi.mock('../store/app-settings-store.js', () => ({
+vi.mock('../store/app-settings-repository.js', () => ({
   getAppSettings: () => ({ altSpaceResetThreshold: 3 }),
 }))
 vi.mock('../utils/focus-manager.js', () => ({ show: state.showMain, hide: state.hideMain }))
