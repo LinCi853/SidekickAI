@@ -14,6 +14,16 @@
 
 验证区分源码、桌面和软件打包回归。处理缺陷先建立可观察的失败场景，完成修复后验证关键路径；涉及数据库时使用独立临时数据。文档改动检查链接、命令和现行事实。
 
+## 分层架构与门禁
+
+主进程代码按四级分层组织：一级是 platform 基础服务（window / hotkey / security 等），二级是 window 容器与内嵌浏览器域（electron/browser），三级是 modules/plugins 内置插件；入口与装配文件不受层约束。完整的层级、域与规则定义以 [contracts/architecture-layers.json](contracts/architecture-layers.json) 为单一事实来源，本节不复制其内容。
+
+三条机器门禁接入 `npm run verify`、`prebuild` 与 CI，违反即失败：
+
+- `architecture:check`（scripts/architecture-check.mjs）：校验分层导入、进程边界与依赖环。豁免记录在 scripts/architecture-baseline.json，为只减不增的棘轮；有意消除某条边后随本次修改删除对应条目，不让豁免累积。`layerCrossings` 必须保持为空。
+- `deadcode:check`（scripts/deadcode-check.mjs）：包装 knip 检查未使用文件、依赖、导出与类型。基线在 scripts/deadcode-baseline.json，同样只减不增；清理后用 `npm run deadcode:check -- --prune` 收紧。新死代码要么删除，要么在说明理由后显式入基线。
+- `format:check` 与 `lint:check`（Biome）：风格由 biome.json 统一（单引号、无分号、行宽 100），lint 启用 correctness 规则组。提交前 `npm run format`；为误报关规则改 biome.json 全局配置，不留行内豁免注释。
+
 ## 公共源码与文档
 
 产品版本以当前工作区 package.json 为准；共用品牌与路线身份由 packages/product-contract 管理。涉及共享软件代码时，核对 contracts/shared-source.json，并通过已有产品和共享检查；不要覆盖其他工作区的修改。
