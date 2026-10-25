@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["@types/adm-zip", "npm"],
+  "ignore": [
+    "src/lib/_empty.ts",
+    "packages/resource-contract/service-origin.d.mts",
+    "scripts/build-backup-cli.cjs",
+    "scripts/prepare-startup-helper.cjs",
+    "scripts/verify-edition-coexistence.cjs",
+    "scripts/verify-packaged-ui.cjs",
+    "scripts/verify-startup-helper.cjs",
+    "scripts/windows-executable-signing.cjs",
+    "scripts/fixtures/backup-recovery-runtime.cjs",
+    "scripts/fixtures/backup-snapshot-runtime.cjs"
+  ]
+}

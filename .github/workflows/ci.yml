@@ -44,5 +44,8 @@ jobs:
       - name: 依赖边界检查
         run: npm run test:architecture && npm run architecture:check
 
+      - name: 死代码检查
+        run: npm run deadcode:check
+
       - name: 构建（主进程 / preload / 渲染层）
         run: npm run build

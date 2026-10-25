@@ -1,0 +1,599 @@
+{
+  "schemaVersion": 1,
+  "files": [],
+  "dependencies": [],
+  "devDependencies": [],
+  "unlisted": [],
+  "unresolved": [
+    {
+      "file": "scripts/build-distribution.cjs",
+      "name": "./build-plugins.cjs"
+    }
+  ],
+  "exports": [
+    {
+      "file": "electron/assets/dom-messages.ts",
+      "name": "readDomMessages"
+    },
+    {
+      "file": "electron/assets/noise.ts",
+      "name": "captureSignature"
+    },
+    {
+      "file": "electron/browser/block-rules-store.ts",
+      "name": "getMatchingRules"
+    },
+    {
+      "file": "electron/browser/preset-store.ts",
+      "name": "getDefaultDesktopPreset"
+    },
+    {
+      "file": "electron/browser/preset-store.ts",
+      "name": "getDefaultMobilePreset"
+    },
+    {
+      "file": "electron/platform/security/file-crypto.ts",
+      "name": "decryptFile"
+    },
+    {
+      "file": "electron/platform/security/file-crypto.ts",
+      "name": "encryptFile"
+    },
+    {
+      "file": "electron/platform/window/app-icon.ts",
+      "name": "getLoadedWindowIconSource"
+    },
+    {
+      "file": "electron/platform/window/helpers.ts",
+      "name": "HISTORY_WINDOW_ID"
+    },
+    {
+      "file": "electron/platform/window/helpers.ts",
+      "name": "isBrowserWindowContents"
+    },
+    {
+      "file": "electron/platform/window/helpers.ts",
+      "name": "isDev"
+    },
+    {
+      "file": "electron/platform/window/helpers.ts",
+      "name": "resolveUserAgent"
+    },
+    {
+      "file": "electron/platform/window/window-size-helpers.ts",
+      "name": "calculateMinWidthByElements"
+    },
+    {
+      "file": "electron/platform/window/window-size-helpers.ts",
+      "name": "UI_SCALE_CONFIG"
+    },
+    {
+      "file": "electron/platform/window/window-size-helpers.ts",
+      "name": "updateAdvancedPanelMinWidth"
+    },
+    {
+      "file": "electron/platform/window/window-utils.ts",
+      "name": "resolveUserAgent"
+    },
+    {
+      "file": "electron/presets/devices.ts",
+      "name": "PRESETS"
+    },
+    {
+      "file": "electron/shared/background-policy.ts",
+      "name": "BROWSER_WINDOW_RETIREMENT_SECONDS"
+    },
+    {
+      "file": "electron/shared/background-policy.ts",
+      "name": "HIDDEN_RELEASE_DELAY_MS"
+    },
+    {
+      "file": "electron/shared/background-policy.ts",
+      "name": "WINDOW_RETIREMENT_SECONDS"
+    },
+    {
+      "file": "electron/shared/ipc-utils.ts",
+      "name": "requireSenderWindow"
+    },
+    {
+      "file": "electron/shared/window-size.ts",
+      "name": "calculateOxyMainWindowMinWidth"
+    },
+    {
+      "file": "electron/shared/window-size.ts",
+      "name": "scaleToOxyScale"
+    },
+    {
+      "file": "electron/store/app-settings-store.ts",
+      "name": "resetSettingsCacheForTest"
+    },
+    {
+      "file": "electron/store/backup-restore.ts",
+      "name": "PARTITION_CACHE_DIRS"
+    },
+    {
+      "file": "electron/store/backup/paths.ts",
+      "name": "pathMatchesDataRoot"
+    },
+    {
+      "file": "electron/store/backup/paths.ts",
+      "name": "sameResolvedPath"
+    },
+    {
+      "file": "electron/store/backup/paths.ts",
+      "name": "strictRootError"
+    },
+    {
+      "file": "electron/store/backup/verify.ts",
+      "name": "reportedCategories"
+    },
+    {
+      "file": "electron/store/backup/verify.ts",
+      "name": "verifyExportTreeUnchanged"
+    },
+    {
+      "file": "electron/store/default-config.ts",
+      "name": "getDefaultAppSettings"
+    },
+    {
+      "file": "electron/store/default-config.ts",
+      "name": "getDefaultPromptTemplate"
+    },
+    {
+      "file": "electron/store/default-config.ts",
+      "name": "PREF_KEYS"
+    },
+    {
+      "file": "electron/store/default-config.ts",
+      "name": "resolveDefaultDesktopPreset"
+    },
+    {
+      "file": "electron/store/default-config.ts",
+      "name": "resolveDefaultMobilePreset"
+    },
+    {
+      "file": "electron/store/device-id.ts",
+      "name": "getDeviceIdShort"
+    },
+    {
+      "file": "electron/store/export-cli.ts",
+      "name": "defaultResultPath"
+    },
+    {
+      "file": "electron/store/export-cli.ts",
+      "name": "parseExportCliArgv"
+    },
+    {
+      "file": "electron/store/install-config-seed.ts",
+      "name": "stampInstallConfigHashAfterImport"
+    },
+    {
+      "file": "electron/store/store-paths.ts",
+      "name": "ensureDefaults"
+    },
+    {
+      "file": "electron/store/store-paths.ts",
+      "name": "getModuleDirname"
+    },
+    {
+      "file": "electron/utils/focus-manager.ts",
+      "name": "untrack"
+    },
+    {
+      "file": "electron/utils/platform-actions.ts",
+      "name": "getForegroundWindowHandle"
+    },
+    {
+      "file": "electron/utils/platform-actions.ts",
+      "name": "platformActions"
+    },
+    {
+      "file": "electron/utils/platform-actions.ts",
+      "name": "setForegroundWindowByHandle"
+    },
+    {
+      "file": "packages/backup-core/context.ts",
+      "name": "backupSourceRoot"
+    },
+    {
+      "file": "packages/backup-core/format.ts",
+      "name": "extractBackupArchive"
+    },
+    {
+      "file": "packages/backup-core/import.ts",
+      "name": "backupFingerprint"
+    },
+    {
+      "file": "packages/desktop-common/edition-session.ts",
+      "name": "prepareEditionSession"
+    },
+    {
+      "file": "packages/desktop-common/running-application.ts",
+      "name": "duplicateVersionNotice"
+    },
+    {
+      "file": "packages/product-contract/index.ts",
+      "name": "editionId"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "ArrowLeftIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "ArrowRightIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "BookmarkIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "HomeIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "MenuIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "PlusIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "RefreshIcon"
+    },
+    {
+      "file": "src/components/icons/index.tsx",
+      "name": "SettingsIcon"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "Badge"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "HotkeyRecorder"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "WindowControls"
+    },
+    {
+      "file": "src/hooks/useWebViewControl.ts",
+      "name": "clearConversationInWebview"
+    },
+    {
+      "file": "src/hooks/useWebViewControl.ts",
+      "name": "injectEnterSendBehavior"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "buildGamepadFrame"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "deserializeFrame"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "serializeFrame"
+    },
+    {
+      "file": "src/lib/gamepad-input/input-frame.ts",
+      "name": "deserializeFrame"
+    },
+    {
+      "file": "src/lib/gamepad-input/input-frame.ts",
+      "name": "serializeFrame"
+    },
+    {
+      "file": "src/lib/oxy-config.ts",
+      "name": "OXY_OVERLAYS"
+    },
+    {
+      "file": "src/lib/oxy-config.ts",
+      "name": "OXY_WINDOWS"
+    },
+    {
+      "file": "src/lib/oxy-design-system.ts",
+      "name": "detectUiScale"
+    },
+    {
+      "file": "src/lib/oxy-layout-engine.ts",
+      "name": "computeTabBarHeight"
+    },
+    {
+      "file": "src/lib/oxy-override-store.ts",
+      "name": "clearOverride"
+    },
+    {
+      "file": "src/pages/BrowserView/utils/favicon-placeholder.ts",
+      "name": "generatePlaceholderSvg"
+    },
+    {
+      "file": "src/pages/CodeBlock.tsx",
+      "name": "default"
+    },
+    {
+      "file": "src/pages/MainView/utils.ts",
+      "name": "simpleHash"
+    },
+    {
+      "file": "src/pages/MessageBubble.tsx",
+      "name": "default"
+    }
+  ],
+  "types": [
+    {
+      "file": "electron/platform/window/window-size-helpers.ts",
+      "name": "MinWidthOptions"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "BrowserAPIRef"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OnAdvancedPanelNavigateCallback"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OnNewTabCallback"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OnPopupDeniedCallback"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OnWebviewPopupUrlCallback"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OnWindowHiddenCallback"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OnWindowShownCallback"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OpenAdvancedPanelWindowFn"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OpenAiAppEditorFn"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "OpenSettingsWindowFn"
+    },
+    {
+      "file": "electron/shared/api/profile-window.api.ts",
+      "name": "ToggleAdvancedPanelWindowFn"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "BroadcastUiVersionChangedFn"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "OnAppSettingsChangedCallback"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "OnPromptInjectResultCallback"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "OnUiScaleChangedCallback"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "OnUiVersionChangedCallback"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "OnWebviewHotkeyCallback"
+    },
+    {
+      "file": "electron/shared/api/settings.api.ts",
+      "name": "SendPromptInjectResultFn"
+    },
+    {
+      "file": "electron/shared/api/voice.api.ts",
+      "name": "OnPreviewHideCallback"
+    },
+    {
+      "file": "electron/shared/api/voice.api.ts",
+      "name": "OnPreviewUpdateCallback"
+    },
+    {
+      "file": "electron/shared/api/voice.api.ts",
+      "name": "OnVoiceInjectAndSendCallback"
+    },
+    {
+      "file": "electron/shared/api/voice.api.ts",
+      "name": "OnVoiceRecordStartCallback"
+    },
+    {
+      "file": "electron/shared/api/voice.api.ts",
+      "name": "OnVoiceRecordStopCallback"
+    },
+    {
+      "file": "electron/shared/api/voice.api.ts",
+      "name": "SendVoiceRecordDataFn"
+    },
+    {
+      "file": "electron/shared/ipc-utils.ts",
+      "name": "IpcErrorResponse"
+    },
+    {
+      "file": "electron/shared/module-manifest.types.ts",
+      "name": "AdvancedPanelTabKey"
+    },
+    {
+      "file": "electron/store/backup-restore.ts",
+      "name": "ExportResult"
+    },
+    {
+      "file": "electron/store/backup-restore.ts",
+      "name": "ExportSizeEstimate"
+    },
+    {
+      "file": "electron/store/backup-restore.ts",
+      "name": "ExportStrictOptions"
+    },
+    {
+      "file": "electron/store/backup-restore.ts",
+      "name": "ImportResult"
+    },
+    {
+      "file": "electron/store/backup/types.ts",
+      "name": "ExportResult"
+    },
+    {
+      "file": "electron/store/backup/types.ts",
+      "name": "ExportTreeTuple"
+    },
+    {
+      "file": "electron/store/default-config.ts",
+      "name": "DefaultAppSettings"
+    },
+    {
+      "file": "packages/backup-core/format.ts",
+      "name": "CookieSnapshot"
+    },
+    {
+      "file": "packages/product-contract/index.ts",
+      "name": "ProductEdition"
+    },
+    {
+      "file": "src/components/ui/Combobox.tsx",
+      "name": "ComboboxPropsType"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "BadgeProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "BadgeVariant"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ButtonProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ButtonVariant"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ChipProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ComboboxProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ConfirmDialogProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "EmptyStateProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "FormRowProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "HotkeyRecorderProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "IconButtonProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "IconButtonVariant"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ModalProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "OtherHotkey"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "PinToggleButtonProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "SectionTitleProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "SegmentedControlProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "SegmentedOption"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "TitleBarProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "ToggleProps"
+    },
+    {
+      "file": "src/components/ui/index.ts",
+      "name": "WindowControlsProps"
+    },
+    {
+      "file": "src/hooks/useSettingsData.ts",
+      "name": "HotkeysState"
+    },
+    {
+      "file": "src/hooks/useSettingsData.ts",
+      "name": "PresetsState"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "GamepadCollectorOptions"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "GamepadConnection"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "GamepadInputFrame"
+    },
+    {
+      "file": "src/lib/gamepad-input/index.ts",
+      "name": "InputFrame"
+    }
+  ],
+  "duplicates": [
+    {
+      "file": "src/components/AppErrorBoundary.tsx",
+      "name": "AppErrorBoundary|default"
+    },
+    {
+      "file": "src/pages/CodeBlock.tsx",
+      "name": "CodeBlock|default"
+    },
+    {
+      "file": "src/pages/MessageBubble.tsx",
+      "name": "MessageBubble|default"
+    }
+  ]
+}
