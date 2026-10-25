@@ -104,7 +104,11 @@ function sendHttpRequest(
     if (settled) return
     settled = true
     if (timer) clearTimeout(timer)
-    try { req.abort() } catch { /* ignore */ }
+    try {
+      req.abort()
+    } catch {
+      /* ignore */
+    }
     resolve(value)
   }
 
@@ -120,9 +124,7 @@ function sendHttpRequest(
     res.on('end', () => {
       const data = Buffer.concat(chunks).toString('utf8')
       if (statusCode !== 200) {
-        console.error(
-          `[SttEngine] ${tag} 返回 ${statusCode}: ${data.slice(0, ERROR_LOG_MAX_LEN)}`,
-        )
+        console.error(`[SttEngine] ${tag} 返回 ${statusCode}: ${data.slice(0, ERROR_LOG_MAX_LEN)}`)
         finish('')
         return
       }
@@ -136,7 +138,9 @@ function sendHttpRequest(
 
   req.on('error', (err: Error) => {
     // 记录详细错误便于诊断 ERR_INVALID_ARGUMENT 等问题
-    console.error(`[SttEngine] ${tag} 请求失败: ${err.message} (code: ${(err as any).code ?? 'unknown'})`)
+    console.error(
+      `[SttEngine] ${tag} 请求失败: ${err.message} (code: ${(err as any).code ?? 'unknown'})`,
+    )
     finish('')
   })
 
@@ -145,9 +149,12 @@ function sendHttpRequest(
     const bodyBuf = typeof body === 'string' ? Buffer.from(body, 'utf-8') : body
     // 调试日志：输出 body 大小和 base64 data URL 长度，便于排查超长请求
     if (process.env.NODE_ENV !== 'production' || process.env.VOICE_DEBUG) {
-      const dataUrlMatch = typeof body === 'string' ? body.match(/data:audio\/wav;base64,([^"]*)/) : null
+      const dataUrlMatch =
+        typeof body === 'string' ? body.match(/data:audio\/wav;base64,([^"]*)/) : null
       if (dataUrlMatch) {
-        console.log(`[SttEngine] ${tag} 发送请求: url=${req}, body 总长=${bodyBuf.length} 字节, base64 音频长度=${dataUrlMatch[1].length}`)
+        console.log(
+          `[SttEngine] ${tag} 发送请求: url=${req}, body 总长=${bodyBuf.length} 字节, base64 音频长度=${dataUrlMatch[1].length}`,
+        )
       } else {
         console.log(`[SttEngine] ${tag} 发送请求: body 总长=${bodyBuf.length} 字节`)
       }

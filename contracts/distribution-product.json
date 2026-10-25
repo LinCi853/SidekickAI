@@ -2,19 +2,12 @@
   "editions": {
     "concept": {
       "cloudResources": false,
-      "dataDirectories": [
-        "sidekickai-opensource"
-      ],
+      "dataDirectories": ["sidekickai-opensource"],
       "directory": "SidekickAI-Concept",
       "label": "概念版",
-      "legacyDirectories": [
-        "SidekickAI-OpenSource"
-      ],
+      "legacyDirectories": ["SidekickAI-OpenSource"],
       "legacyExecutable": "SidekickAI-OpenSource.exe",
-      "packageKinds": [
-        "installer",
-        "portable"
-      ],
+      "packageKinds": ["installer", "portable"],
       "packageName": "sidekickai-opensource",
       "registryKey": "SidekickAI-OpenSource",
       "requiredFiles": [
@@ -43,18 +36,12 @@
     },
     "community": {
       "cloudResources": true,
-      "dataDirectories": [
-        "sidekick-ai",
-        "ai-window",
-        "SidekickAI"
-      ],
+      "dataDirectories": ["sidekick-ai", "ai-window", "SidekickAI"],
       "directory": "SidekickAI",
       "label": "社区版",
       "legacyDirectories": [],
       "legacyExecutable": "SidekickAI.exe",
-      "packageKinds": [
-        "installer"
-      ],
+      "packageKinds": ["installer"],
       "packageName": "sidekick-ai",
       "registryKey": "SidekickAI",
       "requiredFiles": [
@@ -94,15 +81,8 @@
   "identityCarrier": "electron-asar",
   "icon": "resources/product-icon.ico",
   "dataProbe": {
-    "required": [
-      "settings.db"
-    ],
-    "anyOf": [
-      "chat.db",
-      "whiteboard.db",
-      "notes.db",
-      "injection-history.json"
-    ]
+    "required": ["settings.db"],
+    "anyOf": ["chat.db", "whiteboard.db", "notes.db", "injection-history.json"]
   },
   "appExportHook": "--export-user-data"
 }

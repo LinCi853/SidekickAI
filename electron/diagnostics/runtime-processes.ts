@@ -1,6 +1,10 @@
 import { app, BrowserWindow, ipcMain, webContents, type ProcessMetric } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import type { RuntimeProcessRole, RuntimeProcessSnapshot, RuntimeProcessTarget } from '../shared/runtime-processes.js'
+import type {
+  RuntimeProcessRole,
+  RuntimeProcessSnapshot,
+  RuntimeProcessTarget,
+} from '../shared/runtime-processes.js'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { readPrivateWorkingSetBytes } from './private-working-set.js'
 
@@ -12,7 +16,12 @@ function processTargets(): Map<number, RuntimeProcessTarget[]> {
   const add = (pid: number, target: RuntimeProcessTarget) => {
     if (pid <= 0) return
     const entries = targets.get(pid) ?? []
-    if (!entries.some(entry => entry.webContentsId === target.webContentsId && entry.kind === target.kind)) entries.push(target)
+    if (
+      !entries.some(
+        (entry) => entry.webContentsId === target.webContentsId && entry.kind === target.kind,
+      )
+    )
+      entries.push(target)
     targets.set(pid, entries)
   }
   for (const contents of webContents.getAllWebContents()) {
@@ -25,7 +34,11 @@ function processTargets(): Map<number, RuntimeProcessTarget[]> {
       const window = BrowserWindow.fromWebContents(host)
       let title = contents.getTitle().trim().slice(0, 200)
       if (!title && guest) {
-        try { title = new URL(contents.getURL()).hostname } catch { /* A guest may not have navigated yet. */ }
+        try {
+          title = new URL(contents.getURL()).hostname
+        } catch {
+          /* A guest may not have navigated yet. */
+        }
       }
       const target: RuntimeProcessTarget = {
         webContentsId: contents.id,
@@ -42,7 +55,9 @@ function processTargets(): Map<number, RuntimeProcessTarget[]> {
           if (frame.osProcessId !== pid) add(frame.osProcessId, { ...target, kind: 'subframe' })
         }
       }
-    } catch { /* Web contents can disappear or change processes during a snapshot. */ }
+    } catch {
+      /* Web contents can disappear or change processes during a snapshot. */
+    }
   }
   return targets
 }
@@ -57,9 +72,9 @@ function processRole(metric: ProcessMetric, targets: RuntimeProcessTarget[]): Ru
   if (metric.type === 'GPU') return 'gpu'
   if (metric.type === 'Tab') {
     if (!targets.length) return 'renderer'
-    const hasWindow = targets.some(target => target.kind === 'window')
-    const hasPage = targets.some(target => target.kind === 'webpage')
-    const hasSubframe = targets.some(target => target.kind === 'subframe')
+    const hasWindow = targets.some((target) => target.kind === 'window')
+    const hasPage = targets.some((target) => target.kind === 'webpage')
+    const hasSubframe = targets.some((target) => target.kind === 'subframe')
     // 界面进程里另起进程的跨源子框架（OOPIF）仍属界面，不计入网页预算；
     // 真正的网页面与界面同进程时才升格为 mixed。
     if (hasWindow) return hasPage ? 'mixed' : 'interface'
@@ -81,7 +96,7 @@ const nonnegative = (value: number | undefined): number | null =>
 
 export async function getRuntimeProcessSnapshot(): Promise<RuntimeProcessSnapshot> {
   const targets = processTargets()
-  const processes = app.getAppMetrics().map(metric => {
+  const processes = app.getAppMetrics().map((metric) => {
     const associated = targets.get(metric.pid) ?? []
     // 含共享页工作集仅作专用工作集不可用时的回退，避免设置页在查询失败时整列变空。
     const memory = nonnegative(metric.memory.workingSetSize)
@@ -95,17 +110,22 @@ export async function getRuntimeProcessSnapshot(): Promise<RuntimeProcessSnapsho
       memoryBytes: memory === null ? null : memory * 1024,
     }
   })
-  const privateWorkingSet = await readPrivateWorkingSetBytes(processes.map(item => item.pid)).catch(() => new Map<number, number>())
+  const privateWorkingSet = await readPrivateWorkingSetBytes(
+    processes.map((item) => item.pid),
+  ).catch(() => new Map<number, number>())
   for (const item of processes) {
     const bytes = privateWorkingSet?.get(item.pid)
     if (typeof bytes === 'number') item.memoryBytes = bytes
   }
-  processes.sort((left, right) => Number(right.role === 'main') - Number(left.role === 'main') || left.pid - right.pid)
+  processes.sort(
+    (left, right) =>
+      Number(right.role === 'main') - Number(left.role === 'main') || left.pid - right.pid,
+  )
   return { capturedAt: Date.now(), processes }
 }
 
 export function registerRuntimeProcessesIPC(): void {
-  ipcMain.handle(IPC_CHANNELS.RUNTIME_PROCESSES_GET, event => {
+  ipcMain.handle(IPC_CHANNELS.RUNTIME_PROCESSES_GET, (event) => {
     assertTrustedRenderer(event)
     return getRuntimeProcessSnapshot()
   })

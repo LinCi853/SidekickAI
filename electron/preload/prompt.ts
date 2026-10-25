@@ -20,7 +20,8 @@ export const promptApi = {
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_DELETE, id),
     exportPrompts: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_EXPORT),
     importPrompts: () => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_IMPORT),
-    openWindow: (request?: AssetNavigation) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_OPEN_WINDOW, request),
+    openWindow: (request?: AssetNavigation) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROMPT_OPEN_WINDOW, request),
     navigation: () => ipcRenderer.invoke(IPC_CHANNELS.ASSET_NAVIGATION),
     onNavigate: (callback: (request: AssetNavigationEvent) => void) => {
       const handler = (_event: unknown, request: AssetNavigationEvent) => callback(request)
@@ -28,7 +29,8 @@ export const promptApi = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.ASSET_NAVIGATION, handler)
     },
     // 需求 1：传递完整 PromptTemplate，由主窗口渲染层在 webview 上下文中组合后注入
-    requestInject: (template: PromptTemplate) => ipcRenderer.invoke(IPC_CHANNELS.PROMPT_INJECT_REQUEST, template),
+    requestInject: (template: PromptTemplate) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROMPT_INJECT_REQUEST, template),
   },
   // 注入历史管理（需求 2：注入预览 + Jaccard 去重）
   injection: {
@@ -47,10 +49,8 @@ export const promptApi = {
   onPromptInjectResult: (
     callback: (result: { success: boolean; platformName?: string }) => void,
   ) => {
-    const handler = (
-      _e: unknown,
-      result: { success: boolean; platformName?: string },
-    ) => callback(result)
+    const handler = (_e: unknown, result: { success: boolean; platformName?: string }) =>
+      callback(result)
     ipcRenderer.on(IPC_CHANNELS.PROMPT_INJECT_RESULT, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.PROMPT_INJECT_RESULT, handler)
   },

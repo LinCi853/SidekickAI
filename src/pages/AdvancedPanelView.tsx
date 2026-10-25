@@ -10,10 +10,10 @@
    - 主进程通过 'advancedPanel:navigate' 事件通知切换 tab/provider（单例窗口复用时）
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import WindowResizeHandles from '../components/WindowResizeHandles';
-import { useChatStore } from '../store/useChatStore';
-import { useModuleStore } from '../store/useModuleStore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import WindowResizeHandles from '../components/WindowResizeHandles'
+import { useChatStore } from '../store/useChatStore'
+import { useModuleStore } from '../store/useModuleStore'
 import {
   minimizeWindow,
   closeCurrentWindow,
@@ -21,23 +21,23 @@ import {
   pinCurrentWindow,
   getAppSettings,
   onAppSettingsChanged,
-} from '../lib/electron-api';
-import { IconButton, SegmentedControl, TitleBar } from '../components/ui';
-import { AppErrorBoundary } from '../components/AppErrorBoundary';
-import { GearIcon } from '../components/icons';
-import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel';
-import { ChatTab } from './AdvancedPanelChatTab';
-import WhiteboardView from './WhiteboardView';
-import NotesView from './NotesView';
-import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
-import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { useShortcutRegistry, type ShortcutEntry } from '../hooks/useShortcutRegistry';
-import ShortcutHelp from '../components/ShortcutHelp';
-import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
-import './ChatBubble.css';
-import './AdvancedPanelView.css';
+} from '../lib/electron-api'
+import { IconButton, SegmentedControl, TitleBar } from '../components/ui'
+import { AppErrorBoundary } from '../components/AppErrorBoundary'
+import { GearIcon } from '../components/icons'
+import AdvancedPanelSettingsPanel from '../components/AdvancedPanelSettingsPanel'
+import { ChatTab } from './AdvancedPanelChatTab'
+import WhiteboardView from './WhiteboardView'
+import NotesView from './NotesView'
+import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned'
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow'
+import { useShortcutRegistry, type ShortcutEntry } from '../hooks/useShortcutRegistry'
+import ShortcutHelp from '../components/ShortcutHelp'
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore'
+import './ChatBubble.css'
+import './AdvancedPanelView.css'
 
-type TabKey = string;
+type TabKey = string
 
 /** 内置 tab 注册表（模块 ID → tab key + label） */
 const BUILTIN_TAB_REGISTRY: Record<string, { key: string; label: string }> = {
@@ -48,197 +48,270 @@ const BUILTIN_TAB_REGISTRY: Record<string, { key: string; label: string }> = {
 
 /** 从 URL 查询参数读取初始 tab */
 function readInitialTab(): TabKey {
-  if (typeof window === 'undefined') return 'chat';
-  const t = new URLSearchParams(window.location.search).get('tab');
-  return t ?? 'chat';
+  if (typeof window === 'undefined') return 'chat'
+  const t = new URLSearchParams(window.location.search).get('tab')
+  return t ?? 'chat'
 }
 
 /** 从 URL 查询参数读取初始 providerId */
 function readInitialProviderId(): string | null {
-  if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get('provider');
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get('provider')
 }
 
 export default function AdvancedPanelView() {
-  const [activeTab, setActiveTab] = useState<TabKey>(readInitialTab);
-  const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
-  const beforeLeaveRef = useRef<((commit: () => void) => Promise<void>) | null>(null);
-  const registerBeforeLeave = useCallback((guard: ((commit: () => void) => Promise<void>) | null) => {
-    beforeLeaveRef.current = guard;
-  }, []);
+  const [activeTab, setActiveTab] = useState<TabKey>(readInitialTab)
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
+  const beforeLeaveRef = useRef<((commit: () => void) => Promise<void>) | null>(null)
+  const registerBeforeLeave = useCallback(
+    (guard: ((commit: () => void) => Promise<void>) | null) => {
+      beforeLeaveRef.current = guard
+    },
+    [],
+  )
   const requestTab = useCallback((next: TabKey, after?: () => void) => {
     const commit = () => {
-      activeTabRef.current = next;
-      setActiveTab(next);
-      after?.();
-    };
-    if (next !== activeTabRef.current && beforeLeaveRef.current) {
-      void beforeLeaveRef.current(commit).catch((error) => console.error('[AdvancedPanel] leave failed:', error));
-    } else {
-      commit();
+      activeTabRef.current = next
+      setActiveTab(next)
+      after?.()
     }
-  }, []);
+    if (next !== activeTabRef.current && beforeLeaveRef.current) {
+      void beforeLeaveRef
+        .current(commit)
+        .catch((error) => console.error('[AdvancedPanel] leave failed:', error))
+    } else {
+      commit()
+    }
+  }, [])
   // 模块门控：自定义对话 / 白板 / 笔记模块关闭时隐藏对应 tab
   // 注意：不能用 (s) => s.isEnabled 作为 selector（函数引用恒定，zustand 不会触发重渲染）；
   // 改为订阅 modules 数组派生 enabled 集合，模块状态变化时组件必然重渲染。
-  const modules = useModuleStore((s) => s.modules);
-  const enabledModuleIds = useMemo(() => modules.filter((m) => m.enabled).map((m) => m.id), [modules]);
-  const modulesInitialized = useModuleStore((s) => s.initialized);
-  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
+  const modules = useModuleStore((s) => s.modules)
+  const enabledModuleIds = useMemo(
+    () => modules.filter((m) => m.enabled).map((m) => m.id),
+    [modules],
+  )
+  const modulesInitialized = useModuleStore((s) => s.initialized)
+  const moduleEnabled = (id: string) => enabledModuleIds.includes(id)
 
   // tab 注册表：合并内置 tab 和插件声明的 advancedPanelTab
   const tabRegistry = useMemo(() => {
-    const reg: Record<string, { moduleId: string; label: string }> = {};
+    const reg: Record<string, { moduleId: string; label: string }> = {}
     // 内置 tab
     for (const [moduleId, tab] of Object.entries(BUILTIN_TAB_REGISTRY)) {
-      reg[tab.key] = { moduleId, label: tab.label };
+      reg[tab.key] = { moduleId, label: tab.label }
     }
     // 插件 tab（从 module info 的 advancedPanelTab 字段读取）
     for (const m of modules) {
       if (m.advancedPanelTab && !reg[m.advancedPanelTab.key]) {
-        reg[m.advancedPanelTab.key] = { moduleId: m.id, label: m.advancedPanelTab.label };
+        reg[m.advancedPanelTab.key] = { moduleId: m.id, label: m.advancedPanelTab.label }
       }
     }
-    return reg;
-  }, [modules]);
+    return reg
+  }, [modules])
 
   const availableTabs = useMemo<TabKey[]>(() => {
-    if (!modulesInitialized) return Object.keys(tabRegistry);
+    if (!modulesInitialized) return Object.keys(tabRegistry)
     return Object.entries(tabRegistry)
       .filter(([, entry]) => enabledModuleIds.includes(entry.moduleId))
-      .map(([key]) => key);
-  }, [tabRegistry, enabledModuleIds, modulesInitialized]);
-  const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } = useWindowMaximizedAndPinned();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const initialProviderId = useMemo(() => readInitialProviderId(), []);
+      .map(([key]) => key)
+  }, [tabRegistry, enabledModuleIds, modulesInitialized])
+  const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } =
+    useWindowMaximizedAndPinned()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const initialProviderId = useMemo(() => readInitialProviderId(), [])
   useEffect(() => {
     const update = () => {
-      const params = new URLSearchParams(window.location.search);
-      params.set('tab', activeTab);
-      const provider = useChatStore.getState().currentProviderId;
-      if (activeTab === 'chat' && provider) params.set('provider', provider);
-      else params.delete('provider');
-      const search = '?' + params.toString();
-      if (search !== window.location.search) window.history.replaceState(window.history.state, '', search + window.location.hash);
-    };
-    update();
-    return useChatStore.subscribe(update);
-  }, [activeTab]);
+      const params = new URLSearchParams(window.location.search)
+      params.set('tab', activeTab)
+      const provider = useChatStore.getState().currentProviderId
+      if (activeTab === 'chat' && provider) params.set('provider', provider)
+      else params.delete('provider')
+      const search = '?' + params.toString()
+      if (search !== window.location.search)
+        window.history.replaceState(window.history.state, '', search + window.location.hash)
+    }
+    update()
+    return useChatStore.subscribe(update)
+  }, [activeTab])
 
   // 白板应用层侧边栏显隐（默认 false；Excalidraw 无内置多页面 UI，sidebar 是多白板管理入口）
   // 设置面板关闭时重新读取，使设置变更立即生效
-  const [whiteboardSidebarVisible, setWhiteboardSidebarVisible] = useState(false);
+  const [whiteboardSidebarVisible, setWhiteboardSidebarVisible] = useState(false)
   useEffect(() => {
     void getAppSettings()
       .then((cfg) => setWhiteboardSidebarVisible(cfg.whiteboardSidebarVisible ?? false))
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+  }, [])
 
   // 监听主进程的 navigate 事件（单例窗口复用时切换 tab/provider）
   useEffect(() => {
     return onAdvancedPanelNavigate((payload) => {
       requestTab(payload.tab, () => {
-        if (payload.providerId) useChatStore.getState().setCurrentProvider(payload.providerId);
-      });
-    });
-  }, [requestTab]);
+        if (payload.providerId) useChatStore.getState().setCurrentProvider(payload.providerId)
+      })
+    })
+  }, [requestTab])
 
   // Ctrl+1/2/3、Alt+1/2/3、Ctrl+Tab、Ctrl+Shift+Tab 切换进阶面板标签
   // 输入框内也生效（可通过设置关闭，立即生效）
   // 注意：切换范围只含已启用模块的 tab（availableTabs），避免切到已关闭模块导致空白
-  const tabOrder: TabKey[] = availableTabs;
-  const tabSwitchRef = useRef(true);
-  const [tabSwitchShortcuts, setTabSwitchShortcuts] = useState(true);
+  const tabOrder: TabKey[] = availableTabs
+  const tabSwitchRef = useRef(true)
+  const [tabSwitchShortcuts, setTabSwitchShortcuts] = useState(true)
   useEffect(() => {
-    void getAppSettings().then((cfg) => {
-      tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false;
-      setTabSwitchShortcuts(cfg.advancedPanelTabSwitchShortcuts !== false);
-    }).catch(() => {});
+    void getAppSettings()
+      .then((cfg) => {
+        tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false
+        setTabSwitchShortcuts(cfg.advancedPanelTabSwitchShortcuts !== false)
+      })
+      .catch(() => {})
     const off = onAppSettingsChanged((cfg) => {
-      tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false;
-      setTabSwitchShortcuts(cfg.advancedPanelTabSwitchShortcuts !== false);
-    });
-    return off;
-  }, []);
+      tabSwitchRef.current = cfg.advancedPanelTabSwitchShortcuts !== false
+      setTabSwitchShortcuts(cfg.advancedPanelTabSwitchShortcuts !== false)
+    })
+    return off
+  }, [])
 
   // 注册即声明：上方实现的面板标签切换键位 + 自定义 Ctrl+W 关窗
   useRegisterShortcutDocs('advanced-panel', [
-    { id: 'advanced-panel.tab-switch', keys: 'Ctrl + 1/2/3 或 Alt + 1/2/3', action: '切换到第 N 个面板标签（按已启用模块顺序）', category: 'page', disabled: !tabSwitchShortcuts },
-    { id: 'advanced-panel.tab-cycle', keys: 'Ctrl + Tab / Ctrl + Shift + Tab', action: '向前/向后循环面板标签', category: 'page', disabled: !tabSwitchShortcuts },
+    {
+      id: 'advanced-panel.tab-switch',
+      keys: 'Ctrl + 1/2/3 或 Alt + 1/2/3',
+      action: '切换到第 N 个面板标签（按已启用模块顺序）',
+      category: 'page',
+      disabled: !tabSwitchShortcuts,
+    },
+    {
+      id: 'advanced-panel.tab-cycle',
+      keys: 'Ctrl + Tab / Ctrl + Shift + Tab',
+      action: '向前/向后循环面板标签',
+      category: 'page',
+      disabled: !tabSwitchShortcuts,
+    },
     { id: 'window.close', keys: 'Ctrl + W', action: '关闭面板窗口', category: 'page' },
-  ]);
+  ])
 
   // 面板标签切换并入 useShortcutRegistry（与浏览器/主窗同一层）；allowRepeat 支持连按/长按
   useShortcutRegistry(
     useMemo(() => {
-      if (!tabSwitchShortcuts) return [];
-      const entries: ShortcutEntry[] = [];
+      if (!tabSwitchShortcuts) return []
+      const entries: ShortcutEntry[] = []
       const pick = (index: number) => {
-        const next = availableTabs[index];
-        if (next) requestTab(next);
-      };
+        const next = availableTabs[index]
+        if (next) requestTab(next)
+      }
       const cycle = (reverse: boolean) => {
-        const currentIndex = tabOrder.indexOf(activeTab);
+        const currentIndex = tabOrder.indexOf(activeTab)
         const nextIndex = reverse
           ? (currentIndex - 1 + tabOrder.length) % tabOrder.length
-          : (currentIndex + 1) % tabOrder.length;
-        if (tabOrder[nextIndex]) requestTab(tabOrder[nextIndex]);
-      };
+          : (currentIndex + 1) % tabOrder.length
+        if (tabOrder[nextIndex]) requestTab(tabOrder[nextIndex])
+      }
       availableTabs.forEach((_tab, i) => {
-        if (i > 8) return;
-        const n = i + 1;
+        if (i > 8) return
+        const n = i + 1
         entries.push(
-          { accelerator: `Alt+${n}`, allowRepeat: true, handler: (e) => { e.preventDefault(); pick(i); } },
-          { accelerator: `Ctrl+${n}`, allowRepeat: true, handler: (e) => { e.preventDefault(); pick(i); } },
-        );
-      });
+          {
+            accelerator: `Alt+${n}`,
+            allowRepeat: true,
+            handler: (e) => {
+              e.preventDefault()
+              pick(i)
+            },
+          },
+          {
+            accelerator: `Ctrl+${n}`,
+            allowRepeat: true,
+            handler: (e) => {
+              e.preventDefault()
+              pick(i)
+            },
+          },
+        )
+      })
       entries.push(
-        { accelerator: 'Ctrl+Tab', allowRepeat: true, handler: (e) => { e.preventDefault(); cycle(false); } },
-        { accelerator: 'Ctrl+Shift+Tab', allowRepeat: true, handler: (e) => { e.preventDefault(); cycle(true); } },
-      );
-      return entries;
+        {
+          accelerator: 'Ctrl+Tab',
+          allowRepeat: true,
+          handler: (e) => {
+            e.preventDefault()
+            cycle(false)
+          },
+        },
+        {
+          accelerator: 'Ctrl+Shift+Tab',
+          allowRepeat: true,
+          handler: (e) => {
+            e.preventDefault()
+            cycle(true)
+          },
+        },
+      )
+      return entries
     }, [tabSwitchShortcuts, availableTabs, requestTab, activeTab, tabOrder]),
     { capture: true, ignoreRepeat: true },
-  );
+  )
 
   // 初始化时若 URL 指定了 provider，切换 chat tab 并选中该 provider
   useEffect(() => {
     if (initialProviderId) {
-      requestTab('chat', () => useChatStore.getState().setCurrentProvider(initialProviderId));
+      requestTab('chat', () => useChatStore.getState().setCurrentProvider(initialProviderId))
     }
-  }, [initialProviderId, requestTab]);
+  }, [initialProviderId, requestTab])
 
   // 模块联动：当前 tab 被关闭时自动切到第一个可用 tab（避免内容区空白）
   useEffect(() => {
     if (modulesInitialized && !availableTabs.includes(activeTab)) {
-      requestTab(availableTabs[0] ?? '');
+      requestTab(availableTabs[0] ?? '')
     }
-  }, [availableTabs, activeTab, modulesInitialized, requestTab]);
+  }, [availableTabs, activeTab, modulesInitialized, requestTab])
 
   const handleClose = useCallback(() => {
-    const close = () => { void closeCurrentWindow().catch(() => {}); };
+    const close = () => {
+      void closeCurrentWindow().catch(() => {})
+    }
     if (beforeLeaveRef.current) {
-      void beforeLeaveRef.current(close).catch((error) => console.error('[AdvancedPanel] close failed:', error));
-    } else close();
-  }, []);
-  useEscToCloseWindow({ ctrlW: false, windowControls: true, onEsc: (event) => { event.preventDefault(); handleClose(); return true; } });
+      void beforeLeaveRef
+        .current(close)
+        .catch((error) => console.error('[AdvancedPanel] close failed:', error))
+    } else close()
+  }, [])
+  useEscToCloseWindow({
+    ctrlW: false,
+    windowControls: true,
+    onEsc: (event) => {
+      event.preventDefault()
+      handleClose()
+      return true
+    },
+  })
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'w') {
-        event.preventDefault();
-        handleClose();
+      if (
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'w'
+      ) {
+        event.preventDefault()
+        handleClose()
       }
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [handleClose]);
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [handleClose])
 
-  const handleMinimize = useCallback(() => void minimizeWindow().catch(() => {}), []);
+  const handleMinimize = useCallback(() => void minimizeWindow().catch(() => {}), [])
   // handleMaximize 由 useWindowMaximizedAndPinned 统一提供
 
   return (
-    <div className="advanced-panel-provider-view app-shell app-view-root" data-name="advanced-panel.container">
+    <div
+      className="advanced-panel-provider-view app-shell app-view-root"
+      data-name="advanced-panel.container"
+    >
       <TitleBar
         maximized={isMaximized}
         onMinimize={handleMinimize}
@@ -271,15 +344,28 @@ export default function AdvancedPanelView() {
               type="button"
               variant={isPinned ? 'active' : 'default'}
               onClick={async () => {
-                const next = !isPinned;
-                setIsPinned(next);
-                try { await pinCurrentWindow(next); } catch { setIsPinned(!next); }
+                const next = !isPinned
+                setIsPinned(next)
+                try {
+                  await pinCurrentWindow(next)
+                } catch {
+                  setIsPinned(!next)
+                }
               }}
               title={isPinned ? '取消置顶' : '置顶'}
               aria-label={isPinned ? '取消置顶' : '置顶'}
               data-name="advanced-panel.topbar-pin-button"
             >
-              <svg viewBox="0 0 24 24" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '60%', height: '60%' }} data-name="advanced-panel.topbar-pin-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill={isPinned ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ width: '60%', height: '60%' }}
+                data-name="advanced-panel.topbar-pin-icon"
+              >
                 <path d="M12 17v5" />
                 <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
               </svg>
@@ -306,32 +392,40 @@ export default function AdvancedPanelView() {
         )}
         {activeTab === 'notes' && (
           <AppErrorBoundary>
-            <NotesView onOpenSettings={() => setSettingsOpen(true)} onBeforeLeaveReady={registerBeforeLeave} />
+            <NotesView
+              onOpenSettings={() => setSettingsOpen(true)}
+              onBeforeLeaveReady={registerBeforeLeave}
+            />
           </AppErrorBoundary>
         )}
         {/* 插件 tab 渲染：非内置 tab 时显示插件提供的 UI 或占位 */}
         {!['chat', 'whiteboard', 'notes'].includes(activeTab) && tabRegistry[activeTab] && (
-          <div className="advanced-panel-plugin-tab" data-name={'advanced-panel.plugin.' + activeTab}>
+          <div
+            className="advanced-panel-plugin-tab"
+            data-name={'advanced-panel.plugin.' + activeTab}
+          >
             <div style={{ padding: '24px', textAlign: 'center', color: 'var(--foreground-muted)' }}>
               {tabRegistry[activeTab].label}
             </div>
           </div>
         )}
-        {availableTabs.length === 0 && <div style={{ height: '100%' }} data-name="advanced-panel.empty" />}
+        {availableTabs.length === 0 && (
+          <div style={{ height: '100%' }} data-name="advanced-panel.empty" />
+        )}
       </div>
       <AdvancedPanelSettingsPanel
         open={settingsOpen}
         onClose={() => {
-          setSettingsOpen(false);
+          setSettingsOpen(false)
           // 设置面板关闭时重新读取白板侧边栏设置，使开关变化立即生效
           void getAppSettings()
             .then((cfg) => setWhiteboardSidebarVisible(cfg.whiteboardSidebarVisible ?? false))
-            .catch(() => {});
+            .catch(() => {})
         }}
       />
       {/* 快捷键说明（` / ~ / ? 呼出） */}
       <ShortcutHelp />
       <WindowResizeHandles />
     </div>
-  );
+  )
 }

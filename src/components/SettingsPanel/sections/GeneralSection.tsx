@@ -1,61 +1,56 @@
-import { updateAppSettings, clearUsageTraces } from '../../../lib/electron-api';
-import { useState } from 'react';
-import { useSettingsDraft } from '../../../hooks/useSettingsData';
-import { useToast } from '../../../hooks/useToast';
-import SegmentedControl from '../../ui/SegmentedControl';
-import Toggle from '../../ui/Toggle';
-import { SectionTitle, FormRow } from '../../ui';
-import type { GeneralSettings } from '../types';
+import { updateAppSettings, clearUsageTraces } from '../../../lib/electron-api'
+import { useState } from 'react'
+import { useSettingsDraft } from '../../../hooks/useSettingsData'
+import { useToast } from '../../../hooks/useToast'
+import SegmentedControl from '../../ui/SegmentedControl'
+import Toggle from '../../ui/Toggle'
+import { SectionTitle, FormRow } from '../../ui'
+import type { GeneralSettings } from '../types'
 
 interface GeneralSectionProps {
-  general: GeneralSettings;
-  onChange: (patch: Partial<GeneralSettings>) => void;
+  general: GeneralSettings
+  onChange: (patch: Partial<GeneralSettings>) => void
 }
 
 const CLOSE_OPTIONS: Array<{ value: 'close' | 'minimize'; label: string }> = [
   { value: 'close', label: '直接关闭' },
   { value: 'minimize', label: '最小化到托盘' },
-];
+]
 
 const STARTUP_OPEN_OPTIONS: Array<{ value: 'home' | 'lastConversation'; label: string }> = [
   { value: 'home', label: '首页' },
   { value: 'lastConversation', label: '最近对话' },
-];
+]
 
 const APP_CLICK_OPTIONS: Array<{ value: 'switch' | 'close'; label: string }> = [
   { value: 'switch', label: '跳转' },
   { value: 'close', label: '关闭' },
-];
+]
 
 export default function GeneralSection({ general, onChange }: GeneralSectionProps) {
   // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
-  const {
-    startupOpen,
-    closeBehavior,
-    enterToSend,
-    appClickBehavior,
-    usageTrackingEnabled,
-  } = general;
+  const { startupOpen, closeBehavior, enterToSend, appClickBehavior, usageTrackingEnabled } =
+    general
 
   // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部 updateAppSettings 完成
-  const setStartupOpen = (v: 'home' | 'lastConversation') => onChange({ startupOpen: v });
-  const setCloseBehavior = (v: 'close' | 'minimize') => onChange({ closeBehavior: v });
-  const setEnterToSend = (v: boolean) => onChange({ enterToSend: v });
-  const setAppClickBehavior = (v: 'switch' | 'close') => onChange({ appClickBehavior: v });
-  const setUsageTrackingEnabled = (v: boolean) => onChange({ usageTrackingEnabled: v });
-  const { draft, setDraft } = useSettingsDraft();
+  const setStartupOpen = (v: 'home' | 'lastConversation') => onChange({ startupOpen: v })
+  const setCloseBehavior = (v: 'close' | 'minimize') => onChange({ closeBehavior: v })
+  const setEnterToSend = (v: boolean) => onChange({ enterToSend: v })
+  const setAppClickBehavior = (v: 'switch' | 'close') => onChange({ appClickBehavior: v })
+  const setUsageTrackingEnabled = (v: boolean) => onChange({ usageTrackingEnabled: v })
+  const { draft, setDraft } = useSettingsDraft()
   // 使用统计清除反馈（带自动清除的字符串消息 + 独立的 success/error 类型，用于颜色区分）
-  const { toast: usageClearMsg, showToast: showUsageToast } = useToast(3000);
-  const [usageClearType, setUsageClearType] = useState<'success' | 'error'>('success');
+  const { toast: usageClearMsg, showToast: showUsageToast } = useToast(3000)
+  const [usageClearType, setUsageClearType] = useState<'success' | 'error'>('success')
   // 开机自启动 / 静默启动（通过 useSettingsDraft 从主进程加载，不经过父组件 props）
-  const autoLaunch = draft?.autoLaunch ?? false;
-  const silentStart = draft?.silentStart ?? false;
-  const [autoLaunchError, setAutoLaunchError] = useState(false);
+  const autoLaunch = draft?.autoLaunch ?? false
+  const silentStart = draft?.silentStart ?? false
+  const [autoLaunchError, setAutoLaunchError] = useState(false)
 
   const showUsageFeedback = (type: 'success' | 'error', msg: string) => {
-    setUsageClearType(type);
-    showUsageToast(msg);
-  };
+    setUsageClearType(type)
+    showUsageToast(msg)
+  }
 
   return (
     <section data-name="settings.general.section">
@@ -67,11 +62,11 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
           value={startupOpen}
           options={STARTUP_OPEN_OPTIONS}
           onChange={async (v) => {
-            setStartupOpen(v);
+            setStartupOpen(v)
             try {
-              await updateAppSettings({ startupOpen: v });
+              await updateAppSettings({ startupOpen: v })
             } catch (e) {
-              console.error('保存启动时打开设置失败:', e);
+              console.error('保存启动时打开设置失败:', e)
             }
           }}
           name="启动时打开"
@@ -85,11 +80,11 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
           value={closeBehavior}
           options={CLOSE_OPTIONS}
           onChange={async (v) => {
-            setCloseBehavior(v);
+            setCloseBehavior(v)
             try {
-              await updateAppSettings({ closeBehavior: v });
+              await updateAppSettings({ closeBehavior: v })
             } catch (e) {
-              console.error('保存关闭行为设置失败:', e);
+              console.error('保存关闭行为设置失败:', e)
             }
           }}
           name="关闭按钮行为"
@@ -103,11 +98,11 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
           value={appClickBehavior}
           options={APP_CLICK_OPTIONS}
           onChange={async (v) => {
-            setAppClickBehavior(v);
+            setAppClickBehavior(v)
             try {
-              await updateAppSettings({ appClickBehavior: v });
+              await updateAppSettings({ appClickBehavior: v })
             } catch (e) {
-              console.error('保存点击应用行为设置失败:', e);
+              console.error('保存点击应用行为设置失败:', e)
             }
           }}
           name="点击已打开应用时"
@@ -120,12 +115,12 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
         <Toggle
           checked={enterToSend}
           onChange={async (next) => {
-            setEnterToSend(next);
+            setEnterToSend(next)
             try {
-              await updateAppSettings({ enterToSend: next });
+              await updateAppSettings({ enterToSend: next })
             } catch (e) {
-              console.error('保存 Enter 发送设置失败:', e);
-              setEnterToSend(!next);
+              console.error('保存 Enter 发送设置失败:', e)
+              setEnterToSend(!next)
             }
           }}
           aria-label="Enter 键发送消息"
@@ -138,18 +133,18 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
         <Toggle
           checked={autoLaunch}
           onChange={async (next) => {
-            setAutoLaunchError(false);
+            setAutoLaunchError(false)
             if (!next) {
-              setDraft({ autoLaunch: next, silentStart: false });
+              setDraft({ autoLaunch: next, silentStart: false })
             } else {
-              setDraft({ autoLaunch: next });
+              setDraft({ autoLaunch: next })
             }
             try {
-              await updateAppSettings({ autoLaunch: next, silentStart: next ? undefined : false });
+              await updateAppSettings({ autoLaunch: next, silentStart: next ? undefined : false })
             } catch (e) {
-              console.error('保存开机自启动设置失败:', e);
-              setDraft({ autoLaunch: !next });
-              setAutoLaunchError(true);
+              console.error('保存开机自启动设置失败:', e)
+              setDraft({ autoLaunch: !next })
+              setAutoLaunchError(true)
             }
           }}
           aria-label="开机自启动"
@@ -172,12 +167,12 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
           <Toggle
             checked={silentStart}
             onChange={async (next) => {
-              setDraft({ silentStart: next });
+              setDraft({ silentStart: next })
               try {
-                await updateAppSettings({ silentStart: next });
+                await updateAppSettings({ silentStart: next })
               } catch (e) {
-                console.error('保存静默启动设置失败:', e);
-                setDraft({ silentStart: !next });
+                console.error('保存静默启动设置失败:', e)
+                setDraft({ silentStart: !next })
               }
             }}
             aria-label="静默启动"
@@ -191,12 +186,12 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
         <Toggle
           checked={usageTrackingEnabled}
           onChange={async (next) => {
-            setUsageTrackingEnabled(next);
+            setUsageTrackingEnabled(next)
             try {
-              await updateAppSettings({ usageTrackingEnabled: next });
+              await updateAppSettings({ usageTrackingEnabled: next })
             } catch (e) {
-              console.error('保存使用统计设置失败:', e);
-              setUsageTrackingEnabled(!next);
+              console.error('保存使用统计设置失败:', e)
+              setUsageTrackingEnabled(!next)
             }
           }}
           aria-label="使用统计与操作日志"
@@ -211,14 +206,14 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
             data-name="settings.general.usage-clear-button"
             onClick={async () => {
               try {
-                const result = await clearUsageTraces();
+                const result = await clearUsageTraces()
                 if (result.ok) {
-                  showUsageFeedback('success', `已清除 ${result.count} 条记录`);
+                  showUsageFeedback('success', `已清除 ${result.count} 条记录`)
                 } else {
-                  showUsageFeedback('error', '清除失败');
+                  showUsageFeedback('error', '清除失败')
                 }
               } catch (e) {
-                showUsageFeedback('error', '清除失败: ' + String(e));
+                showUsageFeedback('error', '清除失败: ' + String(e))
               }
             }}
           >
@@ -236,5 +231,5 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
         </div>
       )}
     </section>
-  );
+  )
 }

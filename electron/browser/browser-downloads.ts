@@ -28,29 +28,36 @@ function broadcastDownloadUpdated(payload: {
     if (!w.isDestroyed()) {
       try {
         w.webContents.send(IPC_CHANNELS.BROWSER_DOWNLOAD_UPDATED, payload)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
 
-function resolveDownloadOwner(profileId: string, source?: WebContents): { win: BrowserWindow; windowId: string } | null {
+function resolveDownloadOwner(
+  profileId: string,
+  source?: WebContents,
+): { win: BrowserWindow; windowId: string } | null {
   if (source) {
-    if (source.isDestroyed()) return null;
-    const record = getRecordByWebContentsId(source.id);
-    if (record && record.profileId !== profileId) return null;
+    if (source.isDestroyed()) return null
+    const record = getRecordByWebContentsId(source.id)
+    if (record && record.profileId !== profileId) return null
     try {
-      const host = source.hostWebContents || source;
-      const win = BrowserWindow.fromWebContents(host);
-      if (!win || win.isDestroyed()) return null;
-      const windowId = findWindowIdByWin(win);
-      if (!windowId || (record && record.windowId !== windowId)) return null;
-      return { win, windowId };
-    } catch { return null; }
+      const host = source.hostWebContents || source
+      const win = BrowserWindow.fromWebContents(host)
+      if (!win || win.isDestroyed()) return null
+      const windowId = findWindowIdByWin(win)
+      if (!windowId || (record && record.windowId !== windowId)) return null
+      return { win, windowId }
+    } catch {
+      return null
+    }
   }
-  const win = windowState.browserWindowsByProfile.get(profileId);
-  if (!win || win.isDestroyed()) return null;
-  const windowId = findWindowIdByWin(win);
-  return windowId ? { win, windowId } : null;
+  const win = windowState.browserWindowsByProfile.get(profileId)
+  if (!win || win.isDestroyed()) return null
+  const windowId = findWindowIdByWin(win)
+  return windowId ? { win, windowId } : null
 }
 
 /** Keeps one session listener and resolves the initiating window for each download. */
@@ -63,8 +70,8 @@ export function registerBrowserDownloads(profileId: string): void {
   ;(ses as unknown as { __browserDownloadAttached?: boolean }).__browserDownloadAttached = true
 
   ses.on('will-download', (_e, item: DownloadItem, source?: WebContents) => {
-    const owner = resolveDownloadOwner(profileId, source);
-    const windowId = owner?.windowId || '';
+    const owner = resolveDownloadOwner(profileId, source)
+    const windowId = owner?.windowId || ''
     // Explicit saves ask for a path; ordinary downloads use the persisted directory.
     let filename: string
     let savePath: string
@@ -76,10 +83,10 @@ export function registerBrowserDownloads(profileId: string): void {
         title: '另存为',
         defaultPath: askFilename,
         filters: [{ name: '所有文件', extensions: ['*'] }],
-      };
+      }
       const result = owner
         ? dialog.showSaveDialogSync(owner.win, options)
-        : dialog.showSaveDialogSync(options);
+        : dialog.showSaveDialogSync(options)
       if (!result) {
         item.cancel()
         return
@@ -133,8 +140,14 @@ export function registerBrowserDownloads(profileId: string): void {
         const received = item.getReceivedBytes()
         const total = item.getTotalBytes()
         try {
-          browserDownloadStore.update(downloadId, { receivedBytes: received, totalBytes: total, state: 'progressing' })
-        } catch { /* ignore */ }
+          browserDownloadStore.update(downloadId, {
+            receivedBytes: received,
+            totalBytes: total,
+            state: 'progressing',
+          })
+        } catch {
+          /* ignore */
+        }
         broadcastDownloadUpdated({
           id: downloadId,
           windowId,
@@ -152,7 +165,8 @@ export function registerBrowserDownloads(profileId: string): void {
 
     item.once('done', (_e2, state) => {
       const endTime = Date.now()
-      const finalState = state === 'completed' ? 'completed' : state === 'interrupted' ? 'interrupted' : 'cancelled'
+      const finalState =
+        state === 'completed' ? 'completed' : state === 'interrupted' ? 'interrupted' : 'cancelled'
       try {
         browserDownloadStore.update(downloadId, {
           state: finalState,
@@ -160,7 +174,9 @@ export function registerBrowserDownloads(profileId: string): void {
           totalBytes: item.getTotalBytes(),
           endTime,
         })
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       broadcastDownloadUpdated({
         id: downloadId,
         windowId,

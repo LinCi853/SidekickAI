@@ -12,9 +12,7 @@ export function sha256Hex(data: Buffer): string {
   return createHash('sha256').update(data).digest('hex')
 }
 
-
 const MAX_SAFE_TREE_LENGTH = 9007199254740991
-
 
 export function sha256FileSync(filePath: string): string {
   const hash = createHash('sha256')
@@ -32,8 +30,11 @@ export function sha256FileSync(filePath: string): string {
   return hash.digest('hex')
 }
 
-
-export function collectExportTreeTuples(root: string, current: string, tuples: ExportTreeTuple[]): void {
+export function collectExportTreeTuples(
+  root: string,
+  current: string,
+  tuples: ExportTreeTuple[],
+): void {
   for (const name of fs.readdirSync(current)) {
     if (Buffer.from(name, 'utf8').toString('utf8') !== name) {
       throw new Error(`Backup data tree contains a name that is not valid UTF-8: ${current}`)
@@ -59,10 +60,10 @@ export function collectExportTreeTuples(root: string, current: string, tuples: E
   }
 }
 
-
 export function exportTreeDigest(root: string): string {
   const stat = fs.lstatSync(root)
-  if (stat.isSymbolicLink()) throw new Error(`Backup data root is a symbolic link or junction: ${root}`)
+  if (stat.isSymbolicLink())
+    throw new Error(`Backup data root is a symbolic link or junction: ${root}`)
   if (!stat.isDirectory()) throw new Error(`Backup data root is not a directory: ${root}`)
   const tuples: ExportTreeTuple[] = []
   collectExportTreeTuples(root, root, tuples)
@@ -70,11 +71,9 @@ export function exportTreeDigest(root: string): string {
   return sha256Hex(Buffer.from(JSON.stringify(tuples), 'utf8'))
 }
 
-
 export function existingOutputError(targetPath: string): string {
   return `Strict export refuses to overwrite an existing backup (already exists): ${targetPath}`
 }
-
 
 export function publishExclusive(
   scratchPath: string,
@@ -98,7 +97,6 @@ export function publishExclusive(
   }
 }
 
-
 export async function writeStrictArchive(
   targetPath: string,
   zip: AdmZip,
@@ -111,9 +109,10 @@ export async function writeStrictArchive(
   try {
     await reverifySources()
     publishExclusive(prepared.file, path.resolve(targetPath))
-  } finally { prepared.dispose() }
+  } finally {
+    prepared.dispose()
+  }
 }
-
 
 export function writePartialArchive(
   targetPath: string,
@@ -123,13 +122,25 @@ export function writePartialArchive(
   encryptWriter = encryptFile,
 ): void {
   const prepared = prepareArchive(targetPath, zip, encrypt, deviceId, encryptWriter)
-  try { fs.renameSync(prepared.file, targetPath) }
-  finally { prepared.dispose() }
+  try {
+    fs.renameSync(prepared.file, targetPath)
+  } finally {
+    prepared.dispose()
+  }
 }
 
 /** Both entry points publish only a readable, authenticated archive of the verified payload. */
-function prepareArchive(targetPath: string, zip: AdmZip, encrypt: { password: string } | undefined, deviceId: string, encryptWriter: typeof encryptFile) {
-  const scratch = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${randomUUID()}`)
+function prepareArchive(
+  targetPath: string,
+  zip: AdmZip,
+  encrypt: { password: string } | undefined,
+  deviceId: string,
+  encryptWriter: typeof encryptFile,
+) {
+  const scratch = path.join(
+    path.dirname(targetPath),
+    `.${path.basename(targetPath)}.${randomUUID()}`,
+  )
   const zipPath = `${scratch}.zip`
   const encryptedPath = `${scratch}.sabackup`
   const verifiedPath = `${scratch}.verified.zip`
@@ -137,7 +148,9 @@ function prepareArchive(targetPath: string, zip: AdmZip, encrypt: { password: st
   let ownCredentialDirectory = false
   const dispose = () => {
     for (const file of [zipPath, encryptedPath, verifiedPath]) {
-      try { fs.rmSync(file, { force: true }) } catch { }
+      try {
+        fs.rmSync(file, { force: true })
+      } catch {}
     }
     if (ownCredentialDirectory) fs.rmSync(credentialDirectory, { recursive: true, force: true })
   }
@@ -148,7 +161,8 @@ function prepareArchive(targetPath: string, zip: AdmZip, encrypt: { password: st
       createPrivateDirectory(credentialDirectory)
       for (const name of ['settings.db', 'app-key.json']) {
         const bytes = zip.readFile(name)
-        if (bytes) fs.writeFileSync(path.join(credentialDirectory, name), bytes, { flag: 'wx', mode: 0o600 })
+        if (bytes)
+          fs.writeFileSync(path.join(credentialDirectory, name), bytes, { flag: 'wx', mode: 0o600 })
       }
       assertUnencryptedCredentialsAbsent(credentialDirectory)
     }
@@ -157,12 +171,19 @@ function prepareArchive(targetPath: string, zip: AdmZip, encrypt: { password: st
     let verified = zipPath
     if (encrypt) {
       encryptWriter(zipPath, encryptedPath, encrypt.password, deviceId)
-      if (decryptFile(encryptedPath, verifiedPath, encrypt.password) !== deviceId
-        || sha256FileSync(verifiedPath) !== sha256FileSync(zipPath)) throw new Error('Encrypted backup verification failed.')
+      if (
+        decryptFile(encryptedPath, verifiedPath, encrypt.password) !== deviceId ||
+        sha256FileSync(verifiedPath) !== sha256FileSync(zipPath)
+      )
+        throw new Error('Encrypted backup verification failed.')
       verified = verifiedPath
     }
     const actual = validateBackupArchive(new AdmZip(verified))
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Saved backup does not match its snapshot.')
+    if (JSON.stringify(actual) !== JSON.stringify(expected))
+      throw new Error('Saved backup does not match its snapshot.')
     return { file: encrypt ? encryptedPath : zipPath, dispose }
-  } catch (error) { dispose(); throw error }
+  } catch (error) {
+    dispose()
+    throw error
+  }
 }

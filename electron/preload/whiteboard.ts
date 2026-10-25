@@ -6,14 +6,17 @@ export const whiteboardApi = {
   whiteboard: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_LIST),
     create: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_CREATE, title),
-    rename: (id: string, title: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_RENAME, id, title),
+    rename: (id: string, title: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_RENAME, id, title),
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_DELETE, id),
     getActive: () => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_ACTIVE),
     setActive: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SET_ACTIVE, id),
     getSnapshot: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_GET_SNAPSHOT, id),
-    saveSnapshot: (id: string, snapshot: unknown) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT, id, snapshot),
+    saveSnapshot: (id: string, snapshot: unknown) =>
+      ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT, id, snapshot),
     // 同步保存（beforeunload 兜底）
-    saveSnapshotSync: (id: string, snapshot: unknown) => ipcRenderer.sendSync(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT_SYNC, id, snapshot),
+    saveSnapshotSync: (id: string, snapshot: unknown) =>
+      ipcRenderer.sendSync(IPC_CHANNELS.WHITEBOARD_SAVE_SNAPSHOT_SYNC, id, snapshot),
     // 需求 12：保存截图 dataURL 到磁盘，返回 whiteboard-asset:// 路径
     saveImage: (dataUrl: string) => ipcRenderer.invoke(IPC_CHANNELS.WHITEBOARD_SAVE_IMAGE, dataUrl),
     // 需求 12：推送截图到白板（主进程打开进阶面板 + 切 tab + 转发载荷）

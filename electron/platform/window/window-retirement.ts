@@ -20,7 +20,10 @@ function resolveRetirementSeconds(options: WindowRetirementOptions): number {
   return typeof options.seconds === 'function' ? options.seconds() : options.seconds
 }
 
-const tracked = new Map<BrowserWindow, { options: WindowRetirementOptions; deadline: number | null; paused: boolean }>()
+const tracked = new Map<
+  BrowserWindow,
+  { options: WindowRetirementOptions; deadline: number | null; paused: boolean }
+>()
 let timer: ReturnType<typeof setInterval> | null = null
 let suspended = false
 /** 由后台退役/后台释放发起关闭的窗口：closed 回调据此不抢前台 */
@@ -46,7 +49,9 @@ export function isWindowAudible(win: BrowserWindow): boolean {
       if (wc.isDestroyed() || wc.getType() !== 'webview') continue
       if (wc.hostWebContents === host && wc.isCurrentlyAudible()) return true
     }
-  } catch { /* 窗口销毁中，按不出声处理 */ }
+  } catch {
+    /* 窗口销毁中，按不出声处理 */
+  }
   return false
 }
 
@@ -98,14 +103,20 @@ function tick(): void {
 }
 
 /** 登记需要后台退役的用户窗口（主窗口请勿登记） */
-export function registerWindowRetirement(win: BrowserWindow, options: WindowRetirementOptions): void {
+export function registerWindowRetirement(
+  win: BrowserWindow,
+  options: WindowRetirementOptions,
+): void {
   if (tracked.has(win)) return
   tracked.set(win, { options, deadline: null, paused: false })
   const refresh = () => {
     // 窗口状态仍在变化说明上次后台关闭被页面拦下，撤销标记
     backgroundClosing.delete(win)
     const entry = tracked.get(win)
-    if (entry) entry.deadline = isEligible(win, entry.options) ? Date.now() + resolveRetirementSeconds(entry.options) * 1000 : null
+    if (entry)
+      entry.deadline = isEligible(win, entry.options)
+        ? Date.now() + resolveRetirementSeconds(entry.options) * 1000
+        : null
   }
   win.on('hide', refresh)
   win.on('minimize', refresh)
@@ -138,8 +149,12 @@ let powerHooked = false
 function hookPower(): void {
   if (powerHooked) return
   powerHooked = true
-  powerMonitor.on('suspend', () => { suspended = true })
-  powerMonitor.on('resume', () => { suspended = false })
+  powerMonitor.on('suspend', () => {
+    suspended = true
+  })
+  powerMonitor.on('resume', () => {
+    suspended = false
+  })
 }
 
 hookPower()

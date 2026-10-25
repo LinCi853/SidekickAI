@@ -5,12 +5,19 @@
    3. defs 表的 action 与主进程转发约定一致（无重复歧义的关键 action）
    ===================================================================== */
 
-import { describe, it, expect } from 'vitest';
-import { parseAccelerator, matchAccelerator, type ShortcutEntry } from '../../hooks/useShortcutRegistry';
-import { buildShortcutDefs } from './useBrowserKeyboard';
+import { describe, it, expect } from 'vitest'
+import {
+  parseAccelerator,
+  matchAccelerator,
+  type ShortcutEntry,
+} from '../../hooks/useShortcutRegistry'
+import { buildShortcutDefs } from './useBrowserKeyboard'
 
 /** 构造模拟 KeyboardEvent（仅匹配所需字段） */
-function fakeEvent(key: string, opts: { ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean; repeat?: boolean } = {}): KeyboardEvent {
+function fakeEvent(
+  key: string,
+  opts: { ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean; repeat?: boolean } = {},
+): KeyboardEvent {
   return {
     key,
     ctrlKey: opts.ctrl ?? false,
@@ -18,10 +25,10 @@ function fakeEvent(key: string, opts: { ctrl?: boolean; alt?: boolean; shift?: b
     shiftKey: opts.shift ?? false,
     metaKey: opts.meta ?? false,
     repeat: opts.repeat ?? false,
-  } as KeyboardEvent;
+  } as KeyboardEvent
 }
 
-const noop = () => {};
+const noop = () => {}
 const baseOpts = {
   onFocusAddressBar: noop,
   onRefresh: noop,
@@ -31,25 +38,27 @@ const baseOpts = {
   onStopLoading: noop,
   onMaximize: noop,
   onToggleDevTools: noop,
-};
+}
 
 describe('快捷键 defs 表', () => {
-  const defs = buildShortcutDefs(baseOpts);
+  const defs = buildShortcutDefs(baseOpts)
 
   it('全部 accelerator 均可解析出主键', () => {
     for (const def of defs) {
-      const parsed = parseAccelerator(def.accelerator);
-      expect(parsed.key, def.accelerator).not.toBe('');
+      const parsed = parseAccelerator(def.accelerator)
+      expect(parsed.key, def.accelerator).not.toBe('')
     }
-  });
+  })
 
   it('leaves Alt+P available for page input', () => {
-    expect(defs.some(def => matchAccelerator(fakeEvent('p', { alt: true }), def.accelerator))).toBe(false);
-  });
+    expect(
+      defs.some((def) => matchAccelerator(fakeEvent('p', { alt: true }), def.accelerator)),
+    ).toBe(false)
+  })
 
   it('defs 数量符合预期（≥40 条）', () => {
-    expect(defs.length).toBeGreaterThanOrEqual(40);
-  });
+    expect(defs.length).toBeGreaterThanOrEqual(40)
+  })
 
   it('关键快捷键的 accelerator 匹配真实按键事件', () => {
     const cases: Array<[string, KeyboardEvent, boolean]> = [
@@ -78,27 +87,46 @@ describe('快捷键 defs 表', () => {
       ['Ctrl+Alt+C', fakeEvent('c', { ctrl: true }), false],
       ['F11', fakeEvent('F11', { shift: true }), false],
       ['Ctrl+T', fakeEvent('t', { ctrl: true, shift: true }), false],
-    ];
+    ]
     for (const [accelerator, event, expected] of cases) {
-      const label = accelerator + " vs key=" + event.key;
-      expect(matchAccelerator(event, accelerator), label).toBe(expected);
+      const label = accelerator + ' vs key=' + event.key
+      expect(matchAccelerator(event, accelerator), label).toBe(expected)
     }
-  });
+  })
 
   it('关键 action 存在且与主进程转发约定一致', () => {
-    const actions = new Set(defs.map((d) => d.action).filter(Boolean));
+    const actions = new Set(defs.map((d) => d.action).filter(Boolean))
     for (const required of [
-      'addBookmark', 'viewSource', 'toggleCloudPc',
-      'print', 'savePageAs', 'findInPage', 'zoomIn', 'zoomOut', 'zoomReset',
-      'navBack', 'navForward', 'navRefresh', 'forceRefresh', 'focusCycle',
-      'closeTab', 'detachCurrent', 'cycleTab', 'switchTab', 'openHistory',
-      'openDownloads', 'focusSearch', 'clearBrowsingData', 'reopenClosed',
-      'toggleBookmarkBar', 'focusAddressBar',
+      'addBookmark',
+      'viewSource',
+      'toggleCloudPc',
+      'print',
+      'savePageAs',
+      'findInPage',
+      'zoomIn',
+      'zoomOut',
+      'zoomReset',
+      'navBack',
+      'navForward',
+      'navRefresh',
+      'forceRefresh',
+      'focusCycle',
+      'closeTab',
+      'detachCurrent',
+      'cycleTab',
+      'switchTab',
+      'openHistory',
+      'openDownloads',
+      'focusSearch',
+      'clearBrowsingData',
+      'reopenClosed',
+      'toggleBookmarkBar',
+      'focusAddressBar',
     ]) {
-      expect(actions.has(required), "缺少 action: " + required).toBe(true);
+      expect(actions.has(required), '缺少 action: ' + required).toBe(true)
     }
-  });
-});
+  })
+})
 
 describe('通用组件长按（hold）能力类型', () => {
   it('ShortcutEntry 支持 holdMs / onHoldStart / onHoldEnd 声明', () => {
@@ -109,22 +137,20 @@ describe('通用组件长按（hold）能力类型', () => {
       onHoldStart: () => {},
       onHoldEnd: () => {},
       handler: () => {},
-    };
-    expect(entry.holdMs).toBe(500);
-  });
-});
+    }
+    expect(entry.holdMs).toBe(500)
+  })
+})
 
 describe('切标签键 allowRepeat（连按/长按轮播）', () => {
   it('Ctrl+Tab / Ctrl+Shift+Tab / Alt+1~9 声明 allowRepeat', () => {
-    const defs = buildShortcutDefs(baseOpts);
-    const allow = new Set(
-      defs.filter((d) => d.allowRepeat).map((d) => d.accelerator),
-    );
-    expect(allow.has('Ctrl+Tab')).toBe(true);
-    expect(allow.has('Ctrl+Shift+Tab')).toBe(true);
-    for (let n = 1; n <= 9; n += 1) expect(allow.has(`Alt+${n}`)).toBe(true);
+    const defs = buildShortcutDefs(baseOpts)
+    const allow = new Set(defs.filter((d) => d.allowRepeat).map((d) => d.accelerator))
+    expect(allow.has('Ctrl+Tab')).toBe(true)
+    expect(allow.has('Ctrl+Shift+Tab')).toBe(true)
+    for (let n = 1; n <= 9; n += 1) expect(allow.has(`Alt+${n}`)).toBe(true)
     // 非切标签键不应放行 auto-repeat
-    expect(allow.has('Ctrl+T')).toBe(false);
-    expect(allow.has('Ctrl+W')).toBe(false);
-  });
-});
+    expect(allow.has('Ctrl+T')).toBe(false)
+    expect(allow.has('Ctrl+W')).toBe(false)
+  })
+})

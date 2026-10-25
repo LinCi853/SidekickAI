@@ -3,26 +3,26 @@
    从 ProviderSection.tsx 拆出（Modal 替代原 .provider-form-overlay）。
    ===================================================================== */
 
-import { Modal, FormRow, Button } from '../../../ui';
+import { Modal, FormRow, Button } from '../../../ui'
 
 /** 加密导出/导入的反馈信息 */
 export interface CryptoFeedback {
-  type: 'success' | 'error';
-  msg: string;
+  type: 'success' | 'error'
+  msg: string
 }
 
 interface ExportProviderDialogProps {
-  open: boolean;
+  open: boolean
   /** 选中导出的 provider 数量 */
-  selectedCount: number;
+  selectedCount: number
   /** provider 总数（用于「导出全部」提示文案） */
-  totalCount: number;
-  password: string;
-  onPasswordChange: (value: string) => void;
-  exporting: boolean;
-  feedback: CryptoFeedback | null;
-  onClose: () => void;
-  onConfirm: () => void;
+  totalCount: number
+  password: string
+  onPasswordChange: (value: string) => void
+  exporting: boolean
+  feedback: CryptoFeedback | null
+  onClose: () => void
+  onConfirm: () => void
 }
 
 export default function ExportProviderDialog({
@@ -62,7 +62,10 @@ export default function ExportProviderDialog({
         />
       </FormRow>
       {feedback && (
-        <div className={`provider-test-result ${feedback.type === 'success' ? 'ok' : 'fail'}`} data-name="advanced-panel.export-dialog-feedback">
+        <div
+          className={`provider-test-result ${feedback.type === 'success' ? 'ok' : 'fail'}`}
+          data-name="advanced-panel.export-dialog-feedback"
+        >
           {feedback.msg}
         </div>
       )}
@@ -89,5 +92,5 @@ export default function ExportProviderDialog({
         </Button>
       </div>
     </Modal>
-  );
+  )
 }

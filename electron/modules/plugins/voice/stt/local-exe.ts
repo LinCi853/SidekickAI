@@ -81,11 +81,19 @@ export async function recognizeWithLocalExe(
     const MAX_OUTPUT_CHARS = 4 * 1024 * 1024
     const timer = setTimeout(() => {
       console.error('[SttEngine] 本地识别超时（60s），已终止进程')
-      try { proc.kill() } catch { /* 进程已退出 */ }
+      try {
+        proc.kill()
+      } catch {
+        /* 进程已退出 */
+      }
       resolve('')
     }, RECOGNIZE_TIMEOUT_MS)
-    proc.stdout?.on('data', (d: Buffer) => { stdout = (stdout + d.toString()).slice(-MAX_OUTPUT_CHARS) })
-    proc.stderr?.on('data', (d: Buffer) => { stderr = (stderr + d.toString()).slice(-MAX_OUTPUT_CHARS) })
+    proc.stdout?.on('data', (d: Buffer) => {
+      stdout = (stdout + d.toString()).slice(-MAX_OUTPUT_CHARS)
+    })
+    proc.stderr?.on('data', (d: Buffer) => {
+      stderr = (stderr + d.toString()).slice(-MAX_OUTPUT_CHARS)
+    })
     proc.on('error', (err) => {
       console.error('[SttEngine] 本地识别软件启动失败:', err.message)
       clearTimeout(timer)

@@ -1,30 +1,53 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const lookup = vi.hoisted(() => ({ contents: new Map<number, unknown>(), record: null as null | { windowId: string; tabId: string; profileId: string } }))
+const lookup = vi.hoisted(() => ({
+  contents: new Map<number, unknown>(),
+  record: null as null | { windowId: string; tabId: string; profileId: string },
+}))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: (host: { win: unknown }) => host.win },
   webContents: { fromId: (id: number) => lookup.contents.get(id) },
 }))
 vi.mock('./webview-registry.js', () => ({ getRecordByWebContentsId: () => lookup.record }))
 vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: () => 'main' }))
-import { captureWebviewHotkeyTarget, trackWebviewHotkeyTarget, validateWebviewHotkeyTarget } from './webview-hotkey-target.js'
+import {
+  captureWebviewHotkeyTarget,
+  trackWebviewHotkeyTarget,
+  validateWebviewHotkeyTarget,
+} from './webview-hotkey-target.js'
 
 function page() {
   const guest = Object.assign(new EventEmitter(), {
-    id: 41, destroyed: false, focused: true, url: 'https://example.com/chat',
-    isDestroyed() { return this.destroyed },
-    isFocused() { return this.focused },
-    getURL() { return this.url },
+    id: 41,
+    destroyed: false,
+    focused: true,
+    url: 'https://example.com/chat',
+    isDestroyed() {
+      return this.destroyed
+    },
+    isFocused() {
+      return this.focused
+    },
+    getURL() {
+      return this.url
+    },
   })
-  const host = { id: 12, isDestroyed: () => false, win: { isDestroyed: () => false, isFocused: () => true } }
+  const host = {
+    id: 12,
+    isDestroyed: () => false,
+    win: { isDestroyed: () => false, isFocused: () => true },
+  }
   lookup.contents.set(guest.id, guest)
   trackWebviewHotkeyTarget(guest as never, host as never)
   return { guest, host }
 }
 
 describe('Guest hotkey identity', () => {
-  beforeEach(() => { lookup.contents.clear(); lookup.record = null })
+  beforeEach(() => {
+    lookup.contents.clear()
+    lookup.record = null
+  })
 
   it('rejects a late action after reload even when guest and URL are unchanged', () => {
     const { guest, host } = page()

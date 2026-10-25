@@ -3,15 +3,15 @@
    由原 PresetSection 内联表单迁移而来，与 AiAppEditorModal 结构一致。
    ===================================================================== */
 
-import { useState, useEffect, useCallback } from 'react';
-import type { DevicePreset } from '../lib/electron-api';
-import { savePreset } from '../lib/electron-api';
-import { useToast } from '../hooks/useToast';
-import Button from './ui/Button';
-import Modal from './ui/Modal';
-import { Combobox } from './ui';
-import '../pages/PromptLibraryView.css';
-import './AiAppEditorModal.css';
+import { useState, useEffect, useCallback } from 'react'
+import type { DevicePreset } from '../lib/electron-api'
+import { savePreset } from '../lib/electron-api'
+import { useToast } from '../hooks/useToast'
+import Button from './ui/Button'
+import Modal from './ui/Modal'
+import { Combobox } from './ui'
+import '../pages/PromptLibraryView.css'
+import './AiAppEditorModal.css'
 
 /** 创建空白预设草稿（新增时使用） */
 function emptyDraft(): DevicePreset {
@@ -33,16 +33,16 @@ function emptyDraft(): DevicePreset {
     chMobile: false,
     language: 'zh-CN',
     timezone: 'Asia/Shanghai',
-  };
+  }
 }
 
 export interface PresetEditorModalProps {
-  open: boolean;
-  onClose: () => void;
+  open: boolean
+  onClose: () => void
   /** 编辑模式：指定预设；新建模式：不传或 mode='create' */
-  preset?: DevicePreset | null;
-  mode?: 'edit' | 'create';
-  onSaved?: () => void;
+  preset?: DevicePreset | null
+  mode?: 'edit' | 'create'
+  onSaved?: () => void
 }
 
 export default function PresetEditorModal({
@@ -52,66 +52,65 @@ export default function PresetEditorModal({
   mode = 'edit',
   onSaved,
 }: PresetEditorModalProps) {
-  const isCreateMode = mode === 'create';
-  const [draft, setDraft] = useState<DevicePreset>(emptyDraft());
-  const [saving, setSaving] = useState(false);
-  const { toast, showToast } = useToast();
+  const isCreateMode = mode === 'create'
+  const [draft, setDraft] = useState<DevicePreset>(emptyDraft())
+  const [saving, setSaving] = useState(false)
+  const { toast, showToast } = useToast()
 
   // 打开时初始化草稿
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
     if (isCreateMode) {
-      setDraft(emptyDraft());
+      setDraft(emptyDraft())
     } else if (preset) {
-      setDraft({ ...preset });
+      setDraft({ ...preset })
     } else {
-      setDraft(emptyDraft());
+      setDraft(emptyDraft())
     }
-  }, [open, isCreateMode, preset]);
+  }, [open, isCreateMode, preset])
 
   /** 更新草稿标量字段 */
-  const updateField = useCallback(<K extends keyof DevicePreset>(key: K, value: DevicePreset[K]) => {
-    setDraft((d) => ({ ...d, [key]: value }));
-  }, []);
+  const updateField = useCallback(
+    <K extends keyof DevicePreset>(key: K, value: DevicePreset[K]) => {
+      setDraft((d) => ({ ...d, [key]: value }))
+    },
+    [],
+  )
 
   /** 更新视口字段 */
   const updateViewport = useCallback((field: 'width' | 'height', value: number) => {
-    setDraft((d) => ({ ...d, viewport: { ...d.viewport, [field]: value } }));
-  }, []);
+    setDraft((d) => ({ ...d, viewport: { ...d.viewport, [field]: value } }))
+  }, [])
 
   const handleSave = async () => {
     if (!draft.name.trim()) {
-      showToast('请填写名称');
-      return;
+      showToast('请填写名称')
+      return
     }
     if (!draft.userAgent.trim()) {
-      showToast('请填写 User-Agent');
-      return;
+      showToast('请填写 User-Agent')
+      return
     }
-    setSaving(true);
+    setSaving(true)
     try {
-      await savePreset(draft);
-      showToast(isCreateMode ? '已创建' : '已保存');
-      onSaved?.();
-      onClose();
+      await savePreset(draft)
+      showToast(isCreateMode ? '已创建' : '已保存')
+      onSaved?.()
+      onClose()
     } catch (e) {
-      console.error('[PresetEditorModal] 保存失败:', e);
-      showToast('保存失败: ' + (e instanceof Error ? e.message : String(e)));
+      console.error('[PresetEditorModal] 保存失败:', e)
+      showToast('保存失败: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
-  const title = isCreateMode ? '新建设备预设' : `编辑设备预设${preset?.name ? ' · ' + preset.name : ''}`;
+  const title = isCreateMode
+    ? '新建设备预设'
+    : `编辑设备预设${preset?.name ? ' · ' + preset.name : ''}`
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={title}
-      portal
-      className="ai-app-editor-modal"
-    >
+    <Modal open={open} onClose={onClose} title={title} portal className="ai-app-editor-modal">
       <div className="ai-app-editor-body" data-name="preset-editor.body">
         <FieldGroup label="名称">
           <input
@@ -337,19 +336,24 @@ export default function PresetEditorModal({
             disabled={saving || !draft.name.trim() || !draft.userAgent.trim()}
             data-name="preset-editor.save-button"
           >
-            {saving ? '保存中…' : (isCreateMode ? '创建' : '保存')}
+            {saving ? '保存中…' : isCreateMode ? '创建' : '保存'}
           </Button>
         </div>
       </div>
 
       {/* toast */}
       {toast && (
-        <div className="prompt-toast app-toast is-open" role="status" aria-live="polite" data-name="preset-editor.toast">
+        <div
+          className="prompt-toast app-toast is-open"
+          role="status"
+          aria-live="polite"
+          data-name="preset-editor.toast"
+        >
           {toast}
         </div>
       )}
     </Modal>
-  );
+  )
 }
 
 /* =====================================================================
@@ -363,5 +367,5 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
       </label>
       {children}
     </div>
-  );
+  )
 }

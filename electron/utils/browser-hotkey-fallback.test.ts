@@ -1,10 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../platform/hotkey/uiohook.js', () => ({ UiohookKey: { F11: 87, C: 46, P: 25 } }))
-import { dispatchBrowserHotkeyFallback, matchBrowserHotkeyFallback, setBrowserHotkeyFallback, tryForward, type BrowserHotkeyFallbackEvent } from './browser-hotkey-fallback'
+import {
+  dispatchBrowserHotkeyFallback,
+  matchBrowserHotkeyFallback,
+  setBrowserHotkeyFallback,
+  tryForward,
+  type BrowserHotkeyFallbackEvent,
+} from './browser-hotkey-fallback'
 
-const event = (keycode: number, modifiers: Partial<BrowserHotkeyFallbackEvent> = {}): BrowserHotkeyFallbackEvent => ({
-  keycode, ctrl: false, alt: false, shift: false, meta: false, ...modifiers,
+const event = (
+  keycode: number,
+  modifiers: Partial<BrowserHotkeyFallbackEvent> = {},
+): BrowserHotkeyFallbackEvent => ({
+  keycode,
+  ctrl: false,
+  alt: false,
+  shift: false,
+  meta: false,
+  ...modifiers,
 })
 
 afterEach(() => {
@@ -29,7 +43,8 @@ describe('browser hook fallback', () => {
   it('keeps guest and hook deduplication scoped to the same host', () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    const firstHost = {}, secondHost = {}
+    const firstHost = {},
+      secondHost = {}
     expect(tryForward('toggleFullscreen', firstHost)).toBe(true)
     expect(tryForward('toggleFullscreen', firstHost)).toBe(false)
     expect(tryForward('toggleFullscreen', secondHost)).toBe(true)

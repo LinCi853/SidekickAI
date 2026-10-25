@@ -23,7 +23,11 @@ import {
 } from './helpers.js'
 import { browserPorts } from '../browser-port.js'
 import { buildWindowConfig } from './window-config-builder.js'
-import { calculateMainWindowMinWidth, getUiScaleFromSettings, MAIN_WINDOW_MIN_HEIGHT } from './window-size-helpers.js'
+import {
+  calculateMainWindowMinWidth,
+  getUiScaleFromSettings,
+  MAIN_WINDOW_MIN_HEIGHT,
+} from './window-size-helpers.js'
 
 /**
  * 主窗口渲染层加载失败重试状态。
@@ -53,29 +57,31 @@ export function createMainWindow(): void {
   const appSettings = getAppSettings()
   const minWidth = calculateMainWindowMinWidth(uiScale, appSettings.topBarVisibleButtons)
 
-  const win = new BrowserWindow(buildWindowConfig({
-    width,
-    height,
-    x: saved.bounds.x,
-    y: saved.bounds.y,
-    minWidth,
-    minHeight: MAIN_WINDOW_MIN_HEIGHT,
-    show: false,
-    frame: false,
-    // resizable:true 让 setBounds 可自由缩小（Win32 需保留 WS_THICKFRAME 才能 resize）；
-    // 原生 resize 边框由 thickFrame:false 禁用，用户无法通过窗口边缘拖拽 resize。
-    resizable: true,
-    alwaysOnTop: saved.alwaysOnTop,
-    title: '工百窗',
-    webPreferences: {
-      ...createDefaultWebPreferences({
-        preload: getPreloadPath(),
-        webviewTag: true,
-      }),
-      // 启用 OverlayScrollbar 提供跨平台一致的滚动条外观
-      additionalArguments: ['--enable-features=OverlayScrollbar'],
-    },
-  }))
+  const win = new BrowserWindow(
+    buildWindowConfig({
+      width,
+      height,
+      x: saved.bounds.x,
+      y: saved.bounds.y,
+      minWidth,
+      minHeight: MAIN_WINDOW_MIN_HEIGHT,
+      show: false,
+      frame: false,
+      // resizable:true 让 setBounds 可自由缩小（Win32 需保留 WS_THICKFRAME 才能 resize）；
+      // 原生 resize 边框由 thickFrame:false 禁用，用户无法通过窗口边缘拖拽 resize。
+      resizable: true,
+      alwaysOnTop: saved.alwaysOnTop,
+      title: '工百窗',
+      webPreferences: {
+        ...createDefaultWebPreferences({
+          preload: getPreloadPath(),
+          webviewTag: true,
+        }),
+        // 启用 OverlayScrollbar 提供跨平台一致的滚动条外观
+        additionalArguments: ['--enable-features=OverlayScrollbar'],
+      },
+    }),
+  )
   windowState.mainWindow = win
   focusManager.track(win)
 
@@ -97,7 +103,11 @@ export function createMainWindow(): void {
     // 首次启动（无保存位置）：默认显示在屏幕右侧四分之三区域居中
     const defaultX = Math.round(workArea.x + workArea.width * 0.75 - width / 2)
     const defaultY = Math.round(workArea.y + (workArea.height - height) / 2)
-    try { win.setPosition(defaultX, defaultY) } catch { /* 忽略 */ }
+    try {
+      win.setPosition(defaultX, defaultY)
+    } catch {
+      /* 忽略 */
+    }
   }
   if (saved.isMaximized) {
     win.maximize()
@@ -170,12 +180,19 @@ export function createMainWindow(): void {
     if (st.retries >= 2) {
       console.error('[main] 渲染进程加载失败已达重试上限，加载兜底空白页避免永久白屏')
       try {
-        win.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
-          '<html><body style="font-family:sans-serif;padding:24px;color:#333">' +
-          '<h2>窗口加载失败</h2><p>请尝试重启应用或检查网络代理设置。</p>' +
-          '<p style="color:#999;font-size:12px">错误代码: ' + code + ' ' + (desc || '') + '</p>' +
-          '</body></html>'
-        ))
+        win.webContents.loadURL(
+          'data:text/html;charset=utf-8,' +
+            encodeURIComponent(
+              '<html><body style="font-family:sans-serif;padding:24px;color:#333">' +
+                '<h2>窗口加载失败</h2><p>请尝试重启应用或检查网络代理设置。</p>' +
+                '<p style="color:#999;font-size:12px">错误代码: ' +
+                code +
+                ' ' +
+                (desc || '') +
+                '</p>' +
+                '</body></html>',
+            ),
+        )
       } catch (e) {
         console.error('[main] 加载兜底页失败:', e)
       }

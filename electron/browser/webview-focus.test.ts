@@ -39,8 +39,14 @@ describe('webview focus tracking', () => {
     focus.installWebviewFocusTracking()
     const a = { id: 1 }
     const b = { id: 2 }
-    electron.handlers.get(IPC_CHANNELS.WEBVIEW_FOCUS_EDITABLE)?.({ sender: a, returnValue: undefined }, true)
-    electron.handlers.get(IPC_CHANNELS.WEBVIEW_FOCUS_EDITABLE)?.({ sender: b, returnValue: undefined }, false)
+    electron.handlers.get(IPC_CHANNELS.WEBVIEW_FOCUS_EDITABLE)?.(
+      { sender: a, returnValue: undefined },
+      true,
+    )
+    electron.handlers.get(IPC_CHANNELS.WEBVIEW_FOCUS_EDITABLE)?.(
+      { sender: b, returnValue: undefined },
+      false,
+    )
     expect(focus.isGuestFocusEditable(a as never)).toBe(true)
     expect(focus.isGuestFocusEditable(b as never)).toBe(false)
     // 从未上报的 webContents 视为否

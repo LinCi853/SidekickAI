@@ -3,15 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const tables = vi.hoisted(() => new Map<string, Record<string, unknown>>())
 
 vi.mock('../../../store/module-state-store.js', () => ({
-  createSqliteJsonStore: ({ tableName, defaults }: { tableName: string; defaults: Record<string, unknown> }) => {
+  createSqliteJsonStore: ({
+    tableName,
+    defaults,
+  }: {
+    tableName: string
+    defaults: Record<string, unknown>
+  }) => {
     const data = () => {
       if (!tables.has(tableName)) tables.set(tableName, { ...defaults })
       return tables.get(tableName)!
     }
     return {
       get: (key: string) => data()[key],
-      set: (key: string, value: unknown) => { data()[key] = value },
-      delete: (key: string) => { delete data()[key] },
+      set: (key: string, value: unknown) => {
+        data()[key] = value
+      },
+      delete: (key: string) => {
+        delete data()[key]
+      },
       has: (key: string) => key in data(),
       invalidate: () => {},
     }
@@ -38,7 +48,10 @@ describe('tts config store', () => {
     })
 
     expect(store.getTtsSettings()).toEqual({ ttsMode: 'ai', ttsProvider: 'provider-a' })
-    expect(tables.get('voice_config')?.config).toMatchObject({ ttsMode: 'ai', ttsProvider: 'provider-a' })
+    expect(tables.get('voice_config')?.config).toMatchObject({
+      ttsMode: 'ai',
+      ttsProvider: 'provider-a',
+    })
     expect(tables.get('tts_config')).toMatchObject({ migratedFromVoice: true })
 
     tables.get('voice_config')!.config = { ttsMode: 'disable', ttsProvider: 'provider-b' }
@@ -50,6 +63,9 @@ describe('tts config store', () => {
 
     expect(store.getTtsSettings().ttsProvider).toBe('provider-a')
     expect(store.getTtsSettings().ttsMode).toBe('disable')
-    expect(tables.get('tts_config')?.config).toEqual({ ttsMode: 'disable', ttsProvider: 'provider-a' })
+    expect(tables.get('tts_config')?.config).toEqual({
+      ttsMode: 'disable',
+      ttsProvider: 'provider-a',
+    })
   })
 })

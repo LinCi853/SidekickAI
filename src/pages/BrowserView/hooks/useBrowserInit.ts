@@ -9,13 +9,13 @@
    - E3 根据标签状态同步窗口标题
    ===================================================================== */
 
-import { useEffect, useRef, useState } from 'react';
-import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
-import { useProfileStore } from '../../../store/useProfileStore.js';
-import { useTabStore } from '../../../store/useTabStore.js';
-import { consumeAccumulatedLinks, browserTabMigrateBack } from '../../../lib/electron-api/index.js';
-import { getQueryParam, INTERNAL_TAB_SOURCES } from '../constants.js';
-import { formatWindowTitle } from '../../../lib/window-title';
+import { useEffect, useRef, useState } from 'react'
+import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
+import { useProfileStore } from '../../../store/useProfileStore.js'
+import { useTabStore } from '../../../store/useTabStore.js'
+import { consumeAccumulatedLinks, browserTabMigrateBack } from '../../../lib/electron-api/index.js'
+import { getQueryParam, INTERNAL_TAB_SOURCES } from '../constants.js'
+import { formatWindowTitle } from '../../../lib/window-title'
 
 export function useBrowserInit() {
   const {
@@ -30,68 +30,66 @@ export function useBrowserInit() {
     updateTabNavState,
     bookmarkBarVisible,
     setBookmarkBarVisible,
-  } = useBrowserTabStore();
+  } = useBrowserTabStore()
 
-  const profiles = useProfileStore((s) => s.profiles);
-  const [ready, setReady] = useState(false);
-  const profile = profiles.find(item => item.id === profileId) ?? null;
-  const addressBarRef = useRef<HTMLInputElement | null>(null);
-  const webviewContainerRef = useRef<HTMLDivElement | null>(null);
+  const profiles = useProfileStore((s) => s.profiles)
+  const [ready, setReady] = useState(false)
+  const profile = profiles.find((item) => item.id === profileId) ?? null
+  const addressBarRef = useRef<HTMLInputElement | null>(null)
+  const webviewContainerRef = useRef<HTMLDivElement | null>(null)
 
   // 初始化
   useEffect(() => {
-    const windowId = getQueryParam('windowId') || '';
-    const pid = getQueryParam('profileId') || '';
-    if (!windowId || !pid) return;
+    const windowId = getQueryParam('windowId') || ''
+    const pid = getQueryParam('profileId') || ''
+    if (!windowId || !pid) return
 
     void (async () => {
-      await useProfileStore.getState().loadProfiles();
-      await init(windowId, pid);
-      setReady(true);
+      await useProfileStore.getState().loadProfiles()
+      await init(windowId, pid)
+      setReady(true)
       // E1：消费主窗口 AI 应用内累积的链接，转为浏览器窗口的标签页。
       // consume 语义：取出并清空，避免重复消费。累积链接在主窗口拦截 new-window 时
       // 由 helpers.ts 写入（仅主窗口模式，浏览器窗口模式不累积）。
       try {
-        const links = await consumeAccumulatedLinks(pid);
+        const links = await consumeAccumulatedLinks(pid)
         if (links && links.length > 0) {
-          const store = useBrowserTabStore.getState();
+          const store = useBrowserTabStore.getState()
           for (const link of links) {
-            store.newTab(link.url, { source: 'external', kind: 'web' });
+            store.newTab(link.url, { source: 'external', kind: 'web' })
             // newTab 不接受 title 参数，创建后立即更新标题为累积时的标题（通常为 URL）。
             // webview 加载页面后 page-title-updated 事件会自动更新为真实标题。
-            const newTabId = useBrowserTabStore.getState().activeTabId;
+            const newTabId = useBrowserTabStore.getState().activeTabId
             if (newTabId && link.title) {
-              store.updateTabTitle(newTabId, link.title);
+              store.updateTabTitle(newTabId, link.title)
             }
           }
-          console.log(`[BrowserView] E1 消费 ${links.length} 条累积链接`);
+          console.log(`[BrowserView] E1 消费 ${links.length} 条累积链接`)
         }
       } catch (e) {
-        console.warn('[BrowserView] E1 消费累积链接失败:', e);
+        console.warn('[BrowserView] E1 消费累积链接失败:', e)
       }
 
       // P1-3：确保窗口至少有一个非内部标签（空白首页标签）
-      const store = useBrowserTabStore.getState();
-      const hasNonInternal = store.tabs.some((t) => !INTERNAL_TAB_SOURCES.includes(t.source));
+      const store = useBrowserTabStore.getState()
+      const hasNonInternal = store.tabs.some((t) => !INTERNAL_TAB_SOURCES.includes(t.source))
       if (!hasNonInternal) {
-        store.newTab('', { source: 'initial', kind: 'home' });
+        store.newTab('', { source: 'initial', kind: 'home' })
       }
-    })();
-  }, [init]);
+    })()
+  }, [init])
 
   // Keep the product and profile recognizable in the system window switcher.
   useEffect(() => {
-    const hasAppTab = tabs.some(
-      (t) => !INTERNAL_TAB_SOURCES.includes(t.source),
-    );
-    document.title = formatWindowTitle(hasAppTab && profile ? profile.name : '浏览器');
-  }, [tabs, profile]);
+    const hasAppTab = tabs.some((t) => !INTERNAL_TAB_SOURCES.includes(t.source))
+    document.title = formatWindowTitle(hasAppTab && profile ? profile.name : '浏览器')
+  }, [tabs, profile])
 
   // 关闭窗口时，将所有网页标签迁移回主窗口（按 parentTabId 精确恢复）
   useEffect(() => {
     const handleBeforeUnload = () => {
-      const store = useBrowserTabStore.getState();
-      if (!store.profileId) return;
+      const store = useBrowserTabStore.getState()
+      if (!store.profileId) return
       // E2：收集所有非内部标签的 finalUrls + parentTabId + originalOrder + source
       // originalOrder：同 parentTabId 内的原始排序，主窗口据此按序插入到父标签右侧
       // source：'settings' 迁移后通知主窗口切换至主页（不作为主窗口主页插入）
@@ -103,28 +101,29 @@ export function useBrowserInit() {
           title: t.title || '',
           originalOrder: idx,
           source: t.source,
-        }));
+        }))
       // 同时传当前激活标签的 url/title
-      const activeTab = store.tabs.find((t) => t.id === store.activeTabId);
-      const isMigratable = activeTab && activeTab.source !== 'settings' && activeTab.source !== 'bookmark-manager' && activeTab.source !== 'history' && activeTab.source !== 'downloads';
-      const activeUrl = isMigratable
-        ? (activeTab.url || '')
-        : (finalUrls[0]?.url ?? '');
-      const activeTitle = isMigratable
-        ? (activeTab.title || '')
-        : (finalUrls[0]?.title ?? '');
+      const activeTab = store.tabs.find((t) => t.id === store.activeTabId)
+      const isMigratable =
+        activeTab &&
+        activeTab.source !== 'settings' &&
+        activeTab.source !== 'bookmark-manager' &&
+        activeTab.source !== 'history' &&
+        activeTab.source !== 'downloads'
+      const activeUrl = isMigratable ? activeTab.url || '' : (finalUrls[0]?.url ?? '')
+      const activeTitle = isMigratable ? activeTab.title || '' : (finalUrls[0]?.title ?? '')
       browserTabMigrateBack({
         profileId: store.profileId,
         url: activeUrl,
         title: activeTitle,
         finalUrls,
-      });
+      })
       // D3: 迁移完成后触发主窗口 AI 输入框聚焦
-      useTabStore.getState().triggerFocusAiInput();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+      useTabStore.getState().triggerFocusAiInput()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
 
   return {
     tabs,
@@ -143,5 +142,5 @@ export function useBrowserInit() {
     profile,
     addressBarRef,
     webviewContainerRef,
-  };
+  }
 }

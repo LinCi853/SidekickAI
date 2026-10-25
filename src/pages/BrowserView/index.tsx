@@ -11,32 +11,31 @@
    useBrowserWebview / useBrowserShortcuts 四个 hook，并渲染子组件。
    ===================================================================== */
 
-import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms.js';
-import TabsPanel from './TabBar/TabsPanel.js';
-import NavBar from './NavBar/NavBar.js';
-import BookmarksBar from './BookmarksBar/BookmarksBar.js';
-import BrowserWebviewTab from './BrowserWebviewTab.js';
-import DeferredTab from '../../components/DeferredTab';
-import BrowserSettingsTab from './BrowserSettingsTab.js';
-import ViewSourceTab from './ViewSourceTab.js';
-import PrintPreviewTab from './PrintPreviewTab.js';
-import BrowserStatusBar from './BrowserStatusBar.js';
-import BookmarkManager from './BookmarksBar/BookmarkManager.js';
-import NavHistoryPanel from '../HistoryDownloadView/NavHistoryPanel.js';
-import DownloadPanel from '../HistoryDownloadView/DownloadPanel.js';
-import ZoomIndicator from './ZoomIndicator.js';
-import WindowResizeHandles from '../../components/WindowResizeHandles.js';
-import ShortcutHelp from '../../components/ShortcutHelp';
-import { useBrowserInit } from './hooks/useBrowserInit.js';
-import { useBrowserNavigation } from './hooks/useBrowserNavigation.js';
-import { useBrowserWebview } from './hooks/useBrowserWebview.js';
-import { useBrowserShortcuts } from './hooks/useBrowserShortcuts.js';
-import { useTabProcessPriority } from '../../hooks/useTabProcessPriority';
-import { useBrowserTabStore } from '../../store/useBrowserTabStore';
-import { useEffect, useCallback, useState } from 'react';
-import './styles.css';
-import '../HistoryDownloadView/styles.css';
-
+import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms.js'
+import TabsPanel from './TabBar/TabsPanel.js'
+import NavBar from './NavBar/NavBar.js'
+import BookmarksBar from './BookmarksBar/BookmarksBar.js'
+import BrowserWebviewTab from './BrowserWebviewTab.js'
+import DeferredTab from '../../components/DeferredTab'
+import BrowserSettingsTab from './BrowserSettingsTab.js'
+import ViewSourceTab from './ViewSourceTab.js'
+import PrintPreviewTab from './PrintPreviewTab.js'
+import BrowserStatusBar from './BrowserStatusBar.js'
+import BookmarkManager from './BookmarksBar/BookmarkManager.js'
+import NavHistoryPanel from '../HistoryDownloadView/NavHistoryPanel.js'
+import DownloadPanel from '../HistoryDownloadView/DownloadPanel.js'
+import ZoomIndicator from './ZoomIndicator.js'
+import WindowResizeHandles from '../../components/WindowResizeHandles.js'
+import ShortcutHelp from '../../components/ShortcutHelp'
+import { useBrowserInit } from './hooks/useBrowserInit.js'
+import { useBrowserNavigation } from './hooks/useBrowserNavigation.js'
+import { useBrowserWebview } from './hooks/useBrowserWebview.js'
+import { useBrowserShortcuts } from './hooks/useBrowserShortcuts.js'
+import { useTabProcessPriority } from '../../hooks/useTabProcessPriority'
+import { useBrowserTabStore } from '../../store/useBrowserTabStore'
+import { useEffect, useCallback, useState } from 'react'
+import './styles.css'
+import '../HistoryDownloadView/styles.css'
 
 export default function BrowserView() {
   const {
@@ -51,10 +50,10 @@ export default function BrowserView() {
     profile: activeProfile,
     addressBarRef,
     webviewContainerRef,
-  } = useBrowserInit();
+  } = useBrowserInit()
 
   // 浏览器窗口 id（用于同步 guest 进程优先级）
-  const browserWindowId = useBrowserTabStore((state) => state.windowId);
+  const browserWindowId = useBrowserTabStore((state) => state.windowId)
 
   const navigation = useBrowserNavigation({
     activeTabId,
@@ -62,7 +61,7 @@ export default function BrowserView() {
     tabs,
     newTab,
     switchTab,
-  });
+  })
 
   const webview = useBrowserWebview({
     webviewContainerRef,
@@ -71,7 +70,7 @@ export default function BrowserView() {
     profileId,
     newTab,
     activeProfile,
-  });
+  })
 
   useBrowserShortcuts({
     addressBarRef,
@@ -100,36 +99,48 @@ export default function BrowserView() {
     zoomResetAction: webview.zoomResetAction,
     toggleCloudPc: webview.toggleCloudPc,
     handleToggleSpatialNav: webview.handleToggleSpatialNav,
-  });
+  })
 
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null
 
   useTabProcessPriority({
     windowId: browserWindowId,
     tabs,
     activeTabId,
     // 媒体标签保持常规优先级。
-    isProtected: useCallback((tabId: string) => {
-      const tab = tabs.find((item) => item.id === tabId);
-      return tab?.audible === true && tab?.muted !== true;
-    }, [tabs]),
-  });
+    isProtected: useCallback(
+      (tabId: string) => {
+        const tab = tabs.find((item) => item.id === tabId)
+        return tab?.audible === true && tab?.muted !== true
+      },
+      [tabs],
+    ),
+  })
   // 主题色
   const platformDef = activeProfile?.aiPlatformId
     ? AI_PLATFORMS.find((p) => p.id === activeProfile.aiPlatformId)
-    : null;
-  const themeColor = activeProfile?.aiThemeColor || platformDef?.themeColor || '#c25a4a';
+    : null
+  const themeColor = activeProfile?.aiThemeColor || platformDef?.themeColor || '#c25a4a'
 
   /* ===== 加载态 ===== */
 
   if (!ready || !activeProfile) {
     return (
       <div className="browser-view app-shell" data-name="browser.loading">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#999' }} data-name="browser.loading-text">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            color: '#999',
+          }}
+          data-name="browser.loading-text"
+        >
           正在加载...
         </div>
       </div>
-    );
+    )
   }
 
   /* ===== 渲染 ===== */
@@ -145,21 +156,34 @@ export default function BrowserView() {
     >
       {/* 沉浸式全屏悬浮退出条（鼠标移到顶部显示） */}
       {webview.isFullscreen && (
-        <div className={`browser-fullscreen-bar${webview.fsBarVisible ? ' visible' : ''}`} data-name="browser.fullscreen-bar">
+        <div
+          className={`browser-fullscreen-bar${webview.fsBarVisible ? ' visible' : ''}`}
+          data-name="browser.fullscreen-bar"
+        >
           <span className="browser-fullscreen-bar-title" data-name="browser.fullscreen-bar-title">
             {webview.isCloudPc ? '云电脑模式 · 快捷键已直通远端' : '沉浸式全屏'}
           </span>
           {webview.isCloudPc && (
             <>
               <div className="browser-cloud-pc-zoom" data-name="browser.cloud-pc-zoom">
-                <button type="button" className={webview.cloudPcZoomMode === 'auto' ? 'zoom-btn active' : 'zoom-btn'} onClick={webview.resetAutoZoom} data-name="browser.cloud-pc-zoom-auto">
+                <button
+                  type="button"
+                  className={webview.cloudPcZoomMode === 'auto' ? 'zoom-btn active' : 'zoom-btn'}
+                  onClick={webview.resetAutoZoom}
+                  data-name="browser.cloud-pc-zoom-auto"
+                >
                   自动
                 </button>
                 {[1, 1.25, 1.5, 2].map((f, idx) => (
                   <button
                     key={f}
                     type="button"
-                    className={webview.cloudPcZoomMode === 'manual' && Math.abs(webview.cloudPcZoomFactor - f) < 0.01 ? 'zoom-btn active' : 'zoom-btn'}
+                    className={
+                      webview.cloudPcZoomMode === 'manual' &&
+                      Math.abs(webview.cloudPcZoomFactor - f) < 0.01
+                        ? 'zoom-btn active'
+                        : 'zoom-btn'
+                    }
                     onClick={() => webview.setManualZoom(f)}
                     data-name={'browser.cloud-pc-zoom-factor-' + (idx + 1)}
                   >
@@ -167,21 +191,39 @@ export default function BrowserView() {
                   </button>
                 ))}
                 {webview.cloudPcRemoteRes && (
-                  <span className="zoom-info" data-name="browser.cloud-pc-zoom-info">远端 {webview.cloudPcRemoteRes.width}×{webview.cloudPcRemoteRes.height} · {Math.round(webview.cloudPcZoomFactor * 100)}%</span>
+                  <span className="zoom-info" data-name="browser.cloud-pc-zoom-info">
+                    远端 {webview.cloudPcRemoteRes.width}×{webview.cloudPcRemoteRes.height} ·{' '}
+                    {Math.round(webview.cloudPcZoomFactor * 100)}%
+                  </span>
                 )}
               </div>
-              <button type="button" onClick={webview.toggleCloudPc} data-name="browser.cloud-pc-exit">
+              <button
+                type="button"
+                onClick={webview.toggleCloudPc}
+                data-name="browser.cloud-pc-exit"
+              >
                 退出云电脑模式
               </button>
             </>
           )}
-          <button type="button" onClick={() => { console.log('[fullscreen-ui] 退出全屏 button clicked'); webview.handleExitFullscreen(); }} data-name="browser.fullscreen-exit">
+          <button
+            type="button"
+            onClick={() => {
+              console.log('[fullscreen-ui] 退出全屏 button clicked')
+              webview.handleExitFullscreen()
+            }}
+            data-name="browser.fullscreen-exit"
+          >
             退出全屏 (F11 / Esc)
           </button>
         </div>
       )}
       {/* 页面缩放浮窗（右上角） */}
-      <ZoomIndicator onZoomIn={webview.zoomInAction} onZoomOut={webview.zoomOutAction} onZoomReset={webview.zoomResetAction} />
+      <ZoomIndicator
+        onZoomIn={webview.zoomInAction}
+        onZoomOut={webview.zoomOutAction}
+        onZoomReset={webview.zoomResetAction}
+      />
       {/* 云电脑模式进入提示（4 秒后自动消失） */}
       {webview.cloudPcNotice && (
         <div className="browser-cloud-pc-notice" data-name="browser.cloud-pc-notice">
@@ -192,12 +234,23 @@ export default function BrowserView() {
       {webview.cloudPcSuggestion && !webview.isCloudPc && (
         <div className="browser-cloud-pc-suggest" data-name="browser.cloud-pc-suggest">
           <span className="browser-cloud-pc-suggest-text" data-name="browser.cloud-pc-suggest-text">
-            检测到云电脑/云游戏网站「{webview.cloudPcSuggestion.siteName}」，建议开启云电脑模式（快捷键直通远端、自动匹配分辨率）
+            检测到云电脑/云游戏网站「{webview.cloudPcSuggestion.siteName}
+            」，建议开启云电脑模式（快捷键直通远端、自动匹配分辨率）
           </span>
-          <button type="button" className="suggest-btn primary" onClick={webview.acceptCloudPcSuggestion} data-name="browser.cloud-pc-suggest-open">
+          <button
+            type="button"
+            className="suggest-btn primary"
+            onClick={webview.acceptCloudPcSuggestion}
+            data-name="browser.cloud-pc-suggest-open"
+          >
             开启
           </button>
-          <button type="button" className="suggest-btn" onClick={webview.dismissCloudPcSuggestion} data-name="browser.cloud-pc-suggest-ignore">
+          <button
+            type="button"
+            className="suggest-btn"
+            onClick={webview.dismissCloudPcSuggestion}
+            data-name="browser.cloud-pc-suggest-ignore"
+          >
             忽略
           </button>
         </div>
@@ -262,7 +315,7 @@ export default function BrowserView() {
               >
                 <BrowserSettingsTab profile={activeProfile} />
               </div>
-            );
+            )
           }
           // 书签管理器标签页
           if (tab.source === 'bookmark-manager') {
@@ -280,7 +333,7 @@ export default function BrowserView() {
               >
                 <BookmarkManager onOpenInNewTab={(url) => newTab(url, { kind: 'web' })} />
               </div>
-            );
+            )
           }
           // 导航历史标签页
           if (tab.source === 'history') {
@@ -298,7 +351,7 @@ export default function BrowserView() {
               >
                 <NavHistoryPanel />
               </div>
-            );
+            )
           }
           // 下载管理标签页
           if (tab.source === 'downloads') {
@@ -316,7 +369,7 @@ export default function BrowserView() {
               >
                 <DownloadPanel />
               </div>
-            );
+            )
           }
           // 查看网页源代码标签页
           if (tab.source === 'view-source') {
@@ -334,7 +387,7 @@ export default function BrowserView() {
               >
                 <ViewSourceTab tab={tab} profile={activeProfile} />
               </div>
-            );
+            )
           }
           // 打印预览标签页
           if (tab.source === 'print-preview') {
@@ -352,7 +405,7 @@ export default function BrowserView() {
               >
                 <PrintPreviewTab tab={tab} />
               </div>
-            );
+            )
           }
           // 普通网页标签
           return (
@@ -375,7 +428,7 @@ export default function BrowserView() {
                 onZoomReset={webview.zoomResetAction}
               />
             </DeferredTab>
-          );
+          )
         })}
       </div>
 
@@ -387,5 +440,5 @@ export default function BrowserView() {
 
       <WindowResizeHandles />
     </div>
-  );
+  )
 }

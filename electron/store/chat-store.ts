@@ -29,11 +29,7 @@ import type {
   WindowTraceAction,
   LoginTrace,
 } from '../shared/types.js'
-import {
-  resolveSqlitePath,
-  createSqliteDb,
-  createSingletonHolder,
-} from './store-paths.js'
+import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from './store-paths.js'
 import { WindowTraceStore } from './window-trace-store.js'
 import { LoginTraceStore } from '../browser/login-trace-store.js'
 import { ConversationStore } from './conversation-store.js'
@@ -186,9 +182,7 @@ export class ChatStore {
     }
     if (currentVersion < 3) {
       // v3: 新增 conversations.url 列（记录对话发生时的页面 URL，用于"启动时打开最近对话"）
-      const cols = db
-        .prepare('PRAGMA table_info(conversations)')
-        .all() as Array<{ name: string }>
+      const cols = db.prepare('PRAGMA table_info(conversations)').all() as Array<{ name: string }>
       if (!cols.some((c) => c.name === 'url')) {
         db.exec('ALTER TABLE conversations ADD COLUMN url TEXT')
       }
@@ -301,9 +295,7 @@ export class ChatStore {
   }
 
   /** 全文搜索消息（返回带会话标题） */
-  search(
-    query: string,
-  ): Array<ChatMessage & { conversationTitle: string }> {
+  search(query: string): Array<ChatMessage & { conversationTitle: string }> {
     return this.conversations.search(query)
   }
 
@@ -337,7 +329,12 @@ export class ChatStore {
    * @param format 'md' | 'json'
    */
   exportConversation(conversationId: string, format: 'md' | 'json'): string {
-    return exportAssetConversation(this.conversations.exportConversation(conversationId, 'json'), format, conversationId, this.assets)
+    return exportAssetConversation(
+      this.conversations.exportConversation(conversationId, 'json'),
+      format,
+      conversationId,
+      this.assets,
+    )
   }
 
   /**
@@ -356,9 +353,16 @@ export class ChatStore {
       const conversation = this.conversations.importConversation(format, data, sourceId)
       if (format === 'json') {
         const parsed = JSON.parse(data)
-        this.assets.importDetails(conversation.id, sourceId,
-          (parsed.messages ?? []).filter((m: { role: string; content: unknown }) => ['user', 'assistant', 'system'].includes(m.role) && typeof m.content === 'string'),
-          parsed.attachments ?? [], parsed.graph)
+        this.assets.importDetails(
+          conversation.id,
+          sourceId,
+          (parsed.messages ?? []).filter(
+            (m: { role: string; content: unknown }) =>
+              ['user', 'assistant', 'system'].includes(m.role) && typeof m.content === 'string',
+          ),
+          parsed.attachments ?? [],
+          parsed.graph,
+        )
       }
       return conversation
     })()
@@ -373,7 +377,11 @@ export class ChatStore {
    * @param sourceId 可选，按会话来源（Provider id / Profile id）过滤
    * @returns { totalTokens, todayTokens, todayCount }
    */
-  getUsageStats(sourceId?: string): { totalTokens: number; todayTokens: number; todayCount: number } {
+  getUsageStats(sourceId?: string): {
+    totalTokens: number
+    todayTokens: number
+    todayCount: number
+  } {
     return this.conversations.getUsageStats(sourceId)
   }
 
@@ -410,12 +418,18 @@ export class ChatStore {
 
   activityLogRecords(): ActivityLogRecords {
     return this.db.transaction(() => ({
-      loginRecords: this.loginTraces.listLoginTraces().map(record => ({
-        id: record.id, profileId: record.profileId, platform: record.platform,
-        loginUrl: record.loginUrl, loginTime: record.loginTime,
+      loginRecords: this.loginTraces.listLoginTraces().map((record) => ({
+        id: record.id,
+        profileId: record.profileId,
+        platform: record.platform,
+        loginUrl: record.loginUrl,
+        loginTime: record.loginTime,
       })),
-      windowRecords: this.windowTraces.listAllWindowTraces().map(record => ({
-        id: record.id, windowId: record.windowId, action: record.action, timestamp: record.timestamp,
+      windowRecords: this.windowTraces.listAllWindowTraces().map((record) => ({
+        id: record.id,
+        windowId: record.windowId,
+        action: record.action,
+        timestamp: record.timestamp,
       })),
       ...this.usageTraces.exportRecords(),
     }))()
@@ -471,9 +485,7 @@ export class ChatStore {
    * 禁止整库删除（依赖规则 3.3）。
    */
   clearCustomChatData(): number {
-    const result = this.db
-      .prepare(`DELETE FROM conversations WHERE source_type = 'custom'`)
-      .run()
+    const result = this.db.prepare(`DELETE FROM conversations WHERE source_type = 'custom'`).run()
     return result.changes
   }
 

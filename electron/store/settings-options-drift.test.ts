@@ -32,8 +32,13 @@ describe('settings options drift guard', () => {
   })
 
   it('默认设置模块不引入任何运行时依赖（架构约束的就地断言）', () => {
-    const source = readFileSync(path.join(process.cwd(), 'electron/store/app-settings-defaults.ts'), 'utf8')
-    const valueImports = [...source.matchAll(/^import\s+(?!type\b)[^;]*from\s+'([^']+)'/gm)].map(match => match[1])
+    const source = readFileSync(
+      path.join(process.cwd(), 'electron/store/app-settings-defaults.ts'),
+      'utf8',
+    )
+    const valueImports = [...source.matchAll(/^import\s+(?!type\b)[^;]*from\s+'([^']+)'/gm)].map(
+      (match) => match[1],
+    )
     expect(valueImports).toEqual([])
   })
 })

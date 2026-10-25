@@ -14,12 +14,13 @@ vi.mock('electron', () => ({
     getFocusedWindow: () => focusedWindow,
   },
   webContents: {
-    getAllWebContents: () => guests.map((guest) => ({
-      hostWebContents: guest.hostWebContents,
-      isDestroyed: () => false,
-      getType: () => 'webview',
-      isCurrentlyAudible: () => guest.audible,
-    })),
+    getAllWebContents: () =>
+      guests.map((guest) => ({
+        hostWebContents: guest.hostWebContents,
+        isDestroyed: () => false,
+        getType: () => 'webview',
+        isCurrentlyAudible: () => guest.audible,
+      })),
   },
   powerMonitor: {
     on: vi.fn(),
@@ -36,9 +37,15 @@ function makeWin(id: string, visible = false) {
     minimized: false,
     alwaysOnTop: false,
     webContents: host,
-    close: vi.fn(() => { win.destroyed = true }),
-    on(event: string, cb: (...args: unknown[]) => void) { handlers.set(`${id}:${event}`, cb) },
-    once(event: string, cb: (...args: unknown[]) => void) { handlers.set(`${id}:${event}`, cb) },
+    close: vi.fn(() => {
+      win.destroyed = true
+    }),
+    on(event: string, cb: (...args: unknown[]) => void) {
+      handlers.set(`${id}:${event}`, cb)
+    },
+    once(event: string, cb: (...args: unknown[]) => void) {
+      handlers.set(`${id}:${event}`, cb)
+    },
     isDestroyed: () => win.destroyed,
     isVisible: () => win.visible,
     isMinimized: () => win.minimized,
@@ -47,11 +54,9 @@ function makeWin(id: string, visible = false) {
   return win
 }
 
-const {
-  registerWindowRetirement,
-  resetWindowRetirementForTest,
-  isBackgroundClose,
-} = await import('./window-retirement.js')
+const { registerWindowRetirement, resetWindowRetirementForTest, isBackgroundClose } = await import(
+  './window-retirement.js'
+)
 
 const THIRTY_MINUTES = 30 * 60
 

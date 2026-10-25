@@ -4,7 +4,14 @@ let active = 0
 export function beginApplicationHandoff(): () => void {
   active++
   let released = false
-  return () => { if (!released) { released = true; active-- } }
+  return () => {
+    if (!released) {
+      released = true
+      active--
+    }
+  }
 }
 
-export function isApplicationHandoff(): boolean { return active > 0 }
+export function isApplicationHandoff(): boolean {
+  return active > 0
+}

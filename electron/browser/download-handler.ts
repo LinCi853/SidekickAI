@@ -126,8 +126,14 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
         const received = item.getReceivedBytes()
         const total = item.getTotalBytes()
         try {
-          browserDownloadStore.update(downloadId, { receivedBytes: received, totalBytes: total, state: 'progressing' })
-        } catch { /* ignore */ }
+          browserDownloadStore.update(downloadId, {
+            receivedBytes: received,
+            totalBytes: total,
+            state: 'progressing',
+          })
+        } catch {
+          /* ignore */
+        }
         broadcastDownload({
           id: downloadId,
           windowId: 'main',
@@ -146,7 +152,8 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
     // 监听下载完成，向所有窗口广播通知
     item.once('done', (_e2, state) => {
       const endTime = Date.now()
-      const finalState = state === 'completed' ? 'completed' : state === 'interrupted' ? 'interrupted' : 'cancelled'
+      const finalState =
+        state === 'completed' ? 'completed' : state === 'interrupted' ? 'interrupted' : 'cancelled'
       // 更新存储
       try {
         browserDownloadStore.update(downloadId, {
@@ -155,7 +162,9 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
           totalBytes: item.getTotalBytes(),
           endTime,
         })
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       // 广播下载状态更新
       broadcastDownload({
         id: downloadId,
@@ -178,7 +187,9 @@ export function attachDownloadHandler(ses: Session, profileId?: string): void {
           if (!w.isDestroyed()) {
             try {
               w.webContents.send(IPC_CHANNELS.APP_DOWNLOAD_DONE, info)
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
         }
       } else if (state === 'interrupted') {
@@ -206,7 +217,9 @@ function broadcastDownload(payload: {
     if (!w.isDestroyed()) {
       try {
         w.webContents.send(IPC_CHANNELS.BROWSER_DOWNLOAD_UPDATED, payload)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
@@ -224,7 +237,9 @@ export function attachDownloadHandlersForAllProfiles(): void {
     for (const profile of profileStore.list()) {
       try {
         attachDownloadHandler(session.fromPartition(`persist:${profile.id}`), profile.id)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   } catch (err) {
     console.warn('[download-handler] 批量挂载下载监听失败:', err)
@@ -248,9 +263,11 @@ export async function maybeAutoCleanCache(): Promise<void> {
   const now = Date.now()
   const last = s.lastCacheCleanAt || 0
   const interval =
-    s.cacheAutoClean === 'daily' ? 86_400_000
-    : s.cacheAutoClean === 'weekly' ? 604_800_000
-    : 2_592_000_000 // monthly (30 days)
+    s.cacheAutoClean === 'daily'
+      ? 86_400_000
+      : s.cacheAutoClean === 'weekly'
+        ? 604_800_000
+        : 2_592_000_000 // monthly (30 days)
 
   if (now - last < interval) return
 

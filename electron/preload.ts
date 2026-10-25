@@ -25,7 +25,7 @@ const api: ElectronAPI = {
   updates: {
     getState: () => ipcRenderer.invoke(UPDATE_IPC.state),
     check: () => ipcRenderer.invoke(UPDATE_IPC.check),
-    accept: offerId => ipcRenderer.invoke(UPDATE_IPC.accept, offerId),
+    accept: (offerId) => ipcRenderer.invoke(UPDATE_IPC.accept, offerId),
     cancel: () => ipcRenderer.invoke(UPDATE_IPC.cancel),
     openReleases: () => ipcRenderer.invoke(UPDATE_IPC.releases),
   },

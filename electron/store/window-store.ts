@@ -158,9 +158,7 @@ export class WindowStore {
   /** 列出所有 chat 模式脱离窗口状态（mode='chat'） */
   listChatWindows(): WindowStateData[] {
     const states = store.get('states') as Record<string, WindowStateData>
-    return Object.values(states).filter(
-      (s) => s.windowId !== MAIN_WINDOW_ID && s.mode === 'chat',
-    )
+    return Object.values(states).filter((s) => s.windowId !== MAIN_WINDOW_ID && s.mode === 'chat')
   }
 
   /** 更新 chat 模式脱离窗口的 chatConfig */
@@ -210,9 +208,7 @@ export class WindowStore {
   ): void {
     const state = this.get(windowId)
     if (!state) return
-    state.tabs = state.tabs.map((t) =>
-      t.id === tabId ? { ...t, [field]: value } : t,
-    )
+    state.tabs = state.tabs.map((t) => (t.id === tabId ? { ...t, [field]: value } : t))
     this.save(windowId, state)
   }
 }

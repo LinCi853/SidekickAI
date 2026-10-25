@@ -214,7 +214,9 @@ export class EffectScope {
     this.timerIds.clear()
 
     const total = handleArray.length + ipcCount + timerCount
-    console.log(`[effect-scope:${this.label}] 已卸载 ${total} 个副作用 (handles=${handleArray.length}, ipc=${ipcCount}, timers=${timerCount})`)
+    console.log(
+      `[effect-scope:${this.label}] 已卸载 ${total} 个副作用 (handles=${handleArray.length}, ipc=${ipcCount}, timers=${timerCount})`,
+    )
   }
 
   // ==================== 查询 ====================

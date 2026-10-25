@@ -5,23 +5,23 @@
    样式复用 ModuleManagementSection.css。
    ===================================================================== */
 
-import { useEffect, useMemo, useState } from 'react';
-import { useModuleStore } from '../../../store/useModuleStore';
-import type { ModuleInfo } from '../../../lib/electron-api';
-import Toggle from '../../ui/Toggle';
-import ConfirmDialog from '../../ui/ConfirmDialog';
-import SectionTitle from '../../ui/SectionTitle';
-import FormRow from '../../ui/FormRow';
-import RuntimeProcessesSection from './RuntimeProcessesSection';
-import './ModuleManagementSection.css';
+import { useEffect, useMemo, useState } from 'react'
+import { useModuleStore } from '../../../store/useModuleStore'
+import type { ModuleInfo } from '../../../lib/electron-api'
+import Toggle from '../../ui/Toggle'
+import ConfirmDialog from '../../ui/ConfirmDialog'
+import SectionTitle from '../../ui/SectionTitle'
+import FormRow from '../../ui/FormRow'
+import RuntimeProcessesSection from './RuntimeProcessesSection'
+import './ModuleManagementSection.css'
 
 export interface DeveloperOptionsSectionProps {
-  active?: boolean;
-  lowMemoryMode: boolean;
-  onChangeLowMemoryMode: (enabled: boolean) => Promise<void>;
+  active?: boolean
+  lowMemoryMode: boolean
+  onChangeLowMemoryMode: (enabled: boolean) => Promise<void>
   /** 广告屏蔽规则开关状态（true=已禁用） */
-  disableAllBlockRules: boolean;
-  onToggleDisableAllBlockRules: () => void;
+  disableAllBlockRules: boolean
+  onToggleDisableAllBlockRules: () => void
 }
 
 export default function DeveloperOptionsSection({
@@ -31,38 +31,38 @@ export default function DeveloperOptionsSection({
   disableAllBlockRules,
   onToggleDisableAllBlockRules,
 }: DeveloperOptionsSectionProps) {
-  const modules = useModuleStore((s) => s.modules);
-  const initialized = useModuleStore((s) => s.initialized);
-  const setEnabled = useModuleStore((s) => s.setEnabled);
-  const clearData = useModuleStore((s) => s.clearData);
+  const modules = useModuleStore((s) => s.modules)
+  const initialized = useModuleStore((s) => s.initialized)
+  const setEnabled = useModuleStore((s) => s.setEnabled)
+  const clearData = useModuleStore((s) => s.clearData)
 
-  const [pendingClear, setPendingClear] = useState<ModuleInfo | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [pendingClear, setPendingClear] = useState<ModuleInfo | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [okMsg, setOkMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!initialized) void useModuleStore.getState().init();
-  }, [initialized]);
+    if (!initialized) void useModuleStore.getState().init()
+  }, [initialized])
 
-  const devModules = useMemo(() => modules.filter((m) => m.category === 'dev'), [modules]);
+  const devModules = useMemo(() => modules.filter((m) => m.category === 'dev'), [modules])
 
   const handleToggle = async (m: ModuleInfo, enabled: boolean) => {
-    setErrorMsg(null);
-    setOkMsg(null);
-    const r = await setEnabled(m.id, enabled);
-    if (!r.ok) setErrorMsg(m.name + '：' + (r.error ?? '操作失败'));
-    else setOkMsg(m.name + (enabled ? '已开启' : '已关闭'));
-  };
+    setErrorMsg(null)
+    setOkMsg(null)
+    const r = await setEnabled(m.id, enabled)
+    if (!r.ok) setErrorMsg(m.name + '：' + (r.error ?? '操作失败'))
+    else setOkMsg(m.name + (enabled ? '已开启' : '已关闭'))
+  }
 
   const handleConfirmClear = async () => {
-    if (!pendingClear) return;
-    setErrorMsg(null);
-    setOkMsg(null);
-    const r = await clearData(pendingClear.id);
-    if (r.ok) setOkMsg(pendingClear.name + '：已清除该模块所有数据');
-    else setErrorMsg(pendingClear.name + '：' + (r.error ?? '清除失败'));
-    setPendingClear(null);
-  };
+    if (!pendingClear) return
+    setErrorMsg(null)
+    setOkMsg(null)
+    const r = await clearData(pendingClear.id)
+    if (r.ok) setOkMsg(pendingClear.name + '：已清除该模块所有数据')
+    else setErrorMsg(pendingClear.name + '：' + (r.error ?? '清除失败'))
+    setPendingClear(null)
+  }
 
   const renderModule = (m: ModuleInfo, idx: number) => (
     <div
@@ -73,12 +73,18 @@ export default function DeveloperOptionsSection({
     >
       <div className="module-card-head" data-name="settings.developer.card-head">
         <div className="module-card-title-row">
-          <span className="module-card-name" data-name="settings.developer.card-name">{m.name}</span>
+          <span className="module-card-name" data-name="settings.developer.card-name">
+            {m.name}
+          </span>
           {m.testBadge && (
-            <span className="module-test-badge" data-name="settings.developer.test-badge">测试</span>
+            <span className="module-test-badge" data-name="settings.developer.test-badge">
+              测试
+            </span>
           )}
           {!m.installed && (
-            <span className="module-missing-badge" data-name="settings.developer.missing-badge">未安装</span>
+            <span className="module-missing-badge" data-name="settings.developer.missing-badge">
+              未安装
+            </span>
           )}
         </div>
         <div className="module-card-head-actions" data-name="settings.developer.card-actions">
@@ -99,39 +105,55 @@ export default function DeveloperOptionsSection({
           />
         </div>
       </div>
-      <p className="module-card-desc" data-name="settings.developer.card-desc">{m.description}</p>
+      <p className="module-card-desc" data-name="settings.developer.card-desc">
+        {m.description}
+      </p>
       {/* 模块关闭时入口/快捷键已不存在，相关描述直接隐藏 */}
       {m.enabled && m.entries.length > 0 && (
-        <p className="module-card-meta" data-name="settings.developer.card-entries">入口：{m.entries.join('、')}</p>
+        <p className="module-card-meta" data-name="settings.developer.card-entries">
+          入口：{m.entries.join('、')}
+        </p>
       )}
       {m.enabled && m.hotkeys.length > 0 && (
-        <p className="module-card-meta" data-name="settings.developer.card-hotkeys">快捷键：{m.hotkeys.join('、')}</p>
+        <p className="module-card-meta" data-name="settings.developer.card-hotkeys">
+          快捷键：{m.hotkeys.join('、')}
+        </p>
       )}
       {!m.installed && (
-        <p className="module-card-meta module-card-missing-hint" data-name="settings.developer.card-missing-hint">
+        <p
+          className="module-card-meta module-card-missing-hint"
+          data-name="settings.developer.card-missing-hint"
+        >
           该模块未安装，请重新运行安装包补装。
         </p>
       )}
     </div>
-  );
+  )
 
   return (
     <>
       <SectionTitle>开发者选项</SectionTitle>
       {(errorMsg || okMsg) && (
-        <p className={'module-feedback' + (errorMsg ? ' is-error' : '')} data-name="settings.developer.feedback">
+        <p
+          className={'module-feedback' + (errorMsg ? ' is-error' : '')}
+          data-name="settings.developer.feedback"
+        >
           {errorMsg ?? okMsg}
         </p>
       )}
 
       <FormRow label="低内存模式" mutedLabel>
-        <Toggle checked={lowMemoryMode}
+        <Toggle
+          checked={lowMemoryMode}
           onChange={(enabled) => {
-            setErrorMsg(null);
-            void onChangeLowMemoryMode(enabled).catch(() => setErrorMsg("低内存模式设置失败，请重试"));
+            setErrorMsg(null)
+            void onChangeLowMemoryMode(enabled).catch(() =>
+              setErrorMsg('低内存模式设置失败，请重试'),
+            )
           }}
           aria-label="低内存模式"
-          data-name="settings.developer.low-memory-mode-toggle" />
+          data-name="settings.developer.low-memory-mode-toggle"
+        />
       </FormRow>
 
       {/* 开发者向设置：启用广告屏蔽规则 */}
@@ -160,5 +182,5 @@ export default function DeveloperOptionsSection({
         onCancel={() => setPendingClear(null)}
       />
     </>
-  );
+  )
 }

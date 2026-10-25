@@ -74,7 +74,10 @@ export function registerBaseChatIpc(): void {
   )
   ipcMain.handle(
     ipc.CHAT_LOG_LOGIN_TRACE,
-    (_e, trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>) => {
+    (
+      _e,
+      trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>,
+    ) => {
       getChatStore().logLoginTrace(trace)
     },
   )
@@ -100,13 +103,10 @@ export function registerBaseChatIpc(): void {
   ipcMain.handle(ipc.CHAT_SAVE_MESSAGE_WITH_MERGE, (_e, msg: SaveMessageInput) => {
     return getChatStore().saveMessageWithMerge(msg)
   })
-  ipcMain.handle(
-    ipc.CHAT_UPDATE_CONVERSATION,
-    (_e, id: string, updates: { title?: string }) => {
-      getChatStore().touchConversation(id, updates.title)
-      return { ok: true }
-    },
-  )
+  ipcMain.handle(ipc.CHAT_UPDATE_CONVERSATION, (_e, id: string, updates: { title?: string }) => {
+    getChatStore().touchConversation(id, updates.title)
+    return { ok: true }
+  })
   ipcMain.handle(
     ipc.CHAT_EXPORT_CONVERSATION,
     async (e, conversationId: string, format: 'md' | 'json') => {
@@ -132,28 +132,29 @@ export function registerBaseChatIpc(): void {
   )
   ipcMain.handle(
     ipc.CHAT_IMPORT_CONVERSATION,
-    (e, format: 'json' | 'deepseek' | 'md', sourceId: string) => runAssetImport(async () => {
-      const win = BrowserWindow.fromWebContents(e.sender) || undefined
-      const filters = [
-        { name: '所有支持的格式', extensions: ['json', 'md', 'markdown'] },
-        { name: 'JSON', extensions: ['json'] },
-        { name: 'Markdown', extensions: ['md', 'markdown'] },
-        { name: '所有文件', extensions: ['*'] },
-      ]
-      const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
-        title: '导入对话',
-        filters,
-        properties: ['openFile'],
-      })
-      if (canceled || !filePaths || filePaths.length === 0) {
-        return { ok: false, canceled: true }
-      }
-      const filePath = filePaths[0]
-      const content = await readFile(filePath, 'utf-8')
-      const conv = getChatStore().importConversation(format, content, sourceId)
-      showNotification('导入成功', `已导入对话：${conv.title}`)
-      return { ok: true, conversation: conv }
-    }),
+    (e, format: 'json' | 'deepseek' | 'md', sourceId: string) =>
+      runAssetImport(async () => {
+        const win = BrowserWindow.fromWebContents(e.sender) || undefined
+        const filters = [
+          { name: '所有支持的格式', extensions: ['json', 'md', 'markdown'] },
+          { name: 'JSON', extensions: ['json'] },
+          { name: 'Markdown', extensions: ['md', 'markdown'] },
+          { name: '所有文件', extensions: ['*'] },
+        ]
+        const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
+          title: '导入对话',
+          filters,
+          properties: ['openFile'],
+        })
+        if (canceled || !filePaths || filePaths.length === 0) {
+          return { ok: false, canceled: true }
+        }
+        const filePath = filePaths[0]
+        const content = await readFile(filePath, 'utf-8')
+        const conv = getChatStore().importConversation(format, content, sourceId)
+        showNotification('导入成功', `已导入对话：${conv.title}`)
+        return { ok: true, conversation: conv }
+      }),
   )
   ipcMain.handle(ipc.CHAT_CLEAR_CONVERSATIONS, (_e, sourceId?: string) => {
     return { ok: true, count: getChatStore().clearAllConversations(sourceId) }
@@ -167,16 +168,19 @@ export function registerBaseChatIpc(): void {
 export function registerUsageTraceIpc(): void {
   const ipc = IPC_CHANNELS
   // 点击日志：受 usageTrackingEnabled 守卫，关闭时静默丢弃
-  ipcMain.handle(ipc.USAGE_TRACE_LOG_CLICK, (_e, elementName: string, windowType: string | null, detail?: unknown) => {
-    try {
-      if (!getAppSettings().usageTrackingEnabled) return { ok: false, skipped: true }
-      getChatStore().logClick(elementName, windowType, detail)
-      return { ok: true }
-    } catch (err) {
-      console.warn('[chat-ipc] logClick 失败:', err)
-      return { ok: false, error: String(err) }
-    }
-  })
+  ipcMain.handle(
+    ipc.USAGE_TRACE_LOG_CLICK,
+    (_e, elementName: string, windowType: string | null, detail?: unknown) => {
+      try {
+        if (!getAppSettings().usageTrackingEnabled) return { ok: false, skipped: true }
+        getChatStore().logClick(elementName, windowType, detail)
+        return { ok: true }
+      } catch (err) {
+        console.warn('[chat-ipc] logClick 失败:', err)
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
   ipcMain.handle(ipc.USAGE_TRACE_GET_STATS, (_e, rangeDays?: number) => {
     try {
       return { ok: true, stats: getChatStore().getFrequencyStats(rangeDays) }

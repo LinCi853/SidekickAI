@@ -12,14 +12,14 @@ New archives use ZIP64 with ordinary relative file paths and one UTF-8 JSON `man
 
 The manifest requires:
 
-| Field | Meaning |
-| --- | --- |
-| `format` | `sidekickai-backup` |
-| `formatVersion` | Integer `1`; other values are rejected |
-| `deviceId` | Nonempty original encryption/snapshot identity |
-| `appVersion`, `exportedAt` | Application version and export timestamp |
-| `options` | Boolean `basicData`, `cookies`, `indexedDB`, `cache`; basic data is required |
-| `entries` | Relative path to lowercase hexadecimal SHA-256; includes `settings.db`, excludes `manifest.json` |
+| Field                      | Meaning                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| `format`                   | `sidekickai-backup`                                                                              |
+| `formatVersion`            | Integer `1`; other values are rejected                                                           |
+| `deviceId`                 | Nonempty original encryption/snapshot identity                                                   |
+| `appVersion`, `exportedAt` | Application version and export timestamp                                                         |
+| `options`                  | Boolean `basicData`, `cookies`, `indexedDB`, `cache`; basic data is required                     |
+| `entries`                  | Relative path to lowercase hexadecimal SHA-256; includes `settings.db`, excludes `manifest.json` |
 
 Current writers additionally provide `edition` (`community` or `concept`), `dataSchemaVersion`, `jobId`, `snapshotId`, `snapshotAt`, `cookieTransfer`, and an `inventory` array. Each inventory item contains `path`, byte `size`, `sha256`, and `state: "verified"`. Inventory names and hashes must match `entries`; byte sizes must match the actual ZIP payload. Unknown additive fields do not redefine the existing fields. A breaking format requires a new version and a reader with explicit support.
 
@@ -43,17 +43,17 @@ Application import presents file selection, a password when needed and one repla
 
 New encrypted archives use a fresh 32-byte random salt, independent of the device identity. PBKDF2-HMAC-SHA256 derives a 32-byte key from the UTF-8 password and this salt using 100,000 iterations. The salt is intentionally public; its uniqueness prevents reuse of a derived key across archives from one device. A fresh 12-byte nonce accompanies each AES-256-GCM encryption. Integers are unsigned little-endian; offsets count bytes.
 
-| Offset | Length | Value |
-| --- | --- | --- |
-| 0 | 4 | ASCII `SABK` |
-| 4 | 1 | Version `02` |
-| 5 | 4 | Salt length, exactly 32 |
-| 9 | 4 | UTF-8 device identity length `D`, 1 through 65,536 |
-| 13 | 32 | Random salt |
-| 45 | D | UTF-8 device identity |
-| 45 + D | 12 | Random AES-GCM nonce |
-| 57 + D | 16 | AES-GCM authentication tag |
-| 73 + D | Remaining | Ciphertext of the complete ZIP archive |
+| Offset | Length    | Value                                              |
+| ------ | --------- | -------------------------------------------------- |
+| 0      | 4         | ASCII `SABK`                                       |
+| 4      | 1         | Version `02`                                       |
+| 5      | 4         | Salt length, exactly 32                            |
+| 9      | 4         | UTF-8 device identity length `D`, 1 through 65,536 |
+| 13     | 32        | Random salt                                        |
+| 45     | D         | UTF-8 device identity                              |
+| 45 + D | 12        | Random AES-GCM nonce                               |
+| 57 + D | 16        | AES-GCM authentication tag                         |
+| 73 + D | Remaining | Ciphertext of the complete ZIP archive             |
 
 The entire header before the tag, including magic, version, lengths, salt, identity and nonce, is supplied as GCM additional authenticated data. Changed header bytes or ciphertext cause rejection before plaintext is published. Resumed encryption always generates a new salt and nonce. Device identity remains attribution metadata and is not a trust root. Readers that support only v1 cannot open v2 output; use the updated application or independently built recovery tool.
 
@@ -63,15 +63,15 @@ Unencrypted export refuses a captured settings database with nonempty applicatio
 
 All offsets and lengths below count bytes. Integer fields are unsigned little-endian. No padding or trailer is present.
 
-| Offset | Length | Value |
-| --- | --- | --- |
-| 0 | 4 | ASCII `SABK` (`53 41 42 4b`) |
-| 4 | 1 | Version `01` |
-| 5 | 4 | UTF-8 salt/device identity length `S` |
-| 9 | S | UTF-8 `deviceId`; 1 through 65,536 bytes |
-| 9 + S | 12 | Random AES-GCM nonce |
-| 21 + S | 16 | AES-GCM authentication tag |
-| 37 + S | Remaining | Ciphertext of the complete ZIP archive |
+| Offset | Length    | Value                                    |
+| ------ | --------- | ---------------------------------------- |
+| 0      | 4         | ASCII `SABK` (`53 41 42 4b`)             |
+| 4      | 1         | Version `01`                             |
+| 5      | 4         | UTF-8 salt/device identity length `S`    |
+| 9      | S         | UTF-8 `deviceId`; 1 through 65,536 bytes |
+| 9 + S  | 12        | Random AES-GCM nonce                     |
+| 21 + S | 16        | AES-GCM authentication tag               |
+| 37 + S | Remaining | Ciphertext of the complete ZIP archive   |
 
 Derive a 32-byte key using PBKDF2-HMAC-SHA256 with the UTF-8 password, UTF-8 device identity as salt, and 100,000 iterations. No Unicode normalization is performed. Encrypt with AES-256-GCM, a fresh cryptographically random 12-byte nonce, and a 16-byte authentication tag. No additional authenticated data is supplied. The tag authenticates the entire ciphertext; v1 does not separately authenticate the raw header bytes. The header's identity and nonce are required for successful decryption. There is no password recovery key or server dependency.
 

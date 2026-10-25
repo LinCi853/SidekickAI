@@ -5,36 +5,33 @@
    消除各独立窗口（History / Prompt / Onboarding 等）的重复样板。
    ===================================================================== */
 
-import { type ReactNode, useEffect } from 'react';
-import { formatWindowTitle } from '@/lib/window-title';
-import { TitleBar, IconButton, PinToggleButton } from '@/components/ui';
-import { GearIcon } from '@/components/icons';
-import {
-  minimizeWindow,
-  closeCurrentWindow,
-} from '@/lib/electron-api';
-import { useWindowMaximizedAndPinned } from '@/hooks/useWindowMaximizedAndPinned';
-import './StandaloneWindowHeader.css';
+import { type ReactNode, useEffect } from 'react'
+import { formatWindowTitle } from '@/lib/window-title'
+import { TitleBar, IconButton, PinToggleButton } from '@/components/ui'
+import { GearIcon } from '@/components/icons'
+import { minimizeWindow, closeCurrentWindow } from '@/lib/electron-api'
+import { useWindowMaximizedAndPinned } from '@/hooks/useWindowMaximizedAndPinned'
+import './StandaloneWindowHeader.css'
 
 export interface StandaloneWindowHeaderProps {
   /** 窗口标题；当未传入 center 时作为默认标题渲染 */
-  title: string;
+  title: string
   /** 覆盖默认 center（标题）。传入后替换默认标题节点 */
-  center?: ReactNode;
+  center?: ReactNode
   /** 左侧内容（如侧边栏切换按钮） */
-  leading?: ReactNode;
+  leading?: ReactNode
   /** 额外的 action 按钮，渲染在置顶按钮之前 */
-  actions?: ReactNode;
+  actions?: ReactNode
   /** 设置按钮回调；传入则渲染齿轮设置按钮 */
-  onOpenSettings?: () => void;
+  onOpenSettings?: () => void
   /** 是否显示置顶按钮，默认 true */
-  showPinButton?: boolean;
+  showPinButton?: boolean
   /** 是否显示最小化/最大化按钮，默认 true；仅含关闭按钮的窗口（如引导页）传 false */
-  showMinMax?: boolean;
+  showMinMax?: boolean
   /** 埋点 data-name 前缀，默认 'window' */
-  dataNamePrefix?: string;
+  dataNamePrefix?: string
   /** 附加类名（透传给 TitleBar） */
-  className?: string;
+  className?: string
 }
 
 /**
@@ -59,11 +56,11 @@ export default function StandaloneWindowHeader({
   dataNamePrefix = 'window',
   className,
 }: StandaloneWindowHeaderProps) {
-  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
+  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned()
 
   useEffect(() => {
-    document.title = formatWindowTitle(title);
-  }, [title]);
+    document.title = formatWindowTitle(title)
+  }, [title])
 
   return (
     <TitleBar
@@ -104,5 +101,5 @@ export default function StandaloneWindowHeader({
       }
       className={className}
     />
-  );
+  )
 }

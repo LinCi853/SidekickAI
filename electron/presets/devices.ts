@@ -125,5 +125,3 @@ export const PRESETS: DevicePreset[] = [
     timezone: 'Asia/Shanghai',
   },
 ]
-
-

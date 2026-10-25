@@ -65,7 +65,9 @@
   border: 0;
   cursor: pointer;
   border-radius: calc(var(--titlebar-icon) * 0.2);
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
 }
 .titlebar-icon-btn:hover {
   background: var(--glass-bd);

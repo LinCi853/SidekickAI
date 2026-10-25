@@ -23,14 +23,18 @@
   padding: var(--space-0-5) var(--space-1-5);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  transition: border-color var(--duration-fast), background var(--duration-fast);
+  transition:
+    border-color var(--duration-fast),
+    background var(--duration-fast);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
-.sa-top-title:hover { background: var(--glass-bg-2); }
+.sa-top-title:hover {
+  background: var(--glass-bg-2);
+}
 .sa-top-title.editing {
   -webkit-app-region: no-drag;
   app-region: no-drag;

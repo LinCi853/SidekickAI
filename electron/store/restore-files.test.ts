@@ -3,11 +3,20 @@ import Database from 'better-sqlite3'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { replaceRestoreEntries, validateRestoreDirectory, RestoreRecoveryError } from './restore-files.js'
+import {
+  replaceRestoreEntries,
+  validateRestoreDirectory,
+  RestoreRecoveryError,
+} from './restore-files.js'
 
 let directory: string
-beforeEach(() => { directory = fs.mkdtempSync(path.join(os.tmpdir(), 'standalone-restore-')) })
-afterEach(() => { vi.restoreAllMocks(); fs.rmSync(directory, { recursive: true, force: true }) })
+beforeEach(() => {
+  directory = fs.mkdtempSync(path.join(os.tmpdir(), 'standalone-restore-'))
+})
+afterEach(() => {
+  vi.restoreAllMocks()
+  fs.rmSync(directory, { recursive: true, force: true })
+})
 
 describe('backup validation', () => {
   it('rejects a corrupt database before replacing user data', () => {
@@ -64,10 +73,14 @@ describe('restoring included files', () => {
       if (source === path.join(destination, 'zz-locked')) throw new Error('Directory is locked')
       rename(source, target)
     })
-    expect(() => replaceRestoreEntries(staging, destination, recovery)).toThrow('original data was retained')
+    expect(() => replaceRestoreEntries(staging, destination, recovery)).toThrow(
+      'original data was retained',
+    )
     expect(fs.readFileSync(path.join(destination, 'settings.db'), 'utf8')).toBe('original')
     expect(fs.readFileSync(path.join(destination, 'settings.db-wal'), 'utf8')).toBe('old WAL')
-    expect(fs.readFileSync(path.join(destination, 'zz-locked', 'sentinel'), 'utf8')).toBe('original session')
+    expect(fs.readFileSync(path.join(destination, 'zz-locked', 'sentinel'), 'utf8')).toBe(
+      'original session',
+    )
   })
 
   it('retains recovery bytes and distinguishes an incomplete rollback', () => {
@@ -76,12 +89,17 @@ describe('restoring included files', () => {
     fs.mkdirSync(path.join(destination, 'zz-locked'))
     const rename = fs.renameSync
     vi.spyOn(fs, 'renameSync').mockImplementation((source, target) => {
-      if (source === path.join(destination, 'zz-locked') || source === path.join(recovery, 'settings.db')) {
+      if (
+        source === path.join(destination, 'zz-locked') ||
+        source === path.join(recovery, 'settings.db')
+      ) {
         throw new Error('Directory is locked')
       }
       rename(source, target)
     })
-    expect(() => replaceRestoreEntries(staging, destination, recovery)).toThrow(RestoreRecoveryError)
+    expect(() => replaceRestoreEntries(staging, destination, recovery)).toThrow(
+      RestoreRecoveryError,
+    )
     expect(fs.readFileSync(path.join(recovery, 'settings.db'), 'utf8')).toBe('original')
   })
 })

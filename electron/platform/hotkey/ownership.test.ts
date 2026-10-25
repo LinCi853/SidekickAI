@@ -12,11 +12,21 @@ let namespace: string
 const owners: HotkeyOwnership[] = []
 const children: ChildProcess[] = []
 let directory: string | undefined
-beforeEach(() => { namespace = `ownership-test-${process.pid}-${Math.random()}` })
+beforeEach(() => {
+  namespace = `ownership-test-${process.pid}-${Math.random()}`
+})
 afterEach(async () => {
   for (const owner of owners.splice(0)) owner.close()
-  for (const child of children.splice(0)) if (child.exitCode === null && child.signalCode === null) { const exited = once(child, 'exit'); child.kill(); await exited }
-  if (directory) { fs.rmSync(directory, { recursive: true, force: true }); directory = undefined }
+  for (const child of children.splice(0))
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit')
+      child.kill()
+      await exited
+    }
+  if (directory) {
+    fs.rmSync(directory, { recursive: true, force: true })
+    directory = undefined
+  }
   vi.restoreAllMocks()
 })
 function owner(scope = namespace) {
@@ -27,13 +37,17 @@ function owner(scope = namespace) {
 
 describe('kernel-owned shortcut leases', () => {
   it('normalizes aliases and modifier ordering', () => {
-    expect(canonicalHotkey('Shift+Ctrl+Option+Return')).toBe(canonicalHotkey('Alt+Control+Shift+Enter'))
+    expect(canonicalHotkey('Shift+Ctrl+Option+Return')).toBe(
+      canonicalHotkey('Alt+Control+Shift+Enter'),
+    )
     expect(canonicalHotkey('Win+Spacebar')).toBe(canonicalHotkey('Super+Space'))
     expect(canonicalHotkey('Alt+Minus')).toBe(canonicalHotkey('Option+-'))
   })
   it('keeps a lease until its final owned reference is released', () => {
-    const first = owner(), other = owner()
-    const a = first.acquire('Alt+Space', 'application')!, b = first.retain('Option+Spacebar')!
+    const first = owner(),
+      other = owner()
+    const a = first.acquire('Alt+Space', 'application')!,
+      b = first.retain('Option+Spacebar')!
     expect(a.active && b.active).toBe(true)
     expect(first.acquire('Alt+Space', 'different-binding')).toBeNull()
     a.release()
@@ -41,7 +55,8 @@ describe('kernel-owned shortcut leases', () => {
     b.release()
     const next = other.acquire('Alt+Space', 'peer')!
     expect(next.active).toBe(true)
-    a.release(); b.release()
+    a.release()
+    b.release()
     expect(next.active).toBe(true)
   })
   it('isolates interactive namespaces', () => {
@@ -50,17 +65,19 @@ describe('kernel-owned shortcut leases', () => {
     expect(a.active && b.active).toBe(true)
   })
   it('does not let an asynchronous bind error dispose a later acquired claim', async () => {
-    const first = owner(), second = owner()
+    const first = owner(),
+      second = owner()
     const initial = first.acquire('Alt+Q', 'first')!
     expect(second.acquire('Alt+Q', 'second')).toBeNull()
     initial.release()
     const next = second.acquire('Alt+Q', 'second')!
-    await new Promise(resolve => setImmediate(resolve))
+    await new Promise((resolve) => setImmediate(resolve))
     expect(next.active).toBe(true)
   })
   it('invalidates callbacks and releases the endpoint after a listener error', () => {
     const create = vi.spyOn(net, 'createServer')
-    const first = owner(), second = owner()
+    const first = owner(),
+      second = owner()
     const lease = first.acquire('Alt+Q', 'first')!
     const server = create.mock.results.at(-1)!.value as net.Server
     server.emit('error', new Error('Listener fixture failure'))
@@ -69,11 +86,27 @@ describe('kernel-owned shortcut leases', () => {
   })
   it('arbitrates separate Windows processes and releases the endpoint after process termination', async () => {
     directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-hotkey-process-'))
-    const source = fs.readFileSync(path.resolve('packages/desktop-common/hotkey-ownership.ts'), 'utf8')
-    const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText
+    const source = fs.readFileSync(
+      path.resolve('packages/desktop-common/hotkey-ownership.ts'),
+      'utf8',
+    )
+    const compiled = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true,
+      },
+    }).outputText
     const childFile = path.join(directory, 'owner.cjs')
-    fs.writeFileSync(childFile, compiled + '\nconst owner = new exports.HotkeyOwnership(process.argv[2]); const lease = owner.acquire("Alt+Q", "child"); process.on("message", () => {}); process.send({active: !!lease?.active});\n')
-    const options: ForkOptions & { windowsHide: boolean } = { stdio: ['ignore', 'ignore', 'pipe', 'ipc'], windowsHide: true }
+    fs.writeFileSync(
+      childFile,
+      compiled +
+        '\nconst owner = new exports.HotkeyOwnership(process.argv[2]); const lease = owner.acquire("Alt+Q", "child"); process.on("message", () => {}); process.send({active: !!lease?.active});\n',
+    )
+    const options: ForkOptions & { windowsHide: boolean } = {
+      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      windowsHide: true,
+    }
     const child = fork(childFile, [namespace], options)
     children.push(child)
     const [result] = await once(child, 'message')

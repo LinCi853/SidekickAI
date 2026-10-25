@@ -8,67 +8,85 @@
    双挂载误删），仅在「另存为 PDF」成功复制后清理。
    ===================================================================== */
 
-import { useCallback, useState } from 'react';
-import type { BrowserTabState } from '../../lib/electron-api';
-import { savePdfAs, deleteTempPdf, openExternal } from '../../lib/electron-api';
+import { useCallback, useState } from 'react'
+import type { BrowserTabState } from '../../lib/electron-api'
+import { savePdfAs, deleteTempPdf, openExternal } from '../../lib/electron-api'
 
 interface PrintPreviewTabProps {
-  tab: BrowserTabState;
+  tab: BrowserTabState
 }
 
 /** 解析 sidekickai://print-preview?file=...&title=...&sourceUrl=... 参数 */
 function parseParams(tabUrl: string): { file: string; title: string; sourceUrl: string } {
   try {
-    const u = new URL(tabUrl);
+    const u = new URL(tabUrl)
     return {
       file: u.searchParams.get('file') || '',
       title: u.searchParams.get('title') || '页面',
       sourceUrl: u.searchParams.get('sourceUrl') || '',
-    };
+    }
   } catch {
-    return { file: '', title: '页面', sourceUrl: '' };
+    return { file: '', title: '页面', sourceUrl: '' }
   }
 }
 
 /** The main process resolves the preview capability to its private PDF copy. */
 function toPdfUrl(capability: string): string {
-  if (!capability) return '';
-  return `sidekick-pdf://preview/${encodeURIComponent(capability)}`;
+  if (!capability) return ''
+  return `sidekick-pdf://preview/${encodeURIComponent(capability)}`
 }
 
 export default function PrintPreviewTab({ tab }: PrintPreviewTabProps) {
-  const { file, title, sourceUrl } = parseParams(tab.url);
-  const fileUrl = toPdfUrl(file);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const { file, title, sourceUrl } = parseParams(tab.url)
+  const fileUrl = toPdfUrl(file)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const handleSavePdfAs = useCallback(() => {
-    if (!file) return;
-    void savePdfAs(file, title).then((res) => {
-      if (res.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 1500);
-        // 已复制到用户指定路径，临时文件可安全清理
-        void deleteTempPdf(file);
-      }
-    }).catch(() => { /* ignore */ });
-  }, [file, title]);
+    if (!file) return
+    void savePdfAs(file, title)
+      .then((res) => {
+        if (res.ok) {
+          setSaved(true)
+          setTimeout(() => setSaved(false), 1500)
+          // 已复制到用户指定路径，临时文件可安全清理
+          void deleteTempPdf(file)
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      })
+  }, [file, title])
 
   const handleOpenExternal = useCallback(() => {
-    if (sourceUrl) void openExternal(sourceUrl);
-  }, [sourceUrl]);
+    if (sourceUrl) void openExternal(sourceUrl)
+  }, [sourceUrl])
 
   return (
     <div className="print-preview-tab" data-name="browser.print-preview-tab">
       <div className="print-preview-header" data-name="browser.print-preview-header">
-        <span className="print-preview-title" title={sourceUrl} data-name="browser.print-preview-title">
+        <span
+          className="print-preview-title"
+          title={sourceUrl}
+          data-name="browser.print-preview-title"
+        >
           打印预览：{title}
         </span>
         <div className="print-preview-actions" data-name="browser.print-preview-actions">
-          <button type="button" className="print-preview-btn" onClick={handleSavePdfAs} data-name="browser.print-preview-save-pdf">
+          <button
+            type="button"
+            className="print-preview-btn"
+            onClick={handleSavePdfAs}
+            data-name="browser.print-preview-save-pdf"
+          >
             {saved ? '已保存' : '另存为 PDF'}
           </button>
-          <button type="button" className="print-preview-btn" onClick={handleOpenExternal} data-name="browser.print-preview-open-external">
+          <button
+            type="button"
+            className="print-preview-btn"
+            onClick={handleOpenExternal}
+            data-name="browser.print-preview-open-external"
+          >
             在浏览器打开
           </button>
         </div>
@@ -96,5 +114,5 @@ export default function PrintPreviewTab({ tab }: PrintPreviewTabProps) {
         </div>
       )}
     </div>
-  );
+  )
 }

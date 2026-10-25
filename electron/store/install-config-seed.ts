@@ -68,7 +68,8 @@ export function getInstallConfigHash(): string | null {
 function seedModuleStates(modules: Record<string, { enabled: boolean }>, force: boolean): void {
   let seeded = 0
   for (const [id, cfg] of Object.entries(modules)) {
-    if (!BUILTIN_MODULE_INSTALL_DATA.some(module => module.id === id && module.installRequired)) continue
+    if (!BUILTIN_MODULE_INSTALL_DATA.some((module) => module.id === id && module.installRequired))
+      continue
     if (!cfg || typeof cfg.enabled !== 'boolean') continue
     if (!force && getModuleState(id)) continue
     const installed = isLargeModuleInstalledByManifestFile(id)
@@ -110,7 +111,12 @@ export function seedFromInstallConfig(): void {
     seedModuleStates(loaded.cfg.modules ?? {}, !isFirst)
     applyInstallConfigOptions(loaded.cfg.options ?? {})
     meta.set(APPLIED_HASH_KEY, loaded.hash)
-    console.log('[install-config] 安装期配置已应用 hash=', loaded.hash.slice(0, 12), 'reseed=', !isFirst)
+    console.log(
+      '[install-config] 安装期配置已应用 hash=',
+      loaded.hash.slice(0, 12),
+      'reseed=',
+      !isFirst,
+    )
   } catch (err) {
     console.warn('[install-config] 播种失败:', err)
   }

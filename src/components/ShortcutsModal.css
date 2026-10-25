@@ -20,8 +20,9 @@
   /* 淡出后停止绘制，避免关闭的全屏模糊层持续占用合成资源。 */
   visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-out),
-              visibility 0s var(--duration-normal);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    visibility 0s var(--duration-normal);
 }
 .shortcuts-overlay.is-open {
   opacity: 1;
@@ -77,11 +78,19 @@
   letter-spacing: 0.02em;
 }
 .shortcuts-close {
-  width: var(--titlebar-icon); height: var(--titlebar-icon);
-  display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: 0; color: var(--muted-foreground);
-  cursor: pointer; border-radius: var(--radius-sm);
-  transition: color var(--duration-fast), background var(--duration-fast);
+  width: var(--titlebar-icon);
+  height: var(--titlebar-icon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
 }
 .shortcuts-close:hover {
   color: var(--foreground);

@@ -29,7 +29,9 @@ export function closeSecondaryWindows(): number {
       markBackgroundClose(win)
       win.close()
       closed += 1
-    } catch { /* 已在销毁 */ }
+    } catch {
+      /* 已在销毁 */
+    }
   }
   return closed
 }
@@ -56,7 +58,9 @@ export function releaseBackgroundMemory(): BackgroundReleaseResult {
 export function scheduleBackgroundRelease(delayMs?: number): void {
   cancelBackgroundRelease()
   const effectiveDelayMs = delayMs ?? backgroundReleaseDelayMs(isLowMemoryMode())
-  console.log(`[background-release] 已计划 ${Math.round(effectiveDelayMs / 60_000)} 分钟后评估后台释放`)
+  console.log(
+    `[background-release] 已计划 ${Math.round(effectiveDelayMs / 60_000)} 分钟后评估后台释放`,
+  )
   releaseTimer = setTimeout(() => {
     releaseTimer = null
     const focused = BrowserWindow.getFocusedWindow()

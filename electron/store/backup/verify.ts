@@ -1,7 +1,7 @@
-import * as fs from 'fs';
-import { sha256FileSync, exportTreeDigest } from '../../../packages/backup-core/files.js';
-import { selectedCategoryKeys, collectEntryCategories } from './collect.js';
-import type { ExportCategory, ExportOptions, SelectedExportEntry } from './types.js';
+import * as fs from 'fs'
+import { sha256FileSync, exportTreeDigest } from '../../../packages/backup-core/files.js'
+import { selectedCategoryKeys, collectEntryCategories } from './collect.js'
+import type { ExportCategory, ExportOptions, SelectedExportEntry } from './types.js'
 
 /** Re-inventory the selection and reject any addition, removal, or byte change. */
 export function verifyQuiescentSnapshot(
@@ -12,10 +12,12 @@ export function verifyQuiescentSnapshot(
   const beforePaths = new Set(before.map((entry) => entry.archivePath))
   const afterPaths = new Set(after.map((entry) => entry.archivePath))
   for (const archivePath of afterPaths) {
-    if (!beforePaths.has(archivePath)) throw new Error(`Selected source data changed during export (added): ${archivePath}`)
+    if (!beforePaths.has(archivePath))
+      throw new Error(`Selected source data changed during export (added): ${archivePath}`)
   }
   for (const archivePath of beforePaths) {
-    if (!afterPaths.has(archivePath)) throw new Error(`Selected source data changed during export (removed): ${archivePath}`)
+    if (!afterPaths.has(archivePath))
+      throw new Error(`Selected source data changed during export (removed): ${archivePath}`)
   }
   for (const entry of after) {
     if (sourceEntries[entry.archivePath] !== sha256FileSync(entry.sourcePath)) {
@@ -33,7 +35,9 @@ export function verifyQuiescentSnapshot(
 export function verifyExportTreeUnchanged(dataDir: string, expected: string): void {
   const actual = exportTreeDigest(dataDir)
   if (actual !== expected) {
-    throw new Error('Selected source data changed during export (complete data tree digest mismatch)')
+    throw new Error(
+      'Selected source data changed during export (complete data tree digest mismatch)',
+    )
   }
 }
 

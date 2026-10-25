@@ -7,7 +7,6 @@
   position: relative;
 }
 
-
 .data-export-top {
   height: var(--titlebar-h);
   display: flex;
@@ -47,12 +46,53 @@
   app-region: no-drag;
 }
 
-
-.data-export-body { flex: 1; min-height: 0; overflow: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
-.data-export-section { display: flex; flex-direction: column; gap: var(--space-3); background: var(--glass-bg-2); border: 1px solid var(--glass-bd-2); border-radius: var(--radius-md); padding: var(--space-4); min-width: 0; }
-.data-export-section h2 { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--foreground); }
-.data-export-section p, .data-export-body > p { margin: 0; font-size: var(--text-xs); line-height: 1.6; color: var(--muted-foreground); }
-.data-export-section input { width: 100%; min-width: 0; box-sizing: border-box; }
-.data-export-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.data-export-actions button { flex: 1; }
-.data-export-file { overflow-wrap: anywhere; font-size: var(--text-xs); color: var(--muted-foreground); }
+.data-export-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.data-export-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-bd-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  min-width: 0;
+}
+.data-export-section h2 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--foreground);
+}
+.data-export-section p,
+.data-export-body > p {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.data-export-section input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.data-export-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.data-export-actions button {
+  flex: 1;
+}
+.data-export-file {
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}

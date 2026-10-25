@@ -76,10 +76,14 @@ export function forceExitCloudPc(win: BrowserWindow, parentWebContentsId: number
     if (wasFs) {
       win.setFullScreen(false)
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     win.webContents.send(IPC_CHANNELS.BROWSER_CLOUD_PC_CHANGED, false)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   console.log('[cloud-pc] 主进程兜底退出完成')
 }
 /**
@@ -98,7 +102,9 @@ function handleCloudPcKey(
   // 转发到渲染层（渲染层负责合成注入到 guest 页面）
   try {
     win.webContents.send(IPC_CHANNELS.BROWSER_CLOUD_PC_KEYS, e)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   if (e.key === 'escape') {
     // 三连击 Esc（1 秒内连续三次）：uiohook 全局捕获，前两次放行给远端，第三次兜底退出
@@ -147,7 +153,9 @@ function handleCloudPcKey(
         if (win.isMinimized()) win.restore()
         if (!win.isVisible()) win.show()
         win.focus()
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 120)
     return
   }
@@ -160,7 +168,9 @@ function handleCloudPcKey(
         if (win.isMinimized()) win.restore()
         if (!win.isVisible()) win.show()
         win.focus()
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 350)
     return
   }
@@ -172,12 +182,9 @@ function handleCloudPcKey(
 /** 模拟一次 Win 键按下+弹起（关闭被意外打开的系统开始菜单） */
 function closeStartMenu(): void {
   if (process.platform !== 'win32') return
-  const script = 'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class K { [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo); }\'; [K]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero); [K]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)'
-  exec(
-    `powershell -NoProfile -Command "${script}"`,
-    { timeout: 2000 },
-    (err) => {
-      if (err) console.warn('[cloud-pc] 关闭开始菜单失败:', err.message)
-    },
-  )
+  const script =
+    'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class K { [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo); }\'; [K]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero); [K]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)'
+  exec(`powershell -NoProfile -Command "${script}"`, { timeout: 2000 }, (err) => {
+    if (err) console.warn('[cloud-pc] 关闭开始菜单失败:', err.message)
+  })
 }

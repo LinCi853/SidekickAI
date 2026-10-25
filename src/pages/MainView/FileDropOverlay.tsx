@@ -8,11 +8,11 @@
    */
 
 interface FileDropOverlayProps {
-  visible: boolean;
+  visible: boolean
 }
 
 export default function FileDropOverlay({ visible }: FileDropOverlayProps) {
-  if (!visible) return null;
+  if (!visible) return null
   return (
     <div
       style={{
@@ -46,5 +46,5 @@ export default function FileDropOverlay({ visible }: FileDropOverlayProps) {
         松手以导入文件到当前 AI 应用
       </div>
     </div>
-  );
+  )
 }

@@ -49,11 +49,15 @@ function candidateIconFiles(): string[] {
   }
   try {
     roots.push(app.getAppPath())
-  } catch { /* app not ready in some tests */ }
+  } catch {
+    /* app not ready in some tests */
+  }
   roots.push(__dirname)
   try {
     roots.push(process.cwd())
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   for (const root of roots) {
     for (const file of candidateFromRoot(root)) add(file)

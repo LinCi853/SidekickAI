@@ -208,19 +208,28 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
     // 2. new-window：已废弃事件，setWindowOpenHandler 返回 deny 后不会触发，
     //    仅在极少数浏览器内部导航场景兜底。为兼容性保留，仅记录日志。
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(wc as any).on('new-window', (e: Event, url: string, _frameName: string, disposition: string) => {
-      // foreground-tab / background-tab 是同域链接打开（已由 setWindowOpenHandler 处理）
-      // new-window 是真正的弹窗（已由 setWindowOpenHandler allow/deny）
-      // 此处仅记录日志，不做任何拦截，避免与 setWindowOpenHandler 决策冲突
-      console.log('[webview-popup] new-window 事件（已由 setWindowOpenHandler 处理，跳过）:', { url, disposition })
-    })
+    ;(wc as any).on(
+      'new-window',
+      (e: Event, url: string, _frameName: string, disposition: string) => {
+        // foreground-tab / background-tab 是同域链接打开（已由 setWindowOpenHandler 处理）
+        // new-window 是真正的弹窗（已由 setWindowOpenHandler allow/deny）
+        // 此处仅记录日志，不做任何拦截，避免与 setWindowOpenHandler 决策冲突
+        console.log('[webview-popup] new-window 事件（已由 setWindowOpenHandler 处理，跳过）:', {
+          url,
+          disposition,
+        })
+      },
+    )
 
     // 2.5 did-create-window：仅在 setWindowOpenHandler 返回 allow 后触发，
     //    表示独立窗口已创建完成。此处**不能 preventDefault** —— 窗口已存在，
     //    阻止会破坏登录/OAuth 流程。仅记录日志用于调试。
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(wc as any).on('did-create-window', (_e: Event, win: unknown, url: string) => {
-      console.log('[webview-popup] did-create-window: 独立窗口已创建（setWindowOpenHandler 已 allow）:', url)
+      console.log(
+        '[webview-popup] did-create-window: 独立窗口已创建（setWindowOpenHandler 已 allow）:',
+        url,
+      )
       // 该窗口将加载远程内容，向 will-navigate 守卫登记豁免（OAuth/登录流程依赖后续跳转）
       const popupWebContents = (win as { webContents?: Electron.WebContents }).webContents
       if (popupWebContents) allowRemoteNavigation(popupWebContents)

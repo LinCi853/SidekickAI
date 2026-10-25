@@ -10,15 +10,35 @@ import { product } from '../../packages/product-contract'
 const fixture = vi.hoisted(() => ({ paths: {} as Record<string, string> }))
 vi.mock('../edition-runtime.js', () => ({ prepareDataRestoreHandoff: async () => () => {} }))
 vi.mock('electron', () => ({
-  app: { isReady: () => true, isPackaged: true, getPath: (name: string) => fixture.paths[name], getVersion: () => '0.1.0-beta.5', relaunch: vi.fn(), exit: vi.fn() },
-  BrowserWindow: { getAllWindows: () => [] }, dialog: { showErrorBox: vi.fn() },
-  session: { defaultSession: { clearCache: async () => {}, clearAuthCache: async () => {}, clearStorageData: async () => {}, flushStorageData() {}, cookies: { flushStore: async () => {} } } },
+  app: {
+    isReady: () => true,
+    isPackaged: true,
+    getPath: (name: string) => fixture.paths[name],
+    getVersion: () => '0.1.0-beta.5',
+    relaunch: vi.fn(),
+    exit: vi.fn(),
+  },
+  BrowserWindow: { getAllWindows: () => [] },
+  dialog: { showErrorBox: vi.fn() },
+  session: {
+    defaultSession: {
+      clearCache: async () => {},
+      clearAuthCache: async () => {},
+      clearStorageData: async () => {},
+      flushStorageData() {},
+      cookies: { flushStore: async () => {} },
+    },
+  },
 }))
 vi.mock('./chat-store.js', () => ({ closeChatStore() {} }))
 vi.mock('../modules/plugins/whiteboard/whiteboard-db.js', () => ({ closeWhiteboardDb() {} }))
 vi.mock('../modules/plugins/notes/notes-db.js', () => ({ closeNotesDb() {} }))
 vi.mock('../browser/bookmark-store.js', () => ({ closeBookmarkStore() {} }))
-vi.mock('./module-state-store.js', () => ({ closeModuleStateDb() {}, createSqliteJsonStore() {}, clearSqliteStore() {} }))
+vi.mock('./module-state-store.js', () => ({
+  closeModuleStateDb() {},
+  createSqliteJsonStore() {},
+  clearSqliteStore() {},
+}))
 vi.mock('../browser/profile-store.js', () => ({ profileStore: { list: () => [] } }))
 vi.mock('./device-id.js', () => ({ getDeviceId: () => 'fixture-device' }))
 vi.mock('../browser/search-history-store.js', () => ({ closeSearchHistoryStore() {} }))
@@ -26,7 +46,10 @@ vi.mock('../browser/browser-download-store.js', () => ({ closeBrowserDownloadSto
 vi.mock('../browser/nav-history-store.js', () => ({ closeNavHistoryStore() {} }))
 vi.mock('./accumulated-links-store.js', () => ({ accumulatedLinksStore: { close() {} } }))
 vi.mock('./install-config-seed.js', () => ({ stampInstallConfigHashAfterImport() {} }))
-vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }), closeAllModuleDbs() {} }))
+vi.mock('../modules/registry.js', () => ({
+  collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }),
+  closeAllModuleDbs() {},
+}))
 import { estimateExportSizes, exportAllData, importAllData } from './backup-restore'
 import { cleanCacheData, estimateCacheSize } from './cache-maintenance'
 import { applyPendingRestore, finishPendingRestore } from '../../packages/backup-core/transaction'
@@ -40,7 +63,9 @@ beforeEach(() => {
 })
 afterEach(() => {
   setImportingData(false)
-  vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllEnvs()
+  vi.clearAllTimers()
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
   fs.rmSync(root, { recursive: true, force: true })
 })
 function settings(directory: string, value: string) {
@@ -54,8 +79,15 @@ function settings(directory: string, value: string) {
 }
 function sentinel(file: string) {
   const db = new Database(file, { readonly: true })
-  try { return (db.prepare('SELECT value FROM app_settings WHERE key = ?').get('sentinel') as { value: string }).value }
-  finally { db.close() }
+  try {
+    return (
+      db.prepare('SELECT value FROM app_settings WHERE key = ?').get('sentinel') as {
+        value: string
+      }
+    ).value
+  } finally {
+    db.close()
+  }
 }
 function write(directory: string, name: string, bytes: string) {
   const file = path.join(directory, name)
@@ -67,7 +99,10 @@ function dualLayout(arch: 'x64' | 'arm64') {
   const shared = path.join(root, 'data')
   const decoy = path.join(runtime, 'data')
   fs.mkdirSync(runtime)
-  fs.writeFileSync(path.join(runtime, 'portable.txt'), 'SidekickAI Dual Architecture Portable Marker\n')
+  fs.writeFileSync(
+    path.join(runtime, 'portable.txt'),
+    'SidekickAI Dual Architecture Portable Marker\n',
+  )
   fs.writeFileSync(path.join(root, 'portable-layout.json'), JSON.stringify(product.portable))
   settings(shared, 'shared-root')
   settings(decoy, 'architecture-local-sentinel')
@@ -79,14 +114,23 @@ function dualLayout(arch: 'x64' | 'arm64') {
   return { shared, decoy }
 }
 
-describe.each(['x64', 'arm64'] as const)('portable %s data operations', arch => {
+describe.each(['x64', 'arm64'] as const)('portable %s data operations', (arch) => {
   it('estimates, exports, and cleans the common data directory', async () => {
     const { shared, decoy } = dualLayout(arch)
     const estimate = await estimateExportSizes()
-    expect(estimate.basicData).toBe(fs.statSync(path.join(shared, 'settings.db')).size + Buffer.byteLength('shared-note'))
+    expect(estimate.basicData).toBe(
+      fs.statSync(path.join(shared, 'settings.db')).size + Buffer.byteLength('shared-note'),
+    )
     expect(estimateCacheSize()).toBe(Buffer.byteLength('shared-cache'))
     const backup = path.join(root, 'export.zip')
-    expect(await exportAllData(backup, { basicData: true, cookies: false, indexedDB: false, cache: false })).toMatchObject({ success: true })
+    expect(
+      await exportAllData(backup, {
+        basicData: true,
+        cookies: false,
+        indexedDB: false,
+        cache: false,
+      }),
+    ).toMatchObject({ success: true })
     const archive = new AdmZip(backup)
     expect(archive.readAsText('notes-assets/note.txt')).toBe('shared-note')
     const exportedDb = path.join(root, 'exported.db')
@@ -101,12 +145,24 @@ describe.each(['x64', 'arm64'] as const)('portable %s data operations', arch => 
     const incoming = settings(path.join(root, 'incoming'), 'restored-shared-root')
     const archive = new AdmZip()
     archive.addFile('settings.db', fs.readFileSync(incoming))
-    archive.addFile('manifest.json', Buffer.from(JSON.stringify({
-      format: 'sidekickai-backup', formatVersion: 1, edition: 'concept', dataSchemaVersion: 1,
-      deviceId: 'portable-fixture', appVersion: '0.1.5', exportedAt: new Date().toISOString(),
-      options: { basicData: true, cookies: false, indexedDB: false, cache: false },
-      entries: { 'settings.db': createHash('sha256').update(fs.readFileSync(incoming)).digest('hex') },
-    })))
+    archive.addFile(
+      'manifest.json',
+      Buffer.from(
+        JSON.stringify({
+          format: 'sidekickai-backup',
+          formatVersion: 1,
+          edition: 'concept',
+          dataSchemaVersion: 1,
+          deviceId: 'portable-fixture',
+          appVersion: '0.1.5',
+          exportedAt: new Date().toISOString(),
+          options: { basicData: true, cookies: false, indexedDB: false, cache: false },
+          entries: {
+            'settings.db': createHash('sha256').update(fs.readFileSync(incoming)).digest('hex'),
+          },
+        }),
+      ),
+    )
     const backup = path.join(root, 'restore.zip')
     archive.writeZip(backup)
     vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -116,6 +172,6 @@ describe.each(['x64', 'arm64'] as const)('portable %s data operations', arch => 
     finishPendingRestore(shared)
     expect(sentinel(path.join(shared, 'settings.db'))).toBe('restored-shared-root')
     expect(sentinel(path.join(decoy, 'settings.db'))).toBe('architecture-local-sentinel')
-    expect(fs.readdirSync(root).some(name => name.startsWith('data.bak-'))).toBe(false)
+    expect(fs.readdirSync(root).some((name) => name.startsWith('data.bak-'))).toBe(false)
   })
 })

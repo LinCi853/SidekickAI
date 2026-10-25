@@ -32,7 +32,7 @@ function encodeScript(script: string): string {
  */
 export async function readPrivateWorkingSetBytes(pids: number[]): Promise<Map<number, number>> {
   const result = new Map<number, number>()
-  const unique = [...new Set(pids.filter(pid => Number.isInteger(pid) && pid > 0))]
+  const unique = [...new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0))]
   if (process.platform !== 'win32' || unique.length === 0) return result
 
   try {

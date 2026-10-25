@@ -22,7 +22,9 @@ const stateObservers = new Set<() => void>()
 
 export function observeModuleState(observer: () => void): () => void {
   stateObservers.add(observer)
-  return () => { stateObservers.delete(observer) }
+  return () => {
+    stateObservers.delete(observer)
+  }
 }
 
 /** 注册模块（重复注册直接抛错，保证 manifest 唯一） */
@@ -64,7 +66,9 @@ export function runResidualScan(): ResidualScanResult {
       const targets = targetRegistry.getByOwner(moduleId)
       const active = targets.filter((t) => t.state === 'active')
       if (active.length > 0) {
-        violations.push(`模块 ${moduleId} 已关闭但仍有 ${active.length} 个活跃目标: ${active.map((t) => t.targetId).join(', ')}`)
+        violations.push(
+          `模块 ${moduleId} 已关闭但仍有 ${active.length} 个活跃目标: ${active.map((t) => t.targetId).join(', ')}`,
+        )
       }
     }
   } catch {
@@ -76,7 +80,11 @@ export function runResidualScan(): ResidualScanResult {
       violations.push(`模块 ${moduleId} 已关闭但仍注册了 IPC 通道: ${channel}`)
     }
   }
-  const result: ResidualScanResult = { ok: violations.length === 0, violations, disabledModules: disabled }
+  const result: ResidualScanResult = {
+    ok: violations.length === 0,
+    violations,
+    disabledModules: disabled,
+  }
   console.log('[modules] 残留扫描:', result.ok ? '通过' : '发现残留: ' + violations.join('; '))
   return result
 }
@@ -123,7 +131,11 @@ export function collectModuleDataFiles(): { dbFiles: string[]; assetDirs: string
 export async function closeAllModuleDbs(): Promise<void> {
   for (const m of listManifests()) {
     if (m.closeDb) {
-      try { await m.closeDb() } catch { /* ignore */ }
+      try {
+        await m.closeDb()
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
@@ -131,7 +143,11 @@ export async function closeAllModuleDbs(): Promise<void> {
 /** 广播模块状态到所有窗口 */
 function broadcastModuleState(): void {
   for (const observer of stateObservers) {
-    try { observer() } catch (error) { console.warn('[modules] State observer failed:', error) }
+    try {
+      observer()
+    } catch (error) {
+      console.warn('[modules] State observer failed:', error)
+    }
   }
   broadcastToAllWindows(
     IPC_CHANNELS.MODULE_STATE_CHANGED,
@@ -189,7 +205,9 @@ export async function initEnabledModules(): Promise<void> {
       }
     }
   }
-  const enabledIds = listModuleInfos().filter((x) => x.enabled).map((x) => x.id)
+  const enabledIds = listModuleInfos()
+    .filter((x) => x.enabled)
+    .map((x) => x.id)
   console.log(`[modules] 模块初始化完成，启用: ${enabledIds.join(', ') || '（无）'}`)
   // 进阶面板保护：至少一个面板模块（custom-chat / whiteboard / notes）必须启用，
   // 否则 Alt+Q 完全失效。如果全部被禁用，强制恢复 custom-chat。
@@ -282,9 +300,7 @@ export async function setModuleEnabled(
 }
 
 /** 清除模块全部用户数据（不可逆；manifest 未实现 clearData 时拒绝） */
-export async function clearModuleData(
-  id: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function clearModuleData(id: string): Promise<{ ok: boolean; error?: string }> {
   const m = manifests.get(id)
   if (!m) return { ok: false, error: `未知模块: ${id}` }
   if (!m.clearData) return { ok: false, error: '该模块暂不支持清除数据' }

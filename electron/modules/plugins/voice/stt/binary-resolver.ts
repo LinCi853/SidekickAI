@@ -44,12 +44,8 @@ const ASSET_MAP: Record<string, WhisperCliAsset> = {
 /**
  * 获取 whisper-cli 可执行文件候选名（按平台）。
  */
-export function getWhisperCliBinaryNames(
-  platform: NodeJS.Platform = process.platform,
-): string[] {
-  return platform === 'win32'
-    ? ['whisper-cli.exe']
-    : ['whisper-cli']
+export function getWhisperCliBinaryNames(platform: NodeJS.Platform = process.platform): string[] {
+  return platform === 'win32' ? ['whisper-cli.exe'] : ['whisper-cli']
 }
 
 /**

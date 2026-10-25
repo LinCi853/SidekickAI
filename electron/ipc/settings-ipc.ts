@@ -30,8 +30,7 @@ function normalizePopupOrigin(value: unknown): string | undefined {
     const url = new URL(value.trim())
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined
     return url.origin
-  }
-  catch {
+  } catch {
     return undefined
   }
 }
@@ -78,9 +77,7 @@ export function registerSettingsIpc(scope?: EffectScope): void {
 
   // ===== 预设 / AI 平台 IPC =====
   handle(IPC_CHANNELS.PRESETS_LIST, async () => presetStore.list())
-  handle(IPC_CHANNELS.PRESETS_GET, async (_e: unknown, id: string) =>
-    presetStore.get(id),
-  )
+  handle(IPC_CHANNELS.PRESETS_GET, async (_e: unknown, id: string) => presetStore.get(id))
   // Platform defaults retain their own accents; profiles own color overrides.
   // 同时为「未绑定预设」的自定义 AI 应用合成 AIPlatform 项追加到列表末尾，
   // 否则 AppSwitcher / BottomBar / AiAppSection 反向匹配平台时找不到对应项会过滤掉自定义应用。
@@ -110,9 +107,7 @@ export function registerSettingsIpc(scope?: EffectScope): void {
         .filter(
           (pr) =>
             pr.isAIPlatform &&
-            AI_PLATFORMS.some(
-              (p) => p.id === pr.aiPlatformId || p.url === pr.aiPlatformUrl,
-            ),
+            AI_PLATFORMS.some((p) => p.id === pr.aiPlatformId || p.url === pr.aiPlatformUrl),
         )
         .map((pr) => pr.id),
     )
@@ -137,15 +132,18 @@ export function registerSettingsIpc(scope?: EffectScope): void {
   })
 
   // 弹窗白名单：添加 origin 到 Profile 专属 popupWhitelist
-  handle(IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST, async (e: IpcMainInvokeEvent, profileId: string, origin: unknown) => {
-    assertTrustedRenderer(e)
-    const normalized = normalizePopupOrigin(origin)
-    if (!normalized) return
-    const profile = profileStore.get(profileId)
-    if (!profile) return
-    const list = profile.popupWhitelist ?? []
-    if (!list.includes(normalized)) {
-      profileStore.update(profileId, { popupWhitelist: [...list, normalized] })
-    }
-  })
+  handle(
+    IPC_CHANNELS.POPUP_ADD_PROFILE_WHITELIST,
+    async (e: IpcMainInvokeEvent, profileId: string, origin: unknown) => {
+      assertTrustedRenderer(e)
+      const normalized = normalizePopupOrigin(origin)
+      if (!normalized) return
+      const profile = profileStore.get(profileId)
+      if (!profile) return
+      const list = profile.popupWhitelist ?? []
+      if (!list.includes(normalized)) {
+        profileStore.update(profileId, { popupWhitelist: [...list, normalized] })
+      }
+    },
+  )
 }

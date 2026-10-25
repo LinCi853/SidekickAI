@@ -5,25 +5,25 @@
    三方一致：复用 PromptEditorForm 共享表单 + prompt-editor 外壳样式。
    ===================================================================== */
 
-import { useEffect, useState } from 'react';
-import type { PromptTemplate } from '../lib/electron-api';
-import { savePrompt } from '../lib/electron-api';
-import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
-import Button from './ui/Button';
-import IconButton from './ui/IconButton';
-import PromptEditorForm from './PromptEditorForm';
+import { useEffect, useState } from 'react'
+import type { PromptTemplate } from '../lib/electron-api'
+import { savePrompt } from '../lib/electron-api'
+import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow'
+import Button from './ui/Button'
+import IconButton from './ui/IconButton'
+import PromptEditorForm from './PromptEditorForm'
 
 export interface SaveAsPromptModalProps {
   /** 是否打开 */
-  open: boolean;
+  open: boolean
   /** 预填充内容（笔记正文） */
-  initialContent: string;
+  initialContent: string
   /** 预填充标题（笔记标题，可选） */
-  initialTitle?: string;
+  initialTitle?: string
   /** 保存成功回调 */
-  onSaved: () => void;
+  onSaved: () => void
   /** 取消/关闭回调 */
-  onClose: () => void;
+  onClose: () => void
 }
 
 export default function SaveAsPromptModal({
@@ -33,40 +33,40 @@ export default function SaveAsPromptModal({
   onSaved,
   onClose,
 }: SaveAsPromptModalProps) {
-  const [title, setTitle] = useState(initialTitle ?? '');
-  const [content, setContent] = useState(initialContent);
-  const [category, setCategory] = useState('');
-  const [hotkey, setHotkey] = useState('');
-  const [activeFace, setActiveFace] = useState<'general' | 'example'>('general');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState(initialTitle ?? '')
+  const [content, setContent] = useState(initialContent)
+  const [category, setCategory] = useState('')
+  const [hotkey, setHotkey] = useState('')
+  const [activeFace, setActiveFace] = useState<'general' | 'example'>('general')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // 打开时同步预填值（每次 open 从 false→true 时重置）
   useEffect(() => {
     if (open) {
-      setTitle(initialTitle ?? '');
-      setContent(initialContent);
-      setCategory('');
-      setHotkey('');
-      setError(null);
-      setSaving(false);
+      setTitle(initialTitle ?? '')
+      setContent(initialContent)
+      setCategory('')
+      setHotkey('')
+      setError(null)
+      setSaving(false)
     }
-  }, [open, initialContent, initialTitle]);
+  }, [open, initialContent, initialTitle])
 
   // ESC 关闭（走统一浮窗栈）
-  useEscToCloseOverlay(open, onClose);
+  useEscToCloseOverlay(open, onClose)
 
-  if (!open) return null;
+  if (!open) return null
 
   const handleConfirm = async () => {
     if (!content.trim()) {
-      setError('内容不能为空');
-      return;
+      setError('内容不能为空')
+      return
     }
-    setSaving(true);
-    setError(null);
+    setSaving(true)
+    setError(null)
     try {
-      const now = Date.now();
+      const now = Date.now()
       const template: PromptTemplate = {
         id: crypto.randomUUID(),
         title: title.trim() || content.slice(0, 30),
@@ -75,16 +75,16 @@ export default function SaveAsPromptModal({
         hotkey: hotkey.trim() || undefined,
         createdAt: now,
         updatedAt: now,
-      };
-      await savePrompt(template);
-      onSaved();
+      }
+      await savePrompt(template)
+      onSaved()
     } catch (e) {
-      console.error('[SaveAsPromptModal] 保存失败:', e);
-      setError('保存失败，请重试');
+      console.error('[SaveAsPromptModal] 保存失败:', e)
+      setError('保存失败，请重试')
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   return (
     <div
@@ -182,5 +182,5 @@ export default function SaveAsPromptModal({
         </div>
       </div>
     </div>
-  );
+  )
 }

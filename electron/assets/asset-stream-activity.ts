@@ -8,7 +8,9 @@ const active = new Set<AbortController>()
 /** 登记进行中的流式资产请求；返回释放函数供 finally 调用 */
 export function trackAssetStream(controller: AbortController): () => void {
   active.add(controller)
-  return () => { active.delete(controller) }
+  return () => {
+    active.delete(controller)
+  }
 }
 
 /** 是否存在进行中的流式资产请求 */

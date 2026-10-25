@@ -8,22 +8,39 @@ const { spawnSync } = require('node:child_process')
 const { DatabaseSync } = require('node:sqlite')
 const esbuild = require('esbuild')
 const workspace = path.resolve(__dirname, '..')
-const edition = Object.entries(require(path.join(workspace, 'packages/product-contract/manifest.json')).editions)
-  .find(([, product]) => product.packageName === require(path.join(workspace, 'package.json')).name)[0]
+const edition = Object.entries(
+  require(path.join(workspace, 'packages/product-contract/manifest.json')).editions,
+).find(
+  ([, product]) => product.packageName === require(path.join(workspace, 'package.json')).name,
+)[0]
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-durable-test-'))
 let core
 const options = { basicData: true, cookies: true, indexedDB: true, cache: true }
 const evidence = []
 
 before(async () => {
-  await esbuild.build({ bundle: true, platform: 'node', format: 'cjs', target: 'node24', logLevel: 'silent', external: ['electron', 'better-sqlite3'],
-    stdin: { resolveDir: workspace, contents: `export * from './packages/backup-core/offline'; export * from './packages/backup-core/jobs'; export * from './packages/backup-core/io'; export * from './packages/backup-core/file-crypto'; export * from './packages/backup-core/stream-archive'; export * from './packages/backup-core/cli';` }, outfile: path.join(base, 'core.cjs') })
+  await esbuild.build({
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node24',
+    logLevel: 'silent',
+    external: ['electron', 'better-sqlite3'],
+    stdin: {
+      resolveDir: workspace,
+      contents: `export * from './packages/backup-core/offline'; export * from './packages/backup-core/jobs'; export * from './packages/backup-core/io'; export * from './packages/backup-core/file-crypto'; export * from './packages/backup-core/stream-archive'; export * from './packages/backup-core/cli';`,
+    },
+    outfile: path.join(base, 'core.cjs'),
+  })
   core = require(path.join(base, 'core.cjs'))
 })
 after(() => {
   const output = path.join(workspace, 'local/development/2026-10-07-reliable-lifecycle')
   fs.mkdirSync(output, { recursive: true })
-  fs.writeFileSync(path.join(output, 'backup-core-runtime.json'), JSON.stringify({ checkedAt: new Date().toISOString(), workspace, tests: evidence }, null, 2))
+  fs.writeFileSync(
+    path.join(output, 'backup-core-runtime.json'),
+    JSON.stringify({ checkedAt: new Date().toISOString(), workspace, tests: evidence }, null, 2),
+  )
   assert.equal(path.dirname(base), os.tmpdir())
   assert.ok(path.basename(base).startsWith('sidekick-durable-test-'))
   fs.rmSync(base, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -37,7 +54,9 @@ function fixture(name, megabytes = 0) {
   fs.mkdirSync(sourceRoot, { recursive: true })
   fs.mkdirSync(targetDirectory)
   const database = new DatabaseSync(path.join(sourceRoot, 'settings.db'))
-  database.exec("CREATE TABLE app_settings (key TEXT PRIMARY KEY,value TEXT); INSERT INTO app_settings VALUES ('fixture','original'); CREATE TABLE module_state (id TEXT PRIMARY KEY)")
+  database.exec(
+    "CREATE TABLE app_settings (key TEXT PRIMARY KEY,value TEXT); INSERT INTO app_settings VALUES ('fixture','original'); CREATE TABLE module_state (id TEXT PRIMARY KEY)",
+  )
   database.close()
   if (megabytes) {
     const descriptor = fs.openSync(path.join(sourceRoot, 'payload.bin'), 'w')
@@ -45,14 +64,38 @@ function fixture(name, megabytes = 0) {
     for (let index = 0; index < megabytes; index++) fs.writeSync(descriptor, buffer)
     fs.closeSync(descriptor)
   }
-  return { directory, sourceRoot, targetDirectory, tempRoot, targetPath: path.join(targetDirectory, 'backup.zip'), edition, version: 'fixture', options, strict: false }
+  return {
+    directory,
+    sourceRoot,
+    targetDirectory,
+    tempRoot,
+    targetPath: path.join(targetDirectory, 'backup.zip'),
+    edition,
+    version: 'fixture',
+    options,
+    strict: false,
+  }
 }
-function retained(job, target) { return path.join(core.backupJobDirectory(job.id, target.tempRoot), job.encrypted ? 'artifact.sabackup' : 'artifact.zip') }
+function retained(job, target) {
+  return path.join(
+    core.backupJobDirectory(job.id, target.tempRoot),
+    job.encrypted ? 'artifact.sabackup' : 'artifact.zip',
+  )
+}
 async function interrupted(target, encrypted = false) {
   const controller = new AbortController()
-  const result = await core.exportOfflineBackup({ ...target, password: encrypted ? 'fixture-password' : undefined, signal: controller.signal, onProgress: job => {
-    if (job.progress.phase === 'copying-target' && job.progress.completedBytes >= core.COPY_CHUNK_BYTES) controller.abort()
-  } })
+  const result = await core.exportOfflineBackup({
+    ...target,
+    password: encrypted ? 'fixture-password' : undefined,
+    signal: controller.signal,
+    onProgress: (job) => {
+      if (
+        job.progress.phase === 'copying-target' &&
+        job.progress.completedBytes >= core.COPY_CHUNK_BYTES
+      )
+        controller.abort()
+    },
+  })
   assert.equal(result.status, 'cancelled', result.error)
   assert.equal(fs.existsSync(target.targetPath), false)
   const job = core.queryBackupJob(result.jobId, target.tempRoot)
@@ -62,26 +105,53 @@ async function interrupted(target, encrypted = false) {
   return { result, job }
 }
 
-test('a retained authenticated artifact resumes verified blocks without rereading changed source data', { timeout: 60000 }, async () => {
+test('a retained authenticated artifact resumes verified blocks without rereading changed source data', {
+  timeout: 60000,
+}, async () => {
   const target = fixture('resumable', 18)
   const { job } = await interrupted(target, true)
-  const original = { snapshotId: job.snapshotId, artifactSha256: job.artifactSha256, artifactMtime: fs.statSync(retained(job, target)).mtimeMs, offset: job.transfer.completedBytes }
-  fs.writeFileSync(path.join(target.sourceRoot, 'later-edit.txt'), 'new edits belong to the next backup')
+  const original = {
+    snapshotId: job.snapshotId,
+    artifactSha256: job.artifactSha256,
+    artifactMtime: fs.statSync(retained(job, target)).mtimeMs,
+    offset: job.transfer.completedBytes,
+  }
+  fs.writeFileSync(
+    path.join(target.sourceRoot, 'later-edit.txt'),
+    'new edits belong to the next backup',
+  )
   let observedOffset = 0
-  const result = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot, onProgress: state => { if (state.progress.phase === 'copying-target' && !observedOffset) observedOffset = state.progress.completedBytes } })
+  const result = await core.resumeBackupJob(job.id, {
+    tempRoot: target.tempRoot,
+    onProgress: (state) => {
+      if (state.progress.phase === 'copying-target' && !observedOffset)
+        observedOffset = state.progress.completedBytes
+    },
+  })
   assert.equal(result.success, true, result.error)
   assert.equal(observedOffset, original.offset)
   assert.equal(result.snapshotId, original.snapshotId)
   assert.equal(result.artifactSha256, original.artifactSha256)
   assert.equal(fs.statSync(retained(job, target)).mtimeMs, original.artifactMtime)
   const decrypted = path.join(target.directory, 'decrypted.zip')
-  assert.equal(await core.decryptFileStream(result.filePath, decrypted, 'fixture-password'), `${edition}-offline`)
+  assert.equal(
+    await core.decryptFileStream(result.filePath, decrypted, 'fixture-password'),
+    `${edition}-offline`,
+  )
   const manifest = await core.readStreamingArchive(decrypted)
   assert.equal(Object.hasOwn(manifest.entries, 'later-edit.txt'), false)
-  evidence.push({ name: 'encrypted block continuation', continuedAtBytes: observedOffset, bytes: job.artifactBytes, snapshotUnchanged: true, artifactUnchanged: true })
+  evidence.push({
+    name: 'encrypted block continuation',
+    continuedAtBytes: observedOffset,
+    bytes: job.artifactBytes,
+    snapshotUnchanged: true,
+    artifactUnchanged: true,
+  })
 })
 
-test('a replacement target directory waits and an explicitly chosen new target reuses the same artifact', { timeout: 60000 }, async () => {
+test('a replacement target directory waits and an explicitly chosen new target reuses the same artifact', {
+  timeout: 60000,
+}, async () => {
   const target = fixture('device-change', 12)
   const { job } = await interrupted(target)
   const held = `${target.targetDirectory}-original`
@@ -93,7 +163,10 @@ test('a replacement target directory waits and an explicitly chosen new target r
   assert.equal(waited.waitingReason, 'device-changed')
   assert.deepEqual(fs.readdirSync(target.targetDirectory), [])
   const next = path.join(target.directory, 'rerouted.zip')
-  const resumed = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot, targetPath: next })
+  const resumed = await core.resumeBackupJob(job.id, {
+    tempRoot: target.tempRoot,
+    targetPath: next,
+  })
   assert.equal(resumed.success, true, resumed.error)
   assert.equal(resumed.snapshotId, job.snapshotId)
   assert.equal(resumed.artifactSha256, job.artifactSha256)
@@ -101,7 +174,9 @@ test('a replacement target directory waits and an explicitly chosen new target r
   evidence.push({ name: 'replacement device and explicit target change', result: 'passed' })
 })
 
-test('a corrupted retained target block cannot be silently accepted or overwritten', { timeout: 60000 }, async () => {
+test('a corrupted retained target block cannot be silently accepted or overwritten', {
+  timeout: 60000,
+}, async () => {
   const target = fixture('corrupt-block', 12)
   const { job } = await interrupted(target)
   const descriptor = fs.openSync(job.transfer.partialPath, 'r+')
@@ -116,11 +191,20 @@ test('a corrupted retained target block cannot be silently accepted or overwritt
   evidence.push({ name: 'corrupt checkpoint block', result: 'rejected without publication' })
 })
 
-test('a killed exporter resumes its durable checkpoint in another process', { timeout: 60000 }, async () => {
+test('a killed exporter resumes its durable checkpoint in another process', {
+  timeout: 60000,
+}, async () => {
   const target = fixture('process-loss', 16)
   const script = path.join(target.directory, 'interrupted.cjs')
-  fs.writeFileSync(script, `const fs=require('node:fs');const core=require(${JSON.stringify(path.join(base, 'core.cjs'))});const request=${JSON.stringify(target)};core.exportOfflineBackup({...request,onProgress:job=>{if(job.progress.phase==='copying-target'&&job.progress.completedBytes>=4194304){fs.writeFileSync(${JSON.stringify(path.join(target.directory, 'job-id.txt'))},job.id);process.exit(77)}}}).catch(error=>{console.error(error);process.exit(1)});`)
-  const child = spawnSync(process.execPath, [script], { windowsHide: true, encoding: 'utf8', timeout: 45000 })
+  fs.writeFileSync(
+    script,
+    `const fs=require('node:fs');const core=require(${JSON.stringify(path.join(base, 'core.cjs'))});const request=${JSON.stringify(target)};core.exportOfflineBackup({...request,onProgress:job=>{if(job.progress.phase==='copying-target'&&job.progress.completedBytes>=4194304){fs.writeFileSync(${JSON.stringify(path.join(target.directory, 'job-id.txt'))},job.id);process.exit(77)}}}).catch(error=>{console.error(error);process.exit(1)});`,
+  )
+  const child = spawnSync(process.execPath, [script], {
+    windowsHide: true,
+    encoding: 'utf8',
+    timeout: 45000,
+  })
   assert.equal(child.status, 77, child.stderr)
   const id = fs.readFileSync(path.join(target.directory, 'job-id.txt'), 'utf8')
   const before = core.queryBackupJob(id, target.tempRoot)
@@ -130,19 +214,46 @@ test('a killed exporter resumes its durable checkpoint in another process', { ti
   assert.equal(result.success, true, result.error)
   assert.equal(result.snapshotId, before.snapshotId)
   assert.equal(result.artifactSha256, before.artifactSha256)
-  evidence.push({ name: 'process termination', checkpointBytes: before.transfer.completedBytes, result: 'resumed' })
+  evidence.push({
+    name: 'process termination',
+    checkpointBytes: before.transfer.completedBytes,
+    result: 'resumed',
+  })
 })
 
 test('source, staging and target budgets are grouped by real volume and low space is explicit', () => {
   const target = fixture('space')
-  const grouped = core.checkDiskSpace([{ path: target.sourceRoot, bytes: 123, purpose: 'source' }, { path: target.tempRoot, bytes: 234, purpose: 'staging' }, { path: target.targetDirectory, bytes: 345, purpose: 'target' }], 0)
+  const grouped = core.checkDiskSpace(
+    [
+      { path: target.sourceRoot, bytes: 123, purpose: 'source' },
+      { path: target.tempRoot, bytes: 234, purpose: 'staging' },
+      { path: target.targetDirectory, bytes: 345, purpose: 'target' },
+    ],
+    0,
+  )
   assert.equal(grouped.length, 1)
   assert.equal(grouped[0].requiredBytes, 702)
-  assert.throws(() => core.checkDiskSpace([{ path: target.directory, bytes: Number.MAX_SAFE_INTEGER - 64 * 1024 * 1024, purpose: 'fixture' }]), error => error.reason === 'space')
-  evidence.push({ name: 'per-volume capacity', combinedBudget: grouped[0].requiredBytes, lowSpace: 'rejected' })
+  assert.throws(
+    () =>
+      core.checkDiskSpace([
+        {
+          path: target.directory,
+          bytes: Number.MAX_SAFE_INTEGER - 64 * 1024 * 1024,
+          purpose: 'fixture',
+        },
+      ]),
+    (error) => error.reason === 'space',
+  )
+  evidence.push({
+    name: 'per-volume capacity',
+    combinedBudget: grouped[0].requiredBytes,
+    lowSpace: 'rejected',
+  })
 })
 
-test('private staging has explicit current-account and System ACLs on Windows', { skip: process.platform !== 'win32' }, async () => {
+test('private staging has explicit current-account and System ACLs on Windows', {
+  skip: process.platform !== 'win32',
+}, async () => {
   const target = fixture('acl')
   const result = await core.exportOfflineBackup(target)
   assert.equal(result.success, true, result.error)
@@ -151,10 +262,16 @@ test('private staging has explicit current-account and System ACLs on Windows', 
   assert.equal(acl.status, 0)
   assert.match(acl.stdout, /SYSTEM/)
   assert.doesNotMatch(acl.stdout, /\(I\)/)
-  evidence.push({ name: 'restricted staging ACL', inheritedEntries: false, plaintextPolicy: core.queryBackupJob(result.jobId, target.tempRoot).stagingPolicy })
+  evidence.push({
+    name: 'restricted staging ACL',
+    inheritedEntries: false,
+    plaintextPolicy: core.queryBackupJob(result.jobId, target.tempRoot).stagingPolicy,
+  })
 })
 
-test('a large ZIP64 backup and restore stay within bounded process memory', { timeout: 180000 }, async () => {
+test('a large ZIP64 backup and restore stay within bounded process memory', {
+  timeout: 180000,
+}, async () => {
   const target = fixture('large')
   const payload = path.join(target.sourceRoot, 'large.bin')
   const descriptor = fs.openSync(payload, 'w')
@@ -162,8 +279,15 @@ test('a large ZIP64 backup and restore stay within bounded process memory', { ti
   fs.closeSync(descriptor)
   const script = path.join(target.directory, 'large.cjs')
   const report = path.join(target.directory, 'large-result.json')
-  fs.writeFileSync(script, `const fs=require('node:fs');const core=require(${JSON.stringify(path.join(base, 'core.cjs'))});(async()=>{const result=await core.exportOfflineBackup(${JSON.stringify(target)});if(!result.success)throw new Error(result.error);const restored=${JSON.stringify(path.join(target.directory, 'restored'))};fs.mkdirSync(restored);const manifest=await core.readStreamingArchive(result.filePath,{extractTo:restored});fs.writeFileSync(${JSON.stringify(report)},JSON.stringify({success:true,size:fs.statSync(require('node:path').join(restored,'large.bin')).size,maxRssKiB:process.resourceUsage().maxRSS,entryBytes:manifest.inventory.find(x=>x.path==='large.bin').size}));})().catch(error=>{console.error(error);process.exitCode=1});`)
-  const child = spawnSync(process.execPath, ['--max-old-space-size=128', script], { windowsHide: true, encoding: 'utf8', timeout: 160000 })
+  fs.writeFileSync(
+    script,
+    `const fs=require('node:fs');const core=require(${JSON.stringify(path.join(base, 'core.cjs'))});(async()=>{const result=await core.exportOfflineBackup(${JSON.stringify(target)});if(!result.success)throw new Error(result.error);const restored=${JSON.stringify(path.join(target.directory, 'restored'))};fs.mkdirSync(restored);const manifest=await core.readStreamingArchive(result.filePath,{extractTo:restored});fs.writeFileSync(${JSON.stringify(report)},JSON.stringify({success:true,size:fs.statSync(require('node:path').join(restored,'large.bin')).size,maxRssKiB:process.resourceUsage().maxRSS,entryBytes:manifest.inventory.find(x=>x.path==='large.bin').size}));})().catch(error=>{console.error(error);process.exitCode=1});`,
+  )
+  const child = spawnSync(process.execPath, ['--max-old-space-size=128', script], {
+    windowsHide: true,
+    encoding: 'utf8',
+    timeout: 160000,
+  })
   assert.equal(child.status, 0, child.stderr)
   const result = JSON.parse(fs.readFileSync(report, 'utf8'))
   assert.equal(result.size, 600 * 1024 * 1024)
@@ -172,25 +296,42 @@ test('a large ZIP64 backup and restore stay within bounded process memory', { ti
   evidence.push({ name: '600 MiB ZIP64 roundtrip under 128 MiB heap', ...result })
 })
 
-test('the standalone CLI verifies and restores encrypted archives without the application runtime', { timeout: 60000 }, async () => {
+test('the standalone CLI verifies and restores encrypted archives without the application runtime', {
+  timeout: 60000,
+}, async () => {
   const target = fixture('cli')
   const result = await core.exportOfflineBackup({ ...target, password: 'fixture-password' })
   assert.equal(result.success, true, result.error)
   const cli = path.join(base, 'standalone.cjs')
-  const built = spawnSync(process.execPath, [path.join(workspace, 'scripts/build-backup-cli.cjs'), cli], { windowsHide: true, encoding: 'utf8' })
+  const built = spawnSync(
+    process.execPath,
+    [path.join(workspace, 'scripts/build-backup-cli.cjs'), cli],
+    { windowsHide: true, encoding: 'utf8' },
+  )
   assert.equal(built.status, 0, built.stderr)
   const restored = path.join(target.directory, 'restored')
-  const child = spawnSync(process.execPath, [cli, 'restore', '--file', result.filePath, '--target', restored, '--password-stdin'], { input: 'fixture-password\n', windowsHide: true, encoding: 'utf8', cwd: base })
+  const child = spawnSync(
+    process.execPath,
+    [cli, 'restore', '--file', result.filePath, '--target', restored, '--password-stdin'],
+    { input: 'fixture-password\n', windowsHide: true, encoding: 'utf8', cwd: base },
+  )
   assert.equal(child.status, 0, child.stderr)
   const report = JSON.parse(child.stdout)
   assert.equal(report.success, true)
   const database = new DatabaseSync(path.join(restored, 'settings.db'), { readOnly: true })
-  assert.equal(database.prepare("SELECT value FROM app_settings WHERE key='fixture'").get().value, 'original')
+  assert.equal(
+    database.prepare("SELECT value FROM app_settings WHERE key='fixture'").get().value,
+    'original',
+  )
   database.close()
   const wrong = path.join(target.directory, 'wrong.zip')
   assert.equal(await core.decryptFileStream(result.filePath, wrong, 'incorrect-password'), null)
   assert.equal(fs.existsSync(wrong), false)
-  evidence.push({ name: 'independent encrypted restore', applicationProcessRequired: false, wrongPasswordPublishesNothing: true })
+  evidence.push({
+    name: 'independent encrypted restore',
+    applicationProcessRequired: false,
+    wrongPasswordPublishesNothing: true,
+  })
 })
 
 test('independent restore does not publish an invalid archive and can retry the same destination', async () => {
@@ -201,14 +342,20 @@ test('independent restore does not publish an invalid archive and can retry the 
   const zip = new AdmZip(result.filePath)
   const manifest = JSON.parse(zip.readAsText('manifest.json'))
   manifest.entries['settings.db'] = '0'.repeat(64)
-  manifest.inventory.find(entry => entry.path === 'settings.db').sha256 = '0'.repeat(64)
+  manifest.inventory.find((entry) => entry.path === 'settings.db').sha256 = '0'.repeat(64)
   zip.updateFile('manifest.json', Buffer.from(JSON.stringify(manifest)))
   const damaged = path.join(target.directory, 'damaged.zip')
   zip.writeZip(damaged)
   const restored = path.join(target.directory, 'restored')
-  await assert.rejects(core.runBackupCli(['restore', '--file', damaged, '--target', restored]), /integrity check failed/)
+  await assert.rejects(
+    core.runBackupCli(['restore', '--file', damaged, '--target', restored]),
+    /integrity check failed/,
+  )
   assert.equal(fs.existsSync(restored), false)
-  assert.equal((await core.runBackupCli(['restore', '--file', result.filePath, '--target', restored])).success, true)
+  assert.equal(
+    (await core.runBackupCli(['restore', '--file', result.filePath, '--target', restored])).success,
+    true,
+  )
   evidence.push({ name: 'invalid restore publication and retry', result: 'passed' })
 })
 
@@ -219,7 +366,7 @@ test('verified snapshot inventory sizes agree with the archive payload', async (
   const AdmZip = require('adm-zip')
   const zip = new AdmZip(result.filePath)
   const manifest = JSON.parse(zip.readAsText('manifest.json'))
-  manifest.inventory.find(entry => entry.path === 'settings.db').size++
+  manifest.inventory.find((entry) => entry.path === 'settings.db').size++
   zip.updateFile('manifest.json', Buffer.from(JSON.stringify(manifest)))
   const damaged = path.join(target.directory, 'damaged.zip')
   zip.writeZip(damaged)
@@ -230,47 +377,73 @@ test('verified snapshot inventory sizes agree with the archive payload', async (
 test('strict publication supports targets without hard links while retaining exclusive creation', async () => {
   const target = { ...fixture('without-hardlinks'), strict: true }
   const link = fs.linkSync
-  fs.linkSync = () => { throw Object.assign(new Error('Hard links are unsupported.'), { code: 'ENOSYS' }) }
+  fs.linkSync = () => {
+    throw Object.assign(new Error('Hard links are unsupported.'), { code: 'ENOSYS' })
+  }
   let result
-  try { result = await core.exportOfflineBackup({ ...target, password: 'fixture-password' }) }
-  finally { fs.linkSync = link }
+  try {
+    result = await core.exportOfflineBackup({ ...target, password: 'fixture-password' })
+  } finally {
+    fs.linkSync = link
+  }
   assert.equal(result.success, true, result.error)
   const original = await core.hashFile(target.targetPath)
   const repeated = await core.exportOfflineBackup(target)
   assert.equal(repeated.success, false)
   assert.equal(repeated.waitingReason, 'target-exists')
   assert.equal(await core.hashFile(target.targetPath), original)
-  evidence.push({ name: 'exclusive publication without hard links', mechanism: 'simulated ENOSYS', result: 'passed' })
+  evidence.push({
+    name: 'exclusive publication without hard links',
+    mechanism: 'simulated ENOSYS',
+    result: 'passed',
+  })
 })
 
 test('an interrupted encryption requests a password again without retaining the password', async () => {
   const target = fixture('password-reentry')
   const password = 'private-fixture-password-not-a-credential'
   const controller = new AbortController()
-  const stopped = await core.exportOfflineBackup({ ...target, password, signal: controller.signal, onProgress: job => {
-    if (job.progress.phase === 'encrypting') controller.abort()
-  } })
+  const stopped = await core.exportOfflineBackup({
+    ...target,
+    password,
+    signal: controller.signal,
+    onProgress: (job) => {
+      if (job.progress.phase === 'encrypting') controller.abort()
+    },
+  })
   assert.equal(stopped.status, 'cancelled', stopped.error)
   const waiting = await core.resumeBackupJob(stopped.jobId, { tempRoot: target.tempRoot })
   assert.equal(waiting.status, 'waiting')
   assert.equal(waiting.waitingReason, 'password')
   const directory = core.backupJobDirectory(stopped.jobId, target.tempRoot)
-  for (const name of fs.readdirSync(directory).filter(name => /\.jsonl?$/.test(name))) assert.equal(fs.readFileSync(path.join(directory, name), 'utf8').includes(password), false)
+  for (const name of fs.readdirSync(directory).filter((name) => /\.jsonl?$/.test(name)))
+    assert.equal(fs.readFileSync(path.join(directory, name), 'utf8').includes(password), false)
   const resumed = await core.resumeBackupJob(stopped.jobId, { tempRoot: target.tempRoot, password })
   assert.equal(resumed.success, true, resumed.error)
   assert.equal(resumed.snapshotId, stopped.snapshotId)
-  evidence.push({ name: 'password reentry after interrupted encryption', persistedPassword: false, result: 'passed' })
+  evidence.push({
+    name: 'password reentry after interrupted encryption',
+    persistedPassword: false,
+    result: 'passed',
+  })
 })
 
 test('snapshot corruption is rejected and explicit discard removes only the selected task', async () => {
   const target = fixture('snapshot-corruption')
   const controller = new AbortController()
-  const stopped = await core.exportOfflineBackup({ ...target, signal: controller.signal, onProgress: job => {
-    if (job.progress.phase === 'snapshot-ready') controller.abort()
-  } })
+  const stopped = await core.exportOfflineBackup({
+    ...target,
+    signal: controller.signal,
+    onProgress: (job) => {
+      if (job.progress.phase === 'snapshot-ready') controller.abort()
+    },
+  })
   assert.equal(stopped.status, 'cancelled', stopped.error)
   const job = core.queryBackupJob(stopped.jobId, target.tempRoot)
-  fs.writeFileSync(path.join(core.backupSnapshotDirectory(job, target.tempRoot), 'settings.db'), 'damaged snapshot')
+  fs.writeFileSync(
+    path.join(core.backupSnapshotDirectory(job, target.tempRoot), 'settings.db'),
+    'damaged snapshot',
+  )
   const resumed = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot })
   assert.equal(resumed.success, false)
   assert.match(resumed.error, /snapshot integrity check failed/)
@@ -279,11 +452,16 @@ test('snapshot corruption is rejected and explicit discard removes only the sele
   core.cancelBackupJob(job.id, target.tempRoot, { discard: true })
   assert.deepEqual(core.listBackupJobs(target.tempRoot), [])
   assert.equal(fs.existsSync(path.join(target.sourceRoot, 'settings.db')), true)
-  evidence.push({ name: 'corrupt snapshot and explicit discard', result: 'rejected with source retained' })
+  evidence.push({
+    name: 'corrupt snapshot and explicit discard',
+    result: 'rejected with source retained',
+  })
 })
 
 test('the published SABK v1 vector decrypts with both readers and rejects ciphertext tampering', async () => {
-  const vector = JSON.parse(fs.readFileSync(path.join(workspace, 'packages/backup-core/sabk-v1-vector.json'), 'utf8'))
+  const vector = JSON.parse(
+    fs.readFileSync(path.join(workspace, 'packages/backup-core/sabk-v1-vector.json'), 'utf8'),
+  )
   const target = fixture('public-vector')
   const input = path.join(target.directory, 'vector.sabackup')
   const syncOutput = path.join(target.directory, 'sync.txt')
@@ -299,7 +477,11 @@ test('the published SABK v1 vector decrypts with both readers and rejects cipher
   const rejectedOutput = path.join(target.directory, 'tampered.txt')
   assert.equal(await core.decryptFileStream(input, rejectedOutput, vector.password), null)
   assert.equal(fs.existsSync(rejectedOutput), false)
-  evidence.push({ name: 'published encryption test vector', readers: ['sync', 'stream'], tampering: 'rejected' })
+  evidence.push({
+    name: 'published encryption test vector',
+    readers: ['sync', 'stream'],
+    tampering: 'rejected',
+  })
 })
 
 test('legacy streaming reads reject cookie snapshots with unsupported session paths', async () => {
@@ -307,17 +489,35 @@ test('legacy streaming reads reject cookie snapshots with unsupported session pa
   const AdmZip = require('adm-zip')
   const zip = new AdmZip()
   zip.addFile('settings.db', fs.readFileSync(path.join(target.sourceRoot, 'settings.db')))
-  zip.addFile('manifest.json', Buffer.from(JSON.stringify({ appVersion: 'legacy', cookieSnapshots: [{ path: '../unrelated', cookies: [] }] })))
+  zip.addFile(
+    'manifest.json',
+    Buffer.from(
+      JSON.stringify({
+        appVersion: 'legacy',
+        cookieSnapshots: [{ path: '../unrelated', cookies: [] }],
+      }),
+    ),
+  )
   zip.writeZip(target.targetPath)
-  await assert.rejects(core.readStreamingArchive(target.targetPath, { allowLegacy: true }), /session path/)
+  await assert.rejects(
+    core.readStreamingArchive(target.targetPath, { allowLegacy: true }),
+    /session path/,
+  )
   evidence.push({ name: 'legacy cookie session validation', result: 'rejected' })
 })
 
 function interruptedPublication(target) {
   const script = path.join(target.directory, 'publication.cjs')
   const identifier = path.join(target.directory, 'job-id.txt')
-  fs.writeFileSync(script, `const fs=require('node:fs');const core=require(${JSON.stringify(path.join(base, 'core.cjs'))});fs.linkSync=()=>{throw Object.assign(new Error('Unsupported hard link'),{code:'ENOSYS'})};core.exportOfflineBackup({...${JSON.stringify(target)},strict:true,onProgress:job=>{if(job.transfer?.publication?.completedBytes>=4194304){fs.writeFileSync(${JSON.stringify(identifier)},job.id);process.exit(78)}}}).then(result=>{console.error(JSON.stringify(result));process.exit(1)}).catch(error=>{console.error(error);process.exit(1)});`)
-  const child = spawnSync(process.execPath, [script], { windowsHide: true, encoding: 'utf8', timeout: 45000 })
+  fs.writeFileSync(
+    script,
+    `const fs=require('node:fs');const core=require(${JSON.stringify(path.join(base, 'core.cjs'))});fs.linkSync=()=>{throw Object.assign(new Error('Unsupported hard link'),{code:'ENOSYS'})};core.exportOfflineBackup({...${JSON.stringify(target)},strict:true,onProgress:job=>{if(job.transfer?.publication?.completedBytes>=4194304){fs.writeFileSync(${JSON.stringify(identifier)},job.id);process.exit(78)}}}).then(result=>{console.error(JSON.stringify(result));process.exit(1)}).catch(error=>{console.error(error);process.exit(1)});`,
+  )
+  const child = spawnSync(process.execPath, [script], {
+    windowsHide: true,
+    encoding: 'utf8',
+    timeout: 45000,
+  })
   assert.equal(child.status, 78, child.stderr)
   const job = core.queryBackupJob(fs.readFileSync(identifier, 'utf8'), target.tempRoot)
   assert.equal(job.status, 'running')
@@ -327,59 +527,107 @@ function interruptedPublication(target) {
   return job
 }
 
-test('a killed exclusive publication resumes the same owned output from verified blocks', { timeout: 60000 }, async () => {
+test('a killed exclusive publication resumes the same owned output from verified blocks', {
+  timeout: 60000,
+}, async () => {
   const target = fixture('publication-resume', 12)
   const job = interruptedPublication(target)
   const identity = core.diskIdentity(target.targetPath)
   let resumedAt = 0
-  const result = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot, onProgress: state => {
-    if (state.progress.phase === 'publishing' && state.progress.completedBytes === core.COPY_CHUNK_BYTES) resumedAt = state.progress.completedBytes
-  } })
+  const result = await core.resumeBackupJob(job.id, {
+    tempRoot: target.tempRoot,
+    onProgress: (state) => {
+      if (
+        state.progress.phase === 'publishing' &&
+        state.progress.completedBytes === core.COPY_CHUNK_BYTES
+      )
+        resumedAt = state.progress.completedBytes
+    },
+  })
   assert.equal(result.success, true, result.error)
   assert.equal(resumedAt, core.COPY_CHUNK_BYTES)
   assert.deepEqual(core.diskIdentity(target.targetPath), identity)
   assert.equal(await core.hashFile(target.targetPath), job.artifactSha256)
-  evidence.push({ name: 'terminated exclusive publication', continuedAtBytes: resumedAt, sameOwnedFile: true, result: 'passed' })
+  evidence.push({
+    name: 'terminated exclusive publication',
+    continuedAtBytes: resumedAt,
+    sameOwnedFile: true,
+    result: 'passed',
+  })
 })
 
-test('exclusive publication never resumes over replaced files or changed verified blocks', { timeout: 60000 }, async () => {
+test('exclusive publication never resumes over replaced files or changed verified blocks', {
+  timeout: 60000,
+}, async () => {
   for (const mode of ['replaced', 'modified']) {
     const target = fixture(`publication-${mode}`, 12)
     const job = interruptedPublication(target)
-    if (mode === 'replaced') { fs.renameSync(target.targetPath, `${target.targetPath}.owned`); fs.writeFileSync(target.targetPath, 'unrelated file') }
-    else { const descriptor = fs.openSync(target.targetPath, 'r+'); fs.writeSync(descriptor, Buffer.from('external edit'), 0, 13, 100); fs.closeSync(descriptor) }
+    if (mode === 'replaced') {
+      fs.renameSync(target.targetPath, `${target.targetPath}.owned`)
+      fs.writeFileSync(target.targetPath, 'unrelated file')
+    } else {
+      const descriptor = fs.openSync(target.targetPath, 'r+')
+      fs.writeSync(descriptor, Buffer.from('external edit'), 0, 13, 100)
+      fs.closeSync(descriptor)
+    }
     const before = await core.hashFile(target.targetPath)
     const result = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot })
     assert.equal(result.success, false)
     assert.equal(result.status, 'waiting')
     assert.equal(result.waitingReason, 'target-changed')
     assert.equal(await core.hashFile(target.targetPath), before)
-    assert.equal(core.queryBackupJob(job.id, target.tempRoot).transfer.publication.completedBytes, core.COPY_CHUNK_BYTES)
+    assert.equal(
+      core.queryBackupJob(job.id, target.tempRoot).transfer.publication.completedBytes,
+      core.COPY_CHUNK_BYTES,
+    )
   }
-  evidence.push({ name: 'replaced or modified publication destination', result: 'preserved without overwrite' })
+  evidence.push({
+    name: 'replaced or modified publication destination',
+    result: 'preserved without overwrite',
+  })
 })
 
 test('strict publication rechecks source changes before claiming completion', async () => {
   const target = fixture('publication-source-change')
   const link = fs.linkSync
-  fs.linkSync = () => { throw Object.assign(new Error('Hard links are unsupported.'), { code: 'ENOSYS' }) }
+  fs.linkSync = () => {
+    throw Object.assign(new Error('Hard links are unsupported.'), { code: 'ENOSYS' })
+  }
   let result
   try {
-    result = await core.exportOfflineBackup({ ...target, strict: true, onProgress: job => {
-      if (job.transfer?.publication && job.transfer.publication.completedBytes === job.artifactBytes) fs.writeFileSync(path.join(target.sourceRoot, 'later-edit.txt'), 'new source data')
-    } })
-  } finally { fs.linkSync = link }
+    result = await core.exportOfflineBackup({
+      ...target,
+      strict: true,
+      onProgress: (job) => {
+        if (
+          job.transfer?.publication &&
+          job.transfer.publication.completedBytes === job.artifactBytes
+        )
+          fs.writeFileSync(path.join(target.sourceRoot, 'later-edit.txt'), 'new source data')
+      },
+    })
+  } finally {
+    fs.linkSync = link
+  }
   assert.equal(result.success, false)
   assert.equal(result.status, 'recovery-required')
   assert.equal(fs.existsSync(path.join(target.sourceRoot, 'later-edit.txt')), true)
-  evidence.push({ name: 'strict source mutation during publication', result: 'requires new coordinated snapshot' })
+  evidence.push({
+    name: 'strict source mutation during publication',
+    result: 'requires new coordinated snapshot',
+  })
 })
 
-test('private staging removes inherited grants and rejects foreign explicit grants', { skip: process.platform !== 'win32' }, async () => {
+test('private staging removes inherited grants and rejects foreign explicit grants', {
+  skip: process.platform !== 'win32',
+}, async () => {
   const target = fixture('private-parent')
   fs.mkdirSync(target.tempRoot)
-  const grant = directory => {
-    const result = spawnSync('icacls.exe', [directory, '/grant', '*S-1-1-0:(OI)(CI)R'], { windowsHide: true, encoding: 'utf8' })
+  const grant = (directory) => {
+    const result = spawnSync('icacls.exe', [directory, '/grant', '*S-1-1-0:(OI)(CI)R'], {
+      windowsHide: true,
+      encoding: 'utf8',
+    })
     assert.equal(result.status, 0, result.stderr)
   }
   grant(target.tempRoot)
@@ -395,14 +643,23 @@ test('private staging removes inherited grants and rejects foreign explicit gran
   assert.throws(() => core.createPrivateDirectory(shared), /private|access|ACL/i)
   grant(jobDirectory)
   assert.throws(() => core.queryBackupJob(exported.jobId, target.tempRoot), /private|access|ACL/i)
-  evidence.push({ name: 'inherited and foreign explicit Windows ACL grants', newJobPrivate: true, precreatedAndModifiedSharedJobs: 'rejected' })
+  evidence.push({
+    name: 'inherited and foreign explicit Windows ACL grants',
+    newJobPrivate: true,
+    precreatedAndModifiedSharedJobs: 'rejected',
+  })
 })
 
 async function emptyTransfer(target) {
   const controller = new AbortController()
-  const result = await core.exportOfflineBackup({ ...target, signal: controller.signal, onProgress: job => {
-    if (job.progress.phase === 'copying-target' && job.progress.completedBytes === 0) controller.abort()
-  } })
+  const result = await core.exportOfflineBackup({
+    ...target,
+    signal: controller.signal,
+    onProgress: (job) => {
+      if (job.progress.phase === 'copying-target' && job.progress.completedBytes === 0)
+        controller.abort()
+    },
+  })
   assert.equal(result.status, 'cancelled', result.error)
   const job = core.queryBackupJob(result.jobId, target.tempRoot)
   assert.equal(job.transfer.blockCount, 0)
@@ -419,11 +676,22 @@ test('a replaced empty transfer file is preserved by resume and discard', async 
       const result = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot })
       assert.equal(result.status, 'waiting')
       assert.equal(result.waitingReason, 'target-changed')
-    } else assert.throws(() => core.cancelBackupJob(job.id, target.tempRoot, { discard: true }), error => error.reason === 'target-changed')
-    assert.equal(fs.readFileSync(job.transfer.partialPath, 'utf8'), 'unrelated content at the same path')
+    } else
+      assert.throws(
+        () => core.cancelBackupJob(job.id, target.tempRoot, { discard: true }),
+        (error) => error.reason === 'target-changed',
+      )
+    assert.equal(
+      fs.readFileSync(job.transfer.partialPath, 'utf8'),
+      'unrelated content at the same path',
+    )
     assert.equal(fs.existsSync(core.backupJobDirectory(job.id, target.tempRoot)), true)
   }
-  evidence.push({ name: 'replaced zero-checkpoint partial', resume: 'preserved', discard: 'preserved' })
+  evidence.push({
+    name: 'replaced zero-checkpoint partial',
+    resume: 'preserved',
+    discard: 'preserved',
+  })
 })
 
 test('matching transfer bytes do not substitute for the original file identity', async () => {
@@ -448,7 +716,13 @@ test('legacy transfer records without file identity cannot claim existing partia
   const resumed = await core.resumeBackupJob(job.id, { tempRoot: target.tempRoot })
   assert.equal(resumed.status, 'waiting')
   assert.equal(resumed.waitingReason, 'target-changed')
-  assert.throws(() => core.cancelBackupJob(job.id, target.tempRoot, { discard: true }), error => error.reason === 'target-changed')
+  assert.throws(
+    () => core.cancelBackupJob(job.id, target.tempRoot, { discard: true }),
+    (error) => error.reason === 'target-changed',
+  )
   assert.equal(fs.existsSync(job.transfer.partialPath), true)
-  evidence.push({ name: 'legacy partial without ownership identity', result: 'preserved for explicit rerouting' })
+  evidence.push({
+    name: 'legacy partial without ownership identity',
+    result: 'preserved for explicit rerouting',
+  })
 })

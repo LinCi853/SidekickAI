@@ -93,7 +93,8 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
     toggleAiAssets: () => {
       if (!isModuleEnabled('prompt-library')) return
       const window = windowState.promptWindow
-      if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized()) window.close()
+      if (window && !window.isDestroyed() && window.isVisible() && !window.isMinimized())
+        window.close()
       else showPromptWindow()
     },
     toggleDetachedWindows: builtinShortcuts.toggleDetachedWindows,
@@ -106,20 +107,34 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
     },
   }
 
-  const notifyConfiguration = () => broadcastToAllWindows(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, hotkeyManager.getAllHotkeys())
+  const notifyConfiguration = () =>
+    broadcastToAllWindows(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, hotkeyManager.getAllHotkeys())
   const unregisterAssetShortcut = () => {
     const accelerator = hotkeyManager.getActionAccelerator('toggleAiAssets')
-    if (accelerator && !hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) hotkeyManager.unregister(accelerator)
+    if (accelerator && !hotkeyManager.getConflictingAction('toggleAiAssets', accelerator))
+      hotkeyManager.unregister(accelerator)
   }
   const syncAssetShortcut = () => {
     const accelerator = hotkeyManager.getActionAccelerator('toggleAiAssets')
-    if (hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) { notifyConfiguration(); return }
-    if (!isModuleEnabled('prompt-library') || !hotkeyManager.getEnabled('toggleAiAssets') || !accelerator) {
+    if (hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) {
+      notifyConfiguration()
+      return
+    }
+    if (
+      !isModuleEnabled('prompt-library') ||
+      !hotkeyManager.getEnabled('toggleAiAssets') ||
+      !accelerator
+    ) {
       unregisterAssetShortcut()
     } else if (!hotkeyManager.isRegistered(accelerator)) {
-      void hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets).then(ok => {
-        if (!isModuleEnabled('prompt-library') || !hotkeyManager.getEnabled('toggleAiAssets') || accelerator !== hotkeyManager.getHotkey('toggleAiAssets')) {
-          if (ok && !hotkeyManager.getConflictingAction('toggleAiAssets', accelerator)) hotkeyManager.unregister(accelerator)
+      void hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets).then((ok) => {
+        if (
+          !isModuleEnabled('prompt-library') ||
+          !hotkeyManager.getEnabled('toggleAiAssets') ||
+          accelerator !== hotkeyManager.getHotkey('toggleAiAssets')
+        ) {
+          if (ok && !hotkeyManager.getConflictingAction('toggleAiAssets', accelerator))
+            hotkeyManager.unregister(accelerator)
         } else if (ok) hotkeyManager.recordActionAccelerator('toggleAiAssets', accelerator)
         notifyConfiguration()
       })
@@ -144,88 +159,102 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   handle(IPC_CHANNELS.HOTKEY_GET_ALL, async () => {
     return hotkeyManager.getAllHotkeys()
   })
-  handle(IPC_CHANNELS.HOTKEY_SET, async (_e: unknown, action: HotkeyAction, accelerator: string) => {
-    if (!(action in hotkeyCallbacks) || typeof accelerator !== 'string') throw new Error('Invalid shortcut')
-    if (hotkeyManager.getConflictingAction(action, accelerator)) throw new Error('快捷键与其他操作重复')
-    if (action === 'toggleAiAssets') {
-      validateAssetAccelerator(accelerator)
-      if (accelerator && Object.values(getAssetSettings().localShortcuts).some(value => normalizeAssetAccelerator(value) === normalizeAssetAccelerator(accelerator))) throw new Error('全局快捷键与 AI资产窗口内的快捷键重复')
-      unregisterAssetShortcut()
-      if (!accelerator || !isModuleEnabled('prompt-library')) {
+  handle(
+    IPC_CHANNELS.HOTKEY_SET,
+    async (_e: unknown, action: HotkeyAction, accelerator: string) => {
+      if (!(action in hotkeyCallbacks) || typeof accelerator !== 'string')
+        throw new Error('Invalid shortcut')
+      if (hotkeyManager.getConflictingAction(action, accelerator))
+        throw new Error('快捷键与其他操作重复')
+      if (action === 'toggleAiAssets') {
+        validateAssetAccelerator(accelerator)
+        if (
+          accelerator &&
+          Object.values(getAssetSettings().localShortcuts).some(
+            (value) => normalizeAssetAccelerator(value) === normalizeAssetAccelerator(accelerator),
+          )
+        )
+          throw new Error('全局快捷键与 AI资产窗口内的快捷键重复')
+        unregisterAssetShortcut()
+        if (!accelerator || !isModuleEnabled('prompt-library')) {
+          hotkeyManager.setHotkey(action, accelerator)
+          hotkeyManager.recordActionAccelerator(action, accelerator)
+          hotkeyManager.setEnabled(action, !!accelerator)
+          notifyConfiguration()
+          return true
+        }
+        const ok = await hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets)
+        if (ok) {
+          hotkeyManager.setHotkey(action, accelerator)
+          hotkeyManager.setEnabled(action, true)
+          hotkeyManager.recordActionAccelerator(action, accelerator)
+          if (!isModuleEnabled('prompt-library')) hotkeyManager.unregister(accelerator)
+        } else syncAssetShortcut()
+        notifyConfiguration()
+        return ok
+      }
+      // backgroundVoice 走 uiohook keydown/keyup 独立路径（不支持 globalShortcut）
+      if (action === 'backgroundVoice') {
+        // 注销旧语音热键
+        hotkeyManager.voiceUnregisterFn?.()
+        // 注册新语音热键并保存注销函数
+        hotkeyManager.voiceUnregisterFn = hotkeyManager.registerVoiceHotkey(
+          accelerator,
+          () => {
+            void startBackgroundVoice()
+          },
+          () => {
+            void stopBackgroundVoice()
+          },
+        )
+        // 持久化 + 更新映射
+        hotkeyManager.setHotkey('backgroundVoice', accelerator)
+        hotkeyManager.recordActionAccelerator('backgroundVoice', accelerator)
+        // 若热键当前被禁用，保存时自动启用（用户编辑热键即表示想使用它）
+        if (!hotkeyManager.getEnabled('backgroundVoice')) {
+          hotkeyManager.setEnabled('backgroundVoice', true)
+        }
+        console.log(`[main] backgroundVoice 热键已更新为 ${accelerator}`)
+        syncAssetShortcut()
+        notifyConfiguration()
+        return true
+      }
+
+      // 普通 globalShortcut 路径
+      // 清除分支：空 accelerator = 注销旧组合、持久化空值、动作置禁用
+      if (!accelerator) {
+        const oldAcc = hotkeyManager.getActionAccelerator(action)
+        hotkeyManager.unregister(oldAcc)
+        hotkeyManager.setHotkey(action, '')
+        hotkeyManager.recordActionAccelerator(action, '')
+        hotkeyManager.setEnabled(action, false)
+        syncAssetShortcut()
+        notifyConfiguration()
+        return true
+      }
+      const oldAcc = hotkeyManager.getActionAccelerator(action)
+      // 先注销旧热键（仅当当前启用时才已注册，无需判断 enabled）
+      hotkeyManager.unregister(oldAcc)
+      const cb = hotkeyCallbacks[action]
+      const ok = await hotkeyManager.register(accelerator, cb)
+      if (ok) {
+        // 成功：持久化 + 更新已注册映射
         hotkeyManager.setHotkey(action, accelerator)
         hotkeyManager.recordActionAccelerator(action, accelerator)
-        hotkeyManager.setEnabled(action, !!accelerator)
-        notifyConfiguration(); return true
+        // 若热键当前被禁用，保存时自动启用
+        if (!hotkeyManager.getEnabled(action)) {
+          hotkeyManager.setEnabled(action, true)
+        }
+      } else {
+        // 失败：恢复旧热键（避免该动作彻底失效）
+        await hotkeyManager.register(oldAcc, cb)
+        hotkeyManager.recordActionAccelerator(action, oldAcc)
       }
-      const ok = await hotkeyManager.register(accelerator, hotkeyCallbacks.toggleAiAssets)
-      if (ok) {
-        hotkeyManager.setHotkey(action, accelerator); hotkeyManager.setEnabled(action, true)
-        hotkeyManager.recordActionAccelerator(action, accelerator)
-        if (!isModuleEnabled('prompt-library')) hotkeyManager.unregister(accelerator)
-      } else syncAssetShortcut()
-      notifyConfiguration(); return ok
-    }
-    // backgroundVoice 走 uiohook keydown/keyup 独立路径（不支持 globalShortcut）
-    if (action === 'backgroundVoice') {
-      // 注销旧语音热键
-      hotkeyManager.voiceUnregisterFn?.()
-      // 注册新语音热键并保存注销函数
-      hotkeyManager.voiceUnregisterFn = hotkeyManager.registerVoiceHotkey(
-        accelerator,
-        () => {
-          void startBackgroundVoice()
-        },
-        () => {
-          void stopBackgroundVoice()
-        },
-      )
-      // 持久化 + 更新映射
-      hotkeyManager.setHotkey('backgroundVoice', accelerator)
-      hotkeyManager.recordActionAccelerator('backgroundVoice', accelerator)
-      // 若热键当前被禁用，保存时自动启用（用户编辑热键即表示想使用它）
-      if (!hotkeyManager.getEnabled('backgroundVoice')) {
-        hotkeyManager.setEnabled('backgroundVoice', true)
-      }
-      console.log(`[main] backgroundVoice 热键已更新为 ${accelerator}`)
-      syncAssetShortcut()
+      if (ok) syncAssetShortcut()
       notifyConfiguration()
-      return true
-    }
-
-    // 普通 globalShortcut 路径
-    // 清除分支：空 accelerator = 注销旧组合、持久化空值、动作置禁用
-    if (!accelerator) {
-      const oldAcc = hotkeyManager.getActionAccelerator(action)
-      hotkeyManager.unregister(oldAcc)
-      hotkeyManager.setHotkey(action, '')
-      hotkeyManager.recordActionAccelerator(action, '')
-      hotkeyManager.setEnabled(action, false)
-      syncAssetShortcut()
-      notifyConfiguration()
-      return true
-    }
-    const oldAcc = hotkeyManager.getActionAccelerator(action)
-    // 先注销旧热键（仅当当前启用时才已注册，无需判断 enabled）
-    hotkeyManager.unregister(oldAcc)
-    const cb = hotkeyCallbacks[action]
-    const ok = await hotkeyManager.register(accelerator, cb)
-    if (ok) {
-      // 成功：持久化 + 更新已注册映射
-      hotkeyManager.setHotkey(action, accelerator)
-      hotkeyManager.recordActionAccelerator(action, accelerator)
-      // 若热键当前被禁用，保存时自动启用
-      if (!hotkeyManager.getEnabled(action)) {
-        hotkeyManager.setEnabled(action, true)
-      }
-    } else {
-      // 失败：恢复旧热键（避免该动作彻底失效）
-      await hotkeyManager.register(oldAcc, cb)
-      hotkeyManager.recordActionAccelerator(action, oldAcc)
-    }
-    if (ok) syncAssetShortcut()
-    notifyConfiguration()
-    return ok
-  })
+      return ok
+    },
+  )
 
   // 启用/禁用某个内置热键（独立开关）
   handle(
@@ -234,8 +263,12 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
       if (!(action in hotkeyCallbacks)) throw new Error('Invalid shortcut action')
       if (action === 'toggleAiAssets') {
         if (enabled && !hotkeyManager.getHotkey(action)) throw new Error('请先设置快捷键')
-        if (enabled && hotkeyManager.getConflictingAction(action)) throw new Error('快捷键与其他操作重复')
-        hotkeyManager.setEnabled(action, enabled); syncAssetShortcut(); notifyConfiguration(); return
+        if (enabled && hotkeyManager.getConflictingAction(action))
+          throw new Error('快捷键与其他操作重复')
+        hotkeyManager.setEnabled(action, enabled)
+        syncAssetShortcut()
+        notifyConfiguration()
+        return
       }
       const prevEnabled = hotkeyManager.getEnabled(action)
       if (prevEnabled === enabled) return // 无变化

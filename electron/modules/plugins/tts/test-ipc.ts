@@ -79,6 +79,8 @@ export function registerTtsTestIpc(scope?: EffectScope): void {
         ok: false,
         message: e instanceof Error ? e.message : String(e),
       }
-    } finally { requests.delete(controller) }
+    } finally {
+      requests.delete(controller)
+    }
   })
 }

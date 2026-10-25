@@ -19,7 +19,11 @@ import {
  * 记录窗口操作痕迹到 SQLite（安全包装，chatStore 未就绪或失败不抛错）。
  * 用于追踪 create/close/maximize/minimize/tab_switch/pin_toggle 等行为。
  */
-export function safeLogWindowTrace(windowId: string, action: WindowTraceAction, detail?: unknown): void {
+export function safeLogWindowTrace(
+  windowId: string,
+  action: WindowTraceAction,
+  detail?: unknown,
+): void {
   try {
     getChatStore().logWindowTrace(windowId, action, detail)
   } catch (e) {
@@ -29,7 +33,10 @@ export function safeLogWindowTrace(windowId: string, action: WindowTraceAction, 
 }
 
 /** 根据 windowForm 获取默认窗口尺寸 */
-export function getFormBounds(form?: 'narrow' | 'standard' | 'wide'): { width: number; height: number } {
+export function getFormBounds(form?: 'narrow' | 'standard' | 'wide'): {
+  width: number
+  height: number
+} {
   switch (form) {
     case 'wide':
       return { width: 1000, height: 680 }

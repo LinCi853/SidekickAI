@@ -71,11 +71,9 @@ class AccumulatedLinksStore {
     }
     if (persistent) {
       this.initDb()
-      this.db!
-        .prepare(
-          'INSERT INTO accumulated_links (id, profileId, url, title, timestamp) VALUES (?, ?, ?, ?, ?)',
-        )
-        .run(link.id, link.profileId, link.url, link.title, link.timestamp)
+      this.db!.prepare(
+        'INSERT INTO accumulated_links (id, profileId, url, title, timestamp) VALUES (?, ?, ?, ?, ?)',
+      ).run(link.id, link.profileId, link.url, link.title, link.timestamp)
     } else {
       const arr = this.memory.get(profileId) ?? []
       arr.push(link)
@@ -87,11 +85,9 @@ class AccumulatedLinksStore {
   list(profileId: string, persistent: boolean): AccumulatedLink[] {
     if (persistent) {
       this.initDb()
-      return this.db!
-        .prepare(
-          'SELECT id, profileId, url, title, timestamp FROM accumulated_links WHERE profileId = ? ORDER BY timestamp ASC',
-        )
-        .all(profileId) as AccumulatedLink[]
+      return this.db!.prepare(
+        'SELECT id, profileId, url, title, timestamp FROM accumulated_links WHERE profileId = ? ORDER BY timestamp ASC',
+      ).all(profileId) as AccumulatedLink[]
     }
     return this.memory.get(profileId) ?? []
   }
@@ -116,7 +112,11 @@ class AccumulatedLinksStore {
   /** 关闭持久化 SQLite 连接（clearAllData 前释放文件锁） */
   close(): void {
     if (this.db) {
-      try { this.db.close() } catch { /* ignore */ }
+      try {
+        this.db.close()
+      } catch {
+        /* ignore */
+      }
       this.db = null
     }
   }

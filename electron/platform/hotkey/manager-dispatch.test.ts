@@ -25,11 +25,20 @@ const fixture = vi.hoisted(() => ({
 vi.mock('electron', () => ({ globalShortcut: fixture.globalShortcut }))
 vi.mock('./uiohook.js', () => ({
   UiohookKey: {
-    Space: 32, Q: 81, V: 86, Escape: 27,
-    A: 65, K: 75, LeftAlt: 56, RightAlt: 584,
-    LeftControl: 29, RightControl: 585,
-    LeftShift: 42, RightShift: 54,
-    LeftMeta: 3675, RightMeta: 3676,
+    Space: 32,
+    Q: 81,
+    V: 86,
+    Escape: 27,
+    A: 65,
+    K: 75,
+    LeftAlt: 56,
+    RightAlt: 584,
+    LeftControl: 29,
+    RightControl: 585,
+    LeftShift: 42,
+    RightShift: 54,
+    LeftMeta: 3675,
+    RightMeta: 3676,
   },
   EventType: { EVENT_KEY_PRESSED: 7, EVENT_KEY_RELEASED: 8 },
   uIOhook: fixture.uiohook,
@@ -37,12 +46,17 @@ vi.mock('./uiohook.js', () => ({
 }))
 vi.mock('./store.js', () => ({
   DEFAULT_HOTKEYS: { toggleMainWindow: 'Alt+Space', toggleDetachedWindows: 'Alt+Q' },
-  HOTKEY_LABELS: { toggleMainWindow: '显示/隐藏主窗口', toggleDetachedWindows: '显示/隐藏脱离窗口' },
+  HOTKEY_LABELS: {
+    toggleMainWindow: '显示/隐藏主窗口',
+    toggleDetachedWindows: '显示/隐藏脱离窗口',
+  },
   hotkeyStore: { get: fixture.storeGet, set: vi.fn() },
   storeKey: (action: string) => `hotkey.${action}`,
   enabledStoreKey: (action: string) => `hotkey.enabled.${action}`,
 }))
-vi.mock('../../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback: vi.fn() }))
+vi.mock('../../utils/browser-hotkey-fallback.js', () => ({
+  dispatchBrowserHotkeyFallback: vi.fn(),
+}))
 vi.mock('../../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
 
 import { HotkeyManager } from './manager'
@@ -68,7 +82,14 @@ function hookHandlerOf(event: 'keydown' | 'keyup'): (e: UiohookEvent) => void {
 }
 
 function keyEvent(keycode: number, alt: boolean, ctrl: boolean, down: boolean): UiohookEvent {
-  return { type: down ? 7 : 8, keycode, altKey: alt, ctrlKey: ctrl, shiftKey: false, metaKey: false }
+  return {
+    type: down ? 7 : 8,
+    keycode,
+    altKey: alt,
+    ctrlKey: ctrl,
+    shiftKey: false,
+    metaKey: false,
+  }
 }
 
 beforeEach(() => {

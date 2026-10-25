@@ -83,7 +83,11 @@ export function registerNotesExtraIpc(scope?: EffectScope): void {
       try {
         const title =
           payload.title?.trim() ||
-          content.split('\n').map((l) => l.trim()).find((l) => l.length > 0)?.slice(0, 30) ||
+          content
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => l.length > 0)
+            ?.slice(0, 30) ||
           '未命名笔记'
         promptStore.save({
           id: '',

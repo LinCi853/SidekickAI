@@ -4,24 +4,24 @@
    支持 accent / warn / default 三种变体，可显示左侧圆点
    ===================================================================== */
 
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react'
 
-export type BadgeVariant = 'default' | 'accent' | 'warn';
+export type BadgeVariant = 'default' | 'accent' | 'warn'
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   /** 徽章变体 */
-  variant?: BadgeVariant;
+  variant?: BadgeVariant
   /** 是否显示左侧 LED 圆点（呼吸动画） */
-  dot?: boolean;
+  dot?: boolean
   /** 徽章内容 */
-  children: ReactNode;
+  children: ReactNode
 }
 
 /** 计算徽章 className —— 组合基础类 + 变体类 */
 function resolveClass(variant: BadgeVariant, extra?: string): string {
   const variantClass =
-    variant === 'accent' ? 'badge-accent' : variant === 'warn' ? 'badge-warn' : '';
-  return ['badge', variantClass, extra].filter(Boolean).join(' ');
+    variant === 'accent' ? 'badge-accent' : variant === 'warn' ? 'badge-warn' : ''
+  return ['badge', variantClass, extra].filter(Boolean).join(' ')
 }
 
 /**
@@ -43,5 +43,5 @@ export default function Badge({
       {dot ? <span className="badge-dot" /> : null}
       {children}
     </span>
-  );
+  )
 }

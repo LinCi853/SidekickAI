@@ -3,35 +3,35 @@
    从 ProviderSection.tsx 拆出（文件选择 → 密码 → 预览 → 确认；Modal 替代原 .provider-form-overlay）。
    ===================================================================== */
 
-import { Modal, FormRow, Button } from '../../../ui';
-import type { CryptoFeedback } from './ExportProviderDialog.js';
+import { Modal, FormRow, Button } from '../../../ui'
+import type { CryptoFeedback } from './ExportProviderDialog.js'
 
 /** v0.5.2 B-4：导入预览（dry-run，不持久化）结果 */
 export interface ImportPreview {
   providers: Array<{
-    id: string;
-    name: string;
-    protocol: string;
-    apiEndpoint: string;
-    model: string;
-    alternativeModels?: string[];
-  }>;
-  conflictIds: string[];
+    id: string
+    name: string
+    protocol: string
+    apiEndpoint: string
+    model: string
+    alternativeModels?: string[]
+  }>
+  conflictIds: string[]
 }
 
 interface ImportProviderDialogProps {
-  open: boolean;
-  importing: boolean;
-  importFilePath: string;
-  importPassword: string;
-  importPreview: ImportPreview | null;
-  feedback: CryptoFeedback | null;
-  onClose: () => void;
-  onSelectFile: () => void;
-  onPasswordChange: (value: string) => void;
-  onPreview: () => void;
-  onConfirm: () => void;
-  onBack: () => void;
+  open: boolean
+  importing: boolean
+  importFilePath: string
+  importPassword: string
+  importPreview: ImportPreview | null
+  feedback: CryptoFeedback | null
+  onClose: () => void
+  onSelectFile: () => void
+  onPasswordChange: (value: string) => void
+  onPreview: () => void
+  onConfirm: () => void
+  onBack: () => void
 }
 
 export default function ImportProviderDialog({
@@ -58,7 +58,10 @@ export default function ImportProviderDialog({
     >
       {!importPreview ? (
         <>
-          <p className="provider-form-dialog-desc" data-name="advanced-panel.import-dialog-step1-desc">
+          <p
+            className="provider-form-dialog-desc"
+            data-name="advanced-panel.import-dialog-step1-desc"
+          >
             选择 .sapp 文件并输入密码。
           </p>
           <FormRow label="文件" compact data-name="advanced-panel.import-dialog-file-row">
@@ -93,11 +96,17 @@ export default function ImportProviderDialog({
             />
           </FormRow>
           {feedback && (
-            <div className={`provider-test-result ${feedback.type === 'success' ? 'ok' : 'fail'}`} data-name="advanced-panel.import-dialog-step1-feedback">
+            <div
+              className={`provider-test-result ${feedback.type === 'success' ? 'ok' : 'fail'}`}
+              data-name="advanced-panel.import-dialog-step1-feedback"
+            >
               {feedback.msg}
             </div>
           )}
-          <div className="provider-form-actions" data-name="advanced-panel.import-dialog-step1-actions">
+          <div
+            className="provider-form-actions"
+            data-name="advanced-panel.import-dialog-step1-actions"
+          >
             <Button
               type="button"
               variant="outline"
@@ -122,12 +131,19 @@ export default function ImportProviderDialog({
         </>
       ) : (
         <>
-          <p className="provider-form-dialog-desc" data-name="advanced-panel.import-dialog-step2-desc">
-            导入 {importPreview.providers.length} 个 Provider，其中 {importPreview.conflictIds.length} 个覆盖现有配置。
+          <p
+            className="provider-form-dialog-desc"
+            data-name="advanced-panel.import-dialog-step2-desc"
+          >
+            导入 {importPreview.providers.length} 个 Provider，其中{' '}
+            {importPreview.conflictIds.length} 个覆盖现有配置。
           </p>
-          <div className="provider-import-preview-list" data-name="advanced-panel.import-dialog-preview-list">
+          <div
+            className="provider-import-preview-list"
+            data-name="advanced-panel.import-dialog-preview-list"
+          >
             {importPreview.providers.map((p, idx) => {
-              const isConflict = importPreview.conflictIds.includes(p.id);
+              const isConflict = importPreview.conflictIds.includes(p.id)
               return (
                 <div
                   key={p.id}
@@ -136,21 +152,40 @@ export default function ImportProviderDialog({
                   data-index={idx + 1}
                   data-id={p.id}
                 >
-                  <span className="provider-import-preview-name" data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-name`}>{p.name}</span>
-                  <span className="provider-import-preview-meta" data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-meta`}>{p.protocol} · {p.model}</span>
-                  <span className="provider-import-preview-tag" data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-tag`}>
+                  <span
+                    className="provider-import-preview-name"
+                    data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-name`}
+                  >
+                    {p.name}
+                  </span>
+                  <span
+                    className="provider-import-preview-meta"
+                    data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-meta`}
+                  >
+                    {p.protocol} · {p.model}
+                  </span>
+                  <span
+                    className="provider-import-preview-tag"
+                    data-name={`advanced-panel.import-dialog-preview-item-${idx + 1}-tag`}
+                  >
                     {isConflict ? '覆盖' : '新增'}
                   </span>
                 </div>
-              );
+              )
             })}
           </div>
           {feedback && (
-            <div className={`provider-test-result ${feedback.type === 'success' ? 'ok' : 'fail'}`} data-name="advanced-panel.import-dialog-step2-feedback">
+            <div
+              className={`provider-test-result ${feedback.type === 'success' ? 'ok' : 'fail'}`}
+              data-name="advanced-panel.import-dialog-step2-feedback"
+            >
               {feedback.msg}
             </div>
           )}
-          <div className="provider-form-actions" data-name="advanced-panel.import-dialog-step2-actions">
+          <div
+            className="provider-form-actions"
+            data-name="advanced-panel.import-dialog-step2-actions"
+          >
             <Button
               type="button"
               variant="outline"
@@ -175,5 +210,5 @@ export default function ImportProviderDialog({
         </>
       )}
     </Modal>
-  );
+  )
 }

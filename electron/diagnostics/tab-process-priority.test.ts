@@ -9,10 +9,16 @@ const osPriority = { PRIORITY_LOW: 19, PRIORITY_NORMAL: 0 }
 const setPriority = vi.fn()
 
 vi.mock('os', () => ({
-  default: { constants: { priority: osPriority }, setPriority: (...args: unknown[]) => setPriority(...args) },
+  default: {
+    constants: { priority: osPriority },
+    setPriority: (...args: unknown[]) => setPriority(...args),
+  },
 }))
 
-const webviews = new Map<number, { id: number; type: string; destroyed: boolean; pid: number; tabId: string | null }>()
+const webviews = new Map<
+  number,
+  { id: number; type: string; destroyed: boolean; pid: number; tabId: string | null }
+>()
 
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
@@ -20,31 +26,38 @@ vi.mock('electron', () => ({
     fromWebContents: () => ({ isDestroyed: () => false }),
   },
   webContents: {
-    getAllWebContents: () => [...webviews.values()].map(item => ({
-      id: item.id,
-      isDestroyed: () => item.destroyed,
-      getType: () => item.type,
-      getOSProcessId: () => item.pid,
-    })),
+    getAllWebContents: () =>
+      [...webviews.values()].map((item) => ({
+        id: item.id,
+        isDestroyed: () => item.destroyed,
+        getType: () => item.type,
+        getOSProcessId: () => item.pid,
+      })),
   },
 }))
 
 const records = new Map<number, { tabId: string }>()
 
 vi.mock('../platform/browser-port.js', () => ({
-  browserPorts: () => ({ webviews: { getRecordByWebContentsId: (id: number) => records.get(id) ?? null } }),
+  browserPorts: () => ({
+    webviews: { getRecordByWebContentsId: (id: number) => records.get(id) ?? null },
+  }),
 }))
 
 vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: () => {} }))
 
 const { ipcMain } = await import('electron')
-const { applyGuestProcessPriorities, registerTabProcessPriorityIPC, resetTabProcessPriorityForTest } =
-  await import('./tab-process-priority.js')
+const {
+  applyGuestProcessPriorities,
+  registerTabProcessPriorityIPC,
+  resetTabProcessPriorityForTest,
+} = await import('./tab-process-priority.js')
 
 /** 取出 IPC handler 便于模拟渲染层上报 */
 function priorityHandler(): (event: unknown, payload: unknown) => boolean {
-  const call = (ipcMain.handle as ReturnType<typeof vi.fn>).mock.calls
-    .find(entry => entry[0] === 'tab-priority:sync')
+  const call = (ipcMain.handle as ReturnType<typeof vi.fn>).mock.calls.find(
+    (entry) => entry[0] === 'tab-priority:sync',
+  )
   if (!call) throw new Error('优先级同步通道未注册')
   return call[1] as (event: unknown, payload: unknown) => boolean
 }
@@ -91,11 +104,13 @@ describe('tab process priority', () => {
     addGuest(2, 102, 'tab-audible')
     addGuest(3, 103, 'tab-other')
 
-    expect(priorityHandler()(null, {
-      windowId: 'main',
-      activeTabId: 'tab-active',
-      audibleTabIds: ['tab-audible'],
-    })).toBe(true)
+    expect(
+      priorityHandler()(null, {
+        windowId: 'main',
+        activeTabId: 'tab-active',
+        audibleTabIds: ['tab-audible'],
+      }),
+    ).toBe(true)
 
     applyGuestProcessPriorities()
     const priorities = prioritiesByPid()
@@ -108,8 +123,12 @@ describe('tab process priority', () => {
     addGuest(1, 101, 'tab-main')
     addGuest(2, 102, 'tab-browser')
     const handler = priorityHandler()
-    expect(handler(null, { windowId: 'main', activeTabId: 'tab-main', audibleTabIds: [] })).toBe(true)
-    expect(handler(null, { windowId: 'browser', activeTabId: 'tab-browser', audibleTabIds: [] })).toBe(true)
+    expect(handler(null, { windowId: 'main', activeTabId: 'tab-main', audibleTabIds: [] })).toBe(
+      true,
+    )
+    expect(
+      handler(null, { windowId: 'browser', activeTabId: 'tab-browser', audibleTabIds: [] }),
+    ).toBe(true)
 
     applyGuestProcessPriorities()
     const priorities = prioritiesByPid()
@@ -202,17 +221,35 @@ describe('tab process priority', () => {
 })
 
 it('forgets normal priority after process exit so a reused pid is applied again', () => {
- registerTabProcessPriorityIPC();
- resetTabProcessPriorityForTest(); webviews.clear(); records.clear(); setPriority.mockClear();
- addGuest(1,101,'old'); priorityHandler()(null,{windowId:'main',activeTabId:'old',audibleTabIds:[]});
- webviews.clear(); records.clear(); applyGuestProcessPriorities(); setPriority.mockClear();
- addGuest(2,101,'new'); priorityHandler()(null,{windowId:'main',activeTabId:'new',audibleTabIds:[]});
- expect(setPriority).toHaveBeenCalledWith(101,osPriority.PRIORITY_NORMAL);
-});
+  registerTabProcessPriorityIPC()
+  resetTabProcessPriorityForTest()
+  webviews.clear()
+  records.clear()
+  setPriority.mockClear()
+  addGuest(1, 101, 'old')
+  priorityHandler()(null, { windowId: 'main', activeTabId: 'old', audibleTabIds: [] })
+  webviews.clear()
+  records.clear()
+  applyGuestProcessPriorities()
+  setPriority.mockClear()
+  addGuest(2, 101, 'new')
+  priorityHandler()(null, { windowId: 'main', activeTabId: 'new', audibleTabIds: [] })
+  expect(setPriority).toHaveBeenCalledWith(101, osPriority.PRIORITY_NORMAL)
+})
 it('recognizes nested ESRCH during guest teardown without repeated warnings', () => {
- resetTabProcessPriorityForTest(); webviews.clear(); records.clear(); setPriority.mockClear();
- addGuest(1,101,'old'); applyGuestProcessPriorities(); webviews.clear(); records.clear();
- const warning=vi.spyOn(console,'warn').mockImplementation(() => {});
- setPriority.mockImplementationOnce(() => { throw Object.assign(new Error('gone'),{code:'ERR_SYSTEM_ERROR',info:{code:'ESRCH'}}) });
- applyGuestProcessPriorities(); expect(warning).not.toHaveBeenCalled(); warning.mockRestore();
-});
+  resetTabProcessPriorityForTest()
+  webviews.clear()
+  records.clear()
+  setPriority.mockClear()
+  addGuest(1, 101, 'old')
+  applyGuestProcessPriorities()
+  webviews.clear()
+  records.clear()
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  setPriority.mockImplementationOnce(() => {
+    throw Object.assign(new Error('gone'), { code: 'ERR_SYSTEM_ERROR', info: { code: 'ESRCH' } })
+  })
+  applyGuestProcessPriorities()
+  expect(warning).not.toHaveBeenCalled()
+  warning.mockRestore()
+})

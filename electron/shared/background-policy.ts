@@ -43,15 +43,15 @@ export function windowRetirementSeconds(windowId: string, lowMemoryMode = false)
   } else if (windowId === 'main') {
     base = RETIRE_MAIN_SECONDS
   } else if (
-    windowId === 'onboarding'
-    || windowId === 'data-export'
-    || windowId.startsWith('chat')
+    windowId === 'onboarding' ||
+    windowId === 'data-export' ||
+    windowId.startsWith('chat')
   ) {
     base = RETIRE_CONTENT_SECONDS
   } else if (
-    windowId.startsWith('browser')
-    || windowId.startsWith('standalone')
-    || (windowId.startsWith('ai-app') && !windowId.startsWith('ai-app-editor'))
+    windowId.startsWith('browser') ||
+    windowId.startsWith('standalone') ||
+    (windowId.startsWith('ai-app') && !windowId.startsWith('ai-app-editor'))
   ) {
     // 独立 AI 网页 / 浏览器 / Profile 壳（含 ai-app 运行窗，不含编辑器）
     base = RETIRE_BROWSER_SECONDS

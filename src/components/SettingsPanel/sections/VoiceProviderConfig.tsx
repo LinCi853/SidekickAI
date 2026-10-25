@@ -1,33 +1,33 @@
-import { useState } from 'react';
-import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { Button } from '../../ui';
-import { useDraftState } from '../../../hooks/useDraftState';
+import { useState } from 'react'
+import type { Dispatch, ReactNode, SetStateAction } from 'react'
+import { Button } from '../../ui'
+import { useDraftState } from '../../../hooks/useDraftState'
 
 /** 测试结果的公共字段（AI 回声 / TTS 合成结果均含 ok + message） */
 interface BaseTestResult {
-  ok: boolean;
-  message: string;
+  ok: boolean
+  message: string
 }
 
 interface VoiceProviderConfigProps<T, R extends BaseTestResult = BaseTestResult> {
   /** 作用域，用于生成 data-name 属性（ai / local / tts） */
-  scope: 'ai' | 'local' | 'tts';
+  scope: 'ai' | 'local' | 'tts'
   /** 当前的持久化配置（draft 初始值） */
-  initial: T;
+  initial: T
   /** 保存草稿：持久化 + 同步父级 state */
-  onSave: (draft: T) => Promise<void> | void;
+  onSave: (draft: T) => Promise<void> | void
   /** 测试连通性（可选；local 模式无测试按钮） */
-  onTest?: (draft: T) => Promise<R> | R;
+  onTest?: (draft: T) => Promise<R> | R
   /** 测试按钮文案 */
-  testLabel?: string;
+  testLabel?: string
   /** 测试中文案 */
-  testingLabel?: string;
+  testingLabel?: string
   /** 测试按钮额外禁用条件（如未选择服务商） */
-  testDisabled?: (draft: T) => boolean;
+  testDisabled?: (draft: T) => boolean
   /** 渲染表单字段（服务商选择 / 路径输入等差异化部分） */
-  children: (ctx: { draft: T; setDraft: Dispatch<SetStateAction<T>> }) => ReactNode;
+  children: (ctx: { draft: T; setDraft: Dispatch<SetStateAction<T>> }) => ReactNode
   /** 渲染测试结果中的差异化内容（识别回声 / 音频回放） */
-  renderTestResultExtra?: (result: R) => ReactNode;
+  renderTestResultExtra?: (result: R) => ReactNode
 }
 
 /**
@@ -49,33 +49,33 @@ function VoiceProviderConfig<T, R extends BaseTestResult = BaseTestResult>({
   children,
   renderTestResultExtra,
 }: VoiceProviderConfigProps<T, R>) {
-  const { draft, setDraft, isDirty, save } = useDraftState<T>({ initial, onSave });
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<R | null>(null);
+  const { draft, setDraft, isDirty, save } = useDraftState<T>({ initial, onSave })
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<R | null>(null)
 
   const handleSave = async () => {
-    setSaving(true);
+    setSaving(true)
     try {
-      await save();
+      await save()
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   const handleTest = async () => {
-    if (!onTest) return;
-    setTesting(true);
-    setTestResult(null);
+    if (!onTest) return
+    setTesting(true)
+    setTestResult(null)
     try {
-      const result = await onTest(draft);
-      setTestResult(result);
+      const result = await onTest(draft)
+      setTestResult(result)
     } catch (e) {
-      setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) } as R);
+      setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) } as R)
     } finally {
-      setTesting(false);
+      setTesting(false)
     }
-  };
+  }
 
   return (
     <>
@@ -112,7 +112,7 @@ function VoiceProviderConfig<T, R extends BaseTestResult = BaseTestResult>({
         </div>
       )}
     </>
-  );
+  )
 }
 
-export default VoiceProviderConfig;
+export default VoiceProviderConfig

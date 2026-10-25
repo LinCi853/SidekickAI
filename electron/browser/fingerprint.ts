@@ -15,11 +15,7 @@ import { getPreset } from './preset-store.js'
 // ============================================================================
 
 /** 常见 WebGL UNMASKED_VENDOR 字符串池（noise 模式下基于 PRNG 选取） */
-const WEBGL_VENDORS = [
-  'Google Inc. (Intel)',
-  'Google Inc. (NVIDIA)',
-  'Google Inc. (AMD)',
-]
+const WEBGL_VENDORS = ['Google Inc. (Intel)', 'Google Inc. (NVIDIA)', 'Google Inc. (AMD)']
 
 /** 常见 WebGL UNMASKED_RENDERER 字符串池 */
 const WEBGL_RENDERERS = [

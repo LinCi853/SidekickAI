@@ -38,7 +38,10 @@ export interface NotesAPI {
   /** 发送笔记内容到当前 AI 输入框 */
   sendToAi(text: string, enterToSend?: boolean): Promise<{ ok: boolean; error?: string }>
   /** 把笔记内容保存为新的提示词模板 */
-  saveAsPrompt(content: string, title?: string): Promise<{ ok: boolean; title?: string; error?: string }>
+  saveAsPrompt(
+    content: string,
+    title?: string,
+  ): Promise<{ ok: boolean; title?: string; error?: string }>
   /** 保存图片到磁盘，返回 notes-asset:// 路径（用于 markdown 中引用粘贴/拖拽的图片） */
   saveImage(dataUrl: string): Promise<{ ok: boolean; url?: string; error?: string }>
   /** 监听注入结果回传 */

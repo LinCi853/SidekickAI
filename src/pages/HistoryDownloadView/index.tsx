@@ -8,26 +8,26 @@
    下载管理：复用 browser-download-store，订阅 onDownloadUpdated 实时更新
    ===================================================================== */
 
-import { useState } from 'react';
-import WindowResizeHandles from '@/components/WindowResizeHandles';
-import ShortcutHelp from '@/components/ShortcutHelp';
-import StandaloneWindowHeader from '@/components/StandaloneWindowHeader';
-import { SegmentedControl } from '@/components/ui';
-import { useEscToCloseWindow } from '@/hooks/useEscToCloseWindow';
-import NavHistoryPanel from './NavHistoryPanel';
-import DownloadPanel from './DownloadPanel';
-import { HistoryIcon, DownloadIcon } from '@/components/icons';
-import './styles.css';
+import { useState } from 'react'
+import WindowResizeHandles from '@/components/WindowResizeHandles'
+import ShortcutHelp from '@/components/ShortcutHelp'
+import StandaloneWindowHeader from '@/components/StandaloneWindowHeader'
+import { SegmentedControl } from '@/components/ui'
+import { useEscToCloseWindow } from '@/hooks/useEscToCloseWindow'
+import NavHistoryPanel from './NavHistoryPanel'
+import DownloadPanel from './DownloadPanel'
+import { HistoryIcon, DownloadIcon } from '@/components/icons'
+import './styles.css'
 
-type Tab = 'navHistory' | 'downloads';
+type Tab = 'navHistory' | 'downloads'
 
 export default function HistoryDownloadView() {
-  const [tab, setTab] = useState<Tab>('navHistory');
-  const [navCount, setNavCount] = useState(0);
-  const [dlCount, setDlCount] = useState(0);
+  const [tab, setTab] = useState<Tab>('navHistory')
+  const [navCount, setNavCount] = useState(0)
+  const [dlCount, setDlCount] = useState(0)
 
   // ESC / Ctrl+W 关窗
-  useEscToCloseWindow();
+  useEscToCloseWindow()
 
   return (
     <>
@@ -40,10 +40,7 @@ export default function HistoryDownloadView() {
           title="历史记录与下载管理"
           dataNamePrefix="hd.topbar"
           center={
-            <span
-              className="sw-header-title"
-              data-name="hd.topbar.title"
-            >
+            <span className="sw-header-title" data-name="hd.topbar.title">
               历史记录与下载管理
             </span>
           }
@@ -62,7 +59,10 @@ export default function HistoryDownloadView() {
                 {
                   value: 'navHistory',
                   label: (
-                    <span className="hd-sidebar-segment-label" data-name="hd.sidebar.segment-label-nav">
+                    <span
+                      className="hd-sidebar-segment-label"
+                      data-name="hd.sidebar.segment-label-nav"
+                    >
                       <HistoryIcon className="hd-sidebar-segment-icon" />
                       导航历史
                     </span>
@@ -71,7 +71,10 @@ export default function HistoryDownloadView() {
                 {
                   value: 'downloads',
                   label: (
-                    <span className="hd-sidebar-segment-label" data-name="hd.sidebar.segment-label-dl">
+                    <span
+                      className="hd-sidebar-segment-label"
+                      data-name="hd.sidebar.segment-label-dl"
+                    >
                       <DownloadIcon className="hd-sidebar-segment-icon" />
                       下载管理
                     </span>
@@ -100,5 +103,5 @@ export default function HistoryDownloadView() {
       {/* 快捷键说明（` / ~ / ? 呼出） */}
       <ShortcutHelp />
     </>
-  );
+  )
 }

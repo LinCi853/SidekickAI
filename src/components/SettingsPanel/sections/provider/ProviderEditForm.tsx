@@ -5,74 +5,77 @@
    所有状态与副作用逻辑仍由 ProviderSection 容器持有，此处仅负责渲染表单字段。
    ===================================================================== */
 
-import { Button, IconButton, Modal, SegmentedControl, FormRow, Combobox } from '../../../ui';
-import type { ComboboxOption } from '../../../ui';
-import type { CustomAIProviderInput } from '../../../../lib/electron-api';
-import { PRESETS } from './presets.js';
-import type { ProviderPreset } from './presets.js';
+import { Button, IconButton, Modal, SegmentedControl, FormRow, Combobox } from '../../../ui'
+import type { ComboboxOption } from '../../../ui'
+import type { CustomAIProviderInput } from '../../../../lib/electron-api'
+import { PRESETS } from './presets.js'
+import type { ProviderPreset } from './presets.js'
 
 /** 测试连通性结果 */
 export interface TestResult {
-  ok: boolean;
-  message: string;
-  latencyMs?: number;
+  ok: boolean
+  message: string
+  latencyMs?: number
 }
 
 interface ProviderEditFormProps {
   /** 当前编辑/新建的供应商载荷（null 时表单关闭） */
-  editing: CustomAIProviderInput | null;
+  editing: CustomAIProviderInput | null
   /** 是否正在测试连通性 */
-  testing: boolean;
+  testing: boolean
   /** 测试结果（ok / fail） */
-  testResult: TestResult | null;
+  testResult: TestResult | null
   /** 是否正在保存 */
-  saving: boolean;
+  saving: boolean
   /** API Key 是否明文显示（v0.5.2 regress-4：眼睛图标） */
-  showApiKey: boolean;
-  onToggleApiKey: () => void;
+  showApiKey: boolean
+  onToggleApiKey: () => void
   /** 需求 9：模型搜索候选 */
-  modelCandidates: string[];
+  modelCandidates: string[]
   /** 是否正在搜索可用模型 */
-  searchingModels: boolean;
+  searchingModels: boolean
   /** 主模型下拉开关 */
-  showModelDropdown: boolean;
-  onShowModelDropdownChange: (open: boolean) => void;
+  showModelDropdown: boolean
+  onShowModelDropdownChange: (open: boolean) => void
   /** TTS 模型下拉开关 */
-  showTtsDropdown: boolean;
-  onShowTtsDropdownChange: (open: boolean) => void;
+  showTtsDropdown: boolean
+  onShowTtsDropdownChange: (open: boolean) => void
   /** STT 模型下拉开关 */
-  showSttDropdown: boolean;
-  onShowSttDropdownChange: (open: boolean) => void;
+  showSttDropdown: boolean
+  onShowSttDropdownChange: (open: boolean) => void
   /** TTS 自动搜索中 */
-  autoSearchingTts: boolean;
+  autoSearchingTts: boolean
   /** STT 自动搜索中 */
-  autoSearchingStt: boolean;
+  autoSearchingStt: boolean
   /** 通用字段更新 */
-  onFieldChange: <K extends keyof CustomAIProviderInput>(key: K, value: CustomAIProviderInput[K]) => void;
+  onFieldChange: <K extends keyof CustomAIProviderInput>(
+    key: K,
+    value: CustomAIProviderInput[K],
+  ) => void
   /** API 端点变化（自动推断协议） */
-  onEndpointChange: (value: string) => void;
+  onEndpointChange: (value: string) => void
   /** 应用预设（填入 endpoint + model + protocol） */
-  onApplyPreset: (preset: ProviderPreset) => void;
+  onApplyPreset: (preset: ProviderPreset) => void
   /** 搜索供应商可用模型列表（不要求 API Key） */
-  onSearchModels: (overrideInput?: CustomAIProviderInput) => void;
+  onSearchModels: (overrideInput?: CustomAIProviderInput) => void
   /** TTS 开关切换 */
-  onTtsToggle: (v: string) => void;
+  onTtsToggle: (v: string) => void
   /** STT 开关切换 */
-  onSttToggle: (v: string) => void;
+  onSttToggle: (v: string) => void
   /** 勾选/取消勾选模型 */
-  onToggleModel: (modelName: string, checked: boolean) => void;
+  onToggleModel: (modelName: string, checked: boolean) => void
   /** 移除已选模型 Chip */
-  onRemoveModelChip: (modelName: string) => void;
+  onRemoveModelChip: (modelName: string) => void
   /** 语音候选是否匹配 TTS 关键词 */
-  isTtsModel: (m: string) => boolean;
+  isTtsModel: (m: string) => boolean
   /** 语音候选是否匹配 STT 关键词 */
-  isSttModel: (m: string) => boolean;
+  isSttModel: (m: string) => boolean
   /** 测试连通性 */
-  onTest: () => void;
+  onTest: () => void
   /** 保存 */
-  onSave: () => void;
+  onSave: () => void
   /** 取消（关闭表单） */
-  onCancel: () => void;
+  onCancel: () => void
 }
 
 export default function ProviderEditForm({
@@ -142,8 +145,8 @@ export default function ProviderEditForm({
                 selected: p.endpoint === editing.apiEndpoint,
               }))}
               onSelect={(v) => {
-                const preset = PRESETS.find(p => p.id === v);
-                if (preset) onApplyPreset(preset);
+                const preset = PRESETS.find((p) => p.id === v)
+                if (preset) onApplyPreset(preset)
               }}
               searchable
               searchPlaceholder="搜索供应商预设…"
@@ -152,7 +155,10 @@ export default function ProviderEditForm({
             />
           </FormRow>
           <FormRow label="API 密钥" data-name="advanced-panel.provider-form-api-key-row">
-            <div className="provider-api-key-wrapper" data-name="advanced-panel.provider-form-api-key-wrapper">
+            <div
+              className="provider-api-key-wrapper"
+              data-name="advanced-panel.provider-form-api-key-wrapper"
+            >
               <input
                 type={showApiKey ? 'text' : 'password'}
                 className="provider-form-input"
@@ -172,12 +178,26 @@ export default function ProviderEditForm({
                 onClick={onToggleApiKey}
               >
                 {showApiKey ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                     <line x1="1" y1="1" x2="23" y2="23" />
                   </svg>
                 ) : (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
@@ -186,21 +206,28 @@ export default function ProviderEditForm({
             </div>
           </FormRow>
           <FormRow label="模型" compact data-name="advanced-panel.provider-form-model-row">
-            <div className="provider-model-section" data-name="advanced-panel.provider-form-model-section">
+            <div
+              className="provider-model-section"
+              data-name="advanced-panel.provider-form-model-section"
+            >
               {/* 第一行：模型输入 + 搜索按钮 + 统一下拉（右侧无其他组件） */}
-              <div className="provider-model-combobox" data-name="advanced-panel.provider-form-model-combobox">
+              <div
+                className="provider-model-combobox"
+                data-name="advanced-panel.provider-form-model-combobox"
+              >
                 <Combobox
                   inputValue={editing.model}
                   onInputChange={(v) => onFieldChange('model', v)}
                   inputPlaceholder="gpt-4o-mini"
                   inputClassName="provider-form-input"
                   options={modelCandidates.map<ComboboxOption>((m) => {
-                    const isSelected = editing.model === m || (editing.alternativeModels?.includes(m) ?? false);
+                    const isSelected =
+                      editing.model === m || (editing.alternativeModels?.includes(m) ?? false)
                     return {
                       value: m,
                       label: m,
                       selected: isSelected,
-                    };
+                    }
                   })}
                   onSelect={(v) => onToggleModel(v, true)}
                   onDeselect={(v) => onToggleModel(v, false)}
@@ -211,7 +238,9 @@ export default function ProviderEditForm({
                   onOpenChange={onShowModelDropdownChange}
                   loading={searchingModels}
                   loadingText="正在搜索可用模型…"
-                  emptyText={modelCandidates.length === 0 ? '点击右侧搜索按钮查询可用模型' : '无匹配项'}
+                  emptyText={
+                    modelCandidates.length === 0 ? '点击右侧搜索按钮查询可用模型' : '无匹配项'
+                  }
                   dataName="advanced-panel.provider-form-model"
                 />
                 <Button
@@ -227,27 +256,38 @@ export default function ProviderEditForm({
               </div>
               {/* 第二行：已选模型 chips（换行展示，无主次区分） */}
               {(editing.model || (editing.alternativeModels?.length ?? 0) > 0) && (
-                <div className="provider-model-chips" data-name="advanced-panel.provider-form-model-chips">
-                  {[
-                    editing.model,
-                    ...(editing.alternativeModels ?? []),
-                  ].filter(Boolean).map((m) => (
-                    <span key={m} className="provider-model-chip" data-name={`advanced-panel.provider-form-model-chip-${m}`}>
-                      {m}
-                      <button
-                        type="button"
-                        className="provider-model-chip-remove"
-                        aria-label={`移除 ${m}`}
-                        onClick={() => onRemoveModelChip(m)}
-                        data-name={`advanced-panel.provider-form-model-chip-${m}-remove`}
-                      >×</button>
-                    </span>
-                  ))}
+                <div
+                  className="provider-model-chips"
+                  data-name="advanced-panel.provider-form-model-chips"
+                >
+                  {[editing.model, ...(editing.alternativeModels ?? [])]
+                    .filter(Boolean)
+                    .map((m) => (
+                      <span
+                        key={m}
+                        className="provider-model-chip"
+                        data-name={`advanced-panel.provider-form-model-chip-${m}`}
+                      >
+                        {m}
+                        <button
+                          type="button"
+                          className="provider-model-chip-remove"
+                          aria-label={`移除 ${m}`}
+                          onClick={() => onRemoveModelChip(m)}
+                          data-name={`advanced-panel.provider-form-model-chip-${m}-remove`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
                 </div>
               )}
             </div>
           </FormRow>
-          <div className="provider-form-inline-row" data-name="advanced-panel.provider-form-number-row">
+          <div
+            className="provider-form-inline-row"
+            data-name="advanced-panel.provider-form-number-row"
+          >
             <FormRow label="温度" compact data-name="advanced-panel.provider-form-temperature-row">
               <input
                 type="number"
@@ -259,12 +299,16 @@ export default function ProviderEditForm({
                 placeholder="0.7"
                 data-name="advanced-panel.provider-form-temperature-input"
                 onChange={(e) => {
-                  const v = e.target.value;
-                  onFieldChange('temperature', v === '' ? undefined : Number(v));
+                  const v = e.target.value
+                  onFieldChange('temperature', v === '' ? undefined : Number(v))
                 }}
               />
             </FormRow>
-            <FormRow label="最大 token" compact data-name="advanced-panel.provider-form-max-tokens-row">
+            <FormRow
+              label="最大 token"
+              compact
+              data-name="advanced-panel.provider-form-max-tokens-row"
+            >
               <input
                 type="number"
                 className="provider-form-input"
@@ -273,8 +317,8 @@ export default function ProviderEditForm({
                 placeholder="4096"
                 data-name="advanced-panel.provider-form-max-tokens-input"
                 onChange={(e) => {
-                  const v = e.target.value;
-                  onFieldChange('maxTokens', v === '' ? undefined : Number(v));
+                  const v = e.target.value
+                  onFieldChange('maxTokens', v === '' ? undefined : Number(v))
                 }}
               />
             </FormRow>
@@ -354,22 +398,48 @@ export default function ProviderEditForm({
             </div>
           </FormRow>
           {testResult && (
-            <div className={`provider-test-result test-result ${testResult.ok ? 'ok' : 'fail'}`} data-name="advanced-panel.provider-form-test-result">
+            <div
+              className={`provider-test-result test-result ${testResult.ok ? 'ok' : 'fail'}`}
+              data-name="advanced-panel.provider-form-test-result"
+            >
               {testResult.ok ? '连通正常' : '连通失败'}：{testResult.message}
               {typeof testResult.latencyMs === 'number' ? `（${testResult.latencyMs}ms）` : ''}
             </div>
           )}
           <div className="provider-form-actions" data-name="advanced-panel.provider-form-actions">
-            <Button type="button" variant="outline" className="provider-form-btn" disabled={testing || saving} onClick={() => void onTest()} data-name="advanced-panel.provider-form-test-button">
+            <Button
+              type="button"
+              variant="outline"
+              className="provider-form-btn"
+              disabled={testing || saving}
+              onClick={() => void onTest()}
+              data-name="advanced-panel.provider-form-test-button"
+            >
               {testing ? '测试中…' : '测试连通性'}
             </Button>
-            <Button type="button" variant="primary-flat" className="provider-form-btn" disabled={testing || saving} onClick={() => void onSave()} data-name="advanced-panel.provider-form-save-button">
+            <Button
+              type="button"
+              variant="primary-flat"
+              className="provider-form-btn"
+              disabled={testing || saving}
+              onClick={() => void onSave()}
+              data-name="advanced-panel.provider-form-save-button"
+            >
               {saving ? '保存中…' : '保存'}
             </Button>
-            <Button type="button" variant="outline" className="provider-form-btn" disabled={testing || saving} onClick={onCancel} data-name="advanced-panel.provider-form-cancel-button">取消</Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="provider-form-btn"
+              disabled={testing || saving}
+              onClick={onCancel}
+              data-name="advanced-panel.provider-form-cancel-button"
+            >
+              取消
+            </Button>
           </div>
         </>
       )}
     </Modal>
-  );
+  )
 }

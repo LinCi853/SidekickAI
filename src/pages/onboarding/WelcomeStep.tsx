@@ -6,8 +6,8 @@
    从 pages/OnboardingView.tsx 拆出，纯展示组件，不改变任何行为。
    ===================================================================== */
 
-import { TOTAL_PAGES } from './onboardingData';
-import { ICONS, OnboardIcon } from './OnboardIcon';
+import { TOTAL_PAGES } from './onboardingData'
+import { ICONS, OnboardIcon } from './OnboardIcon'
 
 /** 欢迎页三大价值（通用文案，不绑定具体平台数量） */
 const VALUE_POINTS = [
@@ -26,7 +26,7 @@ const VALUE_POINTS = [
     title: '本地',
     desc: '对话、笔记、白板全部本地存储，语音识别数据不出本机',
   },
-] as const;
+] as const
 
 export default function WelcomeStep() {
   return (
@@ -73,7 +73,9 @@ export default function WelcomeStep() {
           </div>
         ))}
       </div>
-      <p className="onboarding-welcome-hint">共 {TOTAL_PAGES} 步 · 可随时跳过 · 之后可从设置菜单再次打开本指南</p>
+      <p className="onboarding-welcome-hint">
+        共 {TOTAL_PAGES} 步 · 可随时跳过 · 之后可从设置菜单再次打开本指南
+      </p>
     </div>
-  );
+  )
 }

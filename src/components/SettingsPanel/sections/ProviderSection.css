@@ -36,8 +36,9 @@
   border: 1px solid var(--glass-bd-2);
   background: var(--glass-bg);
   border-radius: var(--radius-sm);
-  transition: border-color var(--duration-fast) var(--ease-out),
-              background var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
 }
 .provider-row:hover {
   border-color: var(--accent);
@@ -334,7 +335,10 @@ input[type="number"].provider-form-input {
   border: 1px dashed var(--glass-bd-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    background var(--duration-fast);
 }
 .provider-model-show-list-btn:hover {
   color: var(--accent-bright);
@@ -478,7 +482,10 @@ input[type="number"].provider-form-input {
   border: 1px solid var(--glass-bd-2);
   border-radius: var(--radius-full);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .provider-preset-chip:hover {
   background: var(--accent-10);
@@ -567,7 +574,9 @@ input[type="number"].provider-form-input {
   border-radius: 50%;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity var(--duration-fast), background var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    background var(--duration-fast);
 }
 .provider-model-chip-remove:hover {
   opacity: 1;

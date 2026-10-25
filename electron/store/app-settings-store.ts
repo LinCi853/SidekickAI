@@ -15,7 +15,12 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { isPortableMode, getStoreCwd } from './store-paths.js'
 import { getHotkeyManagerInstance } from '../platform/hotkey/manager.js'
-import { readSettingsRaw, writeSettingsRaw, validateAppSettingsPatch, resetSettingsCacheForTest } from './app-settings-repository.js'
+import {
+  readSettingsRaw,
+  writeSettingsRaw,
+  validateAppSettingsPatch,
+  resetSettingsCacheForTest,
+} from './app-settings-repository.js'
 import type { AppSettings } from '../shared/api/settings.api.js'
 export type { AppSettings } from '../shared/api/settings.api.js'
 export { resetSettingsCacheForTest } from './app-settings-repository.js'
@@ -60,7 +65,9 @@ export async function clearAllData(): Promise<void> {
   // 1. 设置 isQuitting 标记，绕过主窗口 closeBehavior='minimize' 拦截
   try {
     ;(app as unknown as { isQuitting?: boolean }).isQuitting = true
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // 2. 中止活跃 AI 流式请求（避免 fetch 阻塞进程退出）
   try {
@@ -74,21 +81,47 @@ export async function clearAllData(): Promise<void> {
   try {
     const { closeAllModuleDbs } = await import('../modules/registry.js')
     await closeAllModuleDbs()
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   const sqliteClosures = [
-    () => import('../assets/collection-journal.js').then(m => m.closeAssetCollectionJournal()).catch(() => {}),
-    () => import('./chat-store.js').then(m => m.closeChatStore()).catch(() => {}),
-    () => import('./module-state-store.js').then(m => m.closeModuleStateDb()).catch(() => {}),
-    () => import('../modules/plugins/notes/notes-db.js').then(m => m.closeNotesDb()).catch(() => {}),
-    () => import('../modules/plugins/whiteboard/whiteboard-db.js').then(m => m.closeWhiteboardDb()).catch(() => {}),
-    () => import('../browser/nav-history-store.js').then(m => m.closeNavHistoryStore()).catch(() => {}),
-    () => import('../browser/bookmark-store.js').then(m => m.closeBookmarkStore()).catch(() => {}),
-    () => import('../browser/search-history-store.js').then(m => m.closeSearchHistoryStore()).catch(() => {}),
-    () => import('../browser/browser-download-store.js').then(m => m.closeBrowserDownloadStore()).catch(() => {}),
-    () => import('./accumulated-links-store.js').then(m => m.accumulatedLinksStore.close()).catch(() => {}),
+    () =>
+      import('../assets/collection-journal.js')
+        .then((m) => m.closeAssetCollectionJournal())
+        .catch(() => {}),
+    () => import('./chat-store.js').then((m) => m.closeChatStore()).catch(() => {}),
+    () => import('./module-state-store.js').then((m) => m.closeModuleStateDb()).catch(() => {}),
+    () =>
+      import('../modules/plugins/notes/notes-db.js').then((m) => m.closeNotesDb()).catch(() => {}),
+    () =>
+      import('../modules/plugins/whiteboard/whiteboard-db.js')
+        .then((m) => m.closeWhiteboardDb())
+        .catch(() => {}),
+    () =>
+      import('../browser/nav-history-store.js')
+        .then((m) => m.closeNavHistoryStore())
+        .catch(() => {}),
+    () =>
+      import('../browser/bookmark-store.js').then((m) => m.closeBookmarkStore()).catch(() => {}),
+    () =>
+      import('../browser/search-history-store.js')
+        .then((m) => m.closeSearchHistoryStore())
+        .catch(() => {}),
+    () =>
+      import('../browser/browser-download-store.js')
+        .then((m) => m.closeBrowserDownloadStore())
+        .catch(() => {}),
+    () =>
+      import('./accumulated-links-store.js')
+        .then((m) => m.accumulatedLinksStore.close())
+        .catch(() => {}),
   ]
   for (const close of sqliteClosures) {
-    try { await close() } catch { /* ignore */ }
+    try {
+      await close()
+    } catch {
+      /* ignore */
+    }
   }
 
   // 4. 收集并清理所有 session（defaultSession + persist:<profileId> partitions）
@@ -99,7 +132,9 @@ export async function clearAllData(): Promise<void> {
     for (const profile of profileStore.list()) {
       try {
         sessionsToClean.push(session.fromPartition(`persist:${profile.id}`))
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   } catch (err) {
     console.warn('[app-settings] 收集 partition sessions 失败:', err)
@@ -107,9 +142,21 @@ export async function clearAllData(): Promise<void> {
 
   await Promise.all(
     sessionsToClean.map(async (s) => {
-      try { await s.clearStorageData() } catch { /* ignore */ }
-      try { await s.clearCache() } catch { /* ignore */ }
-      try { await s.clearAuthCache() } catch { /* ignore */ }
+      try {
+        await s.clearStorageData()
+      } catch {
+        /* ignore */
+      }
+      try {
+        await s.clearCache()
+      } catch {
+        /* ignore */
+      }
+      try {
+        await s.clearAuthCache()
+      } catch {
+        /* ignore */
+      }
     }),
   )
 
@@ -134,7 +181,11 @@ export async function clearAllData(): Promise<void> {
         continue
       }
       win.once('closed', done)
-      try { win.destroy() } catch { done() }
+      try {
+        win.destroy()
+      } catch {
+        done()
+      }
     }
     // 超时兜底：1s 后强制继续（destroy 是同步的，但 OS 释放句柄可能需要时间）
     setTimeout(() => {
@@ -155,10 +206,14 @@ export async function clearAllData(): Promise<void> {
   const settingsDbPath = path.join(dataDir, 'settings.db')
   const settingsDbWal = path.join(dataDir, 'settings.db-wal')
   const settingsDbShm = path.join(dataDir, 'settings.db-shm')
-  
+
   // 带重试的文件删除函数（Windows 上文件锁释放可能需要多次尝试）。
   // 退避等待用 setTimeout 而非忙等：忙等会烧 CPU 并加剧恢复出厂期间的 UI 冻结
-  const unlinkWithRetry = async (filePath: string, maxRetries = 3, delayMs = 200): Promise<boolean> => {
+  const unlinkWithRetry = async (
+    filePath: string,
+    maxRetries = 3,
+    delayMs = 200,
+  ): Promise<boolean> => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (fs.existsSync(filePath)) {
@@ -168,7 +223,11 @@ export async function clearAllData(): Promise<void> {
         }
         return true // 文件不存在也算成功
       } catch (err) {
-        console.warn(`[app-settings] 删除文件失败 (attempt ${attempt}/${maxRetries}):`, filePath, err)
+        console.warn(
+          `[app-settings] 删除文件失败 (attempt ${attempt}/${maxRetries}):`,
+          filePath,
+          err,
+        )
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, delayMs))
         }
@@ -256,19 +315,26 @@ export async function clearAllData(): Promise<void> {
         subPaths.push(db, db + '-wal', db + '-shm')
       }
       subPaths.push(...pluginFiles.assetDirs)
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     for (const sub of subPaths) {
       try {
         fs.rmSync(path.join(dataDir, sub), { recursive: true, force: true })
         console.log('[app-settings] 逐个删除:', sub)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     // 再次尝试删除整个目录
     try {
       fs.rmSync(dataDir, { recursive: true, force: true })
       console.log('[app-settings] 二次删除成功:', dataDir)
     } catch (err2) {
-      console.error('[app-settings] 二次删除仍失败（部分文件可能被锁定，重启后由新进程清理）:', err2)
+      console.error(
+        '[app-settings] 二次删除仍失败（部分文件可能被锁定，重启后由新进程清理）:',
+        err2,
+      )
     }
   }
 
@@ -294,7 +360,8 @@ export async function clearAllData(): Promise<void> {
 /** 更新应用设置（合并 patch） */
 export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
   patch = validateAppSettingsPatch(patch)
-  if (isPortableMode() && patch.autoLaunch) throw new Error('绿色便携版不注册开机自启动，请使用安装版。')
+  if (isPortableMode() && patch.autoLaunch)
+    throw new Error('绿色便携版不注册开机自启动，请使用安装版。')
   const current = readSettingsRaw()
   const next: AppSettings = { ...current, ...patch }
   // 关闭 autoLaunch 时自动重置 silentStart=false（保持字段语义一致，避免 autoLaunch=false 但 silentStart=true 的非法态）
@@ -359,22 +426,30 @@ function broadcastAppSettingsChanged(settings: AppSettings): void {
  * 向所有 BrowserWindow 广播 UI 版本 / 主题变更。
  * 任意窗口修改 Oxy Design System 开关或主题模式后，通过 IPC 调用此函数通知所有窗口同步。
  */
-export function broadcastUiVersionChanged(payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }): void {
+export function broadcastUiVersionChanged(payload: {
+  uiVersion: 'classic' | 'oxy'
+  theme: 'light' | 'dark' | 'system'
+}): void {
   broadcastToAllWindows(IPC_CHANNELS.APP_UI_VERSION_CHANGED, payload, 'app-settings')
 }
 
 /** 注册应用设置 IPC 处理器（含代理测试与即时生效） */
-export function registerAppSettingsIPC(exportData: typeof import('./backup-recovery.js').exportApplicationData): void {
+export function registerAppSettingsIPC(
+  exportData: typeof import('./backup-recovery.js').exportApplicationData,
+): void {
   ipcMain.handle(IPC_CHANNELS.APP_GET_SETTINGS, () => getAppSettings())
   // 渲染层请求广播 UI 版本/主题变更到所有窗口
-  ipcMain.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, (_e, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
-    // 以应用内主题为准：映射到 nativeTheme.themeSource，webview 内 AI 应用随之切换
-    const effective = applyUiThemeBroadcast(payload.uiVersion, payload.theme)
-    if (getAppSettings().themeMode !== effective) {
-      updateAppSettings({ themeMode: effective })
-    }
-    broadcastUiVersionChanged(payload)
-  })
+  ipcMain.on(
+    IPC_CHANNELS.APP_UI_VERSION_CHANGED,
+    (_e, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
+      // 以应用内主题为准：映射到 nativeTheme.themeSource，webview 内 AI 应用随之切换
+      const effective = applyUiThemeBroadcast(payload.uiVersion, payload.theme)
+      if (getAppSettings().themeMode !== effective) {
+        updateAppSettings({ themeMode: effective })
+      }
+      broadcastUiVersionChanged(payload)
+    },
+  )
   // 渲染层请求广播 Oxy 主题色变更到所有窗口
   ipcMain.on(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, (_e, hex: string) => {
     broadcastToAllWindows(IPC_CHANNELS.APP_THEME_COLOR_CHANGED, hex, 'app-settings')
@@ -439,31 +514,48 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
   })
 
   // 数据迁移：导出所有数据到指定路径（细粒度控制，可选加密）
-  ipcMain.handle(IPC_CHANNELS.APP_EXPORT_DATA, async (_e, targetPath: string, options: {
-    basicData: boolean;
-    cookies: boolean;
-    indexedDB: boolean;
-    cache: boolean;
-    voiceAssets: boolean;
-  }, encrypt?: { password: string }) => {
-    return exportData(targetPath, options, encrypt)
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.APP_EXPORT_DATA,
+    async (
+      _e,
+      targetPath: string,
+      options: {
+        basicData: boolean
+        cookies: boolean
+        indexedDB: boolean
+        cache: boolean
+        voiceAssets: boolean
+      },
+      encrypt?: { password: string },
+    ) => {
+      return exportData(targetPath, options, encrypt)
+    },
+  )
 
   // 数据迁移：从 zip/sabackup 文件导入所有数据（导入后应用自动重启）
-    ipcMain.handle(IPC_CHANNELS.APP_INSPECT_BACKUP, async (_e, filePath: string, password?: string) => {
-    const { inspectImportData } = await import('./backup-restore.js')
-    return inspectImportData(filePath, password)
-  })
-  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA, async (_e, zipPath: string, fingerprint?: string) => {
-    const { importAllData } = await import('./backup-restore.js')
-    return importAllData(zipPath, fingerprint)
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.APP_INSPECT_BACKUP,
+    async (_e, filePath: string, password?: string) => {
+      const { inspectImportData } = await import('./backup-restore.js')
+      return inspectImportData(filePath, password)
+    },
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.APP_IMPORT_DATA,
+    async (_e, zipPath: string, fingerprint?: string) => {
+      const { importAllData } = await import('./backup-restore.js')
+      return importAllData(zipPath, fingerprint)
+    },
+  )
 
   // 数据迁移：从加密的 .sabackup 文件导入（输入密码解密后导入）
-  ipcMain.handle(IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED, async (_e, filePath: string, password: string, fingerprint?: string) => {
-    const { importAllDataDecrypted } = await import('./backup-restore.js')
-    return importAllDataDecrypted(filePath, password, fingerprint)
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.APP_IMPORT_DATA_DECRYPTED,
+    async (_e, filePath: string, password: string, fingerprint?: string) => {
+      const { importAllDataDecrypted } = await import('./backup-restore.js')
+      return importAllDataDecrypted(filePath, password, fingerprint)
+    },
+  )
 
   // 选文件后立即检测是否 SABK 加密（不进入导入流程）
   ipcMain.handle(IPC_CHANNELS.APP_DETECT_BACKUP_ENCRYPTED, async (_e, filePath: string) => {
@@ -528,18 +620,27 @@ export function registerAppSettingsIPC(exportData: typeof import('./backup-recov
 
   ipcMain.handle(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, async (_event, options?: LogExportOptions) => {
     const { getChatStore } = await import('./chat-store.js')
-    return openActivityLogFolder(app.getPath('userData'), () => getChatStore().activityLogRecords(),
-      directory => shell.openPath(directory), options, applicationLogSources())
+    return openActivityLogFolder(
+      app.getPath('userData'),
+      () => getChatStore().activityLogRecords(),
+      (directory) => shell.openPath(directory),
+      options,
+      applicationLogSources(),
+    )
   })
 
-  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE, async event =>
-    (await import('../browser/file-drop-handler.js')).prepareFileDrop(event))
+  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE, async (event) =>
+    (await import('../browser/file-drop-handler.js')).prepareFileDrop(event),
+  )
   ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE, async (event, input: unknown) =>
-    (await import('../browser/file-drop-handler.js')).captureFileDrop(event, input))
+    (await import('../browser/file-drop-handler.js')).captureFileDrop(event, input),
+  )
   ipcMain.handle(IPC_CHANNELS.WEBVIEW_FILE_DROP, async (event, input: unknown) =>
-    (await import('../browser/file-drop-handler.js')).readDroppedFiles(event, input))
+    (await import('../browser/file-drop-handler.js')).readDroppedFiles(event, input),
+  )
   ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_OPEN, async (event, input: unknown) =>
-    (await import('../browser/file-drop-handler.js')).openDroppedFiles(event, input))
+    (await import('../browser/file-drop-handler.js')).openDroppedFiles(event, input),
+  )
 
   // ===== 每应用浏览器窗口脱离/回归快捷键 =====
   // 保存/清除指定 Profile 的浏览器窗口快捷键，并重注册全局快捷键
@@ -585,7 +686,9 @@ export async function reregisterProfileShortcuts(): Promise<void> {
       const acc = profile.browserWindowShortcut
       if (!acc) continue
       if (seen.has(acc)) {
-        console.warn(`[reregisterProfileShortcuts] 快捷键 ${acc} 已被其他应用占用，跳过 Profile ${profile.id}（${profile.name}）`)
+        console.warn(
+          `[reregisterProfileShortcuts] 快捷键 ${acc} 已被其他应用占用，跳过 Profile ${profile.id}（${profile.name}）`,
+        )
         continue
       }
       seen.add(acc)
@@ -600,11 +703,13 @@ export async function reregisterProfileShortcuts(): Promise<void> {
   for (const { accelerator, profileId } of toRegister) {
     mgr.registerBrowserShortcut(accelerator, () => {
       // ESM 环境中 require 未定义,使用动态 import() 避免闪退
-      import('../window-factory.js').then(({ toggleBrowserWindow }) => {
-        toggleBrowserWindow(profileId)
-      }).catch((e) => {
-        console.error('[reregisterProfileShortcuts] 动态导入失败:', e)
-      })
+      import('../window-factory.js')
+        .then(({ toggleBrowserWindow }) => {
+          toggleBrowserWindow(profileId)
+        })
+        .catch((e) => {
+          console.error('[reregisterProfileShortcuts] 动态导入失败:', e)
+        })
     })
   }
 }

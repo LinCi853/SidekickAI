@@ -23,7 +23,7 @@ export default defineConfig({
         output: {
           format: 'cjs',
           entryFileNames: '[name].cjs',
-          chunkFileNames: '[name]-[hash].cjs'
+          chunkFileNames: '[name]-[hash].cjs',
         },
         // 主进程依赖由 externalizeDepsPlugin 外置，无需 manualChunks
       },
@@ -47,7 +47,7 @@ export default defineConfig({
         },
         output: {
           format: 'cjs',
-          entryFileNames: '[name].cjs'
+          entryFileNames: '[name].cjs',
         },
       },
     },
@@ -67,7 +67,12 @@ export default defineConfig({
         },
       },
     },
-    plugins: [react(), rendererSecurity(), excalidrawClipboardFeedback(), compilationInputs(__dirname, 'renderer')],
+    plugins: [
+      react(),
+      rendererSecurity(),
+      excalidrawClipboardFeedback(),
+      compilationInputs(__dirname, 'renderer'),
+    ],
     optimizeDeps: {
       // Keep the clipboard transform active and prebundle its nested CommonJS dependencies.
       exclude: ['@excalidraw/excalidraw'],
@@ -81,7 +86,7 @@ export default defineConfig({
         'png-chunk-text',
         'png-chunks-encode',
         'png-chunks-extract',
-      ].map(dependency => `@excalidraw/excalidraw > ${dependency}`),
+      ].map((dependency) => `@excalidraw/excalidraw > ${dependency}`),
     },
     resolve: {
       alias: {
@@ -95,8 +100,8 @@ export default defineConfig({
         // mermaid / katex 是 @excalidraw/excalidraw 的传递依赖，
         // 但源码从未 import mermaid（不使用 Mermaid→Excalidraw 转换功能）。
         // 映射到空模块可从渲染层 bundle 中剔除 ~5-8 MB 的图表引擎 + 51 个 locale 文件。
-        'mermaid': emptyMod,
-        'katex': emptyMod,
+        mermaid: emptyMod,
+        katex: emptyMod,
       },
     },
     server: {

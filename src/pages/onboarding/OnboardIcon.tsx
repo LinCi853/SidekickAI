@@ -6,7 +6,7 @@
    从 pages/OnboardingView.tsx 拆出，纯展示组件，不改变任何行为。
    ===================================================================== */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from 'react'
 
 export function OnboardIcon({ children, size = 15 }: { children: ReactNode; size?: number }) {
   return (
@@ -23,7 +23,7 @@ export function OnboardIcon({ children, size = 15 }: { children: ReactNode; size
     >
       {children}
     </svg>
-  );
+  )
 }
 
 export const ICONS = {
@@ -98,4 +98,4 @@ export const ICONS = {
       <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
     </>
   ),
-};
+}

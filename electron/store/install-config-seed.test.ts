@@ -10,7 +10,9 @@ const fixture = vi.hoisted(() => ({
   meta: new Map<string, string>(),
 }))
 
-vi.mock('electron', () => ({ app: { getPath: () => path.join(fixture.directory, 'SidekickAI.exe') } }))
+vi.mock('electron', () => ({
+  app: { getPath: () => path.join(fixture.directory, 'SidekickAI.exe') },
+}))
 vi.mock('./store-paths.js', () => ({ isPortableMode: () => false }))
 vi.mock('./module-state-store.js', () => ({
   getModuleState: (id: string) => fixture.states.get(id) ?? null,
@@ -29,25 +31,37 @@ beforeEach(() => {
 
 afterEach(() => fs.rmSync(fixture.directory, { recursive: true, force: true }))
 
-it.each([undefined, false, true])('ignores obsolete whiteboard choices while applying installation options (enabled=%s)', async enabled => {
-  const { seedFromInstallConfig } = await import('./install-config-seed.js')
-  const { applyInstallConfigOptions } = await import('./app-settings-store.js')
-  const { saveModuleState, isLargeModuleInstalledByManifestFile } = await import('./module-state-store.js')
-  const existing = enabled === undefined ? undefined
-    : { id: 'whiteboard', enabled, installed: true, clearedAt: 42, updatedAt: 1 }
-  if (existing) fixture.states.set(existing.id, existing)
-  fixture.meta.set('installConfigHash', 'previous-installation-configuration')
-  fs.writeFileSync(path.join(fixture.directory, 'install-config.json'), JSON.stringify({
-    schemaVersion: 2, modules: { whiteboard: { enabled: false } }, options: { autoLaunch: true },
-  }))
+it.each([undefined, false, true])(
+  'ignores obsolete whiteboard choices while applying installation options (enabled=%s)',
+  async (enabled) => {
+    const { seedFromInstallConfig } = await import('./install-config-seed.js')
+    const { applyInstallConfigOptions } = await import('./app-settings-store.js')
+    const { saveModuleState, isLargeModuleInstalledByManifestFile } = await import(
+      './module-state-store.js'
+    )
+    const existing =
+      enabled === undefined
+        ? undefined
+        : { id: 'whiteboard', enabled, installed: true, clearedAt: 42, updatedAt: 1 }
+    if (existing) fixture.states.set(existing.id, existing)
+    fixture.meta.set('installConfigHash', 'previous-installation-configuration')
+    fs.writeFileSync(
+      path.join(fixture.directory, 'install-config.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        modules: { whiteboard: { enabled: false } },
+        options: { autoLaunch: true },
+      }),
+    )
 
-  seedFromInstallConfig()
+    seedFromInstallConfig()
 
-  expect(fixture.states.get('whiteboard')).toEqual(existing)
-  expect(saveModuleState).not.toHaveBeenCalled()
-  expect(isLargeModuleInstalledByManifestFile).not.toHaveBeenCalled()
-  expect(applyInstallConfigOptions).toHaveBeenCalledWith({ autoLaunch: true })
-  expect(fixture.meta.get('installConfigHash')).toMatch(/^[a-f0-9]{64}$/)
-  seedFromInstallConfig()
-  expect(applyInstallConfigOptions).toHaveBeenCalledTimes(1)
-})
+    expect(fixture.states.get('whiteboard')).toEqual(existing)
+    expect(saveModuleState).not.toHaveBeenCalled()
+    expect(isLargeModuleInstalledByManifestFile).not.toHaveBeenCalled()
+    expect(applyInstallConfigOptions).toHaveBeenCalledWith({ autoLaunch: true })
+    expect(fixture.meta.get('installConfigHash')).toMatch(/^[a-f0-9]{64}$/)
+    seedFromInstallConfig()
+    expect(applyInstallConfigOptions).toHaveBeenCalledTimes(1)
+  },
+)

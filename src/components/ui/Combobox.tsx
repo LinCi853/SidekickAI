@@ -8,79 +8,72 @@
    - Portal 渲染：脱离 transform 祖先影响
    ===================================================================== */
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
-import { createPortal } from 'react-dom';
-import { useEscToCloseOverlay } from '../../hooks/useEscToCloseWindow';
-import './Combobox.css';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
+import { useEscToCloseOverlay } from '../../hooks/useEscToCloseWindow'
+import './Combobox.css'
 
 export interface ComboboxOption {
   /** 唯一值 */
-  value: string;
+  value: string
   /** 显示文本（默认与 value 相同） */
-  label?: string;
+  label?: string
   /** 是否已选中 */
-  selected?: boolean;
+  selected?: boolean
   /** 标签（如「主」「TTS」等） */
-  tag?: string;
+  tag?: string
 }
 
 export interface ComboboxProps {
   /** 当前输入框值 */
-  inputValue: string;
+  inputValue: string
   /** 输入框值变化回调 */
-  onInputChange: (value: string) => void;
+  onInputChange: (value: string) => void
   /** 输入框 placeholder */
-  inputPlaceholder?: string;
+  inputPlaceholder?: string
   /** 候选项列表 */
-  options: ComboboxOption[];
+  options: ComboboxOption[]
   /** 选中候选项回调（点击候选项时触发） */
-  onSelect: (value: string) => void;
+  onSelect: (value: string) => void
   /** 取消选中回调（点击已选中项时触发，可选） */
-  onDeselect?: (value: string) => void;
+  onDeselect?: (value: string) => void
   /** 是否多选（默认 false：单选模式下选中后自动关闭） */
-  multiple?: boolean;
+  multiple?: boolean
   /** 是否启用搜索框（默认 true） */
-  searchable?: boolean;
+  searchable?: boolean
   /** 搜索框 placeholder */
-  searchPlaceholder?: string;
+  searchPlaceholder?: string
   /** 是否禁用 */
-  disabled?: boolean;
+  disabled?: boolean
   /** 自定义输入框类名 */
-  inputClassName?: string;
+  inputClassName?: string
   /** 自定义根类名 */
-  className?: string;
+  className?: string
   /** 是否打开（受控模式，可选。不传则由组件内部管理） */
-  open?: boolean;
+  open?: boolean
   /** 打开状态变化回调（受控模式） */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean) => void
   /** 空状态文案 */
-  emptyText?: string;
+  emptyText?: string
   /** 加载中状态 */
-  loading?: boolean;
+  loading?: boolean
   /** 加载文案 */
-  loadingText?: string;
+  loadingText?: string
   /** data-name 前缀（用于测试定位） */
-  dataName?: string;
+  dataName?: string
   /** 输入框的右键菜单关闭时是否自动聚焦输入框 */
-  autoFocusInput?: boolean;
+  autoFocusInput?: boolean
   /**
    * 输入框是否只读（默认 false）。
    *
    * 用于纯选择场景（如 UA 预设、Provider 切换）：输入框仅显示选中项 label，
    * 不可编辑，用户通过下拉箭头 + 搜索框选择。避免用户在输入框输入文本造成困惑。
    */
-  inputReadOnly?: boolean;
+  inputReadOnly?: boolean
   /** 下拉面板最小宽度（px，默认 240）。紧凑场景可设为 0 让面板贴合触发器宽度。 */
-  panelMinWidth?: number;
+  panelMinWidth?: number
   /** 自定义下拉面板类名（portaled 到 body，用于外部 CSS 定位） */
-  panelClassName?: string;
+  panelClassName?: string
 }
 
 /**
@@ -100,40 +93,40 @@ function calculatePanelPosition(
   viewportHeight: number,
   minWidth = 240,
 ): { style: CSSProperties; placement: 'bottom' | 'top' } {
-  const GAP = 4;
-  const MAX_WIDTH = Math.min(viewportWidth * 0.8, 560);
-  const MAX_HEIGHT = Math.min(viewportHeight * 0.6, 420);
+  const GAP = 4
+  const MAX_WIDTH = Math.min(viewportWidth * 0.8, 560)
+  const MAX_HEIGHT = Math.min(viewportHeight * 0.6, 420)
 
   // 宽度：触发器宽度，但不小于 minWidth，不大于 MAX_WIDTH
-  const width = Math.max(minWidth, Math.min(MAX_WIDTH, triggerRect.width));
+  const width = Math.max(minWidth, Math.min(MAX_WIDTH, triggerRect.width))
 
   // 下方剩余空间
-  const spaceBelow = viewportHeight - triggerRect.bottom - GAP;
-  const spaceAbove = triggerRect.top - GAP;
+  const spaceBelow = viewportHeight - triggerRect.bottom - GAP
+  const spaceAbove = triggerRect.top - GAP
   // 决定弹出方向：默认下方，若下方空间 < 200 且上方更宽裕则向上
-  const placement: 'bottom' | 'top' = spaceBelow < 200 && spaceAbove > spaceBelow ? 'top' : 'bottom';
+  const placement: 'bottom' | 'top' = spaceBelow < 200 && spaceAbove > spaceBelow ? 'top' : 'bottom'
 
   // 转换为 document-relative 坐标（absolute 定位需要）
-  const scrollX = window.scrollX;
-  const scrollY = window.scrollY;
+  const scrollX = window.scrollX
+  const scrollY = window.scrollY
 
-  let top: number;
-  let maxHeight: number;
+  let top: number
+  let maxHeight: number
   if (placement === 'bottom') {
-    top = triggerRect.bottom + GAP + scrollY;
-    maxHeight = Math.min(MAX_HEIGHT, spaceBelow - 8);
+    top = triggerRect.bottom + GAP + scrollY
+    maxHeight = Math.min(MAX_HEIGHT, spaceBelow - 8)
   } else {
     // 上方展开：锚定面板底部到触发器顶部，用 transform:translateY(-100%) 在 CSS 中翻转
-    top = triggerRect.top - GAP + scrollY;
-    maxHeight = Math.min(MAX_HEIGHT, spaceAbove - 8);
+    top = triggerRect.top - GAP + scrollY
+    maxHeight = Math.min(MAX_HEIGHT, spaceAbove - 8)
   }
 
   // 防止超出右边界
-  let left = triggerRect.left + scrollX;
+  let left = triggerRect.left + scrollX
   if (left + width > viewportWidth + scrollX - 8) {
-    left = viewportWidth + scrollX - width - 8;
+    left = viewportWidth + scrollX - width - 8
   }
-  if (left < scrollX + 8) left = scrollX + 8;
+  if (left < scrollX + 8) left = scrollX + 8
 
   return {
     style: {
@@ -144,7 +137,7 @@ function calculatePanelPosition(
       ...(placement === 'top' ? { transform: 'translateY(-100%)' } : {}),
     },
     placement,
-  };
+  }
 }
 
 export default function Combobox({
@@ -171,131 +164,136 @@ export default function Combobox({
   panelMinWidth,
   panelClassName,
 }: ComboboxProps) {
-  const triggerRef = useRef<HTMLInputElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // 内部打开状态（非受控模式）
-  const [internalOpen, setInternalOpen] = useState(false);
-  const isOpen = controlledOpen ?? internalOpen;
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isOpen = controlledOpen ?? internalOpen
   const setOpen = (v: boolean) => {
-    if (onOpenChange) onOpenChange(v);
-    else setInternalOpen(v);
-  };
+    if (onOpenChange) onOpenChange(v)
+    else setInternalOpen(v)
+  }
 
   // 搜索关键字
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState('')
 
   // 面板位置样式
-  const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>({})
 
   // ESC 关闭：栈顶时由本组件处理
-  useEscToCloseOverlay(isOpen, () => setOpen(false));
+  useEscToCloseOverlay(isOpen, () => setOpen(false))
 
   // 打开时计算位置、清空搜索、聚焦搜索框
   useLayoutEffect(() => {
-    if (!isOpen) return;
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const { style } = calculatePanelPosition(rect, vw, vh, panelMinWidth);
-    setPanelStyle(style);
+    if (!isOpen) return
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const { style } = calculatePanelPosition(rect, vw, vh, panelMinWidth)
+    setPanelStyle(style)
     // 聚焦搜索框（如有）
     if (searchable) {
       // 延迟一帧确保 DOM 已挂载
-      requestAnimationFrame(() => searchRef.current?.focus());
+      requestAnimationFrame(() => searchRef.current?.focus())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen])
 
   // 滚动/调整窗口时重新计算位置
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return
     const reposition = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const { style } = calculatePanelPosition(rect, window.innerWidth, window.innerHeight, panelMinWidth);
-      setPanelStyle(style);
-    };
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      const { style } = calculatePanelPosition(
+        rect,
+        window.innerWidth,
+        window.innerHeight,
+        panelMinWidth,
+      )
+      setPanelStyle(style)
+    }
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
     return () => {
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
-    };
-  }, [isOpen]);
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+  }, [isOpen])
 
   // 点击外部关闭
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return
     const onMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const triggerEl = triggerRef.current;
-      const panelEl = panelRef.current;
-      if (triggerEl?.contains(target)) return; // 点击触发器内部
-      if (panelEl?.contains(target)) return; // 点击面板内部
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
+      const target = e.target as Node
+      const triggerEl = triggerRef.current
+      const panelEl = panelRef.current
+      if (triggerEl?.contains(target)) return // 点击触发器内部
+      if (panelEl?.contains(target)) return // 点击面板内部
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen])
 
   // 搜索过滤
   const filteredOptions = useMemo(() => {
-    if (!search.trim()) return options;
-    const kw = search.toLowerCase().trim();
+    if (!search.trim()) return options
+    const kw = search.toLowerCase().trim()
     return options.filter((opt) => {
-      const text = (opt.label ?? opt.value).toLowerCase();
-      return text.includes(kw);
-    });
-  }, [options, search]);
+      const text = (opt.label ?? opt.value).toLowerCase()
+      return text.includes(kw)
+    })
+  }, [options, search])
 
   // 选中数量
-  const selectedCount = options.filter((o) => o.selected).length;
+  const selectedCount = options.filter((o) => o.selected).length
 
   // 触发器输入框
-  const inputClasses = ['combobox-input'];
-  if (inputClassName) inputClasses.push(inputClassName);
+  const inputClasses = ['combobox-input']
+  if (inputClassName) inputClasses.push(inputClassName)
 
-  const rootClasses = ['combobox'];
-  if (className) rootClasses.push(className);
-  if (disabled) rootClasses.push('is-disabled');
+  const rootClasses = ['combobox']
+  if (className) rootClasses.push(className)
+  if (disabled) rootClasses.push('is-disabled')
 
   const handleArrowClick = () => {
-    if (disabled) return;
-    setOpen(!isOpen);
-  };
+    if (disabled) return
+    setOpen(!isOpen)
+  }
 
   const handleInputFocus = () => {
     // readOnly 模式下由 click 处理打开，避免 focus+click 事件冲突导致自动关闭
-    if (inputReadOnly) return;
-    if (options.length > 0 && !isOpen) setOpen(true);
-  };
+    if (inputReadOnly) return
+    if (options.length > 0 && !isOpen) setOpen(true)
+  }
 
   // 只读模式下点击输入框仅打开，不 toggle（避免 focus 已打开后 click 又关闭）
   const handleInputClick = () => {
-    if (inputReadOnly && !disabled && !isOpen) setOpen(true);
-  };
+    if (inputReadOnly && !disabled && !isOpen) setOpen(true)
+  }
 
   const handleOptionClick = (value: string, isSelected: boolean) => {
     if (isSelected && onDeselect) {
-      onDeselect(value);
+      onDeselect(value)
       // 单选模式下取消选中不关闭
-      return;
+      return
     }
-    onSelect(value);
+    onSelect(value)
     // 单选模式下选中后自动关闭
     if (!multiple) {
-      setOpen(false);
+      setOpen(false)
     }
-  };
+  }
 
   // 只读模式根类名
-  if (inputReadOnly) rootClasses.push('is-readonly');
+  if (inputReadOnly) rootClasses.push('is-readonly')
 
   return (
     <div className={rootClasses.join(' ')} data-name={dataName}>
@@ -328,7 +326,8 @@ export default function Combobox({
         </button>
       </div>
 
-      {isOpen && typeof document !== 'undefined' &&
+      {isOpen &&
+        typeof document !== 'undefined' &&
         createPortal(
           <div
             ref={panelRef}
@@ -346,9 +345,9 @@ export default function Combobox({
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setOpen(false);
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setOpen(false)
                     }
                   }}
                   placeholder={searchPlaceholder}
@@ -370,15 +369,17 @@ export default function Combobox({
             )}
             <div className="combobox-body" data-name={`${dataName}.body`}>
               {loading ? (
-                <div className="combobox-loading" data-name={`${dataName}.loading`}>{loadingText}</div>
+                <div className="combobox-loading" data-name={`${dataName}.loading`}>
+                  {loadingText}
+                </div>
               ) : filteredOptions.length === 0 ? (
                 <div className="combobox-empty" data-name={`${dataName}.empty`}>
                   {emptyText}
                 </div>
               ) : (
                 filteredOptions.map((opt) => {
-                  const label = opt.label ?? opt.value;
-                  const isSelected = !!opt.selected;
+                  const label = opt.label ?? opt.value
+                  const isSelected = !!opt.selected
                   return (
                     <button
                       type="button"
@@ -391,7 +392,7 @@ export default function Combobox({
                       {opt.tag && <span className="combobox-option-tag">{opt.tag}</span>}
                       <span className="combobox-option-label">{label}</span>
                     </button>
-                  );
+                  )
                 })
               )}
             </div>
@@ -409,7 +410,7 @@ export default function Combobox({
           document.body,
         )}
     </div>
-  );
+  )
 }
 
-export type { ComboboxProps as ComboboxPropsType };
+export type { ComboboxProps as ComboboxPropsType }

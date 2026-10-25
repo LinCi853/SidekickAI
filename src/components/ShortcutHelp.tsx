@@ -15,34 +15,37 @@
    弹窗只读快照。
    ===================================================================== */
 
-import { useCallback, useState } from 'react';
-import ShortcutsModal from './ShortcutsModal';
-import { useShortcutsToggle } from '../hooks/useShortcutsToggle';
-import { useOpenShortcutsForward } from '../hooks/useOpenShortcutsForward';
-import { useGlobalHotkeyDocs } from '../hooks/useGlobalHotkeyDocs';
+import { useCallback, useState } from 'react'
+import ShortcutsModal from './ShortcutsModal'
+import { useShortcutsToggle } from '../hooks/useShortcutsToggle'
+import { useOpenShortcutsForward } from '../hooks/useOpenShortcutsForward'
+import { useGlobalHotkeyDocs } from '../hooks/useGlobalHotkeyDocs'
 
 export interface ShortcutHelpProps {
   /** 受控打开状态（与 onOpenChange 成对传入；缺省为组件内部状态） */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export default function ShortcutHelp({ open, onOpenChange }: ShortcutHelpProps) {
-  const controlled = typeof open === 'boolean' && typeof onOpenChange === 'function';
-  const [internalOpen, setInternalOpen] = useState(false);
-  const isOpen = controlled ? (open as boolean) : internalOpen;
+  const controlled = typeof open === 'boolean' && typeof onOpenChange === 'function'
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isOpen = controlled ? (open as boolean) : internalOpen
 
   const setOpen = useCallback(
     (value: boolean) => {
-      if (controlled) onOpenChange?.(value);
-      else setInternalOpen(value);
+      if (controlled) onOpenChange?.(value)
+      else setInternalOpen(value)
     },
     [controlled, onOpenChange],
-  );
+  )
 
-  useGlobalHotkeyDocs();
-  useShortcutsToggle(isOpen, setOpen);
-  useOpenShortcutsForward(() => setOpen(true), () => setOpen(false));
+  useGlobalHotkeyDocs()
+  useShortcutsToggle(isOpen, setOpen)
+  useOpenShortcutsForward(
+    () => setOpen(true),
+    () => setOpen(false),
+  )
 
-  return <ShortcutsModal open={isOpen} onClose={() => setOpen(false)} />;
+  return <ShortcutsModal open={isOpen} onClose={() => setOpen(false)} />
 }

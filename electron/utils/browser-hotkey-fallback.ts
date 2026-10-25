@@ -39,7 +39,9 @@ export function dispatchBrowserHotkeyFallback(e: BrowserHotkeyFallbackEvent): vo
   fallbackCallback?.(e)
 }
 
-export function matchBrowserHotkeyFallback(event: BrowserHotkeyFallbackEvent): 'toggleCloudPc' | 'toggleFullscreen' | null {
+export function matchBrowserHotkeyFallback(
+  event: BrowserHotkeyFallbackEvent,
+): 'toggleCloudPc' | 'toggleFullscreen' | null {
   if (event.shift || event.meta) return null
   if (event.keycode === UiohookKey.C && event.ctrl && event.alt) return 'toggleCloudPc'
   if (event.keycode === UiohookKey.F11 && !event.ctrl && !event.alt) return 'toggleFullscreen'

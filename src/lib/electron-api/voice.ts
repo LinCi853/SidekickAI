@@ -2,8 +2,8 @@
    lib/electron-api/voice.ts —— 语音识别(STT) / 语音热键 / 后台语音 / 语音输入配置
    ===================================================================== */
 
-import type { VoiceConfig } from '../../../electron/shared/types';
-import { requireElectron } from './core';
+import type { VoiceConfig } from '../../../electron/shared/types'
+import { requireElectron } from './core'
 
 /* =====================================================================
    语音识别 —— 对应 window.electron.stt
@@ -15,13 +15,13 @@ import { requireElectron } from './core';
  * 返回 { ok, message, text? } 便于在 UI 中显示结果
  */
 export interface TestAiProviderResult {
-  ok: boolean;
-  message: string;
-  text?: string;
+  ok: boolean
+  message: string
+  text?: string
 }
 export function testAiProvider(input: { providerId: string }): Promise<TestAiProviderResult> {
-  const api = requireElectron();
-  return api.stt.testAi(input);
+  const api = requireElectron()
+  return api.stt.testAi(input)
 }
 
 /**
@@ -30,13 +30,13 @@ export function testAiProvider(input: { providerId: string }): Promise<TestAiPro
  * 成功则返回 base64 编码的 audio/mpeg dataURL，渲染层可播放预览。
  */
 export interface TestTtsResult {
-  ok: boolean;
-  message: string;
-  audioDataUrl?: string;
+  ok: boolean
+  message: string
+  audioDataUrl?: string
 }
 export function testTtsProvider(input: { providerId: string }): Promise<TestTtsResult> {
-  const api = requireElectron();
-  return api.voice.testTts(input);
+  const api = requireElectron()
+  return api.voice.testTts(input)
 }
 
 /**
@@ -45,17 +45,17 @@ export function testTtsProvider(input: { providerId: string }): Promise<TestTtsR
  * RecordIndicator 客户端会调用此接口触发 stopBackgroundVoice。
  */
 export function forceStopRecording(reason: string): Promise<{ ok: boolean; reason?: string }> {
-  const api = requireElectron();
-  return api.stt.forceStop(reason);
+  const api = requireElectron()
+  return api.stt.forceStop(reason)
 }
 
 /**
  * 麦克风设备信息（来自 navigator.mediaDevices.enumerateDevices）
  */
 export interface AudioDeviceInfo {
-  deviceId: string;
-  label: string;
-  groupId: string;
+  deviceId: string
+  label: string
+  groupId: string
 }
 
 /** Device discovery requests microphone access only after an explicit refresh. */
@@ -65,35 +65,38 @@ export async function enumerateInputDevices(requestAccess = false): Promise<Audi
     !navigator.mediaDevices ||
     typeof navigator.mediaDevices.enumerateDevices !== 'function'
   ) {
-    return [];
+    return []
   }
   try {
-    if (requestAccess) try {
-      const probeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      probeStream.getTracks().forEach((t) => t.stop());
-    } catch (err) {
-      console.warn('[voice] enumerateInputDevices 试探 getUserMedia 失败（可能未授权）:', err);
-    }
-    const devices = await navigator.mediaDevices.enumerateDevices();
+    if (requestAccess)
+      try {
+        const probeStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        probeStream.getTracks().forEach((t) => t.stop())
+      } catch (err) {
+        console.warn('[voice] enumerateInputDevices 试探 getUserMedia 失败（可能未授权）:', err)
+      }
+    const devices = await navigator.mediaDevices.enumerateDevices()
     return devices
       .filter((d) => d.kind === 'audioinput')
       .map((d) => ({
         deviceId: d.deviceId,
         label: d.label,
         groupId: d.groupId,
-      }));
+      }))
   } catch (err) {
-    console.error('[voice] enumerateDevices 失败:', err);
-    return [];
+    console.error('[voice] enumerateDevices 失败:', err)
+    return []
   }
 }
 
 /**
  * 上报麦克风设备列表到主进程（保存到 voice-config.inputDeviceList）
  */
-export function updateInputDeviceList(list: AudioDeviceInfo[]): Promise<{ ok: boolean; count?: number; reason?: string }> {
-  const api = requireElectron();
-  return api.stt.updateInputDeviceList(list);
+export function updateInputDeviceList(
+  list: AudioDeviceInfo[],
+): Promise<{ ok: boolean; count?: number; reason?: string }> {
+  const api = requireElectron()
+  return api.stt.updateInputDeviceList(list)
 }
 
 /* =====================================================================
@@ -102,9 +105,9 @@ export function updateInputDeviceList(list: AudioDeviceInfo[]): Promise<{ ok: bo
 
 /** 后台语音注入载荷（主进程→最近聚焦窗口渲染） */
 export interface VoiceInjectPayload {
-  text: string;
+  text: string
   /** 是否自动回车发送（仅前台注入场景生效） */
-  enterToSend: boolean;
+  enterToSend: boolean
 }
 
 /**
@@ -114,11 +117,9 @@ export interface VoiceInjectPayload {
  *   - 选择器由渲染层从 Profile（aiInputSelector/aiSendSelector）+ 平台预设读取
  * @returns 取消监听函数
  */
-export function onVoiceInjectAndSend(
-  callback: (payload: VoiceInjectPayload) => void,
-): () => void {
-  const api = requireElectron();
-  return api.onVoiceInjectAndSend(callback);
+export function onVoiceInjectAndSend(callback: (payload: VoiceInjectPayload) => void): () => void {
+  const api = requireElectron()
+  return api.onVoiceInjectAndSend(callback)
 }
 
 /* =====================================================================
@@ -127,14 +128,14 @@ export function onVoiceInjectAndSend(
 
 /** 读取语音配置（enterToSend 等全局设置） */
 export function getVoiceConfig(): Promise<VoiceConfig> {
-  const api = requireElectron();
-  return api.voice.getConfig();
+  const api = requireElectron()
+  return api.voice.getConfig()
 }
 
 /** 更新语音配置（合并 patch） */
 export function setVoiceConfig(patch: Partial<VoiceConfig>): Promise<VoiceConfig> {
-  const api = requireElectron();
-  return api.voice.setConfig(patch);
+  const api = requireElectron()
+  return api.voice.setConfig(patch)
 }
 
 /**
@@ -142,16 +143,16 @@ export function setVoiceConfig(patch: Partial<VoiceConfig>): Promise<VoiceConfig
  * 主进程显示独立预览窗并启动 STT。
  */
 export function triggerVoiceStart(): Promise<void> {
-  const api = requireElectron();
-  return api.voice.triggerStart();
+  const api = requireElectron()
+  return api.voice.triggerStart()
 }
 
 /**
  * 停止后台语音录音并注入发送（主进程识别完成后注入最近聚焦窗口的 AI 输入框）。
  */
 export function triggerVoiceStop(): Promise<void> {
-  const api = requireElectron();
-  return api.voice.triggerStop();
+  const api = requireElectron()
+  return api.voice.triggerStop()
 }
 
 /* =====================================================================
@@ -161,19 +162,18 @@ export function triggerVoiceStop(): Promise<void> {
 
 /** 监听开始录音指令（主进程→预览窗渲染） */
 export function onVoiceRecordStart(callback: () => void): () => void {
-  const api = requireElectron();
-  return api.onVoiceRecordStart(callback);
+  const api = requireElectron()
+  return api.onVoiceRecordStart(callback)
 }
 
 /** 监听停止录音指令（主进程→预览窗渲染） */
 export function onVoiceRecordStop(callback: () => void): () => void {
-  const api = requireElectron();
-  return api.onVoiceRecordStop(callback);
+  const api = requireElectron()
+  return api.onVoiceRecordStop(callback)
 }
 
 /** 回传 PCM 数据到主进程（预览窗渲染→主进程） */
 export function sendVoiceRecordData(data: number[]): void {
-  const api = requireElectron();
-  api.sendVoiceRecordData(data);
+  const api = requireElectron()
+  api.sendVoiceRecordData(data)
 }
-

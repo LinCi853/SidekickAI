@@ -5,14 +5,23 @@ import path from 'node:path'
 import AdmZip from 'adm-zip'
 import Database from 'better-sqlite3'
 import { exportBackup, type ExportAdapter } from '../../packages/backup-core/export.js'
-import { exportTreeDigest, writePartialArchive, writeStrictArchive } from '../../packages/backup-core/files.js'
+import {
+  exportTreeDigest,
+  writePartialArchive,
+  writeStrictArchive,
+} from '../../packages/backup-core/files.js'
 import { validateBackupArchive } from '../../packages/backup-core/format.js'
 import { verifyQuiescentSnapshot } from './backup/verify.js'
 
-vi.mock('electron', () => ({ app: { isReady: () => true, getPath: () => os.tmpdir() }, session: {} }))
+vi.mock('electron', () => ({
+  app: { isReady: () => true, getPath: () => os.tmpdir() },
+  session: {},
+}))
 const roots: string[] = []
 const options = { basicData: true, cookies: false, indexedDB: false, cache: false }
-afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }) })
+afterEach(() => {
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
+})
 
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-snapshot-contract-'))
@@ -26,11 +35,20 @@ function fixture() {
   database.close()
   const target = path.join(directory, 'backup.zip')
   const adapter: ExportAdapter = {
-    edition: 'community', root: () => source, version: () => 'fixture', deviceId: () => 'fixture',
-    closeDatabases: async () => {}, validate: () => {}, verifyPayload: validateBackupArchive,
-    collect: async () => [{ category: 'basicData', sourcePath: settings, archivePath: 'settings.db' }],
-    treeDigest: exportTreeDigest, verifySources: verifyQuiescentSnapshot,
-    writeStrict: writeStrictArchive, writeLive: writePartialArchive,
+    edition: 'community',
+    root: () => source,
+    version: () => 'fixture',
+    deviceId: () => 'fixture',
+    closeDatabases: async () => {},
+    validate: () => {},
+    verifyPayload: validateBackupArchive,
+    collect: async () => [
+      { category: 'basicData', sourcePath: settings, archivePath: 'settings.db' },
+    ],
+    treeDigest: exportTreeDigest,
+    verifySources: verifyQuiescentSnapshot,
+    writeStrict: writeStrictArchive,
+    writeLive: writePartialArchive,
   }
   return { directory, source, settings, target, adapter }
 }
@@ -47,7 +65,10 @@ describe('snapshot recovery boundaries', () => {
 
   it('marks source disappearance during verification as recoverable', async () => {
     const entry = fixture()
-    entry.adapter.verifySources = (...args) => { fs.unlinkSync(entry.settings); verifyQuiescentSnapshot(...args) }
+    entry.adapter.verifySources = (...args) => {
+      fs.unlinkSync(entry.settings)
+      verifyQuiescentSnapshot(...args)
+    }
     const result = await exportBackup(entry.adapter, entry.target, options)
     expect(result.retryable).toBe(true)
     expect(fs.existsSync(entry.target)).toBe(false)
@@ -55,7 +76,10 @@ describe('snapshot recovery boundaries', () => {
 
   it('recaptures a changed source when the intermediate payload cannot be validated', async () => {
     const entry = fixture()
-    entry.adapter.validateSnapshot = () => { fs.writeFileSync(entry.settings, 'concurrent save'); throw new Error('Intermediate database is inconsistent') }
+    entry.adapter.validateSnapshot = () => {
+      fs.writeFileSync(entry.settings, 'concurrent save')
+      throw new Error('Intermediate database is inconsistent')
+    }
     const result = await exportBackup(entry.adapter, entry.target, options)
     expect(result.retryable).toBe(true)
     expect(fs.readFileSync(entry.settings, 'utf8')).toBe('concurrent save')
@@ -63,28 +87,49 @@ describe('snapshot recovery boundaries', () => {
 
   it('does not restart for a destination access failure', async () => {
     const entry = fixture()
-    const result = await exportBackup(entry.adapter, path.join(entry.target, 'missing-directory', 'backup.zip'), options)
+    const result = await exportBackup(
+      entry.adapter,
+      path.join(entry.target, 'missing-directory', 'backup.zip'),
+      options,
+    )
     expect(result.success).toBe(false)
     expect(result.retryable).toBeUndefined()
   })
 
   it('does not mistake stable corrupt data for a concurrent writer', async () => {
     const entry = fixture()
-    entry.adapter.validateSnapshot = () => { throw new Error('Stored database is corrupt') }
+    entry.adapter.validateSnapshot = () => {
+      throw new Error('Stored database is corrupt')
+    }
     const result = await exportBackup(entry.adapter, entry.target, options)
     expect(result.success).toBe(false)
     expect(result.retryable).toBeUndefined()
   })
 
-  it.each([false, true])('retains an existing destination when saved bytes fail validation, encrypted=%s', async encrypted => {
-    const entry = fixture()
-    await exportBackup(entry.adapter, entry.target, options)
-    const zip = new AdmZip(entry.target)
-    fs.writeFileSync(entry.target, 'previous backup')
-    const corruptWriter = (_source: string, target: string) => fs.writeFileSync(target, 'corrupt output')
-    if (!encrypted) vi.spyOn(zip, 'writeZip').mockImplementation(target => fs.writeFileSync(target!, 'corrupt output'))
-    expect(() => writePartialArchive(entry.target, zip, encrypted ? { password: 'fixture-secret' } : undefined, 'fixture', corruptWriter)).toThrow()
-    expect(fs.readFileSync(entry.target, 'utf8')).toBe('previous backup')
-    expect(fs.readdirSync(entry.directory).sort()).toEqual(['backup.zip', 'source'])
-  })
+  it.each([false, true])(
+    'retains an existing destination when saved bytes fail validation, encrypted=%s',
+    async (encrypted) => {
+      const entry = fixture()
+      await exportBackup(entry.adapter, entry.target, options)
+      const zip = new AdmZip(entry.target)
+      fs.writeFileSync(entry.target, 'previous backup')
+      const corruptWriter = (_source: string, target: string) =>
+        fs.writeFileSync(target, 'corrupt output')
+      if (!encrypted)
+        vi.spyOn(zip, 'writeZip').mockImplementation((target) =>
+          fs.writeFileSync(target!, 'corrupt output'),
+        )
+      expect(() =>
+        writePartialArchive(
+          entry.target,
+          zip,
+          encrypted ? { password: 'fixture-secret' } : undefined,
+          'fixture',
+          corruptWriter,
+        ),
+      ).toThrow()
+      expect(fs.readFileSync(entry.target, 'utf8')).toBe('previous backup')
+      expect(fs.readdirSync(entry.directory).sort()).toEqual(['backup.zip', 'source'])
+    },
+  )
 })

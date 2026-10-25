@@ -22,7 +22,10 @@ export interface BuiltinShortcutPorts {
   toggleAdvancedPanelWindow: () => void
 }
 
-type BuiltinShortcutCallbacks = Pick<Record<HotkeyAction, () => void>, 'toggleMainWindow' | 'toggleDetachedWindows'>
+type BuiltinShortcutCallbacks = Pick<
+  Record<HotkeyAction, () => void>,
+  'toggleMainWindow' | 'toggleDetachedWindows'
+>
 
 export function createBuiltinShortcuts(ports: BuiltinShortcutPorts): BuiltinShortcutCallbacks {
   // 连续 Alt+Space 触发计数（防误触恢复默认窗口位置），随回调实例保存在闭包内

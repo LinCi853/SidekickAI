@@ -24,7 +24,9 @@ export interface SttAPI {
    */
   forceStop: (reason: string) => Promise<{ ok: boolean; reason?: string }>
   /** 上报麦克风设备列表到主进程（保存到 voice-config.inputDeviceList） */
-  updateInputDeviceList: (list: unknown[]) => Promise<{ ok: boolean; count?: number; reason?: string }>
+  updateInputDeviceList: (
+    list: unknown[],
+  ) => Promise<{ ok: boolean; count?: number; reason?: string }>
   /** 请求渲染层重新枚举设备 */
   refreshInputDevices: () => Promise<{ ok: boolean }>
 }
@@ -134,7 +136,9 @@ export interface VoiceConfigAPI {
 // ── ElectronAPI 根级语音/STT 成员（就近归类） ──
 
 /** 主→最近聚焦窗口渲染：后台识别文本到达，注入 AI 输入框；enterToSend 控制是否自动发送 */
-export type OnVoiceInjectAndSendCallback = (cb: (payload: { text: string; enterToSend: boolean }) => void) => () => void
+export type OnVoiceInjectAndSendCallback = (
+  cb: (payload: { text: string; enterToSend: boolean }) => void,
+) => () => void
 
 /** 主→预览窗渲染：更新文本/状态 */
 export type OnPreviewUpdateCallback = (

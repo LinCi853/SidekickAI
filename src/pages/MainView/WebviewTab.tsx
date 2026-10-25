@@ -2,17 +2,17 @@
 // dom-ready 注入 → useWebviewInjection；事件监听 → useWebviewLifecycleEvents；
 // 弹窗转发 → usePopupForwarding；弹窗白名单 → usePopupWhitelist；
 // Enter 发送标志 → useEnterToSendFlag；remount/UA/抓取 → useWebviewRemount/useWebviewUa/useConversationScrape。
-import { useEffect, useMemo, useRef } from 'react';
-import { sanitizeUrl, type WebviewElement } from '../../lib/webview';
-import type { Profile } from '../../lib/electron-api';
-import { useWebviewRemount } from './hooks/useWebviewRemount';
-import { useWebviewUa } from './hooks/useWebviewUa';
-import { useConversationScrape } from './hooks/useConversationScrape';
-import { useWebviewInjection } from './hooks/useWebviewInjection';
-import { useWebviewLifecycleEvents } from './hooks/useWebviewLifecycleEvents';
-import { usePopupForwarding } from './hooks/usePopupForwarding';
-import { usePopupWhitelist } from './hooks/usePopupWhitelist';
-import { useEnterToSendFlag } from './hooks/useEnterToSendFlag';
+import { useEffect, useMemo, useRef } from 'react'
+import { sanitizeUrl, type WebviewElement } from '../../lib/webview'
+import type { Profile } from '../../lib/electron-api'
+import { useWebviewRemount } from './hooks/useWebviewRemount'
+import { useWebviewUa } from './hooks/useWebviewUa'
+import { useConversationScrape } from './hooks/useConversationScrape'
+import { useWebviewInjection } from './hooks/useWebviewInjection'
+import { useWebviewLifecycleEvents } from './hooks/useWebviewLifecycleEvents'
+import { usePopupForwarding } from './hooks/usePopupForwarding'
+import { usePopupWhitelist } from './hooks/usePopupWhitelist'
+import { useEnterToSendFlag } from './hooks/useEnterToSendFlag'
 
 /* =====================================================================
    WebviewTab —— 单个标签的 webview（自管理指纹注入与导航）
@@ -34,30 +34,41 @@ export function WebviewTab({
   onDomReadyChange,
   onProcessGone,
 }: {
-  tab: { id: string; profileId: string; url?: string; title?: string; autoMobile?: boolean; originalDevicePreset?: string };
-  profile: Profile;
-  active: boolean;
-  isNarrow: boolean;
-  desktopPresetId: string;
-  mobilePresetId: string;
-  inputSelector?: string | null;
-  sendSelector?: string | null;
-  enterToSend?: boolean;
+  tab: {
+    id: string
+    profileId: string
+    url?: string
+    title?: string
+    autoMobile?: boolean
+    originalDevicePreset?: string
+  }
+  profile: Profile
+  active: boolean
+  isNarrow: boolean
+  desktopPresetId: string
+  mobilePresetId: string
+  inputSelector?: string | null
+  sendSelector?: string | null
+  enterToSend?: boolean
   /** webview 导航能力变化回调（dom-ready / 导航后上报 canGoBack/canGoForward） */
-  onNavigationChange?: (canGoBack: boolean, canGoForward: boolean) => void;
+  onNavigationChange?: (canGoBack: boolean, canGoForward: boolean) => void
   /** webview dom-ready 状态变化回调（供父组件判断 reload/loadURL 是否安全） */
-  onDomReadyChange?: (isReady: boolean) => void;
+  onDomReadyChange?: (isReady: boolean) => void
   /** webview guest 进程崩溃/异常退出回调（供父组件触发恢复或提示用户） */
-  onProcessGone?: (reason: string) => void;
+  onProcessGone?: (reason: string) => void
 }) {
-  const ref = useRef<WebviewElement | null>(null);
+  const ref = useRef<WebviewElement | null>(null)
 
   // 导航能力回调 ref（避免 webview setup effect 依赖 onNavigationChange 导致重复挂载）
-  const onNavigationChangeRef = useRef(onNavigationChange);
-  useEffect(() => { onNavigationChangeRef.current = onNavigationChange; });
+  const onNavigationChangeRef = useRef(onNavigationChange)
+  useEffect(() => {
+    onNavigationChangeRef.current = onNavigationChange
+  })
   // 进程崩溃回调 ref（同上，避免重复挂载）
-  const onProcessGoneRef = useRef(onProcessGone);
-  useEffect(() => { onProcessGoneRef.current = onProcessGone; });
+  const onProcessGoneRef = useRef(onProcessGone)
+  useEffect(() => {
+    onProcessGoneRef.current = onProcessGone
+  })
 
   // remount 计数器 / dom-ready 状态 / 延缓 reload：统一由此 hook 管理
   const {
@@ -67,18 +78,18 @@ export function WebviewTab({
     triggerRemount,
     resetRemountFailState,
     scheduleReload,
-  } = useWebviewRemount({ tab, profile, onDomReadyChange });
+  } = useWebviewRemount({ tab, profile, onDomReadyChange })
 
   // enterToSend 运行时标志（供 dom-ready 闭包读取）+ webview 标志位更新
   useEnterToSendFlag({
     webviewRef: ref,
     domReadyRef,
     enterToSend,
-  });
+  })
 
   // 登录痕迹：已记录过登录的 URL 集合、上次检测登录的 URL（注入与抓取共用）
-  const loggedLoginUrlsRef = useRef<Set<string>>(new Set());
-  const lastLoginCheckedUrlRef = useRef<string>('');
+  const loggedLoginUrlsRef = useRef<Set<string>>(new Set())
+  const lastLoginCheckedUrlRef = useRef<string>('')
 
   // dom-ready：注入指纹 / viewport / 统一注入 / 登录检测 / Enter 发送
   useWebviewInjection({
@@ -94,7 +105,7 @@ export function WebviewTab({
     loggedLoginUrlsRef,
     lastLoginCheckedUrlRef,
     remountKey,
-  });
+  })
 
   // 导航 / 崩溃 / 加载失败 / 长按 Tab / fatal-failure 事件监听
   useWebviewLifecycleEvents({
@@ -105,7 +116,7 @@ export function WebviewTab({
     onNavigationChangeRef,
     onProcessGoneRef,
     remountKey,
-  });
+  })
 
   // profile UA / 设备预设变化时刷新 webview
   useWebviewUa({
@@ -117,13 +128,13 @@ export function WebviewTab({
     domReadyRef,
     scheduleReload,
     remountKey,
-  });
+  })
 
   // 主进程转发的 webview 弹窗 URL：页面内导航
-  usePopupForwarding({ webviewRef: ref, tabId: tab.id, remountKey });
+  usePopupForwarding({ webviewRef: ref, tabId: tab.id, remountKey })
 
   // 弹窗白名单确认
-  usePopupWhitelist({ profileId: tab.profileId });
+  usePopupWhitelist({ profileId: tab.profileId })
 
   // 定期抓取网页对话内容并持久化到 SQLite（仅 AI 平台 Profile）
   useConversationScrape({
@@ -134,7 +145,7 @@ export function WebviewTab({
     domReadyRef,
     loggedLoginUrlsRef,
     lastLoginCheckedUrlRef,
-  });
+  })
 
   // webview 的 src 仅在挂载时设置一次（基于 tab.id / remountKey），
   // 不随 tab.url 变化重写。否则 SPA 内部 in-page 导航触发 updateTabUrl →
@@ -147,9 +158,9 @@ export function WebviewTab({
     // 仅在 tab.id 或 remountKey 变化（即 webview 实际销毁重建）时重算
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tab.id, remountKey],
-  );
+  )
 
-  if (!initialSrc) return null;
+  if (!initialSrc) return null
 
   return (
     <webview
@@ -174,5 +185,5 @@ export function WebviewTab({
         height: '100%',
       }}
     />
-  );
+  )
 }

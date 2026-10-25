@@ -1,26 +1,26 @@
-import { type Dispatch, type SetStateAction } from 'react';
-import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api';
+import { type Dispatch, type SetStateAction } from 'react'
+import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api'
 import {
   startHotkeyRecording,
   stopHotkeyRecording,
   onHotkeyRecordingResult,
   onHotkeyRecordingPartial,
-} from '../../../lib/electron-api';
-import Button from '../../ui/Button';
-import { useModuleStore } from '../../../store/useModuleStore';
-import { useShallow } from 'zustand/react/shallow';
-import HotkeyRecorder from '../../ui/HotkeyRecorder';
-import { SectionTitle } from '../../ui';
+} from '../../../lib/electron-api'
+import Button from '../../ui/Button'
+import { useModuleStore } from '../../../store/useModuleStore'
+import { useShallow } from 'zustand/react/shallow'
+import HotkeyRecorder from '../../ui/HotkeyRecorder'
+import { SectionTitle } from '../../ui'
 
 interface HotkeySectionProps {
-  hotkeys: HotkeyConfig[];
-  drafts: Record<string, string>;
-  savingAction: HotkeyAction | null;
-  feedback: Record<string, { type: 'success' | 'error'; msg: string } | null>;
-  setDrafts: Dispatch<SetStateAction<Record<string, string>>>;
-  handleSaveHotkey: (action: HotkeyAction) => Promise<void>;
-  onToggleEnabled?: (action: HotkeyAction, enabled: boolean) => Promise<void>;
-  onOpenShortcuts?: () => void;
+  hotkeys: HotkeyConfig[]
+  drafts: Record<string, string>
+  savingAction: HotkeyAction | null
+  feedback: Record<string, { type: 'success' | 'error'; msg: string } | null>
+  setDrafts: Dispatch<SetStateAction<Record<string, string>>>
+  handleSaveHotkey: (action: HotkeyAction) => Promise<void>
+  onToggleEnabled?: (action: HotkeyAction, enabled: boolean) => Promise<void>
+  onOpenShortcuts?: () => void
 }
 
 /**
@@ -44,44 +44,55 @@ export default function HotkeySection({
   // zustand 5 下 selector 每次返回新数组会触发无限重渲染（React #185），必须用 useShallow 缓存
   const enabledModuleIds = useModuleStore(
     useShallow((s) => s.modules.filter((m) => m.enabled).map((m) => m.id)),
-  );
+  )
   const advancedPanelAvailable =
     enabledModuleIds.includes('custom-chat') ||
     enabledModuleIds.includes('whiteboard') ||
-    enabledModuleIds.includes('notes');
+    enabledModuleIds.includes('notes')
   const visibleHotkeys = hotkeys.filter((h) => {
-    if (h.action === 'backgroundVoice' || h.action === 'toggleVoice') return enabledModuleIds.includes('voice');
-    if (h.action === 'toggleAiAssets') return enabledModuleIds.includes('prompt-library');
-    if (h.action === 'toggleDetachedWindows') return advancedPanelAvailable;
-    return true;
-  });
+    if (h.action === 'backgroundVoice' || h.action === 'toggleVoice')
+      return enabledModuleIds.includes('voice')
+    if (h.action === 'toggleAiAssets') return enabledModuleIds.includes('prompt-library')
+    if (h.action === 'toggleDetachedWindows') return advancedPanelAvailable
+    return true
+  })
   return (
     <section data-name="settings.hotkey.section">
       <SectionTitle
-        actions={onOpenShortcuts && (
-          <Button
-            variant="link"
-            className="hotkey-shortcuts-link"
-            onClick={onOpenShortcuts}
-            title="查看全部快捷键"
-            data-name="settings.hotkey.shortcuts-link-button"
-          >
-            查看全部
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-name="settings.hotkey.shortcuts-link-icon">
-              <path d="M7 17L17 7" />
-              <path d="M7 7h10v10" />
-            </svg>
-          </Button>
-        )}
+        actions={
+          onOpenShortcuts && (
+            <Button
+              variant="link"
+              className="hotkey-shortcuts-link"
+              onClick={onOpenShortcuts}
+              title="查看全部快捷键"
+              data-name="settings.hotkey.shortcuts-link-button"
+            >
+              查看全部
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                data-name="settings.hotkey.shortcuts-link-icon"
+              >
+                <path d="M7 17L17 7" />
+                <path d="M7 7h10v10" />
+              </svg>
+            </Button>
+          )
+        }
       >
         全局热键
       </SectionTitle>
       <div className="hotkey-list" data-name="settings.hotkey.hotkey-list">
         {visibleHotkeys.map((h, idx) => {
-          const draft = drafts[h.action] ?? '';
-          const fb = feedback[h.action];
-          const dirty = draft.trim() !== h.accelerator;
-          const isTestFeature = h.action === 'backgroundVoice';
+          const draft = drafts[h.action] ?? ''
+          const fb = feedback[h.action]
+          const dirty = draft.trim() !== h.accelerator
+          const isTestFeature = h.action === 'backgroundVoice'
           return (
             <div
               key={h.action}
@@ -90,8 +101,14 @@ export default function HotkeySection({
               data-index={idx + 1}
               data-id={h.action}
             >
-              <div className="hotkey-item-header" data-name={`settings.hotkey.hotkey-item-${idx + 1}-header`}>
-                <span className="hotkey-item-name" data-name={`settings.hotkey.hotkey-item-${idx + 1}-name`}>
+              <div
+                className="hotkey-item-header"
+                data-name={`settings.hotkey.hotkey-item-${idx + 1}-header`}
+              >
+                <span
+                  className="hotkey-item-name"
+                  data-name={`settings.hotkey.hotkey-item-${idx + 1}-name`}
+                >
                   {h.label}
                   {isTestFeature && (
                     <span
@@ -112,14 +129,20 @@ export default function HotkeySection({
                     checked={h.enabled}
                     disabled={h.action === 'toggleAiAssets' && !h.accelerator}
                     onChange={(e) => {
-                      void onToggleEnabled?.(h.action, e.target.checked);
+                      void onToggleEnabled?.(h.action, e.target.checked)
                     }}
                     data-name={`settings.hotkey.hotkey-item-${idx + 1}-toggle-input`}
                   />
-                  <span className="toggle-track" data-name={`settings.hotkey.hotkey-item-${idx + 1}-toggle-track`} />
+                  <span
+                    className="toggle-track"
+                    data-name={`settings.hotkey.hotkey-item-${idx + 1}-toggle-track`}
+                  />
                 </label>
               </div>
-              <div className="hotkey-input-row" data-name={`settings.hotkey.hotkey-item-${idx + 1}-input-row`}>
+              <div
+                className="hotkey-input-row"
+                data-name={`settings.hotkey.hotkey-item-${idx + 1}-input-row`}
+              >
                 <HotkeyRecorder
                   value={draft}
                   placeholder={h.accelerator || '未绑定'}
@@ -148,16 +171,27 @@ export default function HotkeySection({
               {/* 系统注册失败但钩子兜底可用：仅在主进程给出原因时降级警告
                   （Alt+Space 等系统保留键走键盘监听是预期行为，registrationReason 为空则不提示） */}
               {h.enabled && h.registration === 'fallback' && h.registrationReason && (
-                <div role="status" className="hotkey-feedback feedback-text warn">{h.registrationReason}</div>
+                <div role="status" className="hotkey-feedback feedback-text warn">
+                  {h.registrationReason}
+                </div>
               )}
-              {h.enabled && (h.registration === 'conflict' || h.registration === 'unavailable') && <div role="status" className="hotkey-feedback feedback-text fail">{h.registrationReason ?? '快捷键暂不可用，请修改组合键或重新启用。'}</div>}
+              {h.enabled && (h.registration === 'conflict' || h.registration === 'unavailable') && (
+                <div role="status" className="hotkey-feedback feedback-text fail">
+                  {h.registrationReason ?? '快捷键暂不可用，请修改组合键或重新启用。'}
+                </div>
+              )}
               {fb && (
-                <div className={`hotkey-feedback feedback-text ${fb.type === 'success' ? 'ok' : 'fail'}`} data-name={`settings.hotkey.hotkey-item-${idx + 1}-feedback`}>{fb.msg}</div>
+                <div
+                  className={`hotkey-feedback feedback-text ${fb.type === 'success' ? 'ok' : 'fail'}`}
+                  data-name={`settings.hotkey.hotkey-item-${idx + 1}-feedback`}
+                >
+                  {fb.msg}
+                </div>
               )}
             </div>
-          );
+          )
         })}
       </div>
     </section>
-  );
+  )
 }

@@ -3,27 +3,27 @@
    搜索框 + 标签筛选 + 笔记列表（置顶/普通）
    ===================================================================== */
 
-import type { Note } from '../../../electron/shared/types.js';
-import { EmptyState } from '../../components/ui';
-import IconButton from '../../components/ui/IconButton.js';
-import SidebarShell from '../../components/SidebarShell.js';
+import type { Note } from '../../../electron/shared/types.js'
+import { EmptyState } from '../../components/ui'
+import IconButton from '../../components/ui/IconButton.js'
+import SidebarShell from '../../components/SidebarShell.js'
 
 interface NotesSidebarProps {
-  notes: Note[];
-  activeId: string | null;
-  allTags: string[];
-  searchKeyword: string;
-  filterTag: string | undefined;
-  onSearchChange: (keyword: string) => void;
-  onTagFilter: (tag: string | undefined) => void;
-  onSelect: (note: Note) => void;
-  onCreate: () => void;
-  onDelete: (id: string) => void;
-  width: number;
-  collapsed: boolean;
-  onResize: (w: number) => void;
-  onToggleCollapse: () => void;
-  onOpenSettings?: () => void;
+  notes: Note[]
+  activeId: string | null
+  allTags: string[]
+  searchKeyword: string
+  filterTag: string | undefined
+  onSearchChange: (keyword: string) => void
+  onTagFilter: (tag: string | undefined) => void
+  onSelect: (note: Note) => void
+  onCreate: () => void
+  onDelete: (id: string) => void
+  width: number
+  collapsed: boolean
+  onResize: (w: number) => void
+  onToggleCollapse: () => void
+  onOpenSettings?: () => void
 }
 
 export default function NotesSidebar({
@@ -43,17 +43,17 @@ export default function NotesSidebar({
   onToggleCollapse,
   onOpenSettings,
 }: NotesSidebarProps) {
-  const pinnedNotes = notes.filter((n) => n.pinned);
-  const normalNotes = notes.filter((n) => !n.pinned);
+  const pinnedNotes = notes.filter((n) => n.pinned)
+  const normalNotes = notes.filter((n) => !n.pinned)
 
   const formatTime = (ts: number) => {
-    const d = new Date(ts);
-    const now = new Date();
+    const d = new Date(ts)
+    const now = new Date()
     if (d.toDateString() === now.toDateString()) {
-      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     }
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  };
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  }
 
   const renderNoteItem = (note: Note, idx: number) => (
     <div
@@ -65,17 +65,45 @@ export default function NotesSidebar({
       data-id={note.id}
       data-pinned={note.pinned ? 'true' : 'false'}
     >
-      <div className="notes-sidebar-item-main" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-main`}>
-        <div className="notes-sidebar-item-title" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-title`}>
+      <div
+        className="notes-sidebar-item-main"
+        data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-main`}
+      >
+        <div
+          className="notes-sidebar-item-title"
+          data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-title`}
+        >
           {note.pinned && <span className="notes-pin-icon">★</span>}
-          {note.title || note.content.split('\n').find((l) => l.trim())?.slice(0, 30) || '空白笔记'}
+          {note.title ||
+            note.content
+              .split('\n')
+              .find((l) => l.trim())
+              ?.slice(0, 30) ||
+            '空白笔记'}
         </div>
-        <div className="notes-sidebar-item-meta" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-meta`}>
-          <span className="notes-sidebar-item-time" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-time`}>{formatTime(note.updatedAt)}</span>
+        <div
+          className="notes-sidebar-item-meta"
+          data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-meta`}
+        >
+          <span
+            className="notes-sidebar-item-time"
+            data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-time`}
+          >
+            {formatTime(note.updatedAt)}
+          </span>
           {note.tags.length > 0 && (
-            <span className="notes-sidebar-item-tags" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-tags`}>
+            <span
+              className="notes-sidebar-item-tags"
+              data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-tags`}
+            >
               {note.tags.map((t) => (
-                <span key={t} className="notes-tag-chip" data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-tag-${t}`}>{t}</span>
+                <span
+                  key={t}
+                  className="notes-tag-chip"
+                  data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-tag-${t}`}
+                >
+                  {t}
+                </span>
               ))}
             </span>
           )}
@@ -83,7 +111,10 @@ export default function NotesSidebar({
       </div>
       <button
         className="notes-sidebar-item-delete sidebar-list-item-delete"
-        onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete(note.id)
+        }}
         title="删除"
         aria-label="删除笔记"
         data-name={`advanced-panel.notes-sidebar-item-${idx + 1}-delete-button`}
@@ -91,14 +122,20 @@ export default function NotesSidebar({
         ×
       </button>
     </div>
-  );
+  )
 
   const collapsedItems = notes.map((n) => ({
     id: n.id,
-    label: n.title || n.content.split('\n').find((l) => l.trim())?.slice(0, 20) || '空白笔记',
+    label:
+      n.title ||
+      n.content
+        .split('\n')
+        .find((l) => l.trim())
+        ?.slice(0, 20) ||
+      '空白笔记',
     active: n.id === activeId,
     onClick: () => onSelect(n),
-  }));
+  }))
 
   return (
     <SidebarShell
@@ -129,7 +166,13 @@ export default function NotesSidebar({
             aria-label="新建笔记"
             data-name="advanced-panel.notes-sidebar-create-button"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -169,17 +212,29 @@ export default function NotesSidebar({
         )}
         {pinnedNotes.length > 0 && (
           <>
-            <div className="notes-sidebar-section" data-name="advanced-panel.notes-sidebar-section-pinned">置顶</div>
+            <div
+              className="notes-sidebar-section"
+              data-name="advanced-panel.notes-sidebar-section-pinned"
+            >
+              置顶
+            </div>
             {pinnedNotes.map((n, i) => renderNoteItem(n, i))}
           </>
         )}
         {normalNotes.length > 0 && (
           <>
-            {pinnedNotes.length > 0 && <div className="notes-sidebar-section" data-name="advanced-panel.notes-sidebar-section-all">全部</div>}
+            {pinnedNotes.length > 0 && (
+              <div
+                className="notes-sidebar-section"
+                data-name="advanced-panel.notes-sidebar-section-all"
+              >
+                全部
+              </div>
+            )}
             {normalNotes.map((n, i) => renderNoteItem(n, pinnedNotes.length + i))}
           </>
         )}
       </div>
     </SidebarShell>
-  );
+  )
 }

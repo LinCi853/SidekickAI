@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { updateAppSettings } from '../../../lib/electron-api';
-import Toggle from '../../ui/Toggle';
-import { SectionTitle, FormRow } from '../../ui';
-import { useSettingsDraft } from '../../../hooks/useSettingsData';
-import { useToast } from '../../../hooks/useToast';
+import { useState } from 'react'
+import { updateAppSettings } from '../../../lib/electron-api'
+import Toggle from '../../ui/Toggle'
+import { SectionTitle, FormRow } from '../../ui'
+import { useSettingsDraft } from '../../../hooks/useSettingsData'
+import { useToast } from '../../../hooks/useToast'
 
 /* =====================================================================
    CookieSection —— Cookie 弹窗自动处理设置（需求 7）
@@ -15,118 +15,118 @@ import { useToast } from '../../../hooks/useToast';
    ===================================================================== */
 
 export default function CookieSection() {
-  const { draft, setDraft } = useSettingsDraft();
-  const { toast: feedbackMsg, showToast } = useToast(2500);
-  const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
-  const [whitelistDraft, setWhitelistDraft] = useState('');
-  const [blacklistDraft, setBlacklistDraft] = useState('');
+  const { draft, setDraft } = useSettingsDraft()
+  const { toast: feedbackMsg, showToast } = useToast(2500)
+  const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success')
+  const [whitelistDraft, setWhitelistDraft] = useState('')
+  const [blacklistDraft, setBlacklistDraft] = useState('')
 
   // 从草稿派生设置值
-  const enabled = draft?.cookieHandlerEnabled ?? true;
-  const whitelist = draft?.cookieWhitelist ?? [];
-  const blacklist = draft?.cookieBlacklist ?? [];
-  const cooldownMs = draft?.cookiePopupCooldownMs ?? 60000;
+  const enabled = draft?.cookieHandlerEnabled ?? true
+  const whitelist = draft?.cookieWhitelist ?? []
+  const blacklist = draft?.cookieBlacklist ?? []
+  const cooldownMs = draft?.cookiePopupCooldownMs ?? 60000
 
   const showFeedback = (type: 'success' | 'error', msg: string) => {
-    setFeedbackType(type);
-    showToast(msg);
-  };
+    setFeedbackType(type)
+    showToast(msg)
+  }
 
   const handleToggleEnabled = async (next: boolean) => {
-    const prev = enabled;
-    setDraft({ cookieHandlerEnabled: next });
+    const prev = enabled
+    setDraft({ cookieHandlerEnabled: next })
     try {
-      await updateAppSettings({ cookieHandlerEnabled: next });
+      await updateAppSettings({ cookieHandlerEnabled: next })
     } catch (e) {
-      console.error('[CookieSection] 更新总开关失败:', e);
-      setDraft({ cookieHandlerEnabled: prev });
+      console.error('[CookieSection] 更新总开关失败:', e)
+      setDraft({ cookieHandlerEnabled: prev })
     }
-  };
+  }
 
   /** 规范化域名输入：去除协议、路径、空白，转小写 */
   const normalizeDomain = (raw: string): string => {
-    let s = raw.trim().toLowerCase();
+    let s = raw.trim().toLowerCase()
     // 去除协议前缀
-    s = s.replace(/^https?:\/\//, '');
+    s = s.replace(/^https?:\/\//, '')
     // 去除路径部分
-    const slashIdx = s.indexOf('/');
-    if (slashIdx !== -1) s = s.slice(0, slashIdx);
-    return s;
-  };
+    const slashIdx = s.indexOf('/')
+    if (slashIdx !== -1) s = s.slice(0, slashIdx)
+    return s
+  }
 
   const handleAddWhitelist = async () => {
-    const domain = normalizeDomain(whitelistDraft);
-    if (!domain) return;
+    const domain = normalizeDomain(whitelistDraft)
+    if (!domain) return
     if (whitelist.includes(domain)) {
-      showFeedback('error', '该域名已在白名单中');
-      return;
+      showFeedback('error', '该域名已在白名单中')
+      return
     }
-    const next = [...whitelist, domain];
-    setDraft({ cookieWhitelist: next });
-    setWhitelistDraft('');
+    const next = [...whitelist, domain]
+    setDraft({ cookieWhitelist: next })
+    setWhitelistDraft('')
     try {
-      await updateAppSettings({ cookieWhitelist: next });
-      showFeedback('success', `已添加 ${domain}`);
+      await updateAppSettings({ cookieWhitelist: next })
+      showFeedback('success', `已添加 ${domain}`)
     } catch (e) {
-      console.error('[CookieSection] 添加白名单失败:', e);
-      setDraft({ cookieWhitelist: whitelist });
-      showFeedback('error', '保存失败');
+      console.error('[CookieSection] 添加白名单失败:', e)
+      setDraft({ cookieWhitelist: whitelist })
+      showFeedback('error', '保存失败')
     }
-  };
+  }
 
   const handleRemoveWhitelist = async (domain: string) => {
-    const next = whitelist.filter((d) => d !== domain);
-    setDraft({ cookieWhitelist: next });
+    const next = whitelist.filter((d) => d !== domain)
+    setDraft({ cookieWhitelist: next })
     try {
-      await updateAppSettings({ cookieWhitelist: next });
+      await updateAppSettings({ cookieWhitelist: next })
     } catch (e) {
-      console.error('[CookieSection] 删除白名单失败:', e);
-      setDraft({ cookieWhitelist: whitelist });
+      console.error('[CookieSection] 删除白名单失败:', e)
+      setDraft({ cookieWhitelist: whitelist })
     }
-  };
+  }
 
   const handleAddBlacklist = async () => {
-    const domain = normalizeDomain(blacklistDraft);
-    if (!domain) return;
+    const domain = normalizeDomain(blacklistDraft)
+    if (!domain) return
     if (blacklist.includes(domain)) {
-      showFeedback('error', '该域名已在黑名单中');
-      return;
+      showFeedback('error', '该域名已在黑名单中')
+      return
     }
-    const next = [...blacklist, domain];
-    setDraft({ cookieBlacklist: next });
-    setBlacklistDraft('');
+    const next = [...blacklist, domain]
+    setDraft({ cookieBlacklist: next })
+    setBlacklistDraft('')
     try {
-      await updateAppSettings({ cookieBlacklist: next });
-      showFeedback('success', `已添加 ${domain}`);
+      await updateAppSettings({ cookieBlacklist: next })
+      showFeedback('success', `已添加 ${domain}`)
     } catch (e) {
-      console.error('[CookieSection] 添加黑名单失败:', e);
-      setDraft({ cookieBlacklist: blacklist });
-      showFeedback('error', '保存失败');
+      console.error('[CookieSection] 添加黑名单失败:', e)
+      setDraft({ cookieBlacklist: blacklist })
+      showFeedback('error', '保存失败')
     }
-  };
+  }
 
   const handleRemoveBlacklist = async (domain: string) => {
-    const next = blacklist.filter((d) => d !== domain);
-    setDraft({ cookieBlacklist: next });
+    const next = blacklist.filter((d) => d !== domain)
+    setDraft({ cookieBlacklist: next })
     try {
-      await updateAppSettings({ cookieBlacklist: next });
+      await updateAppSettings({ cookieBlacklist: next })
     } catch (e) {
-      console.error('[CookieSection] 删除黑名单失败:', e);
-      setDraft({ cookieBlacklist: blacklist });
+      console.error('[CookieSection] 删除黑名单失败:', e)
+      setDraft({ cookieBlacklist: blacklist })
     }
-  };
+  }
 
   const handleCooldownChange = async (value: number) => {
-    const clamped = Math.max(0, Math.min(600000, value));
-    const prev = cooldownMs;
-    setDraft({ cookiePopupCooldownMs: clamped });
+    const clamped = Math.max(0, Math.min(600000, value))
+    const prev = cooldownMs
+    setDraft({ cookiePopupCooldownMs: clamped })
     try {
-      await updateAppSettings({ cookiePopupCooldownMs: clamped });
+      await updateAppSettings({ cookiePopupCooldownMs: clamped })
     } catch (e) {
-      console.error('[CookieSection] 更新冷却时间失败:', e);
-      setDraft({ cookiePopupCooldownMs: prev });
+      console.error('[CookieSection] 更新冷却时间失败:', e)
+      setDraft({ cookiePopupCooldownMs: prev })
     }
-  };
+  }
 
   return (
     <section data-name="settings.cookie.section">
@@ -151,8 +151,8 @@ export default function CookieSection() {
           step={1000}
           value={cooldownMs}
           onChange={(e) => {
-            const v = parseInt(e.target.value, 10);
-            if (Number.isFinite(v)) void handleCooldownChange(v);
+            const v = parseInt(e.target.value, 10)
+            if (Number.isFinite(v)) void handleCooldownChange(v)
           }}
           className="input-underline settings-cookie-cooldown-input"
           data-name="settings.cookie.cooldown-input"
@@ -167,9 +167,9 @@ export default function CookieSection() {
           onChange={(e) => setWhitelistDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              e.preventDefault();
-              e.stopPropagation();
-              void handleAddWhitelist();
+              e.preventDefault()
+              e.stopPropagation()
+              void handleAddWhitelist()
             }
           }}
           placeholder="example.com"
@@ -188,11 +188,19 @@ export default function CookieSection() {
       </FormRow>
       <div className="cookie-domain-list" data-name="settings.cookie.whitelist-list">
         {whitelist.length === 0 ? (
-          <div className="cookie-domain-empty" data-name="settings.cookie.whitelist-empty">暂无白名单域名</div>
+          <div className="cookie-domain-empty" data-name="settings.cookie.whitelist-empty">
+            暂无白名单域名
+          </div>
         ) : (
           whitelist.map((domain) => (
-            <div key={domain} className="cookie-domain-item" data-name={`settings.cookie.whitelist-item-${domain}`}>
-              <span className="cookie-domain-name" data-name="settings.cookie.whitelist-item-name">{domain}</span>
+            <div
+              key={domain}
+              className="cookie-domain-item"
+              data-name={`settings.cookie.whitelist-item-${domain}`}
+            >
+              <span className="cookie-domain-name" data-name="settings.cookie.whitelist-item-name">
+                {domain}
+              </span>
               <button
                 type="button"
                 className="cookie-domain-remove"
@@ -215,9 +223,9 @@ export default function CookieSection() {
           onChange={(e) => setBlacklistDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              e.preventDefault();
-              e.stopPropagation();
-              void handleAddBlacklist();
+              e.preventDefault()
+              e.stopPropagation()
+              void handleAddBlacklist()
             }
           }}
           placeholder="example.com"
@@ -236,11 +244,19 @@ export default function CookieSection() {
       </FormRow>
       <div className="cookie-domain-list" data-name="settings.cookie.blacklist-list">
         {blacklist.length === 0 ? (
-          <div className="cookie-domain-empty" data-name="settings.cookie.blacklist-empty">暂无黑名单域名</div>
+          <div className="cookie-domain-empty" data-name="settings.cookie.blacklist-empty">
+            暂无黑名单域名
+          </div>
         ) : (
           blacklist.map((domain) => (
-            <div key={domain} className="cookie-domain-item" data-name={`settings.cookie.blacklist-item-${domain}`}>
-              <span className="cookie-domain-name" data-name="settings.cookie.blacklist-item-name">{domain}</span>
+            <div
+              key={domain}
+              className="cookie-domain-item"
+              data-name={`settings.cookie.blacklist-item-${domain}`}
+            >
+              <span className="cookie-domain-name" data-name="settings.cookie.blacklist-item-name">
+                {domain}
+              </span>
               <button
                 type="button"
                 className="cookie-domain-remove"
@@ -265,5 +281,5 @@ export default function CookieSection() {
         </div>
       )}
     </section>
-  );
+  )
 }

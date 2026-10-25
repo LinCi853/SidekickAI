@@ -60,9 +60,11 @@ class NavHistoryStore {
   /** 懒加载某 profile 的全部记录到内存（仅首次访问时执行） */
   private ensureLoaded(profileId: string): void {
     if (this.loaded.has(profileId)) return
-    const rows = this.db.prepare(
-      `SELECT id, profile_id, url, title, timestamp FROM nav_history WHERE profile_id = ? ORDER BY timestamp ASC`,
-    ).all(profileId) as Record<string, unknown>[]
+    const rows = this.db
+      .prepare(
+        `SELECT id, profile_id, url, title, timestamp FROM nav_history WHERE profile_id = ? ORDER BY timestamp ASC`,
+      )
+      .all(profileId) as Record<string, unknown>[]
     this.memory.set(profileId, rows.map(rowToEntry))
     this.loaded.add(profileId)
   }
@@ -93,9 +95,11 @@ class NavHistoryStore {
     }
     list.push(full)
     this.memory.set(profileId, list)
-    this.db.prepare(
-      `INSERT INTO nav_history (id, profile_id, url, title, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run(full.id, full.profileId, full.url, full.title, full.timestamp)
+    this.db
+      .prepare(
+        `INSERT INTO nav_history (id, profile_id, url, title, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(full.id, full.profileId, full.url, full.title, full.timestamp)
     this.evictIfNeeded()
     console.log('[nav-history-store] 记录导航历史:', profileId, full.url, full.title)
   }
@@ -105,12 +109,14 @@ class NavHistoryStore {
     const count = this.db.prepare(`SELECT COUNT(*) as c FROM nav_history`).get() as { c: number }
     if (count.c <= MAX_ENTRIES) return
     const overflow = count.c - MAX_ENTRIES
-    const victims = this.db.prepare(
-      `SELECT id, profile_id FROM nav_history ORDER BY timestamp ASC LIMIT ?`,
-    ).all(overflow) as Array<{ id: string; profile_id: string }>
+    const victims = this.db
+      .prepare(`SELECT id, profile_id FROM nav_history ORDER BY timestamp ASC LIMIT ?`)
+      .all(overflow) as Array<{ id: string; profile_id: string }>
     if (victims.length === 0) return
     const ids = victims.map((v) => v.id)
-    this.db.prepare(`DELETE FROM nav_history WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids)
+    this.db
+      .prepare(`DELETE FROM nav_history WHERE id IN (${ids.map(() => '?').join(',')})`)
+      .run(...ids)
     // 同步剔除内存
     for (const v of victims) {
       const arr = this.memory.get(v.profile_id)
@@ -133,14 +139,18 @@ class NavHistoryStore {
   list(profileId: string | undefined, page: number, pageSize: number): NavHistoryEntry[] {
     const offset = Math.max(0, (page - 1) * pageSize)
     const rows = profileId
-      ? (this.db.prepare(
-          `SELECT id, profile_id, url, title, timestamp FROM nav_history
+      ? (this.db
+          .prepare(
+            `SELECT id, profile_id, url, title, timestamp FROM nav_history
            WHERE profile_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
-        ).all(profileId, pageSize, offset) as Record<string, unknown>[])
-      : (this.db.prepare(
-          `SELECT id, profile_id, url, title, timestamp FROM nav_history
+          )
+          .all(profileId, pageSize, offset) as Record<string, unknown>[])
+      : (this.db
+          .prepare(
+            `SELECT id, profile_id, url, title, timestamp FROM nav_history
            ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
-        ).all(pageSize, offset) as Record<string, unknown>[])
+          )
+          .all(pageSize, offset) as Record<string, unknown>[])
     return rows.map(rowToEntry)
   }
 
@@ -148,16 +158,20 @@ class NavHistoryStore {
   search(profileId: string | undefined, keyword: string): NavHistoryEntry[] {
     const like = `%${keyword}%`
     const rows = profileId
-      ? (this.db.prepare(
-          `SELECT id, profile_id, url, title, timestamp FROM nav_history
+      ? (this.db
+          .prepare(
+            `SELECT id, profile_id, url, title, timestamp FROM nav_history
            WHERE profile_id = ? AND (url LIKE ? OR title LIKE ?)
            ORDER BY timestamp DESC LIMIT 200`,
-        ).all(profileId, like, like) as Record<string, unknown>[])
-      : (this.db.prepare(
-          `SELECT id, profile_id, url, title, timestamp FROM nav_history
+          )
+          .all(profileId, like, like) as Record<string, unknown>[])
+      : (this.db
+          .prepare(
+            `SELECT id, profile_id, url, title, timestamp FROM nav_history
            WHERE url LIKE ? OR title LIKE ?
            ORDER BY timestamp DESC LIMIT 200`,
-        ).all(like, like) as Record<string, unknown>[])
+          )
+          .all(like, like) as Record<string, unknown>[])
     return rows.map(rowToEntry)
   }
 

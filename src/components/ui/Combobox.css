@@ -69,7 +69,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-xs);
-  transition: color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
 }
 .combobox-arrow:hover {
   color: var(--foreground);
@@ -142,7 +144,9 @@
   font-size: 14px;
   line-height: 1;
   padding: 0;
-  transition: color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
 }
 .combobox-close:hover {
   color: var(--foreground);
@@ -178,7 +182,11 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast);
 }
 .combobox-option:hover {
   background: var(--accent-10);
@@ -202,7 +210,7 @@
 }
 /* 勾选标记（CSS 伪元素实现 ✓） */
 .combobox-option.selected::before {
-  content: '✓';
+  content: "✓";
   flex-shrink: 0;
   font-size: 10px;
   font-weight: 900;

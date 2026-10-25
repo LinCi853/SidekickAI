@@ -5,55 +5,66 @@
    ===================================================================== */
 
 export interface WebviewCaptureImage {
-  toDataURL(): string;
-  toPNG(): Buffer;
-  getSize(): { width: number; height: number };
+  toDataURL(): string
+  toPNG(): Buffer
+  getSize(): { width: number; height: number }
 }
 
 /** 复用 React 内置 HTMLWebViewElement，并显式声明本组件使用的方法（兼容不同 @types/react 版本） */
 export interface WebviewElement extends HTMLWebViewElement {
   /** 设置 src 属性触发导航（DOM 属性变化，不经过 GUEST_VIEW_MANAGER_CALL IPC，可用于 guest 进程崩溃后恢复） */
-  src: string;
-  executeJavaScript(script: string): Promise<unknown>;
-  reload(): void;
-  loadURL(url: string): void;
-  goBack(): void;
-  goForward(): void;
-  canGoBack(): boolean;
-  canGoForward(): boolean;
-  setUserAgent(ua: string): void;
+  src: string
+  executeJavaScript(script: string): Promise<unknown>
+  reload(): void
+  loadURL(url: string): void
+  goBack(): void
+  goForward(): void
+  canGoBack(): boolean
+  canGoForward(): boolean
+  setUserAgent(ua: string): void
   /** 获取当前页面 URL */
-  getURL(): string;
+  getURL(): string
   /** 获取 guest webContents id（webview attach 后可用；未 attach 时调用会抛错） */
-  getWebContentsId(): number;
+  getWebContentsId(): number
   /** 截图当前页面（需求 12：截图到白板）。返回 NativeImage，调用 toDataURL() 转 base64，getSize() 获取原始尺寸 */
-  capturePage(): Promise<WebviewCaptureImage>;
+  capturePage(): Promise<WebviewCaptureImage>
   /** 打开 DevTools（检查） */
-  openDevTools(): void;
+  openDevTools(): void
   /** 关闭 DevTools */
-  closeDevTools(): void;
+  closeDevTools(): void
   /** DevTools 是否已打开 */
-  isDevToolsOpened(): boolean;
+  isDevToolsOpened(): boolean
   /** 打印当前页面（弹出系统打印对话框） */
-  print(options?: unknown): void;
+  print(options?: unknown): void
   /** 将当前页面打印为 PDF（打印预览用） */
-  printToPDF(options?: { printBackground?: boolean; preferCSSPageSize?: boolean }): Promise<Uint8Array>;
+  printToPDF(options?: {
+    printBackground?: boolean
+    preferCSSPageSize?: boolean
+  }): Promise<Uint8Array>
   /** 在页面中执行原生粘贴命令（剪贴板内容粘贴到焦点元素） */
-  paste(): void;
+  paste(): void
   /** 在页面中执行粘贴并匹配样式命令（粘贴为纯文本） */
-  pasteAndMatchStyle(): void;
+  pasteAndMatchStyle(): void
   /** 开始检查指定位置的元素（打开 DevTools 并定位到该元素，坐标为 guest 页面坐标） */
-  inspectElement(x: number, y: number): void;
+  inspectElement(x: number, y: number): void
   /** 当前页面缩放因子（guest 坐标换算窗口坐标时使用） */
-  getZoomFactor(): number;
+  getZoomFactor(): number
   /** 设置页面缩放因子 */
-  setZoomFactor(factor: number): void;
+  setZoomFactor(factor: number): void
   /** 获取页面缩放级别（log2 尺度） */
-  getZoomLevel(): number;
+  getZoomLevel(): number
   /** 设置页面缩放级别（log2 尺度，0=100%，0.5=141% 等） */
-  setZoomLevel(level: number): void;
-  addEventListener(event: string, callback: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void;
-  removeEventListener(event: string, callback: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void;
+  setZoomLevel(level: number): void
+  addEventListener(
+    event: string,
+    callback: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ): void
+  removeEventListener(
+    event: string,
+    callback: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions,
+  ): void
 }
 
 /**
@@ -62,36 +73,36 @@ export interface WebviewElement extends HTMLWebViewElement {
  */
 export interface WebviewContextMenuParams {
   /** 右键位置（guest 页面 viewport CSS 坐标） */
-  x: number;
+  x: number
   /** 右键位置（guest 页面 viewport CSS 坐标） */
-  y: number;
+  y: number
   /** 右键所在链接的 URL（无链接时为空字符串） */
-  linkURL: string;
+  linkURL: string
   /** 右键所在页面的 URL（查看网页源码用） */
-  pageURL: string;
+  pageURL: string
   /** 右键所在图片/媒体元素的源 URL */
-  srcURL: string;
+  srcURL: string
   /** 右键所在元素类型：none | image | audio | video | canvas | file | plugin */
-  mediaType: 'none' | 'image' | 'audio' | 'video' | 'canvas' | 'file' | 'plugin';
+  mediaType: 'none' | 'image' | 'audio' | 'video' | 'canvas' | 'file' | 'plugin'
   /** 是否在可编辑区域（输入框/文本域/富文本）内 */
-  isEditable: boolean;
+  isEditable: boolean
   /** 当前页面选中的文本 */
-  selectionText: string;
+  selectionText: string
   /** 保存链接时建议的文件名 */
-  suggestedFilename: string;
+  suggestedFilename: string
   /** 拼写错误的单词（启用拼写检查时） */
-  misspelledWord: string;
+  misspelledWord: string
   /** 编辑能力标志（决定撤销/重做/剪切/复制/粘贴/全选是否可用） */
   editFlags: {
-    canUndo: boolean;
-    canRedo: boolean;
-    canCut: boolean;
-    canCopy: boolean;
-    canPaste: boolean;
-    canDelete: boolean;
-    canSelectAll: boolean;
-    canEditRichly: boolean;
-  };
+    canUndo: boolean
+    canRedo: boolean
+    canCut: boolean
+    canCopy: boolean
+    canPaste: boolean
+    canDelete: boolean
+    canSelectAll: boolean
+    canEditRichly: boolean
+  }
 }
 
 /**
@@ -101,18 +112,30 @@ export interface WebviewContextMenuParams {
  * 此函数在所有 loadURL/src 入口前做防御性清理。
  */
 export function sanitizeUrl(url: string): string {
-  if (!url) return '';
-  let cleaned = url.trim();
+  if (!url) return ''
+  let cleaned = url.trim()
   // 循环去除首尾的反引号和单引号（可能成对出现多次）
-  let changed = true;
+  let changed = true
   while (changed) {
-    changed = false;
-    if (cleaned.startsWith('`')) { cleaned = cleaned.slice(1); changed = true; }
-    if (cleaned.endsWith('`')) { cleaned = cleaned.slice(0, -1); changed = true; }
-    if (cleaned.startsWith("'")) { cleaned = cleaned.slice(1); changed = true; }
-    if (cleaned.endsWith("'")) { cleaned = cleaned.slice(0, -1); changed = true; }
+    changed = false
+    if (cleaned.startsWith('`')) {
+      cleaned = cleaned.slice(1)
+      changed = true
+    }
+    if (cleaned.endsWith('`')) {
+      cleaned = cleaned.slice(0, -1)
+      changed = true
+    }
+    if (cleaned.startsWith("'")) {
+      cleaned = cleaned.slice(1)
+      changed = true
+    }
+    if (cleaned.endsWith("'")) {
+      cleaned = cleaned.slice(0, -1)
+      changed = true
+    }
   }
-  return cleaned.trim();
+  return cleaned.trim()
 }
 
 /**
@@ -142,95 +165,97 @@ export function safeReloadWebview(
   domReady: boolean,
 ): void {
   // 防御性 URL 清理：去除反引号/单引号等无效字符
-  let targetUrl = sanitizeUrl(fallbackUrl);
+  let targetUrl = sanitizeUrl(fallbackUrl)
   // URL 空值预检：若 fallbackUrl 为空/about:blank，尝试从当前 webview 取 URL
   // （智谱清言验证页等 SPA 场景 fallbackUrl 可能为空，导致 reload/loadURL 无目标）
   if (!targetUrl || targetUrl === 'about:blank') {
     try {
-      targetUrl = webview.getURL() || '';
-    } catch { /* webview 未 attach 时 getURL 可能抛错 */ }
-    if (!targetUrl || targetUrl === 'about:blank') {
-      console.warn('[webview] reload 目标 URL 为空，跳过 reload');
-      return;
+      targetUrl = webview.getURL() || ''
+    } catch {
+      /* webview 未 attach 时 getURL 可能抛错 */
     }
-    console.log('[webview] fallbackUrl 为空，改用当前 URL:', targetUrl.slice(0, 80));
+    if (!targetUrl || targetUrl === 'about:blank') {
+      console.warn('[webview] reload 目标 URL 为空，跳过 reload')
+      return
+    }
+    console.log('[webview] fallbackUrl 为空，改用当前 URL:', targetUrl.slice(0, 80))
   }
 
   // 判断错误是否为 guest 进程死亡的可靠信号。
   // - ERR_ABORTED (-3)：导航被另一导航中断（SPA 重定向、用户连续点击），正常现象，不视为 fatal
   // - ERR_FAILED (-2) 及其它：guest 进程可能已死亡，需触发 remount 恢复
   const isFatalError = (err: unknown): boolean => {
-    const msg = (err instanceof Error ? err.message : String(err)) || '';
+    const msg = (err instanceof Error ? err.message : String(err)) || ''
     // ERR_ABORTED (-3)：导航被中断，非致命
-    if (msg.includes('ERR_ABORTED') || /\(-3\)/.test(msg)) return false;
-    return true;
-  };
+    if (msg.includes('ERR_ABORTED') || /\(-3\)/.test(msg)) return false
+    return true
+  }
 
   // 终极恢复：guest 进程死亡时，src 赋值也通过 GUEST_VIEW_MANAGER_CALL IPC 失败。
   // 改为派发 DOM 事件通知 WebviewTab 销毁并重建 <webview> 元素（唯一可靠恢复手段）。
   const tryReloadViaSrc = (url: string) => {
-    console.warn('[webview] reload/loadURL 均失败，派发 fatal-failure 事件:', url.slice(0, 80));
+    console.warn('[webview] reload/loadURL 均失败，派发 fatal-failure 事件:', url.slice(0, 80))
     try {
-      webview.dispatchEvent(new CustomEvent('ai-webview-fatal-failure', { detail: { url } }));
+      webview.dispatchEvent(new CustomEvent('ai-webview-fatal-failure', { detail: { url } }))
     } catch (e) {
-      console.error('[webview] dispatchEvent 失败:', e);
+      console.error('[webview] dispatchEvent 失败:', e)
     }
-  };
+  }
 
   // loadURL 恢复（带 promise catch 兜底，失败时回退到 src 赋值）
   const tryLoadURL = (url: string) => {
     try {
-      const result = webview.loadURL(url) as unknown;
+      const result = webview.loadURL(url) as unknown
       if (result && typeof (result as Promise<void>).catch === 'function') {
-        (result as Promise<void>).catch((e) => {
+        ;(result as Promise<void>).catch((e) => {
           // ERR_ABORTED (-3) 是正常中断（被新导航取消），不视为 fatal
           if (!isFatalError(e)) {
-            console.log('[webview] loadURL 被中断（ERR_ABORTED），忽略:', url.slice(0, 80));
-            return;
+            console.log('[webview] loadURL 被中断（ERR_ABORTED），忽略:', url.slice(0, 80))
+            return
           }
-          console.error('[webview] loadURL 异步失败:', e);
+          console.error('[webview] loadURL 异步失败:', e)
           // loadURL 也失败：终极恢复 —— 设置 src 触发 guest 重建
-          tryReloadViaSrc(url);
-        });
+          tryReloadViaSrc(url)
+        })
       }
     } catch (e) {
       // 同步抛错且非 ERR_ABORTED：直接尝试 src 赋值
       if (!isFatalError(e)) {
-        console.log('[webview] loadURL 同步被中断（ERR_ABORTED），忽略:', e);
-        return;
+        console.log('[webview] loadURL 同步被中断（ERR_ABORTED），忽略:', e)
+        return
       }
-      console.error('[webview] loadURL 同步失败:', e);
-      tryReloadViaSrc(url);
+      console.error('[webview] loadURL 同步失败:', e)
+      tryReloadViaSrc(url)
     }
-  };
+  }
 
   if (domReady) {
     try {
-      const result = webview.reload() as unknown;
+      const result = webview.reload() as unknown
       if (result && typeof (result as Promise<void>).catch === 'function') {
         // reload() 返回 promise：异步失败时回退到 loadURL
-        (result as Promise<void>).catch((e) => {
+        ;(result as Promise<void>).catch((e) => {
           if (!isFatalError(e)) {
-            console.log('[webview] reload 被中断（ERR_ABORTED），忽略');
-            return;
+            console.log('[webview] reload 被中断（ERR_ABORTED），忽略')
+            return
           }
-          console.warn('[webview] reload 异步失败（guest 可能已崩溃），回退 loadURL');
-          tryLoadURL(targetUrl);
-        });
+          console.warn('[webview] reload 异步失败（guest 可能已崩溃），回退 loadURL')
+          tryLoadURL(targetUrl)
+        })
       }
     } catch (e) {
       if (!isFatalError(e)) {
-        console.log('[webview] reload 同步被中断（ERR_ABORTED），忽略');
-        return;
+        console.log('[webview] reload 同步被中断（ERR_ABORTED），忽略')
+        return
       }
       // 同步抛错：直接回退到 loadURL
-      console.warn('[webview] reload 同步失败，回退 loadURL:', e);
-      tryLoadURL(targetUrl);
+      console.warn('[webview] reload 同步失败，回退 loadURL:', e)
+      tryLoadURL(targetUrl)
     }
   } else {
     // guest 进程未就绪/已崩溃：reload() 会 ERR_FAILED，直接 loadURL 恢复
-    console.log('[webview] guest 未就绪，用 loadURL 恢复:', targetUrl.slice(0, 80));
-    tryLoadURL(targetUrl);
+    console.log('[webview] guest 未就绪，用 loadURL 恢复:', targetUrl.slice(0, 80))
+    tryLoadURL(targetUrl)
   }
 }
 
@@ -250,51 +275,56 @@ export function safeReloadWebview(
  */
 export function safeLoadURLWebview(webview: WebviewElement, url: string): void {
   // 防御性 URL 清理：去除反引号/单引号等无效字符
-  const cleanUrl = sanitizeUrl(url);
+  const cleanUrl = sanitizeUrl(url)
   if (!cleanUrl || cleanUrl === 'about:blank') {
-    console.warn('[webview] loadURL 目标 URL 为空，跳过');
-    return;
+    console.warn('[webview] loadURL 目标 URL 为空，跳过')
+    return
   }
 
   // 判断错误是否为 guest 进程死亡的可靠信号。
   // ERR_ABORTED (-3) 是正常中断（被新导航取消），不应触发 remount。
   const isFatalError = (err: unknown): boolean => {
-    const msg = (err instanceof Error ? err.message : String(err)) || '';
-    if (msg.includes('ERR_ABORTED') || /\(-3\)/.test(msg)) return false;
-    return true;
-  };
+    const msg = (err instanceof Error ? err.message : String(err)) || ''
+    if (msg.includes('ERR_ABORTED') || /\(-3\)/.test(msg)) return false
+    return true
+  }
 
   // guest 进程死亡时，loadURL 和 src 赋值都通过 GUEST_VIEW_MANAGER_CALL IPC 失败。
   // 唯一可靠恢复：派发 DOM 事件通知 WebviewTab 销毁并重建 <webview> 元素。
   const dispatchFatalFailure = () => {
-    console.warn('[webview] loadURL 失败(guest 可能已死)，派发 fatal-failure 事件:', cleanUrl.slice(0, 80));
+    console.warn(
+      '[webview] loadURL 失败(guest 可能已死)，派发 fatal-failure 事件:',
+      cleanUrl.slice(0, 80),
+    )
     try {
-      webview.dispatchEvent(new CustomEvent('ai-webview-fatal-failure', { detail: { url: cleanUrl } }));
+      webview.dispatchEvent(
+        new CustomEvent('ai-webview-fatal-failure', { detail: { url: cleanUrl } }),
+      )
     } catch (e) {
-      console.error('[webview] dispatchEvent 失败:', e);
+      console.error('[webview] dispatchEvent 失败:', e)
     }
-  };
+  }
 
   try {
-    const result = webview.loadURL(cleanUrl) as unknown;
+    const result = webview.loadURL(cleanUrl) as unknown
     if (result && typeof (result as Promise<void>).catch === 'function') {
-      (result as Promise<void>).catch((e) => {
+      ;(result as Promise<void>).catch((e) => {
         // ERR_ABORTED (-3) 是正常中断（被新导航取消），不视为 fatal
         if (!isFatalError(e)) {
-          console.log('[webview] loadURL 被中断（ERR_ABORTED），忽略:', cleanUrl.slice(0, 80));
-          return;
+          console.log('[webview] loadURL 被中断（ERR_ABORTED），忽略:', cleanUrl.slice(0, 80))
+          return
         }
-        console.error('[webview] loadURL 异步失败:', e);
-        dispatchFatalFailure();
-      });
+        console.error('[webview] loadURL 异步失败:', e)
+        dispatchFatalFailure()
+      })
     }
   } catch (e) {
     if (!isFatalError(e)) {
-      console.log('[webview] loadURL 同步被中断（ERR_ABORTED），忽略:', cleanUrl.slice(0, 80));
-      return;
+      console.log('[webview] loadURL 同步被中断（ERR_ABORTED），忽略:', cleanUrl.slice(0, 80))
+      return
     }
-    console.error('[webview] loadURL 同步失败:', e);
-    dispatchFatalFailure();
+    console.error('[webview] loadURL 同步失败:', e)
+    dispatchFatalFailure()
   }
 }
 
@@ -303,7 +333,7 @@ export interface InjectViewportOptions {
    * 是否注入清除网页右侧阴影/滚动条光晕并跟随应用主题切换 color-scheme 的样式块。
    * MainView 启用，StandaloneView 不启用。默认 false。
    */
-  injectShadowStyle?: boolean;
+  injectShadowStyle?: boolean
 }
 
 /**
@@ -313,7 +343,8 @@ export interface InjectViewportOptions {
  * 注入的脚本监听 matchMedia 变化实时改写样式，应用内切换主题时无需重新注入。
  */
 export function buildShadowStyleScript(): string {
-  const cleanupCss = '* { box-shadow: none !important; text-shadow: none !important; } ::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; } ::-webkit-scrollbar-track, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-corner { background: transparent !important; }';
+  const cleanupCss =
+    '* { box-shadow: none !important; text-shadow: none !important; } ::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; } ::-webkit-scrollbar-track, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-corner { background: transparent !important; }'
   return `
             // 3. 清除网页右侧阴影/渐变/滚动条光晕；color-scheme 跟随应用内主题（亮色下避免未定义背景的页面变黑）
             try {
@@ -331,7 +362,7 @@ export function buildShadowStyleScript(): string {
                 document.head.appendChild(s);
               }
             } catch (e) { /* webview 上下文错误已通过返回值上报 */ }
-`;
+`
 }
 
 /**
@@ -346,17 +377,15 @@ export async function injectViewportAndPopupGuard(
   webview: WebviewElement,
   options: InjectViewportOptions = {},
 ): Promise<void> {
-  const { injectShadowStyle = false } = options;
+  const { injectShadowStyle = false } = options
 
   // 仅 MainView 启用的阴影/滚动条样式块（前导换行对应原空行，结尾换行对应原空行）
-  const shadowBlock = injectShadowStyle
-    ? buildShadowStyleScript()
-    : '';
+  const shadowBlock = injectShadowStyle ? buildShadowStyleScript() : ''
 
   // // 4. 注释仅在 MainView（injectShadowStyle=true）中出现
   const popupGuardComment = injectShadowStyle
     ? '            // 4. 弹窗兜底：保留 window.open 原引用，拦截逻辑由主进程 setWindowOpenHandler 统一处理\n'
-    : '';
+    : ''
 
   await webview.executeJavaScript(`
           (function() {
@@ -450,5 +479,5 @@ ${popupGuardComment}            try {
               }
             }, true);
           })();
-        `);
+        `)
 }

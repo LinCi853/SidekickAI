@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 
 /**
  * 窄屏检测 hook
@@ -8,13 +8,13 @@ import { useEffect, useState } from 'react';
 export function useIsNarrow(threshold = 600): boolean {
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== 'undefined' ? window.innerWidth < threshold : false,
-  );
+  )
 
   useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < threshold);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [threshold]);
+    const onResize = () => setIsNarrow(window.innerWidth < threshold)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [threshold])
 
-  return isNarrow;
+  return isNarrow
 }

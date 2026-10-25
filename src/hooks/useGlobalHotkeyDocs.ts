@@ -10,16 +10,16 @@
    toggleVoice / toggleAiAssets 等未列元信息但已配置键位的动作按配置追加。
    ===================================================================== */
 
-import { useEffect, useState } from 'react';
-import { getHotkeys, requireElectron } from '../lib/electron-api';
-import type { HotkeyConfig } from '../lib/electron-api';
-import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
-import type { ShortcutDoc } from '../store/useShortcutDocStore';
-import { GLOBAL_HOTKEY_META, formatAcc } from '../lib/shortcut-reference';
+import { useEffect, useState } from 'react'
+import { getHotkeys, requireElectron } from '../lib/electron-api'
+import type { HotkeyConfig } from '../lib/electron-api'
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore'
+import type { ShortcutDoc } from '../store/useShortcutDocStore'
+import { GLOBAL_HOTKEY_META, formatAcc } from '../lib/shortcut-reference'
 
 function buildGlobalDocs(hotkeys: HotkeyConfig[]): ShortcutDoc[] {
   const docs: ShortcutDoc[] = GLOBAL_HOTKEY_META.map((meta) => {
-    const cfg = hotkeys.find((h) => h.action === meta.action);
+    const cfg = hotkeys.find((h) => h.action === meta.action)
     return {
       id: `global.${meta.action}`,
       keys: cfg?.accelerator ? formatAcc(cfg.accelerator) : meta.fallbackKeys,
@@ -27,38 +27,43 @@ function buildGlobalDocs(hotkeys: HotkeyConfig[]): ShortcutDoc[] {
       category: 'global',
       note: meta.note,
       disabled: cfg ? !cfg.enabled : false,
-    };
-  });
-  const listed = new Set(GLOBAL_HOTKEY_META.map((m) => m.action));
+    }
+  })
+  const listed = new Set(GLOBAL_HOTKEY_META.map((m) => m.action))
   for (const cfg of hotkeys) {
-    if (listed.has(cfg.action) || !cfg.accelerator) continue;
+    if (listed.has(cfg.action) || !cfg.accelerator) continue
     docs.push({
       id: `global.${cfg.action}`,
       keys: formatAcc(cfg.accelerator),
       action: cfg.label,
       category: 'global',
       disabled: !cfg.enabled,
-    });
+    })
   }
-  return docs;
+  return docs
 }
 
 export function useGlobalHotkeyDocs(): void {
-  const [hotkeys, setHotkeys] = useState<HotkeyConfig[]>([]);
+  const [hotkeys, setHotkeys] = useState<HotkeyConfig[]>([])
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     void getHotkeys()
-      .then((list) => { if (!cancelled) setHotkeys(list); })
-      .catch((e) => console.warn('[global-hotkey-docs] 加载全局热键失败:', e));
-    let off: (() => void) | undefined;
+      .then((list) => {
+        if (!cancelled) setHotkeys(list)
+      })
+      .catch((e) => console.warn('[global-hotkey-docs] 加载全局热键失败:', e))
+    let off: (() => void) | undefined
     try {
-      off = requireElectron().hotkey.onChanged((list) => setHotkeys(list));
+      off = requireElectron().hotkey.onChanged((list) => setHotkeys(list))
     } catch {
       // preload 未就绪或测试环境：仅保留一次性加载结果
     }
-    return () => { cancelled = true; off?.(); };
-  }, []);
+    return () => {
+      cancelled = true
+      off?.()
+    }
+  }, [])
 
-  useRegisterShortcutDocs('global-hotkeys', buildGlobalDocs(hotkeys));
+  useRegisterShortcutDocs('global-hotkeys', buildGlobalDocs(hotkeys))
 }

@@ -48,8 +48,9 @@
   line-height: 1.4;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
   text-align: left;
   width: 100%;
 }

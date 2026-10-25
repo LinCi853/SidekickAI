@@ -4,7 +4,12 @@
 // 快照 + aiPlatformId + platformName 快照）。独立 SQLite 数据库（bookmarks.db）。
 // 仿 search-history-store.ts 模式。
 
-import type { Bookmark, BookmarkInput, BookmarkFilter, BookmarkPatch } from '../shared/bookmark.types.js'
+import type {
+  Bookmark,
+  BookmarkInput,
+  BookmarkFilter,
+  BookmarkPatch,
+} from '../shared/bookmark.types.js'
 import { resolveSqlitePath, createSqliteDb, createSingletonHolder } from '../store/store-paths.js'
 import type Database from 'better-sqlite3'
 
@@ -95,7 +100,9 @@ class BookmarkStore {
     const id = crypto.randomUUID()
     // 新书签默认排到书签栏末尾
     const maxOrderRow = this.db
-      .prepare(`SELECT COALESCE(MAX(sort_order), -1) as max_order FROM bookmarks WHERE in_bookmark_bar = 1`)
+      .prepare(
+        `SELECT COALESCE(MAX(sort_order), -1) as max_order FROM bookmarks WHERE in_bookmark_bar = 1`,
+      )
       .get() as { max_order: number } | undefined
     const order = (maxOrderRow?.max_order ?? -1) + 1
     this.db
@@ -123,7 +130,9 @@ class BookmarkStore {
 
   /** 按 id 查询；不存在返回 undefined */
   get(id: string): Bookmark | undefined {
-    const row = this.db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as BookmarkRow | undefined
+    const row = this.db.prepare(`SELECT * FROM bookmarks WHERE id = ?`).get(id) as
+      | BookmarkRow
+      | undefined
     return row ? rowToBookmark(row) : undefined
   }
 
@@ -177,7 +186,9 @@ class BookmarkStore {
 
   /** 按 URL 查询书签（用于星标按钮判断是否已收藏） */
   findByUrl(url: string): Bookmark | undefined {
-    const row = this.db.prepare(`SELECT * FROM bookmarks WHERE url = ? LIMIT 1`).get(url) as BookmarkRow | undefined
+    const row = this.db.prepare(`SELECT * FROM bookmarks WHERE url = ? LIMIT 1`).get(url) as
+      | BookmarkRow
+      | undefined
     return row ? rowToBookmark(row) : undefined
   }
 }

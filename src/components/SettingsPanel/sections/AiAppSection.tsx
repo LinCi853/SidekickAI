@@ -12,42 +12,42 @@
    开启时 region === 'global' 的内置平台卡片完全不渲染（按 profile 反向匹配平台 region 过滤）。
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AIPlatform, Profile } from '../../../lib/electron-api';
-import { getPlatformColors } from '../../../pages/MainView/utils';
-import { findAiAppProfiles } from '../../../lib/shared-utils';
-import { useProfileStore } from '../../../store/useProfileStore';
-import Button from '../../ui/Button';
-import Toggle from '../../ui/Toggle';
-import { SectionTitle, FormRow } from '../../ui';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { AIPlatform, Profile } from '../../../lib/electron-api'
+import { getPlatformColors } from '../../../pages/MainView/utils'
+import { findAiAppProfiles } from '../../../lib/shared-utils'
+import { useProfileStore } from '../../../store/useProfileStore'
+import Button from '../../ui/Button'
+import Toggle from '../../ui/Toggle'
+import { SectionTitle, FormRow } from '../../ui'
 
 /** pending 删除确认超时时间（ms）：超时未第二次点击则取消删除 */
-const PENDING_DELETE_TIMEOUT_MS = 3000;
+const PENDING_DELETE_TIMEOUT_MS = 3000
 
 /** 从 URL 提取最短显示形式（hostname，去掉 www. 前缀） */
 function shortUrl(url: string): string {
   try {
-    const u = new URL(url);
-    return u.hostname.replace(/^www\./, '');
+    const u = new URL(url)
+    return u.hostname.replace(/^www\./, '')
   } catch {
-    return url;
+    return url
   }
 }
 
 export interface AiAppSectionProps {
-  platforms: AIPlatform[];
-  onEditApp: (profileId: string) => void;
+  platforms: AIPlatform[]
+  onEditApp: (profileId: string) => void
   /** 新建 AI 应用回调；不传时不渲染新建按钮 */
-  onCreateNew?: () => void;
-  hideForeignModels: boolean;
+  onCreateNew?: () => void
+  hideForeignModels: boolean
   /** 屏蔽国外模型开关回调；不传时不渲染开关（由外部高级分类承载） */
-  onToggleHideForeignModels?: () => void;
+  onToggleHideForeignModels?: () => void
   /** 广告屏蔽规则开关当前值（true=已禁用）；不传时不渲染开关 */
-  disableAllBlockRules?: boolean;
+  disableAllBlockRules?: boolean
   /** 广告屏蔽规则开关回调；不传时不渲染开关（由外部高级分类承载） */
-  onToggleDisableAllBlockRules?: () => void;
+  onToggleDisableAllBlockRules?: () => void
   /** 标题是否可折叠（在进阶配置内使用时设为 false，避免二次折叠） */
-  collapsibleTitle?: boolean;
+  collapsibleTitle?: boolean
 }
 
 export default function AiAppSection({
@@ -60,48 +60,48 @@ export default function AiAppSection({
   onToggleDisableAllBlockRules,
   collapsibleTitle = true,
 }: AiAppSectionProps) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(true)
 
-  const profiles = useProfileStore((s) => s.profiles);
+  const profiles = useProfileStore((s) => s.profiles)
 
   // 扁平遍历所有 AI 应用 Profile（按 order 升序）
-  const allAiAppProfiles = useMemo(() => findAiAppProfiles(profiles), [profiles]);
+  const allAiAppProfiles = useMemo(() => findAiAppProfiles(profiles), [profiles])
 
   // 国外模型被屏蔽时按 profile 反向匹配平台 region 过滤（用户决策：完全不渲染）
   const aiAppProfiles = useMemo(() => {
-    if (!hideForeignModels) return allAiAppProfiles;
+    if (!hideForeignModels) return allAiAppProfiles
     // 仅保留其对应平台 region !== 'global' 的 profile
     return allAiAppProfiles.filter((profile) => {
       const platform = profile.aiPlatformId
         ? platforms.find((pp) => pp.id === profile.aiPlatformId)
-        : platforms.find((pp) => pp.url === profile.aiPlatformUrl);
-      return platform != null && platform.region !== 'global';
-    });
-  }, [allAiAppProfiles, platforms, hideForeignModels]);
+        : platforms.find((pp) => pp.url === profile.aiPlatformUrl)
+      return platform != null && platform.region !== 'global'
+    })
+  }, [allAiAppProfiles, platforms, hideForeignModels])
 
-  const totalCount = aiAppProfiles.length;
+  const totalCount = aiAppProfiles.length
 
   // ===== 删除二次确认状态（与 BottomBar/AppSwitcher 的 pendingClose 模式一致） =====
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearPendingDelete = useCallback(() => {
     if (pendingDeleteTimerRef.current) {
-      clearTimeout(pendingDeleteTimerRef.current);
-      pendingDeleteTimerRef.current = null;
+      clearTimeout(pendingDeleteTimerRef.current)
+      pendingDeleteTimerRef.current = null
     }
-    setPendingDeleteId(null);
-  }, []);
+    setPendingDeleteId(null)
+  }, [])
 
   // 卸载时清理定时器
   useEffect(() => {
     return () => {
       if (pendingDeleteTimerRef.current) {
-        clearTimeout(pendingDeleteTimerRef.current);
-        pendingDeleteTimerRef.current = null;
+        clearTimeout(pendingDeleteTimerRef.current)
+        pendingDeleteTimerRef.current = null
       }
-    };
-  }, []);
+    }
+  }, [])
 
   /**
    * 删除按钮点击包装：第一次点击进入 pending 状态（按钮文案变为"确认删除"+红色高亮），
@@ -110,39 +110,42 @@ export default function AiAppSection({
   const handleDelete = useCallback(
     (profile: Profile) => {
       // v0.0.9: 禁止删除保底内置应用
-      if (profile.isBuiltIn) return;
+      if (profile.isBuiltIn) return
       if (pendingDeleteId === profile.id) {
         // 3 秒内第二次点击：执行删除
-        clearPendingDelete();
-        void useProfileStore.getState().deleteProfile(profile.id).catch((e) => {
-          console.error('[AiAppSection] 删除 Profile 失败:', e);
-        });
+        clearPendingDelete()
+        void useProfileStore
+          .getState()
+          .deleteProfile(profile.id)
+          .catch((e) => {
+            console.error('[AiAppSection] 删除 Profile 失败:', e)
+          })
       } else {
         // 第一次点击：设置 pending 状态，3 秒后超时取消
-        setPendingDeleteId(profile.id);
-        if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+        setPendingDeleteId(profile.id)
+        if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current)
         pendingDeleteTimerRef.current = setTimeout(() => {
-          pendingDeleteTimerRef.current = null;
-          setPendingDeleteId(null);
-        }, PENDING_DELETE_TIMEOUT_MS);
+          pendingDeleteTimerRef.current = null
+          setPendingDeleteId(null)
+        }, PENDING_DELETE_TIMEOUT_MS)
       }
     },
     [pendingDeleteId, clearPendingDelete],
-  );
+  )
 
   /** 复制 Profile：调用 store.duplicateProfile，成功后由 onProfileCreated 监听器自动追加 */
   const handleDuplicate = useCallback(async (profile: Profile) => {
     try {
-      await useProfileStore.getState().duplicateProfile(profile.id);
+      await useProfileStore.getState().duplicateProfile(profile.id)
     } catch (e) {
-      console.error('[AiAppSection] 复制 Profile 失败:', e);
+      console.error('[AiAppSection] 复制 Profile 失败:', e)
     }
-  }, []);
+  }, [])
 
   /** 新建 AI 应用：调用外部回调打开编辑器遮罩 */
   const handleCreateNew = useCallback(() => {
-    onCreateNew?.();
-  }, [onCreateNew]);
+    onCreateNew?.()
+  }, [onCreateNew])
 
   return (
     <section data-name="settings.ai-app.section">
@@ -182,13 +185,13 @@ export default function AiAppSection({
             {aiAppProfiles.map((profile, idx) => {
               const platform = profile.aiPlatformId
                 ? platforms.find((pp) => pp.id === profile.aiPlatformId)
-                : platforms.find((pp) => pp.url === profile.aiPlatformUrl);
+                : platforms.find((pp) => pp.url === profile.aiPlatformUrl)
               const { themeColor: c1, gradientColor: c2 } = platform
                 ? getPlatformColors(profile, platform, platform.id)
-                : { themeColor: 'var(--accent)', gradientColor: 'var(--accent)' };
-              const displayName = profile.name || platform?.name || 'AI';
-              const displayUrl = platform?.url ?? profile.aiPlatformUrl ?? '';
-              const isPendingDelete = pendingDeleteId === profile.id;
+                : { themeColor: 'var(--accent)', gradientColor: 'var(--accent)' }
+              const displayName = profile.name || platform?.name || 'AI'
+              const displayUrl = platform?.url ?? profile.aiPlatformUrl ?? ''
+              const isPendingDelete = pendingDeleteId === profile.id
               return (
                 <div
                   key={profile.id}
@@ -205,11 +208,27 @@ export default function AiAppSection({
                   >
                     {displayName.charAt(0).toUpperCase()}
                   </span>
-                  <span className="ai-app-card-info" data-name={`settings.ai-app.app-card-${idx + 1}-info`}>
-                    <span className="ai-app-card-name" data-name={`settings.ai-app.app-card-${idx + 1}-name`}>{displayName}</span>
-                    <span className="ai-app-card-url" data-name={`settings.ai-app.app-card-${idx + 1}-url`}>{shortUrl(displayUrl)}</span>
+                  <span
+                    className="ai-app-card-info"
+                    data-name={`settings.ai-app.app-card-${idx + 1}-info`}
+                  >
+                    <span
+                      className="ai-app-card-name"
+                      data-name={`settings.ai-app.app-card-${idx + 1}-name`}
+                    >
+                      {displayName}
+                    </span>
+                    <span
+                      className="ai-app-card-url"
+                      data-name={`settings.ai-app.app-card-${idx + 1}-url`}
+                    >
+                      {shortUrl(displayUrl)}
+                    </span>
                   </span>
-                  <div className="ai-app-card-actions" data-name={`settings.ai-app.app-card-${idx + 1}-actions`}>
+                  <div
+                    className="ai-app-card-actions"
+                    data-name={`settings.ai-app.app-card-${idx + 1}-actions`}
+                  >
                     <Button
                       variant="text"
                       className="btn-secondary-underline compact"
@@ -238,7 +257,7 @@ export default function AiAppSection({
                     </Button>
                   </div>
                 </div>
-              );
+              )
             })}
             {/* 卡片式新增按钮：追加在列表末尾 */}
             {onCreateNew && (
@@ -248,7 +267,9 @@ export default function AiAppSection({
                 onClick={handleCreateNew}
                 data-name="settings.ai-app.create-button"
               >
-                <span className="preset-card-add-icon" aria-hidden="true">+</span>
+                <span className="preset-card-add-icon" aria-hidden="true">
+                  +
+                </span>
                 <span className="preset-card-add-text">新建 AI 应用</span>
               </button>
             )}
@@ -256,5 +277,5 @@ export default function AiAppSection({
         </>
       )}
     </section>
-  );
+  )
 }

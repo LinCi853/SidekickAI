@@ -79,7 +79,10 @@ export interface CustomAIProvider {
 }
 
 /** 创建/更新 Provider 时传入的载荷（不含加密细节与自动维护字段） */
-export type CustomAIProviderInput = Omit<CustomAIProvider, 'id' | 'createdAt' | 'updatedAt' | 'lastUsedAt' | 'apiKeyUnavailable'>
+export type CustomAIProviderInput = Omit<
+  CustomAIProvider,
+  'id' | 'createdAt' | 'updatedAt' | 'lastUsedAt' | 'apiKeyUnavailable'
+>
 
 // ============================================================================
 // 对话持久化（SQLite）

@@ -34,12 +34,9 @@ export function registerAccumulatedLinksIpc(): void {
   )
 
   // 列出指定 Profile 的全部累积链接
-  ipcMain.handle(
-    IPC_CHANNELS.ACCUMULATED_LINK_LIST,
-    (_e, profileId: string): AccumulatedLink[] => {
-      return accumulatedLinksStore.list(profileId, isPersistent())
-    },
-  )
+  ipcMain.handle(IPC_CHANNELS.ACCUMULATED_LINK_LIST, (_e, profileId: string): AccumulatedLink[] => {
+    return accumulatedLinksStore.list(profileId, isPersistent())
+  })
 
   // 取出并清空指定 Profile 的全部累积链接
   ipcMain.handle(
@@ -50,11 +47,8 @@ export function registerAccumulatedLinksIpc(): void {
   )
 
   // 清空指定 Profile 的全部累积链接
-  ipcMain.handle(
-    IPC_CHANNELS.ACCUMULATED_LINK_CLEAR,
-    (_e, profileId: string) => {
-      accumulatedLinksStore.clear(profileId, isPersistent())
-      return true
-    },
-  )
+  ipcMain.handle(IPC_CHANNELS.ACCUMULATED_LINK_CLEAR, (_e, profileId: string) => {
+    accumulatedLinksStore.clear(profileId, isPersistent())
+    return true
+  })
 }

@@ -12,27 +12,27 @@
 
 ZIP 旁边的 `.manifest.json` 是无 BOM 的 UTF-8 JSON，使用以下字段；对象不得包含重复或未知字段。该清单是未签名的构建输入清单，和后文的官方本体证明是两种契约。
 
-| 字段 | 类型 | 含义 |
-| --- | --- | --- |
-| schemaVersion | 整数 | 固定为 1 |
-| kind | 字符串 | 固定为 application-payload |
-| edition | 字符串 | concept 或 community |
+| 字段           | 类型   | 含义                                                                               |
+| -------------- | ------ | ---------------------------------------------------------------------------------- |
+| schemaVersion  | 整数   | 固定为 1                                                                           |
+| kind           | 字符串 | 固定为 application-payload                                                         |
+| edition        | 字符串 | concept 或 community                                                               |
 | productVersion | 字符串 | 该应用的产品版本，最多 64 字符；三段数字没有多余前导零，可带非空的预发行与构建标识 |
-| architecture | 字符串 | x64 或 arm64 |
-| archive | 对象 | 同目录 ZIP 的身份 |
-| files | 数组 | ZIP 中全部普通文件的身份，1 至 5,000 项 |
+| architecture   | 字符串 | x64 或 arm64                                                                       |
+| archive        | 对象   | 同目录 ZIP 的身份                                                                  |
+| files          | 数组   | ZIP 中全部普通文件的身份，1 至 5,000 项                                            |
 
-| archive 字段 | 类型 | 含义 |
-| --- | --- | --- |
-| file | 字符串 | 以 `.zip` 结尾的文件名，不包含目录 |
-| size | 正整数 | ZIP 总字节数，最多 2,147,483,648 字节（2 GiB） |
-| sha256 | 字符串 | ZIP 原始字节的 SHA-256，小写十六进制 64 字符 |
+| archive 字段 | 类型   | 含义                                           |
+| ------------ | ------ | ---------------------------------------------- |
+| file         | 字符串 | 以 `.zip` 结尾的文件名，不包含目录             |
+| size         | 正整数 | ZIP 总字节数，最多 2,147,483,648 字节（2 GiB） |
+| sha256       | 字符串 | ZIP 原始字节的 SHA-256，小写十六进制 64 字符   |
 
-| files 元素字段 | 类型 | 含义 |
-| --- | --- | --- |
-| path | 字符串 | 相对 ZIP 根目录的文件路径，以 `/` 分隔，最多 240 个 UTF-8 字节 |
-| size | 非负整数 | 解压后的文件字节数；单文件及全部文件总和均不超过 8,589,934,592 字节（8 GiB） |
-| sha256 | 字符串 | 文件原始字节的 SHA-256，小写十六进制 64 字符 |
+| files 元素字段 | 类型     | 含义                                                                         |
+| -------------- | -------- | ---------------------------------------------------------------------------- |
+| path           | 字符串   | 相对 ZIP 根目录的文件路径，以 `/` 分隔，最多 240 个 UTF-8 字节               |
+| size           | 非负整数 | 解压后的文件字节数；单文件及全部文件总和均不超过 8,589,934,592 字节（8 GiB） |
+| sha256         | 字符串   | 文件原始字节的 SHA-256，小写十六进制 64 字符                                 |
 
 长度和文件数量均使用可精确表示的整数。路径拒绝反斜杠、冒号、控制字符、`< > " | ? *`、空路径段、`.`、`..`、以点或空格结尾的路径段及 Windows 保留设备名；文件路径不能同时充当另一文件的目录。不得以 SidekickAI、win-unpacked 或 win-arm64-unpacked 增加外层目录，也不得混入 portable.txt、portable-layout.json 或 portable-manifest.json。
 
@@ -56,28 +56,28 @@ flowchart LR
 
 箭头只表示文件内连续区域的排列。生产者在无证书表时必须让 footer 直接到达文件末尾，不添加对齐填充。当前原生读取器兼容接受未签名 footer 后最多 7 个零字节，JavaScript 读取器不接受；该容忍不属于生产者格式，第三方生产者不得依赖它。
 
-| 区域 | 长度 | 内容 |
-| --- | ---: | --- |
-| 原生向导 | W，且 W > 0 | Windows PE32+ 可执行映像 |
-| 应用载荷 | P | 离线包中的官方应用 ZIP；在线入口长度为 0 |
-| 提取器保留区域 | E，固定为 0 | 当前协议不携带外部提取器 |
-| 元数据 | M | UTF-8 JSON，1 至 8,388,608 字节 |
-| 尾部记录 | 68 | 下表定义的 footer |
-| 可选证书对齐 | 0 至 7 | 零字节，仅用于尾随 Authenticode 证书表对齐 |
-| 可选 Authenticode 证书表 | PE 安全目录声明的长度 | 必须一直延伸到文件末尾 |
+| 区域                     |                  长度 | 内容                                       |
+| ------------------------ | --------------------: | ------------------------------------------ |
+| 原生向导                 |           W，且 W > 0 | Windows PE32+ 可执行映像                   |
+| 应用载荷                 |                     P | 离线包中的官方应用 ZIP；在线入口长度为 0   |
+| 提取器保留区域           |           E，固定为 0 | 当前协议不携带外部提取器                   |
+| 元数据                   |                     M | UTF-8 JSON，1 至 8,388,608 字节            |
+| 尾部记录                 |                    68 | 下表定义的 footer                          |
+| 可选证书对齐             |                0 至 7 | 零字节，仅用于尾随 Authenticode 证书表对齐 |
+| 可选 Authenticode 证书表 | PE 安全目录声明的长度 | 必须一直延伸到文件末尾                     |
 
 设 footer 末尾的绝对文件偏移为 C，则 W = C − 68 − M − E − P。载荷起点为 W，元数据起点为 W + P + E，footer 起点为 C − 68。所有加减运算都必须检查溢出、下溢与文件边界。P 不得超过 2,147,483,648 字节。
 
 footer 的偏移相对于自身起点：
 
-| 偏移 | 长度 | 编码 | 字段 |
-| ---: | ---: | --- | --- |
-| 0 | 8 | 固定字节 | ASCII `SKSETUP3`，十六进制 `53 4b 53 45 54 55 50 33` |
-| 8 | 8 | uint64 little-endian | P，载荷长度 |
-| 16 | 8 | uint64 little-endian | E，必须为 0 |
-| 24 | 8 | uint64 little-endian | M，元数据长度 |
-| 32 | 32 | 原始摘要字节 | 元数据原始 UTF-8 字节的 SHA-256 |
-| 64 | 4 | uint32 little-endian | 固定为 68 |
+| 偏移 | 长度 | 编码                 | 字段                                                 |
+| ---: | ---: | -------------------- | ---------------------------------------------------- |
+|    0 |    8 | 固定字节             | ASCII `SKSETUP3`，十六进制 `53 4b 53 45 54 55 50 33` |
+|    8 |    8 | uint64 little-endian | P，载荷长度                                          |
+|   16 |    8 | uint64 little-endian | E，必须为 0                                          |
+|   24 |    8 | uint64 little-endian | M，元数据长度                                        |
+|   32 |   32 | 原始摘要字节         | 元数据原始 UTF-8 字节的 SHA-256                      |
+|   64 |    4 | uint32 little-endian | 固定为 68                                            |
 
 Magic 恰好为 8 字节，没有 NUL 终止符。footer 中的摘要不是十六进制文本。摘要绑定元数据实际字节，包括其空白与换行；元数据不要求采用签名正文的规范化 JSON 排版。
 
@@ -85,30 +85,30 @@ Magic 恰好为 8 字节，没有 NUL 终止符。footer 中的摘要不是十�
 
 生产者写出下列所有顶层字段；空值明确写为 JSON null。消费者拒绝未知顶层字段、不兼容协议和与当前向导不一致的路线或组件身份。
 
-| 字段 | 类型 | 约束 |
-| --- | --- | --- |
-| schemaVersion | 整数 | 3 |
-| edition | 字符串 | 与向导路线相同 |
-| productVersion | 字符串 | 本次应用产品版本，与本体证明一致 |
-| componentVersion | 字符串 | 与向导自身维护组件版本严格相同；独立于产品版本 |
-| uninstallProtocolVersion | 整数 | 2 |
-| distributionProtocolVersion | 整数 | 1 |
-| distributionMode | 字符串 | offline 或 online |
-| targetArchitecture | 字符串或 null | 见包型约束 |
-| executableArchitecture | 字符串 | x64 或 arm64，声明入口可执行架构 |
-| supportedNativeArchitectures | 字符串数组 | 1 或 2 个不重复的 x64/arm64 |
-| distributionProof | 签名信封或 null | 离线包的官方本体证明 |
-| features | 数组 | 0 至 128 个安装功能描述，id 不重复 |
-| options | 数组 | 0 至 128 个安装选项描述，id 不重复 |
-| payload | Blob 描述或 null | 嵌入载荷的身份 |
-| extractor | null | 当前协议固定为 null |
+| 字段                         | 类型             | 约束                                           |
+| ---------------------------- | ---------------- | ---------------------------------------------- |
+| schemaVersion                | 整数             | 3                                              |
+| edition                      | 字符串           | 与向导路线相同                                 |
+| productVersion               | 字符串           | 本次应用产品版本，与本体证明一致               |
+| componentVersion             | 字符串           | 与向导自身维护组件版本严格相同；独立于产品版本 |
+| uninstallProtocolVersion     | 整数             | 2                                              |
+| distributionProtocolVersion  | 整数             | 1                                              |
+| distributionMode             | 字符串           | offline 或 online                              |
+| targetArchitecture           | 字符串或 null    | 见包型约束                                     |
+| executableArchitecture       | 字符串           | x64 或 arm64，声明入口可执行架构               |
+| supportedNativeArchitectures | 字符串数组       | 1 或 2 个不重复的 x64/arm64                    |
+| distributionProof            | 签名信封或 null  | 离线包的官方本体证明                           |
+| features                     | 数组             | 0 至 128 个安装功能描述，id 不重复             |
+| options                      | 数组             | 0 至 128 个安装选项描述，id 不重复             |
+| payload                      | Blob 描述或 null | 嵌入载荷的身份                                 |
+| extractor                    | null             | 当前协议固定为 null                            |
 
 Blob 描述只含 size 和 sha256；size 是载荷字节数，sha256 是小写十六进制 64 字符摘要。离线载荷 size 必须大于 0，并与 footer 的 P 一致。
 
-| 包型 | 路线 | targetArchitecture | executableArchitecture | supportedNativeArchitectures | payload / distributionProof |
-| --- | --- | --- | --- | --- | --- |
-| 单架构离线安装器 | concept | x64 或 arm64 | 与目标相同 | 仅目标架构 | 均非 null，嵌入 P > 0 |
-| 在线入口 | community | null | x64 | x64 与 arm64，恰好各一次 | 均为 null，P = 0 |
+| 包型             | 路线      | targetArchitecture | executableArchitecture | supportedNativeArchitectures | payload / distributionProof |
+| ---------------- | --------- | ------------------ | ---------------------- | ---------------------------- | --------------------------- |
+| 单架构离线安装器 | concept   | x64 或 arm64       | 与目标相同             | 仅目标架构                   | 均非 null，嵌入 P > 0       |
+| 在线入口         | community | null               | x64                    | x64 与 arm64，恰好各一次     | 均为 null，P = 0            |
 
 目标 Windows 的原生架构必须在 supportedNativeArchitectures 中；非 null 的 targetArchitecture 还必须与其相等。ARM64 系统上能够运行 x64 入口，不等于允许安装 x64 本体。
 
@@ -126,11 +126,11 @@ Blob 描述只含 size 和 sha256；size 是载荷字节数，sha256 是小写�
 
 信封只有 payload 和 signature 两个字段。payload 是下述某一种正文对象，signature 是包含正文的三段 Compact JWS 字符串。
 
-| 签名用途 typ | 正文 |
-| --- | --- |
-| sidekickai-application-body-v1 | 安装或绿色本体 |
-| sidekickai-backup-runtime-v1 | 独立备份恢复组件 |
-| sidekickai-application-release-v1 | 一次发行及其资产 |
+| 签名用途 typ                      | 正文                     |
+| --------------------------------- | ------------------------ |
+| sidekickai-application-body-v1    | 安装或绿色本体           |
+| sidekickai-backup-runtime-v1      | 独立备份恢复组件         |
+| sidekickai-application-release-v1 | 一次发行及其资产         |
 | sidekickai-application-channel-v1 | 有时限且防倒退的频道选择 |
 
 JWS 头部只含 alg、kid、typ。alg 固定为 EdDSA，kid 为预置信任集合内的密钥 id，typ 必须与当前验证目的完全相同。公钥使用 JWK 的 OKP / Ed25519 形式；x 是 32 字节公钥的无填充 Base64url 编码。正文或容器携带的公钥不会自动成为信任来源。
@@ -149,20 +149,20 @@ JWS 头部只含 alg、kid、typ。alg 固定为 EdDSA，kid 为预置信任集�
 
 SKSETUP3 离线包中的 distributionProof 使用本体用途。该 payload 只有以下字段：
 
-| 字段 | 值或含义 |
-| --- | --- |
-| protocolVersion | 1 |
-| productId | sidekickai |
-| edition | concept 或 community |
-| productVersion | 应用产品版本 |
-| variant | installed 或 portable |
-| platform | windows |
-| nativeArchitectures | 不重复的原生架构列表 |
-| maintenanceProtocolVersion | 1 |
-| recoveryProtocolVersion | 1 |
-| archive | installed 的 ZIP 描述；portable 为 null |
-| files | 最终普通文件清单 |
-| components | 对应各原生架构的备份恢复组件绑定 |
+| 字段                       | 值或含义                                |
+| -------------------------- | --------------------------------------- |
+| protocolVersion            | 1                                       |
+| productId                  | sidekickai                              |
+| edition                    | concept 或 community                    |
+| productVersion             | 应用产品版本                            |
+| variant                    | installed 或 portable                   |
+| platform                   | windows                                 |
+| nativeArchitectures        | 不重复的原生架构列表                    |
+| maintenanceProtocolVersion | 1                                       |
+| recoveryProtocolVersion    | 1                                       |
+| archive                    | installed 的 ZIP 描述；portable 为 null |
+| files                      | 最终普通文件清单                        |
+| components                 | 对应各原生架构的备份恢复组件绑定        |
 
 installed 恰好声明一个架构；它的 archive 只有 sha256、sizeBytes、expandedBytes、fileCount。sizeBytes 必须在 1 至 2,147,483,648 之间。expandedBytes 等于 files 中所有 sizeBytes 之和，fileCount 等于 files 的元素数。离线 metadata.productVersion、payload.size 和 payload.sha256 必须分别与正文 productVersion、archive.sizeBytes 和 archive.sha256 相同。
 
@@ -178,16 +178,16 @@ components 的数量等于 nativeArchitectures 的数量，每个架构恰好一
 
 恢复组件使用独立签名用途，避免把其他用途的合法签名误认成恢复资源许可。
 
-| 字段 | 值或含义 |
-| --- | --- |
-| protocolVersion / productId / edition | 1 / sidekickai / 本体路线 |
-| componentId | backup-runtime |
-| componentVersion | 独立恢复组件版本 |
-| nativeArchitecture | 与组件绑定相同的 x64 或 arm64 |
-| archive | 只有 sha256、sizeBytes 的 ZIP 描述 |
-| files | 与本体 files 使用相同元素格式 |
-| exportProtocolVersion / recoveryProtocolVersion | 均为 1 |
-| entrypoints | 只有 export、restore 的对象 |
+| 字段                                            | 值或含义                           |
+| ----------------------------------------------- | ---------------------------------- |
+| protocolVersion / productId / edition           | 1 / sidekickai / 本体路线          |
+| componentId                                     | backup-runtime                     |
+| componentVersion                                | 独立恢复组件版本                   |
+| nativeArchitecture                              | 与组件绑定相同的 x64 或 arm64      |
+| archive                                         | 只有 sha256、sizeBytes 的 ZIP 描述 |
+| files                                           | 与本体 files 使用相同元素格式      |
+| exportProtocolVersion / recoveryProtocolVersion | 均为 1                             |
+| entrypoints                                     | 只有 export、restore 的对象        |
 
 entrypoints.export 固定为 export.mjs，entrypoints.restore 固定为 sidekick-backup.cjs；这两个文件和 node.exe 必须存在于组件 files。node.exe 的 executableArchitecture 必须与 nativeArchitecture 一致。其余非 anycpu 原生文件也必须与组件架构一致。运行恢复入口前仍须验证组件归档及解压后的每份文件。
 

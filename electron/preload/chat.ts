@@ -8,13 +8,7 @@ export const chatApi = {
     listConversations: (sourceId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_CONVERSATIONS, sourceId),
     createConversation: (sourceId: string, sourceType: string, title: string, url: string) =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.CHAT_CREATE_CONVERSATION,
-        sourceId,
-        sourceType,
-        title,
-        url,
-      ),
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_CONVERSATION, sourceId, sourceType, title, url),
     getLastConversationUrl: (sourceId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_LAST_CONV_URL, sourceId),
     deleteConversation: (id: string) =>
@@ -37,14 +31,13 @@ export const chatApi = {
     cancel: (conversationId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CANCEL, conversationId),
     onStreamChunk: (callback: (chunk: ChatStreamChunk) => void) => {
-      const handler = (
-        _e: unknown,
-        chunk: ChatStreamChunk,
-      ) => callback(chunk)
+      const handler = (_e: unknown, chunk: ChatStreamChunk) => callback(chunk)
       ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_CHUNK, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM_CHUNK, handler)
     },
-    onStreamEnd: (callback: (info: { conversationId: string; ok: boolean; error?: string }) => void) => {
+    onStreamEnd: (
+      callback: (info: { conversationId: string; ok: boolean; error?: string }) => void,
+    ) => {
       const handler = (
         _e: unknown,
         info: { conversationId: string; ok: boolean; error?: string },
@@ -52,8 +45,7 @@ export const chatApi = {
       ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_END, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM_END, handler)
     },
-    logLoginTrace: (trace: unknown) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOG_LOGIN_TRACE, trace),
+    logLoginTrace: (trace: unknown) => ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOG_LOGIN_TRACE, trace),
     listWindowTraces: (windowId: string, limit?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_WINDOW_TRACES, windowId, limit),
     listLoginTraces: (profileId: string) =>
@@ -71,8 +63,7 @@ export const chatApi = {
     clearWindowTraces: (windowId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_WINDOW_TRACES, windowId),
     // 使用统计与操作日志
-    clearUsageTraces: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_CLEAR),
+    clearUsageTraces: () => ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_CLEAR),
     updateMessage: (messageId: string, updates: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_MESSAGE, messageId, updates),
     deleteMessage: (messageId: string) =>
@@ -82,8 +73,7 @@ export const chatApi = {
     openHistoryWindow: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_OPEN_HISTORY_WINDOW),
     updateDetachedWindow: (windowId: string, config: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_DETACHED, windowId, config),
-    getChatConfig: (windowId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_CONFIG, windowId),
+    getChatConfig: (windowId: string) => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_CONFIG, windowId),
     // Alt+Q 无对话窗口时，主进程请求打开配置
     onRequestConfig: (callback: () => void) => {
       const handler = () => callback()
@@ -100,7 +90,8 @@ export const chatApi = {
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_DELETE, id),
     test: (input: unknown) => ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_TEST, input),
     listModels: (input: unknown) => ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_LIST_MODELS, input),
-    exportEncrypted: (password: string, selectedIds?: string[]) => ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_EXPORT_ENCRYPTED, password, selectedIds),
+    exportEncrypted: (password: string, selectedIds?: string[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_EXPORT_ENCRYPTED, password, selectedIds),
     importEncrypted: (encrypted: string, password: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AI_PROVIDER_IMPORT_ENCRYPTED, encrypted, password),
     // v0.5.2 B-4：预览导入（dry-run）

@@ -4,29 +4,29 @@
         是否显示到书签栏 / 是否展示书签栏 / 书签管理器
    ===================================================================== */
 
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react'
 
-import Popover, { PopoverItem, PopoverDivider } from '../../../components/ui/Popover';
-import { Button, FormRow, Modal } from '../../../components/ui';
-import type { Bookmark } from '../../../lib/electron-api';
+import Popover, { PopoverItem, PopoverDivider } from '../../../components/ui/Popover'
+import { Button, FormRow, Modal } from '../../../components/ui'
+import type { Bookmark } from '../../../lib/electron-api'
 
 interface BookmarkContextMenuProps {
-  position: { x: number; y: number };
-  bookmark: Bookmark;
-  bookmarkBarVisible: boolean;
-  onClose: () => void;
-  onOpenInNewTab: () => void;
-  onOpenInNewWindow?: () => void;
-  onEdit: () => void;
-  onCut: () => void;
-  onCopy: () => void;
-  onPaste: () => void;
-  onDelete: () => void;
-  onToggleBarVisibility: () => void;
-  onToggleBookmarkBar: () => void;
-  onOpenManager: () => void;
+  position: { x: number; y: number }
+  bookmark: Bookmark
+  bookmarkBarVisible: boolean
+  onClose: () => void
+  onOpenInNewTab: () => void
+  onOpenInNewWindow?: () => void
+  onEdit: () => void
+  onCut: () => void
+  onCopy: () => void
+  onPaste: () => void
+  onDelete: () => void
+  onToggleBarVisibility: () => void
+  onToggleBookmarkBar: () => void
+  onOpenManager: () => void
   /** 剪贴板是否有内容可粘贴 */
-  hasClipboard: boolean;
+  hasClipboard: boolean
 }
 
 export default function BookmarkContextMenu({
@@ -46,11 +46,10 @@ export default function BookmarkContextMenu({
   onOpenManager,
   hasClipboard,
 }: BookmarkContextMenuProps) {
-
   const run = (fn: () => void) => () => {
-    fn();
-    onClose();
-  };
+    fn()
+    onClose()
+  }
 
   return (
     <Popover
@@ -61,17 +60,35 @@ export default function BookmarkContextMenu({
       config={{ closeOnOutsideClick: true, closeOnEsc: true }}
       dataName="browser.bookmark-context-menu"
     >
-      <PopoverItem onClick={run(onOpenInNewTab)} label="在新标签页中打开" dataName="browser.bookmark-ctx-open" />
+      <PopoverItem
+        onClick={run(onOpenInNewTab)}
+        label="在新标签页中打开"
+        dataName="browser.bookmark-ctx-open"
+      />
       {onOpenInNewWindow && (
-        <PopoverItem onClick={run(onOpenInNewWindow)} label="在新窗口中打开" dataName="browser.bookmark-ctx-open-window" />
+        <PopoverItem
+          onClick={run(onOpenInNewWindow)}
+          label="在新窗口中打开"
+          dataName="browser.bookmark-ctx-open-window"
+        />
       )}
       <PopoverItem onClick={run(onEdit)} label="修改" dataName="browser.bookmark-ctx-edit" />
       <PopoverDivider />
       <PopoverItem onClick={run(onCut)} label="剪切" dataName="browser.bookmark-ctx-cut" />
       <PopoverItem onClick={run(onCopy)} label="复制" dataName="browser.bookmark-ctx-copy" />
-      <PopoverItem onClick={run(onPaste)} label="粘贴" disabled={!hasClipboard} dataName="browser.bookmark-ctx-paste" />
+      <PopoverItem
+        onClick={run(onPaste)}
+        label="粘贴"
+        disabled={!hasClipboard}
+        dataName="browser.bookmark-ctx-paste"
+      />
       <PopoverDivider />
-      <PopoverItem onClick={run(onDelete)} label="删除" danger dataName="browser.bookmark-ctx-delete" />
+      <PopoverItem
+        onClick={run(onDelete)}
+        label="删除"
+        danger
+        dataName="browser.bookmark-ctx-delete"
+      />
       <PopoverDivider />
       <PopoverItem
         onClick={run(onToggleBarVisibility)}
@@ -86,9 +103,13 @@ export default function BookmarkContextMenu({
         dataName="browser.bookmark-ctx-toggle-bar-visibility"
       />
       <PopoverDivider />
-      <PopoverItem onClick={run(onOpenManager)} label="书签管理器" dataName="browser.bookmark-ctx-manager" />
+      <PopoverItem
+        onClick={run(onOpenManager)}
+        label="书签管理器"
+        dataName="browser.bookmark-ctx-manager"
+      />
     </Popover>
-  );
+  )
 }
 
 /** 书签编辑弹窗（使用共享 Modal 组件，ESC + 遮罩点击关闭由 Modal 自动处理；portal 渲染到 body 覆盖整个 browser.container） */
@@ -97,12 +118,12 @@ export function BookmarkEditDialog({
   onSave,
   onCancel,
 }: {
-  bookmark: Bookmark;
-  onSave: (title: string, url: string) => void;
-  onCancel: () => void;
+  bookmark: Bookmark
+  onSave: (title: string, url: string) => void
+  onCancel: () => void
 }) {
-  const [title, setTitle] = useState(bookmark.title);
-  const [url, setUrl] = useState(bookmark.url);
+  const [title, setTitle] = useState(bookmark.title)
+  const [url, setUrl] = useState(bookmark.url)
 
   // Modal 内部已处理 ESC 与遮罩点击关闭，无需手动监听
   const inputStyle: CSSProperties = {
@@ -115,7 +136,7 @@ export function BookmarkEditDialog({
     fontSize: 'var(--text-sm)',
     outline: 'none',
     boxSizing: 'border-box',
-  };
+  }
 
   return (
     <Modal
@@ -146,12 +167,31 @@ export function BookmarkEditDialog({
         />
       </FormRow>
       <div
-        style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-1)', marginTop: 'var(--space-3)' }}
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 'var(--space-1)',
+          marginTop: 'var(--space-3)',
+        }}
         data-name="browser.bookmark-edit-actions"
       >
-        <Button type="button" variant="outline" onClick={onCancel} data-name="browser.bookmark-edit-cancel">取消</Button>
-        <Button type="button" variant="primary" onClick={() => onSave(title, url)} data-name="browser.bookmark-edit-save">保存</Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          data-name="browser.bookmark-edit-cancel"
+        >
+          取消
+        </Button>
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => onSave(title, url)}
+          data-name="browser.bookmark-edit-save"
+        >
+          保存
+        </Button>
       </div>
     </Modal>
-  );
+  )
 }

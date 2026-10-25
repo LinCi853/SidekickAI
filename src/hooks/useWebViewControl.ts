@@ -7,8 +7,8 @@
 
 /** webview 元素最小接口（仅注入所需方法） */
 export interface WebviewLike {
-  executeJavaScript(script: string): Promise<unknown>;
-  focus?(): void;
+  executeJavaScript(script: string): Promise<unknown>
+  focus?(): void
 }
 
 const nativeComposerInputScript = `function findNativeComposerInput(inputSel, composerSel) {
@@ -22,7 +22,7 @@ const nativeComposerInputScript = `function findNativeComposerInput(inputSel, co
   var active = document.activeElement;
   if (active && active.matches(inputSel || 'textarea, [contenteditable="true"]')) return inputs.includes(active) ? active : null;
   return inputs.length === 1 ? inputs[0] : null;
-}`;
+}`
 
 /**
  * 构建「明输入明注入」脚本 —— 将文本填入 AI 平台输入框。
@@ -49,7 +49,11 @@ const nativeComposerInputScript = `function findNativeComposerInput(inputSel, co
  *  - 派发 input/change 事件让 React 同步 internal state，避免用户点击输入框时
  *    React 用空 state 覆盖 DOM value 导致注入文本消失
  */
-export function buildInjectionScript(text: string, selector?: string | null, nativeComposerSelector?: string | null): string {
+export function buildInjectionScript(
+  text: string,
+  selector?: string | null,
+  nativeComposerSelector?: string | null,
+): string {
   return `(function(text, selector, nativeComposerSel) {
   ${nativeComposerInputScript}
   var nativeSetter = Object.getOwnPropertyDescriptor(
@@ -178,7 +182,7 @@ export function buildInjectionScript(text: string, selector?: string | null, nat
   setTimeout(cleanupSidebarArtifacts, 400);
 
   return true;
-})(${JSON.stringify(text)}, ${JSON.stringify(selector ?? null)}, ${JSON.stringify(nativeComposerSelector ?? null)})`;
+})(${JSON.stringify(text)}, ${JSON.stringify(selector ?? null)}, ${JSON.stringify(nativeComposerSelector ?? null)})`
 }
 
 /**
@@ -192,11 +196,13 @@ export async function injectTextToWebview(
   nativeComposerSelector?: string | null,
 ): Promise<boolean> {
   try {
-    const result = await webview.executeJavaScript(buildInjectionScript(text, selector, nativeComposerSelector));
-    return Boolean(result);
+    const result = await webview.executeJavaScript(
+      buildInjectionScript(text, selector, nativeComposerSelector),
+    )
+    return Boolean(result)
   } catch (e) {
-    console.error('[injectTextToWebview] 注入失败:', e);
-    return false;
+    console.error('[injectTextToWebview] 注入失败:', e)
+    return false
   }
 }
 
@@ -259,13 +265,13 @@ export async function triggerSendInWebview(
   } catch (e) {
     return false;
   }
-})(${JSON.stringify(sendSelector ?? null)}, ${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendEvent)}, ${JSON.stringify(nativeComposerSelector ?? null)})`;
+})(${JSON.stringify(sendSelector ?? null)}, ${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendEvent)}, ${JSON.stringify(nativeComposerSelector ?? null)})`
   try {
-    const result = await webview.executeJavaScript(script);
-    return Boolean(result);
+    const result = await webview.executeJavaScript(script)
+    return Boolean(result)
   } catch (e) {
-    console.error('[triggerSendInWebview] 触发发送失败:', e);
-    return false;
+    console.error('[triggerSendInWebview] 触发发送失败:', e)
+    return false
   }
 }
 
@@ -304,13 +310,13 @@ export async function clearConversationInWebview(
   clear(el);
   try { el.blur(); } catch (e) {}
   return true;
-})(${JSON.stringify(inputSelector ?? null)})`;
+})(${JSON.stringify(inputSelector ?? null)})`
   try {
-    const result = await webview.executeJavaScript(script);
-    return Boolean(result);
+    const result = await webview.executeJavaScript(script)
+    return Boolean(result)
   } catch (e) {
-    console.error('[clearConversationInWebview] 清空失败:', e);
-    return false;
+    console.error('[clearConversationInWebview] 清空失败:', e)
+    return false
   }
 }
 
@@ -330,13 +336,13 @@ export async function focusInputInWebview(
   if (!el) return false;
   try { el.focus(); } catch (e) { return false; }
   return true;
-})(${JSON.stringify(inputSelector ?? null)})`;
+})(${JSON.stringify(inputSelector ?? null)})`
   try {
-    const result = await webview.executeJavaScript(script);
-    return Boolean(result);
+    const result = await webview.executeJavaScript(script)
+    return Boolean(result)
   } catch (e) {
-    console.error('[focusInputInWebview] 聚焦失败:', e);
-    return false;
+    console.error('[focusInputInWebview] 聚焦失败:', e)
+    return false
   }
 }
 
@@ -429,12 +435,12 @@ export async function injectEnterSendBehavior(
   }, true);
 
   return true;
-})(${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendSelector ?? null)})`;
+})(${JSON.stringify(inputSelector ?? null)}, ${JSON.stringify(sendSelector ?? null)})`
   try {
-    const result = await webview.executeJavaScript(script);
-    return Boolean(result);
+    const result = await webview.executeJavaScript(script)
+    return Boolean(result)
   } catch (e) {
-    console.error('[injectEnterSendBehavior] 注入失败:', e);
-    return false;
+    console.error('[injectEnterSendBehavior] 注入失败:', e)
+    return false
   }
 }

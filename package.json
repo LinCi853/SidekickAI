@@ -29,6 +29,8 @@
     "test:memory-reclaim": "node scripts/verify-resident-memory-ab.mjs 45 --enabled-only --functional --reclaim-flow",
     "test:memory-browsers": "node scripts/verify-resident-memory-ab.mjs 45 --enabled-only --functional --browsers --active-input",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "clean": "npm run clean:build && npm run clean:temp",
     "clean:budget": "node scripts/clean-budget.cjs && node scripts/clean-temp.cjs",
     "clean:temp": "node scripts/clean-temp.cjs",
@@ -73,6 +75,7 @@
     "uiohook-napi": "^1.5.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
     "@electron/rebuild": "^4.2.1",
     "@excalidraw/excalidraw": "^0.18.1",
     "@types/adm-zip": "^0.5.7",

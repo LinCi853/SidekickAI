@@ -13,7 +13,12 @@ vi.mock('./module-state-store.js', () => ({
 }))
 vi.mock('./store-paths.js', () => ({ isPortableMode: () => false }))
 
-import { readSettingsRaw, resetSettingsCacheForTest, validateAppSettingsPatch, writeSettingsRaw } from './app-settings-repository.js'
+import {
+  readSettingsRaw,
+  resetSettingsCacheForTest,
+  validateAppSettingsPatch,
+  writeSettingsRaw,
+} from './app-settings-repository.js'
 
 describe('Application settings persistence', () => {
   beforeEach(() => {
@@ -23,7 +28,12 @@ describe('Application settings persistence', () => {
   })
 
   it('loads valid old preferences while defaulting invalid fields without rewriting stored bytes', () => {
-    data.raw = JSON.stringify({ proxyMode: 'broken', enterToSend: false, notesSidebarWidth: -2, hiddenPlatforms: [42] })
+    data.raw = JSON.stringify({
+      proxyMode: 'broken',
+      enterToSend: false,
+      notesSidebarWidth: -2,
+      hiddenPlatforms: [42],
+    })
     const original = data.raw
     const settings = readSettingsRaw()
     expect(settings.enterToSend).toBe(false)
@@ -37,7 +47,9 @@ describe('Application settings persistence', () => {
   it('keeps the last durable preferences when writing fails', () => {
     writeSettingsRaw(getDefaultAppSettings(false))
     data.fail = true
-    expect(() => writeSettingsRaw({ ...readSettingsRaw(), enterToSend: false })).toThrow('Storage unavailable')
+    expect(() => writeSettingsRaw({ ...readSettingsRaw(), enterToSend: false })).toThrow(
+      'Storage unavailable',
+    )
     expect(readSettingsRaw().enterToSend).toBe(true)
   })
 
@@ -61,12 +73,26 @@ describe('Application settings persistence', () => {
   })
 
   it('rejects malformed runtime updates before persisting them', () => {
-    for (const patch of [{ autoLaunch: 'false' }, { logLevel: 'trace' }, { cookiePopupCooldownMs: NaN }, { defaultSearchEngine: [] }, { topBarVisibleButtons: ['invalid'] }]) {
+    for (const patch of [
+      { autoLaunch: 'false' },
+      { logLevel: 'trace' },
+      { cookiePopupCooldownMs: NaN },
+      { defaultSearchEngine: [] },
+      { topBarVisibleButtons: ['invalid'] },
+    ]) {
       expect(() => validateAppSettingsPatch(patch)).toThrow()
     }
     expect(data.raw).toBeNull()
-    expect(validateAppSettingsPatch({ enterToSend: false, chatSidebarWidth: 212, cookieWhitelist: ['example.com'] })).toEqual({
-      enterToSend: false, chatSidebarWidth: 212, cookieWhitelist: ['example.com'],
+    expect(
+      validateAppSettingsPatch({
+        enterToSend: false,
+        chatSidebarWidth: 212,
+        cookieWhitelist: ['example.com'],
+      }),
+    ).toEqual({
+      enterToSend: false,
+      chatSidebarWidth: 212,
+      cookieWhitelist: ['example.com'],
     })
   })
 

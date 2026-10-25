@@ -14,15 +14,33 @@ function fixture(t) {
   return root
 }
 
-test('compilation skips identical inputs and rebuilds corrupted outputs or changed dependencies', t => {
+test('compilation skips identical inputs and rebuilds corrupted outputs or changed dependencies', (t) => {
   const root = fixture(t)
   const write = (file, bytes) => {
     const destination = path.join(root, file)
     fs.mkdirSync(path.dirname(destination), { recursive: true })
     fs.writeFileSync(destination, bytes)
   }
-  for (const dir of ['electron', 'src', 'resources', 'packages/product-contract', 'packages/desktop-common', 'packages/backup-core', 'packages/resource-contract', 'electron/shared']) fs.mkdirSync(path.join(root, dir), { recursive: true })
-  for (const file of ['product-edition.json', 'package.json', 'electron.vite.config.ts', 'scripts/compilation-inputs.ts', 'tsconfig.json', 'tsconfig.node.json']) write(file, '{}')
+  for (const dir of [
+    'electron',
+    'src',
+    'resources',
+    'packages/product-contract',
+    'packages/desktop-common',
+    'packages/backup-core',
+    'packages/resource-contract',
+    'electron/shared',
+  ])
+    fs.mkdirSync(path.join(root, dir), { recursive: true })
+  for (const file of [
+    'product-edition.json',
+    'package.json',
+    'electron.vite.config.ts',
+    'scripts/compilation-inputs.ts',
+    'tsconfig.json',
+    'tsconfig.node.json',
+  ])
+    write(file, '{}')
   write('package-lock.json', JSON.stringify({ packages: { 'node_modules/runtime': {} } }))
   write('node_modules/runtime/package.json', '{}')
   write('node_modules/runtime/dist/index.js', 'first dependency')
@@ -38,12 +56,21 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   const run = () => {
     builds++
     for (const target of ['main', 'preload', 'renderer']) {
-      write(`out/${target}/index.js`, fs.readFileSync(path.join(root, 'node_modules/runtime/dist/index.js')))
-      const modules = ['node_modules/runtime/dist/index.js', 'electron/shared/used.mjs'].filter(file => fs.existsSync(path.join(root, file)))
-      write(`out/${target}/compilation-inputs.json`, JSON.stringify({ schemaVersion: 1, target, modules, outputs: [] }))
+      write(
+        `out/${target}/index.js`,
+        fs.readFileSync(path.join(root, 'node_modules/runtime/dist/index.js')),
+      )
+      const modules = ['node_modules/runtime/dist/index.js', 'electron/shared/used.mjs'].filter(
+        (file) => fs.existsSync(path.join(root, file)),
+      )
+      write(
+        `out/${target}/compilation-inputs.json`,
+        JSON.stringify({ schemaVersion: 1, target, modules, outputs: [] }),
+      )
     }
   }
-  const compile = () => application.compile(path.join(root, 'evidence'), run, root, path.join(root, 'cache'))
+  const compile = () =>
+    application.compile(path.join(root, 'evidence'), run, root, path.join(root, 'cache'))
   const first = compile()
   assert.equal(builds, 1)
   assert.equal(compile().outputFingerprint, first.outputFingerprint)
@@ -61,17 +88,25 @@ test('compilation skips identical inputs and rebuilds corrupted outputs or chang
   compile()
   assert.equal(builds, 4)
   const current = compile()
-  const record = JSON.parse(fs.readFileSync(path.join(root, 'cache/application-build', `${current.key}.json`)))
+  const record = JSON.parse(
+    fs.readFileSync(path.join(root, 'cache/application-build', `${current.key}.json`)),
+  )
   fs.writeFileSync(path.join(record.value.directory, 'main/index.js'), 'corrupt')
   compile()
   assert.equal(builds, 5)
-  assert.equal(cache.inspect('application-build', current.key, path.join(root, 'cache')).reason, 'matched')
+  assert.equal(
+    cache.inspect('application-build', current.key, path.join(root, 'cache')).reason,
+    'matched',
+  )
   write('node_modules/esbuild/dist/tool.js', 'second tool')
   assert.notEqual(compile().key, first.key)
   assert.equal(builds, 6)
   const previous = process.env.SIDEKICK_REBUILD_ALL
   process.env.SIDEKICK_REBUILD_ALL = '1'
-  try { compile(); assert.equal(builds, 7) } finally {
+  try {
+    compile()
+    assert.equal(builds, 7)
+  } finally {
     if (previous === undefined) delete process.env.SIDEKICK_REBUILD_ALL
     else process.env.SIDEKICK_REBUILD_ALL = previous
   }

@@ -5,8 +5,8 @@
    - detectPromptHotkeyConflicts: 检查 prompt 列表中的快捷键冲突
    ===================================================================== */
 
-import type { HotkeyConfig, PromptTemplate } from './electron-api';
-import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
+import type { HotkeyConfig, PromptTemplate } from './electron-api'
+import { hasUsablePromptContent } from '../../electron/shared/prompt-template'
 
 /**
  * 将 KeyboardEvent 归一化为 Electron accelerator 字符串（如 "Ctrl+Shift+1"）。
@@ -15,24 +15,24 @@ import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
  * - 单字符 key 转大写；空格转为 "Space"
  */
 export function keyEventToAccelerator(e: KeyboardEvent): string | null {
-  const mods: string[] = [];
-  if (e.ctrlKey) mods.push('Ctrl');
-  if (e.altKey) mods.push('Alt');
-  if (e.shiftKey) mods.push('Shift');
-  if (e.metaKey) mods.push('Meta');
+  const mods: string[] = []
+  if (e.ctrlKey) mods.push('Ctrl')
+  if (e.altKey) mods.push('Alt')
+  if (e.shiftKey) mods.push('Shift')
+  if (e.metaKey) mods.push('Meta')
   // 至少一个修饰键才视为快捷键
-  if (mods.length === 0) return null;
+  if (mods.length === 0) return null
 
-  let key = e.key;
+  let key = e.key
   // 纯修饰键按下（key === 'Control' 等）：跳过
-  if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return null;
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return null
   // 空格归一化为 Space
-  if (key === ' ') key = 'Space';
+  if (key === ' ') key = 'Space'
   // 单字符转大写
-  if (key.length === 1) key = key.toUpperCase();
+  if (key.length === 1) key = key.toUpperCase()
   // 其他特殊键（F1-F12、ArrowLeft 等）保持原样
 
-  return [...mods, key].join('+');
+  return [...mods, key].join('+')
 }
 
 /**
@@ -56,7 +56,7 @@ export const APP_HOTKEY_PRESETS: Array<{ label: string; accelerator: string }> =
   { label: '切换到上一个标签', accelerator: 'Ctrl+Shift+Tab' },
   { label: '脱离当前标签', accelerator: 'Ctrl+T' },
   { label: '关闭当前标签', accelerator: 'Ctrl+W' },
-];
+]
 
 /**
  * 构建冲突检测所需的其他热键列表。
@@ -80,8 +80,8 @@ export function buildOtherHotkeysForPrompt(
     ...allPrompts
       .filter((p) => p.id !== currentPromptId && p.hotkey && hasUsablePromptContent(p))
       .map((p) => ({ label: `提示词「${p.title}」`, accelerator: p.hotkey as string })),
-  ];
-  return result;
+  ]
+  return result
 }
 
 /**
@@ -95,36 +95,36 @@ export function detectPromptHotkeyConflicts(
   appHotkeys: HotkeyConfig[],
 ): Map<string, string> {
   // accelerator → 占用者 label
-  const occupied = new Map<string, string>();
+  const occupied = new Map<string, string>()
   for (const preset of APP_HOTKEY_PRESETS) {
-    occupied.set(preset.accelerator, preset.label);
+    occupied.set(preset.accelerator, preset.label)
   }
   for (const h of appHotkeys) {
     if (h.enabled && h.accelerator) {
-      occupied.set(h.accelerator, h.label);
+      occupied.set(h.accelerator, h.label)
     }
   }
 
-  const conflicts = new Map<string, string>(); // promptId → 冲突描述
-  const promptOccupied = new Map<string, string>(); // accelerator → promptTitle（用于 prompt 之间冲突）
+  const conflicts = new Map<string, string>() // promptId → 冲突描述
+  const promptOccupied = new Map<string, string>() // accelerator → promptTitle（用于 prompt 之间冲突）
 
   for (const p of prompts) {
-    if (!p.hotkey || !hasUsablePromptContent(p)) continue;
-    const acc = p.hotkey;
+    if (!p.hotkey || !hasUsablePromptContent(p)) continue
+    const acc = p.hotkey
     // 与应用快捷键冲突
-    const appConflict = occupied.get(acc);
+    const appConflict = occupied.get(acc)
     if (appConflict) {
-      conflicts.set(p.id, `「${p.title}」快捷键 ${acc} 与应用内置「${appConflict}」冲突，已跳过`);
-      continue;
+      conflicts.set(p.id, `「${p.title}」快捷键 ${acc} 与应用内置「${appConflict}」冲突，已跳过`)
+      continue
     }
     // 与其他 prompt 冲突
-    const otherPrompt = promptOccupied.get(acc);
+    const otherPrompt = promptOccupied.get(acc)
     if (otherPrompt) {
-      conflicts.set(p.id, `「${p.title}」快捷键 ${acc} 与「${otherPrompt}」重复，已跳过`);
-      continue;
+      conflicts.set(p.id, `「${p.title}」快捷键 ${acc} 与「${otherPrompt}」重复，已跳过`)
+      continue
     }
-    promptOccupied.set(acc, p.title);
+    promptOccupied.set(acc, p.title)
   }
 
-  return conflicts;
+  return conflicts
 }

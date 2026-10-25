@@ -13,8 +13,12 @@ const product = require('../packages/product-contract/manifest.json')
 const workspace = require('../package.json')
 const u = require('../scripts/build-utils.cjs')
 let directory: string
-beforeEach(() => { directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-portable-package-')) })
-afterEach(() => { fs.rmSync(directory, { recursive: true, force: true }) })
+beforeEach(() => {
+  directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-portable-package-'))
+})
+afterEach(() => {
+  fs.rmSync(directory, { recursive: true, force: true })
+})
 
 function write(relative: string, bytes: Buffer | string) {
   const file = path.join(directory, relative)
@@ -36,23 +40,46 @@ function syntheticPe(arch: 'x64' | 'arm64') {
   return bytes
 }
 
-async function application(arch: 'x64' | 'arm64', unsafeEntry?: string, metadata: { version?: string } = { version: workspace.version }) {
+async function application(
+  arch: 'x64' | 'arm64',
+  unsafeEntry?: string,
+  metadata: { version?: string } = { version: workspace.version },
+) {
   const source = path.join(directory, arch)
-  for (const name of packer.REQUIRED_RUNTIME_FILES) write(`${arch}/${name}`, /\.(?:exe|dll)$/.test(name) ? syntheticPe(arch) : 'runtime fixture')
+  for (const name of packer.REQUIRED_RUNTIME_FILES)
+    write(`${arch}/${name}`, /\.(?:exe|dll)$/.test(name) ? syntheticPe(arch) : 'runtime fixture')
   write(`${arch}/SidekickAI.exe`, syntheticPe(arch))
-  write(`${arch}/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-${arch}.node`, syntheticPe(arch))
-  write(`${arch}/resources/app.asar.unpacked/node_modules/uiohook-napi/prebuilds/win32-${arch}/uiohook-napi.node`, syntheticPe(arch))
+  write(
+    `${arch}/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-${arch}.node`,
+    syntheticPe(arch),
+  )
+  write(
+    `${arch}/resources/app.asar.unpacked/node_modules/uiohook-napi/prebuilds/win32-${arch}/uiohook-napi.node`,
+    syntheticPe(arch),
+  )
   const archiveRoot = `${arch}-archive`
-  write(`${archiveRoot}/package.json`, JSON.stringify({ name: product.editions.concept.packageName, version: metadata.version }))
-  write(`${archiveRoot}/node_modules/node-gyp-build/node-gyp-build.js`, fs.readFileSync(require.resolve('node-gyp-build/node-gyp-build.js')))
+  write(
+    `${archiveRoot}/package.json`,
+    JSON.stringify({ name: product.editions.concept.packageName, version: metadata.version }),
+  )
+  write(
+    `${archiveRoot}/node_modules/node-gyp-build/node-gyp-build.js`,
+    fs.readFileSync(require.resolve('node-gyp-build/node-gyp-build.js')),
+  )
   if (unsafeEntry) write(`${archiveRoot}/${unsafeEntry}`, 'private fixture')
-  await finished(await asar.createPackage(path.join(directory, archiveRoot), path.join(source, 'resources/app.asar')))
+  await finished(
+    await asar.createPackage(
+      path.join(directory, archiveRoot),
+      path.join(source, 'resources/app.asar'),
+    ),
+  )
   return source
 }
 
 function zip(extra: string[] = [], omitted?: string) {
   const archive = new AdmZip()
-  for (const name of [...packer.REQUIRED_ENTRIES, ...extra].filter(name => name !== omitted)) archive.addFile(name, Buffer.from('fixture'))
+  for (const name of [...packer.REQUIRED_ENTRIES, ...extra].filter((name) => name !== omitted))
+    archive.addFile(name, Buffer.from('fixture'))
   const target = path.join(directory, 'portable.zip')
   archive.writeZip(target)
   return target
@@ -98,7 +125,13 @@ describe('portable archive boundaries', () => {
     const target = zip([], 'SidekickAI/SidekickAI.exe')
     expect(() => packer.verifyZip(target, 0)).toThrow('missing')
   })
-  it.each(['data/settings.db', 'win-unpacked/install-receipt.json', 'win-unpacked/uninstall.exe', 'win-arm64-unpacked/.env.local', 'devkit/readme.txt'])('rejects %s from the archive', name => {
+  it.each([
+    'data/settings.db',
+    'win-unpacked/install-receipt.json',
+    'win-unpacked/uninstall.exe',
+    'win-arm64-unpacked/.env.local',
+    'devkit/readme.txt',
+  ])('rejects %s from the archive', (name) => {
     const target = zip([`SidekickAI/${name}`])
     expect(() => packer.verifyZip(target, 0)).toThrow()
   })
@@ -114,42 +147,68 @@ describe('portable archive boundaries', () => {
     const target = zip(['SidekickAI/PORTABLE.TXT'])
     expect(() => packer.verifyZip(target, 0)).toThrow('Duplicate')
   })
-  it.each(['../settings.json', '/settings.json', 'C:/settings.json', 'runtime/./app.exe'])('rejects unsafe input path %s', name => {
-    expect(() => packer.validatePortablePath(name)).toThrow()
-  })
+  it.each(['../settings.json', '/settings.json', 'C:/settings.json', 'runtime/./app.exe'])(
+    'rejects unsafe input path %s',
+    (name) => {
+      expect(() => packer.validatePortablePath(name)).toThrow()
+    },
+  )
   it('rejects an empty architecture list before packaging', () => {
-    expect(() => packer.packPortable({ output: directory, applications: directory, architectures: [] })).toThrow(/architectures/)
+    expect(() =>
+      packer.packPortable({ output: directory, applications: directory, architectures: [] }),
+    ).toThrow(/architectures/)
   })
 })
 
 describe('portable application staging', () => {
   it.each([
     { label: 'missing', version: undefined },
-    { label: 'mismatched', version: '0.0.0' }
+    { label: 'mismatched', version: '0.0.0' },
   ])('rejects a $label workspace version before staging', async ({ version }) => {
     const source = await application('x64', undefined, { version })
     const target = path.join(directory, 'staged')
     const before = u.fingerprint(source, u.listFiles(source, new Set()))
-    expect(() => packer.stagePortableApplication(source, target, 'x64')).toThrow('edition/version mismatch')
+    expect(() => packer.stagePortableApplication(source, target, 'x64')).toThrow(
+      'edition/version mismatch',
+    )
     expect(fs.existsSync(target)).toBe(false)
     expect(u.fingerprint(source, u.listFiles(source, new Set()))).toEqual(before)
   })
-  it.each(['.env.local', '.app-data/settings.json'])('rejects %s hidden inside the application archive', async unsafeEntry => {
-    const source = await application('x64', unsafeEntry)
-    expect(() => packer.stagePortableApplication(source, path.join(directory, 'staged'), 'x64')).toThrow('non-distributable')
-  })
-  it.each(['x64', 'arm64'] as const)('copies a complete %s runtime without modifying its source', async arch => {
-    const source = await application(arch)
-    const before = u.fingerprint(source, u.listFiles(source, new Set()))
-    const staged = packer.stagePortableApplication(source, path.join(directory, 'staged', arch), arch)
-    expect(staged.native.arch).toBe(arch)
-    expect(fs.readFileSync(path.join(staged.directory, 'portable.txt'), 'utf8')).toBe('AI Window Portable Mode Marker\n')
-    expect(u.fingerprint(source, u.listFiles(source, new Set()))).toEqual(before)
-  })
+  it.each(['.env.local', '.app-data/settings.json'])(
+    'rejects %s hidden inside the application archive',
+    async (unsafeEntry) => {
+      const source = await application('x64', unsafeEntry)
+      expect(() =>
+        packer.stagePortableApplication(source, path.join(directory, 'staged'), 'x64'),
+      ).toThrow('non-distributable')
+    },
+  )
+  it.each(['x64', 'arm64'] as const)(
+    'copies a complete %s runtime without modifying its source',
+    async (arch) => {
+      const source = await application(arch)
+      const before = u.fingerprint(source, u.listFiles(source, new Set()))
+      const staged = packer.stagePortableApplication(
+        source,
+        path.join(directory, 'staged', arch),
+        arch,
+      )
+      expect(staged.native.arch).toBe(arch)
+      expect(fs.readFileSync(path.join(staged.directory, 'portable.txt'), 'utf8')).toBe(
+        'AI Window Portable Mode Marker\n',
+      )
+      expect(u.fingerprint(source, u.listFiles(source, new Set()))).toEqual(before)
+    },
+  )
   it('rejects a development native hook before copying', async () => {
     const source = await application('arm64')
-    write('arm64/resources/app.asar.unpacked/node_modules/uiohook-napi/build/Release/hook.node', syntheticPe('x64'))
-    expect(() => packer.stagePortableApplication(source, path.join(directory, 'staged'), 'arm64')).toThrow()
+    write(
+      'arm64/resources/app.asar.unpacked/node_modules/uiohook-napi/build/Release/hook.node',
+      syntheticPe('x64'),
+    )
+    expect(() =>
+      packer.stagePortableApplication(source, path.join(directory, 'staged'), 'arm64'),
+    ).toThrow()
   })
   it('rejects an incomplete Electron runtime before staging', async () => {
     const source = await application('x64')
@@ -168,7 +227,9 @@ describe('portable application staging', () => {
   it('refuses to overwrite previous staging or use the application as its output', async () => {
     const source = await application('x64')
     expect(() => packer.stagePortableApplication(source, source, 'x64')).toThrow('outside')
-    expect(() => packer.stagePortableApplication(source, path.join(source, 'staged'), 'x64')).toThrow('outside')
+    expect(() =>
+      packer.stagePortableApplication(source, path.join(source, 'staged'), 'x64'),
+    ).toThrow('outside')
     const target = path.join(directory, 'staged')
     fs.mkdirSync(target)
     expect(() => packer.stagePortableApplication(source, target, 'x64')).toThrow('already exists')

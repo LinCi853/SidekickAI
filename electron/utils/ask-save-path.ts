@@ -34,7 +34,10 @@ export function consumeAskSavePath(session: Session, requestedUrl: string): bool
   const intents = intentsBySession.get(session)
   if (!intents) return false
   for (const intent of intents) {
-    if (Date.now() >= intent.expiresAt) { intent.cancel(); continue }
+    if (Date.now() >= intent.expiresAt) {
+      intent.cancel()
+      continue
+    }
     if (intent.url !== requestedUrl) continue
     intent.cancel()
     return true

@@ -296,8 +296,11 @@ export function ensureDefaultProfiles(): Profile[] {
   const existing = store.get('profiles') as Profile[]
   if (existing.length > 0) {
     const upgraded = existing.map(upgradeAIPlatformProfile)
-    if (upgraded.some((profile, index) => profile !== existing[index])) store.set('profiles', upgraded)
-    const created = hasQianwenProfile(upgraded) ? [] : [profileStore.createAIAppFromPlatform('qianwen')]
+    if (upgraded.some((profile, index) => profile !== existing[index]))
+      store.set('profiles', upgraded)
+    const created = hasQianwenProfile(upgraded)
+      ? []
+      : [profileStore.createAIAppFromPlatform('qianwen')]
     store.set('version', 2)
     return created
   }

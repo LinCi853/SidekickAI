@@ -7,7 +7,8 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
 function rootPackageVersion(root = ROOT) {
   const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  if (typeof version !== 'string' || !SEMVER.test(version)) throw new Error('Root package.json version is not a valid semver')
+  if (typeof version !== 'string' || !SEMVER.test(version))
+    throw new Error('Root package.json version is not a valid semver')
   return version
 }
 
@@ -17,7 +18,10 @@ function planVersions(root = ROOT) {
   const location = path.join(root, file)
   if (!fs.existsSync(location)) return { version, findings: [], requiredMissing: [file] }
   const lock = JSON.parse(fs.readFileSync(location, 'utf8'))
-  const findings = [['version', lock.version], ['packages[""].version', lock.packages?.['']?.version]]
+  const findings = [
+    ['version', lock.version],
+    ['packages[""].version', lock.packages?.['']?.version],
+  ]
     .filter(([, current]) => current !== version)
     .map(([locator, current]) => ({ file, locator, current: current ?? null, expected: version }))
   return { version, findings, requiredMissing: [] }
@@ -25,8 +29,10 @@ function planVersions(root = ROOT) {
 
 function applyVersions(root = ROOT) {
   const plan = planVersions(root)
-  if (plan.requiredMissing.length) throw new Error('Required version files are missing: ' + plan.requiredMissing.join(', '))
-  if (plan.findings.some(finding => finding.current === null)) throw new Error('Required version fields are missing')
+  if (plan.requiredMissing.length)
+    throw new Error('Required version files are missing: ' + plan.requiredMissing.join(', '))
+  if (plan.findings.some((finding) => finding.current === null))
+    throw new Error('Required version fields are missing')
   const changed = []
   if (plan.findings.length) {
     const file = path.join(root, 'package-lock.json')
@@ -51,13 +57,20 @@ function main(args = process.argv.slice(2)) {
     else throw new Error('Usage: sync-versions.cjs [--check|--apply] [--root <directory>]')
   }
   const result = apply ? applyVersions(root) : planVersions(root)
-  if (result.requiredMissing?.length) throw new Error('Required version files are missing: ' + result.requiredMissing.join(', '))
-  if (result.findings?.length || result.remaining?.length) throw new Error('Product version drift; run with --apply')
+  if (result.requiredMissing?.length)
+    throw new Error('Required version files are missing: ' + result.requiredMissing.join(', '))
+  if (result.findings?.length || result.remaining?.length)
+    throw new Error('Product version drift; run with --apply')
   console.log(JSON.stringify(result, null, 2))
   return result
 }
 
 module.exports = { ROOT, rootPackageVersion, planVersions, applyVersions, main }
 if (require.main === module) {
-  try { main() } catch (error) { console.error(error.message); process.exitCode = 1 }
+  try {
+    main()
+  } catch (error) {
+    console.error(error.message)
+    process.exitCode = 1
+  }
 }

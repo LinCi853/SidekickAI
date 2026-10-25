@@ -1,4 +1,4 @@
-import type { AIPlatformPageAdapter } from '../../../electron/shared/profile.types.js';
+import type { AIPlatformPageAdapter } from '../../../electron/shared/profile.types.js'
 
 /* =====================================================================
    注入脚本：抓取网页对话内容（运行在 webview 网页上下文，返回 JSON 字符串）
@@ -122,7 +122,7 @@ export const SCRAPE_CHAT_SCRIPT = `(function() {
   } catch (e) {
     return JSON.stringify({ error: String((e && e.message) || e) });
   }
-})()`;
+})()`
 
 /* =====================================================================
    注入脚本：检测登录态（运行在 webview 网页上下文，返回 JSON 字符串）
@@ -155,7 +155,7 @@ export const DETECT_LOGIN_SCRIPT = `(function() {
   } catch (e) {
     return JSON.stringify({ error: String((e && e.message) || e) });
   }
-})()`;
+})()`
 
 /* =====================================================================
    注入脚本：Enter 发送 / Shift+Enter 换行行为（运行在 webview 网页上下文）。
@@ -164,10 +164,10 @@ export const DETECT_LOGIN_SCRIPT = `(function() {
    返回可直接传入 executeJavaScript 的完整 IIFE 字符串。
    ===================================================================== */
 export function buildEnterToSendScript(opts: {
-  enabled: boolean;
-  inputSelector?: string | null;
-  sendSelector?: string | null;
-  pageAdapter?: AIPlatformPageAdapter | null;
+  enabled: boolean
+  inputSelector?: string | null
+  sendSelector?: string | null
+  pageAdapter?: AIPlatformPageAdapter | null
 }): string {
   return `(function() {
     if (window.__ai_enter_send_injected__) {
@@ -335,7 +335,7 @@ export function buildEnterToSendScript(opts: {
     window.__ai_enter_send__ = state;
     window.addEventListener('pagehide', state.dispose, { once: true });
     console.log('[EnterSend] 监听器已注册');
-  })()`;
+  })()`
 }
 
 export function buildEnterToSendCleanupScript(): string {

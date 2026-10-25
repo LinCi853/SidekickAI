@@ -40,7 +40,13 @@ export function getUiohookAvailability(): { available: boolean; error: string | 
 export const UiohookKey: Record<string, number> = uiohookMod?.UiohookKey ?? {}
 export const EventType = uiohookMod?.EventType ?? { EVENT_KEY_PRESSED: 1, EVENT_KEY_RELEASED: 2 }
 export const uIOhook = uiohookMod?.uIOhook ?? {
-  start() { /* no-op: uiohook 不可用 */ },
-  stop() { /* no-op */ },
-  on(_event: string, _cb: (e: UiohookEvent) => void) { /* no-op */ },
+  start() {
+    /* no-op: uiohook 不可用 */
+  },
+  stop() {
+    /* no-op */
+  },
+  on(_event: string, _cb: (e: UiohookEvent) => void) {
+    /* no-op */
+  },
 }

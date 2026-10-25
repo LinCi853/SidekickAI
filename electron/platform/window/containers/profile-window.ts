@@ -63,9 +63,13 @@ export class WindowManager {
     if (inFlight) return inFlight
     const opening = this.doOpenProfile(profileId)
     this.openingProfiles.set(profileId, opening)
-    void opening.finally(() => {
-      if (this.openingProfiles.get(profileId) === opening) this.openingProfiles.delete(profileId)
-    }).catch(() => { /* 拒绝由返回给调用方的 opening 传递 */ })
+    void opening
+      .finally(() => {
+        if (this.openingProfiles.get(profileId) === opening) this.openingProfiles.delete(profileId)
+      })
+      .catch(() => {
+        /* 拒绝由返回给调用方的 opening 传递 */
+      })
     return opening
   }
 
@@ -102,28 +106,30 @@ export class WindowManager {
       applyClientHintsInterceptor(ses, profileId, this.clientHints)
 
       // 创建窗口
-      const win = new BrowserWindow(buildWindowConfig({
-        icon: getAppWindowIcon(),
-        width: profile.width,
-        height: profile.height,
-        x: profile.x,
-        y: profile.y,
-        alwaysOnTop: profile.alwaysOnTop,
-        // 标准窗口框架：可拖拽移动 + 可调整大小 + 有标题栏
-        frame: true,
-        resizable: true,
-        minWidth: PROFILE_WINDOW_MIN_WIDTH,
-        minHeight: PROFILE_WINDOW_MIN_HEIGHT,
-        backgroundColor: WINDOW_BACKGROUND_COLOR,
-        webPreferences: {
-          // 关键：session.partition 隔离，Cookie/Storage/Cache 完全独立
-          partition,
-          preload: getWebviewPreloadPath(),
-          contextIsolation: true,
-          sandbox: false,
-          nodeIntegration: false,
-        },
-      }))
+      const win = new BrowserWindow(
+        buildWindowConfig({
+          icon: getAppWindowIcon(),
+          width: profile.width,
+          height: profile.height,
+          x: profile.x,
+          y: profile.y,
+          alwaysOnTop: profile.alwaysOnTop,
+          // 标准窗口框架：可拖拽移动 + 可调整大小 + 有标题栏
+          frame: true,
+          resizable: true,
+          minWidth: PROFILE_WINDOW_MIN_WIDTH,
+          minHeight: PROFILE_WINDOW_MIN_HEIGHT,
+          backgroundColor: WINDOW_BACKGROUND_COLOR,
+          webPreferences: {
+            // 关键：session.partition 隔离，Cookie/Storage/Cache 完全独立
+            partition,
+            preload: getWebviewPreloadPath(),
+            contextIsolation: true,
+            sandbox: false,
+            nodeIntegration: false,
+          },
+        }),
+      )
 
       this.windows.set(profileId, win)
       win.on('minimize', () => reapplyWindowIcon(win))
@@ -171,9 +177,7 @@ export class WindowManager {
       await win.loadURL(url)
     } catch (err) {
       console.error(`[WindowManager] 打开 Profile 失败 (${profileId}):`, err)
-      throw new Error(
-        `打开 Profile 失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`打开 Profile 失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -189,9 +193,7 @@ export class WindowManager {
       win.close() // 触发 'closed' 事件自动清理引用
     } catch (err) {
       console.error(`[WindowManager] 关闭 Profile 窗口失败 (${profileId}):`, err)
-      throw new Error(
-        `关闭 Profile 窗口失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`关闭 Profile 窗口失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -202,9 +204,7 @@ export class WindowManager {
       await Promise.all(ids.map((id) => this.closeProfile(id)))
     } catch (err) {
       console.error('[WindowManager] 关闭所有窗口失败:', err)
-      throw new Error(
-        `关闭所有窗口失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`关闭所有窗口失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -241,9 +241,7 @@ export class WindowManager {
       win.webContents.reload()
     } catch (err) {
       console.error(`[WindowManager] 切换 UA 失败 (${profileId}):`, err)
-      throw new Error(
-        `切换 UA 失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`切换 UA 失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -302,9 +300,7 @@ export class WindowManager {
       win.webContents.reload()
     } catch (err) {
       console.error(`[WindowManager] 切换设备预设失败 (${profileId}):`, err)
-      throw new Error(
-        `切换设备预设失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`切换设备预设失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -325,9 +321,7 @@ export class WindowManager {
       profileStore.update(profileId, { alwaysOnTop: onTop })
     } catch (err) {
       console.error(`[WindowManager] 设置置顶失败 (${profileId}):`, err)
-      throw new Error(
-        `设置置顶失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`设置置顶失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 

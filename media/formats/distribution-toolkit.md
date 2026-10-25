@@ -12,15 +12,15 @@
 
 组件包使用单个 ZIP，随固定版本的发布清单提供。引用 JSON 包含以下字段，不接受额外字段：
 
-| 字段 | 类型 | 要求 |
-| --- | --- | --- |
-| schemaVersion | 整数 | 1 |
-| toolkitVersion | 字符串 | 组件包版本，须与消费端代码内固定版本一致，独立于应用版本 |
-| interfaceVersion | 整数 | 1 |
-| archive.url | 可选字符串 | 无凭据及片段的绝对 HTTPS URL；明确选择本地文件时可用 file URL，与 archive.path 二选一 |
-| archive.path | 可选字符串 | 相对于本工作区根目录的安全路径，使用 `/`；不得使用绝对路径、`..` 或文件系统链接，与 archive.url 二选一 |
-| archive.size | 正整数 | ZIP 原始字节数，须与消费端代码内固定值一致 |
-| archive.sha256 | 字符串 | ZIP 原始字节 SHA-256，小写十六进制 64 字符，须与消费端代码内固定值一致 |
+| 字段             | 类型       | 要求                                                                                                   |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| schemaVersion    | 整数       | 1                                                                                                      |
+| toolkitVersion   | 字符串     | 组件包版本，须与消费端代码内固定版本一致，独立于应用版本                                               |
+| interfaceVersion | 整数       | 1                                                                                                      |
+| archive.url      | 可选字符串 | 无凭据及片段的绝对 HTTPS URL；明确选择本地文件时可用 file URL，与 archive.path 二选一                  |
+| archive.path     | 可选字符串 | 相对于本工作区根目录的安全路径，使用 `/`；不得使用绝对路径、`..` 或文件系统链接，与 archive.url 二选一 |
+| archive.size     | 正整数     | ZIP 原始字节数，须与消费端代码内固定值一致                                                             |
+| archive.sha256   | 字符串     | ZIP 原始字节 SHA-256，小写十六进制 64 字符，须与消费端代码内固定值一致                                 |
 
 组件引用默认从 `contracts/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，使同一归档可从明确的其他位置取得；版本、大小与摘要以消费端代码内固定值为准，环境变量不改变信任锚。任一身份字段不一致，都会在读取归档、下载、使用缓存或运行组件之前失败。缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
 
@@ -32,20 +32,20 @@
 
 ZIP 根目录的 `toolkit-manifest.json` 为 UTF-8 JSON，最多 1 MiB。顶层字段如下，未知字段应被拒绝：
 
-| 字段 | 类型 | 要求 |
-| --- | --- | --- |
-| schemaVersion | 整数 | 1 |
-| kind | 字符串 | sidekick-distribution-toolkit |
-| toolkitVersion | 字符串 | 与发布引用一致 |
-| interfaceVersion | 整数 | 1 |
-| maintenanceComponentVersion | 字符串 | 维护组件版本 |
-| installationConfigurationVersion | 可选整数 | 支持自定义安装默认值时为 1；旧工具包可省略 |
-| recoveryComponentVersion | 字符串 | 独立恢复组件版本 |
-| host | 对象 | platform 为 windows，architecture 为 x64 或 arm64 |
-| assembler | 字符串 | 唯一组装器 EXE 的相对路径 |
-| capabilities | 数组 | 明确支持的路线、包型、身份及架构 |
-| placeholderTrust | 对象 | 模板内固定公开占位身份，不含私钥 |
-| files | 数组 | 包内全部普通文件，最多 1,024 项；不包含清单自身 |
+| 字段                             | 类型     | 要求                                              |
+| -------------------------------- | -------- | ------------------------------------------------- |
+| schemaVersion                    | 整数     | 1                                                 |
+| kind                             | 字符串   | sidekick-distribution-toolkit                     |
+| toolkitVersion                   | 字符串   | 与发布引用一致                                    |
+| interfaceVersion                 | 整数     | 1                                                 |
+| maintenanceComponentVersion      | 字符串   | 维护组件版本                                      |
+| installationConfigurationVersion | 可选整数 | 支持自定义安装默认值时为 1；旧工具包可省略        |
+| recoveryComponentVersion         | 字符串   | 独立恢复组件版本                                  |
+| host                             | 对象     | platform 为 windows，architecture 为 x64 或 arm64 |
+| assembler                        | 字符串   | 唯一组装器 EXE 的相对路径                         |
+| capabilities                     | 数组     | 明确支持的路线、包型、身份及架构                  |
+| placeholderTrust                 | 对象     | 模板内固定公开占位身份，不含私钥                  |
+| files                            | 数组     | 包内全部普通文件，最多 1,024 项；不包含清单自身   |
 
 `capabilities` 的元素为 `{ edition, mode, authority, architectures }`。edition 为 concept 或 community，mode 为 offline 或 online，authority 为 official 或 self-built，architectures 包含不重复的 x64/arm64。概念公开入口要求 concept、offline、self-built 同时支持两种架构；声明能力不授予官方签名身份。
 
@@ -53,15 +53,15 @@ ZIP 根目录的 `toolkit-manifest.json` 为 UTF-8 JSON，最多 1 MiB。顶层�
 
 `files` 元素含 path、role、architecture、size、sha256，可选 edition、authority。path 是安全相对路径，使用 `/`，遵循 [标准应用载荷路径约束](SKSETUP3.md)；size 为正整数，sha256 为小写 64 位十六进制。architecture 为 x64、arm64 或 null。所有条目总大小最多 4 GiB。
 
-| role | 资源 |
-| --- | --- |
-| assembler | 二进制组装和核验入口，仅一个，与 assembler 路径及 host 架构一致 |
-| wizard-template | 对应架构安装向导模板 |
-| uninstaller-template | 对应架构卸载模板及部署描述 |
-| recovery-template | 对应架构独立恢复模板 |
-| backup-runtime | 对应架构恢复运行时及描述 |
-| product-contract | 组件及产品契约 |
-| license | 使用许可与版权说明 |
+| role                 | 资源                                                            |
+| -------------------- | --------------------------------------------------------------- |
+| assembler            | 二进制组装和核验入口，仅一个，与 assembler 路径及 host 架构一致 |
+| wizard-template      | 对应架构安装向导模板                                            |
+| uninstaller-template | 对应架构卸载模板及部署描述                                      |
+| recovery-template    | 对应架构独立恢复模板                                            |
+| backup-runtime       | 对应架构恢复运行时及描述                                        |
+| product-contract     | 组件及产品契约                                                  |
+| license              | 使用许可与版权说明                                              |
 
 两种架构分别需要 wizard-template、uninstaller-template、recovery-template 和 backup-runtime，并且适用于概念版自建身份。ZIP 不得夹带链接、特殊文件、加密条目、重复及大小写冲突路径、目录逃逸或未登记内容。EXE、DLL 和 NODE 文件的 PE 架构须与清单一致。最终完整 Setup 不是可复用模板。
 
@@ -81,15 +81,15 @@ inspect 输出 JSON，包含 interfaceVersion、toolkitVersion、capabilities �
 
 assemble 的请求为以下对象，所有路径是绝对路径，outputDirectory 必须尚不存在：
 
-| 字段 | 要求 |
-| --- | --- |
-| schemaVersion | 1 |
-| toolkitDirectory、toolkitVersion | 已核验组件目录和固定版本 |
-| edition、mode、authority | concept、offline、self-built |
-| payloads.x64、payloads.arm64 | 两份标准应用载荷清单路径；同目录提供清单指向的 ZIP |
-| identityStore | 本机独立身份存储路径，必须在输出目录之外 |
-| outputDirectory | 成品目录 |
-| installationConfiguration | 可选对象：`{ schemaVersion: 1, edition: "concept", options: { ... } }` |
+| 字段                             | 要求                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| schemaVersion                    | 1                                                                      |
+| toolkitDirectory、toolkitVersion | 已核验组件目录和固定版本                                               |
+| edition、mode、authority         | concept、offline、self-built                                           |
+| payloads.x64、payloads.arm64     | 两份标准应用载荷清单路径；同目录提供清单指向的 ZIP                     |
+| identityStore                    | 本机独立身份存储路径，必须在输出目录之外                               |
+| outputDirectory                  | 成品目录                                                               |
+| installationConfiguration        | 可选对象：`{ schemaVersion: 1, edition: "concept", options: { ... } }` |
 
 产品版本从两份一致的标准载荷取得，并与实际软件归档交叉核对；工具包版本不覆盖应用版本。标准载荷清单最多 4 MiB。输出正文包含对应架构卸载器、独立恢复程序及其运行时，由组装器核验、注入并生成本地证明。原始标准载荷保持不变。
 

@@ -29,9 +29,12 @@ export function registerInjectionIpc(scope?: EffectScope): void {
   handle(ipc.INJECTION_LIST_RECENT, (_e: unknown, limit?: number) => {
     return injectionHistoryStore.listRecent(limit)
   })
-  handle(ipc.INJECTION_FIND_SIMILAR, (_e: unknown, text: string, limit?: number, threshold?: number) => {
-    return injectionHistoryStore.findSimilar(text, limit, threshold)
-  })
+  handle(
+    ipc.INJECTION_FIND_SIMILAR,
+    (_e: unknown, text: string, limit?: number, threshold?: number) => {
+      return injectionHistoryStore.findSimilar(text, limit, threshold)
+    },
+  )
   handle(ipc.INJECTION_CLEAR, () => {
     return injectionHistoryStore.clear()
   })

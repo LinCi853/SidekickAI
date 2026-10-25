@@ -7,14 +7,24 @@ describe('MiMo inferred message identity', () => {
   let db: Database.Database
   let store: AiAssetsStore
   const source = { id: 'mimo-profile', type: 'webview' as const }
-  const observation = (content: string, identityToken: string, status: 'streaming' | 'complete' = 'complete'): AssetObservation => ({
-    title: 'MiMo', conversationKey: 'https://aistudio.xiaomimimo.com/#/chat/one',
-    url: 'https://aistudio.xiaomimimo.com/#/chat/one', snapshot: true, completePath: false,
-    messages: [{ key: 'user:mimo:prompt:0', role: 'user', content: 'Same prompt', identityToken },
-      { key: 'assistant:mimo:prompt:0', role: 'assistant', content, identityToken, status }],
+  const observation = (
+    content: string,
+    identityToken: string,
+    status: 'streaming' | 'complete' = 'complete',
+  ): AssetObservation => ({
+    title: 'MiMo',
+    conversationKey: 'https://aistudio.xiaomimimo.com/#/chat/one',
+    url: 'https://aistudio.xiaomimimo.com/#/chat/one',
+    snapshot: true,
+    completePath: false,
+    messages: [
+      { key: 'user:mimo:prompt:0', role: 'user', content: 'Same prompt', identityToken },
+      { key: 'assistant:mimo:prompt:0', role: 'assistant', content, identityToken, status },
+    ],
   })
   beforeEach(() => {
-    db = new Database(':memory:'); db.pragma('foreign_keys = ON')
+    db = new Database(':memory:')
+    db.pragma('foreign_keys = ON')
     db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, source_id TEXT, source_type TEXT, title TEXT, created_at INTEGER, updated_at INTEGER, url TEXT);
       CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT, role TEXT, content TEXT, created_at INTEGER, auto_grabbed INTEGER, content_hash TEXT,
       FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE);`)
@@ -28,9 +38,14 @@ describe('MiMo inferred message identity', () => {
     const next = reloaded.observe(source, observation('Earlier answer', 'other-element'))
     expect(next.conversationId).toBe(first.conversationId)
     expect(next.messageIds).toEqual({})
-    expect(db.prepare('SELECT content FROM messages ORDER BY rowid').all()).toEqual([{ content: 'Same prompt' }, { content: 'Latest answer' }])
+    expect(db.prepare('SELECT content FROM messages ORDER BY rowid').all()).toEqual([
+      { content: 'Same prompt' },
+      { content: 'Latest answer' },
+    ])
     expect(reloaded.usage()).toEqual(usage)
-    expect(reloaded.details(first.conversationId).every(detail => !detail.revisions.length)).toBe(true)
+    expect(reloaded.details(first.conversationId).every((detail) => !detail.revisions.length)).toBe(
+      true,
+    )
   })
   it('accepts unchanged reloaded messages and a later update of that confirmed element', () => {
     const first = store.observe(source, observation('Answer', 'first-element'))
@@ -40,8 +55,13 @@ describe('MiMo inferred message identity', () => {
     const edited = observation('Revised answer', 'reloaded-element')
     edited.messages[0].content = 'Edited prompt'
     reloaded.observe(source, edited)
-    expect(db.prepare('SELECT content FROM messages ORDER BY rowid').all()).toEqual([{ content: 'Edited prompt' }, { content: 'Revised answer' }])
-    expect(reloaded.details(first.conversationId).every(detail => detail.revisions.length === 1)).toBe(true)
+    expect(db.prepare('SELECT content FROM messages ORDER BY rowid').all()).toEqual([
+      { content: 'Edited prompt' },
+      { content: 'Revised answer' },
+    ])
+    expect(
+      reloaded.details(first.conversationId).every((detail) => detail.revisions.length === 1),
+    ).toBe(true)
   })
   it('continues a retained interrupted stream across a new document', () => {
     const first = store.observe(source, observation('Answer', 'first-element', 'streaming'))
@@ -49,7 +69,9 @@ describe('MiMo inferred message identity', () => {
     reloaded.recoverInterruptedStreams()
     reloaded.observe(source, observation('Answer continued', 'reloaded-element'))
     expect(reloaded.details(first.conversationId)[1].status).toBe('complete')
-    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({ content: 'Answer continued' })
+    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({
+      content: 'Answer continued',
+    })
     expect(reloaded.usage().outputCharacters).toBe('Answer continued'.length)
   })
   it('fills a complete reasoning-only reply after reload when the same reasoning is visible', () => {
@@ -61,7 +83,9 @@ describe('MiMo inferred message identity', () => {
     completed.messages[1].reasoning = 'Retained reasoning'
     const next = reloaded.observe(source, completed)
     expect(next.messageIds).toEqual(first.messageIds)
-    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({ content: 'Previously missing answer' })
+    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({
+      content: 'Previously missing answer',
+    })
     expect(reloaded.details(first.conversationId)[1].reasoning).toBe('Retained reasoning')
     expect(reloaded.usage().reasoningCharacters).toBe('Retained reasoning'.length)
     expect(reloaded.usage().outputCharacters).toBe('Previously missing answer'.length)
@@ -74,27 +98,32 @@ describe('MiMo inferred message identity', () => {
     ['extended reasoning', 'Retained reasoning continued', 'Same prompt'],
     ['different prompt', 'Retained reasoning', 'Different prompt'],
     ['missing prompt', 'Retained reasoning', undefined],
-  ]) it(`retains a reasoning-only reply after reload with ${name}`, () => {
-    const initial = observation('', 'first-element')
-    initial.messages[1].reasoning = 'Retained reasoning'
-    const first = store.observe(source, initial)
-    const usage = store.usage()
-    const reloaded = new AiAssetsStore(db)
-    const next = observation('Unconfirmed answer', 'reloaded-element')
-    next.messages[1].reasoning = reasoning
-    if (prompt === undefined) next.messages.shift()
-    else next.messages[0].content = prompt
-    expect(reloaded.observe(source, next).messageIds).toEqual({})
-    expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({ content: '' })
-    expect(reloaded.usage()).toEqual(usage)
-    expect(reloaded.details(first.conversationId)[1].reasoning).toBe('Retained reasoning')
-  })
+  ])
+    it(`retains a reasoning-only reply after reload with ${name}`, () => {
+      const initial = observation('', 'first-element')
+      initial.messages[1].reasoning = 'Retained reasoning'
+      const first = store.observe(source, initial)
+      const usage = store.usage()
+      const reloaded = new AiAssetsStore(db)
+      const next = observation('Unconfirmed answer', 'reloaded-element')
+      next.messages[1].reasoning = reasoning
+      if (prompt === undefined) next.messages.shift()
+      else next.messages[0].content = prompt
+      expect(reloaded.observe(source, next).messageIds).toEqual({})
+      expect(db.prepare('SELECT content FROM messages WHERE role = ?').get('assistant')).toEqual({
+        content: '',
+      })
+      expect(reloaded.usage()).toEqual(usage)
+      expect(reloaded.details(first.conversationId)[1].reasoning).toBe('Retained reasoning')
+    })
   it('rejects conflicting tokens for the same inferred message key in one snapshot', () => {
     const first = store.observe(source, observation('Answer', 'first-element'))
     const duplicate = observation('Answer', 'first-element')
     duplicate.messages.push(...observation('Answer', 'other-element').messages)
     expect(store.observe(source, duplicate).messageIds).toEqual({})
     expect(db.prepare('SELECT COUNT(*) AS count FROM messages').get()).toEqual({ count: 2 })
-    expect(store.details(first.conversationId).every(detail => !detail.revisions.length)).toBe(true)
+    expect(store.details(first.conversationId).every((detail) => !detail.revisions.length)).toBe(
+      true,
+    )
   })
 })

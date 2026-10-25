@@ -6,62 +6,62 @@
    供导航栏手柄指示器、手柄面板与云游戏输入接线消费。
    ===================================================================== */
 
-import { create } from 'zustand';
-import type { GamepadInputFrame } from '../lib/gamepad-input/input-frame';
+import { create } from 'zustand'
+import type { GamepadInputFrame } from '../lib/gamepad-input/input-frame'
 
 export interface GamepadStateEntry {
   /** 手柄索引（多手柄：0..3） */
-  index: number;
+  index: number
   /** 手柄标识（如 Xbox Controller (STANDARD GAMEPAD)） */
-  id: string;
+  id: string
   /** 是否已连接 */
-  connected: boolean;
+  connected: boolean
   /** 最新输入帧（按钮位掩码 / 轴 int16 / 扳机 / 十字键） */
-  frame: GamepadInputFrame | null;
+  frame: GamepadInputFrame | null
 }
 
 interface GamepadStoreState {
   /** 手柄状态（index → entry） */
-  pads: Record<number, GamepadStateEntry>;
+  pads: Record<number, GamepadStateEntry>
   /** 连接中的手柄数量 */
-  connectedCount: number;
+  connectedCount: number
   /** 更新连接状态（gamepadconnected / disconnected） */
-  setConnections: (connections: { index: number; id: string; connected: boolean }[]) => void;
+  setConnections: (connections: { index: number; id: string; connected: boolean }[]) => void
   /** 更新实时帧（由采集器节流调用） */
-  setFrame: (frame: GamepadInputFrame, id: string) => void;
+  setFrame: (frame: GamepadInputFrame, id: string) => void
   /** 清空（窗口销毁时） */
-  reset: () => void;
+  reset: () => void
 }
 
 /** 帧写入节流（20Hz，避免 60Hz 手柄轮询导致 React 高频重渲染） */
-let lastFrameSetAt = 0;
+let lastFrameSetAt = 0
 
 export const useGamepadStore = create<GamepadStoreState>((set, get) => ({
   pads: {},
   connectedCount: 0,
 
   setConnections: (connections) => {
-    const pads: Record<number, GamepadStateEntry> = {};
-    let connectedCount = 0;
+    const pads: Record<number, GamepadStateEntry> = {}
+    let connectedCount = 0
     for (const conn of connections) {
       pads[conn.index] = {
         index: conn.index,
         id: conn.id,
         connected: conn.connected,
         frame: get().pads[conn.index]?.frame ?? null,
-      };
-      if (conn.connected) connectedCount += 1;
+      }
+      if (conn.connected) connectedCount += 1
     }
-    set({ pads, connectedCount });
+    set({ pads, connectedCount })
   },
 
   setFrame: (frame, id) => {
-    const now = Date.now();
+    const now = Date.now()
     if (now - lastFrameSetAt < 50) {
       // 节流：20Hz 足够 UI 展示；高频帧仍由采集器回调直发传输层
-      return;
+      return
     }
-    lastFrameSetAt = now;
+    lastFrameSetAt = now
     set((s) => ({
       pads: {
         ...s.pads,
@@ -72,8 +72,8 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => ({
           frame,
         },
       },
-    }));
+    }))
   },
 
   reset: () => set({ pads: {}, connectedCount: 0 }),
-}));
+}))

@@ -5,7 +5,9 @@ vi.mock('electron-store', () => {
   return {
     default: class MockStore {
       private data: Record<string, unknown> = {}
-      get(key: string) { return this.data[key] }
+      get(key: string) {
+        return this.data[key]
+      }
       set(key: string | Record<string, unknown>, value?: unknown) {
         if (typeof key === 'object') {
           Object.assign(this.data, key)
@@ -26,8 +28,12 @@ vi.mock('../../store/module-state-store.js', () => {
       const data = stores.get(opts.tableName)!
       return {
         get: (key: string) => data[key],
-        set: (key: string, value: unknown) => { data[key] = value },
-        delete: (key: string) => { delete data[key] },
+        set: (key: string, value: unknown) => {
+          data[key] = value
+        },
+        delete: (key: string) => {
+          delete data[key]
+        },
         has: (key: string) => key in data,
       }
     }),

@@ -436,7 +436,7 @@ export function buildSpatialNavScript(): string {
     window.__ai_spatial_nav__ = state;
     window.addEventListener('pagehide', state.dispose, { once: true });
     if (resumeEnabled) toggleNav(true);
-  })();`;
+  })();`
 }
 
 export function buildSpatialNavCleanupScript(replacing = false): string {

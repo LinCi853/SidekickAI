@@ -1,34 +1,34 @@
-import type { Dispatch, SetStateAction } from 'react';
-import { Combobox } from '../ui';
-import type { ComboboxOption } from '../ui';
-import SegmentedControl from '../ui/SegmentedControl';
-import type { AIPlatform, DevicePreset } from '../../lib/electron-api';
-import { isValidHexColor } from '../../pages/AiAppEditor/domain';
-import { FieldGroup } from './FieldGroup';
+import type { Dispatch, SetStateAction } from 'react'
+import { Combobox } from '../ui'
+import type { ComboboxOption } from '../ui'
+import SegmentedControl from '../ui/SegmentedControl'
+import type { AIPlatform, DevicePreset } from '../../lib/electron-api'
+import { isValidHexColor } from '../../pages/AiAppEditor/domain'
+import { FieldGroup } from './FieldGroup'
 
 export interface BasicInfoFieldsProps {
   /** Platform defaults; null for a custom application. */
-  platform: AIPlatform | null;
-  desktopPresets: DevicePreset[];
-  mobilePresets: DevicePreset[];
-  aiPlatformName: string;
-  setAiPlatformName: Dispatch<SetStateAction<string>>;
-  aiPlatformUrl: string;
-  setAiPlatformUrl: Dispatch<SetStateAction<string>>;
-  browserHomePage: string;
-  setBrowserHomePage: Dispatch<SetStateAction<string>>;
-  aiDesktopPreset: string;
-  setAiDesktopPreset: Dispatch<SetStateAction<string>>;
-  aiMobilePreset: string;
-  setAiMobilePreset: Dispatch<SetStateAction<string>>;
-  aiInputSelector: string;
-  setAiInputSelector: Dispatch<SetStateAction<string>>;
-  aiSendSelector: string;
-  setAiSendSelector: Dispatch<SetStateAction<string>>;
-  aiThemeColor: string;
-  setAiThemeColor: Dispatch<SetStateAction<string>>;
-  aiPlatformRegion: 'cn' | 'global';
-  setAiPlatformRegion: Dispatch<SetStateAction<'cn' | 'global'>>;
+  platform: AIPlatform | null
+  desktopPresets: DevicePreset[]
+  mobilePresets: DevicePreset[]
+  aiPlatformName: string
+  setAiPlatformName: Dispatch<SetStateAction<string>>
+  aiPlatformUrl: string
+  setAiPlatformUrl: Dispatch<SetStateAction<string>>
+  browserHomePage: string
+  setBrowserHomePage: Dispatch<SetStateAction<string>>
+  aiDesktopPreset: string
+  setAiDesktopPreset: Dispatch<SetStateAction<string>>
+  aiMobilePreset: string
+  setAiMobilePreset: Dispatch<SetStateAction<string>>
+  aiInputSelector: string
+  setAiInputSelector: Dispatch<SetStateAction<string>>
+  aiSendSelector: string
+  setAiSendSelector: Dispatch<SetStateAction<string>>
+  aiThemeColor: string
+  setAiThemeColor: Dispatch<SetStateAction<string>>
+  aiPlatformRegion: 'cn' | 'global'
+  setAiPlatformRegion: Dispatch<SetStateAction<'cn' | 'global'>>
 }
 
 export function BasicInfoFields({
@@ -184,5 +184,5 @@ export function BasicInfoFields({
         />
       </FieldGroup>
     </>
-  );
+  )
 }

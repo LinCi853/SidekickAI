@@ -2,9 +2,15 @@
    lib/electron-api/window.ts —— 窗口管理 / 窗口控制 / 窗口状态 / 标签 / 设备预设 / AI平台 / 新标签事件
    ===================================================================== */
 
-import type { WindowStateData, DevicePreset, AIPlatform, WebviewHotkeyPayload, WebviewHotkeyTarget } from '../../../electron/shared/types';
-import { requireElectron } from './core';
-import type { WebviewRegistration } from '../../../electron/shared/api/profile-window.api';
+import type {
+  WindowStateData,
+  DevicePreset,
+  AIPlatform,
+  WebviewHotkeyPayload,
+  WebviewHotkeyTarget,
+} from '../../../electron/shared/types'
+import { requireElectron } from './core'
+import type { WebviewRegistration } from '../../../electron/shared/api/profile-window.api'
 
 /* =====================================================================
    窗口管理 —— 对应 window.electron.window
@@ -12,50 +18,50 @@ import type { WebviewRegistration } from '../../../electron/shared/api/profile-w
 
 /** 打开 Profile 窗口（已打开则聚焦） */
 export async function openWindow(profileId: string): Promise<void> {
-  const api = requireElectron();
-  return api.window.open(profileId);
+  const api = requireElectron()
+  return api.window.open(profileId)
 }
 
 /** 关闭指定 Profile 窗口 */
 export async function closeWindow(profileId: string): Promise<void> {
-  const api = requireElectron();
-  return api.window.close(profileId);
+  const api = requireElectron()
+  return api.window.close(profileId)
 }
 
 /** 运行时切换 UA（不重建窗口） */
 export async function switchWindowUA(profileId: string, ua: string): Promise<void> {
-  const api = requireElectron();
-  return api.window.switchUA(profileId, ua);
+  const api = requireElectron()
+  return api.window.switchUA(profileId, ua)
 }
 
 /** 切换设备预设 */
 export async function switchWindowDevice(profileId: string, presetId: string): Promise<void> {
-  const api = requireElectron();
-  return api.window.switchDevice(profileId, presetId);
+  const api = requireElectron()
+  return api.window.switchDevice(profileId, presetId)
 }
 
 /** 设置窗口置顶 */
 export async function setWindowAlwaysOnTop(profileId: string, onTop: boolean): Promise<void> {
-  const api = requireElectron();
-  return api.window.setAlwaysOnTop(profileId, onTop);
+  const api = requireElectron()
+  return api.window.setAlwaysOnTop(profileId, onTop)
 }
 
 /** 获取所有已打开窗口的 profileId 列表 */
 export async function getOpenWindowIds(): Promise<string[]> {
-  const api = requireElectron();
-  return api.window.getOpenWindowIds();
+  const api = requireElectron()
+  return api.window.getOpenWindowIds()
 }
 
 /**
  * 为嵌入式 <webview> 准备 session（单页架构专用）。
  */
 export async function setupSession(profileId: string): Promise<void> {
-  const api = requireElectron();
-  return api.window.setupSession(profileId);
+  const api = requireElectron()
+  return api.window.setupSession(profileId)
 }
 
 export function registerWebview(payload: WebviewRegistration): Promise<boolean> {
-  return requireElectron().window.registerWebview(payload);
+  return requireElectron().window.registerWebview(payload)
 }
 
 /* =====================================================================
@@ -63,53 +69,63 @@ export function registerWebview(payload: WebviewRegistration): Promise<boolean> 
    ===================================================================== */
 
 export async function minimizeWindow(): Promise<void> {
-  const api = requireElectron();
-  return api.windowControl.minimize();
+  const api = requireElectron()
+  return api.windowControl.minimize()
 }
 
 export async function maximizeToggleWindow(): Promise<boolean> {
-  const api = requireElectron();
-  return api.windowControl.maximizeToggle();
+  const api = requireElectron()
+  return api.windowControl.maximizeToggle()
 }
 
 /** 关闭调用方所在窗口本身（区别于 profile 级 closeWindow） */
 export async function closeCurrentWindow(): Promise<void> {
-  const api = requireElectron();
-  return api.windowControl.close();
+  const api = requireElectron()
+  return api.windowControl.close()
 }
 
 /** 设置调用方所在窗口本身置顶（区别于 profile 级 setWindowAlwaysOnTop） */
 export async function pinCurrentWindow(onTop: boolean): Promise<boolean> {
-  const api = requireElectron();
-  return api.windowControl.setAlwaysOnTop(onTop);
+  const api = requireElectron()
+  return api.windowControl.setAlwaysOnTop(onTop)
 }
 
 export async function isWindowMaximized(): Promise<boolean> {
-  const api = requireElectron();
-  return api.windowControl.isMaximized();
+  const api = requireElectron()
+  return api.windowControl.isMaximized()
 }
 
 /** 查询当前窗口的实际置顶状态（win.isAlwaysOnTop()，非持久化值） */
 export async function isWindowAlwaysOnTop(): Promise<boolean> {
-  const api = requireElectron();
-  return api.windowControl.isAlwaysOnTop();
+  const api = requireElectron()
+  return api.windowControl.isAlwaysOnTop()
 }
 
-export async function getWindowBounds(): Promise<{ x?: number; y?: number; width: number; height: number }> {
-  const api = requireElectron();
-  return api.windowControl.getBounds();
+export async function getWindowBounds(): Promise<{
+  x?: number
+  y?: number
+  width: number
+  height: number
+}> {
+  const api = requireElectron()
+  return api.windowControl.getBounds()
 }
 
 /** 将标签脱离当前窗口，弹出为独立窗口 */
 export async function detachTab(tabId: string): Promise<void> {
-  const api = requireElectron();
-  return api.windowControl.detachTab(tabId);
+  const api = requireElectron()
+  return api.windowControl.detachTab(tabId)
 }
 
 /** 自定义边缘拖拽 resize：直接设置窗口 bounds */
-export async function resizeWindow(bounds: { x?: number; y?: number; width: number; height: number }): Promise<void> {
-  const api = requireElectron();
-  return api.windowControl.resize(bounds);
+export async function resizeWindow(bounds: {
+  x?: number
+  y?: number
+  width: number
+  height: number
+}): Promise<void> {
+  const api = requireElectron()
+  return api.windowControl.resize(bounds)
 }
 
 /**
@@ -117,32 +133,35 @@ export async function resizeWindow(bounds: { x?: number; y?: number; width: numb
  * 主进程通过 BrowserWindow.setMinimumSize 设置调用方所在窗口。
  */
 export async function setMinimumSize(width: number, height: number): Promise<void> {
-  const api = requireElectron();
-  return api.windowControl.setMinimumSize(width, height);
+  const api = requireElectron()
+  return api.windowControl.setMinimumSize(width, height)
 }
 
 /** 切换当前窗口全屏状态 */
 export async function toggleFullscreenWindow(): Promise<boolean> {
-  console.log('[electron-api] toggleFullscreenWindow called');
-  const api = requireElectron();
-  const result = await api.windowControl.toggleFullscreen();
-  console.log('[electron-api] toggleFullscreenWindow result:', result);
-  return result;
+  console.log('[electron-api] toggleFullscreenWindow called')
+  const api = requireElectron()
+  const result = await api.windowControl.toggleFullscreen()
+  console.log('[electron-api] toggleFullscreenWindow result:', result)
+  return result
 }
 
 /** 确定性退出全屏：仅在全屏时退出，不做 toggle（防止状态不一致时重新进入） */
 export async function exitFullscreenWindow(): Promise<boolean> {
-  console.log('[electron-api] exitFullscreenWindow called');
-  const api = requireElectron();
-  const result = await api.windowControl.exitFullscreen();
-  console.log('[electron-api] exitFullscreenWindow result:', result);
-  return result;
+  console.log('[electron-api] exitFullscreenWindow called')
+  const api = requireElectron()
+  const result = await api.windowControl.exitFullscreen()
+  console.log('[electron-api] exitFullscreenWindow result:', result)
+  return result
 }
 
 /** 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中） */
-export async function setCursorPosition(x: number, y: number): Promise<{ ok: boolean; error?: string }> {
-  const api = requireElectron();
-  return api.windowControl.setCursor(x, y);
+export async function setCursorPosition(
+  x: number,
+  y: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const api = requireElectron()
+  return api.windowControl.setCursor(x, y)
 }
 
 /**
@@ -150,30 +169,26 @@ export async function setCursorPosition(x: number, y: number): Promise<{ ok: boo
  * 用于 resize 拖拽时动态获取真实下限，而非硬编码。
  */
 export async function getMinimumSize(): Promise<{ width: number; height: number }> {
-  const api = requireElectron();
-  return api.windowControl.getMinimumSize();
+  const api = requireElectron()
+  return api.windowControl.getMinimumSize()
 }
 
 /**
  * 监听最大化状态变更事件（主进程 webview 快捷键兜底触发时通知渲染层）。
  * 返回取消监听的函数。
  */
-export function onMaximizeToggled(
-  callback: (isMaximized: boolean) => void,
-): () => void {
-  const api = requireElectron();
-  return api.windowControl.onMaximizeToggled(callback);
+export function onMaximizeToggled(callback: (isMaximized: boolean) => void): () => void {
+  const api = requireElectron()
+  return api.windowControl.onMaximizeToggled(callback)
 }
 
 /**
  * 监听置顶状态变更事件（主进程 webview 快捷键兜底触发时通知渲染层）。
  * 返回取消监听的函数。
  */
-export function onPinToggled(
-  callback: (alwaysOnTop: boolean) => void,
-): () => void {
-  const api = requireElectron();
-  return api.windowControl.onPinToggled(callback);
+export function onPinToggled(callback: (alwaysOnTop: boolean) => void): () => void {
+  const api = requireElectron()
+  return api.windowControl.onPinToggled(callback)
 }
 
 /**
@@ -181,11 +196,9 @@ export function onPinToggled(
  * 用于置顶按钮禁用态等与全屏互斥的 UI 同步）。
  * 返回取消监听的函数。
  */
-export function onFullscreenToggled(
-  callback: (isFullscreen: boolean) => void,
-): () => void {
-  const api = requireElectron();
-  return api.windowControl.onFullscreenToggled(callback);
+export function onFullscreenToggled(callback: (isFullscreen: boolean) => void): () => void {
+  const api = requireElectron()
+  return api.windowControl.onFullscreenToggled(callback)
 }
 
 /* =====================================================================
@@ -193,32 +206,40 @@ export function onFullscreenToggled(
    ===================================================================== */
 
 export async function getWindowState(windowId: string): Promise<WindowStateData | null> {
-  const api = requireElectron();
-  return api.windowState.get(windowId);
+  const api = requireElectron()
+  return api.windowState.get(windowId)
 }
 
 export async function saveWindowState(windowId: string, state: WindowStateData): Promise<void> {
-  const api = requireElectron();
-  return api.windowState.save(windowId, state);
+  const api = requireElectron()
+  return api.windowState.save(windowId, state)
 }
 
 /* =====================================================================
    标签管理 —— 对应 window.electron.tab
    ===================================================================== */
 
-export async function updateTabTitle(windowId: string, tabId: string, title: string): Promise<void> {
-  const api = requireElectron();
-  return api.tab.updateTitle(windowId, tabId, title);
+export async function updateTabTitle(
+  windowId: string,
+  tabId: string,
+  title: string,
+): Promise<void> {
+  const api = requireElectron()
+  return api.tab.updateTitle(windowId, tabId, title)
 }
 
 export async function updateTabUrl(windowId: string, tabId: string, url: string): Promise<void> {
-  const api = requireElectron();
-  return api.tab.updateUrl(windowId, tabId, url);
+  const api = requireElectron()
+  return api.tab.updateUrl(windowId, tabId, url)
 }
 
-export async function updateTabHomeUrl(windowId: string, tabId: string, homeUrl: string): Promise<void> {
-  const api = requireElectron();
-  return api.tab.updateHomeUrl(windowId, tabId, homeUrl);
+export async function updateTabHomeUrl(
+  windowId: string,
+  tabId: string,
+  homeUrl: string,
+): Promise<void> {
+  const api = requireElectron()
+  return api.tab.updateHomeUrl(windowId, tabId, homeUrl)
 }
 
 /**
@@ -226,14 +247,17 @@ export async function updateTabHomeUrl(windowId: string, tabId: string, homeUrl:
  * 主进程在主窗口无该 Profile 标签时，请求渲染层创建标签并返回 tabId。
  */
 export function onTabEnsureAndDetach(callback: (profileId: string) => void): () => void {
-  const api = requireElectron();
-  return api.tab.onEnsureAndDetach(callback);
+  const api = requireElectron()
+  return api.tab.onEnsureAndDetach(callback)
 }
 
 /** 回复兜底请求结果给主进程（tabId 或 null） */
-export function reportTabEnsureAndDetachResult(payload: { profileId: string; tabId: string | null }): void {
-  const api = requireElectron();
-  return api.tab.reportEnsureAndDetachResult(payload);
+export function reportTabEnsureAndDetachResult(payload: {
+  profileId: string
+  tabId: string | null
+}): void {
+  const api = requireElectron()
+  return api.tab.reportEnsureAndDetachResult(payload)
 }
 
 /* =====================================================================
@@ -242,38 +266,38 @@ export function reportTabEnsureAndDetachResult(payload: { profileId: string; tab
 
 /** 获取全部设备预设列表 */
 export async function listPresets(): Promise<DevicePreset[]> {
-  const api = requireElectron();
-  return api.presets.list();
+  const api = requireElectron()
+  return api.presets.list()
 }
 
 /** 按 id 获取设备预设 */
 export async function getPreset(id: string): Promise<DevicePreset | null> {
-  const api = requireElectron();
-  return api.presets.get(id);
+  const api = requireElectron()
+  return api.presets.get(id)
 }
 
 /** 新增或更新设备预设（upsert 语义，按 id 匹配） */
 export async function savePreset(preset: DevicePreset): Promise<DevicePreset> {
-  const api = requireElectron();
-  return api.presets.save(preset);
+  const api = requireElectron()
+  return api.presets.save(preset)
 }
 
 /** 删除设备预设 */
 export async function deletePreset(id: string): Promise<void> {
-  const api = requireElectron();
-  return api.presets.delete(id);
+  const api = requireElectron()
+  return api.presets.delete(id)
 }
 
 /** 获取全部内置 AI 平台（预置列表，无 Profile 合并） */
 export function getPresetAIPlatforms(): AIPlatform[] {
-  const api = requireElectron();
-  return api.aiPlatform.presetList?.() ?? [];
+  const api = requireElectron()
+  return api.aiPlatform.presetList?.() ?? []
 }
 
 /** 获取全部内置 AI 平台（合并 Profile 自定义覆盖） */
 export async function listAIPlatforms(): Promise<AIPlatform[]> {
-  const api = requireElectron();
-  return api.aiPlatform.list();
+  const api = requireElectron()
+  return api.aiPlatform.list()
 }
 
 /* =====================================================================
@@ -289,8 +313,8 @@ export async function listAIPlatforms(): Promise<AIPlatform[]> {
 export function onWebviewPopupUrl(
   callback: (payload: { url: string; webContentsId: number }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onWebviewPopupUrl(callback);
+  const api = requireElectron()
+  return api.onWebviewPopupUrl(callback)
 }
 
 /**
@@ -298,8 +322,8 @@ export function onWebviewPopupUrl(
  * 用于每次唤出窗口时聚焦 AI 输入框。返回取消监听的函数。
  */
 export function onWindowShown(callback: () => void): () => void {
-  const api = requireElectron();
-  return api.onWindowShown(callback);
+  const api = requireElectron()
+  return api.onWindowShown(callback)
 }
 
 /**
@@ -308,8 +332,8 @@ export function onWindowShown(callback: () => void): () => void {
  * 返回取消监听的函数。
  */
 export function onWindowHidden(callback: () => void): () => void {
-  const api = requireElectron();
-  return api.onWindowHidden(callback);
+  const api = requireElectron()
+  return api.onWindowHidden(callback)
 }
 
 /**
@@ -319,33 +343,31 @@ export function onWindowHidden(callback: () => void): () => void {
 export function onPopupDenied(
   callback: (data: { origin: string; count: number }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onPopupDenied(callback);
+  const api = requireElectron()
+  return api.onPopupDenied(callback)
 }
 
 /** 添加 origin 到全局弹窗白名单 */
 export async function addToPopupWhitelist(origin: string): Promise<void> {
-  const api = requireElectron();
-  return api.addToPopupWhitelist(origin);
+  const api = requireElectron()
+  return api.addToPopupWhitelist(origin)
 }
 
 /** 添加 origin 到 Profile 专属弹窗白名单 */
 export async function addToProfilePopupWhitelist(profileId: string, origin: string): Promise<void> {
-  const api = requireElectron();
-  return api.addToProfilePopupWhitelist(profileId, origin);
+  const api = requireElectron()
+  return api.addToProfilePopupWhitelist(profileId, origin)
 }
 
 /**
  * 监听 webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行）。
  * 统一拦截点：Alt+1~9 / Ctrl+Tab / Ctrl+G / ` / ? 等快捷键在 webview 焦点时也能生效。
  */
-export function onWebviewHotkey(
-  callback: (payload: WebviewHotkeyPayload) => void,
-): () => void {
-  const api = requireElectron();
-  return api.onWebviewHotkey(callback);
+export function onWebviewHotkey(callback: (payload: WebviewHotkeyPayload) => void): () => void {
+  const api = requireElectron()
+  return api.onWebviewHotkey(callback)
 }
 
 export function validateWebviewHotkeyTarget(target: WebviewHotkeyTarget): Promise<boolean> {
-  return requireElectron().validateWebviewHotkeyTarget(target);
+  return requireElectron().validateWebviewHotkeyTarget(target)
 }

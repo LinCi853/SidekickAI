@@ -10,7 +10,7 @@
    - 所有状态通过 useTabStore 持久化（bounds / tabs / activeTabId / alwaysOnTop / bottomBarExpanded / bottomBarHeight）
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   openSettingsWindow,
   openHistoryWindow,
@@ -24,45 +24,43 @@ import {
   reportTabEnsureAndDetachResult,
   onDownloadUpdated,
   listBrowserDownloads,
-} from '../../lib/electron-api';
-import type { Profile } from '../../lib/electron-api';
-import ShortcutHelp from '../../components/ShortcutHelp';
-import DrawerPanel from '../../components/DrawerPanel';
-import WindowResizeHandles from '../../components/WindowResizeHandles';
-import { useHotkeys } from '../../hooks/useHotkeys';
-import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl';
-import { useProfileStore } from '../../store/useProfileStore';
-import { useTabStore } from '../../store/useTabStore';
-import { useThemeStore } from '../../store/useThemeStore';
-import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms';
-import './styles.css';
-import { WebviewTab } from './WebviewTab';
-import DeferredTab from '../../components/DeferredTab';
-import TabContextMenu from './TabContextMenu';
-import BottomBar from './BottomBar';
-import TopBar from './TopBar';
-import TabBar from './TabBar';
-import { useTabContextMenu } from './useTabContextMenu';
-import { useMainViewKeyboard } from './useMainViewKeyboard';
-import FileDropOverlay from './FileDropOverlay';
-import InjectionPreviewModal from '../../components/InjectionPreviewModal';
+} from '../../lib/electron-api'
+import type { Profile } from '../../lib/electron-api'
+import ShortcutHelp from '../../components/ShortcutHelp'
+import DrawerPanel from '../../components/DrawerPanel'
+import WindowResizeHandles from '../../components/WindowResizeHandles'
+import { useHotkeys } from '../../hooks/useHotkeys'
+import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl'
+import { useProfileStore } from '../../store/useProfileStore'
+import { useTabStore } from '../../store/useTabStore'
+import { useThemeStore } from '../../store/useThemeStore'
+import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms'
+import './styles.css'
+import { WebviewTab } from './WebviewTab'
+import DeferredTab from '../../components/DeferredTab'
+import TabContextMenu from './TabContextMenu'
+import BottomBar from './BottomBar'
+import TopBar from './TopBar'
+import TabBar from './TabBar'
+import { useTabContextMenu } from './useTabContextMenu'
+import { useMainViewKeyboard } from './useMainViewKeyboard'
+import FileDropOverlay from './FileDropOverlay'
+import InjectionPreviewModal from '../../components/InjectionPreviewModal'
 
 // Extracted hooks
-import { useMainViewData } from './hooks/useMainViewData';
-import { useTitleEditing } from './hooks/useTitleEditing';
-import { useNavigation } from './hooks/useNavigation';
-import { useWebviewHotkeyDispatch } from './hooks/useWebviewHotkeyDispatch';
-import { useVoiceInjection } from './hooks/useVoiceInjection';
-import { usePromptInjection } from './hooks/usePromptInjection';
-import { useFileDragDrop } from './hooks/useFileDragDrop';
-import { useTabDragSort } from './hooks/useTabDragSort';
-import { useWindowMinWidth } from './hooks/useWindowMinWidth';
-import { useOxyTheme } from './hooks/useOxyTheme';
-import { useToast } from '../../hooks/useToast';
-import { formatWindowTitle } from '../../lib/window-title';
-import { useTabProcessPriority } from '../../hooks/useTabProcessPriority';
-
-
+import { useMainViewData } from './hooks/useMainViewData'
+import { useTitleEditing } from './hooks/useTitleEditing'
+import { useNavigation } from './hooks/useNavigation'
+import { useWebviewHotkeyDispatch } from './hooks/useWebviewHotkeyDispatch'
+import { useVoiceInjection } from './hooks/useVoiceInjection'
+import { usePromptInjection } from './hooks/usePromptInjection'
+import { useFileDragDrop } from './hooks/useFileDragDrop'
+import { useTabDragSort } from './hooks/useTabDragSort'
+import { useWindowMinWidth } from './hooks/useWindowMinWidth'
+import { useOxyTheme } from './hooks/useOxyTheme'
+import { useToast } from '../../hooks/useToast'
+import { formatWindowTitle } from '../../lib/window-title'
+import { useTabProcessPriority } from '../../hooks/useTabProcessPriority'
 
 export default function MainView() {
   // Store state
@@ -89,15 +87,15 @@ export default function MainView() {
     detachedProfiles,
     addDetachedProfile,
     removeDetachedProfile,
-  } = useTabStore();
+  } = useTabStore()
 
-  const profiles = useProfileStore((s) => s.profiles);
-  const updateProfile = useProfileStore((s) => s.updateProfile);
-  const { toast: homepageToast, showToast: showHomepageToast } = useToast(3000);
-  const updateProfileUaLockMode = useProfileStore((s) => s.updateProfileUaLockMode);
+  const profiles = useProfileStore((s) => s.profiles)
+  const updateProfile = useProfileStore((s) => s.updateProfile)
+  const { toast: homepageToast, showToast: showHomepageToast } = useToast(3000)
+  const updateProfileUaLockMode = useProfileStore((s) => s.updateProfileUaLockMode)
 
   // D3: 监听 AI 输入框聚焦触发器（标签迁回主窗口时触发）
-  const focusAiInputTrigger = useTabStore((s) => s.focusAiInputTrigger);
+  const focusAiInputTrigger = useTabStore((s) => s.focusAiInputTrigger)
 
   // Extracted hooks
   const {
@@ -113,7 +111,7 @@ export default function MainView() {
     enterToSend,
     appClickBehavior,
     topBarVisibleButtons,
-  } = useMainViewData();
+  } = useMainViewData()
 
   const {
     isEditingTitle,
@@ -125,7 +123,7 @@ export default function MainView() {
     commitTitle,
     titleToast,
     canRenameTitle,
-  } = useTitleEditing(tabs, activeTabId, profiles, renameTab, updateProfile);
+  } = useTitleEditing(tabs, activeTabId, profiles, renameTab, updateProfile)
 
   const {
     canGoBack,
@@ -138,34 +136,30 @@ export default function MainView() {
     handleGoForward,
     handleReload,
     handleGoHome,
-  } = useNavigation(activeTabId, tabs, profiles);
+  } = useNavigation(activeTabId, tabs, profiles)
 
-  useWebviewHotkeyDispatch(addTab, closeTab, detachTab, setShortcutsOpen, activeTabDomReadyRef);
+  useWebviewHotkeyDispatch(addTab, closeTab, detachTab, setShortcutsOpen, activeTabDomReadyRef)
 
   const visibleTabs = useMemo(
     () => tabs.filter((t) => !detachedProfiles.has(t.profileId)),
     [tabs, detachedProfiles],
-  );
-  const activeTab = visibleTabs.find((t) => t.id === activeTabId) ?? null;
-  const activeTitle = activeTab?.title ?? '工百窗';
+  )
+  const activeTab = visibleTabs.find((t) => t.id === activeTabId) ?? null
+  const activeTitle = activeTab?.title ?? '工百窗'
   useEffect(() => {
-    document.title = formatWindowTitle(activeTitle);
-  }, [activeTitle]);
+    document.title = formatWindowTitle(activeTitle)
+  }, [activeTitle])
 
   const getProfile = useCallback(
     (profileId: string) => profiles.find((p) => p.id === profileId) ?? null,
     [profiles],
-  );
+  )
 
-  const { injectAndSendVoice } = useVoiceInjection(activeTab, getProfile, platforms);
-  const {
-    previewState,
-    handleInjectPrompt,
-    handleConfirmInjection,
-    handleCancelInjection,
-  } = usePromptInjection(activeTab, getProfile, platforms);
+  const { injectAndSendVoice } = useVoiceInjection(activeTab, getProfile, platforms)
+  const { previewState, handleInjectPrompt, handleConfirmInjection, handleCancelInjection } =
+    usePromptInjection(activeTab, getProfile, platforms)
 
-  const { isDragOver, downloadToast } = useFileDragDrop(platforms);
+  const { isDragOver, downloadToast } = useFileDragDrop(platforms)
 
   const {
     draggingTabId,
@@ -174,252 +168,259 @@ export default function MainView() {
     handleTabDrop,
     handleTabDragStart,
     handleTabDragEnd,
-  } = useTabDragSort(moveTab, detachTab);
+  } = useTabDragSort(moveTab, detachTab)
 
-  useWindowMinWidth(activeTitle, topBarVisibleButtons);
-  const { isOxy } = useOxyTheme(activeTabId, tabs, profiles, platforms);
+  useWindowMinWidth(activeTitle, topBarVisibleButtons)
+  const { isOxy } = useOxyTheme(activeTabId, tabs, profiles, platforms)
 
   // Remaining inline state
-  const [isBottomHovered, setIsBottomHovered] = useState(false);
+  const [isBottomHovered, setIsBottomHovered] = useState(false)
 
   // Keyboard shortcuts
-  useHotkeys({});
-  useMainViewKeyboard(bottomBarExpanded, toggleBottomBar);
+  useHotkeys({})
+  useMainViewKeyboard(bottomBarExpanded, toggleBottomBar)
   // ` / ~ / ? 呼出快捷键说明由 ShortcutHelp 内部处理（窗口焦点 + webview 转发双通道）
 
   // D3: focusAiInputTrigger 变化时聚焦当前激活标签的 AI 输入框
   useEffect(() => {
-    if (focusAiInputTrigger <= 0) return;
-    const activeTabId = useTabStore.getState().activeTabId;
-    if (!activeTabId) return;
-    const wv = document.querySelector(`webview[data-tab-id="${activeTabId}"]`) as WebviewLike | null;
-    if (!wv) return;
-    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
-    const profile = tab ? useProfileStore.getState().profiles.find((p) => p.id === tab.profileId) : null;
+    if (focusAiInputTrigger <= 0) return
+    const activeTabId = useTabStore.getState().activeTabId
+    if (!activeTabId) return
+    const wv = document.querySelector(`webview[data-tab-id="${activeTabId}"]`) as WebviewLike | null
+    if (!wv) return
+    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId)
+    const profile = tab
+      ? useProfileStore.getState().profiles.find((p) => p.id === tab.profileId)
+      : null
     const platform = profile?.aiPlatformId
       ? AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)
-      : null;
-    const selector = profile?.aiInputSelector || platform?.inputSelector || null;
-    wv.focus?.();
-    void focusInputInWebview(wv, selector);
-  }, [focusAiInputTrigger]);
+      : null
+    const selector = profile?.aiInputSelector || platform?.inputSelector || null
+    wv.focus?.()
+    void focusInputInWebview(wv, selector)
+  }, [focusAiInputTrigger])
 
   // Browser tab migration
   // P0-4：一个 AI 应用 = 一个主标签。浏览器窗口关闭时仅恢复主标签（更新 URL/title），
   // 不再迁移多个标签。浏览器窗口内的浏览历史通过 navHistoryStore 独立保存。
   useEffect(() => {
     const off = onBrowserTabMigrateBack(({ profileId, url }) => {
-      removeDetachedProfile(profileId);
-      const allTabs = useTabStore.getState().tabs;
+      removeDetachedProfile(profileId)
+      const allTabs = useTabStore.getState().tabs
 
       // 按 profileId 查找主窗口中的已有标签（即被脱离的父标签）
-      const existingTab = allTabs.find((t) => t.profileId === profileId);
+      const existingTab = allTabs.find((t) => t.profileId === profileId)
       if (existingTab) {
         // 更新主标签 URL 为浏览器窗口中最后浏览的页面
         if (url) {
-          void useTabStore.getState().updateTabUrl(existingTab.id, url);
+          void useTabStore.getState().updateTabUrl(existingTab.id, url)
         }
         // 标题显式恢复为 AI 应用名（Profile.name）——顶栏与标签栏始终显示应用名，
         // 与主进程持久化恢复逻辑一致，防止任何环节把标题覆盖为网页标题
-        const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId);
+        const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId)
         if (profile && existingTab.title !== profile.name) {
-          void useTabStore.getState().renameTab(existingTab.id, profile.name);
+          void useTabStore.getState().renameTab(existingTab.id, profile.name)
         }
-        useTabStore.getState().setActiveTab(existingTab.id);
+        useTabStore.getState().setActiveTab(existingTab.id)
       }
 
       // D3: 标签迁回后触发 AI 输入框聚焦
-      useTabStore.getState().triggerFocusAiInput();
-    });
-    return () => off();
-  }, [removeDetachedProfile]);
+      useTabStore.getState().triggerFocusAiInput()
+    })
+    return () => off()
+  }, [removeDetachedProfile])
 
   useEffect(() => {
     const off = onBrowserTabDetached((profileId, newActiveTabId) => {
-      addDetachedProfile(profileId);
+      addDetachedProfile(profileId)
       if (newActiveTabId) {
-        useTabStore.getState().setActiveTab(newActiveTabId);
+        useTabStore.getState().setActiveTab(newActiveTabId)
       }
-    });
-    return () => off();
-  }, [addDetachedProfile]);
+    })
+    return () => off()
+  }, [addDetachedProfile])
 
   // 窗口快捷键兜底：主窗口无该 Profile 标签时，主进程请求渲染层创建标签并返回 tabId。
   // 渲染层作为标签真源创建后 persist，主进程收到 tabId 再脱离，保证数据一致。
   useEffect(() => {
     const off = onTabEnsureAndDetach(async (profileId) => {
-      const store = useTabStore.getState();
-      const existing = store.tabs.find((t) => t.profileId === profileId);
+      const store = useTabStore.getState()
+      const existing = store.tabs.find((t) => t.profileId === profileId)
       if (existing) {
-        reportTabEnsureAndDetachResult({ profileId, tabId: existing.id });
-        return;
+        reportTabEnsureAndDetachResult({ profileId, tabId: existing.id })
+        return
       }
-      const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId);
+      const profile = useProfileStore.getState().profiles.find((p) => p.id === profileId)
       if (!profile) {
-        reportTabEnsureAndDetachResult({ profileId, tabId: null });
-        return;
+        reportTabEnsureAndDetachResult({ profileId, tabId: null })
+        return
       }
-      await store.addTab(profile);
-      const created = useTabStore.getState().tabs.find((t) => t.profileId === profileId);
-      reportTabEnsureAndDetachResult({ profileId, tabId: created?.id ?? null });
-    });
-    return () => off();
-  }, []);
+      await store.addTab(profile)
+      const created = useTabStore.getState().tabs.find((t) => t.profileId === profileId)
+      reportTabEnsureAndDetachResult({ profileId, tabId: created?.id ?? null })
+    })
+    return () => off()
+  }, [])
 
   // Chat request config: open settings on Alt+Q
   useEffect(() => {
     const off = onChatRequestConfig(() => {
-      void openSettingsWindow();
-    });
-    return off;
-  }, []);
+      void openSettingsWindow()
+    })
+    return off
+  }, [])
 
   // Default DeepSeek on first launch
   useEffect(() => {
-    if (!initialized || visibleTabs.length > 0 || profiles.length === 0) return;
-    const builtIn = profiles.find((p) => p.isBuiltIn);
-    const deepseek = builtIn ?? profiles.find(
-      (p) => p.isAIPlatform && p.aiPlatformUrl?.includes('deepseek'),
-    );
-    const target =
-      deepseek ?? profiles.find((p) => p.isAIPlatform) ?? profiles[0];
-    if (!target) return;
+    if (!initialized || visibleTabs.length > 0 || profiles.length === 0) return
+    const builtIn = profiles.find((p) => p.isBuiltIn)
+    const deepseek =
+      builtIn ?? profiles.find((p) => p.isAIPlatform && p.aiPlatformUrl?.includes('deepseek'))
+    const target = deepseek ?? profiles.find((p) => p.isAIPlatform) ?? profiles[0]
+    if (!target) return
     void (async () => {
       try {
-        const { getAppSettings } = await import('../../lib/electron-api');
-        const cfg = await getAppSettings();
+        const { getAppSettings } = await import('../../lib/electron-api')
+        const cfg = await getAppSettings()
         if (cfg.startupOpen === 'lastConversation') {
-          const lastUrl = await getLastConversationUrl(target.id);
+          const lastUrl = await getLastConversationUrl(target.id)
           if (lastUrl) {
-            await addTab(target, { url: lastUrl });
-            return;
+            await addTab(target, { url: lastUrl })
+            return
           }
         }
       } catch (e) {
-        console.warn('[MainView] 读取 startupOpen 失败，回退首页:', e);
+        console.warn('[MainView] 读取 startupOpen 失败，回退首页:', e)
       }
-      void addTab(target);
-    })();
-  }, [initialized, tabs.length, visibleTabs.length, profiles, addTab]);
+      void addTab(target)
+    })()
+  }, [initialized, tabs.length, visibleTabs.length, profiles, addTab])
 
   // Sync initial maximized state
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized) return
     isWindowMaximized()
       .then((m) => setMaximized(m))
-      .catch((e) => console.warn('[main-view] 操作失败:', e));
-  }, [initialized, setMaximized]);
+      .catch((e) => console.warn('[main-view] 操作失败:', e))
+  }, [initialized, setMaximized])
 
   const handleMaximize = useCallback(() => {
-    useTabStore.getState().toggleMaximize();
-  }, []);
+    useTabStore.getState().toggleMaximize()
+  }, [])
 
   const handleCloseActiveTab = useCallback(() => {
-    if (activeTabId) void closeTab(activeTabId);
-  }, [activeTabId, closeTab]);
+    if (activeTabId) void closeTab(activeTabId)
+  }, [activeTabId, closeTab])
 
   const handleHandleClick = useCallback(
     (e: React.MouseEvent) => {
-      e.preventDefault();
-      toggleBottomBar();
+      e.preventDefault()
+      toggleBottomBar()
     },
     [toggleBottomBar],
-  );
+  )
 
-  const effectiveTabBarCollapsed = isOxy ? true : isTabBarCollapsed;
+  const effectiveTabBarCollapsed = isOxy ? true : isTabBarCollapsed
 
-  const activeProfile = activeTab ? (profiles.find((p) => p.id === activeTab.profileId) ?? null) : null;
-  const activeUaLockMode = activeProfile?.uaLockMode;
+  const activeProfile = activeTab
+    ? (profiles.find((p) => p.id === activeTab.profileId) ?? null)
+    : null
+  const activeUaLockMode = activeProfile?.uaLockMode
 
   const handleToggleUaLockMode = useCallback(() => {
-    if (!activeProfile) return;
-    const current = activeProfile.uaLockMode ?? 'auto';
+    if (!activeProfile) return
+    const current = activeProfile.uaLockMode ?? 'auto'
     const next: 'auto' | 'mobile' | 'desktop' =
-      current === 'auto' ? 'mobile' : current === 'mobile' ? 'desktop' : 'auto';
-    void updateProfileUaLockMode(activeProfile.id, next);
-  }, [activeProfile, updateProfileUaLockMode]);
+      current === 'auto' ? 'mobile' : current === 'mobile' ? 'desktop' : 'auto'
+    void updateProfileUaLockMode(activeProfile.id, next)
+  }, [activeProfile, updateProfileUaLockMode])
 
   const openProfileIds = useMemo(
     () => new Set(tabs.filter((t) => !detachedProfiles.has(t.profileId)).map((t) => t.profileId)),
     [tabs, detachedProfiles],
-  );
+  )
 
   // 标签容器：委托媒体事件，供进程优先级保护使用。
-  const tabsContainerRef = useRef<HTMLDivElement | null>(null);
+  const tabsContainerRef = useRef<HTMLDivElement | null>(null)
 
   // 出声或下载中的标签保持常规优先级。
-  const downloadingProfileIdsRef = useRef<Set<string>>(new Set());
-  const [downloadTick, setDownloadTick] = useState(0);
+  const downloadingProfileIdsRef = useRef<Set<string>>(new Set())
+  const [downloadTick, setDownloadTick] = useState(0)
   useEffect(() => {
     const off = onDownloadUpdated((record) => {
-      const set = downloadingProfileIdsRef.current;
-      if (record.state === 'progressing') set.add(record.profileId);
-      else set.delete(record.profileId);
-      setDownloadTick((t) => t + 1);
-    });
+      const set = downloadingProfileIdsRef.current
+      if (record.state === 'progressing') set.add(record.profileId)
+      else set.delete(record.profileId)
+      setDownloadTick((t) => t + 1)
+    })
     listBrowserDownloads()
       .then((records) => {
-        const set = downloadingProfileIdsRef.current;
-        set.clear();
+        const set = downloadingProfileIdsRef.current
+        set.clear()
         for (const r of records) {
-          if (r.state === 'progressing') set.add(r.profileId);
+          if (r.state === 'progressing') set.add(r.profileId)
         }
-        setDownloadTick((t) => t + 1);
+        setDownloadTick((t) => t + 1)
       })
-      .catch(() => { /* 下载记录不可用时不做豁免 */ });
-    return off;
-  }, []);
+      .catch(() => {
+        /* 下载记录不可用时不做豁免 */
+      })
+    return off
+  }, [])
 
   // webview media 事件（委托到容器）：驱动标签 audible 状态
   useEffect(() => {
-    const container = tabsContainerRef.current;
-    if (!container) return;
+    const container = tabsContainerRef.current
+    if (!container) return
     const findTabId = (e: Event): string | null => {
-      const el = (e.target as HTMLElement | null)?.closest?.('webview');
-      return el?.getAttribute?.('data-tab-id') ?? null;
-    };
+      const el = (e.target as HTMLElement | null)?.closest?.('webview')
+      return el?.getAttribute?.('data-tab-id') ?? null
+    }
     const handleStarted = (e: Event) => {
-      const tabId = findTabId(e);
-      if (tabId) useTabStore.getState().updateAudible(tabId, true);
-    };
+      const tabId = findTabId(e)
+      if (tabId) useTabStore.getState().updateAudible(tabId, true)
+    }
     const handlePaused = (e: Event) => {
-      const tabId = findTabId(e);
-      if (tabId) useTabStore.getState().updateAudible(tabId, false);
-    };
-    container.addEventListener('media-started-playing', handleStarted);
-    container.addEventListener('media-paused', handlePaused);
+      const tabId = findTabId(e)
+      if (tabId) useTabStore.getState().updateAudible(tabId, false)
+    }
+    container.addEventListener('media-started-playing', handleStarted)
+    container.addEventListener('media-paused', handlePaused)
     return () => {
-      container.removeEventListener('media-started-playing', handleStarted);
-      container.removeEventListener('media-paused', handlePaused);
-    };
-  }, []);
+      container.removeEventListener('media-started-playing', handleStarted)
+      container.removeEventListener('media-paused', handlePaused)
+    }
+  }, [])
 
   useTabProcessPriority({
     windowId: 'main',
     tabs,
     activeTabId,
-    isProtected: useCallback((tabId: string) => {
-      const tab = tabs.find((t) => t.id === tabId);
-      if (!tab) return false;
-      if (tab.audible === true && tab.muted !== true) return true;
-      return downloadingProfileIdsRef.current.has(tab.profileId);
-    }, [tabs, downloadTick]),
-  });
+    isProtected: useCallback(
+      (tabId: string) => {
+        const tab = tabs.find((t) => t.id === tabId)
+        if (!tab) return false
+        if (tab.audible === true && tab.muted !== true) return true
+        return downloadingProfileIdsRef.current.has(tab.profileId)
+      },
+      [tabs, downloadTick],
+    ),
+  })
   const handleAppClick = useCallback(
     (profile: Profile) => {
-      const existingTab = tabs.find((t) => t.profileId === profile.id);
+      const existingTab = tabs.find((t) => t.profileId === profile.id)
       if (existingTab && existingTab.id === activeTabId) {
         if (appClickBehavior === 'close') {
-          void closeTab(existingTab.id);
+          void closeTab(existingTab.id)
         } else {
-          setActiveTab(existingTab.id);
+          setActiveTab(existingTab.id)
         }
       } else {
-        void addTab(profile);
+        void addTab(profile)
       }
     },
     [addTab, closeTab, tabs, activeTabId, appClickBehavior],
-  );
+  )
 
   // Context menu
   const {
@@ -450,10 +451,10 @@ export default function MainView() {
     updateTabHomeUrl,
     updateProfile,
     onHomeFeedback: showHomepageToast,
-    isTabDomReady: (tabId: string) => tabId === activeTabId ? activeTabDomReadyRef.current : true,
-  });
+    isTabDomReady: (tabId: string) => (tabId === activeTabId ? activeTabDomReadyRef.current : true),
+  })
 
-  const statusToast = titleToast ?? homepageToast ?? downloadToast;
+  const statusToast = titleToast ?? homepageToast ?? downloadToast
 
   return (
     <>
@@ -527,15 +528,21 @@ export default function MainView() {
           }}
         />
 
-        <div className="webview-container" ref={tabsContainerRef} data-name="main.main-view.webview-container">
+        <div
+          className="webview-container"
+          ref={tabsContainerRef}
+          data-name="main.main-view.webview-container"
+        >
           {visibleTabs.map((tab) => {
-            const profile = getProfile(tab.profileId);
-            if (!profile) return null;
+            const profile = getProfile(tab.profileId)
+            if (!profile) return null
             const platform = profile.isAIPlatform
-              ? platforms.find((p) => p.id === profile.aiPlatformId || p.url === profile.aiPlatformUrl)
-              : null;
-            const desktopPresetId = platform?.defaultDesktopPreset ?? 'win-chrome-125';
-            const mobilePresetId = platform?.defaultMobilePreset ?? 'iphone-15-pro-safari';
+              ? platforms.find(
+                  (p) => p.id === profile.aiPlatformId || p.url === profile.aiPlatformUrl,
+                )
+              : null
+            const desktopPresetId = platform?.defaultDesktopPreset ?? 'win-chrome-125'
+            const mobilePresetId = platform?.defaultMobilePreset ?? 'iphone-15-pro-safari'
             return (
               <DeferredTab key={tab.id} active={tab.id === activeTabId}>
                 <WebviewTab
@@ -550,23 +557,23 @@ export default function MainView() {
                   enterToSend={enterToSend}
                   onNavigationChange={(back, fwd) => {
                     if (tab.id === activeTabId) {
-                      handleNavigationChange(back, fwd);
+                      handleNavigationChange(back, fwd)
                     }
                   }}
                   onDomReadyChange={(isReady) => {
                     if (tab.id === activeTabId) {
-                      setActiveTabDomReady(isReady);
+                      setActiveTabDomReady(isReady)
                     }
                   }}
                   onProcessGone={(reason) => {
-                    console.warn('[MainView] webview 进程崩溃，已触发自动恢复:', tab.id, reason);
+                    console.warn('[MainView] webview 进程崩溃，已触发自动恢复:', tab.id, reason)
                     if (tab.id === activeTabId) {
-                      setActiveTabDomReady(false);
+                      setActiveTabDomReady(false)
                     }
                   }}
                 />
               </DeferredTab>
-            );
+            )
           })}
         </div>
 
@@ -605,10 +612,7 @@ export default function MainView() {
           onOpenPromptLibrary={() => void openPromptWindow()}
         />
 
-        <ShortcutHelp
-          open={shortcutsOpen}
-          onOpenChange={setShortcutsOpen}
-        />
+        <ShortcutHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
         <WindowResizeHandles />
 
@@ -675,5 +679,5 @@ export default function MainView() {
         />
       </div>
     </>
-  );
+  )
 }

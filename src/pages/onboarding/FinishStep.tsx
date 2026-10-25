@@ -6,14 +6,14 @@
    从 pages/OnboardingView.tsx 拆出，仅通过 props 回调操作状态，不改变任何行为。
    ===================================================================== */
 
-import { ICONS, OnboardIcon } from './OnboardIcon';
+import { ICONS, OnboardIcon } from './OnboardIcon'
 
 interface FinishStepProps {
-  importing: boolean;
-  importError: string | null;
-  finishing: boolean;
-  onImport: () => Promise<void>;
-  onFinishAndOpenSettings: () => Promise<void>;
+  importing: boolean
+  importError: string | null
+  finishing: boolean
+  onImport: () => Promise<void>
+  onFinishAndOpenSettings: () => Promise<void>
 }
 
 export default function FinishStep({
@@ -66,5 +66,5 @@ export default function FinishStep({
         {importError && <span className="onboarding-error">{importError}</span>}
       </div>
     </div>
-  );
+  )
 }

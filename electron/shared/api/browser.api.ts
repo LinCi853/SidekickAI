@@ -38,33 +38,58 @@ export interface BrowserAPI {
    * 另存为：保存指定 webview（guest webContents）的当前页面到用户指定路径。
    * 主进程弹出保存对话框后以 HTMLComplete 格式保存。
    */
-  savePageAs(webContentsId: number, suggestedName?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
+  savePageAs(
+    webContentsId: number,
+    suggestedName?: string,
+  ): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
   /**
    * 另存为：下载指定 URL（链接/图片等）到用户指定路径。
    * partition 为 webview 的 session 分区（persist:profileId），主进程在 will-download 中弹出保存对话框。
    */
-  downloadAs(partition: string, url: string, suggestedFilename?: string): Promise<{ ok: boolean; error?: string }>
+  downloadAs(
+    partition: string,
+    url: string,
+    suggestedFilename?: string,
+  ): Promise<{ ok: boolean; error?: string }>
   /** 查看网页源代码：按 session partition 抓取原始 HTML 文本（携带登录态 Cookie） */
-  viewSource(partition: string, url: string): Promise<{ ok: boolean; html?: string; contentType?: string; error?: string }>
+  viewSource(
+    partition: string,
+    url: string,
+  ): Promise<{ ok: boolean; html?: string; contentType?: string; error?: string }>
   /** 打印预览：生成当前页面的 PDF 临时文件并返回文件路径 */
-  printPreview(webContentsId: number, title?: string): Promise<{ ok: boolean; filePath?: string; title?: string; error?: string }>
+  printPreview(
+    webContentsId: number,
+    title?: string,
+  ): Promise<{ ok: boolean; filePath?: string; title?: string; error?: string }>
   /** 打印预览页「另存为」：把临时 PDF 复制到用户指定路径 */
-  savePdfAs(sourcePath: string, suggestedName?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
+  savePdfAs(
+    sourcePath: string,
+    suggestedName?: string,
+  ): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
   /** 删除打印预览临时文件 */
   deleteTempPdf(filePath: string): Promise<{ ok: boolean }>
   /** 网页截图：保存截图 PNG（dataURL）到用户指定路径 */
-  saveCapture(dataUrl: string, suggestedName?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
+  saveCapture(
+    dataUrl: string,
+    suggestedName?: string,
+  ): Promise<{ ok: boolean; canceled?: boolean; error?: string }>
   /** 云电脑模式：进入/退出（主进程挂起/恢复全局热键、同步全屏） */
   setCloudPcMode(enter: boolean): Promise<{ ok: boolean }>
   getCursorPos(): Promise<{ ok: boolean; x: number; y: number }>
   /** 主→渲染：云电脑模式状态变化（含主进程兜底退出通知）。返回取消监听函数。 */
   onCloudPcChanged(callback: (active: boolean) => void): () => void
   /** 主→渲染：云电脑模式系统级按键路由（Win/Alt+Tab 等，渲染层合成注入 guest）。返回取消监听函数。 */
-  onCloudPcKeys(callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void): () => void
+  onCloudPcKeys(
+    callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void,
+  ): () => void
   /** 记录一条搜索历史 */
   addSearchHistory(entry: { profileId: string; query: string; url: string }): Promise<void>
   /** 查询搜索历史（按 profileId，可选关键词过滤，按时间倒序） */
-  listSearchHistory(profileId: string, keyword?: string, limit?: number): Promise<SearchHistoryEntry[]>
+  listSearchHistory(
+    profileId: string,
+    keyword?: string,
+    limit?: number,
+  ): Promise<SearchHistoryEntry[]>
   /** 列出下载记录（可选按 windowId 过滤，按时间倒序） */
   listDownloads(windowId?: string, limit?: number): Promise<BrowserDownloadRecord[]>
   /** 打开已下载文件 */
@@ -82,15 +107,38 @@ export interface BrowserAPI {
   /** 主→渲染：F11 切换全屏（webview 焦点时主进程拦截转发）。返回取消监听函数。 */
   onToggleFullscreen(callback: () => void): () => void
   /** 浏览器窗口关闭时，将当前标签迁移回主窗口 */
-  tabMigrateBack(payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }): void
+  tabMigrateBack(payload: {
+    profileId: string
+    url: string
+    title: string
+    finalUrls?: MigratedTabInfo[]
+  }): void
   /** 主→渲染：监听浏览器标签迁移回主窗口的事件。返回取消监听函数。 */
-  onTabMigrateBack(callback: (payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }) => void): () => void
+  onTabMigrateBack(
+    callback: (payload: {
+      profileId: string
+      url: string
+      title: string
+      finalUrls?: MigratedTabInfo[]
+    }) => void,
+  ): () => void
   /** 主→渲染：标签已脱离到浏览器窗口（载荷：profileId, newActiveTabId）。返回取消监听函数。 */
   onTabDetached(callback: (profileId: string, newActiveTabId: string | null) => void): () => void
   /** 主→渲染：标签音频状态变化（页面开始/停止播放音频）。返回取消监听函数。 */
-  onTabAudioChanged(callback: (payload: { windowId: string; tabId: string; audible: boolean }) => void): () => void
+  onTabAudioChanged(
+    callback: (payload: { windowId: string; tabId: string; audible: boolean }) => void,
+  ): () => void
   /** 跨窗口标签聚合查询（主窗口 A 标签 ↔ 浏览器窗口 A1/A2/A3 子标签） */
-  queryAllTabs(): Promise<{ main: TabState[]; browsers: { windowId: string; parentTabId: string | null; profileId: string; platformName: string | null; tabs: BrowserTabState[] }[] }>
+  queryAllTabs(): Promise<{
+    main: TabState[]
+    browsers: {
+      windowId: string
+      parentTabId: string | null
+      profileId: string
+      platformName: string | null
+      tabs: BrowserTabState[]
+    }[]
+  }>
   /** 聚焦指定浏览器窗口 */
   focusWindow(windowId: string): Promise<boolean>
   /** 书签系统 API */
@@ -180,9 +228,13 @@ export interface HotkeyAPI {
   /** 停止录制热键 */
   stopRecording(): Promise<void>
   /** 监听热键录制结果（主进程 → 渲染层：录制完成后通知） */
-  onRecordingResult(callback: (result: { accelerator: string; reason?: string }) => void): () => void
+  onRecordingResult(
+    callback: (result: { accelerator: string; reason?: string }) => void,
+  ): () => void
   /** 订阅热键录制实时反馈（主进程 → 渲染层：每次按键时推送当前组合，用于 UI 实时显示） */
-  onRecordingPartial(callback: (partial: { modifiers: string[]; key: string | null }) => void): () => void
+  onRecordingPartial(
+    callback: (partial: { modifiers: string[]; key: string | null }) => void,
+  ): () => void
   /** 订阅热键管理器状态变化（主进程推送：uiohook/voiceHotkey/voiceKeyPressed/polling） */
   onChanged(callback: (config: HotkeyConfig[]) => void): () => void
   onStatus(callback: (status: unknown) => void): () => void

@@ -16,16 +16,32 @@ const { TabHibernationStore } = await import('./tab-hibernate-store.js')
 const image = '11111111-2222-3333-4444-555555555555.png'
 const orphan = '22222222-2222-3333-4444-555555555555.jpg'
 const directory = path.join(assetsDir, 'tab-hibernation')
-const entry = (tabId: string, hibernatedAt: number, snapshotPath: string | null = null): TabHibernationEntry => ({
-  tabId, hibernatedAt, snapshotPath, profileId: 'p', windowId: 'main', url: 'https://example.test', title: tabId,
+const entry = (
+  tabId: string,
+  hibernatedAt: number,
+  snapshotPath: string | null = null,
+): TabHibernationEntry => ({
+  tabId,
+  hibernatedAt,
+  snapshotPath,
+  profileId: 'p',
+  windowId: 'main',
+  url: 'https://example.test',
+  title: tabId,
 })
 describe('historical hibernation data', () => {
   const store = new TabHibernationStore()
-  beforeEach(() => { memoryStore.clear(); fs.mkdirSync(assetsDir, { recursive: true }) })
-  afterEach(() => { fs.rmSync(assetsDir, { recursive: true, force: true }); vi.restoreAllMocks() })
+  beforeEach(() => {
+    memoryStore.clear()
+    fs.mkdirSync(assetsDir, { recursive: true })
+  })
+  afterEach(() => {
+    fs.rmSync(assetsDir, { recursive: true, force: true })
+    vi.restoreAllMocks()
+  })
   it('reads metadata without creating an empty snapshot directory', () => {
     memoryStore.set('entries', [entry('a', 1), entry('b', 2)])
-    expect(store.list().map(item => item.tabId)).toEqual(['b', 'a'])
+    expect(store.list().map((item) => item.tabId)).toEqual(['b', 'a'])
     expect(store.snapshotStats()).toEqual({ snapshotCount: 0, snapshotBytes: 0 })
     expect(fs.existsSync(directory)).toBe(false)
   })
@@ -42,7 +58,9 @@ describe('historical hibernation data', () => {
     expect(store.list()).toHaveLength(2)
   })
   it('reports inaccessible stats instead of a false zero', () => {
-    vi.spyOn(fs, 'readdirSync').mockImplementationOnce(() => { throw Object.assign(new Error('Denied'), { code: 'EACCES' }) })
+    vi.spyOn(fs, 'readdirSync').mockImplementationOnce(() => {
+      throw Object.assign(new Error('Denied'), { code: 'EACCES' })
+    })
     expect(() => store.snapshotStats()).toThrow('Denied')
   })
   it('prunes expired metadata and images while retaining recent data and removing orphans', () => {
@@ -51,15 +69,27 @@ describe('historical hibernation data', () => {
     fs.mkdirSync(directory)
     fs.writeFileSync(path.join(directory, image), 'old')
     fs.writeFileSync(path.join(directory, orphan), 'orphan')
-    expect(store.prune({ retentionDays: 7, maxCount: 40 }, now)).toEqual({ removed: 1, expired: 1, orphans: 1 })
-    expect(store.list().map(item => item.tabId)).toEqual(['recent'])
+    expect(store.prune({ retentionDays: 7, maxCount: 40 }, now)).toEqual({
+      removed: 1,
+      expired: 1,
+      orphans: 1,
+    })
+    expect(store.list().map((item) => item.tabId)).toEqual(['recent'])
     expect(fs.readdirSync(directory)).toEqual([])
   })
   it('keeps newest records under the count limit and treats zero limits as unlimited', () => {
     memoryStore.set('entries', [entry('a', 1), entry('b', 2), entry('c', 3)])
-    expect(store.prune({ retentionDays: 0, maxCount: 0 }, 1_000_000)).toEqual({ removed: 0, expired: 0, orphans: 0 })
-    expect(store.prune({ retentionDays: 0, maxCount: 2 }, 1_000_000)).toEqual({ removed: 1, expired: 0, orphans: 0 })
-    expect(store.list().map(item => item.tabId)).toEqual(['c', 'b'])
+    expect(store.prune({ retentionDays: 0, maxCount: 0 }, 1_000_000)).toEqual({
+      removed: 0,
+      expired: 0,
+      orphans: 0,
+    })
+    expect(store.prune({ retentionDays: 0, maxCount: 2 }, 1_000_000)).toEqual({
+      removed: 1,
+      expired: 0,
+      orphans: 0,
+    })
+    expect(store.list().map((item) => item.tabId)).toEqual(['c', 'b'])
   })
   it('does not follow unsafe historical snapshot paths during pruning', () => {
     const outside = path.join(assetsDir, 'protected.txt')

@@ -123,7 +123,8 @@ function setPidPriority(pid: number, priority: number): boolean {
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | undefined)?.code
     const info = (error as { info?: { code?: string } } | undefined)?.info
-    if (code !== 'ESRCH' && info?.code !== 'ESRCH') console.warn('[tab-priority] 设置 guest 优先级失败:', error)
+    if (code !== 'ESRCH' && info?.code !== 'ESRCH')
+      console.warn('[tab-priority] 设置 guest 优先级失败:', error)
     return false
   }
 }
@@ -156,7 +157,7 @@ export function registerTabProcessPriorityIPC(): void {
       windowId: payload.windowId,
       activeTabId: payload.activeTabId ?? null,
       audibleTabIds: Array.isArray(payload.audibleTabIds)
-        ? payload.audibleTabIds.filter(id => typeof id === 'string')
+        ? payload.audibleTabIds.filter((id) => typeof id === 'string')
         : [],
     })
     applyGuestProcessPriorities()

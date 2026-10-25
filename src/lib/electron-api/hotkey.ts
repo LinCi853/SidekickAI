@@ -2,8 +2,8 @@
    lib/electron-api/hotkey.ts —— 全局热键
    ===================================================================== */
 
-import type { HotkeyAction, HotkeyConfig } from '../../../electron/shared/types';
-import { requireElectron } from './core';
+import type { HotkeyAction, HotkeyConfig } from '../../../electron/shared/types'
+import { requireElectron } from './core'
 
 /* =====================================================================
    全局热键 —— 对应 window.electron.hotkey
@@ -11,20 +11,20 @@ import { requireElectron } from './core';
 
 /** 注册全局热键（accelerator 如 'CommandOrControl+Space'） */
 export async function registerHotkey(accelerator: string, callback: () => void): Promise<boolean> {
-  const api = requireElectron();
-  return api.hotkey.register(accelerator, callback);
+  const api = requireElectron()
+  return api.hotkey.register(accelerator, callback)
 }
 
 /** 注销全局热键 */
 export async function unregisterHotkey(accelerator: string): Promise<void> {
-  const api = requireElectron();
-  return api.hotkey.unregister(accelerator);
+  const api = requireElectron()
+  return api.hotkey.unregister(accelerator)
 }
 
 /** 获取全部内置热键配置（供 UI 展示） */
 export async function getHotkeys(): Promise<HotkeyConfig[]> {
-  const api = requireElectron();
-  return api.hotkey.getAll();
+  const api = requireElectron()
+  return api.hotkey.getAll()
 }
 
 /**
@@ -32,8 +32,8 @@ export async function getHotkeys(): Promise<HotkeyConfig[]> {
  * @returns 是否注册成功（失败时主进程会恢复旧热键）
  */
 export async function setHotkeyFor(action: HotkeyAction, accelerator: string): Promise<boolean> {
-  const api = requireElectron();
-  return api.hotkey.set(action, accelerator);
+  const api = requireElectron()
+  return api.hotkey.set(action, accelerator)
 }
 
 /**
@@ -41,8 +41,8 @@ export async function setHotkeyFor(action: HotkeyAction, accelerator: string): P
  * 禁用时主进程注销当前 accelerator；启用时主进程重新注册；持久化到 hotkey.json。
  */
 export async function setHotkeyEnabled(action: HotkeyAction, enabled: boolean): Promise<void> {
-  const api = requireElectron();
-  return api.hotkey.setEnabled(action, enabled);
+  const api = requireElectron()
+  return api.hotkey.setEnabled(action, enabled)
 }
 
 /**
@@ -51,14 +51,14 @@ export async function setHotkeyEnabled(action: HotkeyAction, enabled: boolean): 
  * @returns 是否成功进入录制状态
  */
 export async function startHotkeyRecording(): Promise<boolean> {
-  const api = requireElectron();
-  return api.hotkey.startRecording();
+  const api = requireElectron()
+  return api.hotkey.startRecording()
 }
 
 /** 停止录制热键 */
 export async function stopHotkeyRecording(): Promise<void> {
-  const api = requireElectron();
-  return api.hotkey.stopRecording();
+  const api = requireElectron()
+  return api.hotkey.stopRecording()
 }
 
 /**
@@ -68,8 +68,8 @@ export async function stopHotkeyRecording(): Promise<void> {
 export function onHotkeyRecordingResult(
   callback: (result: { accelerator: string; reason?: string }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.hotkey.onRecordingResult(callback);
+  const api = requireElectron()
+  return api.hotkey.onRecordingResult(callback)
 }
 
 /**
@@ -80,6 +80,6 @@ export function onHotkeyRecordingResult(
 export function onHotkeyRecordingPartial(
   callback: (partial: { modifiers: string[]; key: string | null }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.hotkey.onRecordingPartial(callback);
+  const api = requireElectron()
+  return api.hotkey.onRecordingPartial(callback)
 }

@@ -1,126 +1,136 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 import {
   estimateCacheSize,
   cleanCache,
   updateAppSettings,
   selectDownloadDir,
   openDownloadDir,
-} from '../../../lib/electron-api';
-import SegmentedControl from '../../ui/SegmentedControl';
-import { SectionTitle, FormRow } from '../../ui';
-import { useSettingsDraft } from '../../../hooks/useSettingsData';
-import { useToast } from '../../../hooks/useToast';
+} from '../../../lib/electron-api'
+import SegmentedControl from '../../ui/SegmentedControl'
+import { SectionTitle, FormRow } from '../../ui'
+import { useSettingsDraft } from '../../../hooks/useSettingsData'
+import { useToast } from '../../../hooks/useToast'
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 function formatRelativeTime(ts: number): string {
-  if (!ts) return '从未';
-  const diff = Date.now() - ts;
-  const min = 60_000;
-  const hour = 60 * min;
-  const day = 24 * hour;
-  if (diff < min) return '刚刚';
-  if (diff < hour) return `${Math.floor(diff / min)} 分钟前`;
-  if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
-  if (diff < 30 * day) return `${Math.floor(diff / day)} 天前`;
-  return new Date(ts).toLocaleDateString();
+  if (!ts) return '从未'
+  const diff = Date.now() - ts
+  const min = 60_000
+  const hour = 60 * min
+  const day = 24 * hour
+  if (diff < min) return '刚刚'
+  if (diff < hour) return `${Math.floor(diff / min)} 分钟前`
+  if (diff < day) return `${Math.floor(diff / hour)} 小时前`
+  if (diff < 30 * day) return `${Math.floor(diff / day)} 天前`
+  return new Date(ts).toLocaleDateString()
 }
 
 export default function StorageSection() {
-  const { draft, setDraft } = useSettingsDraft();
-  const { toast: cleanFeedback, showToast: showFeedback, clearToast: clearFeedback } = useToast(3000);
-  const [cacheSize, setCacheSize] = useState<number | null>(null);
-  const [cleaning, setCleaning] = useState(false);
-  const [lastCleaned, setLastCleaned] = useState<number>(0);
-  const [selectingDir, setSelectingDir] = useState(false);
+  const { draft, setDraft } = useSettingsDraft()
+  const {
+    toast: cleanFeedback,
+    showToast: showFeedback,
+    clearToast: clearFeedback,
+  } = useToast(3000)
+  const [cacheSize, setCacheSize] = useState<number | null>(null)
+  const [cleaning, setCleaning] = useState(false)
+  const [lastCleaned, setLastCleaned] = useState<number>(0)
+  const [selectingDir, setSelectingDir] = useState(false)
 
   // 从草稿派生设置值
-  const autoClean = draft?.cacheAutoClean || 'never';
-  const downloadDir = draft?.downloadDir || '';
-  const downloadBehavior = draft?.downloadBehavior || 'ask';
+  const autoClean = draft?.cacheAutoClean || 'never'
+  const downloadDir = draft?.downloadDir || ''
+  const downloadBehavior = draft?.downloadBehavior || 'ask'
 
   useEffect(() => {
-    void estimateCacheSize().then(setCacheSize).catch(() => {});
-  }, []);
+    void estimateCacheSize()
+      .then(setCacheSize)
+      .catch(() => {})
+  }, [])
 
   // 当草稿加载/变化时同步 lastCleaned
   useEffect(() => {
-    setLastCleaned(draft?.lastCacheCleanAt || 0);
-  }, [draft?.lastCacheCleanAt]);
+    setLastCleaned(draft?.lastCacheCleanAt || 0)
+  }, [draft?.lastCacheCleanAt])
 
   const handleClean = async () => {
-    setCleaning(true);
-    clearFeedback();
+    setCleaning(true)
+    clearFeedback()
     try {
-      const result = await cleanCache();
-      setCacheSize(0);
-      setLastCleaned(Date.now());
-      showFeedback(`已清理 ${formatBytes(result.cleanedBytes)}`);
+      const result = await cleanCache()
+      setCacheSize(0)
+      setLastCleaned(Date.now())
+      showFeedback(`已清理 ${formatBytes(result.cleanedBytes)}`)
     } catch (err) {
-      console.error('[StorageSection] 缓存清理失败:', err);
-      showFeedback('清理失败，请查看日志');
+      console.error('[StorageSection] 缓存清理失败:', err)
+      showFeedback('清理失败，请查看日志')
     } finally {
-      setCleaning(false);
+      setCleaning(false)
     }
-  };
+  }
 
   const handleAutoCleanChange = async (value: 'never' | 'daily' | 'weekly' | 'monthly') => {
-    const prev = autoClean;
-    setDraft({ cacheAutoClean: value });
+    const prev = autoClean
+    setDraft({ cacheAutoClean: value })
     try {
-      await updateAppSettings({ cacheAutoClean: value });
+      await updateAppSettings({ cacheAutoClean: value })
     } catch (err) {
-      console.error('[StorageSection] 更新自动清理频率失败:', err);
-      setDraft({ cacheAutoClean: prev });
+      console.error('[StorageSection] 更新自动清理频率失败:', err)
+      setDraft({ cacheAutoClean: prev })
     }
-  };
+  }
 
   const handleSelectDownloadDir = async () => {
-    if (selectingDir) return;
-    setSelectingDir(true);
+    if (selectingDir) return
+    setSelectingDir(true)
     try {
-      const dir = await selectDownloadDir();
-      if (!dir) return;
-      setDraft({ downloadDir: dir });
+      const dir = await selectDownloadDir()
+      if (!dir) return
+      setDraft({ downloadDir: dir })
       try {
-        await updateAppSettings({ downloadDir: dir });
+        await updateAppSettings({ downloadDir: dir })
       } catch (err) {
-        console.error('[StorageSection] 保存下载目录失败:', err);
-        setDraft({ downloadDir: '' });
+        console.error('[StorageSection] 保存下载目录失败:', err)
+        setDraft({ downloadDir: '' })
       }
     } catch (err) {
-      console.error('[StorageSection] 选择下载目录失败:', err);
+      console.error('[StorageSection] 选择下载目录失败:', err)
     } finally {
-      setSelectingDir(false);
+      setSelectingDir(false)
     }
-  };
+  }
 
   const handleBehaviorChange = async (value: 'ask' | 'auto') => {
-    const prev = downloadBehavior;
-    setDraft({ downloadBehavior: value });
+    const prev = downloadBehavior
+    setDraft({ downloadBehavior: value })
     try {
-      await updateAppSettings({ downloadBehavior: value });
+      await updateAppSettings({ downloadBehavior: value })
     } catch (err) {
-      console.error('[StorageSection] 更新下载行为失败:', err);
-      setDraft({ downloadBehavior: prev });
+      console.error('[StorageSection] 更新下载行为失败:', err)
+      setDraft({ downloadBehavior: prev })
     }
-  };
+  }
 
   return (
     <section data-name="settings.storage.section">
       <SectionTitle>缓存清理</SectionTitle>
       <div className="about-row" data-name="settings.storage.cache-size-row">
         <span data-name="settings.storage.cache-size-label">当前缓存体积</span>
-        <span data-name="settings.storage.cache-size-value">{cacheSize === null ? '计算中…' : formatBytes(cacheSize)}</span>
+        <span data-name="settings.storage.cache-size-value">
+          {cacheSize === null ? '计算中…' : formatBytes(cacheSize)}
+        </span>
       </div>
       <div className="about-row" data-name="settings.storage.last-cleaned-row">
         <span data-name="settings.storage.last-cleaned-label">上次清理</span>
-        <span data-name="settings.storage.last-cleaned-value">{formatRelativeTime(lastCleaned)}</span>
+        <span data-name="settings.storage.last-cleaned-value">
+          {formatRelativeTime(lastCleaned)}
+        </span>
       </div>
       <FormRow label="自动清理">
         <SegmentedControl
@@ -146,7 +156,9 @@ export default function StorageSection() {
         </button>
       </FormRow>
       {cleanFeedback && (
-        <p className="feedback-text ok" data-name="settings.storage.clean-feedback">{cleanFeedback}</p>
+        <p className="feedback-text ok" data-name="settings.storage.clean-feedback">
+          {cleanFeedback}
+        </p>
       )}
 
       <SectionTitle className="section-title-spacer">下载</SectionTitle>
@@ -189,5 +201,5 @@ export default function StorageSection() {
         />
       </FormRow>
     </section>
-  );
+  )
 }

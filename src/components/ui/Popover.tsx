@@ -3,15 +3,9 @@
    统一封装：遮罩、搜索、ESC关闭、点击外部、安全定位、分区显示
    ===================================================================== */
 
-import { 
-  useEffect, 
-  useState, 
-  useRef, 
-  type ReactNode, 
-  type CSSProperties
-} from 'react';
-import { createPortal } from 'react-dom';
-import './Popover.css';
+import { useEffect, useState, useRef, type ReactNode, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
+import './Popover.css'
 
 /* =====================================================================
    类型定义
@@ -19,88 +13,88 @@ import './Popover.css';
 
 /** 弹出层位置 */
 export interface PopoverPosition {
-  x: number;
-  y: number;
+  x: number
+  y: number
 }
 
 /** 弹出层配置 */
 export interface PopoverConfig {
   /** 是否显示遮罩（默认 false） */
-  overlay?: boolean;
+  overlay?: boolean
   /** 遮罩点击是否关闭（默认 true） */
-  closeOnOverlayClick?: boolean;
+  closeOnOverlayClick?: boolean
   /** 是否启用 ESC 关闭（默认 true） */
-  closeOnEsc?: boolean;
+  closeOnEsc?: boolean
   /** 是否启用点击外部关闭（默认 true） */
-  closeOnOutsideClick?: boolean;
+  closeOnOutsideClick?: boolean
   /** 是否使用 Portal 渲染到 body（默认 false） */
-  usePortal?: boolean;
+  usePortal?: boolean
   /** z-index（默认 200） */
-  zIndex?: number;
+  zIndex?: number
   /** 背景样式：'solid' | 'glass'（默认 'solid'） */
-  background?: 'solid' | 'glass';
+  background?: 'solid' | 'glass'
 }
 
 /** 弹出层变体类型 */
-export type PopoverVariant = 
-  | 'dropdown'      // 下拉菜单
-  | 'context-menu'  // 右键菜单
-  | 'panel'         // 面板（搜索、设置等）
-  | 'dialog'        // 对话框
-  | 'tooltip';      // 提示框
+export type PopoverVariant =
+  | 'dropdown' // 下拉菜单
+  | 'context-menu' // 右键菜单
+  | 'panel' // 面板（搜索、设置等）
+  | 'dialog' // 对话框
+  | 'tooltip' // 提示框
 
 /** 分区配置 */
 export interface PopoverSection {
   /** 分区标签 */
-  label?: string;
+  label?: string
   /** 分区内容 */
-  children: ReactNode;
+  children: ReactNode
   /** 是否显示分隔线 */
-  divider?: boolean;
+  divider?: boolean
 }
 
 /** 搜索配置 */
 export interface PopoverSearch {
   /** 搜索占位符 */
-  placeholder?: string;
+  placeholder?: string
   /** 搜索值 */
-  value: string;
+  value: string
   /** 搜索变更回调 */
-  onChange: (value: string) => void;
+  onChange: (value: string) => void
   /** 是否自动聚焦 */
-  autoFocus?: boolean;
+  autoFocus?: boolean
 }
 
 /** Popover 组件属性 */
 export interface PopoverProps {
   /** 是否显示 */
-  isOpen: boolean;
+  isOpen: boolean
   /** 关闭回调 */
-  onClose: () => void;
+  onClose: () => void
   /** 弹出层内容 */
-  children: ReactNode;
+  children: ReactNode
   /** 触发元素的 ref（用于定位） */
-  triggerRef?: React.RefObject<HTMLElement>;
+  triggerRef?: React.RefObject<HTMLElement>
   /** 位置（固定定位时使用） */
-  position?: PopoverPosition;
+  position?: PopoverPosition
   /** 变体类型 */
-  variant?: PopoverVariant;
+  variant?: PopoverVariant
   /** 配置选项 */
-  config?: PopoverConfig;
+  config?: PopoverConfig
   /** 搜索配置 */
-  search?: PopoverSearch;
+  search?: PopoverSearch
   /** 分区列表 */
-  sections?: PopoverSection[];
+  sections?: PopoverSection[]
   /** 自定义类名 */
-  className?: string;
+  className?: string
   /** data-name 属性 */
-  dataName?: string;
+  dataName?: string
   /** 自定义样式 */
-  style?: CSSProperties;
+  style?: CSSProperties
   /** 宽度（可选） */
-  width?: number | string;
+  width?: number | string
   /** 最大高度（可选） */
-  maxHeight?: number | string;
+  maxHeight?: number | string
 }
 
 /* =====================================================================
@@ -111,73 +105,73 @@ function useSafePosition(
   isOpen: boolean,
   position: PopoverPosition | undefined,
   triggerRef: React.RefObject<HTMLElement> | undefined,
-  variant: PopoverVariant
+  variant: PopoverVariant,
 ) {
-  const [safePos, setSafePos] = useState<CSSProperties>({});
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [safePos, setSafePos] = useState<CSSProperties>({})
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return
 
     const calculatePosition = () => {
-      const el = menuRef.current;
-      if (!el) return;
+      const el = menuRef.current
+      if (!el) return
 
-      const rect = el.getBoundingClientRect();
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const GAP = 8;
+      const rect = el.getBoundingClientRect()
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const GAP = 8
 
-      let left = position?.x ?? 0;
-      let top = position?.y ?? 0;
+      let left = position?.x ?? 0
+      let top = position?.y ?? 0
 
       // 如果有触发元素，基于触发元素定位
       if (triggerRef?.current) {
-        const triggerRect = triggerRef.current.getBoundingClientRect();
-        
+        const triggerRect = triggerRef.current.getBoundingClientRect()
+
         switch (variant) {
           case 'dropdown':
-            left = triggerRect.left;
-            top = triggerRect.bottom + 4;
-            break;
+            left = triggerRect.left
+            top = triggerRect.bottom + 4
+            break
           case 'context-menu':
             // 使用传入的 position
-            break;
+            break
           case 'panel':
-            left = triggerRect.left;
-            top = triggerRect.bottom + 4;
-            break;
+            left = triggerRect.left
+            top = triggerRect.bottom + 4
+            break
           default:
-            break;
+            break
         }
       }
 
       // 防止超出右边界
       if (left + rect.width > vw - GAP) {
-        left = vw - rect.width - GAP;
+        left = vw - rect.width - GAP
       }
-      if (left < GAP) left = GAP;
+      if (left < GAP) left = GAP
 
       // 防止超出下边界
       if (top + rect.height > vh - GAP) {
         // 如果是 dropdown，尝试显示在上方
         if (variant === 'dropdown' && triggerRef?.current) {
-          const triggerRect = triggerRef.current.getBoundingClientRect();
-          top = triggerRect.top - rect.height - 4;
+          const triggerRect = triggerRef.current.getBoundingClientRect()
+          top = triggerRect.top - rect.height - 4
         } else {
-          top = vh - rect.height - GAP;
+          top = vh - rect.height - GAP
         }
       }
-      if (top < GAP) top = GAP;
+      if (top < GAP) top = GAP
 
-      setSafePos({ left, top });
-    };
+      setSafePos({ left, top })
+    }
 
     // 使用 requestAnimationFrame 确保 DOM 已更新
-    requestAnimationFrame(calculatePosition);
-  }, [isOpen, position, triggerRef, variant]);
+    requestAnimationFrame(calculatePosition)
+  }, [isOpen, position, triggerRef, variant])
 
-  return { menuRef, safePos };
+  return { menuRef, safePos }
 }
 
 /* =====================================================================
@@ -208,66 +202,66 @@ export default function Popover({
     usePortal = false,
     zIndex = 200,
     background = 'solid',
-  } = config;
+  } = config
 
-  const { menuRef, safePos } = useSafePosition(isOpen, position, triggerRef, variant);
+  const { menuRef, safePos } = useSafePosition(isOpen, position, triggerRef, variant)
 
   // ESC 关闭
   useEffect(() => {
-    if (!isOpen || !closeOnEsc) return;
+    if (!isOpen || !closeOnEsc) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // 输入框聚焦时不处理 ESC
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, closeOnEsc, onClose]);
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, closeOnEsc, onClose])
 
   // 点击外部关闭 - 使用透明遮罩层解决 webview 捕获事件问题
   useEffect(() => {
-    if (!isOpen || !closeOnOutsideClick || overlay) return;
+    if (!isOpen || !closeOnOutsideClick || overlay) return
 
     // 创建透明遮罩层覆盖整个屏幕
-    const overlayEl = document.createElement('div');
+    const overlayEl = document.createElement('div')
     overlayEl.style.cssText = `
       position: fixed;
       inset: 0;
       z-index: ${zIndex - 1};
       background: transparent;
-    `;
-    overlayEl.setAttribute('data-name', 'popover-click-outside-overlay');
+    `
+    overlayEl.setAttribute('data-name', 'popover-click-outside-overlay')
 
     const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
+      const target = e.target as Node
       // 如果点击的是菜单内部，不关闭
-      if (menuRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return
       // 如果点击的是触发元素，不关闭
-      if (triggerRef?.current?.contains(target)) return;
-      onClose();
-    };
+      if (triggerRef?.current?.contains(target)) return
+      onClose()
+    }
 
-    overlayEl.addEventListener('mousedown', handleClickOutside);
-    document.body.appendChild(overlayEl);
+    overlayEl.addEventListener('mousedown', handleClickOutside)
+    document.body.appendChild(overlayEl)
 
     return () => {
-      overlayEl.removeEventListener('mousedown', handleClickOutside);
+      overlayEl.removeEventListener('mousedown', handleClickOutside)
       if (overlayEl.parentNode) {
-        overlayEl.parentNode.removeChild(overlayEl);
+        overlayEl.parentNode.removeChild(overlayEl)
       }
-    };
-  }, [isOpen, closeOnOutsideClick, overlay, onClose, triggerRef, zIndex]);
+    }
+  }, [isOpen, closeOnOutsideClick, overlay, onClose, triggerRef, zIndex])
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
-  const isFixed = variant === 'context-menu' || variant === 'dialog';
+  const isFixed = variant === 'context-menu' || variant === 'dialog'
 
   const popoverStyle: CSSProperties = {
     position: isFixed ? 'fixed' : 'absolute',
@@ -276,7 +270,7 @@ export default function Popover({
     ...safePos,
     width,
     maxHeight,
-  };
+  }
 
   const content = (
     <>
@@ -289,7 +283,7 @@ export default function Popover({
           data-name={`${dataName}.overlay`}
         />
       )}
-      
+
       {/* 弹出层主体 */}
       <div
         ref={menuRef}
@@ -316,17 +310,30 @@ export default function Popover({
         {sections ? (
           <div className="popover-sections" data-name={`${dataName}.sections`}>
             {sections.map((section, index) => (
-              <div key={index} className="popover-section" data-name={`${dataName}.section-${index}`}>
+              <div
+                key={index}
+                className="popover-section"
+                data-name={`${dataName}.section-${index}`}
+              >
                 {section.label && (
-                  <div className="popover-section-label" data-name={`${dataName}.section-${index}-label`}>
+                  <div
+                    className="popover-section-label"
+                    data-name={`${dataName}.section-${index}-label`}
+                  >
                     {section.label}
                   </div>
                 )}
-                <div className="popover-section-content" data-name={`${dataName}.section-${index}-content`}>
+                <div
+                  className="popover-section-content"
+                  data-name={`${dataName}.section-${index}-content`}
+                >
                   {section.children}
                 </div>
                 {section.divider && index < sections.length - 1 && (
-                  <div className="popover-divider" data-name={`${dataName}.section-${index}-divider`} />
+                  <div
+                    className="popover-divider"
+                    data-name={`${dataName}.section-${index}-divider`}
+                  />
                 )}
               </div>
             ))}
@@ -338,10 +345,10 @@ export default function Popover({
         )}
       </div>
     </>
-  );
+  )
 
   // 始终使用 Portal 渲染到 body，确保菜单在遮罩层上面
-  return createPortal(content, document.body);
+  return createPortal(content, document.body)
 }
 
 /* =====================================================================
@@ -350,21 +357,21 @@ export default function Popover({
 
 export interface PopoverItemProps {
   /** 点击回调 */
-  onClick?: () => void;
+  onClick?: () => void
   /** 是否禁用 */
-  disabled?: boolean;
+  disabled?: boolean
   /** 是否为危险操作 */
-  danger?: boolean;
+  danger?: boolean
   /** 是否激活（如选中状态） */
-  active?: boolean;
+  active?: boolean
   /** 图标 */
-  icon?: ReactNode;
+  icon?: ReactNode
   /** 标签 */
-  label: string;
+  label: string
   /** 快捷键提示 */
-  shortcut?: string;
+  shortcut?: string
   /** data-name 属性 */
-  dataName?: string;
+  dataName?: string
 }
 
 export function PopoverItem({
@@ -382,7 +389,9 @@ export function PopoverItem({
     danger ? 'danger' : '',
     active ? 'active' : '',
     disabled ? 'disabled' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <button
@@ -406,7 +415,7 @@ export function PopoverItem({
         </span>
       )}
     </button>
-  );
+  )
 }
 
 /* =====================================================================
@@ -414,5 +423,5 @@ export function PopoverItem({
    ===================================================================== */
 
 export function PopoverDivider({ dataName = 'popover-divider' }: { dataName?: string }) {
-  return <div className="popover-divider" data-name={dataName} />;
+  return <div className="popover-divider" data-name={dataName} />
 }

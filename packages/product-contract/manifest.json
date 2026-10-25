@@ -10,19 +10,12 @@
       "packageName": "sidekickai-opensource",
       "appId": "com.sidekickai.opensource",
       "directory": "SidekickAI-Concept",
-      "legacyDirectories": [
-        "SidekickAI-OpenSource"
-      ],
+      "legacyDirectories": ["SidekickAI-OpenSource"],
       "registryKey": "SidekickAI-OpenSource",
-      "dataDirectories": [
-        "sidekickai-opensource"
-      ],
+      "dataDirectories": ["sidekickai-opensource"],
       "legacyExecutable": "SidekickAI-OpenSource.exe",
       "cloudResources": false,
-      "packageKinds": [
-        "installer",
-        "portable"
-      ],
+      "packageKinds": ["installer", "portable"],
       "distribution": {
         "protocolVersion": 1,
         "installerMode": "offline",
@@ -41,22 +34,20 @@
       "appId": "com.sidekickai.app",
       "directory": "SidekickAI",
       "registryKey": "SidekickAI",
-      "dataDirectories": [
-        "sidekick-ai",
-        "ai-window",
-        "SidekickAI"
-      ],
+      "dataDirectories": ["sidekick-ai", "ai-window", "SidekickAI"],
       "legacyExecutable": "SidekickAI.exe",
       "cloudResources": true,
-      "packageKinds": [
-        "installer"
-      ],
+      "packageKinds": ["installer"],
       "distribution": {
         "protocolVersion": 1,
         "installerMode": "online",
         "installerArchitectures": ["x64"],
         "publicPackages": [
-          { "role": "online-bootstrap", "architecture": "x64", "supportedNativeArchitectures": ["x64", "arm64"] }
+          {
+            "role": "online-bootstrap",
+            "architecture": "x64",
+            "supportedNativeArchitectures": ["x64", "arm64"]
+          }
         ],
         "internalPayloadArchitectures": ["x64", "arm64"]
       }

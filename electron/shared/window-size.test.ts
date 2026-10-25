@@ -92,7 +92,14 @@ describe('calculateMainWindowMinWidth', () => {
   })
 
   it('should handle all buttons visible', () => {
-    const buttons: TopBarButtonGroup[] = ['uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle']
+    const buttons: TopBarButtonGroup[] = [
+      'uaToggle',
+      'navBack',
+      'navForward',
+      'navHome',
+      'themeToggle',
+      'pinToggle',
+    ]
     const width = calculateMainWindowMinWidth('medium', buttons)
 
     expect(width).toBeGreaterThan(0)

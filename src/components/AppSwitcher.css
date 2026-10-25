@@ -32,8 +32,9 @@
   font-family: var(--font-sans);
   font-weight: 800;
   font-size: calc(var(--titlebar-icon) * 0.55);
-  transition: filter var(--duration-fast) var(--ease-out),
-              box-shadow var(--duration-fast) var(--ease-out);
+  transition:
+    filter var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
   flex: none;
   /* 主题色边框：用 box-shadow 避免影响布局尺寸 */
   box-shadow: 0 0 0 1.5px var(--primary);
@@ -99,7 +100,9 @@
   text-align: center;
   width: 100%;
   line-height: 1.3;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
   position: relative;
 }
 .app-switcher-item:hover {
@@ -126,7 +129,9 @@
 }
 /* 当前激活（再点即关闭）：图标描边强化提示 */
 .app-switcher-item.active .app-switcher-item-icon {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--primary);
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 3px var(--primary);
 }
 .app-switcher-item-icon {
   width: var(--icon-svg);

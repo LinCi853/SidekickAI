@@ -13,30 +13,61 @@ export function createAttachmentRetention(options: {
   now?: () => number
 }) {
   let status: AssetRetentionStatus = { state: 'disabled', deleted: 0, cleanupPending: false }
-  let stopped = false, running = false
-  const publish = (changes: Partial<AssetRetentionStatus>) => { status = { ...status, ...changes }; options.publish({ ...status }) }
+  let stopped = false,
+    running = false
+  const publish = (changes: Partial<AssetRetentionStatus>) => {
+    status = { ...status, ...changes }
+    options.publish({ ...status })
+  }
   const tick = async () => {
     if (stopped || running) return
     running = true
     try {
-      if (!options.settings().fileRetentionDays) { publish({ state: 'disabled', error: undefined }); return }
+      if (!options.settings().fileRetentionDays) {
+        publish({ state: 'disabled', error: undefined })
+        return
+      }
       await options.prepare?.()
       if (stopped) return
       const days = options.settings().fileRetentionDays
-      if (!days) { publish({ state: 'disabled', error: undefined }); return }
-      if (options.busy()) { publish({ state: 'waiting' }); return }
-      const now = (options.now ?? Date.now)(), assets = options.assets()
+      if (!days) {
+        publish({ state: 'disabled', error: undefined })
+        return
+      }
+      if (options.busy()) {
+        publish({ state: 'waiting' })
+        return
+      }
+      const now = (options.now ?? Date.now)(),
+        assets = options.assets()
       const ids = assets.expiredAttachmentIds(now - days * 86400000)
       let result = { deleted: 0, cleanupPending: false }
       if (ids.length) result = cleanSelectedAttachments(options.userData, assets, ids)
       else recoverSelectedCleanup(options.userData, assets)
       if (result.deleted) options.changed()
-      publish({ state: 'idle', deleted: status.deleted + result.deleted, lastRun: now, cleanupPending: result.cleanupPending, error: undefined })
+      publish({
+        state: 'idle',
+        deleted: status.deleted + result.deleted,
+        lastRun: now,
+        cleanupPending: result.cleanupPending,
+        error: undefined,
+      })
     } catch (error) {
       if (!stopped) publish({ state: 'error', error: String(error) })
-    } finally { running = false }
+    } finally {
+      running = false
+    }
   }
-  const timer = setInterval(() => { void tick() }, 60000)
+  const timer = setInterval(() => {
+    void tick()
+  }, 60000)
   timer.unref?.()
-  return { tick, status: () => ({ ...status }), stop: () => { stopped = true; clearInterval(timer) } }
+  return {
+    tick,
+    status: () => ({ ...status }),
+    stop: () => {
+      stopped = true
+      clearInterval(timer)
+    },
+  }
 }

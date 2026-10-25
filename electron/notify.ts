@@ -12,7 +12,9 @@ import { Notification } from 'electron'
 export function showNotification(title: string, body: string): void {
   try {
     if (!Notification.isSupported()) {
-      console.warn(`[notify] ⚠️ 降级实现: Notification.isSupported() 为 false，使用 console.log 替代`)
+      console.warn(
+        `[notify] ⚠️ 降级实现: Notification.isSupported() 为 false，使用 console.log 替代`,
+      )
       console.log(`[通知] ${title}: ${body}`)
       return
     }

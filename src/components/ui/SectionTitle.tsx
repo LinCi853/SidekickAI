@@ -4,24 +4,24 @@
    + .settings-section-title + .collapse-toggle-icon 的手写样板。
    ===================================================================== */
 
-import type { ReactNode } from 'react';
-import './SectionTitle.css';
+import type { ReactNode } from 'react'
+import './SectionTitle.css'
 
 export interface SectionTitleProps {
   /** 标题文本 */
-  children: ReactNode;
+  children: ReactNode
   /** 分区简介（显示在标题下方） */
-  hint?: string;
+  hint?: string
   /** 是否可折叠 */
-  collapsible?: boolean;
+  collapsible?: boolean
   /** 当前是否折叠（仅 collapsible=true 时生效） */
-  collapsed?: boolean;
+  collapsed?: boolean
   /** 折叠/展开回调 */
-  onToggle?: () => void;
+  onToggle?: () => void
   /** 标题右侧操作区（如按钮） */
-  actions?: ReactNode;
+  actions?: ReactNode
   /** 额外 className */
-  className?: string;
+  className?: string
 }
 
 export default function SectionTitle({
@@ -33,13 +33,9 @@ export default function SectionTitle({
   actions,
   className,
 }: SectionTitleProps) {
-  const cls = [
-    'section-title-row',
-    collapsible && 'collapsible',
-    className,
-  ]
+  const cls = ['section-title-row', collapsible && 'collapsible', className]
     .filter(Boolean)
-    .join(' ');
+    .join(' ')
 
   if (collapsible) {
     return (
@@ -52,28 +48,48 @@ export default function SectionTitle({
         aria-expanded={!collapsed}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle?.();
+            e.preventDefault()
+            onToggle?.()
           }
         }}
         data-name="ui.section-title.collapsible"
       >
         <div className="section-title-main" data-name="ui.section-title.main">
-          <h3 className="section-title" data-name="ui.section-title.title">{children}</h3>
-          <span className="section-title-toggle-icon" aria-hidden="true" data-name="ui.section-title.toggle-icon">
+          <h3 className="section-title" data-name="ui.section-title.title">
+            {children}
+          </h3>
+          <span
+            className="section-title-toggle-icon"
+            aria-hidden="true"
+            data-name="ui.section-title.toggle-icon"
+          >
             ▼
           </span>
         </div>
-        {actions && <div className="section-title-actions" data-name="ui.section-title.actions">{actions}</div>}
+        {actions && (
+          <div className="section-title-actions" data-name="ui.section-title.actions">
+            {actions}
+          </div>
+        )}
       </div>
-    );
+    )
   }
 
   return (
     <div className={cls} data-name="ui.section-title">
-      <h3 className="section-title" data-name="ui.section-title.title">{children}</h3>
-      {actions && <div className="section-title-actions" data-name="ui.section-title.actions">{actions}</div>}
-      {hint && <p className="section-title-hint" data-name="ui.section-title.hint">{hint}</p>}
+      <h3 className="section-title" data-name="ui.section-title.title">
+        {children}
+      </h3>
+      {actions && (
+        <div className="section-title-actions" data-name="ui.section-title.actions">
+          {actions}
+        </div>
+      )}
+      {hint && (
+        <p className="section-title-hint" data-name="ui.section-title.hint">
+          {hint}
+        </p>
+      )}
     </div>
-  );
+  )
 }

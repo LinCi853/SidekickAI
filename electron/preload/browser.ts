@@ -1,15 +1,20 @@
 import { ipcRenderer } from 'electron'
-import { IPC_CHANNELS, type BrowserDownloadRecord, type BookmarkInput, type BookmarkPatch, type AccumulatedLink, type MigratedTabInfo } from '../shared/types.js'
+import {
+  IPC_CHANNELS,
+  type BrowserDownloadRecord,
+  type BookmarkInput,
+  type BookmarkPatch,
+  type AccumulatedLink,
+  type MigratedTabInfo,
+} from '../shared/types.js'
 
 export const browserApi = {
   // ===== 浏览器窗口（v0.0.9：多标签浏览器） =====
   browser: {
-    getState: (windowId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_GET_STATE, windowId),
+    getState: (windowId: string) => ipcRenderer.invoke(IPC_CHANNELS.BROWSER_GET_STATE, windowId),
     saveState: (windowId: string, state: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SAVE_STATE, windowId, state),
-    openExternal: (url: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_OPEN_EXTERNAL, url),
+    openExternal: (url: string) => ipcRenderer.invoke(IPC_CHANNELS.BROWSER_OPEN_EXTERNAL, url),
     savePageAs: (webContentsId: number, suggestedName?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_SAVE_PAGE_AS, webContentsId, suggestedName),
     downloadAs: (partition: string, url: string, suggestedFilename?: string) =>
@@ -28,15 +33,19 @@ export const browserApi = {
     setCloudPcMode: (enter: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_CLOUD_PC_SET, enter),
     // 全局光标屏幕坐标（全屏悬浮退出条的光标探测）
-    getCursorPos: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_CURSOR_POS),
+    getCursorPos: () => ipcRenderer.invoke(IPC_CHANNELS.BROWSER_CURSOR_POS),
     onCloudPcChanged: (callback: (active: boolean) => void) => {
       const handler = (_e: unknown, active: boolean) => callback(active)
       ipcRenderer.on(IPC_CHANNELS.BROWSER_CLOUD_PC_CHANGED, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_CLOUD_PC_CHANGED, handler)
     },
-    onCloudPcKeys: (callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void) => {
-      const handler = (_e: unknown, payload: { key: string; down: boolean; alt: boolean; win: boolean }) => callback(payload)
+    onCloudPcKeys: (
+      callback: (e: { key: string; down: boolean; alt: boolean; win: boolean }) => void,
+    ) => {
+      const handler = (
+        _e: unknown,
+        payload: { key: string; down: boolean; alt: boolean; win: boolean },
+      ) => callback(payload)
       ipcRenderer.on(IPC_CHANNELS.BROWSER_CLOUD_PC_KEYS, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_CLOUD_PC_KEYS, handler)
     },
@@ -50,12 +59,12 @@ export const browserApi = {
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOAD_OPEN_FILE, id),
     showDownloadInFolder: (id: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOAD_SHOW_IN_FOLDER, id),
-    deleteDownload: (id: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOAD_DELETE, id),
+    deleteDownload: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOAD_DELETE, id),
     clearAllDownloads: (windowId?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_DOWNLOAD_CLEAR_ALL, windowId),
     onDownloadUpdated: (callback: (record: BrowserDownloadRecord) => void) => {
-      const handler = (_e: unknown, record: unknown) => callback(record as Parameters<typeof callback>[0])
+      const handler = (_e: unknown, record: unknown) =>
+        callback(record as Parameters<typeof callback>[0])
       ipcRenderer.on(IPC_CHANNELS.BROWSER_DOWNLOAD_UPDATED, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_DOWNLOAD_UPDATED, handler)
     },
@@ -69,29 +78,45 @@ export const browserApi = {
       ipcRenderer.on(IPC_CHANNELS.BROWSER_TOGGLE_FULLSCREEN, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_TOGGLE_FULLSCREEN, handler)
     },
-    tabMigrateBack: (payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }) => {
+    tabMigrateBack: (payload: {
+      profileId: string
+      url: string
+      title: string
+      finalUrls?: MigratedTabInfo[]
+    }) => {
       ipcRenderer.send(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, payload)
     },
-    onTabMigrateBack: (callback: (payload: { profileId: string; url: string; title: string; finalUrls?: MigratedTabInfo[] }) => void) => {
-      const handler = (_e: unknown, payload: unknown) => callback(payload as Parameters<typeof callback>[0])
+    onTabMigrateBack: (
+      callback: (payload: {
+        profileId: string
+        url: string
+        title: string
+        finalUrls?: MigratedTabInfo[]
+      }) => void,
+    ) => {
+      const handler = (_e: unknown, payload: unknown) =>
+        callback(payload as Parameters<typeof callback>[0])
       ipcRenderer.on(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, handler)
     },
     /** 主→渲染：标签已脱离到浏览器窗口（载荷：profileId, newActiveTabId） */
     onTabDetached: (callback: (profileId: string, newActiveTabId: string | null) => void) => {
-      const handler = (_e: unknown, profileId: unknown, newActiveTabId: unknown) => callback(profileId as string, newActiveTabId as string | null)
+      const handler = (_e: unknown, profileId: unknown, newActiveTabId: unknown) =>
+        callback(profileId as string, newActiveTabId as string | null)
       ipcRenderer.on(IPC_CHANNELS.BROWSER_TAB_DETACHED, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_TAB_DETACHED, handler)
     },
     /** 主→渲染：标签音频状态变化（页面开始/停止播放音频） */
-    onTabAudioChanged: (callback: (payload: { windowId: string; tabId: string; audible: boolean }) => void) => {
-      const handler = (_e: unknown, payload: unknown) => callback(payload as Parameters<typeof callback>[0])
+    onTabAudioChanged: (
+      callback: (payload: { windowId: string; tabId: string; audible: boolean }) => void,
+    ) => {
+      const handler = (_e: unknown, payload: unknown) =>
+        callback(payload as Parameters<typeof callback>[0])
       ipcRenderer.on(IPC_CHANNELS.BROWSER_TAB_AUDIO_CHANGED, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BROWSER_TAB_AUDIO_CHANGED, handler)
     },
     /** 跨窗口标签聚合查询（主窗口 A 标签 ↔ 浏览器窗口 A1/A2/A3 子标签） */
-    queryAllTabs: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.BROWSER_TABS_QUERY),
+    queryAllTabs: () => ipcRenderer.invoke(IPC_CHANNELS.BROWSER_TABS_QUERY),
     /** 聚焦指定浏览器窗口 */
     focusWindow: (windowId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.BROWSER_FOCUS_WINDOW, windowId),
@@ -100,7 +125,8 @@ export const browserApi = {
       list: (filter?: { profileId?: string; barOnly?: boolean }) =>
         ipcRenderer.invoke(IPC_CHANNELS.BOOKMARK_LIST, filter),
       add: (input: BookmarkInput) => ipcRenderer.invoke(IPC_CHANNELS.BOOKMARK_ADD, input),
-      update: (id: string, patch: BookmarkPatch) => ipcRenderer.invoke(IPC_CHANNELS.BOOKMARK_UPDATE, id, patch),
+      update: (id: string, patch: BookmarkPatch) =>
+        ipcRenderer.invoke(IPC_CHANNELS.BOOKMARK_UPDATE, id, patch),
       delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.BOOKMARK_DELETE, id),
       reorder: (ids: string[]) => ipcRenderer.invoke(IPC_CHANNELS.BOOKMARK_REORDER, ids),
     },
@@ -109,9 +135,13 @@ export const browserApi = {
       add: (profileId: string, url: string, title: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.ACCUMULATED_LINK_ADD, profileId, url, title),
       list: (profileId: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.ACCUMULATED_LINK_LIST, profileId) as Promise<AccumulatedLink[]>,
+        ipcRenderer.invoke(IPC_CHANNELS.ACCUMULATED_LINK_LIST, profileId) as Promise<
+          AccumulatedLink[]
+        >,
       consume: (profileId: string) =>
-        ipcRenderer.invoke(IPC_CHANNELS.ACCUMULATED_LINK_CONSUME, profileId) as Promise<AccumulatedLink[]>,
+        ipcRenderer.invoke(IPC_CHANNELS.ACCUMULATED_LINK_CONSUME, profileId) as Promise<
+          AccumulatedLink[]
+        >,
       clear: (profileId: string) =>
         ipcRenderer.invoke(IPC_CHANNELS.ACCUMULATED_LINK_CLEAR, profileId),
     },
@@ -120,28 +150,21 @@ export const browserApi = {
   navHistory: {
     record: (profileId: string, entry: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_RECORD, profileId, entry),
-    get: (profileId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_GET, profileId),
-    clear: (profileId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_CLEAR, profileId),
+    get: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_GET, profileId),
+    clear: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_CLEAR, profileId),
     list: (profileId: string | undefined, page: number, pageSize: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_LIST, profileId, page, pageSize),
     search: (profileId: string | undefined, keyword: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_SEARCH, profileId, keyword),
-    delete: (id: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_DELETE, id),
+    delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_DELETE, id),
     clearAll: (profileId?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.NAV_HISTORY_CLEAR_ALL, profileId),
   },
   // 主→渲染：webview 弹窗 URL 转发（主进程拦截 window.open / target="_blank" 后，
   // 将 URL + guest webContents id 发回渲染层，由渲染层在匹配的当前 webview 内导航）
-  onWebviewPopupUrl: (
-    callback: (payload: { url: string; webContentsId: number }) => void,
-  ) => {
-    const handler = (
-      _e: unknown,
-      payload: { url: string; webContentsId: number },
-    ) => callback(payload)
+  onWebviewPopupUrl: (callback: (payload: { url: string; webContentsId: number }) => void) => {
+    const handler = (_e: unknown, payload: { url: string; webContentsId: number }) =>
+      callback(payload)
     ipcRenderer.on(IPC_CHANNELS.WEBVIEW_POPUP_URL, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.WEBVIEW_POPUP_URL, handler)
   },

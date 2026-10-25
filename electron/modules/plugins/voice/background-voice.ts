@@ -24,7 +24,11 @@ import {
   hidePreview,
   hasAppFocusedWindow,
 } from './preview-window.js'
-import { pasteTextToExternalApp, typeTextToExternalApp, insertTextToExternalApp } from './clipboard-paste.js'
+import {
+  pasteTextToExternalApp,
+  typeTextToExternalApp,
+  insertTextToExternalApp,
+} from './clipboard-paste.js'
 
 /** 后台录音状态：true 表示当前正在录音（Alt+V 按下中） */
 let backgroundRecording = false
@@ -34,7 +38,8 @@ let generation = 0
 
 export async function cancelBackgroundVoice(sttEngine: SttEngine): Promise<void> {
   generation += 1
-  backgroundRecording = false; toggleRecording = false
+  backgroundRecording = false
+  toggleRecording = false
   clearRecordingWatchdog()
   await sttEngine.cancel()
   hidePreview()
@@ -64,7 +69,9 @@ function armRecordingWatchdog(sttEngine: SttEngine): void {
     recordingWatchdog = null
     if (!backgroundRecording) return
     console.warn('[voice] 录音超过 30 分钟未结束（keyup 可能丢失），watchdog 强制收尾')
-    void stopBackgroundVoice(sttEngine).catch((err) => console.error('[voice] watchdog 收尾失败:', err))
+    void stopBackgroundVoice(sttEngine).catch((err) =>
+      console.error('[voice] watchdog 收尾失败:', err),
+    )
   }, RECORDING_MAX_DURATION_MS)
 }
 
@@ -121,7 +128,9 @@ export async function startBackgroundVoice(sttEngine: SttEngine): Promise<void> 
 export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
   const operation = generation
   if (!backgroundRecording) {
-    console.warn('[voice] stopBackgroundVoice 被调用但 backgroundRecording=false，跳过（可能 watchdog 已触发）')
+    console.warn(
+      '[voice] stopBackgroundVoice 被调用但 backgroundRecording=false，跳过（可能 watchdog 已触发）',
+    )
     return
   }
   backgroundRecording = false
@@ -151,7 +160,10 @@ export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
     }
   } catch (err) {
     console.error('[main] 后台语音识别失败:', err)
-    showPreview({ status: 'done', text: '识别失败：' + (err instanceof Error ? err.message : String(err)) })
+    showPreview({
+      status: 'done',
+      text: '识别失败：' + (err instanceof Error ? err.message : String(err)),
+    })
     hidePreviewDelayed()
   }
 }
@@ -163,8 +175,12 @@ export async function stopBackgroundVoice(sttEngine: SttEngine): Promise<void> {
 function deliverVoiceText(text: string, config: VoiceSettings): void {
   if (!text || !text.trim()) return
   const appIsFocused = hasAppFocusedWindow()
-  console.log(`[voice] 自动上屏：appIsFocused=${appIsFocused}，confirmMode=${config.confirmMode}，inputMethod=${config.inputMethod}`)
-  console.log(`[voice] 窗口状态：mainWindow=${!!windowState.mainWindow}, previewWindow=${!!windowState.previewWindow}`)
+  console.log(
+    `[voice] 自动上屏：appIsFocused=${appIsFocused}，confirmMode=${config.confirmMode}，inputMethod=${config.inputMethod}`,
+  )
+  console.log(
+    `[voice] 窗口状态：mainWindow=${!!windowState.mainWindow}, previewWindow=${!!windowState.previewWindow}`,
+  )
 
   if (config.confirmMode === 'clipboard') {
     try {

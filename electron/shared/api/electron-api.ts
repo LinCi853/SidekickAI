@@ -1,9 +1,29 @@
 // electron-api.ts — ElectronAPI 根接口（通过 contextBridge 暴露到渲染进程的完整 API）
 
-import type { ProfileAPI, WindowAPI, WindowControlAPI, WindowStateAPI, TabAPI, PresetsAPI } from './profile-window.api.js'
-import type { ChatAPI, AIProviderAPI, AIPlatformAPI, PromptAPI, InjectionHistoryAPI } from './chat.api.js'
+import type {
+  ProfileAPI,
+  WindowAPI,
+  WindowControlAPI,
+  WindowStateAPI,
+  TabAPI,
+  PresetsAPI,
+} from './profile-window.api.js'
+import type {
+  ChatAPI,
+  AIProviderAPI,
+  AIPlatformAPI,
+  PromptAPI,
+  InjectionHistoryAPI,
+} from './chat.api.js'
 import type { SttAPI, VoiceConfigAPI } from './voice.api.js'
-import type { AppSettingsAPI, OnboardingAPI, BlockRulesAPI, FingerprintAPI, PlatformCapabilitiesAPI, AppSettings } from './settings.api.js'
+import type {
+  AppSettingsAPI,
+  OnboardingAPI,
+  BlockRulesAPI,
+  FingerprintAPI,
+  PlatformCapabilitiesAPI,
+  AppSettings,
+} from './settings.api.js'
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
 import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
 import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
@@ -79,7 +99,9 @@ export interface ElectronAPI {
   /** 渲染→主：添加 origin 到 Profile 专属弹窗白名单 */
   addToProfilePopupWhitelist: (profileId: string, origin: string) => Promise<void>
   /** 主→最近聚焦窗口渲染：后台识别文本到达，注入 AI 输入框；enterToSend 控制是否自动发送 */
-  onVoiceInjectAndSend: (cb: (payload: { text: string; enterToSend: boolean }) => void) => () => void
+  onVoiceInjectAndSend: (
+    cb: (payload: { text: string; enterToSend: boolean }) => void,
+  ) => () => void
   /** 主→预览窗渲染：更新文本/状态 */
   onPreviewUpdate: (
     cb: (payload: { text: string; status: 'recording' | 'transcribing' | 'done' | 'sent' }) => void,
@@ -91,9 +113,7 @@ export interface ElectronAPI {
   /** 主→预览窗渲染：开始录音（getUserMedia） */
   onVoiceRecordStart: (cb: () => void) => () => void
   /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
-  onWebviewHotkey: (
-    callback: (payload: WebviewHotkeyPayload) => void,
-  ) => () => void
+  onWebviewHotkey: (callback: (payload: WebviewHotkeyPayload) => void) => () => void
   validateWebviewHotkeyTarget: (target: WebviewHotkeyTarget) => Promise<boolean>
   /** 主→预览窗渲染：停止录音并回传 PCM */
   onVoiceRecordStop: (cb: () => void) => () => void
@@ -103,7 +123,9 @@ export interface ElectronAPI {
   /** 主→主窗口渲染：提示词库窗口请求注入模板到激活 webview（需求 1：传递完整模板由主窗口组合） */
   onPromptInjectRequest: (cb: (template: PromptTemplate) => void) => () => void
   /** 主→提示词库窗口渲染：注入结果回传 */
-  onPromptInjectResult: (cb: (result: { success: boolean; platformName?: string }) => void) => () => void
+  onPromptInjectResult: (
+    cb: (result: { success: boolean; platformName?: string }) => void,
+  ) => () => void
   /** 主窗口渲染 → 主进程：回传注入结果（主进程转发到提示词库窗口，供其显示 toast） */
   sendPromptInjectResult: (result: { success: boolean; platformName?: string }) => void
   /** 页面组件屏蔽规则管理 */
@@ -142,9 +164,17 @@ export interface ElectronAPI {
   /** 主→渲染：应用设置变更广播（任意窗口修改设置后通知所有窗口同步） */
   onAppSettingsChanged: (callback: (settings: AppSettings) => void) => () => void
   /** 渲染→主：请求广播 UI 版本/主题变更到所有窗口 */
-  broadcastUiVersionChanged: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void
+  broadcastUiVersionChanged: (payload: {
+    uiVersion: 'classic' | 'oxy'
+    theme: 'light' | 'dark' | 'system'
+  }) => void
   /** 主→渲染：UI 版本/主题变更广播 */
-  onUiVersionChanged: (callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void) => () => void
+  onUiVersionChanged: (
+    callback: (payload: {
+      uiVersion: 'classic' | 'oxy'
+      theme: 'light' | 'dark' | 'system'
+    }) => void,
+  ) => () => void
   /** 渲染→主：请求广播 Oxy 主题色变更到所有窗口 */
   broadcastThemeColorChanged: (hex: string) => void
   /** 主→渲染：Oxy 主题色变更广播 */

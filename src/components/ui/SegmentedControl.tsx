@@ -4,31 +4,31 @@
    替代 .proxy-mode-btn / .voice-mode-btn / .platform-region-btn / .platform-status-btn
    ===================================================================== */
 
-import type { ReactNode } from 'react';
-import { Fragment } from 'react';
+import type { ReactNode } from 'react'
+import { Fragment } from 'react'
 
 export interface SegmentedOption<T extends string> {
   /** 选项值 */
-  value: T;
+  value: T
   /** 选项标签（可为文本或图标） */
-  label: ReactNode;
+  label: ReactNode
   /** 是否禁用 */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 export interface SegmentedControlProps<T extends string> {
   /** 当前选中值 */
-  value: T;
+  value: T
   /** 选项列表 */
-  options: SegmentedOption<T>[];
+  options: SegmentedOption<T>[]
   /** 选中变更回调 */
-  onChange: (value: T) => void;
+  onChange: (value: T) => void
   /** 用于分组的无障碍 name */
-  name?: string;
+  name?: string
   /** 是否禁用整个控件 */
-  disabled?: boolean;
+  disabled?: boolean
   /** 额外类名（应用到容器） */
-  className?: string;
+  className?: string
 }
 
 /**
@@ -60,8 +60,8 @@ export default function SegmentedControl<T extends string>({
       data-name="ui.segmented-control.container"
     >
       {options.map((opt, index) => {
-        const isActive = opt.value === value;
-        const isDisabled = disabled || opt.disabled;
+        const isActive = opt.value === value
+        const isDisabled = disabled || opt.disabled
         return (
           <Fragment key={opt.value}>
             <button
@@ -76,8 +76,8 @@ export default function SegmentedControl<T extends string>({
               {opt.label}
             </button>
           </Fragment>
-        );
+        )
       })}
     </div>
-  );
+  )
 }

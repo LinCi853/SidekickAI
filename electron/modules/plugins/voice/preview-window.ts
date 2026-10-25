@@ -100,7 +100,9 @@ function createRecordIndicatorWindow(): BrowserWindow {
     show: false,
     frame: false,
     resizable: true,
-    minimizable: false, maximizable: false, fullscreenable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     backgroundColor: isLinux ? '#1e1e1e' : 'rgba(0, 0, 0, 0)',
@@ -229,7 +231,11 @@ function positionPreviewAtBottomCenter(win: BrowserWindow): void {
 export function hidePreviewDelayed(): void {
   if (previewHideTimer) clearTimeout(previewHideTimer)
   previewHideTimer = setTimeout(() => {
-    if (windowState.previewWindow && !windowState.previewWindow.isDestroyed() && windowState.previewWindow.isVisible()) {
+    if (
+      windowState.previewWindow &&
+      !windowState.previewWindow.isDestroyed() &&
+      windowState.previewWindow.isVisible()
+    ) {
       try {
         windowState.previewWindow.webContents.send(IPC_CHANNELS.PREVIEW_HIDE)
       } catch (err) {
@@ -250,7 +256,11 @@ export function hidePreview(): void {
     clearTimeout(previewHideTimer)
     previewHideTimer = null
   }
-  if (windowState.previewWindow && !windowState.previewWindow.isDestroyed() && windowState.previewWindow.isVisible()) {
+  if (
+    windowState.previewWindow &&
+    !windowState.previewWindow.isDestroyed() &&
+    windowState.previewWindow.isVisible()
+  ) {
     try {
       windowState.previewWindow.webContents.send(IPC_CHANNELS.PREVIEW_HIDE)
     } catch (err) {

@@ -1,21 +1,36 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'fs'
+import * as path from 'path'
 
-import { BACKUP_FILES, ASSET_DIRS, PARTITION_COOKIE_FILES, PARTITION_COOKIE_DIRS, PARTITION_INDEXEDDB_DIRS, PARTITION_CACHE_DIRS } from './constants.js';
-import { assertRealDataRoot, resolveDataRootEntry, inspectSelectedPath, lstatSelected } from './paths.js';
-import type { ExportCategory, ExportOptions, SelectedExportEntry } from './types.js';
+import {
+  BACKUP_FILES,
+  ASSET_DIRS,
+  PARTITION_COOKIE_FILES,
+  PARTITION_COOKIE_DIRS,
+  PARTITION_INDEXEDDB_DIRS,
+  PARTITION_CACHE_DIRS,
+} from './constants.js'
+import {
+  assertRealDataRoot,
+  resolveDataRootEntry,
+  inspectSelectedPath,
+  lstatSelected,
+} from './paths.js'
+import type { ExportCategory, ExportOptions, SelectedExportEntry } from './types.js'
 
 /**
  * Collect the extra backup files declared by plugins (lazy import avoids a
  * circular dependency). Strict mode must not silently omit a declaration, so a
  * read failure aborts the export.
  */
-export async function collectPluginExtraFiles(strict: boolean): Promise<{ dbFiles: string[]; assetDirs: string[] }> {
+export async function collectPluginExtraFiles(
+  strict: boolean,
+): Promise<{ dbFiles: string[]; assetDirs: string[] }> {
   try {
     const { collectModuleDataFiles } = await import('../../modules/registry.js')
     return collectModuleDataFiles()
   } catch (error) {
-    if (strict) throw new Error(`Plugin data declarations could not be read: ${(error as Error).message}`)
+    if (strict)
+      throw new Error(`Plugin data declarations could not be read: ${(error as Error).message}`)
     return { dbFiles: [], assetDirs: [] }
   }
 }
@@ -76,7 +91,8 @@ export function walkSelectedDirectory(
       continue
     }
     if (stat.isSymbolicLink()) {
-      if (strict) throw new Error(`Backup selection contains a symbolic link or junction: ${archivePath}`)
+      if (strict)
+        throw new Error(`Backup selection contains a symbolic link or junction: ${archivePath}`)
       continue
     }
     if (stat.isDirectory()) walkSelectedDirectory(entries, child, archivePath, category, strict)
@@ -96,14 +112,46 @@ export function collectSessionEntries(
 ): void {
   const entryPrefix = prefix ? `${prefix}/` : ''
   if (options.cookies) {
-    for (const name of PARTITION_COOKIE_FILES) addSelectedFile(entries, dataDir, path.join(basePath, name), `${entryPrefix}${name}`, 'cookies', strict)
-    for (const name of PARTITION_COOKIE_DIRS) addSelectedDirectory(entries, dataDir, path.join(basePath, name), `${entryPrefix}${name}`, 'cookies', strict)
+    for (const name of PARTITION_COOKIE_FILES)
+      addSelectedFile(
+        entries,
+        dataDir,
+        path.join(basePath, name),
+        `${entryPrefix}${name}`,
+        'cookies',
+        strict,
+      )
+    for (const name of PARTITION_COOKIE_DIRS)
+      addSelectedDirectory(
+        entries,
+        dataDir,
+        path.join(basePath, name),
+        `${entryPrefix}${name}`,
+        'cookies',
+        strict,
+      )
   }
   if (options.indexedDB) {
-    for (const name of PARTITION_INDEXEDDB_DIRS) addSelectedDirectory(entries, dataDir, path.join(basePath, name), `${entryPrefix}${name}`, 'indexedDB', strict)
+    for (const name of PARTITION_INDEXEDDB_DIRS)
+      addSelectedDirectory(
+        entries,
+        dataDir,
+        path.join(basePath, name),
+        `${entryPrefix}${name}`,
+        'indexedDB',
+        strict,
+      )
   }
   if (options.cache) {
-    for (const name of PARTITION_CACHE_DIRS) addSelectedDirectory(entries, dataDir, path.join(basePath, name), `${entryPrefix}${name}`, 'cache', strict)
+    for (const name of PARTITION_CACHE_DIRS)
+      addSelectedDirectory(
+        entries,
+        dataDir,
+        path.join(basePath, name),
+        `${entryPrefix}${name}`,
+        'cache',
+        strict,
+      )
   }
 }
 
@@ -147,18 +195,26 @@ export async function collectSelectedExportEntries(
       const { sourcePath, archivePath } = resolveDataRootEntry(dataDir, declared)
       addSelectedDirectory(entries, dataDir, sourcePath, archivePath, 'basicData', strict)
     }
-
   }
 
   const wantSession = options.cookies || options.indexedDB || options.cache
   if (wantSession) {
-    if (options.cookies) addSelectedFile(entries, dataDir, path.join(dataDir, 'Local State'), 'Local State', 'cookies', strict)
+    if (options.cookies)
+      addSelectedFile(
+        entries,
+        dataDir,
+        path.join(dataDir, 'Local State'),
+        'Local State',
+        'cookies',
+        strict,
+      )
     const partitionsDir = path.join(dataDir, 'Partitions')
     if (inspectSelectedPath(dataDir, partitionsDir, 'Partitions', 'directory', strict)) {
       for (const name of fs.readdirSync(partitionsDir)) {
         const partitionPath = path.join(partitionsDir, name)
         const partitionArchive = `Partitions/${name}`
-        if (!inspectSelectedPath(dataDir, partitionPath, partitionArchive, 'directory', strict)) continue
+        if (!inspectSelectedPath(dataDir, partitionPath, partitionArchive, 'directory', strict))
+          continue
         collectSessionEntries(entries, dataDir, partitionPath, partitionArchive, options, strict)
       }
     }

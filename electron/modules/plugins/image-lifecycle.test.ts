@@ -28,7 +28,9 @@ vi.mock('electron', () => ({
     },
   },
 }))
-vi.mock('../../store/store-paths.js', () => ({ resolveSqlitePath: (name: string) => path.join(fixture.root, name) }))
+vi.mock('../../store/store-paths.js', () => ({
+  resolveSqlitePath: (name: string) => path.join(fixture.root, name),
+}))
 vi.mock('./notes/notes-db.js', () => ({
   registerNotesIPC: (scope: any) => scope.ipcHandle('notes:list', () => []),
   closeNotesDb: fixture.closeNotes,
@@ -44,20 +46,38 @@ vi.mock('./whiteboard/whiteboard-db.js', () => ({
   closeWhiteboardDb: fixture.closeWhiteboard,
 }))
 vi.mock('../../window-factory.js', () => ({ openAdvancedPanelWindow: vi.fn() }))
-vi.mock('../../platform/window/window-state.js', () => ({ windowState: { advancedPanelWindow: null } }))
+vi.mock('../../platform/window/window-state.js', () => ({
+  windowState: { advancedPanelWindow: null },
+}))
 
 import { initNotesModule, teardownNotesModule, clearNotesData } from './notes/index.js'
-import { initWhiteboardModule, teardownWhiteboardModule, clearWhiteboardData } from './whiteboard/index.js'
+import {
+  initWhiteboardModule,
+  teardownWhiteboardModule,
+  clearWhiteboardData,
+} from './whiteboard/index.js'
 
 const image = Buffer.from('persistent fixture bytes')
 const dataUrl = 'data:image/png;base64,' + image.toString('base64')
 const modules = [
-  { id: 'notes', init: initNotesModule, teardown: teardownNotesModule, clear: clearNotesData, close: fixture.closeNotes,
+  {
+    id: 'notes',
+    init: initNotesModule,
+    teardown: teardownNotesModule,
+    clear: clearNotesData,
+    close: fixture.closeNotes,
     channels: ['notes:list', 'notes:saveImage', 'notes:sendToAi', 'notes:saveAsPrompt'],
-    save: async () => (await fixture.handlers.get('notes:saveImage')!(null, dataUrl)).url },
-  { id: 'whiteboard', init: initWhiteboardModule, teardown: teardownWhiteboardModule, clear: clearWhiteboardData, close: fixture.closeWhiteboard,
+    save: async () => (await fixture.handlers.get('notes:saveImage')!(null, dataUrl)).url,
+  },
+  {
+    id: 'whiteboard',
+    init: initWhiteboardModule,
+    teardown: teardownWhiteboardModule,
+    clear: clearWhiteboardData,
+    close: fixture.closeWhiteboard,
     channels: ['whiteboard:list', 'whiteboard:saveImage', 'whiteboard:pushImageRequest'],
-    save: async () => fixture.handlers.get('whiteboard:saveImage')!(null, dataUrl) },
+    save: async () => fixture.handlers.get('whiteboard:saveImage')!(null, dataUrl),
+  },
 ]
 
 beforeEach(() => {
@@ -73,7 +93,7 @@ afterEach(async () => {
   fs.rmSync(fixture.root, { recursive: true, force: true })
 })
 
-describe.each(modules)('$id image lifecycle', module => {
+describe.each(modules)('$id image lifecycle', (module) => {
   it('releases every write channel and restores all handlers on repeated enable', async () => {
     for (let cycle = 0; cycle < 4; cycle++) {
       await module.init()

@@ -15,14 +15,19 @@ function value(args: string[], key: string): string | undefined {
   if (!next || next.startsWith('--')) throw new Error(`Missing value for ${key}.`)
   return next
 }
-function required(args: string[], key: string): string { const item = value(args, key); if (!item) throw new Error(`Required argument: ${key}`); return item }
+function required(args: string[], key: string): string {
+  const item = value(args, key)
+  if (!item) throw new Error(`Required argument: ${key}`)
+  return item
+}
 /**
  * Only a GCM authentication failure (decryptFileStream returning null) maps to a password error.
  * Archive format errors — unsupported compression method, declared expansion over the limit — keep
  * their own text so a repacked but valid backup is never reported as a wrong password.
  */
 async function decryptPayload(file: string, output: string, password: string): Promise<void> {
-  if (await decryptFileStream(file, output, password) === null) throw new Error('Password is incorrect or the encrypted archive is corrupt.')
+  if ((await decryptFileStream(file, output, password)) === null)
+    throw new Error('Password is incorrect or the encrypted archive is corrupt.')
 }
 async function passwordInput(args: string[]): Promise<string | undefined> {
   if (!args.includes('--password-stdin')) return undefined
@@ -33,7 +38,9 @@ async function passwordInput(args: string[]): Promise<string | undefined> {
     if (bytes > 64 * 1024) throw new Error('Password input exceeds the supported length.')
     chunks.push(Buffer.from(chunk))
   }
-  const password = Buffer.concat(chunks).toString('utf8').replace(/\r?\n$/, '')
+  const password = Buffer.concat(chunks)
+    .toString('utf8')
+    .replace(/\r?\n$/, '')
   if (!password) throw new Error('Password input is empty.')
   return password
 }
@@ -44,14 +51,36 @@ export async function runBackupCli(args: string[]): Promise<unknown> {
   const password = await passwordInput(args)
   if (command === 'jobs') return listBackupJobs(tempRoot)
   if (command === 'status') return queryBackupJob(required(args, '--job'), tempRoot)
-  if (command === 'resume') return resumeBackupJob(required(args, '--job'), { tempRoot, password, targetPath: value(args, '--target') })
-  if (command === 'cancel') return cancelBackupJob(required(args, '--job'), tempRoot, { discard: args.includes('--discard') })
+  if (command === 'resume')
+    return resumeBackupJob(required(args, '--job'), {
+      tempRoot,
+      password,
+      targetPath: value(args, '--target'),
+    })
+  if (command === 'cancel')
+    return cancelBackupJob(required(args, '--job'), tempRoot, {
+      discard: args.includes('--discard'),
+    })
   if (command === 'export') {
     const edition = required(args, '--edition')
-    if (!['community', 'concept'].includes(edition)) throw new Error('Edition must be community or concept.')
-    return exportOfflineBackup({ sourceRoot: path.resolve(required(args, '--source')), edition: edition as BackupEdition, version: value(args, '--version') ?? 'standalone',
-      targetPath: path.resolve(required(args, '--target')), password, tempRoot, jobId: value(args, '--job'), strict: true,
-      options: { basicData: true, cookies: !args.includes('--exclude-cookies'), indexedDB: !args.includes('--exclude-indexeddb'), cache: !args.includes('--exclude-cache') } })
+    if (!['community', 'concept'].includes(edition))
+      throw new Error('Edition must be community or concept.')
+    return exportOfflineBackup({
+      sourceRoot: path.resolve(required(args, '--source')),
+      edition: edition as BackupEdition,
+      version: value(args, '--version') ?? 'standalone',
+      targetPath: path.resolve(required(args, '--target')),
+      password,
+      tempRoot,
+      jobId: value(args, '--job'),
+      strict: true,
+      options: {
+        basicData: true,
+        cookies: !args.includes('--exclude-cookies'),
+        indexedDB: !args.includes('--exclude-indexeddb'),
+        cache: !args.includes('--exclude-cache'),
+      },
+    })
   }
   if (['verify', 'restore', 'decrypt'].includes(command)) {
     const file = path.resolve(required(args, '--file'))
@@ -70,28 +99,45 @@ export async function runBackupCli(args: string[]): Promise<unknown> {
         input = path.join(directory, 'decrypted.zip')
         await decryptPayload(file, input, password)
       } else if (command === 'decrypt') throw new Error('Input is not an encrypted SABK backup.')
-      const target = command === 'restore' || command === 'decrypt' ? path.resolve(required(args, '--target')) : undefined
-      if (target && fs.existsSync(target)) throw new Error('Independent restore and decrypt require a new destination.')
+      const target =
+        command === 'restore' || command === 'decrypt'
+          ? path.resolve(required(args, '--target'))
+          : undefined
+      if (target && fs.existsSync(target))
+        throw new Error('Independent restore and decrypt require a new destination.')
       if (command === 'restore') {
         assertOrdinaryPath(path.dirname(target!), true)
         restoreStaging = fs.mkdtempSync(path.join(path.dirname(target!), '.sidekick-restore-'))
         createPrivateDirectory(restoreStaging)
       }
-      const manifest = await readStreamingArchive(input, { allowLegacy: true, extractTo: restoreStaging })
+      const manifest = await readStreamingArchive(input, {
+        allowLegacy: true,
+        extractTo: restoreStaging,
+      })
       if (restoreStaging) {
-        if (fs.existsSync(target!)) throw new Error('Independent restore requires a new destination.')
+        if (fs.existsSync(target!))
+          throw new Error('Independent restore requires a new destination.')
         fs.renameSync(restoreStaging, target!)
         restoreStaging = undefined
       }
       if (command === 'decrypt') {
-        checkDiskSpace([{ path: path.dirname(target!), bytes: fs.statSync(input).size, purpose: '解密目标' }])
+        checkDiskSpace([
+          { path: path.dirname(target!), bytes: fs.statSync(input).size, purpose: '解密目标' },
+        ])
         fs.copyFileSync(input, target!, fs.constants.COPYFILE_EXCL)
       }
-      return { success: true, sha256: await hashFile(file), manifest, ...(target ? { targetPath: target } : {}) }
+      return {
+        success: true,
+        sha256: await hashFile(file),
+        manifest,
+        ...(target ? { targetPath: target } : {}),
+      }
     } finally {
       if (restoreStaging) fs.rmSync(restoreStaging, { recursive: true, force: true })
       fs.rmSync(directory, { recursive: true, force: true })
     }
   }
-  throw new Error('Commands: export, verify, decrypt, restore, jobs, status, resume, cancel. Passwords are accepted only through --password-stdin.')
+  throw new Error(
+    'Commands: export, verify, decrypt, restore, jobs, status, resume, cancel. Passwords are accepted only through --password-stdin.',
+  )
 }

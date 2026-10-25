@@ -43,7 +43,12 @@ function assetFilePath(filename: string): string {
 
 function removeSnapshot(snapshotPath: string | null | undefined): boolean {
   if (!snapshotPath || !ASSET_FILENAME.test(snapshotPath)) return false
-  try { fs.unlinkSync(assetFilePath(snapshotPath)); return true } catch { return false }
+  try {
+    fs.unlinkSync(assetFilePath(snapshotPath))
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 清理孤儿快照：目录中存在但没有任何休眠记录引用的文件 */
@@ -54,7 +59,9 @@ function removeOrphanSnapshots(referenced: ReadonlySet<string>): number {
       if (referenced.has(name) || !ASSET_FILENAME.test(name)) continue
       if (removeSnapshot(name)) removed += 1
     }
-  } catch { /* 目录不可读时跳过，下次清理重试 */ }
+  } catch {
+    /* 目录不可读时跳过，下次清理重试 */
+  }
   return removed
 }
 
@@ -92,7 +99,9 @@ export class TabHibernationStore {
       keep.push(entry)
     }
     writeEntries(keep)
-    const referenced = new Set(keep.map(entry => entry.snapshotPath).filter((name): name is string => Boolean(name)))
+    const referenced = new Set(
+      keep.map((entry) => entry.snapshotPath).filter((name): name is string => Boolean(name)),
+    )
     return { removed, expired, orphans: removeOrphanSnapshots(referenced) }
   }
 
@@ -102,11 +111,15 @@ export class TabHibernationStore {
     // alone neither occupies image space nor proves a live tab is asleep.
     const directory = path.join(app.getPath('userData'), ASSETS_DIR_NAME)
     let names: string[]
-    try { names = fs.readdirSync(directory) } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { snapshotCount: 0, snapshotBytes: 0 }
+    try {
+      names = fs.readdirSync(directory)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        return { snapshotCount: 0, snapshotBytes: 0 }
       throw error
     }
-    let snapshotCount = 0, snapshotBytes = 0
+    let snapshotCount = 0,
+      snapshotBytes = 0
     for (const name of names) {
       if (!ASSET_FILENAME.test(name)) continue
       try {
@@ -126,7 +139,7 @@ export const tabHibernationStore = new TabHibernationStore()
 
 /** 历史数据只读统计；不再提供截图写入、卸载恢复或旧驱逐广播。 */
 export function registerTabHibernationIPC(scope: EffectScope): void {
-  scope.ipcHandle(IPC_CHANNELS.TAB_HIBERNATE_STATS, event => {
+  scope.ipcHandle(IPC_CHANNELS.TAB_HIBERNATE_STATS, (event) => {
     assertTrustedRenderer(event)
     return { count: tabHibernationStore.list().length, ...tabHibernationStore.snapshotStats() }
   })

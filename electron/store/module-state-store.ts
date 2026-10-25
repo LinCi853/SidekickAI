@@ -105,9 +105,7 @@ export function isLargeModuleInstalledByManifestFile(moduleId: string): boolean 
 /** 读取模块状态（不存在返回 null，由 registry 补默认值） */
 export function getModuleState(id: string): ModuleStateRecord | null {
   const row = getModuleStateDb()
-    .prepare(
-      'SELECT id, enabled, installed, cleared_at, updated_at FROM module_state WHERE id = ?',
-    )
+    .prepare('SELECT id, enabled, installed, cleared_at, updated_at FROM module_state WHERE id = ?')
     .get(id) as ModuleStateRow | undefined
   if (!row) return null
   return {
@@ -180,7 +178,11 @@ export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
     if (cache) return cache
     const raw = table.get('__data__')
     if (raw) {
-      try { cache = JSON.parse(raw) as T } catch { cache = { ...opts.defaults } }
+      try {
+        cache = JSON.parse(raw) as T
+      } catch {
+        cache = { ...opts.defaults }
+      }
     } else {
       cache = { ...opts.defaults }
       table.set('__data__', JSON.stringify(cache))
@@ -189,7 +191,9 @@ export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
   }
 
   return {
-    invalidate(): void { cache = null },
+    invalidate(): void {
+      cache = null
+    },
     get(key: string): any {
       const data = load()
       return key in data ? (data as any)[key] : (opts.defaults as any)[key]
@@ -217,7 +221,9 @@ export function createSqliteJsonStore<T extends Record<string, any>>(opts: {
  */
 export function clearSqliteStore(tableName: string): void {
   try {
-    getModuleStateDb().prepare('DELETE FROM ' + tableName).run()
+    getModuleStateDb()
+      .prepare('DELETE FROM ' + tableName)
+      .run()
     console.log('[store] 已清除 settings.db/' + tableName)
   } catch (err) {
     console.warn('[store] 清除 ' + tableName + ' 失败:', err)

@@ -118,9 +118,7 @@ export async function simulatePaste(): Promise<void> {
     }
   }
 
-  throw new Error(
-    'Linux 粘贴模拟失败：未找到可用的 xdotool / wtype（请安装对应工具或手动 Ctrl+V）',
-  )
+  throw new Error('Linux 粘贴模拟失败：未找到可用的 xdotool / wtype（请安装对应工具或手动 Ctrl+V）')
 }
 
 /**
@@ -211,7 +209,7 @@ export function getForegroundWindowHandle(): number | null {
     const { execSync } = require('child_process')
     const result = execSync(
       'powershell -NoProfile -Command "Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class Win32 { [DllImport(\\\"user32.dll\\\")] public static extern IntPtr GetForegroundWindow(); }\'; [Win32]::GetForegroundWindow().ToInt64()"',
-      { encoding: 'utf-8', timeout: 2000 }
+      { encoding: 'utf-8', timeout: 2000 },
     ).trim()
     const handle = parseInt(result, 10)
     return isNaN(handle) ? null : handle
@@ -282,7 +280,7 @@ export async function insertTextLayered(
     backup: () => unknown
     write: (text: string) => void
     restore: (snapshot: unknown) => void
-  }
+  },
 ): Promise<InsertTextResult> {
   if (process.platform !== 'win32') {
     // 非 Windows：降级到剪贴板
@@ -495,7 +493,7 @@ function insertTextViaClipboard(
     backup: () => unknown
     write: (text: string) => void
     restore: (snapshot: unknown) => void
-  }
+  },
 ): InsertTextResult {
   if (!clipboardBackup) {
     return { success: false, method: 'clipboard', error: 'No clipboard backup provided' }
@@ -511,7 +509,7 @@ function insertTextViaClipboard(
         .then(() => {
           console.log('[platform-actions] 剪贴板模式 Ctrl+V 已触发')
         })
-        .catch(e => {
+        .catch((e) => {
           console.error('[platform-actions] 剪贴板模式 Ctrl+V 失败:', e)
         })
       // 再延迟恢复剪贴板，确保外部应用已完成粘贴读取

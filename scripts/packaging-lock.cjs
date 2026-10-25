@@ -59,7 +59,12 @@ const reserved = new Set()
 
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false
-  try { process.kill(pid, 0); return true } catch (error) { return error.code !== 'ESRCH' }
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error.code !== 'ESRCH'
+  }
 }
 
 function parseOwner(text) {
@@ -81,14 +86,27 @@ function ownerIdentity(owner) {
  */
 function readOwnerFile(file) {
   let stat
-  try { stat = fs.statSync(file, { throwIfNoEntry: false, bigint: true }) } catch { return { state: 'indeterminate', reason: 'cannot inspect the lock file' } }
+  try {
+    stat = fs.statSync(file, { throwIfNoEntry: false, bigint: true })
+  } catch {
+    return { state: 'indeterminate', reason: 'cannot inspect the lock file' }
+  }
   if (!stat) return { state: 'absent' }
-  if (!stat.isFile()) return { state: 'indeterminate', reason: 'the lock path is not a regular file' }
+  if (!stat.isFile())
+    return { state: 'indeterminate', reason: 'the lock path is not a regular file' }
   let text
-  try { text = fs.readFileSync(file, 'utf8') } catch { return { state: 'indeterminate', reason: 'cannot read the lock file' } }
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch {
+    return { state: 'indeterminate', reason: 'cannot read the lock file' }
+  }
   if (!text.trim()) return { state: 'indeterminate', reason: 'the lock file is empty' }
   let owner
-  try { owner = parseOwner(text) } catch { return { state: 'indeterminate', reason: 'the lock file is not valid JSON' } }
+  try {
+    owner = parseOwner(text)
+  } catch {
+    return { state: 'indeterminate', reason: 'the lock file is not valid JSON' }
+  }
   if (!owner) return { state: 'indeterminate', reason: 'the lock file has no valid owner record' }
   return { state: alive(owner.pid) ? 'owned' : 'dead', owner }
 }
@@ -114,11 +132,22 @@ function createExclusive(file, contents) {
       if (!['EPERM', 'EACCES', 'ENOTSUP', 'ENOSYS'].includes(error.code)) throw error
     }
     let descriptor
-    try { descriptor = fs.openSync(file, 'wx') } catch (error) { if (error.code === 'EEXIST') return false; throw error }
-    try { fs.writeFileSync(descriptor, contents) } finally { fs.closeSync(descriptor) }
+    try {
+      descriptor = fs.openSync(file, 'wx')
+    } catch (error) {
+      if (error.code === 'EEXIST') return false
+      throw error
+    }
+    try {
+      fs.writeFileSync(descriptor, contents)
+    } finally {
+      fs.closeSync(descriptor)
+    }
     return true
   } finally {
-    try { fs.rmSync(temporary, { force: true }) } catch {}
+    try {
+      fs.rmSync(temporary, { force: true })
+    } catch {}
   }
 }
 
@@ -126,7 +155,12 @@ function createExclusive(file, contents) {
 function releaseOwnerFile(file, owner) {
   try {
     const state = readOwnerFile(file)
-    if (state.state === 'owned' && state.owner.pid === owner.pid && state.owner.token === owner.token) fs.unlinkSync(file)
+    if (
+      state.state === 'owned' &&
+      state.owner.pid === owner.pid &&
+      state.owner.token === owner.token
+    )
+      fs.unlinkSync(file)
   } catch (error) {
     // Lock bookkeeping is secondary: never replace the error from the protected
     // work, and never delete a file whose ownership can no longer be proven.
@@ -145,16 +179,24 @@ async function withGate(lock, action) {
   const deadline = Date.now() + GATE_TIMEOUT_MS
   for (;;) {
     if (createExclusive(gate, JSON.stringify(owner))) {
-      try { return action() } finally { releaseOwnerFile(gate, owner) }
+      try {
+        return action()
+      } finally {
+        releaseOwnerFile(gate, owner)
+      }
     }
     const state = readOwnerFile(gate)
     if (state.state === 'absent') continue
-    if (state.state === 'indeterminate') throw new Error(`Packaging lock gate needs manual recovery: ${gate} (${state.reason})`)
+    if (state.state === 'indeterminate')
+      throw new Error(`Packaging lock gate needs manual recovery: ${gate} (${state.reason})`)
     if (!alive(state.owner.pid)) {
-      throw new Error(`Packaging lock gate was abandoned by stopped process PID ${state.owner.pid} and is never reclaimed automatically; confirm no packaging process is running and remove ${gate}`)
+      throw new Error(
+        `Packaging lock gate was abandoned by stopped process PID ${state.owner.pid} and is never reclaimed automatically; confirm no packaging process is running and remove ${gate}`,
+      )
     }
-    if (Date.now() >= deadline) throw new Error(`Timed out waiting for the packaging lock gate: ${gate}`)
-    await new Promise(resolve => setTimeout(resolve, GATE_RETRY_MS))
+    if (Date.now() >= deadline)
+      throw new Error(`Timed out waiting for the packaging lock gate: ${gate}`)
+    await new Promise((resolve) => setTimeout(resolve, GATE_RETRY_MS))
   }
 }
 
@@ -168,16 +210,24 @@ function acquireAttempt(lock) {
   if (createExclusive(lock, JSON.stringify(owner))) return { acquired: true, owner }
   const state = readLock(lock)
   if (state.state === 'absent') return { retry: true }
-  if (state.state === 'indeterminate') return { fail: `Packaging lock needs inspection and was not reclaimed: ${lock} (${state.reason})` }
+  if (state.state === 'indeterminate')
+    return {
+      fail: `Packaging lock needs inspection and was not reclaimed: ${lock} (${state.reason})`,
+    }
   if (state.state === 'dead') {
-    try { fs.unlinkSync(lock) } catch (error) { if (error.code !== 'ENOENT') throw error }
+    try {
+      fs.unlinkSync(lock)
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error
+    }
     return { retry: true }
   }
   return { busy: state.owner.pid }
 }
 
 async function acquire(lock, timeoutMs = DEFAULT_TIMEOUT_MS) {
-  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs < 0) throw new Error('Packaging lock timeout must be a nonnegative number of milliseconds')
+  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs < 0)
+    throw new Error('Packaging lock timeout must be a nonnegative number of milliseconds')
   const deadline = Date.now() + timeoutMs
   fs.mkdirSync(path.dirname(lock), { recursive: true })
   for (;;) {
@@ -185,8 +235,9 @@ async function acquire(lock, timeoutMs = DEFAULT_TIMEOUT_MS) {
     if (outcome.acquired) return outcome.owner
     if (outcome.fail) throw new Error(outcome.fail)
     if (outcome.retry) continue
-    if (Date.now() >= deadline) throw new Error(`Another packaging process is active (PID ${outcome.busy}): ${lock}`)
-    await new Promise(resolve => setTimeout(resolve, RETRY_MS))
+    if (Date.now() >= deadline)
+      throw new Error(`Another packaging process is active (PID ${outcome.busy}): ${lock}`)
+    await new Promise((resolve) => setTimeout(resolve, RETRY_MS))
   }
 }
 
@@ -199,7 +250,8 @@ function inheritedOwner(lock) {
   const token = value.slice(separator + 1)
   if (!Number.isSafeInteger(pid) || pid <= 0 || !TOKEN_PATTERN.test(token)) return null
   const state = readLock(lock)
-  if (state.state === 'owned' && state.owner.pid === pid && state.owner.token === token) return { pid, token }
+  if (state.state === 'owned' && state.owner.pid === pid && state.owner.token === token)
+    return { pid, token }
   return null
 }
 
@@ -214,12 +266,16 @@ function release(lock, owner) {
  * context runs the work directly; unrelated concurrent work is rejected.
  */
 function withPackagingLock(work, options) {
-  const settings = typeof options === 'string' || options === undefined ? { lock: options } : options || {}
+  const settings =
+    typeof options === 'string' || options === undefined ? { lock: options } : options || {}
   const lock = path.resolve(settings.lock || LOCK)
   const run = async () => {
     const context = ownership.getStore()
     if (context && context.held.has(lock)) return work()
-    if (held.has(lock) || reserved.has(lock)) throw new Error(`Packaging is already running in this process and cannot be started twice in parallel: ${lock}`)
+    if (held.has(lock) || reserved.has(lock))
+      throw new Error(
+        `Packaging is already running in this process and cannot be started twice in parallel: ${lock}`,
+      )
     reserved.add(lock)
     const previousOwner = process.env[OWNER_ENV]
     try {

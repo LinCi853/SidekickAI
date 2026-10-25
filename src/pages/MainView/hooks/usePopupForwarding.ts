@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { onWebviewPopupUrl } from '../../../lib/electron-api';
-import { safeLoadURLWebview, type WebviewElement } from '../../../lib/webview';
+import { useEffect } from 'react'
+import { onWebviewPopupUrl } from '../../../lib/electron-api'
+import { safeLoadURLWebview, type WebviewElement } from '../../../lib/webview'
 
 /**
  * 主进程转发的 webview 弹窗 URL：在当前 webview tab 内导航（页面内跳转，不弹新窗口）。
@@ -12,42 +12,42 @@ export function usePopupForwarding({
   tabId,
   remountKey,
 }: {
-  webviewRef: React.RefObject<WebviewElement | null>;
-  tabId: string;
-  remountKey: number;
+  webviewRef: React.RefObject<WebviewElement | null>
+  tabId: string
+  remountKey: number
 }) {
   useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
+    const webview = webviewRef.current
+    if (!webview) return
     const off = onWebviewPopupUrl(({ url, webContentsId }) => {
-      let currentId: number | undefined;
+      let currentId: number | undefined
       try {
-        currentId = webview.getWebContentsId();
+        currentId = webview.getWebContentsId()
       } catch {
         // webview 未 attach 时 getWebContentsId 不可用，忽略本次事件
-        return;
+        return
       }
-      if (currentId !== webContentsId) return;
-      console.log('[WebviewTab] 收到弹窗 URL 转发，页面内导航:', url);
+      if (currentId !== webContentsId) return
+      console.log('[WebviewTab] 收到弹窗 URL 转发，页面内导航:', url)
       // 优先尝试 SPA 路由导航（history.pushState + popstate），避免全页 reload 导致白屏闪烁。
       // 仅对同源 URL 适用：跨域 pushState 会抛 SecurityError，需走 loadURL。
       // 失败时回退到 safeLoadURLWebview（处理 guest 崩溃后的 ERR_FAILED）。
       void (async () => {
         try {
-          const currentUrl = webview.getURL?.() || '';
-          let currentOrigin = '';
-          let targetOrigin = '';
+          const currentUrl = webview.getURL?.() || ''
+          let currentOrigin = ''
+          let targetOrigin = ''
           try {
-            currentOrigin = new URL(currentUrl).origin;
-            targetOrigin = new URL(url).origin;
+            currentOrigin = new URL(currentUrl).origin
+            targetOrigin = new URL(url).origin
           } catch {
             // URL 解析失败，直接走 loadURL
           }
           if (currentOrigin && targetOrigin && currentOrigin === targetOrigin) {
             // 同源：优先 SPA 路由（pushState + popstate），避免全页 reload
-            console.log('[WebviewTab] 同源弹窗 URL，尝试 SPA 路由导航:', url);
-            const escapedUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            const result = await webview.executeJavaScript(`
+            console.log('[WebviewTab] 同源弹窗 URL，尝试 SPA 路由导航:', url)
+            const escapedUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+            const result = (await webview.executeJavaScript(`
               (function() {
                 try {
                   var u = '${escapedUrl}';
@@ -61,22 +61,26 @@ export function usePopupForwarding({
                   return { ok: false, error: String(e) };
                 }
               })()
-            `) as { ok: boolean; skipped?: boolean; error?: string } | null;
+            `)) as { ok: boolean; skipped?: boolean; error?: string } | null
             if (result && result.ok) {
-              console.log('[WebviewTab] SPA 路由导航成功:', url, result.skipped ? '(已在该页面，跳过)' : '');
-              return;
+              console.log(
+                '[WebviewTab] SPA 路由导航成功:',
+                url,
+                result.skipped ? '(已在该页面，跳过)' : '',
+              )
+              return
             }
-            console.warn('[WebviewTab] SPA 路由导航失败，回退到 loadURL:', result?.error);
+            console.warn('[WebviewTab] SPA 路由导航失败，回退到 loadURL:', result?.error)
           }
         } catch (err) {
-          console.warn('[WebviewTab] SPA 路由导航异常，回退到 loadURL:', err);
+          console.warn('[WebviewTab] SPA 路由导航异常，回退到 loadURL:', err)
         }
         // 回退：使用 safeLoadURLWebview 处理 guest 崩溃后的 ERR_FAILED
-        safeLoadURLWebview(webview, url);
-      })();
-    });
+        safeLoadURLWebview(webview, url)
+      })()
+    })
     return () => {
-      off();
-    };
-  }, [tabId, remountKey]);
+      off()
+    }
+  }, [tabId, remountKey])
 }

@@ -31,7 +31,10 @@ vi.mock('node:fs', () => ({
     existsSync: (p: string) => {
       // emulate repo layout: only <repoRoot>/resources/icons/icon.ico exists
       const normalized = String(p).replace(/\\/g, '/')
-      return fixture.exists && normalized.endsWith(`${fixture.repoRoot.replace(/\\/g, '/')}/resources/icons/icon.ico`)
+      return (
+        fixture.exists &&
+        normalized.endsWith(`${fixture.repoRoot.replace(/\\/g, '/')}/resources/icons/icon.ico`)
+      )
     },
   },
 }))
@@ -51,8 +54,12 @@ describe('app-icon', () => {
     expect(icon).toBeTruthy()
     expect(fixture.lastPath.replace(/\\/g, '/')).toContain('resources/icons/icon.ico')
     // walk-up must discover the repository root above out/main
-    const candidates = mod.listWindowIconCandidates().map(p => p.replace(/\\/g, '/'))
-    expect(candidates.some(p => p.includes(`${fixture.repoRoot.replace(/\\/g, '/')}/resources/icons/icon.ico`))).toBe(true)
+    const candidates = mod.listWindowIconCandidates().map((p) => p.replace(/\\/g, '/'))
+    expect(
+      candidates.some((p) =>
+        p.includes(`${fixture.repoRoot.replace(/\\/g, '/')}/resources/icons/icon.ico`),
+      ),
+    ).toBe(true)
   })
 
   it('returns undefined when every candidate is empty', async () => {

@@ -146,8 +146,9 @@
   line-height: 1;
   padding: 0;
   border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 
 .wb-sidebar-item-btn:hover {

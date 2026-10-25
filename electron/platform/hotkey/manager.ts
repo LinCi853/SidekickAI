@@ -28,7 +28,10 @@
 //   - manager.ts      仅保留 HotkeyManager 类与单例
 
 import { globalShortcut } from 'electron'
-import { HotkeyOwnership, type HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
+import {
+  HotkeyOwnership,
+  type HotkeyLease,
+} from '../../../packages/desktop-common/hotkey-ownership.js'
 import { HotkeyInputState } from './input-state.js'
 import { dispatchBrowserHotkeyFallback } from '../../utils/browser-hotkey-fallback.js'
 import { checkAccessibilityPermission } from '../../utils/permission-manager.js'
@@ -37,13 +40,7 @@ import { normalizeAssetAccelerator } from '../../shared/asset-settings.js'
 import { UiohookKey, EventType, uIOhook, getUiohookAvailability } from './uiohook.js'
 import { parseAccelerator } from './accelerator.js'
 import { classifyCloudPcKey } from './cloud-pc-keys.js'
-import {
-  DEFAULT_HOTKEYS,
-  HOTKEY_LABELS,
-  hotkeyStore,
-  storeKey,
-  enabledStoreKey,
-} from './store.js'
+import { DEFAULT_HOTKEYS, HOTKEY_LABELS, hotkeyStore, storeKey, enabledStoreKey } from './store.js'
 import type {
   HotkeyAction,
   HotkeyConfig,
@@ -51,17 +48,27 @@ import type {
   HotkeyPartialCallback,
   UiohookEvent,
 } from './types.js'
-import { buildUiohookKeyMap, startRecording, stopRecording, handleRecordingKeydown } from './recording.js'
-import { registerVoiceHotkey, releaseVoiceHold, startVoicePolling, stopVoicePolling, type VoiceMatcher } from './voice-hotkey.js'
-import { registerBrowserShortcut, unregisterBrowserShortcut, unregisterAllBrowserShortcuts } from './browser-shortcuts.js'
+import {
+  buildUiohookKeyMap,
+  startRecording,
+  stopRecording,
+  handleRecordingKeydown,
+} from './recording.js'
+import {
+  registerVoiceHotkey,
+  releaseVoiceHold,
+  startVoicePolling,
+  stopVoicePolling,
+  type VoiceMatcher,
+} from './voice-hotkey.js'
+import {
+  registerBrowserShortcut,
+  unregisterBrowserShortcut,
+  unregisterAllBrowserShortcuts,
+} from './browser-shortcuts.js'
 
 // 向后兼容 re-export：原 manager.ts 对外导出的类型与 hotkeyStore
-export type {
-  HotkeyAction,
-  HotkeyRecordingCallback,
-  HotkeyPartialCallback,
-  HotkeyConfig,
-}
+export type { HotkeyAction, HotkeyRecordingCallback, HotkeyPartialCallback, HotkeyConfig }
 export { hotkeyStore }
 
 /**
@@ -92,35 +99,43 @@ export class HotkeyManager {
   /** @internal —— manager 拆分模块协作字段 */
   readonly ownershipLeases = new Map<string, HotkeyLease>()
   /** @internal —— manager 拆分模块协作字段 */
-  readonly registrationStates = new Map<string, 'registered' | 'fallback' | 'conflict' | 'unavailable'>()  /** @internal —— manager 拆分模块协作字段 */
+  readonly registrationStates = new Map<
+    string,
+    'registered' | 'fallback' | 'conflict' | 'unavailable'
+  >() /** @internal —— manager 拆分模块协作字段 */
   readonly recordingLeases = new Map<string, HotkeyLease>()
   /** @internal —— manager 拆分模块协作字段 */
   voiceCleanup: (() => void) | null = null
   /** @internal —— manager 拆分模块协作字段 */
   readonly inputState = new HotkeyInputState(UiohookKey)
-    /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底）；@internal manager 拆分模块协作字段 */
+  /** accelerator -> 回调（已注册项，含 globalShortcut 与 uiohook 兜底）；@internal manager 拆分模块协作字段 */
   registered = new Map<string, () => void>()
-    /** 浏览器窗口快捷键 accelerator -> 回调（C4：scope='global' 的浏览器快捷键，独立跟踪）；@internal manager 拆分模块协作字段 */
+  /** 浏览器窗口快捷键 accelerator -> 回调（C4：scope='global' 的浏览器快捷键，独立跟踪）；@internal manager 拆分模块协作字段 */
   browserShortcuts = new Map<string, () => void>()
   /** action -> accelerator（当前已注册的内置热键映射） */
   private actionAccelerators = new Map<HotkeyAction, string>()
-    /** uiohook 是否已启动；@internal manager 拆分模块协作字段 */
+  /** uiohook 是否已启动；@internal manager 拆分模块协作字段 */
   uiohookStarted = false
-    /** 已注册 accelerator 的 uiohook 匹配条件缓存；@internal manager 拆分模块协作字段 */
-  uiohookMatchers = new Map<string, ReturnType<typeof parseAccelerator> & { callback: () => void }>()
+  /** 已注册 accelerator 的 uiohook 匹配条件缓存；@internal manager 拆分模块协作字段 */
+  uiohookMatchers = new Map<
+    string,
+    ReturnType<typeof parseAccelerator> & { callback: () => void }
+  >()
   /** The current dispatch and its release evidence share one owned record. */
   readonly systemDispatches = new Map<string, { triggeredAt: number; releaseCount: number }>()
   /** Release observations rearm system dispatch independently of clock precision. */
   private readonly primaryKeyReleaseCount = new Map<number, number>()
   /** Recent primary-key observations distinguish a held key from stale hook state. */
   private readonly primaryKeyObservations = new Map<number, { at: number; recovered: boolean }>()
-    /** 钩子最近一次收到事件的时间戳（null = 启动后未观察到任何键盘事件） */
+  /** 钩子最近一次收到事件的时间戳（null = 启动后未观察到任何键盘事件） */
   lastHookEventAt: number | null = null
-    /** 钩子不可用原因（模块缺失/启动失败/macOS 权限）；null = 可用 */
+  /** 钩子不可用原因（模块缺失/启动失败/macOS 权限）；null = 可用 */
   hookError: string | null = null
-    /** 热键运行状态订阅（注册状态/钩子可用性变化时通知，供 IPC 推送） */
-  private readonly statusListeners = new Set<(status: ReturnType<HotkeyManager['getStatus']>) => void>()
-    /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut）；@internal manager 拆分模块协作字段 */
+  /** 热键运行状态订阅（注册状态/钩子可用性变化时通知，供 IPC 推送） */
+  private readonly statusListeners = new Set<
+    (status: ReturnType<HotkeyManager['getStatus']>) => void
+  >()
+  /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut）；@internal manager 拆分模块协作字段 */
   voiceMatcher: VoiceMatcher | null = null
   /** @internal —— manager 拆分模块协作字段 */
   /**
@@ -140,7 +155,7 @@ export class HotkeyManager {
    * 当前阈值 1500ms：仅在 uiohook keyup 完全丢失且超过 1.5s 没有任何 keydown 时兜底。
    */
   voiceLastKeydownAt = 0
-    /** 500ms 轮询 timer id（兜底检测 keyup 丢失，阈值放宽避免误判 auto-repeat）；@internal manager 拆分模块协作字段 */
+  /** 500ms 轮询 timer id（兜底检测 keyup 丢失，阈值放宽避免误判 auto-repeat）；@internal manager 拆分模块协作字段 */
   voicePollingTimer: ReturnType<typeof setInterval> | null = null
   /** keydown 日志节流时间戳（避免 OS 重复 keydown 打爆日志） */
   private _lastKeydownLogAt = 0
@@ -150,16 +165,18 @@ export class HotkeyManager {
    */
   voiceUnregisterFn: (() => void) | null = null
 
-    /** 热键录制状态：null 表示未录制，非 null 表示录制中（含回调）；@internal manager 拆分模块协作字段 */
+  /** 热键录制状态：null 表示未录制，非 null 表示录制中（含回调）；@internal manager 拆分模块协作字段 */
   _recordingCallback: HotkeyRecordingCallback | null = null
-    /** 录制实时反馈回调（每次按键时调用，用于 UI 显示当前组合）；@internal manager 拆分模块协作字段 */
+  /** 录制实时反馈回调（每次按键时调用，用于 UI 显示当前组合）；@internal manager 拆分模块协作字段 */
   _recordingPartialCallback: HotkeyPartialCallback | null = null
-    /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等）；@internal manager 拆分模块协作字段 */
+  /** 录制期间临时注册的抑制器 accelerator 列表（用于阻止系统菜单等）；@internal manager 拆分模块协作字段 */
   _recordingSuppressors: string[] = []
-    /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时）；@internal manager 拆分模块协作字段 */
+  /** 暂停状态：true 时跳过所有全局热键匹配（如使用指南窗口打开时）；@internal manager 拆分模块协作字段 */
   _paused = false
   /** 云电脑模式按键监听（Win / Alt+Tab / Win+Tab / Win+D / Alt+F4 等系统级按键路由） */
-  private cloudPcKeyListener: ((e: { key: string; down: boolean; alt: boolean; win: boolean }) => void) | null = null
+  private cloudPcKeyListener:
+    | ((e: { key: string; down: boolean; alt: boolean; win: boolean }) => void)
+    | null = null
 
   /**
    * 修饰键实时按下状态（独立追踪，解决 uiohook altKey 状态残留问题）。
@@ -176,7 +193,12 @@ export class HotkeyManager {
   private modShift = false
   private modMeta = false
   /** 修饰键 keycode 集合（按 Alt/Ctrl/Shift/Meta 分类） */
-  private _modKeyCodes: { alt: Set<number>; ctrl: Set<number>; shift: Set<number>; meta: Set<number> } = {
+  private _modKeyCodes: {
+    alt: Set<number>
+    ctrl: Set<number>
+    shift: Set<number>
+    meta: Set<number>
+  } = {
     alt: new Set(),
     ctrl: new Set(),
     shift: new Set(),
@@ -270,10 +292,7 @@ export class HotkeyManager {
         })(),
       )
     } catch (err) {
-      console.warn(
-        `[HotkeyManager] System shortcut registration failed: ${accelerator}`,
-        err,
-      )
+      console.warn(`[HotkeyManager] System shortcut registration failed: ${accelerator}`, err)
       this.unregister(accelerator)
       this.registrationStates.set(accelerator, 'unavailable')
       this.notifyStatus()
@@ -318,7 +337,7 @@ export class HotkeyManager {
       const primary = parseAccelerator(accelerator).keycode
       this.systemDispatches.set(accelerator, {
         triggeredAt: Date.now(),
-        releaseCount: primary == null ? 0 : this.primaryKeyReleaseCount.get(primary) ?? 0,
+        releaseCount: primary == null ? 0 : (this.primaryKeyReleaseCount.get(primary) ?? 0),
       })
       if (primary != null) {
         const observation = this.primaryKeyObservations.get(primary)
@@ -348,7 +367,10 @@ export class HotkeyManager {
     const last = dispatched.triggeredAt
     const now = Date.now()
     const primary = parseAccelerator(accelerator).keycode
-    if (primary != null && (this.primaryKeyReleaseCount.get(primary) ?? 0) > dispatched.releaseCount) {
+    if (
+      primary != null &&
+      (this.primaryKeyReleaseCount.get(primary) ?? 0) > dispatched.releaseCount
+    ) {
       return true
     }
     if (primary != null && this.inputState.isKeyHeld(primary)) {
@@ -407,8 +429,11 @@ export class HotkeyManager {
       if (e.type !== EventType.EVENT_KEY_PRESSED) return
       const now = Date.now()
       const previous = this.primaryKeyObservations.get(e.keycode)
-      const recovered = !!previous?.recovered || this.inputState.isKeyHeld(e.keycode)
-        && previous != null && now - previous.at >= SYSTEM_HOLD_CAP_MS
+      const recovered =
+        !!previous?.recovered ||
+        (this.inputState.isKeyHeld(e.keycode) &&
+          previous != null &&
+          now - previous.at >= SYSTEM_HOLD_CAP_MS)
       this.primaryKeyObservations.set(e.keycode, { at: now, recovered })
       this.inputState.observe(e, true)
       this.lastHookEventAt = now
@@ -453,10 +478,7 @@ export class HotkeyManager {
       // 语音热键 keydown：要求主键 + 必备修饰键匹配，其它修饰键（Ctrl/Shift/Meta）允许不一致
       if (this.voiceMatcher?.lease.active && this.voiceMatcher.keycode) {
         const m = this.voiceMatcher
-        if (
-          e.keycode === m.keycode &&
-          this.inputState.matches(m)
-        ) {
+        if (e.keycode === m.keycode && this.inputState.matches(m)) {
           // 关键修复：长按时 OS 会重复发 keydown 事件（每 ~30ms 一次），
           // 之前每次都触发 onKeyDown → startBackgroundVoice → 上轮未 stop → 自愈循环
           // 导致 UI 一直 start-stop-start 闪烁。用 voiceKeyPressed 标志去重：
@@ -490,7 +512,10 @@ export class HotkeyManager {
       }
       this.inputState.observe(e, false)
       this.lastHookEventAt = Date.now()
-      this.primaryKeyReleaseCount.set(e.keycode, (this.primaryKeyReleaseCount.get(e.keycode) ?? 0) + 1)
+      this.primaryKeyReleaseCount.set(
+        e.keycode,
+        (this.primaryKeyReleaseCount.get(e.keycode) ?? 0) + 1,
+      )
       this.primaryKeyObservations.delete(e.keycode)
       this.syncModifierState()
       // 语音热键 keyup：主键匹配就触发 onKeyUp
@@ -519,10 +544,14 @@ export class HotkeyManager {
   }
 
   /** 启动 500ms 轮询（实现见 voice-hotkey.ts） */
-  private startVoicePolling(): void { startVoicePolling(this) }
+  private startVoicePolling(): void {
+    startVoicePolling(this)
+  }
 
   /** 停止轮询（实现见 voice-hotkey.ts） */
-  private stopVoicePolling(): void { stopVoicePolling(this) }
+  private stopVoicePolling(): void {
+    stopVoicePolling(this)
+  }
 
   /** 注销指定热键 */
   unregister(accelerator: string): void {
@@ -621,18 +650,24 @@ export class HotkeyManager {
     hotkeyStore.set(enabledStoreKey(action), enabled)
   }
 
-  getConflictingAction(action: HotkeyAction, accelerator = this.getHotkey(action)): HotkeyAction | undefined {
+  getConflictingAction(
+    action: HotkeyAction,
+    accelerator = this.getHotkey(action),
+  ): HotkeyAction | undefined {
     if (!accelerator) return undefined
     const normalized = normalizeAssetAccelerator(accelerator)
-    return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).find(other => other !== action
-      && normalizeAssetAccelerator(this.getHotkey(other)) === normalized)
+    return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).find(
+      (other) =>
+        other !== action && normalizeAssetAccelerator(this.getHotkey(other)) === normalized,
+    )
   }
 
   /** 获取全部内置热键配置（供 UI 展示，含 enabled 状态） */
   getAllHotkeys(): HotkeyConfig[] {
     return (Object.keys(DEFAULT_HOTKEYS) as HotkeyAction[]).map((action) => {
       const acc = this.getHotkey(action)
-      const conflict = action === 'toggleAiAssets' ? this.getConflictingAction(action, acc) : undefined
+      const conflict =
+        action === 'toggleAiAssets' ? this.getConflictingAction(action, acc) : undefined
       const registration = conflict ? 'conflict' : this.registrationStates.get(acc)
       return {
         action,
@@ -640,15 +675,20 @@ export class HotkeyManager {
         accelerator: acc,
         enabled: this.getEnabled(action),
         registration: this.getEnabled(action) ? registration : undefined,
-        registrationReason: this.getEnabled(action) ? conflict
-          ? `与「${HOTKEY_LABELS[conflict]}」快捷键重复，请为 AI资产设置独立组合。`
-          : this.registrationReason(registration, acc) : undefined,
+        registrationReason: this.getEnabled(action)
+          ? conflict
+            ? `与「${HOTKEY_LABELS[conflict]}」快捷键重复，请为 AI资产设置独立组合。`
+            : this.registrationReason(registration, acc)
+          : undefined,
       }
     })
   }
 
   /** 注册状态的用户可读原因（registered 时为 undefined） */
-  private registrationReason(state: 'registered' | 'fallback' | 'conflict' | 'unavailable' | undefined, accelerator?: string): string | undefined {
+  private registrationReason(
+    state: 'registered' | 'fallback' | 'conflict' | 'unavailable' | undefined,
+    accelerator?: string,
+  ): string | undefined {
     switch (state) {
       case 'conflict':
         return '此快捷键由另一个工百窗实例使用或暂时无法取得，请修改组合键或重新启用。'
@@ -692,10 +732,7 @@ export class HotkeyManager {
     toggleMainWindow: () => void
     toggleDetachedWindows: () => void
   }): Promise<Record<HotkeyAction, boolean>> {
-    const actions = [
-      'toggleMainWindow',
-      'toggleDetachedWindows',
-    ] as const
+    const actions = ['toggleMainWindow', 'toggleDetachedWindows'] as const
     const results = {} as Record<HotkeyAction, boolean>
     for (const action of actions) {
       // 启动注册时跳过被禁用的热键
@@ -712,20 +749,14 @@ export class HotkeyManager {
         this.recordActionAccelerator(action, acc)
         console.log(`[HotkeyManager] 内置热键 ${action} (${acc}) 注册成功`)
       } else {
-        console.warn(
-          `[HotkeyManager] Shortcut unavailable: ${action} (${acc})`,
-        )
+        console.warn(`[HotkeyManager] Shortcut unavailable: ${action} (${acc})`)
       }
     }
     return results
   }
 
   /** 注册语音热键（Alt+V hold-to-record，实现见 voice-hotkey.ts） */
-  registerVoiceHotkey(
-    accelerator: string,
-    onKeyDown: () => void,
-    onKeyUp: () => void,
-  ): () => void {
+  registerVoiceHotkey(accelerator: string, onKeyDown: () => void, onKeyUp: () => void): () => void {
     return registerVoiceHotkey(this, accelerator, onKeyDown, onKeyUp)
   }
 
@@ -746,7 +777,10 @@ export class HotkeyManager {
    * 通过 globalShortcut.register 检测所有应用（含外部应用）的占用情况。
    * @returns 是否成功进入录制状态
    */
-  async startRecording(callback: HotkeyRecordingCallback, onPartial?: HotkeyPartialCallback): Promise<boolean> {
+  async startRecording(
+    callback: HotkeyRecordingCallback,
+    onPartial?: HotkeyPartialCallback,
+  ): Promise<boolean> {
     return startRecording(this, callback, onPartial)
   }
 
@@ -766,7 +800,11 @@ export class HotkeyManager {
     this.releaseVoiceHold()
     this.inputState.suspend()
     for (const acc of [...this.registered.keys(), ...this.browserShortcuts.keys()]) {
-      try { globalShortcut.unregister(acc) } catch { /* ignore */ }
+      try {
+        globalShortcut.unregister(acc)
+      } catch {
+        /* ignore */
+      }
     }
     // 暂停语音热键
     if (this.voiceMatcher) {
@@ -798,7 +836,7 @@ export class HotkeyManager {
       try {
         globalShortcut.unregister(acc)
         const registered = globalShortcut.register(acc, cb)
-        if (registered || this.uiohookStarted && parseAccelerator(acc).keycode != null) {
+        if (registered || (this.uiohookStarted && parseAccelerator(acc).keycode != null)) {
           this.registrationStates.set(acc, registered ? 'registered' : 'fallback')
           continue
         }
@@ -856,7 +894,9 @@ export class HotkeyManager {
   subscribeStatus(listener: (status: ReturnType<HotkeyManager['getStatus']>) => void): () => void {
     this.statusListeners.add(listener)
     listener(this.getStatus())
-    return () => { this.statusListeners.delete(listener) }
+    return () => {
+      this.statusListeners.delete(listener)
+    }
   }
 
   private notifyStatus(): void {

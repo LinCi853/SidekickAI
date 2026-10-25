@@ -3,31 +3,31 @@
    左：后退/前进/刷新/主页 / 中：地址栏 / 右：扩展占位 + AI 头像 + 设置
    ===================================================================== */
 
-import { useEffect, useState, type MutableRefObject } from 'react';
+import { useEffect, useState, type MutableRefObject } from 'react'
 
-import type { BrowserTabState, Profile, BrowserDownloadRecord } from '../../../lib/electron-api';
-import { onDownloadUpdated } from '../../../lib/electron-api';
-import { IconButton } from '../../../components/ui';
-import { HistoryIcon, DownloadIcon, GearIcon } from '@/components/icons';
-import AddressBar from './AddressBar';
-import GamepadIndicator from './GamepadIndicator';
+import type { BrowserTabState, Profile, BrowserDownloadRecord } from '../../../lib/electron-api'
+import { onDownloadUpdated } from '../../../lib/electron-api'
+import { IconButton } from '../../../components/ui'
+import { HistoryIcon, DownloadIcon, GearIcon } from '@/components/icons'
+import AddressBar from './AddressBar'
+import GamepadIndicator from './GamepadIndicator'
 
 interface NavBarProps {
-  profile: Profile;
-  themeColor: string;
-  activeTab: BrowserTabState | null;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onGoBack: () => void;
-  onGoForward: () => void;
-  onRefresh: () => void;
-  onStopLoading: () => void;
-  onGoHome: () => void;
-  onNavigate: (url: string) => void;
-  onOpenSettings: () => void;
-  onOpenHistory: () => void;
-  onOpenDownloads: () => void;
-  addressBarRef: MutableRefObject<HTMLInputElement | null>;
+  profile: Profile
+  themeColor: string
+  activeTab: BrowserTabState | null
+  canGoBack: boolean
+  canGoForward: boolean
+  onGoBack: () => void
+  onGoForward: () => void
+  onRefresh: () => void
+  onStopLoading: () => void
+  onGoHome: () => void
+  onNavigate: (url: string) => void
+  onOpenSettings: () => void
+  onOpenHistory: () => void
+  onOpenDownloads: () => void
+  addressBarRef: MutableRefObject<HTMLInputElement | null>
 }
 
 export default function NavBar({
@@ -48,23 +48,23 @@ export default function NavBar({
   addressBarRef,
 }: NavBarProps) {
   // v0.0.9: 下载指示器（仅用于角标显示进行中下载数量，点击打开下载管理内嵌标签页）
-  const [downloads, setDownloads] = useState<BrowserDownloadRecord[]>([]);
-  const activeDownloads = downloads.filter((d) => d.state === 'progressing');
+  const [downloads, setDownloads] = useState<BrowserDownloadRecord[]>([])
+  const activeDownloads = downloads.filter((d) => d.state === 'progressing')
 
   useEffect(() => {
     const off = onDownloadUpdated((record) => {
       setDownloads((prev) => {
-        const idx = prev.findIndex((d) => d.id === record.id);
+        const idx = prev.findIndex((d) => d.id === record.id)
         if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = record;
-          return next;
+          const next = [...prev]
+          next[idx] = record
+          return next
         }
-        return [...prev, record];
-      });
-    });
-    return off;
-  }, []);
+        return [...prev, record]
+      })
+    })
+    return off
+  }, [])
 
   return (
     <div className="browser-bar-row browser-bar-row-nav" data-name="browser.nav-bar">
@@ -77,7 +77,14 @@ export default function NavBar({
           title="后退 (Alt+←)"
           data-name="browser.back"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </IconButton>
@@ -88,7 +95,14 @@ export default function NavBar({
           title="前进 (Alt+→)"
           data-name="browser.forward"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </IconButton>
@@ -99,7 +113,14 @@ export default function NavBar({
             title="停止加载 (Esc)"
             data-name="browser.stop"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -111,20 +132,29 @@ export default function NavBar({
             title="刷新 (F5)"
             data-name="browser.refresh"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="23 4 23 10 17 10" />
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
           </IconButton>
         )}
-        <IconButton
-          aria-label="主页"
-          onClick={onGoHome}
-          title="主页"
-          data-name="browser.home"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <IconButton aria-label="主页" onClick={onGoHome} title="主页" data-name="browser.home">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
@@ -144,8 +174,21 @@ export default function NavBar({
       <div className="browser-bar-right">
         <GamepadIndicator />
         {/* 扩展程序图标区（占位，待后续开发） */}
-        <div className="browser-extension-slot" title="扩展程序（待开发）" data-name="browser.extension-slot">
-          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div
+          className="browser-extension-slot"
+          title="扩展程序（待开发）"
+          data-name="browser.extension-slot"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width={14}
+            height={14}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
             <line x1="7" y1="7" x2="7.01" y2="7" />
           </svg>
@@ -175,10 +218,16 @@ export default function NavBar({
         </IconButton>
         {/* AI 应用头像与名称 */}
         <div className="browser-ai-avatar" title={profile.name} data-name="browser.ai-avatar">
-          <span className="browser-ai-avatar-icon" data-name="browser.ai-avatar-icon" style={{ background: themeColor }}>
+          <span
+            className="browser-ai-avatar-icon"
+            data-name="browser.ai-avatar-icon"
+            style={{ background: themeColor }}
+          >
             {profile.name.charAt(0).toUpperCase()}
           </span>
-          <span className="browser-ai-avatar-name" data-name="browser.ai-avatar-name">{profile.name}</span>
+          <span className="browser-ai-avatar-name" data-name="browser.ai-avatar-name">
+            {profile.name}
+          </span>
         </div>
         {/* 设置入口（新标签页打开） */}
         <IconButton
@@ -201,5 +250,5 @@ export default function NavBar({
         </div>
       )}
     </div>
-  );
+  )
 }

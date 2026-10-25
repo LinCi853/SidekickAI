@@ -5,13 +5,13 @@
    注意：与 Badge 不同，Chip 是可点击的开关样式；Badge 是只读状态标签
    ===================================================================== */
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** 是否选中 */
-  selected?: boolean;
+  selected?: boolean
   /** chip 内容 */
-  children: ReactNode;
+  children: ReactNode
 }
 
 /**
@@ -20,12 +20,7 @@ export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * @example
  * <Chip selected={visible} onClick={toggle}>{label}</Chip>
  */
-export default function Chip({
-  selected = false,
-  className,
-  children,
-  ...rest
-}: ChipProps) {
+export default function Chip({ selected = false, className, children, ...rest }: ChipProps) {
   return (
     <button
       type="button"
@@ -35,5 +30,5 @@ export default function Chip({
     >
       {children}
     </button>
-  );
+  )
 }

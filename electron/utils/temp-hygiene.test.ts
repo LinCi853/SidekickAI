@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { cancelPendingAttachmentExpiry, scheduleAttachmentCopyExpiry, sweepStaleRuntimeTemp } from './temp-hygiene'
+import {
+  cancelPendingAttachmentExpiry,
+  scheduleAttachmentCopyExpiry,
+  sweepStaleRuntimeTemp,
+} from './temp-hygiene'
 
 describe('temp hygiene', () => {
   let root: string
@@ -11,7 +15,10 @@ describe('temp hygiene', () => {
   })
   afterEach(async () => {
     cancelPendingAttachmentExpiry()
-    if (path.dirname(root) !== path.resolve('build') || !path.basename(root).startsWith('temp-hygiene-')) {
+    if (
+      path.dirname(root) !== path.resolve('build') ||
+      !path.basename(root).startsWith('temp-hygiene-')
+    ) {
       throw new Error('Unexpected fixture path')
     }
     await rm(root, { recursive: true, force: true })
@@ -30,8 +37,12 @@ describe('temp hygiene', () => {
 
     const removed = await sweepStaleRuntimeTemp(root, 24 * 3600 * 1000)
     expect(removed).toBe(1)
-    await expect(readdir(root)).resolves.toEqual(expect.arrayContaining(['sidekickai-asset-fresh', 'dsh-workspace-changes-x']))
-    await expect(readdir(root)).resolves.not.toEqual(expect.arrayContaining(['sidekickai-asset-stale']))
+    await expect(readdir(root)).resolves.toEqual(
+      expect.arrayContaining(['sidekickai-asset-fresh', 'dsh-workspace-changes-x']),
+    )
+    await expect(readdir(root)).resolves.not.toEqual(
+      expect.arrayContaining(['sidekickai-asset-stale']),
+    )
   })
 
   it('expires attachment copies after the TTL', async () => {
@@ -39,7 +50,9 @@ describe('temp hygiene', () => {
     await mkdir(directory)
     await writeFile(path.join(directory, 'report.pdf'), 'copy')
     scheduleAttachmentCopyExpiry(directory, 20)
-    await new Promise(resolve => setTimeout(resolve, 60))
-    await expect(readdir(root)).resolves.not.toEqual(expect.arrayContaining(['sidekickai-asset-copy']))
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await expect(readdir(root)).resolves.not.toEqual(
+      expect.arrayContaining(['sidekickai-asset-copy']),
+    )
   })
 })

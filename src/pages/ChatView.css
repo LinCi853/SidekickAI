@@ -74,7 +74,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: transform var(--duration-normal) var(--ease-out),
+  transition:
+    transform var(--duration-normal) var(--ease-out),
     width var(--duration-normal) var(--ease-out),
     min-width var(--duration-normal) var(--ease-out),
     border-width var(--duration-normal) var(--ease-out);
@@ -125,7 +126,9 @@
   color: var(--muted-foreground);
   border: 1px solid transparent;
   margin-bottom: var(--space-0-5);
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .chat-conv-item:hover {
   background: var(--glass-bg-2);

@@ -7,10 +7,14 @@ describe('profile accents', () => {
   it('keeps two configurations of a platform independent', () => {
     const own = getPlatformColors({ aiThemeColor: '#ee8844' } as Profile, platform, 'second')
     expect(own).toEqual({ themeColor: '#ee8844', gradientColor: '#be6d36' })
-    expect(getPlatformColors({ aiThemeColor: '#4D6BFE' } as Profile, platform, 'first').gradientColor).toBe('#2e4fd9')
+    expect(
+      getPlatformColors({ aiThemeColor: '#4D6BFE' } as Profile, platform, 'first').gradientColor,
+    ).toBe('#2e4fd9')
   })
   it('derives short hexadecimal colors and retains preset defaults', () => {
-    expect(getPlatformColors({ aiThemeColor: '#aBc' } as Profile, platform, 'short').gradientColor).toBe('#8896a3')
+    expect(
+      getPlatformColors({ aiThemeColor: '#aBc' } as Profile, platform, 'short').gradientColor,
+    ).toBe('#8896a3')
     expect(getPlatformColors(undefined, platform, 'unset')).toEqual(platform)
   })
 })

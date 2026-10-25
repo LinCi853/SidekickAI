@@ -9,8 +9,14 @@ import { registerBrowserIpc } from '../../../browser/browser-ipc.js'
 import { registerBrowserTabAudioIpc } from '../../../browser/browser-tab-audio-ipc.js'
 import { registerCursorIpc } from '../../../utils/cursor.js'
 import { createBrowserWindow, showHistoryDownloadWindow } from '../../../window-factory.js'
-import { searchHistoryStore, closeSearchHistoryStore } from '../../../browser/search-history-store.js'
-import { browserDownloadStore, closeBrowserDownloadStore } from '../../../browser/browser-download-store.js'
+import {
+  searchHistoryStore,
+  closeSearchHistoryStore,
+} from '../../../browser/search-history-store.js'
+import {
+  browserDownloadStore,
+  closeBrowserDownloadStore,
+} from '../../../browser/browser-download-store.js'
 import { closeBookmarkStore } from '../../../browser/bookmark-store.js'
 import { browserWindowStore } from '../../../browser/browser-window-store.js'
 import { windowState } from '../../../platform/window/window-state.js'
@@ -20,16 +26,18 @@ import fs from 'fs'
 /** 模块级 EffectScope */
 const scope = new EffectScope('browser', 'browser')
 
-
 export async function initBrowserModule(): Promise<void> {
   // 幂等：先清理旧注册再注册（init 重入/热重载安全）
   await scope.dispose()
   // 传递 scope 给 registerBrowserIpc，使其使用 EffectScope 管理 IPC handler
-  registerBrowserIpc({
-    createBrowserWindow,
-    getSearchHistoryStore: () => searchHistoryStore,
-    getDownloadStore: () => browserDownloadStore,
-  }, scope)
+  registerBrowserIpc(
+    {
+      createBrowserWindow,
+      getSearchHistoryStore: () => searchHistoryStore,
+      getDownloadStore: () => browserDownloadStore,
+    },
+    scope,
+  )
   registerBrowserTabAudioIpc({})
   registerCursorIpc(scope)
   scope.ipcHandle(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN, () => {
@@ -51,9 +59,21 @@ export async function teardownBrowserModule(): Promise<void> {
   // 2. 卸载通道
   await scope.dispose()
   // 3. 关闭数据库句柄
-  try { closeSearchHistoryStore() } catch (err) { console.warn('[wiring:browser] close search-history:', err) }
-  try { closeBrowserDownloadStore() } catch (err) { console.warn('[wiring:browser] close download:', err) }
-  try { closeBookmarkStore() } catch (err) { console.warn('[wiring:browser] close bookmark:', err) }
+  try {
+    closeSearchHistoryStore()
+  } catch (err) {
+    console.warn('[wiring:browser] close search-history:', err)
+  }
+  try {
+    closeBrowserDownloadStore()
+  } catch (err) {
+    console.warn('[wiring:browser] close download:', err)
+  }
+  try {
+    closeBookmarkStore()
+  } catch (err) {
+    console.warn('[wiring:browser] close bookmark:', err)
+  }
 }
 
 export async function clearBrowserData(): Promise<void> {

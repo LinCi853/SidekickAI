@@ -23,58 +23,40 @@ export const windowApi = {
   // 窗口控制（操作调用方所在窗口本身）
   windowControl: {
     minimize: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_MINIMIZE),
-    maximizeToggle: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLE),
+    maximizeToggle: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLE),
     close: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_CLOSE),
     setAlwaysOnTop: (onTop: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_SET_ALWAYS_ON_TOP, onTop),
     isMaximized: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_IS_MAXIMIZED),
     isAlwaysOnTop: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_IS_ALWAYS_ON_TOP),
     getBounds: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_GET_BOUNDS),
-    detachTab: (tabId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_DETACH_TAB, tabId),
+    detachTab: (tabId: string) => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_DETACH_TAB, tabId),
     resize: (bounds: { x: number; y: number; width: number; height: number }) =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_RESIZE, bounds),
-    toggleFullscreen: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN),
-    exitFullscreen: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_EXIT_FULLSCREEN),
+    toggleFullscreen: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN),
+    exitFullscreen: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_EXIT_FULLSCREEN),
     // 云游戏备用方案：把系统光标重置到指定屏幕坐标（指针锁定不可用时的光标居中）
-    setCursor: (x: number, y: number) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CURSOR_SET, x, y),
+    setCursor: (x: number, y: number) => ipcRenderer.invoke(IPC_CHANNELS.CURSOR_SET, x, y),
     // 动态设置当前窗口的最小尺寸（UI 比例变化时重新约束）
     setMinimumSize: (width: number, height: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_SET_MIN_SIZE, width, height),
     // 获取当前窗口的最小尺寸（resize 拖拽时动态获取真实下限）
-    getMinimumSize: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_GET_MIN_SIZE),
+    getMinimumSize: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_GET_MIN_SIZE),
     // 主→渲染：webview 快捷键主进程兜底触发后，同步状态
     onMaximizeToggled: (callback: (isMaximized: boolean) => void) => {
       const handler = (_e: unknown, isMax: boolean) => callback(isMax)
       ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, handler)
-      return () =>
-        ipcRenderer.removeListener(
-          IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED,
-          handler,
-        )
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, handler)
     },
     onFullscreenToggled: (callback: (isFullscreen: boolean) => void) => {
       const handler = (_e: unknown, isFs: boolean) => callback(isFs)
       ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, handler)
-      return () =>
-        ipcRenderer.removeListener(
-          IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED,
-          handler,
-        )
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.WIN_CONTROL_FULLSCREEN_TOGGLED, handler)
     },
     onPinToggled: (callback: (alwaysOnTop: boolean) => void) => {
       const handler = (_e: unknown, onTop: boolean) => callback(onTop)
       ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, handler)
-      return () =>
-        ipcRenderer.removeListener(
-          IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED,
-          handler,
-        )
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, handler)
     },
   },
   // 窗口状态持久化
@@ -82,8 +64,7 @@ export const windowApi = {
     get: (windowId: string) => ipcRenderer.invoke(IPC_CHANNELS.WIN_STATE_GET, windowId),
     save: (windowId: string, state: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.WIN_STATE_SAVE, windowId, state),
-    listDetachedWindowIds: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.WIN_STATE_LIST_DETACHED),
+    listDetachedWindowIds: () => ipcRenderer.invoke(IPC_CHANNELS.WIN_STATE_LIST_DETACHED),
     remove: (windowId: string) => ipcRenderer.invoke(IPC_CHANNELS.WIN_STATE_REMOVE, windowId),
   },
   // 标签管理
@@ -98,8 +79,7 @@ export const windowApi = {
     onEnsureAndDetach: (callback: (profileId: string) => void) => {
       const handler = (_e: unknown, profileId: string) => callback(profileId)
       ipcRenderer.on(IPC_CHANNELS.TAB_ENSURE_AND_DETACH, handler)
-      return () =>
-        ipcRenderer.removeListener(IPC_CHANNELS.TAB_ENSURE_AND_DETACH, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TAB_ENSURE_AND_DETACH, handler)
     },
     // 渲染→主：回复兜底请求结果（tabId 或 null）
     reportEnsureAndDetachResult: (payload: { profileId: string; tabId: string | null }) =>

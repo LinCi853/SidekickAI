@@ -94,7 +94,6 @@ export function getDefaultPromptTemplate(): Omit<PromptTemplate, 'id' | 'created
   return PROMPTS[0]
 }
 
-
 // =============================================================================
 // Device Presets（第一个元素即默认预设）
 // =============================================================================
@@ -231,11 +230,31 @@ export const PRESETS: DevicePreset[] = [
 
 /** 首次启动填充的通用预置模板（不含 id/createdAt/updatedAt，由 save 时补全） */
 export const PROMPTS: Array<Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>> = [
-  { title: '总结全文', content: '请用简洁的语言总结以下内容的要点，分条列出：\n\n{{body}}', category: '通用' },
-  { title: '翻译为英文', content: '请将以下内容翻译为自然流畅的英文：\n\n{{body}}', category: '通用' },
-  { title: '扩写细节', content: '请在保持原意的基础上，扩写以下内容，补充更多细节与示例：\n\n{{body}}', category: '通用' },
-  { title: '润色优化', content: '请润色以下文字，使其更专业、流畅，并保留原意：\n\n{{body}}', category: '通用' },
-  { title: '解释代码', content: '请逐行解释以下代码的作用与实现思路：\n\n{{body}}', category: '开发' },
+  {
+    title: '总结全文',
+    content: '请用简洁的语言总结以下内容的要点，分条列出：\n\n{{body}}',
+    category: '通用',
+  },
+  {
+    title: '翻译为英文',
+    content: '请将以下内容翻译为自然流畅的英文：\n\n{{body}}',
+    category: '通用',
+  },
+  {
+    title: '扩写细节',
+    content: '请在保持原意的基础上，扩写以下内容，补充更多细节与示例：\n\n{{body}}',
+    category: '通用',
+  },
+  {
+    title: '润色优化',
+    content: '请润色以下文字，使其更专业、流畅，并保留原意：\n\n{{body}}',
+    category: '通用',
+  },
+  {
+    title: '解释代码',
+    content: '请逐行解释以下代码的作用与实现思路：\n\n{{body}}',
+    category: '开发',
+  },
 ]
 
 // =============================================================================

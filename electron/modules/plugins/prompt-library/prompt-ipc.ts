@@ -63,18 +63,24 @@ export function registerPromptIpc(deps: PromptIpcDeps, scope?: EffectScope): voi
   // 主窗口执行完注入后把 {success, platformName} 发回，主进程转发给提示词库窗口以显示 toast
   // 注意：这里使用 ipcMain.on 而非 handle，因为不需要返回值
   if (scope) {
-    scope.ipcOn(IPC_CHANNELS.PROMPT_INJECT_RESULT, (_e: unknown, result: { success: boolean; platformName?: string }) => {
-      const promptWindow = getPromptWindow()
-      if (promptWindow && !promptWindow.isDestroyed()) {
-        promptWindow.webContents.send(IPC_CHANNELS.PROMPT_INJECT_RESULT, result)
-      }
-    })
+    scope.ipcOn(
+      IPC_CHANNELS.PROMPT_INJECT_RESULT,
+      (_e: unknown, result: { success: boolean; platformName?: string }) => {
+        const promptWindow = getPromptWindow()
+        if (promptWindow && !promptWindow.isDestroyed()) {
+          promptWindow.webContents.send(IPC_CHANNELS.PROMPT_INJECT_RESULT, result)
+        }
+      },
+    )
   } else {
-    ipcMain.on(IPC_CHANNELS.PROMPT_INJECT_RESULT, (_e, result: { success: boolean; platformName?: string }) => {
-      const promptWindow = getPromptWindow()
-      if (promptWindow && !promptWindow.isDestroyed()) {
-        promptWindow.webContents.send(IPC_CHANNELS.PROMPT_INJECT_RESULT, result)
-      }
-    })
+    ipcMain.on(
+      IPC_CHANNELS.PROMPT_INJECT_RESULT,
+      (_e, result: { success: boolean; platformName?: string }) => {
+        const promptWindow = getPromptWindow()
+        if (promptWindow && !promptWindow.isDestroyed()) {
+          promptWindow.webContents.send(IPC_CHANNELS.PROMPT_INJECT_RESULT, result)
+        }
+      },
+    )
   }
 }

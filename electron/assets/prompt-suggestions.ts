@@ -1,15 +1,25 @@
 import type { AssetPromptSuggestion } from '../shared/ai-assets.types.js'
 import { promptWeight } from './text-usage.js'
 
-export interface PromptSample { id: string; conversationId: string; content: string; before: string; after: string }
+export interface PromptSample {
+  id: string
+  conversationId: string
+  content: string
+  before: string
+  after: string
+}
 function edges(text: string): string {
   const chars = Array.from(text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim())
   const length = Math.ceil(chars.length * 0.1)
-  return chars.length <= 20 ? chars.join('') : chars.slice(0, length).join('') + '\n' + chars.slice(-length).join('')
+  return chars.length <= 20
+    ? chars.join('')
+    : chars.slice(0, length).join('') + '\n' + chars.slice(-length).join('')
 }
 function grams(text: string): Set<string> {
   const chars = Array.from(text)
-  return new Set(chars.length < 2 ? chars : chars.slice(1).map((char, index) => chars[index] + char))
+  return new Set(
+    chars.length < 2 ? chars : chars.slice(1).map((char, index) => chars[index] + char),
+  )
 }
 function comparison(samples: PromptSample[], field: 'content' | 'before' | 'after') {
   const count = samples.length
@@ -21,7 +31,10 @@ function comparison(samples: PromptSample[], field: 'content' | 'before' | 'afte
     sizes[right] = tokens.size
     for (const token of tokens) {
       const previous = index.get(token)
-      if (!previous) { index.set(token, [right]); continue }
+      if (!previous) {
+        index.set(token, [right])
+        continue
+      }
       for (const left of previous) common[left * count + right]++
       previous.push(right)
     }
@@ -29,12 +42,15 @@ function comparison(samples: PromptSample[], field: 'content' | 'before' | 'afte
   return (left: number, right: number) => {
     if (left === right) return true
     const total = sizes[left] + sizes[right]
-    return total === 0 || 2 * common[Math.min(left, right) * count + Math.max(left, right)] / total >= 0.8
+    return (
+      total === 0 ||
+      (2 * common[Math.min(left, right) * count + Math.max(left, right)]) / total >= 0.8
+    )
   }
 }
 export function repeatedPromptSuggestions(samples: PromptSample[]): AssetPromptSuggestion[] {
-  samples = samples.filter(sample => sample.content.trim())
-  if (new Set(samples.map(sample => sample.conversationId)).size < 3) return []
+  samples = samples.filter((sample) => sample.content.trim())
+  if (new Set(samples.map((sample) => sample.conversationId)).size < 3) return []
   const inputMatches = comparison(samples, 'content')
   let beforeMatches: ReturnType<typeof comparison> | undefined
   let afterMatches: ReturnType<typeof comparison> | undefined
@@ -50,12 +66,18 @@ export function repeatedPromptSuggestions(samples: PromptSample[]): AssetPromptS
       afterMatches ??= comparison(samples, 'after')
       return afterMatches(candidateIndex, otherIndex)
     })
-    const uses = new Set(matches.map(other => other.conversationId)).size
+    const uses = new Set(matches.map((other) => other.conversationId)).size
     if (uses < 3) continue
     const { content, conversationId, id } = candidate
-    result.push({ content, conversationId, messageId: id, uses, weight: promptWeight(content, uses),
-      title: Array.from(content.trim().split('\n')[0]).slice(0, 48).join('') })
-    matches.forEach(other => consumed.add(other.id))
+    result.push({
+      content,
+      conversationId,
+      messageId: id,
+      uses,
+      weight: promptWeight(content, uses),
+      title: Array.from(content.trim().split('\n')[0]).slice(0, 48).join(''),
+    })
+    matches.forEach((other) => consumed.add(other.id))
   }
   return result.sort((a, b) => b.weight - a.weight).slice(0, 100)
 }

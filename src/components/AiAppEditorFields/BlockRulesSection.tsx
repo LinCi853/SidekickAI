@@ -1,24 +1,24 @@
-import type { Dispatch, SetStateAction } from 'react';
-import Button from '../ui/Button';
-import Toggle from '../ui/Toggle';
-import SegmentedControl from '../ui/SegmentedControl';
-import type { BlockRule, BlockRuleType } from '../../../electron/shared/block-rules.types';
-import type { AIPlatform } from '../../lib/electron-api';
-import { hostnameFromUrl } from '../../pages/AiAppEditor/domain';
-import { FieldGroup } from './FieldGroup';
+import type { Dispatch, SetStateAction } from 'react'
+import Button from '../ui/Button'
+import Toggle from '../ui/Toggle'
+import SegmentedControl from '../ui/SegmentedControl'
+import type { BlockRule, BlockRuleType } from '../../../electron/shared/block-rules.types'
+import type { AIPlatform } from '../../lib/electron-api'
+import { hostnameFromUrl } from '../../pages/AiAppEditor/domain'
+import { FieldGroup } from './FieldGroup'
 
 export interface BlockRulesSectionProps {
-  platform: AIPlatform | null;
-  filteredRules: BlockRule[];
-  showRuleForm: boolean;
-  ruleDraft: Omit<BlockRule, 'id' | 'builtin'>;
-  setRuleDraft: Dispatch<SetStateAction<Omit<BlockRule, 'id' | 'builtin'>>>;
-  onRuleToggle: (rule: BlockRule) => void;
-  onRuleEdit: (rule: BlockRule) => void;
-  onRuleDelete: (id: string) => void;
-  onRuleAdd: () => void;
-  onRuleSave: () => void;
-  onRuleCancel: () => void;
+  platform: AIPlatform | null
+  filteredRules: BlockRule[]
+  showRuleForm: boolean
+  ruleDraft: Omit<BlockRule, 'id' | 'builtin'>
+  setRuleDraft: Dispatch<SetStateAction<Omit<BlockRule, 'id' | 'builtin'>>>
+  onRuleToggle: (rule: BlockRule) => void
+  onRuleEdit: (rule: BlockRule) => void
+  onRuleDelete: (id: string) => void
+  onRuleAdd: () => void
+  onRuleSave: () => void
+  onRuleCancel: () => void
 }
 
 export function BlockRulesSection({
@@ -40,7 +40,9 @@ export function BlockRulesSection({
         label={`屏蔽规则（按 ${platform ? hostnameFromUrl(platform.url) || '*' : '*'} 匹配）`}
       >
         <div className="ai-app-editor-rules" data-name="ai-app-editor.block-rules-container">
-          <p style={{ color: 'var(--muted-foreground)', fontSize: 'var(--text-xs)' }}>CSS 屏蔽会立即更新。JS 规则修改或关闭后，已运行脚本的效果可能需要刷新页面才能恢复。</p>
+          <p style={{ color: 'var(--muted-foreground)', fontSize: 'var(--text-xs)' }}>
+            CSS 屏蔽会立即更新。JS 规则修改或关闭后，已运行脚本的效果可能需要刷新页面才能恢复。
+          </p>
           {filteredRules.length === 0 && !showRuleForm && (
             <div className="ai-app-editor-empty" data-name="ai-app-editor.block-rules-empty">
               暂无匹配规则
@@ -52,16 +54,22 @@ export function BlockRulesSection({
               className="ai-app-editor-rule-item"
               data-name={`ai-app-editor.block-rule-item-${rIdx + 1}`}
             >
-              <span className="ai-app-editor-rule-toggle" data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-toggle-wrapper`}>
-                <Toggle
-                  checked={rule.enabled}
-                  onChange={() => void onRuleToggle(rule)}
-                />
+              <span
+                className="ai-app-editor-rule-toggle"
+                data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-toggle-wrapper`}
+              >
+                <Toggle checked={rule.enabled} onChange={() => void onRuleToggle(rule)} />
               </span>
-              <span className="ai-app-editor-rule-label" data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-label`}>
+              <span
+                className="ai-app-editor-rule-label"
+                data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-label`}
+              >
                 {rule.label || '(未命名)'}
                 {rule.builtin && (
-                  <span className="ai-app-editor-rule-builtin" data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-builtin-badge`}>
+                  <span
+                    className="ai-app-editor-rule-builtin"
+                    data-name={`ai-app-editor.block-rule-item-${rIdx + 1}-builtin-badge`}
+                  >
                     内置
                   </span>
                 )}
@@ -132,7 +140,10 @@ export function BlockRulesSection({
                   data-name="ai-app-editor.block-rule-form-js-code-textarea"
                 />
               )}
-              <div className="ai-app-editor-rule-form-actions" data-name="ai-app-editor.block-rule-form-actions">
+              <div
+                className="ai-app-editor-rule-form-actions"
+                data-name="ai-app-editor.block-rule-form-actions"
+              >
                 <Button
                   variant="primary-compact"
                   onClick={() => void onRuleSave()}
@@ -163,5 +174,5 @@ export function BlockRulesSection({
         </div>
       </FieldGroup>
     </>
-  );
+  )
 }

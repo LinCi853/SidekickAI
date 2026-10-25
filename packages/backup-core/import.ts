@@ -6,31 +6,67 @@ import { assertOrdinaryPath, checkDiskSpace, createPrivateDirectory, hashFile } 
 import { sha256FileSync } from './files.js'
 import { defaultBackupJobRoot } from './jobs.js'
 import { classifyBackup } from './compatibility.js'
-import { normalizeLegacySettings, validateSettingsDatabase, validateTransfer, type TransferDefaults } from './transfer.js'
-import type { BackupEdition, BackupInspection, BackupManifest, ImportDecision, ImportReport } from './types.js'
+import {
+  normalizeLegacySettings,
+  validateSettingsDatabase,
+  validateTransfer,
+  type TransferDefaults,
+} from './transfer.js'
+import type {
+  BackupEdition,
+  BackupInspection,
+  BackupManifest,
+  ImportDecision,
+  ImportReport,
+} from './types.js'
 
 export interface ImportAdapter {
   edition: BackupEdition
   defaults: TransferDefaults
   validateFull(directory: string): void
 }
-export interface PreparedBackup { manifest: BackupManifest; decision: ImportDecision; fingerprint: string; report: ImportReport }
-export interface ImportPreparation { tempRoot?: string; signal?: AbortSignal; onProgress?: (bytes: number, total: number) => void }
+export interface PreparedBackup {
+  manifest: BackupManifest
+  decision: ImportDecision
+  fingerprint: string
+  report: ImportReport
+}
+export interface ImportPreparation {
+  tempRoot?: string
+  signal?: AbortSignal
+  onProgress?: (bytes: number, total: number) => void
+}
 
-export function backupFingerprint(file: string): string { return sha256FileSync(file) }
+export function backupFingerprint(file: string): string {
+  return sha256FileSync(file)
+}
 
 /**
  * 只有 SABK 的 GCM 认证失败（decryptFileStream 返回 null）才映射为“密码错误或文件损坏”。
  * 压缩方式不受支持、声明展开体积超限等归档格式错误由 stream-archive 直接抛出，必须保留原文：
  * 否则一个由 7-Zip/unzip/Compress-Archive 重新打包的合法备份会被误报为密码错误。
  */
-async function decryptPayload(file: string, output: string, password: string, signal?: AbortSignal): Promise<void> {
-  if (await decryptFileStream(file, output, password, { signal }) === null) throw new Error('密码错误或文件损坏')
+async function decryptPayload(
+  file: string,
+  output: string,
+  password: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  if ((await decryptFileStream(file, output, password, { signal })) === null)
+    throw new Error('密码错误或文件损坏')
 }
 
-export async function readImportBackup(adapter: ImportAdapter, file: string, directory: string, password?: string, expectedFingerprint?: string, preparation: ImportPreparation = {}): Promise<PreparedBackup> {
+export async function readImportBackup(
+  adapter: ImportAdapter,
+  file: string,
+  directory: string,
+  password?: string,
+  expectedFingerprint?: string,
+  preparation: ImportPreparation = {},
+): Promise<PreparedBackup> {
   const fingerprint = await hashFile(file, preparation.signal)
-  if (expectedFingerprint && fingerprint !== expectedFingerprint) throw new Error('备份文件已变化，请重新检查并确认导入。')
+  if (expectedFingerprint && fingerprint !== expectedFingerprint)
+    throw new Error('备份文件已变化，请重新检查并确认导入。')
   let temporary = ''
   try {
     let input = file
@@ -45,7 +81,12 @@ export async function readImportBackup(adapter: ImportAdapter, file: string, dir
       input = path.join(temporary, 'payload.zip')
       await decryptPayload(file, input, password, preparation.signal)
     }
-    const manifest = await readStreamingArchive(input, { extractTo: directory, allowLegacy: true, signal: preparation.signal, onBytes: preparation.onProgress })
+    const manifest = await readStreamingArchive(input, {
+      extractTo: directory,
+      allowLegacy: true,
+      signal: preparation.signal,
+      onBytes: preparation.onProgress,
+    })
     const decision = classifyBackup(manifest, adapter.edition)
     const report: ImportReport = { imported: [], skipped: [], warnings: [] }
     normalizeLegacySettings(directory)
@@ -53,30 +94,62 @@ export async function readImportBackup(adapter: ImportAdapter, file: string, dir
     if (decision.mode === 'full') adapter.validateFull(directory)
     else {
       const transfer = validateTransfer(directory, adapter.defaults)
-      report.imported.push(...transfer.imported); report.skipped.push(...transfer.skipped); report.warnings.push(...transfer.warnings)
+      report.imported.push(...transfer.imported)
+      report.skipped.push(...transfer.skipped)
+      report.warnings.push(...transfer.warnings)
     }
     if (decision.mode === 'full') report.imported.push({ category: 'basicData' })
-    if (decision.mode === 'limited' && manifest.options.cookies && manifest.cookieSnapshots === undefined) decision.message += '此旧备份没有可迁移 Cookie，部分网站可能需要重新登录。'
-    if (await hashFile(file, preparation.signal) !== fingerprint) throw new Error('备份文件已变化，请重新检查并确认导入。')
-    manifest.entries['settings.db'] = await hashFile(path.join(directory, 'settings.db'), preparation.signal)
-    const settingsInventory = manifest.inventory?.find(entry => entry.path === 'settings.db')
-    if (settingsInventory) { settingsInventory.sha256 = manifest.entries['settings.db']; settingsInventory.size = fs.statSync(path.join(directory, 'settings.db')).size }
+    if (
+      decision.mode === 'limited' &&
+      manifest.options.cookies &&
+      manifest.cookieSnapshots === undefined
+    )
+      decision.message += '此旧备份没有可迁移 Cookie，部分网站可能需要重新登录。'
+    if ((await hashFile(file, preparation.signal)) !== fingerprint)
+      throw new Error('备份文件已变化，请重新检查并确认导入。')
+    manifest.entries['settings.db'] = await hashFile(
+      path.join(directory, 'settings.db'),
+      preparation.signal,
+    )
+    const settingsInventory = manifest.inventory?.find((entry) => entry.path === 'settings.db')
+    if (settingsInventory) {
+      settingsInventory.sha256 = manifest.entries['settings.db']
+      settingsInventory.size = fs.statSync(path.join(directory, 'settings.db')).size
+    }
     Object.assign(manifest, { restoreMode: decision.mode, importReport: report })
     fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(manifest))
     return { manifest, decision, fingerprint, report }
-  } finally { if (temporary) fs.rmSync(temporary, { recursive: true, force: true }) }
+  } finally {
+    if (temporary) fs.rmSync(temporary, { recursive: true, force: true })
+  }
 }
 
-export async function inspectBackup(adapter: ImportAdapter, file: string, password?: string, preparation: ImportPreparation = {}): Promise<BackupInspection> {
-  if (isSabkEncrypted(file) && !password) return { success: false, encrypted: true, error: '需要密码解密' }
+export async function inspectBackup(
+  adapter: ImportAdapter,
+  file: string,
+  password?: string,
+  preparation: ImportPreparation = {},
+): Promise<BackupInspection> {
+  if (isSabkEncrypted(file) && !password)
+    return { success: false, encrypted: true, error: '需要密码解密' }
   const root = preparation.tempRoot ?? path.join(defaultBackupJobRoot(), 'inspections')
   fs.mkdirSync(root, { recursive: true, mode: 0o700 })
   assertOrdinaryPath(root, true)
   const directory = fs.mkdtempSync(path.join(root, 'sidekick-backup-inspect-'))
   createPrivateDirectory(directory)
   try {
-    const { decision, fingerprint, report } = await readImportBackup(adapter, file, directory, password, undefined, preparation)
+    const { decision, fingerprint, report } = await readImportBackup(
+      adapter,
+      file,
+      directory,
+      password,
+      undefined,
+      preparation,
+    )
     return { success: true, ...decision, fingerprint, report }
-  } catch (error) { return { success: false, error: (error as Error).message } }
-  finally { fs.rmSync(directory, { recursive: true, force: true }) }
+  } catch (error) {
+    return { success: false, error: (error as Error).message }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
 }

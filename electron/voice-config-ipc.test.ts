@@ -8,7 +8,8 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: (channel: string, handler: (...args: any[]) => any) => fixture.handlers.set(channel, handler),
+    handle: (channel: string, handler: (...args: any[]) => any) =>
+      fixture.handlers.set(channel, handler),
   },
 }))
 vi.mock('./modules/plugins/voice/config-store.js', () => ({

@@ -9,16 +9,16 @@
    - Alt+Q 由主进程全局热键控制显隐（自定义窗口）
    ===================================================================== */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useHotkeys } from '../hooks/useHotkeys';
-import WindowResizeHandles from '../components/WindowResizeHandles';
-import SettingsPanel from '../components/SettingsPanel';
-import ShortcutHelp from '../components/ShortcutHelp';
-import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
-import { IconButton, TitleBar, PinToggleButton } from '../components/ui';
-import { GearIcon } from '../components/icons';
-import { useProfileStore } from '../store/useProfileStore';
-import { useTabStore } from '../store/useTabStore';
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useHotkeys } from '../hooks/useHotkeys'
+import WindowResizeHandles from '../components/WindowResizeHandles'
+import SettingsPanel from '../components/SettingsPanel'
+import ShortcutHelp from '../components/ShortcutHelp'
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore'
+import { IconButton, TitleBar, PinToggleButton } from '../components/ui'
+import { GearIcon } from '../components/icons'
+import { useProfileStore } from '../store/useProfileStore'
+import { useTabStore } from '../store/useTabStore'
 import {
   getFingerprintScript,
   minimizeWindow,
@@ -27,15 +27,19 @@ import {
   isWindowMaximized,
   pinCurrentWindow,
   listAIPlatforms,
-} from '../lib/electron-api';
-import type { Profile } from '../lib/electron-api';
-import { injectViewportAndPopupGuard, safeLoadURLWebview, type WebviewElement } from '../lib/webview';
-import { useIsNarrow } from '../hooks/useIsNarrow';
-import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { injectionManager } from '../lib/injection-manager';
-import { leaseWebviewLifecycle } from '../lib/webview-lifecycle';
-import { formatWindowTitle } from '../lib/window-title';
-import './StandaloneView.css';
+} from '../lib/electron-api'
+import type { Profile } from '../lib/electron-api'
+import {
+  injectViewportAndPopupGuard,
+  safeLoadURLWebview,
+  type WebviewElement,
+} from '../lib/webview'
+import { useIsNarrow } from '../hooks/useIsNarrow'
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow'
+import { injectionManager } from '../lib/injection-manager'
+import { leaseWebviewLifecycle } from '../lib/webview-lifecycle'
+import { formatWindowTitle } from '../lib/window-title'
+import './StandaloneView.css'
 
 export default function StandaloneView() {
   // 从 TabStore 读取当前窗口状态（初始化已在 App.tsx 完成）
@@ -48,174 +52,203 @@ export default function StandaloneView() {
     renameTab,
     setAlwaysOnTop,
     setMaximized,
-  } = useTabStore();
+  } = useTabStore()
 
   // 从 ProfileStore 读取 Profile 列表（已在 App.tsx 加载）
-  const profiles = useProfileStore((s) => s.profiles);
+  const profiles = useProfileStore((s) => s.profiles)
 
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
   // 长宽自适应：< 600px 视为窄屏（导航/工具按钮隐藏）
-  const isNarrow = useIsNarrow();
+  const isNarrow = useIsNarrow()
 
-  const titleInputRef = useRef<HTMLInputElement | null>(null);
-  const webviewRef = useRef<WebviewElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
+  const webviewRef = useRef<WebviewElement | null>(null)
 
   // 单标签窗口：不登记标签切换键位说明
-  useHotkeys({ registerTabDocs: false });
+  useHotkeys({ registerTabDocs: false })
 
   // 快捷键说明窗口：` / ~ / ? 与主进程 openShortcuts 转发由 ShortcutHelp 内部处理
 
   // 同步初始最大化态
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized) return
     isWindowMaximized()
       .then((m) => setMaximized(m))
-      .catch((e) => console.warn('[standalone] 操作失败:', e));
-  }, [initialized, setMaximized]);
+      .catch((e) => console.warn('[standalone] 操作失败:', e))
+  }, [initialized, setMaximized])
 
   // D3: 独立窗口关闭时触发主窗口 AI 输入框聚焦
   useEffect(() => {
     const handleBeforeUnload = () => {
-      useTabStore.getState().triggerFocusAiInput();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+      useTabStore.getState().triggerFocusAiInput()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
 
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0] ?? null;
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0] ?? null
   const activeProfile: Profile | null = activeTab
-    ? profiles.find((p) => p.id === activeTab.profileId) ?? null
-    : null;
-  const activeTitle = activeTab?.title ?? '工百窗';
+    ? (profiles.find((p) => p.id === activeTab.profileId) ?? null)
+    : null
+  const activeTitle = activeTab?.title ?? '工百窗'
   useEffect(() => {
-    document.title = formatWindowTitle(activeTitle);
-  }, [activeTitle]);
+    document.title = formatWindowTitle(activeTitle)
+  }, [activeTitle])
 
   // webview 指纹注入 + viewport + 弹窗拦截兜底 + 屏蔽规则注入
   useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview || !activeProfile) return;
-    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
-    const injectionId = `standalone-${activeProfile.id}`;
+    const webview = webviewRef.current
+    if (!webview || !activeProfile) return
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current)
+    const injectionId = `standalone-${activeProfile.id}`
     const getInputContext = async () => {
-      if (!activeProfile.isAIPlatform) return {};
-      const platform = activeProfile.aiPlatformId ? (await listAIPlatforms()).find(item => item.id === activeProfile.aiPlatformId) : undefined;
-      return { manageEnterToSend: true, inputSelector: activeProfile.aiInputSelector || platform?.inputSelector || null,
-        sendSelector: activeProfile.aiSendSelector || platform?.sendSelector || null };
-    };
+      if (!activeProfile.isAIPlatform) return {}
+      const platform = activeProfile.aiPlatformId
+        ? (await listAIPlatforms()).find((item) => item.id === activeProfile.aiPlatformId)
+        : undefined
+      return {
+        manageEnterToSend: true,
+        inputSelector: activeProfile.aiInputSelector || platform?.inputSelector || null,
+        sendSelector: activeProfile.aiSendSelector || platform?.sendSelector || null,
+      }
+    }
     const handleDomReady = async () => {
-      if (!activeProfile) return;
-      const page = lifecycle.capture();
-      if (!page.isCurrent()) return;
+      if (!activeProfile) return
+      const page = lifecycle.capture()
+      if (!page.isCurrent()) return
       try {
-        const script = await getFingerprintScript(activeProfile.id);
-        if (!page.isCurrent()) return;
-        await webview.executeJavaScript(script);
-        if (!page.isCurrent()) return;
+        const script = await getFingerprintScript(activeProfile.id)
+        if (!page.isCurrent()) return
+        await webview.executeJavaScript(script)
+        if (!page.isCurrent()) return
 
         // 强制移动端 viewport，防止横向滚动/阴影；兜底拦截 window.open 与 _blank
-        await injectViewportAndPopupGuard(webview);
-        if (!page.isCurrent()) return;
+        await injectViewportAndPopupGuard(webview)
+        if (!page.isCurrent()) return
 
         // 通过统一注入管理器注入可关闭功能（屏蔽规则、Cookie 处理、空间导航）
         try {
-          const inputContext = await getInputContext();
-          if (!page.isCurrent()) return;
-          await injectionManager.injectAll(
-            injectionId,
-            webview,
-            page.url,
-            { profileId: activeProfile.id, profile: activeProfile, tabId: activeTab?.id, pageGeneration: page.pageGeneration, isCurrent: page.isCurrent, ...inputContext },
-          );
+          const inputContext = await getInputContext()
+          if (!page.isCurrent()) return
+          await injectionManager.injectAll(injectionId, webview, page.url, {
+            profileId: activeProfile.id,
+            profile: activeProfile,
+            tabId: activeTab?.id,
+            pageGeneration: page.pageGeneration,
+            isCurrent: page.isCurrent,
+            ...inputContext,
+          })
         } catch (e) {
-          console.error('[StandaloneView] 统一注入失败:', e);
+          console.error('[StandaloneView] 统一注入失败:', e)
         }
       } catch (e) {
-        console.error('[StandaloneView] 注入失败:', e);
+        console.error('[StandaloneView] 注入失败:', e)
       }
-    };
+    }
     const handleInPageNavigation = (event: Event) => {
-      if ((event as Event & { isMainFrame?: boolean }).isMainFrame === false) return;
-      const page = lifecycle.capture();
-      if (!page.isCurrent()) return;
-      void getInputContext().then(inputContext => {
-        if (!page.isCurrent()) return;
-        return injectionManager.injectAll(injectionId, webview, page.url,
-          { profileId: activeProfile.id, profile: activeProfile, tabId: activeTab?.id, pageGeneration: page.pageGeneration, isCurrent: page.isCurrent, ...inputContext });
-      }).catch(error => console.warn('[StandaloneView] Navigation enhancement update failed:', error));
-    };
-    webview.addEventListener('dom-ready', handleDomReady as EventListener);
-    webview.addEventListener('did-navigate-in-page', handleInPageNavigation);
-    if (lifecycle.isReady()) void handleDomReady();
+      if ((event as Event & { isMainFrame?: boolean }).isMainFrame === false) return
+      const page = lifecycle.capture()
+      if (!page.isCurrent()) return
+      void getInputContext()
+        .then((inputContext) => {
+          if (!page.isCurrent()) return
+          return injectionManager.injectAll(injectionId, webview, page.url, {
+            profileId: activeProfile.id,
+            profile: activeProfile,
+            tabId: activeTab?.id,
+            pageGeneration: page.pageGeneration,
+            isCurrent: page.isCurrent,
+            ...inputContext,
+          })
+        })
+        .catch((error) =>
+          console.warn('[StandaloneView] Navigation enhancement update failed:', error),
+        )
+    }
+    webview.addEventListener('dom-ready', handleDomReady as EventListener)
+    webview.addEventListener('did-navigate-in-page', handleInPageNavigation)
+    if (lifecycle.isReady()) void handleDomReady()
 
     // webview 内快捷键拦截（F12 置顶 / ` ~ ? 呼出快捷键窗口），webview 获得焦点时也生效
     const handleBeforeInput = (e: Event) => {
       const inputEvent = e as unknown as {
-        type: string;
-        key: string;
-        code?: string;
-        modifiers: string[];
-      };
-      if (inputEvent.type !== 'keyDown') return;
-      const mods = inputEvent.modifiers || [];
-      const hasAlt = mods.includes('alt');
-      const hasCtrl = mods.includes('control') || mods.includes('ctrl');
-      const hasMeta = mods.includes('meta') || mods.includes('command');
-      const hasShift = mods.includes('shift');
+        type: string
+        key: string
+        code?: string
+        modifiers: string[]
+      }
+      if (inputEvent.type !== 'keyDown') return
+      const mods = inputEvent.modifiers || []
+      const hasAlt = mods.includes('alt')
+      const hasCtrl = mods.includes('control') || mods.includes('ctrl')
+      const hasMeta = mods.includes('meta') || mods.includes('command')
+      const hasShift = mods.includes('shift')
       if (inputEvent.key === 'F12') {
-        e.preventDefault();
-        useTabStore.getState().toggleAlwaysOnTop();
-        return;
+        e.preventDefault()
+        useTabStore.getState().toggleAlwaysOnTop()
+        return
       }
       // Ctrl+W：关闭整个脱离窗口（webview 焦点时兜底，主进程已拦截但渲染层需自行处理关闭）
-      if (hasCtrl && !hasAlt && !hasMeta && !hasShift && (inputEvent.key === 'w' || inputEvent.key === 'W')) {
-        e.preventDefault();
-        void closeCurrentWindow();
-        return;
+      if (
+        hasCtrl &&
+        !hasAlt &&
+        !hasMeta &&
+        !hasShift &&
+        (inputEvent.key === 'w' || inputEvent.key === 'W')
+      ) {
+        e.preventDefault()
+        void closeCurrentWindow()
+        return
       }
       // 反引号(` ~) 或 Shift+? 呼出快捷键说明窗口
-      if (!hasAlt && !hasCtrl && !hasMeta && !hasShift && (inputEvent.key === '`' || inputEvent.key === '~' || inputEvent.code === 'Backquote')) {
-        e.preventDefault();
-        setIsShortcutsOpen((prev) => !prev);
-        return;
+      if (
+        !hasAlt &&
+        !hasCtrl &&
+        !hasMeta &&
+        !hasShift &&
+        (inputEvent.key === '`' || inputEvent.key === '~' || inputEvent.code === 'Backquote')
+      ) {
+        e.preventDefault()
+        setIsShortcutsOpen((prev) => !prev)
+        return
       }
       if (!hasAlt && !hasCtrl && !hasMeta && hasShift && inputEvent.key === '?') {
-        e.preventDefault();
-        setIsShortcutsOpen((prev) => !prev);
-        return;
+        e.preventDefault()
+        setIsShortcutsOpen((prev) => !prev)
+        return
       }
-    };
-    webview.addEventListener('before-input-event', handleBeforeInput);
+    }
+    webview.addEventListener('before-input-event', handleBeforeInput)
 
     return () => {
-      lifecycle.dispose();
-      void injectionManager.disposeWebview(injectionId, webview).catch(error => {
-        console.warn('[StandaloneView] Injection cleanup failed:', error);
-      });
-      webview.removeEventListener('dom-ready', handleDomReady as EventListener);
-      webview.removeEventListener('did-navigate-in-page', handleInPageNavigation);
-      webview.removeEventListener('before-input-event', handleBeforeInput);
-    };
-  }, [activeProfile, activeTab?.id]);
+      lifecycle.dispose()
+      void injectionManager.disposeWebview(injectionId, webview).catch((error) => {
+        console.warn('[StandaloneView] Injection cleanup failed:', error)
+      })
+      webview.removeEventListener('dom-ready', handleDomReady as EventListener)
+      webview.removeEventListener('did-navigate-in-page', handleInPageNavigation)
+      webview.removeEventListener('before-input-event', handleBeforeInput)
+    }
+  }, [activeProfile, activeTab?.id])
 
   // 窗口级 F12 快捷键（webview 未获得焦点时生效，与顶栏按钮同一路径）
   // 注：Ctrl+W / ESC 由下方 useEscToCloseWindow 统一处理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F12') {
-        e.preventDefault();
-        useTabStore.getState().toggleAlwaysOnTop();
-        return;
+        e.preventDefault()
+        useTabStore.getState().toggleAlwaysOnTop()
+        return
       }
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, []);
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [])
 
   // ESC / Ctrl+W 关窗：浮窗（设置面板/快捷键说明）由 useEscToCloseOverlay 统一处理；
   // onEsc 仅处理标题编辑态退出（非浮窗）；否则关闭窗口
@@ -224,51 +257,61 @@ export default function StandaloneView() {
     onEsc: (e) => {
       // 标题编辑时退出编辑
       if (isEditingTitle) {
-        e.preventDefault();
-        setIsEditingTitle(false);
-        return true;
+        e.preventDefault()
+        setIsEditingTitle(false)
+        return true
       }
-      return false;
+      return false
     },
-  });
+  })
 
   // 注册即声明：本窗口的 F12 置顶与双击标题编辑
   useRegisterShortcutDocs('standalone-window', [
-    { id: 'window.always-on-top', keys: 'F12', action: '切换窗口置顶', category: 'page', note: '最大化/全屏时不可用' },
+    {
+      id: 'window.always-on-top',
+      keys: 'F12',
+      action: '切换窗口置顶',
+      category: 'page',
+      note: '最大化/全屏时不可用',
+    },
     { id: 'standalone.window-retitle', keys: '双击标题', action: '编辑标签标题', category: 'page' },
-  ]);
+  ])
 
   const startEditTitle = useCallback(() => {
-    if (!activeTab) return;
-    setTitleDraft(activeTab.title);
-    setIsEditingTitle(true);
-    requestAnimationFrame(() => titleInputRef.current?.select());
-  }, [activeTab]);
+    if (!activeTab) return
+    setTitleDraft(activeTab.title)
+    setIsEditingTitle(true)
+    requestAnimationFrame(() => titleInputRef.current?.select())
+  }, [activeTab])
 
   const commitTitle = useCallback(() => {
     if (!isEditingTitle || !activeTab) {
-      setIsEditingTitle(false);
-      return;
+      setIsEditingTitle(false)
+      return
     }
-    const trimmed = titleDraft.trim();
+    const trimmed = titleDraft.trim()
     if (trimmed && trimmed !== activeTab.title) {
-      void renameTab(activeTab.id, trimmed);
+      void renameTab(activeTab.id, trimmed)
     }
-    setIsEditingTitle(false);
-  }, [isEditingTitle, activeTab, titleDraft, renameTab]);
+    setIsEditingTitle(false)
+  }, [isEditingTitle, activeTab, titleDraft, renameTab])
 
   const handleMaximize = useCallback(async () => {
     try {
-      const maximized = await maximizeToggleWindow();
-      setMaximized(maximized);
+      const maximized = await maximizeToggleWindow()
+      setMaximized(maximized)
     } catch (e) {
-      console.error('最大化失败:', e);
+      console.error('最大化失败:', e)
     }
-  }, [setMaximized]);
+  }, [setMaximized])
 
   return (
     <>
-      <div className="standalone-view app-shell app-view-root" data-viewport={isNarrow ? 'narrow' : 'wide'} data-name="standalone.container">
+      <div
+        className="standalone-view app-shell app-view-root"
+        data-viewport={isNarrow ? 'narrow' : 'wide'}
+        data-name="standalone.container"
+      >
         {/* ===== 顶栏（宽屏常驻；窄屏下隐藏导航/工具按钮，仅留标题 + 窗口控制） ===== */}
         <TitleBar
           maximized={isMaximized}
@@ -277,7 +320,10 @@ export default function StandaloneView() {
           onClose={() => void closeCurrentWindow()}
           center={
             isEditingTitle ? (
-              <span className="sa-top-title editing" data-name="standalone.top-bar.title-edit-wrapper">
+              <span
+                className="sa-top-title editing"
+                data-name="standalone.top-bar.title-edit-wrapper"
+              >
                 <input
                   ref={titleInputRef}
                   className="sa-top-title-input"
@@ -289,10 +335,10 @@ export default function StandaloneView() {
                   onBlur={commitTitle}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      e.preventDefault();
-                      commitTitle();
+                      e.preventDefault()
+                      commitTitle()
                     } else if (e.key === 'Escape') {
-                      setIsEditingTitle(false);
+                      setIsEditingTitle(false)
                     }
                   }}
                 />
@@ -319,11 +365,20 @@ export default function StandaloneView() {
                   aria-label="后退"
                   title="后退"
                   onClick={() => {
-                    const wv = webviewRef.current;
-                    if (wv && wv.canGoBack()) wv.goBack();
+                    const wv = webviewRef.current
+                    if (wv && wv.canGoBack()) wv.goBack()
                   }}
                 >
-                  <svg className="icon-svg" data-name="standalone.top-bar.back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="icon-svg"
+                    data-name="standalone.top-bar.back-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="15 18 9 12 15 6" />
                   </svg>
                 </IconButton>
@@ -334,11 +389,20 @@ export default function StandaloneView() {
                   aria-label="前进"
                   title="前进"
                   onClick={() => {
-                    const wv = webviewRef.current;
-                    if (wv && wv.canGoForward()) wv.goForward();
+                    const wv = webviewRef.current
+                    if (wv && wv.canGoForward()) wv.goForward()
                   }}
                 >
-                  <svg className="icon-svg" data-name="standalone.top-bar.forward-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="icon-svg"
+                    data-name="standalone.top-bar.forward-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </IconButton>
@@ -350,7 +414,16 @@ export default function StandaloneView() {
                   title="刷新"
                   onClick={() => webviewRef.current?.reload()}
                 >
-                  <svg className="icon-svg" data-name="standalone.top-bar.reload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="icon-svg"
+                    data-name="standalone.top-bar.reload-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="23 4 23 10 17 10" />
                     <polyline points="1 20 1 14 7 14" />
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
@@ -363,11 +436,20 @@ export default function StandaloneView() {
                   aria-label="主页"
                   title="回到默认页"
                   onClick={() => {
-                    const wv = webviewRef.current;
-                    if (wv) safeLoadURLWebview(wv, activeProfile?.aiPlatformUrl || '');
+                    const wv = webviewRef.current
+                    if (wv) safeLoadURLWebview(wv, activeProfile?.aiPlatformUrl || '')
                   }}
                 >
-                  <svg className="icon-svg" data-name="standalone.top-bar.home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="icon-svg"
+                    data-name="standalone.top-bar.home-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                     <polyline points="9 22 9 12 15 12 15 22" />
                   </svg>
@@ -390,7 +472,16 @@ export default function StandaloneView() {
                   title="快捷键"
                   onClick={() => setIsShortcutsOpen(true)}
                 >
-                  <svg className="icon-svg" data-name="standalone.top-bar.shortcuts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="icon-svg"
+                    data-name="standalone.top-bar.shortcuts-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <rect x="2" y="4" width="20" height="16" rx="2" />
                     <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
                   </svg>
@@ -398,9 +489,13 @@ export default function StandaloneView() {
                 <PinToggleButton
                   isPinned={alwaysOnTop}
                   onToggle={async () => {
-                    const next = !alwaysOnTop;
-                    setAlwaysOnTop(next);
-                    try { await pinCurrentWindow(next); } catch { setAlwaysOnTop(!next); }
+                    const next = !alwaysOnTop
+                    setAlwaysOnTop(next)
+                    try {
+                      await pinCurrentWindow(next)
+                    } catch {
+                      setAlwaysOnTop(!next)
+                    }
                   }}
                   className="sa-btn titlebar-icon-btn"
                   data-name="standalone.top-bar.pin-icon-button"
@@ -440,10 +535,7 @@ export default function StandaloneView() {
         <WindowResizeHandles />
       </div>
       <SettingsPanel open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      <ShortcutHelp
-        open={isShortcutsOpen}
-        onOpenChange={setIsShortcutsOpen}
-      />
+      <ShortcutHelp open={isShortcutsOpen} onOpenChange={setIsShortcutsOpen} />
     </>
-  );
+  )
 }

@@ -18,13 +18,16 @@ const STALE_SWEEP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const pendingTimers = new Set<NodeJS.Timeout>()
 
 function isManagedTempName(name: string): boolean {
-  return RUNTIME_PREFIXES.some(prefix => name.startsWith(prefix))
+  return RUNTIME_PREFIXES.some((prefix) => name.startsWith(prefix))
 }
 
 /**
  * 资源管理器高亮需要副本在场，延迟再删；应用退出前由 sweep 兜底。
  */
-export function scheduleAttachmentCopyExpiry(directory: string, ttlMs = ATTACHMENT_COPY_TTL_MS): void {
+export function scheduleAttachmentCopyExpiry(
+  directory: string,
+  ttlMs = ATTACHMENT_COPY_TTL_MS,
+): void {
   const timer = setTimeout(() => {
     pendingTimers.delete(timer)
     void rm(directory, { recursive: true, force: true }).catch(() => {})
@@ -36,7 +39,10 @@ export function scheduleAttachmentCopyExpiry(directory: string, ttlMs = ATTACHME
 /**
  * 启动时回收上次会话留下的预览/副本/识别临时物。只删 temp 根下受管前缀且超过 maxAge 的项。
  */
-export async function sweepStaleRuntimeTemp(tempRoot: string, maxAgeMs = STALE_SWEEP_MAX_AGE_MS): Promise<number> {
+export async function sweepStaleRuntimeTemp(
+  tempRoot: string,
+  maxAgeMs = STALE_SWEEP_MAX_AGE_MS,
+): Promise<number> {
   let removed = 0
   let entries: string[]
   try {
@@ -57,7 +63,9 @@ export async function sweepStaleRuntimeTemp(tempRoot: string, maxAgeMs = STALE_S
     try {
       await rm(target, { recursive: true, force: true })
       removed++
-    } catch { /* locked by another session — try next time */ }
+    } catch {
+      /* locked by another session — try next time */
+    }
   }
   return removed
 }

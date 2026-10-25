@@ -9,6 +9,6 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/local/**', '**/build/**', '**/release/**', '**/dist*/**'],
     // vitest 5 移除了 --minWorkers/--maxWorkers 命令行参数，worker 限额集中在此配置
     minWorkers: 1,
-    maxWorkers: 4
-  }
+    maxWorkers: 4,
+  },
 })

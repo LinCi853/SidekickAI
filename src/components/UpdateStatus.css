@@ -33,8 +33,13 @@
   margin-inline-end: 2px;
 }
 
-.about-update-hint.is-available { color: var(--accent-bright); }
-.about-update-hint.is-error, .about-update-detail.is-error { color: var(--danger); }
+.about-update-hint.is-available {
+  color: var(--accent-bright);
+}
+.about-update-hint.is-error,
+.about-update-detail.is-error {
+  color: var(--danger);
+}
 
 .about-update-btn {
   width: 24px;
@@ -43,8 +48,13 @@
   padding: 0;
 }
 
-.about-update-btn svg { width: 14px; height: 14px; }
-.about-update-btn.is-spinning svg { animation: about-update-spin 0.9s linear infinite; }
+.about-update-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.about-update-btn.is-spinning svg {
+  animation: about-update-spin 0.9s linear infinite;
+}
 
 .about-update-detail {
   flex-basis: 100%;
@@ -60,10 +70,22 @@
   white-space: normal;
 }
 
-.about-update-notes { white-space: pre-wrap; }
-.about-update-detail progress { display: block; width: 100%; margin-block: var(--space-1); }
+.about-update-notes {
+  white-space: pre-wrap;
+}
+.about-update-detail progress {
+  display: block;
+  width: 100%;
+  margin-block: var(--space-1);
+}
 
-@keyframes about-update-spin { to { transform: rotate(360deg); } }
+@keyframes about-update-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .about-update-btn.is-spinning svg { animation: none; }
+  .about-update-btn.is-spinning svg {
+    animation: none;
+  }
 }

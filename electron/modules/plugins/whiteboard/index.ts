@@ -14,9 +14,11 @@ import { app } from 'electron'
 const scope = new EffectScope('whiteboard', 'whiteboard')
 
 /** 截图到白板：打开进阶面板 → 切到 whiteboard tab → 转发载荷（原 main.ts 内联 handler） */
-function handleWhiteboardPushImage(
-  payload: { assetUrl: string; sourceUrl?: string; platform?: string },
-): { ok: boolean } {
+function handleWhiteboardPushImage(payload: {
+  assetUrl: string
+  sourceUrl?: string
+  platform?: string
+}): { ok: boolean } {
   openAdvancedPanelWindow({ initialTab: 'whiteboard' })
   const win = windowState.advancedPanelWindow
   if (!win || win.isDestroyed()) return { ok: false }

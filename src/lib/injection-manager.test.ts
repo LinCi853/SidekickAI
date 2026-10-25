@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // Mock electron-api
 vi.mock('./electron-api', () => ({
   listBlockRules: vi.fn(() => Promise.resolve([])),
-  getAppSettings: vi.fn(() => Promise.resolve({
-    disableAllBlockRules: false,
-    cookieHandlerEnabled: true,
-    enterToSend: true,
-  })),
+  getAppSettings: vi.fn(() =>
+    Promise.resolve({
+      disableAllBlockRules: false,
+      cookieHandlerEnabled: true,
+      enterToSend: true,
+    }),
+  ),
   getFingerprintScript: vi.fn(() => Promise.resolve('fingerprint-script')),
   listAIPlatforms: vi.fn(() => Promise.resolve([])),
   onAppSettingsChanged: vi.fn(() => () => {}),
@@ -61,35 +63,70 @@ describe('InjectionManager', () => {
     it('resolves declarative application data through the list API and retains account selectors', async () => {
       const api = await import('./electron-api')
       const scripts = await import('../pages/MainView/scripts')
-      const pageAdapter = { version: 1 as const, hosts: ['custom.example'], messageEdit: {
-        rootSelector: '.history-edit', sendSelector: '.confirm', cancelSelector: '.cancel',
-      } }
+      const pageAdapter = {
+        version: 1 as const,
+        hosts: ['custom.example'],
+        messageEdit: {
+          rootSelector: '.history-edit',
+          sendSelector: '.confirm',
+          cancelSelector: '.cancel',
+        },
+      }
       vi.mocked(api.listAIPlatforms).mockResolvedValueOnce([{ id: 'custom', pageAdapter } as never])
       await registerDefaultInjectionPoints()
       const webview = { executeJavaScript: vi.fn(async () => undefined) }
       await injectionManager.injectAll('custom-app', webview, 'https://custom.example/chat', {
-        manageEnterToSend: true, profile: { id: 'account', isAIPlatform: true, aiPlatformId: 'custom' },
-        inputSelector: '#account-input', sendSelector: '#account-send',
+        manageEnterToSend: true,
+        profile: { id: 'account', isAIPlatform: true, aiPlatformId: 'custom' },
+        inputSelector: '#account-input',
+        sendSelector: '#account-send',
       })
-      expect(scripts.buildEnterToSendScript).toHaveBeenLastCalledWith({ enabled: true,
-        inputSelector: '#account-input', sendSelector: '#account-send', pageAdapter })
+      expect(scripts.buildEnterToSendScript).toHaveBeenLastCalledWith({
+        enabled: true,
+        inputSelector: '#account-input',
+        sendSelector: '#account-send',
+        pageAdapter,
+      })
       expect(webview.executeJavaScript).toHaveBeenCalledWith('enter-script')
     })
 
     it('resolves legacy application profiles by their saved URL', async () => {
       const api = await import('./electron-api')
       const scripts = await import('../pages/MainView/scripts')
-      const pageAdapter = { version: 1 as const, hosts: ['legacy.example'], messageEdit: {
-        rootSelector: '.history-edit', sendSelector: '.confirm', cancelSelector: '.cancel',
-      } }
-      vi.mocked(api.listAIPlatforms).mockResolvedValueOnce([{ id: 'legacy', url: 'https://legacy.example',
-        inputSelector: '#legacy-input', sendSelector: '#legacy-send', pageAdapter } as never])
+      const pageAdapter = {
+        version: 1 as const,
+        hosts: ['legacy.example'],
+        messageEdit: {
+          rootSelector: '.history-edit',
+          sendSelector: '.confirm',
+          cancelSelector: '.cancel',
+        },
+      }
+      vi.mocked(api.listAIPlatforms).mockResolvedValueOnce([
+        {
+          id: 'legacy',
+          url: 'https://legacy.example',
+          inputSelector: '#legacy-input',
+          sendSelector: '#legacy-send',
+          pageAdapter,
+        } as never,
+      ])
       await registerDefaultInjectionPoints()
-      await injectionManager.injectAll('legacy-app', { executeJavaScript: vi.fn(async () => undefined) }, 'https://legacy.example/chat', {
-        manageEnterToSend: true, profile: { id: 'account', isAIPlatform: true, aiPlatformUrl: 'https://legacy.example' },
+      await injectionManager.injectAll(
+        'legacy-app',
+        { executeJavaScript: vi.fn(async () => undefined) },
+        'https://legacy.example/chat',
+        {
+          manageEnterToSend: true,
+          profile: { id: 'account', isAIPlatform: true, aiPlatformUrl: 'https://legacy.example' },
+        },
+      )
+      expect(scripts.buildEnterToSendScript).toHaveBeenLastCalledWith({
+        enabled: true,
+        inputSelector: '#legacy-input',
+        sendSelector: '#legacy-send',
+        pageAdapter,
       })
-      expect(scripts.buildEnterToSendScript).toHaveBeenLastCalledWith({ enabled: true,
-        inputSelector: '#legacy-input', sendSelector: '#legacy-send', pageAdapter })
     })
 
     it('should register an injection point', () => {
@@ -190,7 +227,9 @@ describe('InjectionManager', () => {
         enabled: () => true,
       })
 
-      await injectionManager.injectAll('webview-1', mockWebview, 'https://example.com', undefined, ['block-rules'])
+      await injectionManager.injectAll('webview-1', mockWebview, 'https://example.com', undefined, [
+        'block-rules',
+      ])
 
       expect(mockWebview.executeJavaScript).not.toHaveBeenCalled()
     })
@@ -357,16 +396,28 @@ describe('InjectionManager', () => {
   describe('target ownership', () => {
     it('coalesces concurrent calls for the same guest and point', async () => {
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => 'binding', enabled: () => true })
-      await Promise.all([injectionManager.injectAll('guest', webview, 'https://example.com'),
-        injectionManager.injectAll('guest', webview, 'https://example.com')])
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => 'binding',
+        enabled: () => true,
+      })
+      await Promise.all([
+        injectionManager.injectAll('guest', webview, 'https://example.com'),
+        injectionManager.injectAll('guest', webview, 'https://example.com'),
+      ])
       expect(webview.executeJavaScript).toHaveBeenCalledTimes(1)
     })
 
     it('does not carry injection records into a replacement guest at the same URL', async () => {
       const oldGuest = { executeJavaScript: vi.fn(async (_script: string) => {}) }
       const newGuest = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => 'binding', enabled: () => true })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => 'binding',
+        enabled: () => true,
+      })
       await injectionManager.injectAll('guest', oldGuest, 'https://example.com')
       await injectionManager.injectAll('guest', newGuest, 'https://example.com')
       expect(newGuest.executeJavaScript).toHaveBeenCalledWith('binding')
@@ -375,17 +426,33 @@ describe('InjectionManager', () => {
 
     it('rebinds a new document generation at an unchanged URL', async () => {
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => 'binding', enabled: () => true })
-      await injectionManager.injectAll('guest', webview, 'https://example.com', { pageGeneration: 1 })
-      await injectionManager.injectAll('guest', webview, 'https://example.com', { pageGeneration: 2 })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => 'binding',
+        enabled: () => true,
+      })
+      await injectionManager.injectAll('guest', webview, 'https://example.com', {
+        pageGeneration: 1,
+      })
+      await injectionManager.injectAll('guest', webview, 'https://example.com', {
+        pageGeneration: 2,
+      })
       expect(webview.executeJavaScript).toHaveBeenCalledTimes(2)
     })
 
     it('retires pending script generation before page disposal', async () => {
       let release: (script: string) => void = () => {}
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      const generated = new Promise<string>(resolve => { release = resolve })
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => generated, enabled: () => true })
+      const generated = new Promise<string>((resolve) => {
+        release = resolve
+      })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => generated,
+        enabled: () => true,
+      })
       const pending = injectionManager.injectAll('guest', webview, 'https://example.com')
       await Promise.resolve()
       await Promise.resolve()
@@ -399,10 +466,19 @@ describe('InjectionManager', () => {
     it('honors a caller target guard after an asynchronous preference read', async () => {
       let current = true
       let release: (enabled: boolean) => void = () => {}
-      const enabled = new Promise<boolean>(resolve => { release = resolve })
+      const enabled = new Promise<boolean>((resolve) => {
+        release = resolve
+      })
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => 'binding', enabled: () => enabled })
-      const pending = injectionManager.injectAll('guest', webview, 'https://example.com', { isCurrent: () => current })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => 'binding',
+        enabled: () => enabled,
+      })
+      const pending = injectionManager.injectAll('guest', webview, 'https://example.com', {
+        isCurrent: () => current,
+      })
       await Promise.resolve()
       current = false
       release(true)
@@ -413,22 +489,44 @@ describe('InjectionManager', () => {
     it('cleans owned scripts when disabled and when explicitly disposed', async () => {
       let enabled = true
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => 'binding', cleanupScriptFn: () => 'cleanup', enabled: () => enabled })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => 'binding',
+        cleanupScriptFn: () => 'cleanup',
+        enabled: () => enabled,
+      })
       await injectionManager.injectAll('guest', webview, 'https://example.com')
       enabled = false
       await injectionManager.injectAll('guest', webview, 'https://example.com')
-      expect(webview.executeJavaScript.mock.calls.map(call => call[0])).toEqual(['binding', 'cleanup'])
+      expect(webview.executeJavaScript.mock.calls.map((call) => call[0])).toEqual([
+        'binding',
+        'cleanup',
+      ])
       enabled = true
       await injectionManager.injectAll('guest', webview, 'https://example.com')
       await injectionManager.disposeWebview('guest')
-      expect(webview.executeJavaScript.mock.calls.map(call => call[0])).toEqual(['binding', 'cleanup', 'binding', 'cleanup'])
+      expect(webview.executeJavaScript.mock.calls.map((call) => call[0])).toEqual([
+        'binding',
+        'cleanup',
+        'binding',
+        'cleanup',
+      ])
     })
 
     it('cancels pending module-owned work while retaining other points', async () => {
       let release: (script: string) => void = () => {}
-      const generated = new Promise<string>(resolve => { release = resolve })
+      const generated = new Promise<string>((resolve) => {
+        release = resolve
+      })
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', ownerModule: 'browser', scriptFn: () => generated, enabled: () => true })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        ownerModule: 'browser',
+        scriptFn: () => generated,
+        enabled: () => true,
+      })
       const pending = injectionManager.injectOne('point', 'guest', webview)
       await Promise.resolve()
       await injectionManager.disposeModule('browser')
@@ -440,45 +538,96 @@ describe('InjectionManager', () => {
     it('updates changed configuration on the same document', async () => {
       let script = 'original'
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => script, cleanupScriptFn: () => 'cleanup',
-        enabled: () => true, reinjectOnNavigation: true })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => script,
+        cleanupScriptFn: () => 'cleanup',
+        enabled: () => true,
+        reinjectOnNavigation: true,
+      })
       await injectionManager.injectAll('guest', webview, 'https://example.com')
       script = 'changed'
       await injectionManager.injectAll('guest', webview, 'https://example.com')
-      expect(webview.executeJavaScript.mock.calls.map(call => call[0])).toEqual(['original', 'cleanup', 'changed'])
+      expect(webview.executeJavaScript.mock.calls.map((call) => call[0])).toEqual([
+        'original',
+        'cleanup',
+        'changed',
+      ])
     })
 
     it('matches default rules against the guest URL', async () => {
       const api = await import('./electron-api')
-      vi.mocked(api.listBlockRules).mockResolvedValueOnce([{ id: 'guest-rule', label: 'Guest', type: 'css', selector: '.ad',
-        domainPattern: 'chatgpt.com', enabled: true, builtin: false }])
+      vi.mocked(api.listBlockRules).mockResolvedValueOnce([
+        {
+          id: 'guest-rule',
+          label: 'Guest',
+          type: 'css',
+          selector: '.ad',
+          domainPattern: 'chatgpt.com',
+          enabled: true,
+          builtin: false,
+        },
+      ])
       await registerDefaultInjectionPoints()
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      await injectionManager.injectAll('guest', webview, 'https://chatgpt.com/c/test', undefined,
-        ['spatial-nav', 'login-detect', 'chat-scrape', 'cookie-handler'])
+      await injectionManager.injectAll('guest', webview, 'https://chatgpt.com/c/test', undefined, [
+        'spatial-nav',
+        'login-detect',
+        'chat-scrape',
+        'cookie-handler',
+      ])
       expect(webview.executeJavaScript).toHaveBeenCalledWith('blocker-script')
     })
 
     it('retains old resource cleanup when a same-element navigation disables a point', async () => {
       let enabled = true
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', scriptFn: () => 'binding', cleanupScriptFn: () => 'cleanup',
-        enabled: () => enabled, reinjectOnNavigation: true })
-      await injectionManager.injectAll('guest', webview, 'https://example.com/a', { pageGeneration: 1 })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        scriptFn: () => 'binding',
+        cleanupScriptFn: () => 'cleanup',
+        enabled: () => enabled,
+        reinjectOnNavigation: true,
+      })
+      await injectionManager.injectAll('guest', webview, 'https://example.com/a', {
+        pageGeneration: 1,
+      })
       enabled = false
-      await injectionManager.injectAll('guest', webview, 'https://example.com/b', { pageGeneration: 2 })
-      expect(webview.executeJavaScript.mock.calls.map(call => call[0])).toEqual(['binding', 'cleanup'])
+      await injectionManager.injectAll('guest', webview, 'https://example.com/b', {
+        pageGeneration: 2,
+      })
+      expect(webview.executeJavaScript.mock.calls.map((call) => call[0])).toEqual([
+        'binding',
+        'cleanup',
+      ])
     })
 
     it('applies the latest context after a previous configuration is still generating', async () => {
       let release: (script: string) => void = () => {}
-      const previous = new Promise<string>(resolve => { release = resolve })
+      const previous = new Promise<string>((resolve) => {
+        release = resolve
+      })
       const webview = { executeJavaScript: vi.fn(async (_script: string) => {}) }
-      injectionManager.register({ id: 'point', kind: 'custom', enabled: () => true, reinjectOnNavigation: true,
-        scriptFn: context => context?.revision === 1 ? previous : 'changed', cleanupScriptFn: () => 'cleanup' })
-      const first = injectionManager.injectOne('point', 'guest', webview, { url: 'https://example.com', revision: 1 })
-      await Promise.resolve(); await Promise.resolve()
-      const second = injectionManager.injectOne('point', 'guest', webview, { url: 'https://example.com', revision: 2 })
+      injectionManager.register({
+        id: 'point',
+        kind: 'custom',
+        enabled: () => true,
+        reinjectOnNavigation: true,
+        scriptFn: (context) => (context?.revision === 1 ? previous : 'changed'),
+        cleanupScriptFn: () => 'cleanup',
+      })
+      const first = injectionManager.injectOne('point', 'guest', webview, {
+        url: 'https://example.com',
+        revision: 1,
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      const second = injectionManager.injectOne('point', 'guest', webview, {
+        url: 'https://example.com',
+        revision: 2,
+      })
       release('previous')
       await Promise.all([first, second])
       expect(webview.executeJavaScript).toHaveBeenLastCalledWith('changed')

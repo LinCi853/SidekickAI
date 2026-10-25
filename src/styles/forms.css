@@ -45,11 +45,20 @@
   color: var(--primary-foreground);
   border: 0;
   line-height: 1.4;
-  transition: filter var(--duration-fast), opacity var(--duration-fast);
+  transition:
+    filter var(--duration-fast),
+    opacity var(--duration-fast);
 }
-.btn-save-primary:hover { filter: brightness(1.08); }
-.btn-save-primary:active { filter: brightness(0.96); }
-.btn-save-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-save-primary:hover {
+  filter: brightness(1.08);
+}
+.btn-save-primary:active {
+  filter: brightness(0.96);
+}
+.btn-save-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ===== 次要下划线按钮（透明背景，悬停高亮文字） ===== */
 .btn-secondary-underline {
@@ -65,8 +74,12 @@
   line-height: 1.4;
   transition: color var(--duration-fast);
 }
-.btn-secondary-underline:hover { color: var(--accent-bright); }
-.btn-secondary-underline.danger:hover { color: var(--danger); }
+.btn-secondary-underline:hover {
+  color: var(--accent-bright);
+}
+.btn-secondary-underline.danger:hover {
+  color: var(--danger);
+}
 /* 紧凑变体：用于卡片内多按钮行（更小 padding + 字号） */
 .btn-secondary-underline.compact {
   padding: 2px 6px;
@@ -82,17 +95,29 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-bd-2);
 }
-.test-result.ok { color: var(--success); border-color: var(--success); }
-.test-result.fail { color: var(--danger); border-color: var(--danger); }
+.test-result.ok {
+  color: var(--success);
+  border-color: var(--success);
+}
+.test-result.fail {
+  color: var(--danger);
+  border-color: var(--danger);
+}
 
 /* ===== 反馈文本（成功/失败文字提示，无边框） ===== */
 .feedback-text {
   font-size: var(--text-xs);
   line-height: 1.4;
 }
-.feedback-text.ok { color: var(--success); }
-.feedback-text.fail { color: var(--danger); }
-.feedback-text.warn { color: var(--warning); }
+.feedback-text.ok {
+  color: var(--success);
+}
+.feedback-text.fail {
+  color: var(--danger);
+}
+.feedback-text.warn {
+  color: var(--warning);
+}
 
 /* ===== SegmentedControl 容器通用布局类（替代跨场景复用 .proxy-mode-group） ===== */
 .seg-control-row {
@@ -103,6 +128,27 @@
 }
 
 /* 快捷键录制器：清除按钮（Del/退格等效） */
-.hotkey-recorder-wrapper input { padding-right: 28px; }
-.hotkey-recorder-clear { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
-.hotkey-recorder-clear:hover { background: var(--muted); color: var(--foreground); }
+.hotkey-recorder-wrapper input {
+  padding-right: 28px;
+}
+.hotkey-recorder-clear {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.hotkey-recorder-clear:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}

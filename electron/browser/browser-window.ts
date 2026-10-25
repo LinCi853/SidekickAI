@@ -15,7 +15,10 @@ import { isModuleEnabled } from '../modules/registry.js'
 import { registerOwnedWindow } from '../modules/target-registry.js'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { app } from 'electron'
-import { isBackgroundClose, registerWindowRetirement } from '../platform/window/window-retirement.js'
+import {
+  isBackgroundClose,
+  registerWindowRetirement,
+} from '../platform/window/window-retirement.js'
 import { browserWindowRetirementSeconds } from '../shared/background-policy.js'
 import { isLowMemoryMode } from '../store/low-memory-mode.js'
 import {
@@ -40,8 +43,12 @@ import type { BrowserTabState, BrowserWindowState } from '../shared/browser.type
 /** app 是否正在退出（云电脑模式 close 保护的放行条件） */
 let appQuitting = false
 try {
-  app.on('before-quit', () => { appQuitting = true })
-} catch { /* ignore */ }
+  app.on('before-quit', () => {
+    appQuitting = true
+  })
+} catch {
+  /* ignore */
+}
 
 /**
  * 为浏览器窗口生成 Profile 专属图标（首字母 + 主题色）。
@@ -84,25 +91,27 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     '#c25a4a'
   const profileIcon = profile ? generateProfileIcon(profile.name, themeColor) : null
 
-  const win = new BrowserWindow(buildWindowConfig({
-    width: isMaximized ? workArea.width : (saved?.bounds.width || 1280),
-    height: isMaximized ? workArea.height : (saved?.bounds.height || 800),
-    x: isMaximized ? workArea.x : (saved?.bounds.x),
-    y: isMaximized ? workArea.y : (saved?.bounds.y),
-    minWidth: 800,
-    minHeight: 600,
-    show: false,
-    frame: false,
-    resizable: true,
-    alwaysOnTop: saved?.alwaysOnTop ?? false,
-    backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: `工百窗 - ${profile?.name || '浏览器'}`,
-    icon: profileIcon && !profileIcon.isEmpty() ? profileIcon : undefined,
-    webPreferences: createDefaultWebPreferences({
-      preload: getPreloadPath(),
-      webviewTag: true,
+  const win = new BrowserWindow(
+    buildWindowConfig({
+      width: isMaximized ? workArea.width : saved?.bounds.width || 1280,
+      height: isMaximized ? workArea.height : saved?.bounds.height || 800,
+      x: isMaximized ? workArea.x : saved?.bounds.x,
+      y: isMaximized ? workArea.y : saved?.bounds.y,
+      minWidth: 800,
+      minHeight: 600,
+      show: false,
+      frame: false,
+      resizable: true,
+      alwaysOnTop: saved?.alwaysOnTop ?? false,
+      backgroundColor: WINDOW_BACKGROUND_COLOR,
+      title: `工百窗 - ${profile?.name || '浏览器'}`,
+      icon: profileIcon && !profileIcon.isEmpty() ? profileIcon : undefined,
+      webPreferences: createDefaultWebPreferences({
+        preload: getPreloadPath(),
+        webviewTag: true,
+      }),
     }),
-  }))
+  )
 
   attachWebviewAntiDetection(win.webContents)
   attachWebviewPopupInterceptor(win.webContents)
@@ -125,14 +134,21 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     if (input.key === 'F11' && !hasCtrl && !hasAlt && !hasShift) {
       event.preventDefault()
       const wasFs = isTrackedFullscreen(windowId)
-      console.log('[browser-window] F11 → 宿主兜底切换沉浸式全屏, wasFullScreen=', wasFs, '→', !wasFs)
+      console.log(
+        '[browser-window] F11 → 宿主兜底切换沉浸式全屏, wasFullScreen=',
+        wasFs,
+        '→',
+        !wasFs,
+      )
       if (!wasFs) {
         // 进入全屏前保存 bounds
         const state = windowStore.getOrDefault(windowId)
         state.fullscreenNormalBounds = win.getBounds()
         windowStore.save(windowId, state)
       }
-      try { win.setFullScreen(!wasFs) } catch (err) {
+      try {
+        win.setFullScreen(!wasFs)
+      } catch (err) {
         console.error('[browser-window] 切换全屏失败:', err)
       }
       return
@@ -145,7 +161,11 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
       if (wasFs) {
         event.preventDefault()
         console.log('[browser-window] Escape → 宿主兜底退出全屏')
-        try { win.setFullScreen(false) } catch { /* ignore */ }
+        try {
+          win.setFullScreen(false)
+        } catch {
+          /* ignore */
+        }
         return
       }
     }
@@ -221,7 +241,11 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
 
   win.on('closed', () => {
     // 云电脑模式清理：窗口关闭时恢复挂起的全局热键（防止泄漏）
-    try { exitCloudPc(win.webContents.id) } catch { /* ignore */ }
+    try {
+      exitCloudPc(win.webContents.id)
+    } catch {
+      /* ignore */
+    }
     // 清理 profileId -> win 映射（仅当当前映射指向此 win 时才删除，避免误删新窗口引用）
     const mapped = windowState.browserWindowsByProfile.get(profileId)
     if (mapped === win) {
@@ -238,11 +262,19 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     const hasParentTab = savedState.tabs.some((t) => t.parentTabId)
     if (hasParentTab) {
       // 取当前激活的非内部标签 URL/title（内部页 settings/bookmark/history/downloads 跳过）
-      const internalSources = ['settings', 'bookmark-manager', 'history', 'downloads', 'view-source', 'print-preview']
+      const internalSources = [
+        'settings',
+        'bookmark-manager',
+        'history',
+        'downloads',
+        'view-source',
+        'print-preview',
+      ]
       const activeTab = savedState.tabs.find((t) => t.id === savedState.activeTabId)
-      const activeNonInternal = activeTab && !internalSources.includes(activeTab.source)
-        ? activeTab
-        : savedState.tabs.find((t) => !internalSources.includes(t.source))
+      const activeNonInternal =
+        activeTab && !internalSources.includes(activeTab.source)
+          ? activeTab
+          : savedState.tabs.find((t) => !internalSources.includes(t.source))
 
       mainWindow.webContents.send(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK, {
         profileId: savedState.profileId,
@@ -261,11 +293,11 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
     // v0.0.9: 清理主窗口持久化状态（detachedProfiles + detachedWindowId）
     const mainState = windowStore.get(MAIN_WINDOW_ID)
     if (mainState) {
-      const detachedProfiles = (mainState.detachedProfiles ?? []).filter((id) => id !== savedState.profileId)
+      const detachedProfiles = (mainState.detachedProfiles ?? []).filter(
+        (id) => id !== savedState.profileId,
+      )
       const restoredTabs = mainState.tabs.map((t) =>
-        t.profileId === savedState.profileId
-          ? { ...t, detachedWindowId: null }
-          : t,
+        t.profileId === savedState.profileId ? { ...t, detachedWindowId: null } : t,
       )
       windowStore.save(MAIN_WINDOW_ID, { ...mainState, tabs: restoredTabs, detachedProfiles })
     }

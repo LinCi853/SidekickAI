@@ -97,26 +97,41 @@ export class AudioCapture {
       // 即便 execFileAsync reject，错误对象上仍带 stdout/stderr 缓冲。
       let output = ''
       try {
-        const r = await execFileAsync('ffmpeg', ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], { timeout: 5000 })
+        const r = await execFileAsync(
+          'ffmpeg',
+          ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'],
+          { timeout: 5000 },
+        )
         output = (r.stderr || '') + (r.stdout || '')
       } catch (e: unknown) {
         const err = e as { stderr?: string; stdout?: string }
-        output = ((err?.stderr || '') + (err?.stdout || ''))
+        output = (err?.stderr || '') + (err?.stdout || '')
       }
       if (output) {
         // dshow 设备列表格式：[dshow @ ...] "设备名" (audio)，或 "DirectShow audio devices" 段
         const lines = output.split(/\r?\n/)
         let inAudio = false
         for (const line of lines) {
-          if (/DirectShow audio devices/i.test(line)) { inAudio = true; continue }
-          if (/DirectShow video devices/i.test(line)) { inAudio = false; continue }
+          if (/DirectShow audio devices/i.test(line)) {
+            inAudio = true
+            continue
+          }
+          if (/DirectShow video devices/i.test(line)) {
+            inAudio = false
+            continue
+          }
           if (inAudio) {
             const m = line.match(/"([^"]+)"\s*\((?:audio|input)\)/) || line.match(/"([^"]+)"/)
-            if (m && m[1]) { device = m[1]; break }
+            if (m && m[1]) {
+              device = m[1]
+              break
+            }
           }
         }
       } else {
-        console.warn('[audio-capture] 枚举 dshow 设备失败（ffmpeg 不可用或超时），回退到 Microphone')
+        console.warn(
+          '[audio-capture] 枚举 dshow 设备失败（ffmpeg 不可用或超时），回退到 Microphone',
+        )
       }
     } catch (e) {
       console.warn('[audio-capture] 枚举 dshow 设备失败，回退到 Microphone:', (e as Error).message)
@@ -151,7 +166,10 @@ export class AudioCapture {
       try {
         await new Promise<void>((resolve, reject) => {
           const wc = win.webContents
-          const cleanup = () => { clearTimeout(timer); ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_READY, onReady) }
+          const cleanup = () => {
+            clearTimeout(timer)
+            ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_READY, onReady)
+          }
           const timer = setTimeout(() => {
             cleanup()
             reject(new Error('录音界面准备超时（3s）'))
@@ -162,7 +180,10 @@ export class AudioCapture {
             resolve()
           }
           ipcMain.on(IPC_CHANNELS.VOICE_RECORD_READY, onReady)
-          if (readyRenderers.has(wc)) { cleanup(); resolve() }
+          if (readyRenderers.has(wc)) {
+            cleanup()
+            resolve()
+          }
         })
         if (generation !== this.generation) return
         win.webContents.send(IPC_CHANNELS.VOICE_RECORD_START)
@@ -197,11 +218,16 @@ export class AudioCapture {
       command = 'ffmpeg'
       args = [
         '-y',
-        '-f', 'dshow',
-        '-i', `audio=${device}`,
-        '-ar', String(SAMPLE_RATE),
-        '-ac', '1',
-        '-sample_fmt', 's16',
+        '-f',
+        'dshow',
+        '-i',
+        `audio=${device}`,
+        '-ar',
+        String(SAMPLE_RATE),
+        '-ac',
+        '1',
+        '-sample_fmt',
+        's16',
         this.tempFile,
       ]
     } else if (platform === 'darwin') {
@@ -209,23 +235,22 @@ export class AudioCapture {
       command = 'ffmpeg'
       args = [
         '-y',
-        '-f', 'avfoundation',
-        '-i', ':0',
-        '-ar', String(SAMPLE_RATE),
-        '-ac', '1',
-        '-sample_fmt', 's16',
+        '-f',
+        'avfoundation',
+        '-i',
+        ':0',
+        '-ar',
+        String(SAMPLE_RATE),
+        '-ac',
+        '1',
+        '-sample_fmt',
+        's16',
         this.tempFile,
       ]
     } else {
       // Linux: arecord（ALSA），输出 16kHz mono 16-bit WAV
       command = 'arecord'
-      args = [
-        '-q',
-        '-r', String(SAMPLE_RATE),
-        '-f', 'S16_LE',
-        '-c', '1',
-        this.tempFile,
-      ]
+      args = ['-q', '-r', String(SAMPLE_RATE), '-f', 'S16_LE', '-c', '1', this.tempFile]
     }
 
     try {
@@ -260,9 +285,7 @@ export class AudioCapture {
       this.process.on('exit', (code, signal) => {
         // 仅在主动录音期间的非正常退出记录日志
         if (code !== 0 && code !== null && this.recording) {
-          console.error(
-            `[AudioCapture] ${command} 异常退出 code=${code} signal=${signal}`,
-          )
+          console.error(`[AudioCapture] ${command} 异常退出 code=${code} signal=${signal}`)
           console.error(`[AudioCapture] stderr: ${stderrBuf.slice(-512)}`)
         }
       })
@@ -272,9 +295,7 @@ export class AudioCapture {
       console.error('[AudioCapture] 启动录音失败:', err)
       this.recording = false
       this.process = null
-      throw new Error(
-        `启动录音失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      throw new Error(`启动录音失败: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -319,7 +340,10 @@ export class AudioCapture {
   private clearFailListener(): void {
     if (this.failHandler) {
       try {
-        ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, this.failHandler as (...args: unknown[]) => void)
+        ipcMain.removeListener(
+          IPC_CHANNELS.VOICE_RECORD_DATA,
+          this.failHandler as (...args: unknown[]) => void,
+        )
       } catch {
         /* ignore */
       }
@@ -359,7 +383,10 @@ export class AudioCapture {
           if (settled) return
           settled = true
           clearTimeout(timer)
-          ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+          ipcMain.removeListener(
+            IPC_CHANNELS.VOICE_RECORD_DATA,
+            handler as (...args: unknown[]) => void,
+          )
           this.cancelPendingStop = undefined
           const float32 = data instanceof Float32Array ? data : new Float32Array(data)
           console.info(`[AudioCapture] 渲染进程录音完成，收到 ${float32.length} 样本`)
@@ -368,7 +395,10 @@ export class AudioCapture {
         const timer = setTimeout(() => {
           if (settled) return
           settled = true
-          ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+          ipcMain.removeListener(
+            IPC_CHANNELS.VOICE_RECORD_DATA,
+            handler as (...args: unknown[]) => void,
+          )
           this.cancelPendingStop = undefined
           console.error('[AudioCapture] 渲染进程录音超时（10s），返回空数据')
           resolve(new Float32Array(0))
@@ -376,8 +406,12 @@ export class AudioCapture {
         ipcMain.on(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
         this.cancelPendingStop = () => {
           if (settled) return
-          settled = true; clearTimeout(timer)
-          ipcMain.removeListener(IPC_CHANNELS.VOICE_RECORD_DATA, handler as (...args: unknown[]) => void)
+          settled = true
+          clearTimeout(timer)
+          ipcMain.removeListener(
+            IPC_CHANNELS.VOICE_RECORD_DATA,
+            handler as (...args: unknown[]) => void,
+          )
           resolve(new Float32Array(0))
         }
         win.webContents.send(IPC_CHANNELS.VOICE_RECORD_STOP)
@@ -443,8 +477,10 @@ export class AudioCapture {
     this.generation += 1
     this.recording = false
     this.clearFailListener()
-    this.cancelPendingStop?.(); this.cancelPendingStop = undefined
-    if (this.rendererWin && !this.rendererWin.isDestroyed()) this.rendererWin.webContents.send(IPC_CHANNELS.VOICE_RECORD_STOP)
+    this.cancelPendingStop?.()
+    this.cancelPendingStop = undefined
+    if (this.rendererWin && !this.rendererWin.isDestroyed())
+      this.rendererWin.webContents.send(IPC_CHANNELS.VOICE_RECORD_STOP)
     const captureProcess = this.process
     this.process = null
     if (captureProcess && captureProcess.exitCode === null) {
@@ -460,10 +496,7 @@ export class AudioCapture {
    * 等待子进程退出
    * 超时后强制 SIGKILL，但仍 resolve（继续读取已写入的部分数据）。
    */
-  private waitForExit(
-    proc: ChildProcessWithoutNullStreams,
-    timeoutMs: number,
-  ): Promise<void> {
+  private waitForExit(proc: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         try {
@@ -487,10 +520,7 @@ export class AudioCapture {
    */
   private parseWavToInt16ThenF32(buf: Buffer): Float32Array {
     // 校验 RIFF / WAVE 头
-    if (
-      buf.toString('ascii', 0, 4) !== 'RIFF' ||
-      buf.toString('ascii', 8, 12) !== 'WAVE'
-    ) {
+    if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') {
       console.error('[AudioCapture] 非 WAV 格式（RIFF/WAVE 标识缺失）')
       return new Float32Array(0)
     }

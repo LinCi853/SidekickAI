@@ -17,10 +17,7 @@ import { windowStore } from '../store/window-store.js'
 import { profileStore } from '../browser/profile-store.js'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { createMaximizeManager } from '../platform/window/window-maximize-manager.js'
-import {
-  IPC_CHANNELS,
-  type WindowStateData,
-} from '../shared/types.js'
+import { IPC_CHANNELS, type WindowStateData } from '../shared/types.js'
 import type { WindowManager } from '../platform/window/containers/profile-window.js'
 import type { FingerprintEngine } from '../browser/fingerprint.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
@@ -63,15 +60,25 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
     ? (channel: string, fn: (...args: any[]) => any) => scope.ipcHandle(channel, fn as any)
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
-  handle(IPC_CHANNELS.WEBVIEW_VALIDATE_HOTKEY_TARGET, (event: IpcMainInvokeEvent, target: unknown) =>
-    validateWebviewHotkeyTarget(event.sender, target))
-  handle(IPC_CHANNELS.WINDOW_REGISTER_WEBVIEW, (event: IpcMainInvokeEvent, payload: WebviewRegistration) => {
-    const win = getSenderWindow(event)
-    const profile = typeof payload?.profileId === 'string' ? profileStore.get(payload.profileId) : null
-    return registerWindowWebview(event, payload,
-      win && !win.isDestroyed() ? findWindowIdByWin(win) : null,
-      profile ? session.fromPartition(`persist:${profile.id}`) : null)
-  })
+  handle(
+    IPC_CHANNELS.WEBVIEW_VALIDATE_HOTKEY_TARGET,
+    (event: IpcMainInvokeEvent, target: unknown) =>
+      validateWebviewHotkeyTarget(event.sender, target),
+  )
+  handle(
+    IPC_CHANNELS.WINDOW_REGISTER_WEBVIEW,
+    (event: IpcMainInvokeEvent, payload: WebviewRegistration) => {
+      const win = getSenderWindow(event)
+      const profile =
+        typeof payload?.profileId === 'string' ? profileStore.get(payload.profileId) : null
+      return registerWindowWebview(
+        event,
+        payload,
+        win && !win.isDestroyed() ? findWindowIdByWin(win) : null,
+        profile ? session.fromPartition(`persist:${profile.id}`) : null,
+      )
+    },
+  )
 
   // ===== 创建自定义对话窗口 IPC（旧单例） =====
   handle(IPC_CHANNELS.CHAT_OPEN_WINDOW, () => {
@@ -96,12 +103,18 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   ipcMain.handle(IPC_CHANNELS.WINDOW_SWITCH_UA, async (_e, profileId: string, ua: string) => {
     windowManager.switchUA(profileId, ua)
   })
-  ipcMain.handle(IPC_CHANNELS.WINDOW_SWITCH_DEVICE, async (_e, profileId: string, presetId: string) => {
-    windowManager.switchDevice(profileId, presetId)
-  })
-  ipcMain.handle(IPC_CHANNELS.WINDOW_SET_ALWAYS_ON_TOP, async (_e, profileId: string, onTop: boolean) => {
-    windowManager.setAlwaysOnTop(profileId, onTop)
-  })
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_SWITCH_DEVICE,
+    async (_e, profileId: string, presetId: string) => {
+      windowManager.switchDevice(profileId, presetId)
+    },
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.WINDOW_SET_ALWAYS_ON_TOP,
+    async (_e, profileId: string, onTop: boolean) => {
+      windowManager.setAlwaysOnTop(profileId, onTop)
+    },
+  )
   ipcMain.handle(IPC_CHANNELS.WINDOW_GET_OPEN_IDS, async () => {
     return windowManager.getOpenWindowIds()
   })
@@ -141,7 +154,11 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
     const win = getSenderWindow(e)
     if (!win) return false
     // 标记用户主动操作时间戳，防止 reapplyAlwaysOnTop 竞态覆盖
-    try { (win as any).__markUserPinAction?.() } catch { /* ignore */ }
+    try {
+      ;(win as any).__markUserPinAction?.()
+    } catch {
+      /* ignore */
+    }
     return setAlwaysOnTopForWindow(win, findWindowIdByWin(win), onTop)
   })
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_IS_MAXIMIZED, (e) => {
@@ -161,33 +178,39 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
     if (!win) return { width: 0, height: 0 }
     return win.getBounds()
   })
-  ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_RESIZE, (e, bounds: { x?: number; y?: number; width: number; height: number }) => {
-    const win = getSenderWindow(e)
-    if (!win || win.isDestroyed()) return
-    if (!Number.isFinite(bounds?.width) || !Number.isFinite(bounds?.height)) return
-    try {
-      // 若窗口处于最大化状态，先还原再设置 bounds，避免 setBounds 行为异常
-      if (win.isMaximized()) {
-        win.unmaximize()
+  ipcMain.handle(
+    IPC_CHANNELS.WIN_CONTROL_RESIZE,
+    (e, bounds: { x?: number; y?: number; width: number; height: number }) => {
+      const win = getSenderWindow(e)
+      if (!win || win.isDestroyed()) return
+      if (!Number.isFinite(bounds?.width) || !Number.isFinite(bounds?.height)) return
+      try {
+        // 若窗口处于最大化状态，先还原再设置 bounds，避免 setBounds 行为异常
+        if (win.isMaximized()) {
+          win.unmaximize()
+        }
+        // Clamp 到窗口的 minimumSize：setBounds 不会自动约束，
+        // 需手动确保 width/height 不低于 minWidth/minHeight（UI 比例变化时 minWidth 会动态更新）
+        // minimumSize 可能尚未设置（返回 0），此时 Math.max(0) 才是正确下限，不能用 NaN
+        const [minW, minH] = win.getMinimumSize()
+        const clamped = {
+          ...bounds,
+          width: Math.max(bounds.width, Number.isFinite(minW) ? minW : 0),
+          height: Math.max(bounds.height, Number.isFinite(minH) ? minH : 0),
+        }
+        win.setBounds(clamped)
+      } catch (err) {
+        console.error('[main] resize 失败:', err)
       }
-      // Clamp 到窗口的 minimumSize：setBounds 不会自动约束，
-      // 需手动确保 width/height 不低于 minWidth/minHeight（UI 比例变化时 minWidth 会动态更新）
-      // minimumSize 可能尚未设置（返回 0），此时 Math.max(0) 才是正确下限，不能用 NaN
-      const [minW, minH] = win.getMinimumSize()
-      const clamped = {
-        ...bounds,
-        width: Math.max(bounds.width, Number.isFinite(minW) ? minW : 0),
-        height: Math.max(bounds.height, Number.isFinite(minH) ? minH : 0),
-      }
-      win.setBounds(clamped)
-    } catch (err) {
-      console.error('[main] resize 失败:', err)
-    }
-  })
+    },
+  )
   // 切换全屏：进入前记录当前 bounds，退出时由 leave-full-screen 事件恢复
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_TOGGLE_FULLSCREEN, (e) => {
     const win = getSenderWindow(e)
-    if (!win) { console.log('[fullscreen-ipc] TOGGLE: no sender window'); return false }
+    if (!win) {
+      console.log('[fullscreen-ipc] TOGGLE: no sender window')
+      return false
+    }
     const windowId = findWindowIdByWin(win)
     const wasFs = windowId ? isTrackedFullscreen(windowId) : win.isFullScreen()
     console.log('[fullscreen-ipc] TOGGLE called, wasFullScreen=', wasFs, 'windowId=', windowId)
@@ -208,7 +231,10 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   // 确定性退出全屏：仅在全屏时退出，不做 toggle（防止状态不一致时重新进入）
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_EXIT_FULLSCREEN, (e) => {
     const win = getSenderWindow(e)
-    if (!win) { console.log('[fullscreen-ipc] EXIT: no sender window'); return false }
+    if (!win) {
+      console.log('[fullscreen-ipc] EXIT: no sender window')
+      return false
+    }
     const windowId = findWindowIdByWin(win)
     const wasFs = windowId ? isTrackedFullscreen(windowId) : win.isFullScreen()
     console.log('[fullscreen-ipc] EXIT called, wasFullScreen=', wasFs, 'windowId=', windowId)
@@ -226,15 +252,14 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   })
   // 动态设置当前窗口的最小尺寸（UI 比例变化时重新约束）
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_SET_MIN_SIZE, (e, width: number, height: number) => {
-      const win = getSenderWindow(e)
-      if (!win || win.isDestroyed()) return
-      try {
-        win.setMinimumSize(Math.max(0, Math.floor(width)), Math.max(0, Math.floor(height)))
-      } catch (err) {
-        console.error('[main] setMinimumSize 失败:', err)
-      }
-    },
-  )
+    const win = getSenderWindow(e)
+    if (!win || win.isDestroyed()) return
+    try {
+      win.setMinimumSize(Math.max(0, Math.floor(width)), Math.max(0, Math.floor(height)))
+    } catch (err) {
+      console.error('[main] setMinimumSize 失败:', err)
+    }
+  })
   ipcMain.handle(IPC_CHANNELS.WIN_CONTROL_GET_MIN_SIZE, (e) => {
     const win = getSenderWindow(e)
     if (!win || win.isDestroyed()) return { width: 0, height: 0 }
@@ -246,29 +271,37 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
   ipcMain.handle(IPC_CHANNELS.WIN_STATE_GET, (_e, windowId: string) => {
     return windowStore.get(windowId)
   })
-  ipcMain.handle(IPC_CHANNELS.WIN_STATE_SAVE, (e: IpcMainInvokeEvent, windowId: string, incoming: WindowStateData) => {
-    assertTrustedRenderer(e)
-    const existing = windowStore.get(windowId)
-    // 脱离流程在 await 间隙把标签的 detachedWindowId 置为 __PENDING__，
-    // 期间渲染层的整包 persist 携带旧状态，原样写入会擦掉占位符并让后续回填失败
-    if (existing?.tabs.length && Array.isArray(incoming.tabs)) {
-      const pending = new Map(existing.tabs.filter((t) => t?.detachedWindowId === '__PENDING__').map((t) => [t.id, t]))
-      if (pending.size) {
-        incoming.tabs = incoming.tabs.map((t) =>
-          t && pending.has(t.id) && t.detachedWindowId !== '__PENDING__' ? { ...t, detachedWindowId: '__PENDING__' } : t)
+  ipcMain.handle(
+    IPC_CHANNELS.WIN_STATE_SAVE,
+    (e: IpcMainInvokeEvent, windowId: string, incoming: WindowStateData) => {
+      assertTrustedRenderer(e)
+      const existing = windowStore.get(windowId)
+      // 脱离流程在 await 间隙把标签的 detachedWindowId 置为 __PENDING__，
+      // 期间渲染层的整包 persist 携带旧状态，原样写入会擦掉占位符并让后续回填失败
+      if (existing?.tabs.length && Array.isArray(incoming.tabs)) {
+        const pending = new Map(
+          existing.tabs.filter((t) => t?.detachedWindowId === '__PENDING__').map((t) => [t.id, t]),
+        )
+        if (pending.size) {
+          incoming.tabs = incoming.tabs.map((t) =>
+            t && pending.has(t.id) && t.detachedWindowId !== '__PENDING__'
+              ? { ...t, detachedWindowId: '__PENDING__' }
+              : t,
+          )
+        }
       }
-    }
-    // 最大化时保留旧 bounds，避免渲染层 persist 用全屏尺寸覆盖小窗口尺寸
-    if (incoming.isMaximized && existing) {
-      incoming.bounds = existing.bounds
-    }
-    // 渲染层 persist 不携带 normalBounds，保留主进程已保存的值，
-    // 否则最大化期间任何一次 persist 都会把它擦成 undefined，导致还原时无法回到原尺寸
-    if (existing?.normalBounds && incoming.normalBounds === undefined) {
-      incoming.normalBounds = existing.normalBounds
-    }
-    windowStore.save(windowId, incoming)
-  })
+      // 最大化时保留旧 bounds，避免渲染层 persist 用全屏尺寸覆盖小窗口尺寸
+      if (incoming.isMaximized && existing) {
+        incoming.bounds = existing.bounds
+      }
+      // 渲染层 persist 不携带 normalBounds，保留主进程已保存的值，
+      // 否则最大化期间任何一次 persist 都会把它擦成 undefined，导致还原时无法回到原尺寸
+      if (existing?.normalBounds && incoming.normalBounds === undefined) {
+        incoming.normalBounds = existing.normalBounds
+      }
+      windowStore.save(windowId, incoming)
+    },
+  )
   ipcMain.handle(IPC_CHANNELS.WIN_STATE_LIST_DETACHED, async () => {
     return windowStore.listDetachedWindowIds()
   })
@@ -286,10 +319,7 @@ export function registerWindowControlIpc(deps: WindowControlIpcDeps, scope?: Eff
  * 切换指定窗口的最大化状态（复用 IPC 同一份逻辑）
  * @returns 切换后是否最大化
  */
-export function toggleMaximizeForWindow(
-  win: BrowserWindow,
-  windowId: string | null,
-): boolean {
+export function toggleMaximizeForWindow(win: BrowserWindow, windowId: string | null): boolean {
   if (!windowId) return win.isMaximized()
   // 使用统一的最大化管理组件，自动推断还原策略：
   // 浏览器窗口 → centered70，其他窗口 → normalBounds
@@ -313,7 +343,11 @@ export function setAlwaysOnTopForWindow(
     return false
   }
   // 如果是用户主动操作（通过 __markUserPinAction 标记），记录时间戳
-  try { (win as any).__markUserPinAction?.() } catch { /* ignore */ }
+  try {
+    ;(win as any).__markUserPinAction?.()
+  } catch {
+    /* ignore */
+  }
   win.setAlwaysOnTop(onTop, 'screen-saver')
   const actual = win.isAlwaysOnTop()
   if (windowId) {
@@ -323,7 +357,11 @@ export function setAlwaysOnTopForWindow(
   }
   // 每次变更都广播，确保渲染层同步（修复置顶后失焦被覆盖的竞态）
   if (!win.isDestroyed()) {
-    try { win.webContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, actual) } catch { /* ignore */ }
+    try {
+      win.webContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, actual)
+    } catch {
+      /* ignore */
+    }
   }
   return actual
 }

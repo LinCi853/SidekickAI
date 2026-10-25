@@ -37,7 +37,9 @@ export function isBrowserWindowContents(wc: Electron.WebContents): boolean {
     const tagged = (wc as unknown as { __aiWindowMode?: string }).__aiWindowMode
     if (tagged === 'browser') return true
     if (tagged === 'main') return false
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return (wc.getURL?.() || '').includes('mode=browser')
 }
 
@@ -52,8 +54,10 @@ export function loadRenderer(
 ): void {
   // 窗口类型标记：主进程快捷键路由不再依赖 URL 解析（dev/生产一致）
   try {
-    (win.webContents as unknown as { __aiWindowMode?: string }).__aiWindowMode = mode ?? 'main'
-  } catch { /* ignore */ }
+    ;(win.webContents as unknown as { __aiWindowMode?: string }).__aiWindowMode = mode ?? 'main'
+  } catch {
+    /* ignore */
+  }
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(buildRendererUrl(windowId, mode, extraQuery))
   } else {

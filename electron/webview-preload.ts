@@ -14,9 +14,19 @@ installFileDropCapture('guest')
 installFocusReporter()
 
 if (document.readyState === 'loading') {
-  window.addEventListener('DOMContentLoaded', () => { void startAiAssetCollector().catch(error => console.warn('[ai-assets] Collector unavailable:', error)) }, { once: true })
+  window.addEventListener(
+    'DOMContentLoaded',
+    () => {
+      void startAiAssetCollector().catch((error) =>
+        console.warn('[ai-assets] Collector unavailable:', error),
+      )
+    },
+    { once: true },
+  )
 } else {
-  void startAiAssetCollector().catch(error => console.warn('[ai-assets] Collector unavailable:', error))
+  void startAiAssetCollector().catch((error) =>
+    console.warn('[ai-assets] Collector unavailable:', error),
+  )
 }
 
 // ===== 核心反检测：navigator.webdriver =====
@@ -45,18 +55,60 @@ try {
   const chrome = w.chrome
   if (!chrome.runtime) {
     chrome.runtime = {
-      OnInstalledReason: { INSTALL: 'install', UPDATE: 'update', CHROME_UPDATE: 'chrome_update', SHARED_MODULE_UPDATE: 'shared_module_update' },
-      OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
-      PlatformArch: { ARM: 'arm', ARM64: 'arm64', X86_32: 'x86-32', X86_64: 'x86-64', MIPS: 'mips', MIPS64: 'mips64' },
-      PlatformNaclArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64', MIPS: 'mips', MIPS64: 'mips64' },
-      PlatformOs: { MAC: 'mac', WIN: 'win', ANDROID: 'android', CROS: 'cros', LINUX: 'linux', OPENBSD: 'openbsd' },
-      RequestUpdateCheckStatus: { THROTTLED: 'throttled', NO_UPDATE: 'no_update', UPDATE_AVAILABLE: 'update_available' },
-      connect: () => ({ disconnect() {}, onMessage: { addListener() {}, removeListener() {} }, onDisconnect: { addListener() {}, removeListener() {} }, postMessage() {} }),
-      sendMessage: (_msg: unknown, _cb?: unknown) => { if (typeof _cb === 'function') _cb() },
+      OnInstalledReason: {
+        INSTALL: 'install',
+        UPDATE: 'update',
+        CHROME_UPDATE: 'chrome_update',
+        SHARED_MODULE_UPDATE: 'shared_module_update',
+      },
+      OnRestartRequiredReason: {
+        APP_UPDATE: 'app_update',
+        OS_UPDATE: 'os_update',
+        PERIODIC: 'periodic',
+      },
+      PlatformArch: {
+        ARM: 'arm',
+        ARM64: 'arm64',
+        X86_32: 'x86-32',
+        X86_64: 'x86-64',
+        MIPS: 'mips',
+        MIPS64: 'mips64',
+      },
+      PlatformNaclArch: {
+        ARM: 'arm',
+        X86_32: 'x86-32',
+        X86_64: 'x86-64',
+        MIPS: 'mips',
+        MIPS64: 'mips64',
+      },
+      PlatformOs: {
+        MAC: 'mac',
+        WIN: 'win',
+        ANDROID: 'android',
+        CROS: 'cros',
+        LINUX: 'linux',
+        OPENBSD: 'openbsd',
+      },
+      RequestUpdateCheckStatus: {
+        THROTTLED: 'throttled',
+        NO_UPDATE: 'no_update',
+        UPDATE_AVAILABLE: 'update_available',
+      },
+      connect: () => ({
+        disconnect() {},
+        onMessage: { addListener() {}, removeListener() {} },
+        onDisconnect: { addListener() {}, removeListener() {} },
+        postMessage() {},
+      }),
+      sendMessage: (_msg: unknown, _cb?: unknown) => {
+        if (typeof _cb === 'function') _cb()
+      },
       getManifest: () => ({ version: '0.0.0', name: '', description: '' }),
       id: undefined,
       getURL: (p: string) => `chrome-extension://invalid/${p}`,
-      getPlatformInfo: (cb: Function) => { if (cb) cb({ os: 'win', arch: 'x86-64', nacl_arch: 'x86-64' }) },
+      getPlatformInfo: (cb: Function) => {
+        if (cb) cb({ os: 'win', arch: 'x86-64', nacl_arch: 'x86-64' })
+      },
     }
   }
   if (!chrome.csi) {
@@ -86,8 +138,12 @@ try {
 // 空插件列表是自动化检测的常见信号。
 try {
   const makePlugin = (name: string, filename: string, description: string) => ({
-    name, filename, description, length: 0,
-    item: () => null, namedItem: () => null,
+    name,
+    filename,
+    description,
+    length: 0,
+    item: () => null,
+    namedItem: () => null,
   })
   const plugins = [
     makePlugin('Chrome PDF Plugin', 'internal-pdf-viewer', 'Portable Document Format'),
@@ -98,8 +154,18 @@ try {
   Object.defineProperty(navigator, 'plugins', { get: () => plugins, configurable: true })
 
   const mimeTypes = [
-    { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: plugins[0] },
-    { type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: plugins[0] },
+    {
+      type: 'application/pdf',
+      suffixes: 'pdf',
+      description: 'Portable Document Format',
+      enabledPlugin: plugins[0],
+    },
+    {
+      type: 'application/x-google-chrome-pdf',
+      suffixes: 'pdf',
+      description: 'Portable Document Format',
+      enabledPlugin: plugins[0],
+    },
   ]
   Object.setPrototypeOf(mimeTypes, MimeTypeArray.prototype)
   Object.defineProperty(navigator, 'mimeTypes', { get: () => mimeTypes, configurable: true })
@@ -118,7 +184,16 @@ try {
 // ===== 防御性清理可能泄露的 Electron 全局变量 =====
 // contextIsolation:true 通常已隔离，但做一层兜底。
 try {
-  const leakKeys = ['__electron', '__electronBinding', 'Buffer', 'process', 'require', 'setImmediate', 'clearImmediate', 'global']
+  const leakKeys = [
+    '__electron',
+    '__electronBinding',
+    'Buffer',
+    'process',
+    'require',
+    'setImmediate',
+    'clearImmediate',
+    'global',
+  ]
   for (const key of leakKeys) {
     try {
       if (key in window && (window as any)[key] !== undefined) {

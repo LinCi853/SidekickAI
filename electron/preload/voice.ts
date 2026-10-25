@@ -29,13 +29,9 @@ export const voiceApi = {
   },
   // 后台语音注入+发送（主→最近聚焦窗口渲染：背景路径识别完成后注入 AI 输入框）
   // 载荷：{ text, enterToSend }，由渲染层决定是否自动回车发送
-  onVoiceInjectAndSend: (
-    callback: (payload: { text: string; enterToSend: boolean }) => void,
-  ) => {
-    const handler = (
-      _e: unknown,
-      payload: { text: string; enterToSend: boolean },
-    ) => callback(payload)
+  onVoiceInjectAndSend: (callback: (payload: { text: string; enterToSend: boolean }) => void) => {
+    const handler = (_e: unknown, payload: { text: string; enterToSend: boolean }) =>
+      callback(payload)
     ipcRenderer.on(IPC_CHANNELS.VOICE_INJECT_AND_SEND, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.VOICE_INJECT_AND_SEND, handler)
   },

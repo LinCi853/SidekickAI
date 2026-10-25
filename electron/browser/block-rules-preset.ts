@@ -25,7 +25,8 @@ export const BLOCK_RULES: BlockRule[] = [
     id: 'builtin-generic-sidebar-ads',
     domainPattern: '*',
     type: 'css',
-    selector: '[class*="ad-banner"], [class*="ad-container"], [id*="ad-banner"], [class*="sidebar-ad"], [class*="ad-slot"], [id*="ad-container"]',
+    selector:
+      '[class*="ad-banner"], [class*="ad-container"], [id*="ad-banner"], [class*="sidebar-ad"], [class*="ad-slot"], [id*="ad-container"]',
     label: '通用侧边栏广告屏蔽',
     enabled: true,
     builtin: true,

@@ -9,7 +9,7 @@
      使用指南（HotkeysStep）也用它渲染热键启停开关
    ===================================================================== */
 
-import type { HotkeyAction } from '../lib/electron-api';
+import type { HotkeyAction } from '../lib/electron-api'
 
 /** 当前渲染层对应的页面/窗口类型（与 App.tsx 的 URL 路由分流一致） */
 export type ShortcutPageId =
@@ -25,29 +25,30 @@ export type ShortcutPageId =
   | 'data-export'
   | 'settings'
   | 'browser'
-  | 'history-download';
+  | 'history-download'
 
 /**
  * 从 URL 推导当前页面 ID（与 App.tsx 的路由判定顺序保持一致）。
  * 修改 App.tsx 的分流条件时必须同步这里，否则弹窗会展示错误页面的徽标。
  */
 export function getShortcutPageId(search?: string): ShortcutPageId {
-  const query = search ?? (typeof window === 'undefined' ? '' : window.location.search);
-  const params = new URLSearchParams(query);
-  const windowId = params.get('windowId') ?? 'main';
-  const mode = params.get('mode');
-  if (windowId === 'chat' || mode === 'chat') return 'chat';
-  if (windowId === 'preview' && (mode === null || mode === 'record-indicator')) return 'record-indicator';
-  if (mode === 'history') return 'history';
-  if (mode === 'prompts') return 'prompts';
-  if (mode === 'ai-app-editor') return 'ai-app-editor';
-  if (mode === 'advanced-panel') return 'advanced-panel';
-  if (mode === 'onboarding') return 'onboarding';
-  if (mode === 'data-export') return 'data-export';
-  if (mode === 'settings') return 'settings';
-  if (mode === 'browser') return 'browser';
-  if (mode === 'history-download') return 'history-download';
-  return windowId === 'main' ? 'main' : 'standalone';
+  const query = search ?? (typeof window === 'undefined' ? '' : window.location.search)
+  const params = new URLSearchParams(query)
+  const windowId = params.get('windowId') ?? 'main'
+  const mode = params.get('mode')
+  if (windowId === 'chat' || mode === 'chat') return 'chat'
+  if (windowId === 'preview' && (mode === null || mode === 'record-indicator'))
+    return 'record-indicator'
+  if (mode === 'history') return 'history'
+  if (mode === 'prompts') return 'prompts'
+  if (mode === 'ai-app-editor') return 'ai-app-editor'
+  if (mode === 'advanced-panel') return 'advanced-panel'
+  if (mode === 'onboarding') return 'onboarding'
+  if (mode === 'data-export') return 'data-export'
+  if (mode === 'settings') return 'settings'
+  if (mode === 'browser') return 'browser'
+  if (mode === 'history-download') return 'history-download'
+  return windowId === 'main' ? 'main' : 'standalone'
 }
 
 /** 页面显示名（弹窗头部「当前页面」徽标）。
@@ -66,29 +67,33 @@ export const SHORTCUT_PAGE_TITLES: Record<ShortcutPageId, string> = {
   settings: '设置',
   browser: '浏览器',
   'history-download': '历史与下载',
-};
+}
 
 /** 全局热键展示元信息（实际键位运行时从主进程 getHotkeys() 读取） */
 export interface GlobalHotkeyMeta {
-  action: HotkeyAction;
+  action: HotkeyAction
   /** 未获取到用户配置时的回退展示值 */
-  fallbackKeys: string;
+  fallbackKeys: string
   /** 动作描述 */
-  actionText: string;
-  note?: string;
+  actionText: string
+  note?: string
 }
 
 /** 固定展示的全局热键（toggleVoice / toggleAiAssets 默认无键位，配置后运行时追加展示） */
 export const GLOBAL_HOTKEY_META: GlobalHotkeyMeta[] = [
   { action: 'toggleMainWindow', fallbackKeys: 'Alt + Space', actionText: '呼出/隐藏主窗口' },
   { action: 'toggleDetachedWindows', fallbackKeys: 'Alt + Q', actionText: '打开进阶面板' },
-  { action: 'backgroundVoice', fallbackKeys: 'Alt + V', actionText: '后台语音录入（按住说话，松开发送）' },
-];
+  {
+    action: 'backgroundVoice',
+    fallbackKeys: 'Alt + V',
+    actionText: '后台语音录入（按住说话，松开发送）',
+  },
+]
 
 /** accelerator 'Alt+Space' → 'Alt + Space'（统一展示格式） */
 export function formatAcc(acc: string): string {
   return acc
     .split('+')
     .map((p) => p.trim())
-    .join(' + ');
+    .join(' + ')
 }

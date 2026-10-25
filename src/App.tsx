@@ -7,18 +7,25 @@
    全部完成后才渲染实际视图，保证状态就绪。
    ===================================================================== */
 
-import { Suspense, lazy, useEffect, useState } from 'react';
-import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { Suspense, lazy, useEffect, useState } from 'react'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 // 首屏关键组件：同步导入，避免 CSS 异步加载导致布局紊乱
-import MainView from './pages/MainView';
-import Button from './components/ui/Button';
-import { useProfileStore } from './store/useProfileStore';
-import { useTabStore } from './store/useTabStore';
-import { useWindowStore } from './store/useWindowStore';
-import { usePromptStore } from './store/usePromptStore';
-import { useModuleStore } from './store/useModuleStore';
-import { useShallow } from 'zustand/react/shallow';
-import { getAppSettings, onUiScaleChanged, onAppSettingsChanged, onUiVersionChanged, onThemeColorChanged, setMinimumSize } from './lib/electron-api';
+import MainView from './pages/MainView'
+import Button from './components/ui/Button'
+import { useProfileStore } from './store/useProfileStore'
+import { useTabStore } from './store/useTabStore'
+import { useWindowStore } from './store/useWindowStore'
+import { usePromptStore } from './store/usePromptStore'
+import { useModuleStore } from './store/useModuleStore'
+import { useShallow } from 'zustand/react/shallow'
+import {
+  getAppSettings,
+  onUiScaleChanged,
+  onAppSettingsChanged,
+  onUiVersionChanged,
+  onThemeColorChanged,
+  setMinimumSize,
+} from './lib/electron-api'
 import {
   calculateMainWindowMinWidth,
   calculateChatWindowMinWidth,
@@ -33,27 +40,27 @@ import {
   calculateOxyAdvancedPanelMinWidthByScale,
   type UiScale,
   type OxyScale,
-} from '../electron/shared/window-size';
-import { useUiVersionStore } from './store/useUiVersionStore';
-import { useThemeStore } from './store/useThemeStore';
-import { getOxyLayout, activateOxy, deactivateOxy, applyAppTheme } from './lib/oxy-design-system';
-const applicationIconUrl = new URL('./assets/app-icon-64.png', import.meta.url).href;
+} from '../electron/shared/window-size'
+import { useUiVersionStore } from './store/useUiVersionStore'
+import { useThemeStore } from './store/useThemeStore'
+import { getOxyLayout, activateOxy, deactivateOxy, applyAppTheme } from './lib/oxy-design-system'
+const applicationIconUrl = new URL('./assets/app-icon-64.png', import.meta.url).href
 
 /* =====================================================================
    React.lazy 页面组件 —— 辅助窗口按需加载（非首屏，可 lazy）
    首屏关键路径 MainView 保持同步导入，其他窗口按路由加载
    ===================================================================== */
-const StandaloneView = lazy(() => import('./pages/StandaloneView'));
-const ChatView = lazy(() => import('./pages/ChatView'));
-const RecordIndicator = lazy(() => import('./pages/RecordIndicator'));
-const AiAssetsView = lazy(() => import('./pages/AiAssetsView'));
-const AiAppEditor = lazy(() => import('./pages/AiAppEditor'));
-const AdvancedPanelView = lazy(() => import('./pages/AdvancedPanelView'));
-const DataExportWindow = lazy(() => import('./pages/DataExportWindow'));
-const OnboardingView = lazy(() => import('./pages/OnboardingView'));
-const SettingsView = lazy(() => import('./pages/SettingsView'));
-const BrowserView = lazy(() => import('./pages/BrowserView'));
-const HistoryDownloadView = lazy(() => import('./pages/HistoryDownloadView'));
+const StandaloneView = lazy(() => import('./pages/StandaloneView'))
+const ChatView = lazy(() => import('./pages/ChatView'))
+const RecordIndicator = lazy(() => import('./pages/RecordIndicator'))
+const AiAssetsView = lazy(() => import('./pages/AiAssetsView'))
+const AiAppEditor = lazy(() => import('./pages/AiAppEditor'))
+const AdvancedPanelView = lazy(() => import('./pages/AdvancedPanelView'))
+const DataExportWindow = lazy(() => import('./pages/DataExportWindow'))
+const OnboardingView = lazy(() => import('./pages/OnboardingView'))
+const SettingsView = lazy(() => import('./pages/SettingsView'))
+const BrowserView = lazy(() => import('./pages/BrowserView'))
+const HistoryDownloadView = lazy(() => import('./pages/HistoryDownloadView'))
 
 /* =====================================================================
    ErrorBoundary —— 已抽离到 components/AppErrorBoundary.tsx：
@@ -62,14 +69,14 @@ const HistoryDownloadView = lazy(() => import('./pages/HistoryDownloadView'));
 
 /** 从 URL 查询参数获取当前窗口 id（默认 'main'） */
 function getWindowId(): string {
-  if (typeof window === 'undefined') return 'main';
-  return new URLSearchParams(window.location.search).get('windowId') ?? 'main';
+  if (typeof window === 'undefined') return 'main'
+  return new URLSearchParams(window.location.search).get('windowId') ?? 'main'
 }
 
 /** 从 URL 查询参数获取窗口模式（'chat' 表示自定义对话脱离窗口） */
 function getWindowMode(): string | null {
-  if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get('mode');
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get('mode')
 }
 
 /** 暖砖红骨架屏 */
@@ -134,270 +141,317 @@ function LoadingScreen() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 export default function App() {
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(false)
 
   // 从 URL 获取当前窗口 id 与模式
-  const windowId = getWindowId();
-  const mode = getWindowMode();
-  const isMain = windowId === 'main';
+  const windowId = getWindowId()
+  const mode = getWindowMode()
+  const isMain = windowId === 'main'
   // 旧单例 chat 窗口（windowId='chat'）或新 chat 脱离窗口（mode='chat'）
-  const isChat = windowId === 'chat' || mode === 'chat';
+  const isChat = windowId === 'chat' || mode === 'chat'
   // 录音指示器（windowId='preview' + mode='record-indicator'，默认无 mode 时也走它）
-  const isRecordIndicator = windowId === 'preview' && (mode === null || mode === 'record-indicator');
-  const isHistory = mode === 'history';
-  const isPrompts = mode === 'prompts';
-  const isAiAppEditor = mode === 'ai-app-editor';
-  const isAdvancedPanel = mode === 'advanced-panel';
-  const isOnboarding = mode === 'onboarding';
-  const isDataExport = mode === 'data-export';
-  const isSettings = mode === 'settings';
-  const isBrowser = mode === 'browser';
-  const isHistoryDownload = mode === 'history-download';
+  const isRecordIndicator = windowId === 'preview' && (mode === null || mode === 'record-indicator')
+  const isHistory = mode === 'history'
+  const isPrompts = mode === 'prompts'
+  const isAiAppEditor = mode === 'ai-app-editor'
+  const isAdvancedPanel = mode === 'advanced-panel'
+  const isOnboarding = mode === 'onboarding'
+  const isDataExport = mode === 'data-export'
+  const isSettings = mode === 'settings'
+  const isBrowser = mode === 'browser'
+  const isHistoryDownload = mode === 'history-download'
 
   // chat/preview/history/prompts/ai-app-editor/advanced-panel/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
   // 设置窗口需要加载 ProfileStore（AI 应用卡片依赖），但不需 TabStore
   useEffect(() => {
-    if (isChat || isRecordIndicator || isHistory || isPrompts || isAiAppEditor || isAdvancedPanel || isOnboarding || isDataExport || isSettings || isBrowser || isHistoryDownload) {
+    if (
+      isChat ||
+      isRecordIndicator ||
+      isHistory ||
+      isPrompts ||
+      isAiAppEditor ||
+      isAdvancedPanel ||
+      isOnboarding ||
+      isDataExport ||
+      isSettings ||
+      isBrowser ||
+      isHistoryDownload
+    ) {
       // 模块状态先行加载（路由门控与进阶面板 tab 依赖），就绪后才 ready，保证首帧即有状态
       void useModuleStore
         .getState()
         .init()
         .catch((e) => {
-          console.error('[App] 模块状态加载失败:', e);
+          console.error('[App] 模块状态加载失败:', e)
         })
         .finally(async () => {
           if (isBrowser) {
             try {
-              const { registerDefaultInjectionPoints } = await import('./lib/injection-manager');
-              await registerDefaultInjectionPoints();
+              const { registerDefaultInjectionPoints } = await import('./lib/injection-manager')
+              await registerDefaultInjectionPoints()
             } catch (error) {
-              console.error('[App] Browser injection setup failed:', error);
+              console.error('[App] Browser injection setup failed:', error)
             }
           }
-          setReady(true);
+          setReady(true)
           // 即使是辅助窗口也应用 UI 比例（Oxy 模式下跳过，避免 scale.css 覆盖 JS 注入变量）
-          void getAppSettings().then((cfg) => {
-            const isOxy = useUiVersionStore.getState().version === 'oxy';
-            if (!isOxy) {
-              document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
-            }
-          }).catch(() => {});
+          void getAppSettings()
+            .then((cfg) => {
+              const isOxy = useUiVersionStore.getState().version === 'oxy'
+              if (!isOxy) {
+                document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium')
+              }
+            })
+            .catch(() => {})
           // 设置窗口需要加载 Profile 列表（AI 应用卡片依赖 useProfileStore）
           if (isSettings) {
-            void useProfileStore.getState().loadProfiles().catch((e) => {
-              console.error('[App] 设置窗口加载 Profile 列表失败:', e);
-            });
+            void useProfileStore
+              .getState()
+              .loadProfiles()
+              .catch((e) => {
+                console.error('[App] 设置窗口加载 Profile 列表失败:', e)
+              })
           }
-        });
-      return;
+        })
+      return
     }
-    let cancelled = false;
+    let cancelled = false
 
-    (async () => {
+    ;(async () => {
       // 1. 初始化 TabStore（加载窗口持久化状态 + 初始化 UI 默认值）
       //    这必须在加载 Profile 之前，因为 addTab 需要 profiles 就绪
-      console.log('[App] 1. 开始初始化 TabStore, windowId:', windowId);
+      console.log('[App] 1. 开始初始化 TabStore, windowId:', windowId)
       try {
-        await useTabStore.getState().init(windowId);
-        console.log('[App] 1. TabStore 初始化完成');
+        await useTabStore.getState().init(windowId)
+        console.log('[App] 1. TabStore 初始化完成')
       } catch (e) {
-        console.error('[App] 1. TabStore 初始化失败:', e);
+        console.error('[App] 1. TabStore 初始化失败:', e)
       }
 
       // 2. 初始化 WindowStore（UI 默认值）
-      console.log('[App] 2. 初始化 WindowStore');
-      useWindowStore.getState().init();
+      console.log('[App] 2. 初始化 WindowStore')
+      useWindowStore.getState().init()
 
       // 3. 加载 Profile 列表（ensureDefaultProfiles 已在主进程完成）
-      console.log('[App] 3. 开始加载 Profile 列表');
+      console.log('[App] 3. 开始加载 Profile 列表')
       try {
-        await useProfileStore.getState().loadProfiles();
-        const profileCount = useProfileStore.getState().profiles.length;
-        console.log('[App] 3. Profile 列表加载完成，数量:', profileCount);
+        await useProfileStore.getState().loadProfiles()
+        const profileCount = useProfileStore.getState().profiles.length
+        console.log('[App] 3. Profile 列表加载完成，数量:', profileCount)
       } catch (e) {
-        console.error('[App] 3. 加载 Profile 列表失败:', e);
+        console.error('[App] 3. 加载 Profile 列表失败:', e)
       }
 
       // 4.5 加载模块状态（入口显隐依赖）
       try {
-        await useModuleStore.getState().init();
+        await useModuleStore.getState().init()
       } catch (e) {
-        console.error('[App] 模块状态加载失败:', e);
+        console.error('[App] 模块状态加载失败:', e)
       }
 
       // 4.6 初始化统一注入管理器（注册所有功能的注入点）
       try {
-        const { registerDefaultInjectionPoints } = await import('./lib/injection-manager');
-        await registerDefaultInjectionPoints();
+        const { registerDefaultInjectionPoints } = await import('./lib/injection-manager')
+        await registerDefaultInjectionPoints()
       } catch (e) {
-        console.error('[App] 注入管理器初始化失败:', e);
+        console.error('[App] 注入管理器初始化失败:', e)
       }
 
       // 4. 加载提示词模板（明输入明注入）
-      console.log('[App] 4. 开始加载提示词模板');
+      console.log('[App] 4. 开始加载提示词模板')
       try {
-        await usePromptStore.getState().init();
-        console.log('[App] 4. 提示词模板加载完成');
+        await usePromptStore.getState().init()
+        console.log('[App] 4. 提示词模板加载完成')
       } catch (e) {
-        console.error('[App] 4. 提示词模板加载失败:', e);
+        console.error('[App] 4. 提示词模板加载失败:', e)
       }
 
       // 打印当前 TabStore 状态
-      const ts = useTabStore.getState();
-      const ps = useProfileStore.getState();
-      console.log('[App] 最终状态: initialized=', ts.initialized, 'tabs=', ts.tabs.length, 'profiles=', ps.profiles.length);
+      const ts = useTabStore.getState()
+      const ps = useProfileStore.getState()
+      console.log(
+        '[App] 最终状态: initialized=',
+        ts.initialized,
+        'tabs=',
+        ts.tabs.length,
+        'profiles=',
+        ps.profiles.length,
+      )
 
       if (!cancelled) {
-        console.log('[App] 渲染视图');
+        console.log('[App] 渲染视图')
         // 应用 UI 比例设置（Oxy 模式下不设置 data-ui-scale，避免 scale.css 静态值覆盖 JS 注入的变量）
         try {
-          const isOxy = useUiVersionStore.getState().version === 'oxy';
+          const isOxy = useUiVersionStore.getState().version === 'oxy'
           if (!isOxy) {
-            const cfg = await getAppSettings();
-            document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+            const cfg = await getAppSettings()
+            document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium')
           }
-        } catch { /* ignore */ }
-        setReady(true);
+        } catch {
+          /* ignore */
+        }
+        setReady(true)
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [windowId, isChat, isRecordIndicator, isHistory, isPrompts, isAiAppEditor, isAdvancedPanel, isOnboarding, isDataExport, isSettings, isBrowser, isHistoryDownload]);
+      cancelled = true
+    }
+  }, [
+    windowId,
+    isChat,
+    isRecordIndicator,
+    isHistory,
+    isPrompts,
+    isAiAppEditor,
+    isAdvancedPanel,
+    isOnboarding,
+    isDataExport,
+    isSettings,
+    isBrowser,
+    isHistoryDownload,
+  ])
 
   // 录音指示器窗口：添加透明背景类
   useEffect(() => {
     if (isRecordIndicator) {
-      document.documentElement.classList.add('record-indicator-window');
+      document.documentElement.classList.add('record-indicator-window')
     }
     return () => {
-      document.documentElement.classList.remove('record-indicator-window');
-    };
-  }, [isRecordIndicator]);
+      document.documentElement.classList.remove('record-indicator-window')
+    }
+  }, [isRecordIndicator])
 
   // 监听 UI 比例变化广播：更新 data-ui-scale 属性 + 重新计算当前窗口最小尺寸。
   // 主进程在 uiScale 变更后向所有窗口推送；各窗口根据自身类型选用对应公式。
   useEffect(() => {
     const off = onUiScaleChanged(async (uiScale: UiScale) => {
       // Oxy 模式下不更新 data-ui-scale，避免 scale.css 静态值覆盖 JS 注入变量
-      const isOxy = useUiVersionStore.getState().version === 'oxy';
+      const isOxy = useUiVersionStore.getState().version === 'oxy'
       if (!isOxy) {
-        document.documentElement.setAttribute('data-ui-scale', uiScale);
+        document.documentElement.setAttribute('data-ui-scale', uiScale)
       }
       // Oxy 模式下使用 V2 连续 scale 计算
-      const oxyLayout = getOxyLayout();
-      const oxyScale = oxyLayout?.scale ?? 1.0;
+      const oxyLayout = getOxyLayout()
+      const oxyScale = oxyLayout?.scale ?? 1.0
       // 根据当前窗口类型选择对应的最小尺寸计算公式
-      let minWidth: number | null = null;
-      let minHeight: number | null = null;
+      let minWidth: number | null = null
+      let minHeight: number | null = null
       if (isMain) {
         try {
-          const cfg = await getAppSettings();
-          const tabState = useTabStore.getState();
-          const activeTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
-          const title = activeTab?.title;
+          const cfg = await getAppSettings()
+          const tabState = useTabStore.getState()
+          const activeTab = tabState.tabs.find((t) => t.id === tabState.activeTabId)
+          const title = activeTab?.title
           if (isOxy && oxyLayout) {
-            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale, cfg.topBarVisibleButtons, title);
+            minWidth = calculateOxyMainWindowMinWidthByScale(
+              oxyScale,
+              cfg.topBarVisibleButtons,
+              title,
+            )
           } else {
-            minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title);
+            minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title)
           }
         } catch {
           if (isOxy && oxyLayout) {
-            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale);
+            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale)
           } else {
-            minWidth = calculateMainWindowMinWidth(uiScale);
+            minWidth = calculateMainWindowMinWidth(uiScale)
           }
         }
-        minHeight = MAIN_WINDOW_MIN_HEIGHT;
+        minHeight = MAIN_WINDOW_MIN_HEIGHT
         // 主窗口计算完后更新进阶面板缓存，供其他窗口读取
-        if (!isOxy) updateAdvancedPanelMinWidth(uiScale);
+        if (!isOxy) updateAdvancedPanelMinWidth(uiScale)
       } else if (isChat) {
         if (isOxy && oxyLayout) {
-          minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale);
+          minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale)
         } else {
-          minWidth = calculateChatWindowMinWidth(uiScale);
+          minWidth = calculateChatWindowMinWidth(uiScale)
         }
-        minHeight = CHAT_WINDOW_MIN_HEIGHT;
+        minHeight = CHAT_WINDOW_MIN_HEIGHT
       } else if (mode === 'advanced-panel') {
         if (isOxy && oxyLayout) {
-          minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale);
+          minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale)
         } else {
           // 直接读取缓存值（由主窗口计算并更新）
-          minWidth = getAdvancedPanelMinWidth(uiScale);
+          minWidth = getAdvancedPanelMinWidth(uiScale)
         }
-        minHeight = ADVANCED_PANEL_MIN_HEIGHT;
+        minHeight = ADVANCED_PANEL_MIN_HEIGHT
       }
       if (minWidth != null && minHeight != null) {
         void setMinimumSize(minWidth, minHeight).catch((e) =>
           console.warn('[App] setMinimumSize 失败:', e),
-        );
+        )
       }
-    });
-    return off;
-  }, [isMain, isChat, mode]);
+    })
+    return off
+  }, [isMain, isChat, mode])
 
   // 监听应用设置变更广播：任意窗口修改设置后，主进程向所有窗口推送最新设置。
   // 更新 data-ui-scale + 重新计算窗口最小尺寸（与 onUiScaleChanged 逻辑一致，
   // 但覆盖所有设置变更场景，不仅限于 uiScale）。
   useEffect(() => {
     const off = onAppSettingsChanged(async (cfg) => {
-      const isOxy = useUiVersionStore.getState().version === 'oxy';
+      const isOxy = useUiVersionStore.getState().version === 'oxy'
       if (!isOxy) {
-        document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+        document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium')
       }
       // 重新计算窗口最小尺寸
-      const oxyLayout = getOxyLayout();
-      const oxyScale = oxyLayout?.scale ?? 1.0;
-      const uiScale = (cfg.uiScale ?? 'medium') as UiScale;
-      let minWidth: number | null = null;
-      let minHeight: number | null = null;
+      const oxyLayout = getOxyLayout()
+      const oxyScale = oxyLayout?.scale ?? 1.0
+      const uiScale = (cfg.uiScale ?? 'medium') as UiScale
+      let minWidth: number | null = null
+      let minHeight: number | null = null
       if (isMain) {
         try {
-          const tabState = useTabStore.getState();
-          const activeTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
-          const title = activeTab?.title;
+          const tabState = useTabStore.getState()
+          const activeTab = tabState.tabs.find((t) => t.id === tabState.activeTabId)
+          const title = activeTab?.title
           if (isOxy && oxyLayout) {
-            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale, cfg.topBarVisibleButtons, title);
+            minWidth = calculateOxyMainWindowMinWidthByScale(
+              oxyScale,
+              cfg.topBarVisibleButtons,
+              title,
+            )
           } else {
-            minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title);
+            minWidth = calculateMainWindowMinWidth(uiScale, cfg.topBarVisibleButtons, title)
           }
         } catch {
           if (isOxy && oxyLayout) {
-            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale);
+            minWidth = calculateOxyMainWindowMinWidthByScale(oxyScale)
           } else {
-            minWidth = calculateMainWindowMinWidth(uiScale);
+            minWidth = calculateMainWindowMinWidth(uiScale)
           }
         }
-        minHeight = MAIN_WINDOW_MIN_HEIGHT;
+        minHeight = MAIN_WINDOW_MIN_HEIGHT
       } else if (isChat) {
         if (isOxy && oxyLayout) {
-          minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale);
+          minWidth = calculateOxyChatWindowMinWidthByScale(oxyScale)
         } else {
-          minWidth = calculateChatWindowMinWidth(uiScale);
+          minWidth = calculateChatWindowMinWidth(uiScale)
         }
-        minHeight = CHAT_WINDOW_MIN_HEIGHT;
+        minHeight = CHAT_WINDOW_MIN_HEIGHT
       } else if (mode === 'advanced-panel') {
         if (isOxy && oxyLayout) {
-          minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale);
+          minWidth = calculateOxyAdvancedPanelMinWidthByScale(oxyScale)
         } else {
           // 直接读取缓存值（由主窗口计算并更新）
-          minWidth = getAdvancedPanelMinWidth(uiScale);
+          minWidth = getAdvancedPanelMinWidth(uiScale)
         }
-        minHeight = ADVANCED_PANEL_MIN_HEIGHT;
+        minHeight = ADVANCED_PANEL_MIN_HEIGHT
       }
       if (minWidth != null && minHeight != null) {
         void setMinimumSize(minWidth, minHeight).catch((e) =>
           console.warn('[App] setMinimumSize 失败:', e),
-        );
+        )
       }
-    });
-    return off;
-  }, [isMain, isChat, mode]);
+    })
+    return off
+  }, [isMain, isChat, mode])
 
   // 监听 UI 版本/主题变更广播：任意窗口切换 Oxy Design System 或主题模式后实时同步。
   // UI 版本直接调用 activateOxy/deactivateOxy；主题通过 setTheme 应用。
@@ -405,35 +459,35 @@ export default function App() {
   useEffect(() => {
     const off = onUiVersionChanged(({ uiVersion, theme }) => {
       // 同步 UI 版本（Oxy / 经典版）——直接调用控制器，不经过 setVersion 避免循环广播
-      const curVersion = useUiVersionStore.getState().version;
+      const curVersion = useUiVersionStore.getState().version
       if (uiVersion !== curVersion) {
         if (uiVersion === 'oxy') {
-          activateOxy();
+          activateOxy()
         } else {
-          deactivateOxy();
+          deactivateOxy()
         }
-        useUiVersionStore.setState({ version: uiVersion });
+        useUiVersionStore.setState({ version: uiVersion })
       }
       // 同步主题模式
-      const curTheme = useThemeStore.getState().theme;
+      const curTheme = useThemeStore.getState().theme
       if (theme !== curTheme) {
-        useThemeStore.getState().setTheme(theme);
+        useThemeStore.getState().setTheme(theme)
       }
-    });
-    return off;
-  }, []);
+    })
+    return off
+  }, [])
 
   // 监听 Oxy 主题色变更广播：主窗口切换 AI 应用后，其他窗口同步主题色
   // 仅在 Oxy 模式下生效；经典模式不跟随主题色
   useEffect(() => {
-    if (isBrowser) return;
-    const isOxy = useUiVersionStore.getState().version === 'oxy';
-    if (!isOxy) return;
+    if (isBrowser) return
+    const isOxy = useUiVersionStore.getState().version === 'oxy'
+    if (!isOxy) return
     const off = onThemeColorChanged((hex) => {
-      applyAppTheme(hex);
-    });
-    return off;
-  }, [isBrowser]);
+      applyAppTheme(hex)
+    })
+    return off
+  }, [isBrowser])
 
   // 模块门控：对应模块关闭时，独立窗口路由渲染占位视图（11.10 全路径封死）。
   // 注意：hook 必须在 if (!ready) 提前返回之前调用，保证每次渲染 hooks 数量一致。
@@ -441,11 +495,11 @@ export default function App() {
   // zustand 5 下 selector 每次返回新数组会触发无限重渲染（React #185），必须用 useShallow 缓存
   const enabledModuleIds = useModuleStore(
     useShallow((s) => s.modules.filter((m) => m.enabled).map((m) => m.id)),
-  );
-  const moduleEnabled = (id: string) => enabledModuleIds.includes(id);
+  )
+  const moduleEnabled = (id: string) => enabledModuleIds.includes(id)
 
   if (!ready) {
-    return <LoadingScreen />;
+    return <LoadingScreen />
   }
 
   // 路由分流：preview(默认/record-indicator) → RecordIndicator,
@@ -456,28 +510,131 @@ export default function App() {
   // 所有视图用 ErrorBoundary 包裹，防止单个 webview 报错导致整个应用白屏
   // 模块门控兜底：主进程已拒绝打开对应窗口；此处渲染静默空视图（不展示任何提示文案）
   if (isChat && !moduleEnabled('custom-chat')) {
-    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+    return (
+      <AppErrorBoundary>
+        <div style={{ height: '100vh' }} />
+      </AppErrorBoundary>
+    )
   }
   if ((isPrompts || isHistory) && !moduleEnabled('prompt-library')) {
-    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+    return (
+      <AppErrorBoundary>
+        <div style={{ height: '100vh' }} />
+      </AppErrorBoundary>
+    )
   }
   if (isBrowser && !moduleEnabled('browser')) {
-    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+    return (
+      <AppErrorBoundary>
+        <div style={{ height: '100vh' }} />
+      </AppErrorBoundary>
+    )
   }
   if (isHistoryDownload && !moduleEnabled('browser')) {
-    return <AppErrorBoundary><div style={{ height: '100vh' }} /></AppErrorBoundary>;
+    return (
+      <AppErrorBoundary>
+        <div style={{ height: '100vh' }} />
+      </AppErrorBoundary>
+    )
   }
 
-  if (isRecordIndicator) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><RecordIndicator /></Suspense></AppErrorBoundary>;
-  if (isHistory) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAssetsView /></Suspense></AppErrorBoundary>;
-  if (isPrompts) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAssetsView /></Suspense></AppErrorBoundary>;
-  if (isAiAppEditor) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AiAppEditor /></Suspense></AppErrorBoundary>;
-  if (isAdvancedPanel) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><AdvancedPanelView /></Suspense></AppErrorBoundary>;
-  if (isDataExport) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><DataExportWindow /></Suspense></AppErrorBoundary>;
-  if (isSettings) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><SettingsView /></Suspense></AppErrorBoundary>;
-  if (isOnboarding) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><OnboardingView /></Suspense></AppErrorBoundary>;
-  if (isChat) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><ChatView windowId={mode === 'chat' ? windowId : undefined} /></Suspense></AppErrorBoundary>;
-  if (isBrowser) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><BrowserView /></Suspense></AppErrorBoundary>;
-  if (isHistoryDownload) return <AppErrorBoundary><Suspense fallback={<LoadingScreen />}><HistoryDownloadView /></Suspense></AppErrorBoundary>;
-  return <AppErrorBoundary>{isMain ? <MainView /> : <Suspense fallback={<LoadingScreen />}><StandaloneView /></Suspense>}</AppErrorBoundary>;
+  if (isRecordIndicator)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <RecordIndicator />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isHistory)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <AiAssetsView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isPrompts)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <AiAssetsView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isAiAppEditor)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <AiAppEditor />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isAdvancedPanel)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <AdvancedPanelView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isDataExport)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <DataExportWindow />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isSettings)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <SettingsView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isOnboarding)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <OnboardingView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isChat)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <ChatView windowId={mode === 'chat' ? windowId : undefined} />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isBrowser)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <BrowserView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  if (isHistoryDownload)
+    return (
+      <AppErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          <HistoryDownloadView />
+        </Suspense>
+      </AppErrorBoundary>
+    )
+  return (
+    <AppErrorBoundary>
+      {isMain ? (
+        <MainView />
+      ) : (
+        <Suspense fallback={<LoadingScreen />}>
+          <StandaloneView />
+        </Suspense>
+      )}
+    </AppErrorBoundary>
+  )
 }

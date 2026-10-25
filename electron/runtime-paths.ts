@@ -13,13 +13,17 @@ export function portableRoot(executable: string): string | undefined {
   const marker = path.join(directory, 'portable.txt')
   const parent = path.dirname(directory)
   const layoutPath = path.join(parent, 'portable-layout.json')
-  const hasLayout = Object.values(product.portable.runtimes).includes(path.basename(directory)) && existsSync(layoutPath)
+  const hasLayout =
+    Object.values(product.portable.runtimes).includes(path.basename(directory)) &&
+    existsSync(layoutPath)
   if (!existsSync(marker)) {
     if (hasLayout) throw new Error('Portable runtime marker is missing')
     return undefined
   }
   if (!lstatSync(marker).isFile()) throw new Error('Invalid portable runtime marker')
-  const markerTitle = readFileSync(marker, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0]
+  const markerTitle = readFileSync(marker, 'utf8')
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/, 1)[0]
   const dualArchitecture = markerTitle === 'SidekickAI Dual Architecture Portable Marker'
   if (!dualArchitecture && markerTitle !== 'AI Window Portable Mode Marker') {
     throw new Error('Invalid portable runtime marker')
@@ -29,10 +33,15 @@ export function portableRoot(executable: string): string | undefined {
   if (!lstatSync(layoutPath).isFile()) throw new Error('Invalid portable layout file')
   const layout = JSON.parse(readFileSync(layoutPath, 'utf8'))
   const expected = product.portable
-  if (layout.schemaVersion !== expected.schemaVersion || layout.edition !== expected.edition ||
-      layout.layout !== expected.layout || layout.dataDirectory !== expected.dataDirectory ||
-      layout.launcher !== expected.launcher || layout.runtimes?.x64 !== expected.runtimes.x64 ||
-      layout.runtimes?.arm64 !== expected.runtimes.arm64) {
+  if (
+    layout.schemaVersion !== expected.schemaVersion ||
+    layout.edition !== expected.edition ||
+    layout.layout !== expected.layout ||
+    layout.dataDirectory !== expected.dataDirectory ||
+    layout.launcher !== expected.launcher ||
+    layout.runtimes?.x64 !== expected.runtimes.x64 ||
+    layout.runtimes?.arm64 !== expected.runtimes.arm64
+  ) {
     throw new Error('Portable layout does not match this application')
   }
   return parent
@@ -53,8 +62,12 @@ export function resolveRuntimePaths(options: {
   return {
     mode,
     portableRoot: root,
-    dataDirectory: options.dataOverride || (mode === 'development'
-      ? options.developmentDirectory
-      : root ? path.join(root, product.portable.dataDirectory) : path.join(options.appData, edition.packageName)),
+    dataDirectory:
+      options.dataOverride ||
+      (mode === 'development'
+        ? options.developmentDirectory
+        : root
+          ? path.join(root, product.portable.dataDirectory)
+          : path.join(options.appData, edition.packageName)),
   }
 }

@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ themeSource: 'system' as string }))
 vi.mock('electron', () => ({
   nativeTheme: {
-    get themeSource() { return state.themeSource },
-    set themeSource(value: string) { state.themeSource = value },
+    get themeSource() {
+      return state.themeSource
+    },
+    set themeSource(value: string) {
+      state.themeSource = value
+    },
   },
 }))
 

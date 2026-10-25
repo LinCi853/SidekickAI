@@ -1,12 +1,12 @@
 import type { BlockRule } from '../../electron/shared/types'
 
 export function buildBlockerScript(rules: BlockRule[]): string {
-  const cssRules = rules.filter(rule => rule.type === 'css' && rule.selector)
-  const jsRules = rules.filter(rule => rule.type === 'js' && rule.jsCode)
+  const cssRules = rules.filter((rule) => rule.type === 'css' && rule.selector)
+  const jsRules = rules.filter((rule) => rule.type === 'js' && rule.jsCode)
   return `(function() {
     if (window.__ai_blocker_state__) window.__ai_blocker_state__.dispose();
-    var cssRules = ${JSON.stringify(cssRules.map(rule => ({ id: rule.id, selector: rule.selector })))};
-    var jsRules = ${JSON.stringify(jsRules.map(rule => ({ id: rule.id, code: rule.jsCode })))};
+    var cssRules = ${JSON.stringify(cssRules.map((rule) => ({ id: rule.id, selector: rule.selector })))};
+    var jsRules = ${JSON.stringify(jsRules.map((rule) => ({ id: rule.id, code: rule.jsCode })))};
     var style = document.createElement('style');
     style.id = '__ai_block_style__';
     (document.head || document.documentElement).appendChild(style);

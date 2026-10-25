@@ -1,10 +1,9 @@
-
 export const BACKUP_FILES = [
   // ===== settings.db =====
   'settings.db',
   'settings.db-wal',
   'settings.db-shm',
-  
+
   'chat.db',
   'chat.db-wal',
   'chat.db-shm',
@@ -32,30 +31,26 @@ export const BACKUP_FILES = [
   'accumulated-links.db',
   'accumulated-links.db-wal',
   'accumulated-links.db-shm',
-  
+
   'injection-history.json',
-  
-];
+]
 
-
-export const ASSET_DIRS = ['whiteboard-assets', 'notes-assets', 'ai-assets'];
-
+export const ASSET_DIRS = ['whiteboard-assets', 'notes-assets', 'ai-assets']
 
 export const PARTITION_COOKIE_FILES = [
-  'Cookies', 'Cookies-wal', 'Cookies-shm', 'Cookies-journal',
-  'Network/Cookies', 'Network/Cookies-wal', 'Network/Cookies-shm', 'Network/Cookies-journal',
-];
+  'Cookies',
+  'Cookies-wal',
+  'Cookies-shm',
+  'Cookies-journal',
+  'Network/Cookies',
+  'Network/Cookies-wal',
+  'Network/Cookies-shm',
+  'Network/Cookies-journal',
+]
 
-
-export const PARTITION_COOKIE_DIRS = ['Local Storage'];
+export const PARTITION_COOKIE_DIRS = ['Local Storage']
 
 /** Persistent offline application storage must never be treated as disposable cache. */
-export const PARTITION_INDEXEDDB_DIRS = ['IndexedDB', 'File System', 'blob_storage', 'WebStorage'];
+export const PARTITION_INDEXEDDB_DIRS = ['IndexedDB', 'File System', 'blob_storage', 'WebStorage']
 
-
-export const PARTITION_CACHE_DIRS = [
-  'Service Worker',
-  'Cache',
-  'Code Cache',
-  'GPUCache',
-];
+export const PARTITION_CACHE_DIRS = ['Service Worker', 'Cache', 'Code Cache', 'GPUCache']

@@ -55,7 +55,9 @@ export function registerSafeIpcHandler<T>(
     })
   } else {
     // 降级实现：直接使用 ipcMain.handle（不经过 EffectScope 管理）
-    console.warn(`[ipc-utils:registerSafeIpcHandler] ⚠️ 降级实现: ${channel} 未传入 scope，直接使用 ipcMain.handle（不经过 EffectScope 管理）`)
+    console.warn(
+      `[ipc-utils:registerSafeIpcHandler] ⚠️ 降级实现: ${channel} 未传入 scope，直接使用 ipcMain.handle（不经过 EffectScope 管理）`,
+    )
     ipcMain.handle(channel, async (event, ...args) => {
       try {
         return await handler(event, ...args)
@@ -101,7 +103,9 @@ export function registerSyncIpcHandler(
     })
   } else {
     // 降级实现：直接使用 ipcMain.on（不经过 EffectScope 管理）
-    console.warn(`[ipc-utils:registerSyncIpcHandler] ⚠️ 降级实现: ${channel} 未传入 scope，直接使用 ipcMain.on（不经过 EffectScope 管理）`)
+    console.warn(
+      `[ipc-utils:registerSyncIpcHandler] ⚠️ 降级实现: ${channel} 未传入 scope，直接使用 ipcMain.on（不经过 EffectScope 管理）`,
+    )
     ipcMain.on(channel, (event, ...args) => {
       try {
         const data = handler(event, ...args)

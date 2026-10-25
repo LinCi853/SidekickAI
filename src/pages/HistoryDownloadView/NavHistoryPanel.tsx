@@ -8,143 +8,147 @@
    UI：共享组件（Button / IconButton / ConfirmDialog）+ useToast，替代原生 confirm/alert
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, IconButton, ConfirmDialog } from '@/components/ui';
-import { SearchIcon, TrashIcon, GlobeIcon } from '@/components/icons';
-import { useToast } from '@/hooks/useToast';
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button, IconButton, ConfirmDialog } from '@/components/ui'
+import { SearchIcon, TrashIcon, GlobeIcon } from '@/components/icons'
+import { useToast } from '@/hooks/useToast'
 import {
   listNavHistory,
   searchNavHistory,
   deleteNavHistory,
   clearAllNavHistory,
   openExternal,
-} from '@/lib/electron-api';
-import type { NavHistoryEntry } from '@/lib/electron-api';
-import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
-import { formatTime } from '@/lib/datetime';
+} from '@/lib/electron-api'
+import type { NavHistoryEntry } from '@/lib/electron-api'
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback'
+import { formatTime } from '@/lib/datetime'
 
 /** 时间分组键 */
-type GroupKey = 'today' | 'yesterday' | 'thisWeek' | 'earlier';
+type GroupKey = 'today' | 'yesterday' | 'thisWeek' | 'earlier'
 
 const GROUP_LABEL: Record<GroupKey, string> = {
   today: '今天',
   yesterday: '昨天',
   thisWeek: '本周',
   earlier: '更早',
-};
+}
 
 /** 计算时间分组：以本地日期边界为准，本周 = 今天往前到本周一 */
 function resolveGroup(ts: number, now: Date): GroupKey {
-  const d = new Date(ts);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
-  if (ts >= startOfToday) return 'today';
-  if (ts >= startOfToday - dayMs) return 'yesterday';
+  const d = new Date(ts)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const dayMs = 24 * 60 * 60 * 1000
+  if (ts >= startOfToday) return 'today'
+  if (ts >= startOfToday - dayMs) return 'yesterday'
   // 周一 00:00 为本周起点（getDay() 周日=0 → 转换为 6）
-  const dayOfWeek = (now.getDay() + 6) % 7;
-  const startOfWeek = startOfToday - dayOfWeek * dayMs;
-  if (ts >= startOfWeek) return 'thisWeek';
-  return 'earlier';
+  const dayOfWeek = (now.getDay() + 6) % 7
+  const startOfWeek = startOfToday - dayOfWeek * dayMs
+  if (ts >= startOfWeek) return 'thisWeek'
+  return 'earlier'
 }
 
 interface NavHistoryPanelProps {
   /** 总数变化时通知父组件刷新侧栏计数 */
-  onCountChange?: (count: number) => void;
+  onCountChange?: (count: number) => void
 }
 
 export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps) {
-  const [entries, setEntries] = useState<NavHistoryEntry[]>([]);
-  const [keyword, setKeyword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { toast, showToast } = useToast(2500);
-  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [entries, setEntries] = useState<NavHistoryEntry[]>([])
+  const [keyword, setKeyword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const { toast, showToast } = useToast(2500)
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
-  const refresh = useCallback(async (kw: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = kw.trim()
-        ? await searchNavHistory(undefined, kw.trim())
-        : await listNavHistory(undefined, 1, 200);
-      setEntries(list);
-      onCountChange?.(list.length);
-    } catch (e) {
-      console.error('[NavHistoryPanel] 加载失败:', e);
-      setError('加载失败');
-      setEntries([]);
-      onCountChange?.(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [onCountChange]);
+  const refresh = useCallback(
+    async (kw: string) => {
+      setLoading(true)
+      setError(null)
+      try {
+        const list = kw.trim()
+          ? await searchNavHistory(undefined, kw.trim())
+          : await listNavHistory(undefined, 1, 200)
+        setEntries(list)
+        onCountChange?.(list.length)
+      } catch (e) {
+        console.error('[NavHistoryPanel] 加载失败:', e)
+        setError('加载失败')
+        setEntries([])
+        onCountChange?.(0)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [onCountChange],
+  )
 
   // 初始化加载
   useEffect(() => {
-    void refresh('');
-  }, [refresh]);
+    void refresh('')
+  }, [refresh])
 
   // 实时搜索（防抖 300ms）
   const debouncedRefresh = useDebouncedCallback((kw: string) => {
-    void refresh(kw);
-  }, 300);
+    void refresh(kw)
+  }, 300)
 
   useEffect(() => {
-    debouncedRefresh(keyword);
-  }, [keyword, debouncedRefresh]);
+    debouncedRefresh(keyword)
+  }, [keyword, debouncedRefresh])
 
   const handleOpen = useCallback(async (url: string) => {
     try {
-      await openExternal(url);
+      await openExternal(url)
     } catch (e) {
-      console.error('[NavHistoryPanel] openExternal 失败:', e);
+      console.error('[NavHistoryPanel] openExternal 失败:', e)
     }
-  }, []);
+  }, [])
 
-  const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await deleteNavHistory(id);
-      setEntries((prev) => {
-        const next = prev.filter((x) => x.id !== id);
-        onCountChange?.(next.length);
-        return next;
-      });
-      showToast('已删除');
-    } catch (err) {
-      console.error('[NavHistoryPanel] 删除失败:', err);
-      showToast('删除失败');
-    }
-  }, [onCountChange, showToast]);
+  const handleDelete = useCallback(
+    async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation()
+      try {
+        await deleteNavHistory(id)
+        setEntries((prev) => {
+          const next = prev.filter((x) => x.id !== id)
+          onCountChange?.(next.length)
+          return next
+        })
+        showToast('已删除')
+      } catch (err) {
+        console.error('[NavHistoryPanel] 删除失败:', err)
+        showToast('删除失败')
+      }
+    },
+    [onCountChange, showToast],
+  )
 
   const handleClearAll = useCallback(async () => {
-    setConfirmClearOpen(false);
+    setConfirmClearOpen(false)
     try {
-      await clearAllNavHistory();
-      setEntries([]);
-      onCountChange?.(0);
-      showToast('已清空导航历史');
+      await clearAllNavHistory()
+      setEntries([])
+      onCountChange?.(0)
+      showToast('已清空导航历史')
     } catch (err) {
-      console.error('[NavHistoryPanel] 清空失败:', err);
-      showToast('清空失败');
+      console.error('[NavHistoryPanel] 清空失败:', err)
+      showToast('清空失败')
     }
-  }, [onCountChange, showToast]);
+  }, [onCountChange, showToast])
 
   // 按时间分组
   const grouped = useMemo(() => {
-    const now = new Date();
-    const map = new Map<GroupKey, NavHistoryEntry[]>();
+    const now = new Date()
+    const map = new Map<GroupKey, NavHistoryEntry[]>()
     for (const entry of entries) {
-      const key = resolveGroup(entry.timestamp, now);
-      const arr = map.get(key) ?? [];
-      arr.push(entry);
-      map.set(key, arr);
+      const key = resolveGroup(entry.timestamp, now)
+      const arr = map.get(key) ?? []
+      arr.push(entry)
+      map.set(key, arr)
     }
-    const order: GroupKey[] = ['today', 'yesterday', 'thisWeek', 'earlier'];
-    return order
-      .filter((k) => map.has(k))
-      .map((k) => ({ key: k, items: map.get(k)! }));
-  }, [entries]);
+    const order: GroupKey[] = ['today', 'yesterday', 'thisWeek', 'earlier']
+    return order.filter((k) => map.has(k)).map((k) => ({ key: k, items: map.get(k)! }))
+  }, [entries])
 
   return (
     <div className="hd-content" data-name="hd.nav.container">
@@ -178,7 +182,9 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
 
       <div className="hd-list" data-name="hd.nav.list">
         {loading && entries.length === 0 && (
-          <div className="hd-empty" data-name="hd.nav.loading">加载中…</div>
+          <div className="hd-empty" data-name="hd.nav.loading">
+            加载中…
+          </div>
         )}
         {!loading && entries.length === 0 && (
           <div className="hd-empty" data-name="hd.nav.empty">
@@ -186,7 +192,9 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
           </div>
         )}
         {error && (
-          <div className="hd-empty" data-name="hd.nav.error">{error}</div>
+          <div className="hd-empty" data-name="hd.nav.error">
+            {error}
+          </div>
         )}
         {grouped.map((group) => (
           <div key={group.key} className="hd-group" data-name={'hd.nav.group-' + group.key}>
@@ -203,7 +211,11 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
                 title={entry.url}
                 onClick={() => void handleOpen(entry.url)}
               >
-                <span className="hd-item-icon" aria-hidden="true" data-name={'hd.nav.item-icon-' + (idx + 1)}>
+                <span
+                  className="hd-item-icon"
+                  aria-hidden="true"
+                  data-name={'hd.nav.item-icon-' + (idx + 1)}
+                >
                   <GlobeIcon className="hd-item-icon-svg" />
                 </span>
                 <div className="hd-item-main" data-name={'hd.nav.item-main-' + (idx + 1)}>
@@ -253,5 +265,5 @@ export default function NavHistoryPanel({ onCountChange }: NavHistoryPanelProps)
         </div>
       )}
     </div>
-  );
+  )
 }

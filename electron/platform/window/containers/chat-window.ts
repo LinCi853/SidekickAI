@@ -14,7 +14,11 @@ import {
   attachWindowHotkeyInterceptor,
 } from '../helpers.js'
 import { buildWindowConfig } from '../window-config-builder.js'
-import { calculateChatWindowMinWidth, getUiScaleFromSettings, CHAT_WINDOW_MIN_HEIGHT } from '../window-size-helpers.js'
+import {
+  calculateChatWindowMinWidth,
+  getUiScaleFromSettings,
+  CHAT_WINDOW_MIN_HEIGHT,
+} from '../window-size-helpers.js'
 import { isModuleEnabled } from '../../../modules/registry.js'
 import { registerOwnedWindow } from '../../../modules/target-registry.js'
 import { registerWindowRetirement } from '../window-retirement.js'
@@ -54,24 +58,26 @@ export function createChatWindow(): BrowserWindow | null {
   // 根据 UI 比例动态计算最小宽度（替代硬编码 360）
   const uiScale = getUiScaleFromSettings()
   const minWidth = calculateChatWindowMinWidth(uiScale)
-  const win = new BrowserWindow(buildWindowConfig({
-    // 默认宽屏尺寸 900×680（适合对话场景）
-    width: saved.bounds.width || 900,
-    height: saved.bounds.height || 680,
-    x: saved.bounds.x,
-    y: saved.bounds.y,
-    minWidth,
-    minHeight: CHAT_WINDOW_MIN_HEIGHT,
-    show: false,
-    frame: false,
-    alwaysOnTop: saved.alwaysOnTop,
-    backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: '工百窗 - 对话',
-    webPreferences: createDefaultWebPreferences({
-      preload: getPreloadPath(),
-      webviewTag: false,
+  const win = new BrowserWindow(
+    buildWindowConfig({
+      // 默认宽屏尺寸 900×680（适合对话场景）
+      width: saved.bounds.width || 900,
+      height: saved.bounds.height || 680,
+      x: saved.bounds.x,
+      y: saved.bounds.y,
+      minWidth,
+      minHeight: CHAT_WINDOW_MIN_HEIGHT,
+      show: false,
+      frame: false,
+      alwaysOnTop: saved.alwaysOnTop,
+      backgroundColor: WINDOW_BACKGROUND_COLOR,
+      title: '工百窗 - 对话',
+      webPreferences: createDefaultWebPreferences({
+        preload: getPreloadPath(),
+        webviewTag: false,
+      }),
     }),
-  }))
+  )
 
   if (saved.isMaximized) {
     win.maximize()
@@ -107,4 +113,3 @@ export function createChatWindow(): BrowserWindow | null {
   registerOwnedWindow(win, 'custom-chat')
   return win
 }
-

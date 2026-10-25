@@ -60,10 +60,10 @@ import type {
   ProfileProxyConfig,
   ModuleInfo,
   ModuleStateChangedPayload,
-} from '../../../electron/shared/types';
+} from '../../../electron/shared/types'
 
 // ALL_TOP_BAR_BUTTON_GROUPS / ALL_DRAWER_MENU_ITEMS 是 const 值，必须用普通 import（非 import type）才能 re-export
-import { ALL_TOP_BAR_BUTTON_GROUPS, ALL_DRAWER_MENU_ITEMS } from '../../../electron/shared/types';
+import { ALL_TOP_BAR_BUTTON_GROUPS, ALL_DRAWER_MENU_ITEMS } from '../../../electron/shared/types'
 
 /** 暴露到 window.electron 的完整 API */
 export type {
@@ -121,19 +121,16 @@ export type {
   ProfileProxyConfig,
   ModuleInfo,
   ModuleStateChangedPayload,
-};
+}
 
 /** 全部顶栏按钮组（默认全选，供设置/引导页默认值使用） */
-export {
-  ALL_TOP_BAR_BUTTON_GROUPS,
-  ALL_DRAWER_MENU_ITEMS,
-};
+export { ALL_TOP_BAR_BUTTON_GROUPS, ALL_DRAWER_MENU_ITEMS }
 
 /** 全局 Window 扩展 —— 声明 window.electron 由 preload 注入 */
 declare global {
   interface Window {
     /** Electron preload 通过 contextBridge 暴露的 API */
-    electron: ElectronAPI;
+    electron: ElectronAPI
   }
 }
 
@@ -142,7 +139,7 @@ declare global {
  * 调用方需处理 null 情况，便于开发期降级
  */
 export function getElectron(): ElectronAPI | null {
-  return typeof window !== 'undefined' ? window.electron ?? null : null;
+  return typeof window !== 'undefined' ? (window.electron ?? null) : null
 }
 
 /**
@@ -150,14 +147,14 @@ export function getElectron(): ElectronAPI | null {
  * 用于「确定在 Electron 环境」的场景
  */
 export function requireElectron(): ElectronAPI {
-  const api = getElectron();
+  const api = getElectron()
   if (!api) {
-    throw new Error('window.electron 不可用（未在 Electron 环境运行）');
+    throw new Error('window.electron 不可用（未在 Electron 环境运行）')
   }
-  return api;
+  return api
 }
 
-import { PLATFORM } from '../platform-detector';
+import { PLATFORM } from '../platform-detector'
 
 /** 当前平台常量（re-export 供外部同步分支使用） */
-export { PLATFORM };
+export { PLATFORM }

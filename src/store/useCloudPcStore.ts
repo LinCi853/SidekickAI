@@ -6,25 +6,25 @@
      → 本 store 同步为 false（BrowserView 订阅后退出全屏 UI）
    ===================================================================== */
 
-import { create } from 'zustand';
+import { create } from 'zustand'
 
 /** 缩放模式：auto=自动匹配远端分辨率；manual=用户手动指定缩放因子 */
-export type CloudPcZoomMode = 'auto' | 'manual';
+export type CloudPcZoomMode = 'auto' | 'manual'
 
 interface CloudPcStoreState {
   /** 云电脑模式是否激活 */
-  isActive: boolean;
+  isActive: boolean
   /** 渲染层激活/停用（不含主进程同步，由 BrowserView 统一处理） */
-  setActive: (active: boolean) => void;
+  setActive: (active: boolean) => void
   /** 内容缩放因子（4K 屏跑 1080P 云电脑时放大画面铺满屏幕；1=不缩放） */
-  zoomFactor: number;
+  zoomFactor: number
   /** 缩放模式（auto=自动检测远端视频分辨率匹配） */
-  zoomMode: CloudPcZoomMode;
+  zoomMode: CloudPcZoomMode
   /** 检测到的远端视频分辨率（调试/提示展示） */
- remoteResolution: { width: number; height: number } | null;
-  setZoom: (factor: number, mode?: CloudPcZoomMode) => void;
-  setRemoteResolution: (r: { width: number; height: number } | null) => void;
-  reset: () => void;
+  remoteResolution: { width: number; height: number } | null
+  setZoom: (factor: number, mode?: CloudPcZoomMode) => void
+  setRemoteResolution: (r: { width: number; height: number } | null) => void
+  reset: () => void
 }
 
 export const useCloudPcStore = create<CloudPcStoreState>((set) => ({
@@ -36,4 +36,4 @@ export const useCloudPcStore = create<CloudPcStoreState>((set) => ({
   setZoom: (factor, mode) => set((s) => ({ zoomFactor: factor, zoomMode: mode ?? s.zoomMode })),
   setRemoteResolution: (r) => set({ remoteResolution: r }),
   reset: () => set({ isActive: false, zoomFactor: 1, zoomMode: 'auto', remoteResolution: null }),
-}));
+}))

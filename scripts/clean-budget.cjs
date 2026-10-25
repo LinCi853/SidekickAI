@@ -19,17 +19,33 @@ const ASSET_TEST_GROUP = 'asset-ipc-test-*'
 // native-startup 是可复用的编译产物（build-startup-helper.cjs 靠它判定复用），
 // 不能按"48 小时未改动"当测试残留删掉，只在超预算时作为可再生缓存处理。
 const FIXED_TEST_NAMES = ['test-fixtures', 'version-tests', 'local-build-config-tests']
-const PURGEABLE_CACHES = ['component-cache', 'native-minimum', 'native-minimum-addon', 'native-startup', 'shared-components']
+const PURGEABLE_CACHES = [
+  'component-cache',
+  'native-minimum',
+  'native-minimum-addon',
+  'native-startup',
+  'shared-components',
+]
 
 function dirSize(directory) {
   let total = 0
-  const walk = current => {
+  const walk = (current) => {
     let entries
-    try { entries = fs.readdirSync(current, { withFileTypes: true }) } catch { return }
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true })
+    } catch {
+      return
+    }
     for (const entry of entries) {
       const target = path.join(current, entry.name)
       if (entry.isDirectory()) walk(target)
-      else if (entry.isFile()) { try { total += fs.statSync(target).size } catch { /* raced */ } }
+      else if (entry.isFile()) {
+        try {
+          total += fs.statSync(target).size
+        } catch {
+          /* raced */
+        }
+      }
     }
   }
   walk(directory)
@@ -48,7 +64,11 @@ function remove(target, dryRun) {
   // 重解析点（junction / 符号链接）本身不是"build/ 内的数据"：
   // rmSync 递归会跟随它删到链接目标里去，所以只断开链接本身。
   let link = false
-  try { link = fs.lstatSync(target).isSymbolicLink() } catch { return 0 }
+  try {
+    link = fs.lstatSync(target).isSymbolicLink()
+  } catch {
+    return 0
+  }
   const size = link ? 0 : dirSize(target)
   if (!dryRun) {
     if (link) fs.unlinkSync(target)
@@ -59,14 +79,21 @@ function remove(target, dryRun) {
 
 function subdirs(directory) {
   try {
-    return fs.readdirSync(directory, { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
-      .map(entry => path.join(directory, entry.name))
-  } catch { return [] }
+    return fs
+      .readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(directory, entry.name))
+  } catch {
+    return []
+  }
 }
 
 function modifiedAt(target) {
-  try { return fs.statSync(target).mtimeMs } catch { return 0 }
+  try {
+    return fs.statSync(target).mtimeMs
+  } catch {
+    return 0
+  }
 }
 
 // 版本键：保留名称里日期/版本号之前的通道前缀（release / ui / verification …），
@@ -86,11 +113,14 @@ function testGroup(name) {
   return FIXED_TEST_NAMES.includes(name) ? name : undefined
 }
 
-const gib = bytes => (bytes / 1024 ** 3).toFixed(2) + ' GiB'
+const gib = (bytes) => (bytes / 1024 ** 3).toFixed(2) + ' GiB'
 
 function main(args) {
   const dryRun = args.includes('--dry-run')
-  if (!fs.existsSync(BUILD)) { console.log('[budget] No build directory'); return }
+  if (!fs.existsSync(BUILD)) {
+    console.log('[budget] No build directory')
+    return
+  }
   const before = dirSize(BUILD)
   let freed = 0
   const prune = (target, label) => {
@@ -109,7 +139,10 @@ function main(args) {
     for (const [key, runs] of byVersion) {
       runs.sort((a, b) => modifiedAt(b) - modifiedAt(a))
       for (const stale of runs.slice(KEEP_RUNS))
-        prune(stale, `distribution run ${path.relative(BUILD, stale).replaceAll('\\', '/')} (version ${key})`)
+        prune(
+          stale,
+          `distribution run ${path.relative(BUILD, stale).replaceAll('\\', '/')} (version ${key})`,
+        )
     }
   }
 
@@ -122,21 +155,25 @@ function main(args) {
     groups.get(group).push(entry)
   }
   for (const [group, entries] of groups) {
-    const expired = new Set(entries.filter(entry => Date.now() - modifiedAt(entry) > TEST_MAX_AGE_MS))
+    const expired = new Set(
+      entries.filter((entry) => Date.now() - modifiedAt(entry) > TEST_MAX_AGE_MS),
+    )
     if (group === ASSET_TEST_GROUP && entries.length > KEEP_TEST_ENTRIES) {
-      for (const entry of [...entries].sort((a, b) => modifiedAt(b) - modifiedAt(a)).slice(KEEP_TEST_ENTRIES))
+      for (const entry of [...entries]
+        .sort((a, b) => modifiedAt(b) - modifiedAt(a))
+        .slice(KEEP_TEST_ENTRIES))
         expired.add(entry)
     }
-    for (const entry of entries) if (expired.has(entry)) prune(entry, `test output ${path.basename(entry)}`)
+    for (const entry of entries)
+      if (expired.has(entry)) prune(entry, `test output ${path.basename(entry)}`)
   }
 
   // 3. 仍超预算：清空可再生缓存，命中预算即停（按体积从大到小，避免删了小缓存仍不够）
   let after = dryRun ? before - freed : dirSize(BUILD)
   if (after > BUDGET) {
-    const caches = PURGEABLE_CACHES
-      .map(name => ({ name, target: path.join(BUILD, name) }))
-      .filter(entry => fs.existsSync(entry.target))
-      .map(entry => ({ ...entry, size: dirSize(entry.target) }))
+    const caches = PURGEABLE_CACHES.map((name) => ({ name, target: path.join(BUILD, name) }))
+      .filter((entry) => fs.existsSync(entry.target))
+      .map((entry) => ({ ...entry, size: dirSize(entry.target) }))
       .sort((a, b) => b.size - a.size)
     for (const cache of caches) {
       if (after <= BUDGET) break
@@ -148,7 +185,9 @@ function main(args) {
   // 实测而非估算：force:true 会静默吞掉 EBUSY/EPERM，
   // 用 before - freed 记账会把"删失败"报成"已释放"，正好掩盖硬性预算违规。
   const now = dryRun ? before - freed : dirSize(BUILD)
-  console.log(`[budget] build/ before ${gib(before)}${dryRun ? ' (dry-run)' : ''}, freed ${gib(freed)}, now ${gib(now)}, budget ${gib(BUDGET)}`)
+  console.log(
+    `[budget] build/ before ${gib(before)}${dryRun ? ' (dry-run)' : ''}, freed ${gib(freed)}, now ${gib(now)}, budget ${gib(BUDGET)}`,
+  )
   if (now > BUDGET) {
     console.error(`[budget] HARD LIMIT EXCEEDED: build/ is ${gib(now)} > ${gib(BUDGET)}`)
     process.exitCode = 1

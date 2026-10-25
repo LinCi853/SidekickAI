@@ -8,12 +8,27 @@ export type DefaultAppSettings = AppSettings
 // 该叶子模块定义同一批字面量，设置校验依赖它；此处一旦漂移，
 // 默认值将无法通过自己的校验器。
 const DEFAULT_TOP_BAR_BUTTON_GROUPS: AppSettings['topBarVisibleButtons'] = [
-  'uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle',
+  'uaToggle',
+  'navBack',
+  'navForward',
+  'navHome',
+  'themeToggle',
+  'pinToggle',
 ]
 
 const DEFAULT_DRAWER_MENU_ITEMS: AppSettings['drawerMenuItems'] = [
-  'advancedPanel', 'promptLibrary', 'settings', 'network', 'modules', 'manage',
-  'backup', 'logs', 'detach', 'onboarding', 'shortcuts', 'themeToggle',
+  'advancedPanel',
+  'promptLibrary',
+  'settings',
+  'network',
+  'modules',
+  'manage',
+  'backup',
+  'logs',
+  'detach',
+  'onboarding',
+  'shortcuts',
+  'themeToggle',
 ]
 
 export function getDefaultAppSettings(isPortable: boolean): DefaultAppSettings {

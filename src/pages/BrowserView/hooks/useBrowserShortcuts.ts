@@ -6,38 +6,38 @@
    - 主进程 F12 / 菜单触发的 DevTools 切换
    ===================================================================== */
 
-import { useEffect, type MutableRefObject } from 'react';
-import { useBrowserKeyboard } from '../useBrowserKeyboard.js';
-import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
-import { onToggleDevTools, maximizeToggleWindow } from '../../../lib/electron-api/index.js';
+import { useEffect, type MutableRefObject } from 'react'
+import { useBrowserKeyboard } from '../useBrowserKeyboard.js'
+import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
+import { onToggleDevTools, maximizeToggleWindow } from '../../../lib/electron-api/index.js'
 
 interface UseBrowserShortcutsParams {
-  addressBarRef: MutableRefObject<HTMLInputElement | null>;
-  bookmarkBarVisible: boolean;
-  setBookmarkBarVisible: (visible: boolean) => void;
-  isFullscreen: boolean;
-  isCloudPc: boolean;
-  handleRefresh: () => void;
-  handleGoBack: () => void;
-  handleGoForward: () => void;
-  handleStopLoading: () => void;
-  handleForceRefresh: () => void;
-  handleToggleDevTools: () => void;
-  handleToggleFullscreen: () => void;
-  handleExitFullscreen: () => void;
-  handleFocusCycle: () => void;
-  focusCycleRef: MutableRefObject<() => void>;
-  handleAddBookmark: () => void;
-  handleFocusSearch: () => void;
-  handleFindInPage: () => void;
-  handlePrint: () => void;
-  handleSavePageAs: () => void;
-  handleViewSource: () => void;
-  zoomInAction: () => void;
-  zoomOutAction: () => void;
-  zoomResetAction: () => void;
-  toggleCloudPc: () => void;
-  handleToggleSpatialNav: () => void;
+  addressBarRef: MutableRefObject<HTMLInputElement | null>
+  bookmarkBarVisible: boolean
+  setBookmarkBarVisible: (visible: boolean) => void
+  isFullscreen: boolean
+  isCloudPc: boolean
+  handleRefresh: () => void
+  handleGoBack: () => void
+  handleGoForward: () => void
+  handleStopLoading: () => void
+  handleForceRefresh: () => void
+  handleToggleDevTools: () => void
+  handleToggleFullscreen: () => void
+  handleExitFullscreen: () => void
+  handleFocusCycle: () => void
+  focusCycleRef: MutableRefObject<() => void>
+  handleAddBookmark: () => void
+  handleFocusSearch: () => void
+  handleFindInPage: () => void
+  handlePrint: () => void
+  handleSavePageAs: () => void
+  handleViewSource: () => void
+  zoomInAction: () => void
+  zoomOutAction: () => void
+  zoomResetAction: () => void
+  toggleCloudPc: () => void
+  handleToggleSpatialNav: () => void
 }
 
 export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
@@ -46,14 +46,14 @@ export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && e.code === 'KeyC') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        p.toggleCloudPc();
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        p.toggleCloudPc()
       }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [p.toggleCloudPc]);
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [p.toggleCloudPc])
 
   useBrowserKeyboard({
     onFocusAddressBar: () => p.addressBarRef.current?.focus(),
@@ -62,7 +62,9 @@ export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
     onGoBack: p.handleGoBack,
     onGoForward: p.handleGoForward,
     onStopLoading: p.handleStopLoading,
-    onMaximize: () => { void maximizeToggleWindow(); },
+    onMaximize: () => {
+      void maximizeToggleWindow()
+    },
     onToggleDevTools: p.handleToggleDevTools,
     onToggleFullscreen: p.handleToggleFullscreen,
     onExitFullscreen: p.handleExitFullscreen,
@@ -81,10 +83,12 @@ export function useBrowserShortcuts(p: UseBrowserShortcutsParams): void {
     onZoomIn: p.zoomInAction,
     onZoomOut: p.zoomOutAction,
     onZoomReset: p.zoomResetAction,
-  });
+  })
 
   useEffect(() => {
-    const offDevTools = onToggleDevTools(p.handleToggleDevTools);
-    return () => { offDevTools(); };
-  }, [p.handleToggleDevTools]);
+    const offDevTools = onToggleDevTools(p.handleToggleDevTools)
+    return () => {
+      offDevTools()
+    }
+  }, [p.handleToggleDevTools])
 }

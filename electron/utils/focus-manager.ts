@@ -68,7 +68,14 @@ const HIDE_SETTLE_MS = 60
 const RESTORE_VERIFY_DELAY_MS = 150
 
 function newState(): TrackedState {
-  return { returnHandle: null, returnHandleValid: false, wasMaximized: false, wasFullScreen: false, bounds: null, generation: 0 }
+  return {
+    returnHandle: null,
+    returnHandleValid: false,
+    wasMaximized: false,
+    wasFullScreen: false,
+    bounds: null,
+    generation: 0,
+  }
 }
 
 /**
@@ -78,7 +85,9 @@ function newState(): TrackedState {
 export function track(win: BrowserWindow): void {
   if (states.has(win)) return
   states.set(win, newState())
-  win.on('closed', () => { states.delete(win) })
+  win.on('closed', () => {
+    states.delete(win)
+  })
 }
 
 /** 停止追踪窗口（通常不需要手动调用，closed 事件自动清理） */
@@ -86,7 +95,10 @@ export function untrack(win: BrowserWindow): void {
   states.delete(win)
 }
 
-const delay = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms) })
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 /** 采集到的句柄是否就是本窗口自己（自己不能作为收起后的归还目标） */
 function getOwnHandle(win: BrowserWindow): number | null {
@@ -110,7 +122,9 @@ function isSelfHandle(win: BrowserWindow, handle: number): boolean {
 function markPinHold(win: BrowserWindow): void {
   try {
     ;(win as unknown as { __markUserPinAction?: () => void }).__markUserPinAction?.()
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -162,7 +176,9 @@ export async function show(win: BrowserWindow): Promise<void> {
       if (b.width !== st.bounds.width || b.height !== st.bounds.height) {
         try {
           win.setBounds({ ...st.bounds })
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
@@ -190,9 +206,7 @@ function scheduleActivationCheck(win: BrowserWindow, generation: number): void {
       const later = states.get(win)
       if (!later || later.generation !== generation) return
       if (!win.isFocused()) {
-        console.warn(
-          '[focus-manager] 唤出后窗口未取得前台焦点（可能受前台锁定/全屏应用限制）',
-        )
+        console.warn('[focus-manager] 唤出后窗口未取得前台焦点（可能受前台锁定/全屏应用限制）')
       }
     }, ACTIVATION_RETRY_DELAY_MS)
   }, ACTIVATION_CHECK_DELAY_MS)
@@ -211,8 +225,13 @@ function activateWithSteal(win: BrowserWindow): void {
   markPinHold(win)
   // 以用户偏好为准：激活瞬间系统 topmost 可能短暂为 false，不能据此取消置顶
   const wid = findWindowIdByWin(win)
-  const desiredTopmost = (wid ? windowStore.getOrDefault(wid).alwaysOnTop : false) || win.isAlwaysOnTop()
-  try { win.setAlwaysOnTop(true) } catch { /* ignore */ }
+  const desiredTopmost =
+    (wid ? windowStore.getOrDefault(wid).alwaysOnTop : false) || win.isAlwaysOnTop()
+  try {
+    win.setAlwaysOnTop(true)
+  } catch {
+    /* ignore */
+  }
   win.show()
   win.moveTop()
   win.focus()
@@ -226,7 +245,11 @@ function activateWithSteal(win: BrowserWindow): void {
   // topmost 保持到系统完成 z-order/激活后再还原，立刻还原会前功尽弃
   setTimeout(() => {
     if (win.isDestroyed()) return
-    try { win.setAlwaysOnTop(desiredTopmost) } catch { /* ignore */ }
+    try {
+      win.setAlwaysOnTop(desiredTopmost)
+    } catch {
+      /* ignore */
+    }
   }, ACTIVATION_RETRY_DELAY_MS)
 }
 
@@ -252,7 +275,7 @@ async function restoreReturnAsync(handle: number, isCancelled: () => boolean): P
   }
   await delay(RESTORE_VERIFY_DELAY_MS)
   if (isCancelled()) return
-  if (await getForegroundHandle() !== handle) {
+  if ((await getForegroundHandle()) !== handle) {
     console.warn('[focus-manager] 交还前台后仍未落在目标窗口（可能被前台锁定）:', handle)
   }
 }

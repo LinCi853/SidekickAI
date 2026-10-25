@@ -20,13 +20,14 @@ import {
 } from './plugins/custom-chat/index.js'
 import { initVoiceModule, teardownVoiceModule, clearVoiceData } from './plugins/voice/index.js'
 import { initTtsModule, teardownTtsModule, clearTtsData } from './plugins/tts/index.js'
-import { initBrowserModule, teardownBrowserModule, clearBrowserData } from './plugins/browser/index.js'
+import {
+  initBrowserModule,
+  teardownBrowserModule,
+  clearBrowserData,
+} from './plugins/browser/index.js'
 
 /** Lifecycle callbacks keyed by module identity. */
-const WIRING: Record<
-  string,
-  Pick<ModuleManifest, 'init' | 'teardown' | 'clearData'>
-> = {
+const WIRING: Record<string, Pick<ModuleManifest, 'init' | 'teardown' | 'clearData'>> = {
   whiteboard: {
     init: initWhiteboardModule,
     teardown: teardownWhiteboardModule,

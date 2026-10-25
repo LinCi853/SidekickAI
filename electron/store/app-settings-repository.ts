@@ -32,8 +32,15 @@ function isValid(key: keyof AppSettings, value: unknown, defaults: AppSettings):
   if (allowed) return typeof value === 'string' && allowed.includes(value)
   const fallback = defaults[key]
   if (Array.isArray(fallback)) {
-    return Array.isArray(value) && value.every(item => typeof item === 'string'
-      && (key !== 'topBarVisibleButtons' || (ALL_TOP_BAR_BUTTON_GROUPS as readonly string[]).includes(item)))
+    return (
+      Array.isArray(value) &&
+      value.every(
+        (item) =>
+          typeof item === 'string' &&
+          (key !== 'topBarVisibleButtons' ||
+            (ALL_TOP_BAR_BUTTON_GROUPS as readonly string[]).includes(item)),
+      )
+    )
   }
   if (key === 'defaultSearchEngine') {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -41,10 +48,14 @@ function isValid(key: keyof AppSettings, value: unknown, defaults: AppSettings):
     return typeof engine.name === 'string' && typeof engine.urlTemplate === 'string'
   }
   if (typeof fallback === 'number') {
-    return typeof value === 'number' && Number.isFinite(value) && value >= 0
-      && (!integerKeys.has(key) || Number.isInteger(value))
-      && (key !== 'altSpaceResetThreshold' || value >= 1)
-      && (!key.endsWith('Width') || value > 0)
+    return (
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      (!integerKeys.has(key) || Number.isInteger(value)) &&
+      (key !== 'altSpaceResetThreshold' || value >= 1) &&
+      (!key.endsWith('Width') || value > 0)
+    )
   }
   return typeof value === typeof fallback
 }
@@ -74,8 +85,9 @@ export function readSettingsRaw(): AppSettings {
     const raw = getAppSettingsTable().get('appSettings')
     const defaults = getDefaultAppSettings(isPortableMode())
     if (raw != null) {
-      try { cache = { ...defaults, ...validated(JSON.parse(raw), false) } }
-      catch (error) {
+      try {
+        cache = { ...defaults, ...validated(JSON.parse(raw), false) }
+      } catch (error) {
         console.error('[app-settings] Cannot read persisted settings:', error)
         cache = defaults
       }

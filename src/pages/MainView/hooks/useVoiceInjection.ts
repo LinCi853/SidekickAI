@@ -1,11 +1,15 @@
-import { useCallback, useEffect } from 'react';
-import { injectTextToWebview, triggerSendInWebview, type WebviewLike } from '../../../hooks/useWebViewControl';
-import { onVoiceInjectAndSend } from '../../../lib/electron-api';
-import type { AIPlatform, Profile } from '../../../lib/electron-api';
+import { useCallback, useEffect } from 'react'
+import {
+  injectTextToWebview,
+  triggerSendInWebview,
+  type WebviewLike,
+} from '../../../hooks/useWebViewControl'
+import { onVoiceInjectAndSend } from '../../../lib/electron-api'
+import type { AIPlatform, Profile } from '../../../lib/electron-api'
 
 interface Tab {
-  id: string;
-  profileId: string;
+  id: string
+  profileId: string
 }
 
 /**
@@ -19,39 +23,56 @@ export function useVoiceInjection(
 ) {
   const injectAndSendVoice = useCallback(
     async (text: string, send = true): Promise<void> => {
-      if (!text || !text.trim()) return;
+      if (!text || !text.trim()) return
       if (!activeTab) {
-        console.warn('[MainView] injectAndSendVoice: 无激活标签，跳过');
-        return;
+        console.warn('[MainView] injectAndSendVoice: 无激活标签，跳过')
+        return
       }
-      const profile = getProfile(activeTab.profileId);
-      const platform = platforms.find(p => profile?.aiPlatformId ? p.id === profile.aiPlatformId : p.url === profile?.aiPlatformUrl);
-      const inputSelector = profile?.aiInputSelector || platform?.inputSelector || null;
-      const sendSelector = profile?.aiSendSelector || platform?.sendSelector || null;
-      const el = document.querySelector(`webview[data-tab-id="${activeTab.id}"]`) as WebviewLike | null;
+      const profile = getProfile(activeTab.profileId)
+      const platform = platforms.find((p) =>
+        profile?.aiPlatformId ? p.id === profile.aiPlatformId : p.url === profile?.aiPlatformUrl,
+      )
+      const inputSelector = profile?.aiInputSelector || platform?.inputSelector || null
+      const sendSelector = profile?.aiSendSelector || platform?.sendSelector || null
+      const el = document.querySelector(
+        `webview[data-tab-id="${activeTab.id}"]`,
+      ) as WebviewLike | null
       if (!el) {
-        console.warn('[MainView] injectAndSendVoice: 未找到激活 webview');
-        return;
+        console.warn('[MainView] injectAndSendVoice: 未找到激活 webview')
+        return
       }
-      const ok = await injectTextToWebview(el, text, inputSelector, platform?.pageAdapter?.nativeComposerSelector);
+      const ok = await injectTextToWebview(
+        el,
+        text,
+        inputSelector,
+        platform?.pageAdapter?.nativeComposerSelector,
+      )
       if (!ok) {
-        console.warn('[MainView] injectAndSendVoice: 注入失败');
-        return;
+        console.warn('[MainView] injectAndSendVoice: 注入失败')
+        return
       }
       if (send) {
-        await triggerSendInWebview(el, sendSelector, inputSelector, platform?.pageAdapter?.sendEvent, platform?.pageAdapter?.nativeComposerSelector);
+        await triggerSendInWebview(
+          el,
+          sendSelector,
+          inputSelector,
+          platform?.pageAdapter?.sendEvent,
+          platform?.pageAdapter?.nativeComposerSelector,
+        )
       }
     },
     [activeTab, getProfile, platforms],
-  );
+  )
 
   useEffect(() => {
     const offInject = onVoiceInjectAndSend(({ text, enterToSend }) => {
-      console.log('[MainView] 收到后台语音注入指令，enterToSend=', enterToSend);
-      void injectAndSendVoice(text, enterToSend);
-    });
-    return () => { offInject(); };
-  }, [injectAndSendVoice]);
+      console.log('[MainView] 收到后台语音注入指令，enterToSend=', enterToSend)
+      void injectAndSendVoice(text, enterToSend)
+    })
+    return () => {
+      offInject()
+    }
+  }, [injectAndSendVoice])
 
-  return { injectAndSendVoice };
+  return { injectAndSendVoice }
 }

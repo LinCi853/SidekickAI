@@ -50,7 +50,12 @@ export function buildWindowConfig(
   const linux = isLinux()
 
   const result: BrowserWindowConstructorOptions = { ...base }
-  result.icon ??= path.join(app.getAppPath(), 'resources', 'icons', platform === 'win32' ? 'icon.ico' : 'icon.png')
+  result.icon ??= path.join(
+    app.getAppPath(),
+    'resources',
+    'icons',
+    platform === 'win32' ? 'icon.ico' : 'icon.png',
+  )
 
   // Windows 专属字段仅 Windows 应用；其它平台显式移除避免无效字段
   // roundedCorners:false 取消系统级圆角（用户决策：窗口圆角怎么调整都不合适，统一取消）

@@ -1,4 +1,4 @@
-const brand = '工百窗';
+const brand = '工百窗'
 
 const windowNames: Record<string, string> = {
   settings: '设置',
@@ -11,15 +11,15 @@ const windowNames: Record<string, string> = {
   onboarding: '使用指南',
   browser: '浏览器',
   'history-download': '历史记录与下载管理',
-};
+}
 
 export function formatWindowTitle(value?: string | null): string {
-  const title = value?.trim();
-  if (!title) return brand;
-  return title.startsWith(brand) ? title : `${brand} - ${title}`;
+  const title = value?.trim()
+  if (!title) return brand
+  return title.startsWith(brand) ? title : `${brand} - ${title}`
 }
 
 export function getInitialWindowTitle(mode: string | null, windowId: string): string {
-  if (windowId === 'preview' || mode === 'record-indicator') return '录音';
-  return formatWindowTitle(windowNames[mode ?? windowId]);
+  if (windowId === 'preview' || mode === 'record-indicator') return '录音'
+  return formatWindowTitle(windowNames[mode ?? windowId])
 }

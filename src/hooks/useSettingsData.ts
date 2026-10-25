@@ -3,8 +3,8 @@
    将 SettingsPanel/index.tsx 的 50+ useState 按数据域拆分，便于复用与测试。
    ===================================================================== */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import {
   getAppSettings,
   updateAppSettings,
@@ -13,39 +13,40 @@ import {
   ALL_TOP_BAR_BUTTON_GROUPS,
   ALL_DRAWER_MENU_ITEMS,
   type DrawerMenuItem,
-} from '../lib/electron-api';
-import type {
-  AppSettings,
-  TopBarButtonGroup,
-  VoiceConfig,
-} from '../lib/electron-api';
+} from '../lib/electron-api'
+import type { AppSettings, TopBarButtonGroup, VoiceConfig } from '../lib/electron-api'
 
 // 热键/预设域拆分至 useSettingsHotkeys.ts，此处 re-export 保持导入路径兼容
-export { useHotkeys, usePresets } from './useSettingsHotkeys';
-export type { HotkeysState, PresetsState } from './useSettingsHotkeys';
+export { useHotkeys, usePresets } from './useSettingsHotkeys'
+export type { HotkeysState, PresetsState } from './useSettingsHotkeys'
 
 /* =====================================================================
    useTabMemorySettings —— 开发者低内存模式
    ===================================================================== */
 
 export interface TabMemorySettingsState {
-  lowMemoryMode: boolean;
-  setLowMemoryMode: Dispatch<SetStateAction<boolean>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  lowMemoryMode: boolean
+  setLowMemoryMode: Dispatch<SetStateAction<boolean>>
+  load: () => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 export function useTabMemorySettings(enabled: boolean): TabMemorySettingsState {
-  const [lowMemoryMode, setLowMemoryMode] = useState(false);
+  const [lowMemoryMode, setLowMemoryMode] = useState(false)
   const load = useCallback(async () => {
-    try { setLowMemoryMode((await getAppSettings()).lowMemoryMode === true); }
-    catch (error) { console.error(error); }
-  }, []);
-  useEffect(() => { if (enabled) void load(); }, [enabled, load]);
+    try {
+      setLowMemoryMode((await getAppSettings()).lowMemoryMode === true)
+    } catch (error) {
+      console.error(error)
+    }
+  }, [])
+  useEffect(() => {
+    if (enabled) void load()
+  }, [enabled, load])
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-    if (patch.lowMemoryMode !== undefined) setLowMemoryMode(patch.lowMemoryMode);
-  }, []);
-  return { lowMemoryMode, setLowMemoryMode, load, update };
+    await updateAppSettings(patch)
+    if (patch.lowMemoryMode !== undefined) setLowMemoryMode(patch.lowMemoryMode)
+  }, [])
+  return { lowMemoryMode, setLowMemoryMode, load, update }
 }
 
 /* =====================================================================
@@ -53,43 +54,45 @@ export function useTabMemorySettings(enabled: boolean): TabMemorySettingsState {
    ===================================================================== */
 
 export interface AppearanceSettingsState {
-  tabBarCollapsed: boolean;
-  setTabBarCollapsed: Dispatch<SetStateAction<boolean>>;
-  uiScale: 'small' | 'medium' | 'large';
-  setUiScale: Dispatch<SetStateAction<'small' | 'medium' | 'large'>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  tabBarCollapsed: boolean
+  setTabBarCollapsed: Dispatch<SetStateAction<boolean>>
+  uiScale: 'small' | 'medium' | 'large'
+  setUiScale: Dispatch<SetStateAction<'small' | 'medium' | 'large'>>
+  load: () => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
 export function useAppearanceSettings(enabled: boolean): AppearanceSettingsState {
-  const [tabBarCollapsed, setTabBarCollapsed] = useState(true);
-  const [uiScale, setUiScale] = useState<'small' | 'medium' | 'large'>('medium');
+  const [tabBarCollapsed, setTabBarCollapsed] = useState(true)
+  const [uiScale, setUiScale] = useState<'small' | 'medium' | 'large'>('medium')
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getAppSettings();
-      setTabBarCollapsed(cfg.tabBarCollapsed ?? true);
-      setUiScale(cfg.uiScale ?? 'medium');
-      document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium');
+      const cfg = await getAppSettings()
+      setTabBarCollapsed(cfg.tabBarCollapsed ?? true)
+      setUiScale(cfg.uiScale ?? 'medium')
+      document.documentElement.setAttribute('data-ui-scale', cfg.uiScale ?? 'medium')
     } catch (e) {
-      console.error('[useAppearanceSettings] 加载失败:', e);
+      console.error('[useAppearanceSettings] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-  }, []);
+    await updateAppSettings(patch)
+  }, [])
 
   return {
-    tabBarCollapsed, setTabBarCollapsed,
-    uiScale, setUiScale,
+    tabBarCollapsed,
+    setTabBarCollapsed,
+    uiScale,
+    setUiScale,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
@@ -97,72 +100,80 @@ export function useAppearanceSettings(enabled: boolean): AppearanceSettingsState
    ===================================================================== */
 
 export interface GeneralSettingsState {
-  enterToSend: boolean;
-  setEnterToSend: Dispatch<SetStateAction<boolean>>;
-  defaultDesktopUaPreset: string;
-  setDefaultDesktopUaPreset: Dispatch<SetStateAction<string>>;
-  defaultMobileUaPreset: string;
-  setDefaultMobileUaPreset: Dispatch<SetStateAction<string>>;
-  closeBehavior: 'close' | 'minimize';
-  setCloseBehavior: Dispatch<SetStateAction<'close' | 'minimize'>>;
-  startupOpen: 'home' | 'lastConversation';
-  setStartupOpen: Dispatch<SetStateAction<'home' | 'lastConversation'>>;
-  appClickBehavior: 'switch' | 'close';
-  setAppClickBehavior: Dispatch<SetStateAction<'switch' | 'close'>>;
-  usageTrackingEnabled: boolean;
-  setUsageTrackingEnabled: Dispatch<SetStateAction<boolean>>;
-  altSpaceResetThreshold: number;
-  setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  enterToSend: boolean
+  setEnterToSend: Dispatch<SetStateAction<boolean>>
+  defaultDesktopUaPreset: string
+  setDefaultDesktopUaPreset: Dispatch<SetStateAction<string>>
+  defaultMobileUaPreset: string
+  setDefaultMobileUaPreset: Dispatch<SetStateAction<string>>
+  closeBehavior: 'close' | 'minimize'
+  setCloseBehavior: Dispatch<SetStateAction<'close' | 'minimize'>>
+  startupOpen: 'home' | 'lastConversation'
+  setStartupOpen: Dispatch<SetStateAction<'home' | 'lastConversation'>>
+  appClickBehavior: 'switch' | 'close'
+  setAppClickBehavior: Dispatch<SetStateAction<'switch' | 'close'>>
+  usageTrackingEnabled: boolean
+  setUsageTrackingEnabled: Dispatch<SetStateAction<boolean>>
+  altSpaceResetThreshold: number
+  setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>
+  load: () => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
 export function useGeneralSettings(enabled: boolean): GeneralSettingsState {
-  const [enterToSend, setEnterToSend] = useState(true);
-  const [defaultDesktopUaPreset, setDefaultDesktopUaPreset] = useState('win-chrome-125');
-  const [defaultMobileUaPreset, setDefaultMobileUaPreset] = useState('iphone-15-pro-safari');
-  const [closeBehavior, setCloseBehavior] = useState<'close' | 'minimize'>('close');
-  const [startupOpen, setStartupOpen] = useState<'home' | 'lastConversation'>('home');
-  const [appClickBehavior, setAppClickBehavior] = useState<'switch' | 'close'>('switch');
-  const [usageTrackingEnabled, setUsageTrackingEnabled] = useState(true);
-  const [altSpaceResetThreshold, setAltSpaceResetThreshold] = useState(6);
+  const [enterToSend, setEnterToSend] = useState(true)
+  const [defaultDesktopUaPreset, setDefaultDesktopUaPreset] = useState('win-chrome-125')
+  const [defaultMobileUaPreset, setDefaultMobileUaPreset] = useState('iphone-15-pro-safari')
+  const [closeBehavior, setCloseBehavior] = useState<'close' | 'minimize'>('close')
+  const [startupOpen, setStartupOpen] = useState<'home' | 'lastConversation'>('home')
+  const [appClickBehavior, setAppClickBehavior] = useState<'switch' | 'close'>('switch')
+  const [usageTrackingEnabled, setUsageTrackingEnabled] = useState(true)
+  const [altSpaceResetThreshold, setAltSpaceResetThreshold] = useState(6)
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getAppSettings();
-      setEnterToSend(cfg.enterToSend ?? true);
-      setDefaultDesktopUaPreset(cfg.defaultDesktopUaPreset ?? 'win-chrome-125');
-      setDefaultMobileUaPreset(cfg.defaultMobileUaPreset ?? 'iphone-15-pro-safari');
-      setCloseBehavior(cfg.closeBehavior ?? 'close');
-      setStartupOpen(cfg.startupOpen ?? 'home');
-      setAppClickBehavior(cfg.appClickBehavior ?? 'switch');
-      setAltSpaceResetThreshold(cfg.altSpaceResetThreshold ?? 6);
-      setUsageTrackingEnabled(cfg.usageTrackingEnabled ?? true);
+      const cfg = await getAppSettings()
+      setEnterToSend(cfg.enterToSend ?? true)
+      setDefaultDesktopUaPreset(cfg.defaultDesktopUaPreset ?? 'win-chrome-125')
+      setDefaultMobileUaPreset(cfg.defaultMobileUaPreset ?? 'iphone-15-pro-safari')
+      setCloseBehavior(cfg.closeBehavior ?? 'close')
+      setStartupOpen(cfg.startupOpen ?? 'home')
+      setAppClickBehavior(cfg.appClickBehavior ?? 'switch')
+      setAltSpaceResetThreshold(cfg.altSpaceResetThreshold ?? 6)
+      setUsageTrackingEnabled(cfg.usageTrackingEnabled ?? true)
     } catch (e) {
-      console.error('[useGeneralSettings] 加载失败:', e);
+      console.error('[useGeneralSettings] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-  }, []);
+    await updateAppSettings(patch)
+  }, [])
 
   return {
-    enterToSend, setEnterToSend,
-    defaultDesktopUaPreset, setDefaultDesktopUaPreset,
-    defaultMobileUaPreset, setDefaultMobileUaPreset,
-    closeBehavior, setCloseBehavior,
-    startupOpen, setStartupOpen,
-    appClickBehavior, setAppClickBehavior,
-    usageTrackingEnabled, setUsageTrackingEnabled,
-    altSpaceResetThreshold, setAltSpaceResetThreshold,
+    enterToSend,
+    setEnterToSend,
+    defaultDesktopUaPreset,
+    setDefaultDesktopUaPreset,
+    defaultMobileUaPreset,
+    setDefaultMobileUaPreset,
+    closeBehavior,
+    setCloseBehavior,
+    startupOpen,
+    setStartupOpen,
+    appClickBehavior,
+    setAppClickBehavior,
+    usageTrackingEnabled,
+    setUsageTrackingEnabled,
+    altSpaceResetThreshold,
+    setAltSpaceResetThreshold,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
@@ -170,67 +181,74 @@ export function useGeneralSettings(enabled: boolean): GeneralSettingsState {
    ===================================================================== */
 
 export interface ProxySettingsState {
-  proxyMode: 'system' | 'direct' | 'custom';
-  setProxyMode: Dispatch<SetStateAction<'system' | 'direct' | 'custom'>>;
-  customProxy: string;
-  setCustomProxy: Dispatch<SetStateAction<string>>;
-  proxyUsername: string;
-  setProxyUsername: Dispatch<SetStateAction<string>>;
-  proxyPassword: string;
-  setProxyPassword: Dispatch<SetStateAction<string>>;
-  proxyBypass: string;
-  setProxyBypass: Dispatch<SetStateAction<string>>;
-  proxyFallbackEnabled: boolean;
-  setProxyFallbackEnabled: Dispatch<SetStateAction<boolean>>;
-  proxyFallbackMode: 'direct' | 'system';
-  setProxyFallbackMode: Dispatch<SetStateAction<'direct' | 'system'>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  proxyMode: 'system' | 'direct' | 'custom'
+  setProxyMode: Dispatch<SetStateAction<'system' | 'direct' | 'custom'>>
+  customProxy: string
+  setCustomProxy: Dispatch<SetStateAction<string>>
+  proxyUsername: string
+  setProxyUsername: Dispatch<SetStateAction<string>>
+  proxyPassword: string
+  setProxyPassword: Dispatch<SetStateAction<string>>
+  proxyBypass: string
+  setProxyBypass: Dispatch<SetStateAction<string>>
+  proxyFallbackEnabled: boolean
+  setProxyFallbackEnabled: Dispatch<SetStateAction<boolean>>
+  proxyFallbackMode: 'direct' | 'system'
+  setProxyFallbackMode: Dispatch<SetStateAction<'direct' | 'system'>>
+  load: () => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
 export function useProxySettings(enabled: boolean): ProxySettingsState {
-  const [proxyMode, setProxyMode] = useState<'system' | 'direct' | 'custom'>('system');
-  const [customProxy, setCustomProxy] = useState('');
-  const [proxyUsername, setProxyUsername] = useState('');
-  const [proxyPassword, setProxyPassword] = useState('');
-  const [proxyBypass, setProxyBypass] = useState('');
-  const [proxyFallbackEnabled, setProxyFallbackEnabled] = useState(false);
-  const [proxyFallbackMode, setProxyFallbackMode] = useState<'direct' | 'system'>('direct');
+  const [proxyMode, setProxyMode] = useState<'system' | 'direct' | 'custom'>('system')
+  const [customProxy, setCustomProxy] = useState('')
+  const [proxyUsername, setProxyUsername] = useState('')
+  const [proxyPassword, setProxyPassword] = useState('')
+  const [proxyBypass, setProxyBypass] = useState('')
+  const [proxyFallbackEnabled, setProxyFallbackEnabled] = useState(false)
+  const [proxyFallbackMode, setProxyFallbackMode] = useState<'direct' | 'system'>('direct')
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getAppSettings();
-      setProxyMode(cfg.proxyMode);
-      setCustomProxy(cfg.customProxy);
-      setProxyUsername(cfg.proxyUsername ?? '');
-      setProxyPassword(cfg.proxyPassword ?? '');
-      setProxyBypass(cfg.proxyBypass ?? '');
-      setProxyFallbackEnabled(cfg.proxyFallbackEnabled ?? false);
-      setProxyFallbackMode(cfg.proxyFallbackMode ?? 'direct');
+      const cfg = await getAppSettings()
+      setProxyMode(cfg.proxyMode)
+      setCustomProxy(cfg.customProxy)
+      setProxyUsername(cfg.proxyUsername ?? '')
+      setProxyPassword(cfg.proxyPassword ?? '')
+      setProxyBypass(cfg.proxyBypass ?? '')
+      setProxyFallbackEnabled(cfg.proxyFallbackEnabled ?? false)
+      setProxyFallbackMode(cfg.proxyFallbackMode ?? 'direct')
     } catch (e) {
-      console.error('[useProxySettings] 加载失败:', e);
+      console.error('[useProxySettings] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-  }, []);
+    await updateAppSettings(patch)
+  }, [])
 
   return {
-    proxyMode, setProxyMode,
-    customProxy, setCustomProxy,
-    proxyUsername, setProxyUsername,
-    proxyPassword, setProxyPassword,
-    proxyBypass, setProxyBypass,
-    proxyFallbackEnabled, setProxyFallbackEnabled,
-    proxyFallbackMode, setProxyFallbackMode,
+    proxyMode,
+    setProxyMode,
+    customProxy,
+    setCustomProxy,
+    proxyUsername,
+    setProxyUsername,
+    proxyPassword,
+    setProxyPassword,
+    proxyBypass,
+    setProxyBypass,
+    proxyFallbackEnabled,
+    setProxyFallbackEnabled,
+    proxyFallbackMode,
+    setProxyFallbackMode,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
@@ -238,47 +256,50 @@ export function useProxySettings(enabled: boolean): ProxySettingsState {
    ===================================================================== */
 
 export interface PlatformSettingsState {
-  hiddenPlatforms: string[];
-  setHiddenPlatforms: Dispatch<SetStateAction<string[]>>;
-  hideForeignModels: boolean;
-  setHideForeignModels: Dispatch<SetStateAction<boolean>>;
-  disableAllBlockRules: boolean;
-  setDisableAllBlockRules: Dispatch<SetStateAction<boolean>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  hiddenPlatforms: string[]
+  setHiddenPlatforms: Dispatch<SetStateAction<string[]>>
+  hideForeignModels: boolean
+  setHideForeignModels: Dispatch<SetStateAction<boolean>>
+  disableAllBlockRules: boolean
+  setDisableAllBlockRules: Dispatch<SetStateAction<boolean>>
+  load: () => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
 export function usePlatformSettings(enabled: boolean): PlatformSettingsState {
-  const [hiddenPlatforms, setHiddenPlatforms] = useState<string[]>([]);
-  const [hideForeignModels, setHideForeignModels] = useState(true);
-  const [disableAllBlockRules, setDisableAllBlockRules] = useState(false);
+  const [hiddenPlatforms, setHiddenPlatforms] = useState<string[]>([])
+  const [hideForeignModels, setHideForeignModels] = useState(true)
+  const [disableAllBlockRules, setDisableAllBlockRules] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getAppSettings();
-      setHiddenPlatforms(cfg.hiddenPlatforms ?? []);
-      setHideForeignModels(cfg.hideForeignModels ?? true);
-      setDisableAllBlockRules(cfg.disableAllBlockRules ?? false);
+      const cfg = await getAppSettings()
+      setHiddenPlatforms(cfg.hiddenPlatforms ?? [])
+      setHideForeignModels(cfg.hideForeignModels ?? true)
+      setDisableAllBlockRules(cfg.disableAllBlockRules ?? false)
     } catch (e) {
-      console.error('[usePlatformSettings] 加载失败:', e);
+      console.error('[usePlatformSettings] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-  }, []);
+    await updateAppSettings(patch)
+  }, [])
 
   return {
-    hiddenPlatforms, setHiddenPlatforms,
-    hideForeignModels, setHideForeignModels,
-    disableAllBlockRules, setDisableAllBlockRules,
+    hiddenPlatforms,
+    setHiddenPlatforms,
+    hideForeignModels,
+    setHideForeignModels,
+    disableAllBlockRules,
+    setDisableAllBlockRules,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
@@ -286,45 +307,46 @@ export function usePlatformSettings(enabled: boolean): PlatformSettingsState {
    ===================================================================== */
 
 export interface TopBarSettingsState {
-  topBarVisibleButtons: TopBarButtonGroup[];
-  setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  topBarVisibleButtons: TopBarButtonGroup[]
+  setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>
+  load: () => Promise<void>
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
 export interface DrawerMenuSettingsState {
-  drawerMenuItems: DrawerMenuItem[];
-  setDrawerMenuItems: Dispatch<SetStateAction<DrawerMenuItem[]>>;
-  load: () => Promise<void>;
+  drawerMenuItems: DrawerMenuItem[]
+  setDrawerMenuItems: Dispatch<SetStateAction<DrawerMenuItem[]>>
+  load: () => Promise<void>
 }
 
 export function useTopBarSettings(enabled: boolean): TopBarSettingsState {
   const [topBarVisibleButtons, setTopBarVisibleButtons] = useState<TopBarButtonGroup[]>([
     ...ALL_TOP_BAR_BUTTON_GROUPS,
-  ]);
+  ])
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getAppSettings();
-      setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS]);
+      const cfg = await getAppSettings()
+      setTopBarVisibleButtons(cfg.topBarVisibleButtons ?? [...ALL_TOP_BAR_BUTTON_GROUPS])
     } catch (e) {
-      console.error('[useTopBarSettings] 加载失败:', e);
+      console.error('[useTopBarSettings] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
   const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await updateAppSettings(patch);
-  }, []);
+    await updateAppSettings(patch)
+  }, [])
 
   return {
-    topBarVisibleButtons, setTopBarVisibleButtons,
+    topBarVisibleButtons,
+    setTopBarVisibleButtons,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
@@ -333,72 +355,72 @@ export function useTopBarSettings(enabled: boolean): TopBarSettingsState {
 
 export interface AppSettingsState {
   // 外观
-  tabBarCollapsed: boolean;
-  setTabBarCollapsed: Dispatch<SetStateAction<boolean>>;
-  uiScale: 'small' | 'medium' | 'large';
-  setUiScale: Dispatch<SetStateAction<'small' | 'medium' | 'large'>>;
+  tabBarCollapsed: boolean
+  setTabBarCollapsed: Dispatch<SetStateAction<boolean>>
+  uiScale: 'small' | 'medium' | 'large'
+  setUiScale: Dispatch<SetStateAction<'small' | 'medium' | 'large'>>
   // 通用
-  enterToSend: boolean;
-  setEnterToSend: Dispatch<SetStateAction<boolean>>;
-  defaultDesktopUaPreset: string;
-  setDefaultDesktopUaPreset: Dispatch<SetStateAction<string>>;
-  defaultMobileUaPreset: string;
-  setDefaultMobileUaPreset: Dispatch<SetStateAction<string>>;
-  closeBehavior: 'close' | 'minimize';
-  setCloseBehavior: Dispatch<SetStateAction<'close' | 'minimize'>>;
-  startupOpen: 'home' | 'lastConversation';
-  setStartupOpen: Dispatch<SetStateAction<'home' | 'lastConversation'>>;
-  appClickBehavior: 'switch' | 'close';
-  setAppClickBehavior: Dispatch<SetStateAction<'switch' | 'close'>>;
-  usageTrackingEnabled: boolean;
-  setUsageTrackingEnabled: Dispatch<SetStateAction<boolean>>;
+  enterToSend: boolean
+  setEnterToSend: Dispatch<SetStateAction<boolean>>
+  defaultDesktopUaPreset: string
+  setDefaultDesktopUaPreset: Dispatch<SetStateAction<string>>
+  defaultMobileUaPreset: string
+  setDefaultMobileUaPreset: Dispatch<SetStateAction<string>>
+  closeBehavior: 'close' | 'minimize'
+  setCloseBehavior: Dispatch<SetStateAction<'close' | 'minimize'>>
+  startupOpen: 'home' | 'lastConversation'
+  setStartupOpen: Dispatch<SetStateAction<'home' | 'lastConversation'>>
+  appClickBehavior: 'switch' | 'close'
+  setAppClickBehavior: Dispatch<SetStateAction<'switch' | 'close'>>
+  usageTrackingEnabled: boolean
+  setUsageTrackingEnabled: Dispatch<SetStateAction<boolean>>
   // 代理
-  proxyMode: 'system' | 'direct' | 'custom';
-  setProxyMode: Dispatch<SetStateAction<'system' | 'direct' | 'custom'>>;
-  customProxy: string;
-  setCustomProxy: Dispatch<SetStateAction<string>>;
-  proxyUsername: string;
-  setProxyUsername: Dispatch<SetStateAction<string>>;
-  proxyPassword: string;
-  setProxyPassword: Dispatch<SetStateAction<string>>;
-  proxyBypass: string;
-  setProxyBypass: Dispatch<SetStateAction<string>>;
-  proxyFallbackEnabled: boolean;
-  setProxyFallbackEnabled: Dispatch<SetStateAction<boolean>>;
-  proxyFallbackMode: 'direct' | 'system';
-  setProxyFallbackMode: Dispatch<SetStateAction<'direct' | 'system'>>;
+  proxyMode: 'system' | 'direct' | 'custom'
+  setProxyMode: Dispatch<SetStateAction<'system' | 'direct' | 'custom'>>
+  customProxy: string
+  setCustomProxy: Dispatch<SetStateAction<string>>
+  proxyUsername: string
+  setProxyUsername: Dispatch<SetStateAction<string>>
+  proxyPassword: string
+  setProxyPassword: Dispatch<SetStateAction<string>>
+  proxyBypass: string
+  setProxyBypass: Dispatch<SetStateAction<string>>
+  proxyFallbackEnabled: boolean
+  setProxyFallbackEnabled: Dispatch<SetStateAction<boolean>>
+  proxyFallbackMode: 'direct' | 'system'
+  setProxyFallbackMode: Dispatch<SetStateAction<'direct' | 'system'>>
   // 平台与模型
-  hiddenPlatforms: string[];
-  setHiddenPlatforms: Dispatch<SetStateAction<string[]>>;
-  hideForeignModels: boolean;
-  setHideForeignModels: Dispatch<SetStateAction<boolean>>;
-  disableAllBlockRules: boolean;
-  setDisableAllBlockRules: Dispatch<SetStateAction<boolean>>;
+  hiddenPlatforms: string[]
+  setHiddenPlatforms: Dispatch<SetStateAction<string[]>>
+  hideForeignModels: boolean
+  setHideForeignModels: Dispatch<SetStateAction<boolean>>
+  disableAllBlockRules: boolean
+  setDisableAllBlockRules: Dispatch<SetStateAction<boolean>>
   // 顶栏
-  topBarVisibleButtons: TopBarButtonGroup[];
-  setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>;
+  topBarVisibleButtons: TopBarButtonGroup[]
+  setTopBarVisibleButtons: Dispatch<SetStateAction<TopBarButtonGroup[]>>
   // 侧边菜单
-  drawerMenuItems: DrawerMenuItem[];
-  setDrawerMenuItems: Dispatch<SetStateAction<DrawerMenuItem[]>>;
+  drawerMenuItems: DrawerMenuItem[]
+  setDrawerMenuItems: Dispatch<SetStateAction<DrawerMenuItem[]>>
   // 其他
-  altSpaceResetThreshold: number;
-  setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>;
-  lowMemoryMode: boolean;
-  setLowMemoryMode: Dispatch<SetStateAction<boolean>>;
+  altSpaceResetThreshold: number
+  setAltSpaceResetThreshold: Dispatch<SetStateAction<number>>
+  lowMemoryMode: boolean
+  setLowMemoryMode: Dispatch<SetStateAction<boolean>>
   // 加载与持久化
-  load: () => Promise<void>;
+  load: () => Promise<void>
   /** 更新单个或多个字段并持久化到主进程 */
-  update: (patch: Partial<AppSettings>) => Promise<void>;
+  update: (patch: Partial<AppSettings>) => Promise<void>
 }
 
 export function useAppSettings(enabled: boolean): AppSettingsState {
-  const appearance = useAppearanceSettings(enabled);
-  const general = useGeneralSettings(enabled);
-  const proxy = useProxySettings(enabled);
-  const platform = usePlatformSettings(enabled);
-  const topBar = useTopBarSettings(enabled);
-  const drawer = useDrawerMenuSettings(enabled);
-  const tabMemory = useTabMemorySettings(enabled);
+  const appearance = useAppearanceSettings(enabled)
+  const general = useGeneralSettings(enabled)
+  const proxy = useProxySettings(enabled)
+  const platform = usePlatformSettings(enabled)
+  const topBar = useTopBarSettings(enabled)
+  const drawer = useDrawerMenuSettings(enabled)
+  const tabMemory = useTabMemorySettings(enabled)
 
   const load = useCallback(async () => {
     await Promise.all([
@@ -409,12 +431,23 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
       topBar.load(),
       drawer.load(),
       tabMemory.load(),
-    ]);
-  }, [appearance.load, general.load, proxy.load, platform.load, topBar.load, drawer.load, tabMemory.load]);
+    ])
+  }, [
+    appearance.load,
+    general.load,
+    proxy.load,
+    platform.load,
+    topBar.load,
+    drawer.load,
+    tabMemory.load,
+  ])
 
-  const update = useCallback(async (patch: Partial<AppSettings>) => {
-    await tabMemory.update(patch);
-  }, [tabMemory.update]);
+  const update = useCallback(
+    async (patch: Partial<AppSettings>) => {
+      await tabMemory.update(patch)
+    },
+    [tabMemory.update],
+  )
 
   return {
     ...appearance,
@@ -426,44 +459,55 @@ export function useAppSettings(enabled: boolean): AppSettingsState {
     ...tabMemory,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
    useDrawerMenuSettings —— 侧边菜单入口显隐
    ===================================================================== */
 
-const LEGACY_DRAWER_ITEMS: DrawerMenuItem[] = ['advancedPanel', 'onboarding', 'shortcuts', 'settings', 'promptLibrary', 'themeToggle'];
-const NEW_DRAWER_ITEMS = ALL_DRAWER_MENU_ITEMS.filter((id) => !LEGACY_DRAWER_ITEMS.includes(id));
+const LEGACY_DRAWER_ITEMS: DrawerMenuItem[] = [
+  'advancedPanel',
+  'onboarding',
+  'shortcuts',
+  'settings',
+  'promptLibrary',
+  'themeToggle',
+]
+const NEW_DRAWER_ITEMS = ALL_DRAWER_MENU_ITEMS.filter((id) => !LEGACY_DRAWER_ITEMS.includes(id))
 
 function normalizeDrawerMenuItems(list: unknown): DrawerMenuItem[] {
-  if (!Array.isArray(list) || list.length === 0) return [...ALL_DRAWER_MENU_ITEMS];
-  const valid = list.filter((id): id is DrawerMenuItem => ALL_DRAWER_MENU_ITEMS.includes(id as DrawerMenuItem));
-  if (valid.length === 0) return [...ALL_DRAWER_MENU_ITEMS];
-  const isLegacy = valid.every((id) => LEGACY_DRAWER_ITEMS.includes(id)) && !valid.some((id) => NEW_DRAWER_ITEMS.includes(id));
-  return isLegacy ? [...valid, ...NEW_DRAWER_ITEMS] : valid;
+  if (!Array.isArray(list) || list.length === 0) return [...ALL_DRAWER_MENU_ITEMS]
+  const valid = list.filter((id): id is DrawerMenuItem =>
+    ALL_DRAWER_MENU_ITEMS.includes(id as DrawerMenuItem),
+  )
+  if (valid.length === 0) return [...ALL_DRAWER_MENU_ITEMS]
+  const isLegacy =
+    valid.every((id) => LEGACY_DRAWER_ITEMS.includes(id)) &&
+    !valid.some((id) => NEW_DRAWER_ITEMS.includes(id))
+  return isLegacy ? [...valid, ...NEW_DRAWER_ITEMS] : valid
 }
 
 export function useDrawerMenuSettings(enabled: boolean): DrawerMenuSettingsState {
   const [drawerMenuItems, setDrawerMenuItems] = useState<DrawerMenuItem[]>([
     ...ALL_DRAWER_MENU_ITEMS,
-  ]);
+  ])
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getAppSettings();
-      const list = cfg.drawerMenuItems;
-      setDrawerMenuItems(normalizeDrawerMenuItems(list));
+      const cfg = await getAppSettings()
+      const list = cfg.drawerMenuItems
+      setDrawerMenuItems(normalizeDrawerMenuItems(list))
     } catch (e) {
-      console.error('[useDrawerMenuSettings] 加载失败:', e);
+      console.error('[useDrawerMenuSettings] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
-  return { drawerMenuItems, setDrawerMenuItems, load };
+  return { drawerMenuItems, setDrawerMenuItems, load }
 }
 
 /* =====================================================================
@@ -471,87 +515,98 @@ export function useDrawerMenuSettings(enabled: boolean): DrawerMenuSettingsState
    ===================================================================== */
 
 export interface VoiceConfigState {
-  confirmMode: 'auto' | 'clipboard';
-  setConfirmMode: Dispatch<SetStateAction<'auto' | 'clipboard'>>;
-  inputMethod: 'layered' | 'clipboard' | 'type';
-  setInputMethod: Dispatch<SetStateAction<'layered' | 'clipboard' | 'type'>>;
-  enterToSend: boolean;
-  setEnterToSend: Dispatch<SetStateAction<boolean>>;
-  sttMode: 'ai' | 'local';
-  setSttMode: Dispatch<SetStateAction<'ai' | 'local'>>;
-  aiProvider: string;
-  setAiProvider: Dispatch<SetStateAction<string>>;
-  language: string;
-  setLanguage: Dispatch<SetStateAction<string>>;
-  inputDeviceId: string;
-  setInputDeviceId: Dispatch<SetStateAction<string>>;
-  localExePath: string;
-  setLocalExePath: Dispatch<SetStateAction<string>>;
-  localArgs: string;
-  setLocalArgs: Dispatch<SetStateAction<string>>;
-  ttsMode: 'disable' | 'ai';
-  setTtsMode: Dispatch<SetStateAction<'disable' | 'ai'>>;
-  ttsProvider: string;
-  setTtsProvider: Dispatch<SetStateAction<string>>;
-  load: () => Promise<void>;
-  update: (patch: Partial<VoiceConfig>) => Promise<void>;
+  confirmMode: 'auto' | 'clipboard'
+  setConfirmMode: Dispatch<SetStateAction<'auto' | 'clipboard'>>
+  inputMethod: 'layered' | 'clipboard' | 'type'
+  setInputMethod: Dispatch<SetStateAction<'layered' | 'clipboard' | 'type'>>
+  enterToSend: boolean
+  setEnterToSend: Dispatch<SetStateAction<boolean>>
+  sttMode: 'ai' | 'local'
+  setSttMode: Dispatch<SetStateAction<'ai' | 'local'>>
+  aiProvider: string
+  setAiProvider: Dispatch<SetStateAction<string>>
+  language: string
+  setLanguage: Dispatch<SetStateAction<string>>
+  inputDeviceId: string
+  setInputDeviceId: Dispatch<SetStateAction<string>>
+  localExePath: string
+  setLocalExePath: Dispatch<SetStateAction<string>>
+  localArgs: string
+  setLocalArgs: Dispatch<SetStateAction<string>>
+  ttsMode: 'disable' | 'ai'
+  setTtsMode: Dispatch<SetStateAction<'disable' | 'ai'>>
+  ttsProvider: string
+  setTtsProvider: Dispatch<SetStateAction<string>>
+  load: () => Promise<void>
+  update: (patch: Partial<VoiceConfig>) => Promise<void>
 }
 
 export function useVoiceConfig(enabled: boolean): VoiceConfigState {
-  const [confirmMode, setConfirmMode] = useState<'auto' | 'clipboard'>('auto');
-  const [inputMethod, setInputMethod] = useState<'layered' | 'clipboard' | 'type'>('layered');
-  const [enterToSend, setEnterToSend] = useState(false);
-  const [sttMode, setSttMode] = useState<'ai' | 'local'>('ai');
-  const [aiProvider, setAiProvider] = useState('openai');
-  const [language, setLanguage] = useState('zh');
-  const [inputDeviceId, setInputDeviceId] = useState('');
-  const [localExePath, setLocalExePath] = useState('');
-  const [localArgs, setLocalArgs] = useState('');
-  const [ttsMode, setTtsMode] = useState<'disable' | 'ai'>('disable');
-  const [ttsProvider, setTtsProvider] = useState('openai');
+  const [confirmMode, setConfirmMode] = useState<'auto' | 'clipboard'>('auto')
+  const [inputMethod, setInputMethod] = useState<'layered' | 'clipboard' | 'type'>('layered')
+  const [enterToSend, setEnterToSend] = useState(false)
+  const [sttMode, setSttMode] = useState<'ai' | 'local'>('ai')
+  const [aiProvider, setAiProvider] = useState('openai')
+  const [language, setLanguage] = useState('zh')
+  const [inputDeviceId, setInputDeviceId] = useState('')
+  const [localExePath, setLocalExePath] = useState('')
+  const [localArgs, setLocalArgs] = useState('')
+  const [ttsMode, setTtsMode] = useState<'disable' | 'ai'>('disable')
+  const [ttsProvider, setTtsProvider] = useState('openai')
 
   const load = useCallback(async () => {
     try {
-      const cfg = await getVoiceConfig();
-      setConfirmMode(cfg.confirmMode ?? 'auto');
-      setInputMethod(cfg.inputMethod ?? 'clipboard');
-      setEnterToSend(cfg.enterToSend ?? true);
-      setSttMode(cfg.sttMode ?? 'ai');
-      setAiProvider(cfg.aiProvider ?? 'openai');
-      setLanguage(cfg.language ?? 'zh');
-      setInputDeviceId(cfg.inputDeviceId ?? '');
-      setLocalExePath(cfg.localExePath ?? '');
-      setLocalArgs(cfg.localArgs ?? '');
-      setTtsMode(cfg.ttsMode ?? 'disable');
-      setTtsProvider(cfg.ttsProvider ?? 'openai');
+      const cfg = await getVoiceConfig()
+      setConfirmMode(cfg.confirmMode ?? 'auto')
+      setInputMethod(cfg.inputMethod ?? 'clipboard')
+      setEnterToSend(cfg.enterToSend ?? true)
+      setSttMode(cfg.sttMode ?? 'ai')
+      setAiProvider(cfg.aiProvider ?? 'openai')
+      setLanguage(cfg.language ?? 'zh')
+      setInputDeviceId(cfg.inputDeviceId ?? '')
+      setLocalExePath(cfg.localExePath ?? '')
+      setLocalArgs(cfg.localArgs ?? '')
+      setTtsMode(cfg.ttsMode ?? 'disable')
+      setTtsProvider(cfg.ttsProvider ?? 'openai')
     } catch (e) {
-      console.error('[useVoiceConfig] 加载失败:', e);
+      console.error('[useVoiceConfig] 加载失败:', e)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    if (enabled) void load()
+  }, [enabled, load])
 
   const update = useCallback(async (patch: Partial<VoiceConfig>) => {
-    await setVoiceConfig(patch);
-  }, []);
+    await setVoiceConfig(patch)
+  }, [])
 
   return {
-    confirmMode, setConfirmMode,
-    inputMethod, setInputMethod,
-    enterToSend, setEnterToSend,
-    sttMode, setSttMode,
-    aiProvider, setAiProvider,
-    language, setLanguage,
-    inputDeviceId, setInputDeviceId,
-    localExePath, setLocalExePath,
-    localArgs, setLocalArgs,
-    ttsMode, setTtsMode,
-    ttsProvider, setTtsProvider,
+    confirmMode,
+    setConfirmMode,
+    inputMethod,
+    setInputMethod,
+    enterToSend,
+    setEnterToSend,
+    sttMode,
+    setSttMode,
+    aiProvider,
+    setAiProvider,
+    language,
+    setLanguage,
+    inputDeviceId,
+    setInputDeviceId,
+    localExePath,
+    setLocalExePath,
+    localArgs,
+    setLocalArgs,
+    ttsMode,
+    setTtsMode,
+    ttsProvider,
+    setTtsProvider,
     load,
     update,
-  };
+  }
 }
 
 /* =====================================================================
@@ -567,97 +622,94 @@ export function useVoiceConfig(enabled: boolean): VoiceConfigState {
 
 export interface UseSettingsDraftResult {
   /** 当前持久化的设置（从主进程加载） */
-  settings: AppSettings | null;
+  settings: AppSettings | null
   /** 本地草稿副本 */
-  draft: AppSettings | null;
+  draft: AppSettings | null
   /** 部分更新草稿（不持久化） */
-  setDraft: (patch: Partial<AppSettings>) => void;
+  setDraft: (patch: Partial<AppSettings>) => void
   /** 草稿与 settings 是否有差异 */
-  isDirty: boolean;
+  isDirty: boolean
   /** 是否正在加载 */
-  loading: boolean;
+  loading: boolean
   /** 重新从主进程加载 */
-  reload: () => Promise<void>;
+  reload: () => Promise<void>
   /** 保存草稿到主进程（仅保存差异字段） */
-  save: () => Promise<void>;
+  save: () => Promise<void>
   /** 草稿回滚到 settings */
-  reset: () => void;
+  reset: () => void
 }
 
 export function useSettingsDraft(enabled = true): UseSettingsDraftResult {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [draft, setDraftState] = useState<AppSettings | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [draft, setDraftState] = useState<AppSettings | null>(null)
+  const [loading, setLoading] = useState(false)
 
   // 使用 ref 保存最新值，使 save() 能在 setDraft 之后立即读到最新草稿
-  const settingsRef = useRef<AppSettings | null>(null);
-  const draftRef = useRef<AppSettings | null>(null);
+  const settingsRef = useRef<AppSettings | null>(null)
+  const draftRef = useRef<AppSettings | null>(null)
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      const cfg = await getAppSettings();
-      settingsRef.current = cfg;
-      draftRef.current = cfg;
-      setSettings(cfg);
-      setDraftState(cfg);
+      const cfg = await getAppSettings()
+      settingsRef.current = cfg
+      draftRef.current = cfg
+      setSettings(cfg)
+      setDraftState(cfg)
     } catch (e) {
-      console.error('[useSettingsDraft] 加载失败:', e);
+      console.error('[useSettingsDraft] 加载失败:', e)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (enabled) void reload();
-  }, [enabled, reload]);
+    if (enabled) void reload()
+  }, [enabled, reload])
 
   const setDraft = useCallback((patch: Partial<AppSettings>) => {
-    const prev = draftRef.current;
-    if (!prev) return;
-    const next = { ...prev, ...patch };
-    draftRef.current = next;
-    setDraftState(next);
-  }, []);
+    const prev = draftRef.current
+    if (!prev) return
+    const next = { ...prev, ...patch }
+    draftRef.current = next
+    setDraftState(next)
+  }, [])
 
   const isDirty = useMemo(() => {
-    if (!settings || !draft) return false;
-    const keys = new Set<string>([...Object.keys(settings), ...Object.keys(draft)]);
+    if (!settings || !draft) return false
+    const keys = new Set<string>([...Object.keys(settings), ...Object.keys(draft)])
     for (const key of keys) {
-      const k = key as keyof AppSettings;
-      if (settings[k] !== draft[k]) return true;
+      const k = key as keyof AppSettings
+      if (settings[k] !== draft[k]) return true
     }
-    return false;
-  }, [settings, draft]);
+    return false
+  }, [settings, draft])
 
   const save = useCallback(async () => {
-    const currentDraft = draftRef.current;
-    const currentSettings = settingsRef.current;
-    if (!currentDraft || !currentSettings) return;
-    const diff: Partial<AppSettings> = {};
-    const keys = new Set<string>([
-      ...Object.keys(currentSettings),
-      ...Object.keys(currentDraft),
-    ]);
+    const currentDraft = draftRef.current
+    const currentSettings = settingsRef.current
+    if (!currentDraft || !currentSettings) return
+    const diff: Partial<AppSettings> = {}
+    const keys = new Set<string>([...Object.keys(currentSettings), ...Object.keys(currentDraft)])
     for (const key of keys) {
-      const k = key as keyof AppSettings;
+      const k = key as keyof AppSettings
       if (currentDraft[k] !== currentSettings[k]) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (diff as any)[k] = currentDraft[k];
+        ;(diff as any)[k] = currentDraft[k]
       }
     }
-    if (Object.keys(diff).length === 0) return;
-    await updateAppSettings(diff);
-    settingsRef.current = currentDraft;
-    setSettings(currentDraft);
-  }, []);
+    if (Object.keys(diff).length === 0) return
+    await updateAppSettings(diff)
+    settingsRef.current = currentDraft
+    setSettings(currentDraft)
+  }, [])
 
   const reset = useCallback(() => {
-    const currentSettings = settingsRef.current;
-    if (!currentSettings) return;
-    draftRef.current = currentSettings;
-    setDraftState(currentSettings);
-  }, []);
+    const currentSettings = settingsRef.current
+    if (!currentSettings) return
+    draftRef.current = currentSettings
+    setDraftState(currentSettings)
+  }, [])
 
   return {
     settings,
@@ -668,5 +720,5 @@ export function useSettingsDraft(enabled = true): UseSettingsDraftResult {
     reload,
     save,
     reset,
-  };
+  }
 }

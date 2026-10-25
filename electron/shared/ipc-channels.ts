@@ -367,10 +367,10 @@ export const IPC_CHANNELS = {
   ONBOARDING_IS_COMPLETED: 'onboarding:isCompleted',
   ONBOARDING_COMPLETE: 'onboarding:complete',
   // 灵感笔记（v2：SQLite + FTS5 + 富文本 + 分类）
-  NOTES_LIST: 'notes:list',                   // 支持 filter: {keyword?, tag?, pinnedOnly?}
-  NOTES_SEARCH: 'notes:search',               // 全文搜索（keyword）
-  NOTES_SAVE: 'notes:save',                   // upsert
-  NOTES_SAVE_SYNC: 'notes:saveSync',          // beforeunload 同步保存兜底（sendSync）
+  NOTES_LIST: 'notes:list', // 支持 filter: {keyword?, tag?, pinnedOnly?}
+  NOTES_SEARCH: 'notes:search', // 全文搜索（keyword）
+  NOTES_SAVE: 'notes:save', // upsert
+  NOTES_SAVE_SYNC: 'notes:saveSync', // beforeunload 同步保存兜底（sendSync）
   NOTES_DELETE: 'notes:delete',
   NOTES_GET_ACTIVE: 'notes:getActive',
   NOTES_SET_ACTIVE: 'notes:setActive',

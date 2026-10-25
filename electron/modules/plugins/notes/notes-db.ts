@@ -36,7 +36,10 @@ export interface NoteListFilter {
 
 /** 从纯文本推导标题：首个非空行截断 30 字 */
 function deriveTitle(contentText: string): string {
-  const firstLine = contentText.split('\n').map((l) => l.trim()).find((l) => l.length > 0)
+  const firstLine = contentText
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length > 0)
   return firstLine ? firstLine.slice(0, 30) : '未命名笔记'
 }
 
@@ -106,29 +109,31 @@ export class NotesDb {
     if (filter?.pinnedOnly) conditions.push('pinned = 1')
     if (filter?.tag) {
       // tags 是 JSON 数组，用 LIKE 近似匹配（标签场景可接受）
-      conditions.push("tags LIKE ?")
+      conditions.push('tags LIKE ?')
       params.push(`%"${filter.tag}"%`)
     }
     if (filter?.keyword && filter.keyword.trim()) {
       // 走 FTS5 全文搜索
-      const ftsRows = this.db.prepare(
-        `SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?`,
-      ).all(filter.keyword.trim()) as Array<{ rowid: number }>
+      const ftsRows = this.db
+        .prepare(`SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?`)
+        .all(filter.keyword.trim()) as Array<{ rowid: number }>
       if (ftsRows.length === 0) return []
       const rowids = ftsRows.map((r) => r.rowid)
       conditions.push(`rowid IN (${rowids.map(() => '?').join(',')})`)
       params.push(...rowids)
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-    const rows = this.db.prepare(
-      `SELECT * FROM notes ${where} ORDER BY pinned DESC, updated_at DESC`,
-    ).all(...params) as Record<string, unknown>[]
+    const rows = this.db
+      .prepare(`SELECT * FROM notes ${where} ORDER BY pinned DESC, updated_at DESC`)
+      .all(...params) as Record<string, unknown>[]
     return rows.map((r) => this.rowToNote(r))
   }
 
   /** 获取单条笔记 */
   getNote(id: string): Note | null {
-    const row = this.db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    const row = this.db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined
     return row ? this.rowToNote(row) : null
   }
 
@@ -136,17 +141,21 @@ export class NotesDb {
   saveNote(input: NoteSaveInput): Note {
     const now = Date.now()
     if (input.id) {
-      const existing = this.db.prepare('SELECT * FROM notes WHERE id = ?').get(input.id) as Record<string, unknown> | undefined
+      const existing = this.db.prepare('SELECT * FROM notes WHERE id = ?').get(input.id) as
+        | Record<string, unknown>
+        | undefined
       if (existing) {
         const contentText = input.content ?? (existing.content_text as string)
         const title = input.title ?? deriveTitle(contentText)
         const contentJson = input.contentJson ?? (existing.content_json as string)
         const pinned = input.pinned ?? Boolean(existing.pinned)
         const tags = input.tags ?? JSON.parse((existing.tags as string) || '[]')
-        this.db.prepare(
-          `UPDATE notes SET title = ?, content_text = ?, content_json = ?, pinned = ?, tags = ?, updated_at = ?
+        this.db
+          .prepare(
+            `UPDATE notes SET title = ?, content_text = ?, content_json = ?, pinned = ?, tags = ?, updated_at = ?
            WHERE id = ?`,
-        ).run(title, contentText, contentJson, pinned ? 1 : 0, JSON.stringify(tags), now, input.id)
+          )
+          .run(title, contentText, contentJson, pinned ? 1 : 0, JSON.stringify(tags), now, input.id)
         return this.getNote(input.id)!
       }
     }
@@ -157,10 +166,23 @@ export class NotesDb {
     const contentJson = input.contentJson ?? ''
     const pinned = input.pinned ?? false
     const tags = input.tags ?? []
-    this.db.prepare(
-      `INSERT INTO notes (id, title, content_text, content_json, pinned, tags, created_at, updated_at, window_title, ai_platform)
+    this.db
+      .prepare(
+        `INSERT INTO notes (id, title, content_text, content_json, pinned, tags, created_at, updated_at, window_title, ai_platform)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, title, contentText, contentJson, pinned ? 1 : 0, JSON.stringify(tags), now, now, input.windowTitle ?? null, input.aiPlatform ?? null)
+      )
+      .run(
+        id,
+        title,
+        contentText,
+        contentJson,
+        pinned ? 1 : 0,
+        JSON.stringify(tags),
+        now,
+        now,
+        input.windowTitle ?? null,
+        input.aiPlatform ?? null,
+      )
     return this.getNote(id)!
   }
 
@@ -174,12 +196,16 @@ export class NotesDb {
 
   /** 设置置顶 */
   setNotePinned(id: string, pinned: boolean): void {
-    this.db.prepare('UPDATE notes SET pinned = ?, updated_at = ? WHERE id = ?').run(pinned ? 1 : 0, Date.now(), id)
+    this.db
+      .prepare('UPDATE notes SET pinned = ?, updated_at = ? WHERE id = ?')
+      .run(pinned ? 1 : 0, Date.now(), id)
   }
 
   /** 设置标签 */
   setNoteTags(id: string, tags: string[]): void {
-    this.db.prepare('UPDATE notes SET tags = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(tags), Date.now(), id)
+    this.db
+      .prepare('UPDATE notes SET tags = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(tags), Date.now(), id)
   }
 
   /** 列出全部已用标签（去重） */
@@ -190,7 +216,9 @@ export class NotesDb {
       try {
         const arr = JSON.parse(r.tags || '[]') as string[]
         arr.forEach((t) => set.add(t))
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     return Array.from(set).sort()
   }

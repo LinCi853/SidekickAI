@@ -6,10 +6,19 @@ describe('AI asset collection', () => {
   let db: Database.Database
   let store: AiAssetsStore
   const source = { id: 'account-a', type: 'webview' as const }
-  const observe = (content: string, status: 'streaming' | 'complete' | 'withdrawn' = 'streaming', key = 'assistant:0') =>
-    store.observe(source, { conversationKey: '/conversation/1', title: 'Conversation', messages: [{ key, role: 'assistant', content, status }] })
+  const observe = (
+    content: string,
+    status: 'streaming' | 'complete' | 'withdrawn' = 'streaming',
+    key = 'assistant:0',
+  ) =>
+    store.observe(source, {
+      conversationKey: '/conversation/1',
+      title: 'Conversation',
+      messages: [{ key, role: 'assistant', content, status }],
+    })
   beforeEach(() => {
-    db = new Database(':memory:'); db.pragma('foreign_keys = ON')
+    db = new Database(':memory:')
+    db.pragma('foreign_keys = ON')
     db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, source_id TEXT, source_type TEXT, title TEXT, created_at INTEGER, updated_at INTEGER, url TEXT);
       CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT, role TEXT, content TEXT, created_at INTEGER, auto_grabbed INTEGER, content_hash TEXT,
       FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE);`)
@@ -18,15 +27,26 @@ describe('AI asset collection', () => {
   afterEach(() => db.close())
   it('requires three distinct conversations before suggesting a repeated instruction', () => {
     const content = 'Please analyze the result and explain the output.'
-    store.observe(source, { conversationKey: '/repeat/one', title: 'One', messages: [1, 2, 3].map(index => ({ key: `u${index}`, role: 'user' as const, content })) })
+    store.observe(source, {
+      conversationKey: '/repeat/one',
+      title: 'One',
+      messages: [1, 2, 3].map((index) => ({ key: `u${index}`, role: 'user' as const, content })),
+    })
     expect(store.suggestions()).toEqual([])
-    for (const key of ['two', 'three', 'four']) store.observe(source, { conversationKey: `/repeat/${key}`, title: key, messages: [{ key: 'u', role: 'user', content }] })
+    for (const key of ['two', 'three', 'four'])
+      store.observe(source, {
+        conversationKey: `/repeat/${key}`,
+        title: key,
+        messages: [{ key: 'u', role: 'user', content }],
+      })
     expect(store.suggestions()).toMatchObject([{ content, uses: 3 }])
   })
 
   it('keeps short and long replies, stream withdrawal and independent identical turns', () => {
     const { conversationId } = observe('好')
-    observe('好'.repeat(12000)); observe('', 'withdrawn'); observe('', 'withdrawn')
+    observe('好'.repeat(12000))
+    observe('', 'withdrawn')
+    observe('', 'withdrawn')
     observe('好', 'complete', 'assistant:1')
     const details = store.details(conversationId)
     expect(details).toHaveLength(2)
@@ -35,20 +55,27 @@ describe('AI asset collection', () => {
     expect(store.usage().outputCharacters).toBe(12001)
   })
   it('does not count repeated observations or count returned token fields', () => {
-    observe('😀 A'); observe('😀 A'); observe('😀 A', 'complete')
+    observe('😀 A')
+    observe('😀 A')
+    observe('😀 A', 'complete')
     expect(store.usage().totalCharacters).toBe(3)
   })
   it('restores an unchanged visible message after withdrawal without counting its content twice', () => {
     const { conversationId } = observe('answer', 'complete')
-    observe('', 'withdrawn'); observe('answer', 'complete')
+    observe('', 'withdrawn')
+    observe('answer', 'complete')
     expect(store.details(conversationId)[0].status).toBe('complete')
     expect(store.usage().outputCharacters).toBe(6)
   })
   it('retains complete source versions when output or reasoning grows by a prefix', () => {
-    const sample = (content: string, reasoning: string) => store.observe(source, {
-      conversationKey: '/conversation/1', title: 'Conversation',
-      messages: [{ key: 'assistant:0', role: 'assistant', content, reasoning, status: 'complete' }],
-    })
+    const sample = (content: string, reasoning: string) =>
+      store.observe(source, {
+        conversationKey: '/conversation/1',
+        title: 'Conversation',
+        messages: [
+          { key: 'assistant:0', role: 'assistant', content, reasoning, status: 'complete' },
+        ],
+      })
     const { conversationId } = sample('Answer', 'Thought')
     sample('Answer extended', 'Thought')
     sample('Answer extended', 'Thought extended')
@@ -73,16 +100,22 @@ describe('AI asset collection', () => {
     observe('搜索词\n12个来源\n第一行 第二行', 'complete')
     observe('第一行 第二行', 'complete')
     expect(store.details(conversationId)[0].revisions).toEqual([])
-    expect(db.prepare('SELECT content FROM messages WHERE conversation_id = ?').get(conversationId)).toEqual({ content: '第一行 第二行' })
+    expect(
+      db.prepare('SELECT content FROM messages WHERE conversation_id = ?').get(conversationId),
+    ).toEqual({ content: '第一行 第二行' })
   })
   it('keeps a genuine rewrite as a revision', () => {
     const { conversationId } = observe('旧的回答', 'complete')
     observe('全新的回答', 'complete')
-    expect(store.details(conversationId)[0].revisions).toMatchObject([{ content: '旧的回答', status: 'complete' }])
+    expect(store.details(conversationId)[0].revisions).toMatchObject([
+      { content: '旧的回答', status: 'complete' },
+    ])
   })
   it('cleans capture noise revisions at startup while keeping genuine rewrites', () => {
     const { conversationId } = observe('ANSWER', 'complete')
-    const { id } = db.prepare('SELECT id FROM messages WHERE conversation_id = ?').get(conversationId) as { id: string }
+    const { id } = db
+      .prepare('SELECT id FROM messages WHERE conversation_id = ?')
+      .get(conversationId) as { id: string }
     const insert = db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
     insert.run('r1', id, 'ANSWER ', '', 'complete', 1)
     insert.run('r2', id, '搜索词\nANSWER', '', 'complete', 2)
@@ -93,31 +126,70 @@ describe('AI asset collection', () => {
   it('excludes deleted API output by both its explicit id and external key before graph reads', () => {
     const api = { id: 'provider-a', type: 'api' as const }
     const conversationId = store.conversation(api, { conversationKey: 'session-a', title: 'API' })
-    const output = { key: 'output-key', role: 'assistant' as const, content: 'First', status: 'streaming' as const }
+    const output = {
+      key: 'output-key',
+      role: 'assistant' as const,
+      content: 'First',
+      status: 'streaming' as const,
+    }
     store.capture(conversationId, output, 'output-id')
     store.deleteMessage('output-id')
-    expect(store.capture(conversationId, { ...output, content: 'First second' }, 'output-id')).toBeUndefined()
-    expect(store.capture(conversationId, { ...output, content: 'First final', status: 'complete' })).toBeUndefined()
+    expect(
+      store.capture(conversationId, { ...output, content: 'First second' }, 'output-id'),
+    ).toBeUndefined()
+    expect(
+      store.capture(conversationId, { ...output, content: 'First final', status: 'complete' }),
+    ).toBeUndefined()
     expect(store.details(conversationId)).toEqual([])
     expect(store.usage().totalCharacters).toBe(0)
-    expect(store.capture(conversationId, { ...output, key: 'next-output', status: 'complete' })).toBeTruthy()
+    expect(
+      store.capture(conversationId, { ...output, key: 'next-output', status: 'complete' }),
+    ).toBeTruthy()
     expect(store.usage().outputCharacters).toBe(5)
   })
   it('suppresses later API flushes after the conversation has been deleted', () => {
     const api = { id: 'provider-a', type: 'api' as const }
     const conversationId = store.conversation(api, { conversationKey: 'session-a', title: 'API' })
-    const output = { key: 'output', role: 'assistant' as const, content: 'Received', status: 'streaming' as const }
+    const output = {
+      key: 'output',
+      role: 'assistant' as const,
+      content: 'Received',
+      status: 'streaming' as const,
+    }
     store.capture(conversationId, output, output.key)
     store.deleteConversation(conversationId)
-    expect(() => store.capture(conversationId, { ...output, content: 'Received later' }, output.key)).not.toThrow()
-    expect(store.capture(conversationId, { ...output, status: 'complete' }, output.key)).toBeUndefined()
+    expect(() =>
+      store.capture(conversationId, { ...output, content: 'Received later' }, output.key),
+    ).not.toThrow()
+    expect(
+      store.capture(conversationId, { ...output, status: 'complete' }, output.key),
+    ).toBeUndefined()
     expect(db.prepare('SELECT * FROM conversations').all()).toEqual([])
     expect(db.prepare('SELECT * FROM messages').all()).toEqual([])
   })
   it('isolates accounts and conversations and persists reasoning and revisions', () => {
     const original = observe('answer')
-    store.observe(source, { conversationKey: '/conversation/1', title: 'Conversation', messages: [{ key: 'assistant:0', role: 'assistant', content: 'new', reasoning: '思考 😀', status: 'complete' }] })
-    store.observe({ id: 'account-b', type: 'webview' }, { conversationKey: '/conversation/1', title: 'Other account', messages: [{ key: 'assistant:0', role: 'assistant', content: 'answer' }] })
+    store.observe(source, {
+      conversationKey: '/conversation/1',
+      title: 'Conversation',
+      messages: [
+        {
+          key: 'assistant:0',
+          role: 'assistant',
+          content: 'new',
+          reasoning: '思考 😀',
+          status: 'complete',
+        },
+      ],
+    })
+    store.observe(
+      { id: 'account-b', type: 'webview' },
+      {
+        conversationKey: '/conversation/1',
+        title: 'Other account',
+        messages: [{ key: 'assistant:0', role: 'assistant', content: 'answer' }],
+      },
+    )
     expect(db.prepare('SELECT * FROM conversations').all()).toHaveLength(2)
     const detail = store.details(original.conversationId)[0]
     expect(detail.reasoningCharacters).toBe(4)
@@ -125,15 +197,36 @@ describe('AI asset collection', () => {
   })
   it('keeps identity when a draft URL becomes a stable conversation URL', () => {
     const message = { key: 'user:platform-id', role: 'user' as const, content: 'same input' }
-    const original = store.observe(source, { conversationKey: 'document:draft', title: 'Draft', messages: [message] })
-    const stable = store.observe(source, { conversationKey: '/conversation/created', previousConversationKey: 'document:draft', title: 'Created', messages: [message] })
+    const original = store.observe(source, {
+      conversationKey: 'document:draft',
+      title: 'Draft',
+      messages: [message],
+    })
+    const stable = store.observe(source, {
+      conversationKey: '/conversation/created',
+      previousConversationKey: 'document:draft',
+      title: 'Created',
+      messages: [message],
+    })
     expect(stable.conversationId).toBe(original.conversationId)
     expect(store.usage().inputCharacters).toBe(10)
-    const other = store.observe(source, { conversationKey: '/conversation/other', previousConversationKey: '/conversation/created', title: 'Other', messages: [message] })
+    const other = store.observe(source, {
+      conversationKey: '/conversation/other',
+      previousConversationKey: '/conversation/created',
+      title: 'Other',
+      messages: [message],
+    })
     expect(other.conversationId).not.toBe(original.conversationId)
   })
   it('keeps attachment references unique and exposes failed acquisition honestly', () => {
-    const input = { conversationKey: '1', title: 'Files', externalKey: 'a', name: 'a.png', mimeType: 'image/png', direction: 'input' as const }
+    const input = {
+      conversationKey: '1',
+      title: 'Files',
+      externalKey: 'a',
+      name: 'a.png',
+      mimeType: 'image/png',
+      direction: 'input' as const,
+    }
     const first = store.beginAttachment(source, input)
     expect(store.beginAttachment(source, input).id).toBe(first.id)
     store.attachmentFailed(first.id, 'Offline')

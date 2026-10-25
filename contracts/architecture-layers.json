@@ -21,9 +21,7 @@
       "path": "electron/platform/window/containers/",
       "level": 2,
       "domain": "containers",
-      "allowedDomains": [
-        "browser"
-      ]
+      "allowedDomains": ["browser"]
     },
     {
       "path": "electron/updates/",

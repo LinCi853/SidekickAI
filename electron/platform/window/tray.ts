@@ -35,7 +35,8 @@ export function createTray(): void {
     let trayIcon = nativeImage.createFromPath(iconPath)
     if (!isMac && !trayIcon.isEmpty() && !trayIcon.getScaleFactors().includes(2)) {
       const denseIcon = nativeImage.createFromPath(path.join(resourcesPath, 'icon-tray@2x.png'))
-      if (!denseIcon.isEmpty()) trayIcon.addRepresentation({ scaleFactor: 2, buffer: denseIcon.toPNG() })
+      if (!denseIcon.isEmpty())
+        trayIcon.addRepresentation({ scaleFactor: 2, buffer: denseIcon.toPNG() })
     }
     // macOS template image 缺失时回退到 icon.png，避免托盘创建失败
     if (isMac && trayIcon.isEmpty()) {

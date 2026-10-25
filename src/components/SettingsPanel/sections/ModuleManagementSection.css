@@ -105,7 +105,10 @@
   color: var(--destructive);
 }
 
-.module-management { container-type: inline-size; min-width: 0; }
+.module-management {
+  container-type: inline-size;
+  min-width: 0;
+}
 .module-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -121,17 +124,56 @@
   background: var(--card);
   border-color: var(--border);
 }
-.module-management .module-card-title-row { flex-wrap: wrap; gap: 4px 8px; }
-.module-management .module-card-name { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
-.module-management .module-card-desc { font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
-.module-management .module-card-meta { overflow-wrap: anywhere; }
-.module-card-footer { display: flex; align-items: flex-start; gap: 8px; margin-top: auto; }
-.module-entry-details { flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--muted-foreground); }
-.module-entry-details summary { cursor: pointer; padding-block: 4px; }
-.module-entry-details[open] .module-card-meta { margin-top: 4px; }
-.module-clear-icon { width: 26px; height: 26px; flex: 0 0 26px; padding: 0; margin-inline-start: auto; }
-.module-clear-icon:hover:not(:disabled) { color: var(--danger); background: var(--danger-bg-soft); }
+.module-management .module-card-title-row {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.module-management .module-card-name {
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.module-management .module-card-desc {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.module-management .module-card-meta {
+  overflow-wrap: anywhere;
+}
+.module-card-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: auto;
+}
+.module-entry-details {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.module-entry-details summary {
+  cursor: pointer;
+  padding-block: 4px;
+}
+.module-entry-details[open] .module-card-meta {
+  margin-top: 4px;
+}
+.module-clear-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  padding: 0;
+  margin-inline-start: auto;
+}
+.module-clear-icon:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-bg-soft);
+}
 
 @container (min-width: 560px) {
-  .module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

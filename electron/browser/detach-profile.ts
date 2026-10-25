@@ -96,11 +96,13 @@ function rollbackPendingDetachMarkers(sourceWindowId: string): void {
     if (!rolled.tabs.some((t) => t.detachedWindowId === DETACH_WINDOW_ID_PLACEHOLDER)) return
     windowStore.save(sourceWindowId, {
       ...rolled,
-      tabs: rolled.tabs.map((t) => t.detachedWindowId === DETACH_WINDOW_ID_PLACEHOLDER
-        ? { ...t, detachedWindowId: null }
-        : t),
+      tabs: rolled.tabs.map((t) =>
+        t.detachedWindowId === DETACH_WINDOW_ID_PLACEHOLDER ? { ...t, detachedWindowId: null } : t,
+      ),
     })
-  } catch { /* 回滚失败时保留现场便于排查 */ }
+  } catch {
+    /* 回滚失败时保留现场便于排查 */
+  }
 }
 
 /** 在途脱离执行体：占位符写入 → session 准备 → 建窗回填 */
@@ -127,15 +129,15 @@ async function detachProfileToBrowserWindowWithin(
     detachedProfiles.push(profileId)
   }
   // 如果当前激活标签属于该 Profile，切换到其他标签
-  const newActiveId = state.activeTabId && state.tabs.some((t) => t.id === state.activeTabId && t.profileId === profileId)
-    ? (state.tabs.find((t) => t.profileId !== profileId)?.id ?? null)
-    : state.activeTabId
+  const newActiveId =
+    state.activeTabId &&
+    state.tabs.some((t) => t.id === state.activeTabId && t.profileId === profileId)
+      ? (state.tabs.find((t) => t.profileId !== profileId)?.id ?? null)
+      : state.activeTabId
   // 为每个脱离的标签标记 detachedWindowId（稍后赋值为 newWindowId）
   const newWindowIdPlaceholder = '__PENDING__'
   const updatedTabs = state.tabs.map((t) =>
-    t.profileId === profileId
-      ? { ...t, detachedWindowId: newWindowIdPlaceholder }
-      : t,
+    t.profileId === profileId ? { ...t, detachedWindowId: newWindowIdPlaceholder } : t,
   )
   windowStore.save(sourceWindowId, {
     ...state,
@@ -151,7 +153,9 @@ async function detachProfileToBrowserWindowWithin(
   const profile = profileStore.get(profileId)
   const aiPlatformId = profile?.aiPlatformId
   const platformName = profile?.aiPlatformId
-    ? (await import('../presets/ai-platforms.js')).AI_PLATFORMS.find((p) => p.id === profile.aiPlatformId)?.name
+    ? (await import('../presets/ai-platforms.js')).AI_PLATFORMS.find(
+        (p) => p.id === profile.aiPlatformId,
+      )?.name
     : undefined
 
   // 4. 收集该 Profile 的全部标签，转换为 BrowserTabState
@@ -190,7 +194,8 @@ async function detachProfileToBrowserWindowWithin(
   // 5. 保存浏览器窗口状态（含 parentTabId / aiPlatformId / platformName 快照）
   const newWindowId = randomUUID()
   const clickedIdx = profileTabs.findIndex((t) => t.id === tabId)
-  const activeBrowserTabId = browserTabs[clickedIdx >= 0 ? clickedIdx : browserTabs.length - 1]?.id ?? null
+  const activeBrowserTabId =
+    browserTabs[clickedIdx >= 0 ? clickedIdx : browserTabs.length - 1]?.id ?? null
 
   const browserState: BrowserWindowState = {
     windowId: newWindowId,
@@ -210,9 +215,7 @@ async function detachProfileToBrowserWindowWithin(
   // 6. 回填主窗口 TabState 的 detachedWindowId（替换占位符为真实 windowId）
   const refreshedState = windowStore.getOrDefault(sourceWindowId)
   const backfilledTabs = refreshedState.tabs.map((t) =>
-    t.detachedWindowId === newWindowIdPlaceholder
-      ? { ...t, detachedWindowId: newWindowId }
-      : t,
+    t.detachedWindowId === newWindowIdPlaceholder ? { ...t, detachedWindowId: newWindowId } : t,
   )
   windowStore.save(sourceWindowId, { ...refreshedState, tabs: backfilledTabs })
 

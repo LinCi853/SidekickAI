@@ -40,10 +40,7 @@ export function createSqliteDb(
  * @param factory 创建实例的工厂函数（首次 get 时调用）
  * @param closeFn 关闭实例的函数（close 时调用，用于释放数据库连接等资源）
  */
-export function createSingletonHolder<T>(
-  factory: () => T,
-  closeFn?: (instance: T) => void,
-) {
+export function createSingletonHolder<T>(factory: () => T, closeFn?: (instance: T) => void) {
   let instance: T | null = null
   return {
     /** 获取实例（不存在时通过 factory 创建） */
@@ -88,9 +85,9 @@ export class MetaTable<V = string> {
 
   /** 读取指定 key 的值；不存在返回 null */
   get(key: string): V | null {
-    const row = this.db
-      .prepare(`SELECT value FROM ${this.table} WHERE key = ?`)
-      .get(key) as { value: string } | undefined
+    const row = this.db.prepare(`SELECT value FROM ${this.table} WHERE key = ?`).get(key) as
+      | { value: string }
+      | undefined
     return (row?.value as unknown as V) ?? null
   }
 
@@ -172,7 +169,10 @@ export function createCrudStore<T extends { id: string }>(opts: {
     },
     delete(id: string): void {
       const arr = getArr()
-      store.set(key, arr.filter((x) => x.id !== id))
+      store.set(
+        key,
+        arr.filter((x) => x.id !== id),
+      )
     },
     update(id: string, patch: Partial<T>): void {
       const arr = getArr()

@@ -4,25 +4,41 @@ import os from 'node:os'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 
-const runtime = vi.hoisted(() => ({ temporary: '', handler: undefined as undefined | ((request: Request) => Response | Promise<Response>) }))
-vi.mock('electron', () => ({ app: { getPath: () => runtime.temporary }, protocol: { handle: (_scheme: string, handler: typeof runtime.handler) => { runtime.handler = handler } } }))
+const runtime = vi.hoisted(() => ({
+  temporary: '',
+  handler: undefined as undefined | ((request: Request) => Response | Promise<Response>),
+}))
+vi.mock('electron', () => ({
+  app: { getPath: () => runtime.temporary },
+  protocol: {
+    handle: (_scheme: string, handler: typeof runtime.handler) => {
+      runtime.handler = handler
+    },
+  },
+}))
 
 let root: string
 let owner: any
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-boundary-'))
   runtime.temporary = root
-  owner = new EventEmitter(); owner.id = 17
+  owner = new EventEmitter()
+  owner.id = 17
   vi.resetModules()
 })
-afterEach(() => { owner.emit('destroyed'); fs.rmSync(root, { recursive: true, force: true }) })
+afterEach(() => {
+  owner.emit('destroyed')
+  fs.rmSync(root, { recursive: true, force: true })
+})
 
 it('refuses caller supplied absolute paths even when they exist', async () => {
   const api = await import('./pdf-protocol.js')
   api.registerPdfProtocol()
   const unrelated = path.join(root, 'unrelated.pdf')
   fs.writeFileSync(unrelated, 'unrelated bytes')
-  const response = await runtime.handler!(new Request(`sidekick-pdf://preview/${encodeURIComponent(unrelated)}`))
+  const response = await runtime.handler!(
+    new Request(`sidekick-pdf://preview/${encodeURIComponent(unrelated)}`),
+  )
   expect(response.status).toBe(404)
   expect(await response.text()).not.toContain('unrelated bytes')
 })
@@ -45,7 +61,7 @@ it('serves a registered preview and binds save and deletion to its owner', async
 it('rejects a registered path replaced with another ordinary file', async () => {
   const api = await import('./pdf-protocol.js')
   const token = api.createPdfPreview(Buffer.from('%PDF-1.7\noriginal'), owner)
-  const directory = fs.readdirSync(root).find(name => name.startsWith('sidekick-previews-'))!
+  const directory = fs.readdirSync(root).find((name) => name.startsWith('sidekick-previews-'))!
   const file = path.join(root, directory, token + '.pdf')
   fs.renameSync(file, file + '.original')
   fs.writeFileSync(file, 'unrelated replacement')

@@ -14,18 +14,18 @@
    */
 
 export interface DroppedFileInfo {
-  filename: string;
-  dataUrl: string;
-  mime: string;
-  size: number;
+  filename: string
+  dataUrl: string
+  mime: string
+  size: number
 }
 
 /** 平台特定的文件派发选项（从 AIPlatform 配置传入） */
 export interface FileDropOptions {
   /** 文件上传 input 的 CSS 选择器（优先于通用 input[type=file]） */
-  fileInputSelector?: string;
+  fileInputSelector?: string
   /** 拖放区 CSS 选择器（追加到启发式候选集） */
-  dropZoneSelector?: string;
+  dropZoneSelector?: string
 }
 
 /**
@@ -36,9 +36,9 @@ export interface FileDropOptions {
  */
 export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDropOptions): string {
   // 序列化参数为 JSON 注入脚本，避免字符串拼接转义问题
-  const payload = JSON.stringify(files);
-  const fileInputSelector = options?.fileInputSelector ?? '';
-  const dropZoneSelector = options?.dropZoneSelector ?? '';
+  const payload = JSON.stringify(files)
+  const fileInputSelector = options?.fileInputSelector ?? ''
+  const dropZoneSelector = options?.dropZoneSelector ?? ''
   return `
 (function(filesPayload, fileInputSelector, dropZoneSelector) {
   // 1. dataUrl → File 对象
@@ -183,5 +183,5 @@ export function buildFileDropScript(files: DroppedFileInfo[], options?: FileDrop
     return { success: false, error: String(e) };
   });
 })(${payload}, ${JSON.stringify(fileInputSelector)}, ${JSON.stringify(dropZoneSelector)});
-  `.trim();
+  `.trim()
 }

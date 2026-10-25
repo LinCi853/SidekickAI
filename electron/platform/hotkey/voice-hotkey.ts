@@ -5,7 +5,10 @@
 // 全部为函数式实现：第一参数 host 为 HotkeyManager 实例，
 // 通过 VoiceHost 协作接口访问 manager 的字段与方法。
 
-import type { HotkeyOwnership, HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
+import type {
+  HotkeyOwnership,
+  HotkeyLease,
+} from '../../../packages/desktop-common/hotkey-ownership.js'
 import { parseAccelerator } from './accelerator.js'
 
 /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut） */
@@ -118,8 +121,11 @@ export function releaseVoiceHold(host: VoiceHost): void {
   host.voiceKeyPressed = false
   host.voiceLastKeydownAt = 0
   stopVoicePolling(host)
-  try { host.voiceMatcher?.onKeyUp() }
-  catch (error) { console.warn('[HotkeyManager] Voice release failed', error) }
+  try {
+    host.voiceMatcher?.onKeyUp()
+  } catch (error) {
+    console.warn('[HotkeyManager] Voice release failed', error)
+  }
 }
 
 /**

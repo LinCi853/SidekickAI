@@ -2,13 +2,23 @@ import type Database from 'better-sqlite3'
 import { createHash, randomUUID } from 'node:crypto'
 import type { ChatMessage } from '../shared/chat.types.js'
 import type {
-  AssetAttachment, AssetAttachmentInput, AssetMessageDetail, AssetMessageStatus,
-  AssetObservation, AssetObservedMessage, AssetPromptSuggestion, AssetRevision,
-  AssetSource, AssetTextUsage,
+  AssetAttachment,
+  AssetAttachmentInput,
+  AssetMessageDetail,
+  AssetMessageStatus,
+  AssetObservation,
+  AssetObservedMessage,
+  AssetPromptSuggestion,
+  AssetRevision,
+  AssetSource,
+  AssetTextUsage,
 } from '../shared/ai-assets.types.js'
 import { repeatedPromptSuggestions, type PromptSample } from '../assets/prompt-suggestions.js'
 import { canonicalWebConversationUrl } from '../assets/conversation-identity.js'
-import { captureLeadingNoiseDifference, captureRevisionSignature } from '../shared/asset-presentation.js'
+import {
+  captureLeadingNoiseDifference,
+  captureRevisionSignature,
+} from '../shared/asset-presentation.js'
 import { AssetGraphStore } from './asset-graph-store.js'
 import { classifyCapturedNoise } from '../assets/noise.js'
 import { addedCharacters, countCharacters } from '../assets/text-usage.js'
@@ -23,17 +33,35 @@ interface MessageState {
   output_characters: number
 }
 interface AttachmentRow {
-  id: string; conversation_id: string; message_id: string | null; source_id: string
-  name: string; mime_type: string; source_url: string | null; direction: 'input' | 'output'
-  status: AssetAttachment['status']; sha256: string | null; size: number | null
-  error: string | null; created_at: number; updated_at: number | null
+  id: string
+  conversation_id: string
+  message_id: string | null
+  source_id: string
+  name: string
+  mime_type: string
+  source_url: string | null
+  direction: 'input' | 'output'
+  status: AssetAttachment['status']
+  sha256: string | null
+  size: number | null
+  error: string | null
+  created_at: number
+  updated_at: number | null
 }
 const digest = (text: string) => createHash('sha256').update(text).digest('hex')
 const attachment = (row: AttachmentRow): AssetAttachment => ({
-  id: row.id, conversationId: row.conversation_id, messageId: row.message_id ?? undefined,
-  sourceId: row.source_id, name: row.name, mimeType: row.mime_type,
-  sourceUrl: row.source_url ?? undefined, direction: row.direction, status: row.status,
-  sha256: row.sha256 ?? undefined, size: row.size ?? undefined, error: row.error ?? undefined,
+  id: row.id,
+  conversationId: row.conversation_id,
+  messageId: row.message_id ?? undefined,
+  sourceId: row.source_id,
+  name: row.name,
+  mimeType: row.mime_type,
+  sourceUrl: row.source_url ?? undefined,
+  direction: row.direction,
+  status: row.status,
+  sha256: row.sha256 ?? undefined,
+  size: row.size ?? undefined,
+  error: row.error ?? undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at ?? row.created_at,
 })
@@ -97,32 +125,52 @@ export class AiAssetsStore {
         source_id TEXT NOT NULL, external_key TEXT NOT NULL, PRIMARY KEY(source_id, external_key)
       );
     `)
-    const attachmentColumns = db.prepare('PRAGMA table_info(asset_attachments)').all() as Array<{ name: string }>
-    if (!attachmentColumns.some(column => column.name === 'updated_at')) db.exec('ALTER TABLE asset_attachments ADD COLUMN updated_at INTEGER')
+    const attachmentColumns = db.prepare('PRAGMA table_info(asset_attachments)').all() as Array<{
+      name: string
+    }>
+    if (!attachmentColumns.some((column) => column.name === 'updated_at'))
+      db.exec('ALTER TABLE asset_attachments ADD COLUMN updated_at INTEGER')
     this.graph = new AssetGraphStore(db)
     this.cleanupNoiseRevisions()
     const seed = db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
-    const versions = db.prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
-      UNION ALL SELECT message_id AS id, content, reasoning FROM asset_revisions`).all() as Array<{ id: string; content: string; reasoning: string }>
-    db.transaction(() => { for (const item of versions) seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning]))) })()
+    const versions = db
+      .prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
+      UNION ALL SELECT message_id AS id, content, reasoning FROM asset_revisions`)
+      .all() as Array<{ id: string; content: string; reasoning: string }>
+    db.transaction(() => {
+      for (const item of versions)
+        seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning])))
+    })()
   }
 
   /** 收录抖动留下的历史版本不是真实修订：与当前内容仅空白/工具状态行差异、或只是清掉工具卡片残行的，启动时清理 */
   private cleanupNoiseRevisions(): void {
-    const rows = this.db.prepare(`SELECT r.rowid AS rowid, r.content AS content, r.reasoning AS reasoning,
+    const rows = this.db
+      .prepare(`SELECT r.rowid AS rowid, r.content AS content, r.reasoning AS reasoning,
       m.content AS current, COALESCE(s.reasoning, '') AS current_reasoning
       FROM asset_revisions r JOIN messages m ON m.id = r.message_id
-      LEFT JOIN asset_message_state s ON s.message_id = m.id`).all() as Array<{
-      rowid: number; content: string; reasoning: string; current: string; current_reasoning: string }>
+      LEFT JOIN asset_message_state s ON s.message_id = m.id`)
+      .all() as Array<{
+      rowid: number
+      content: string
+      reasoning: string
+      current: string
+      current_reasoning: string
+    }>
     const remove = this.db.prepare('DELETE FROM asset_revisions WHERE rowid = ?')
     this.db.transaction(() => {
       for (const row of rows) {
-        const settled = captureRevisionSignature(row.content) === captureRevisionSignature(row.current)
-          && captureRevisionSignature(row.reasoning) === captureRevisionSignature(row.current_reasoning)
-        const empty = !captureRevisionSignature(row.content) && !captureRevisionSignature(row.reasoning)
-        const noise = captureLeadingNoiseDifference(row.content, row.current)
-          && (captureRevisionSignature(row.reasoning) === captureRevisionSignature(row.current_reasoning)
-            || captureLeadingNoiseDifference(row.reasoning, row.current_reasoning))
+        const settled =
+          captureRevisionSignature(row.content) === captureRevisionSignature(row.current) &&
+          captureRevisionSignature(row.reasoning) ===
+            captureRevisionSignature(row.current_reasoning)
+        const empty =
+          !captureRevisionSignature(row.content) && !captureRevisionSignature(row.reasoning)
+        const noise =
+          captureLeadingNoiseDifference(row.content, row.current) &&
+          (captureRevisionSignature(row.reasoning) ===
+            captureRevisionSignature(row.current_reasoning) ||
+            captureLeadingNoiseDifference(row.reasoning, row.current_reasoning))
         if (settled || empty || noise) remove.run(row.rowid)
       }
     })()
@@ -147,8 +195,16 @@ export class AiAssetsStore {
         this.db.prepare('DELETE FROM asset_exclusions').run()
         this.db.prepare('DELETE FROM asset_cleanup_events').run()
         this.db.prepare('DELETE FROM asset_attachment_exclusions').run()
-        this.db.prepare("UPDATE asset_settings.prompts SET value = json_set(value, '$.prompts', json('[]')) WHERE key = '__data__'").run()
-        this.db.prepare("UPDATE asset_settings.injection_history SET value = json_set(value, '$.records', json('[]')) WHERE key = '__data__'").run()
+        this.db
+          .prepare(
+            "UPDATE asset_settings.prompts SET value = json_set(value, '$.prompts', json('[]')) WHERE key = '__data__'",
+          )
+          .run()
+        this.db
+          .prepare(
+            "UPDATE asset_settings.injection_history SET value = json_set(value, '$.records', json('[]')) WHERE key = '__data__'",
+          )
+          .run()
       })()
     } finally {
       if (journalAttached) this.db.exec('DETACH DATABASE collection_journal')
@@ -157,234 +213,470 @@ export class AiAssetsStore {
   }
 
   conversation(source: AssetSource, observation: Omit<AssetObservation, 'messages'>): string {
-    if (this.graph.excluded(source.id, observation.conversationKey)) throw new Error('这段对话已从本地记录中排除')
-    const known = this.db.prepare('SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?')
+    if (this.graph.excluded(source.id, observation.conversationKey))
+      throw new Error('这段对话已从本地记录中排除')
+    const known = this.db
+      .prepare(
+        'SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?',
+      )
       .get(source.id, observation.conversationKey) as { conversation_id: string } | undefined
     if (known) return known.conversation_id
-    const canonical = source.type === 'webview' && observation.url ? canonicalWebConversationUrl(observation.url) : undefined
-    const legacy = canonical === observation.conversationKey
-      ? (this.db.prepare('SELECT id, url FROM conversations WHERE source_id = ? AND source_type = ? ORDER BY updated_at DESC')
-        .all(source.id, source.type) as Array<{ id: string; url: string | null }>).find(item => item.url && canonicalWebConversationUrl(item.url) === canonical)
-      : observation.url ? this.db.prepare(`SELECT id FROM conversations
+    const canonical =
+      source.type === 'webview' && observation.url
+        ? canonicalWebConversationUrl(observation.url)
+        : undefined
+    const legacy =
+      canonical === observation.conversationKey
+        ? (
+            this.db
+              .prepare(
+                'SELECT id, url FROM conversations WHERE source_id = ? AND source_type = ? ORDER BY updated_at DESC',
+              )
+              .all(source.id, source.type) as Array<{ id: string; url: string | null }>
+          ).find((item) => item.url && canonicalWebConversationUrl(item.url) === canonical)
+        : observation.url
+          ? (this.db
+              .prepare(`SELECT id FROM conversations
         WHERE source_id = ? AND source_type = ? AND url = ? AND NOT EXISTS
         (SELECT 1 FROM asset_conversation_keys WHERE conversation_id = conversations.id)
-        ORDER BY updated_at DESC LIMIT 1`).get(source.id, source.type, observation.url) as { id: string } | undefined : undefined
+        ORDER BY updated_at DESC LIMIT 1`)
+              .get(source.id, source.type, observation.url) as { id: string } | undefined)
+          : undefined
     const id = legacy?.id ?? randomUUID()
     const now = Date.now()
-    if (!legacy) this.db.prepare('INSERT INTO conversations (id, source_id, source_type, title, created_at, updated_at, url) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, source.id, source.type, observation.title || '新对话', now, now, observation.url ?? null)
-    this.db.prepare('INSERT INTO asset_conversation_keys VALUES (?, ?, ?)').run(source.id, observation.conversationKey, id)
+    if (!legacy)
+      this.db
+        .prepare(
+          'INSERT INTO conversations (id, source_id, source_type, title, created_at, updated_at, url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          id,
+          source.id,
+          source.type,
+          observation.title || '新对话',
+          now,
+          now,
+          observation.url ?? null,
+        )
+    this.db
+      .prepare('INSERT INTO asset_conversation_keys VALUES (?, ?, ?)')
+      .run(source.id, observation.conversationKey, id)
     return id
   }
 
-  observe(source: AssetSource, observation: AssetObservation): { conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> } {
-    if (this.graph.excluded(source.id, observation.conversationKey)) return { conversationId: '', suppressed: true }
+  observe(
+    source: AssetSource,
+    observation: AssetObservation,
+  ): { conversationId: string; suppressed?: boolean; messageIds?: Record<string, string> } {
+    if (this.graph.excluded(source.id, observation.conversationKey))
+      return { conversationId: '', suppressed: true }
     return this.db.transaction(() => {
-      for (const rejected of observation.rejected ?? []) this.recordCleanup(source, observation.adapter ?? 'dom', rejected.reason, 1, 0, digest(JSON.stringify([observation.visitId, rejected.key, rejected.signature])))
-      const valid = observation.messages.filter(message => {
+      for (const rejected of observation.rejected ?? [])
+        this.recordCleanup(
+          source,
+          observation.adapter ?? 'dom',
+          rejected.reason,
+          1,
+          0,
+          digest(JSON.stringify([observation.visitId, rejected.key, rejected.signature])),
+        )
+      const valid = observation.messages.filter((message) => {
         if (source.type !== 'webview') return true
-        const reason = !message.content && !message.reasoning && !message.status ? 'empty-capture' : undefined
+        const reason =
+          !message.content && !message.reasoning && !message.status ? 'empty-capture' : undefined
         if (!reason) return true
-        this.recordCleanup(source, observation.adapter ?? 'dom', reason, 1, 0, digest(message.content))
+        this.recordCleanup(
+          source,
+          observation.adapter ?? 'dom',
+          reason,
+          1,
+          0,
+          digest(message.content),
+        )
         return false
       })
       if (!valid.length) return { conversationId: '' }
       observation = { ...observation, messages: valid }
 
-      if (observation.previousConversationKey?.startsWith('document:') && !observation.conversationKey.startsWith('document:')) {
-        const draft = this.db.prepare('SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?')
-          .get(source.id, observation.previousConversationKey) as { conversation_id: string } | undefined
-        const matches = draft && observation.messages.some(message => this.db.prepare(`SELECT 1 FROM messages m
+      if (
+        observation.previousConversationKey?.startsWith('document:') &&
+        !observation.conversationKey.startsWith('document:')
+      ) {
+        const draft = this.db
+          .prepare(
+            'SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?',
+          )
+          .get(source.id, observation.previousConversationKey) as
+          | { conversation_id: string }
+          | undefined
+        const matches =
+          draft &&
+          observation.messages.some((message) =>
+            this.db
+              .prepare(`SELECT 1 FROM messages m
           LEFT JOIN asset_nodes n ON n.message_id = m.id LEFT JOIN asset_message_state s ON s.message_id = m.id
           WHERE m.conversation_id = ? AND (n.source_key = ? OR s.external_key = ?) AND m.content = ?`)
-          .get(draft.conversation_id, message.key, message.key, message.content))
-        if (matches) this.db.prepare('INSERT OR IGNORE INTO asset_conversation_keys VALUES (?, ?, ?)')
-          .run(source.id, observation.conversationKey, draft.conversation_id)
+              .get(draft.conversation_id, message.key, message.key, message.content),
+          )
+        if (matches)
+          this.db
+            .prepare('INSERT OR IGNORE INTO asset_conversation_keys VALUES (?, ?, ?)')
+            .run(source.id, observation.conversationKey, draft.conversation_id)
       }
       const conversationId = this.conversation(source, observation)
       observation = this.protectMiMoIdentity(source, conversationId, observation)
-      const messageIds: Record<string, string> = observation.snapshot ? this.graph.observe(conversationId, source.id, observation,
-        (message, messageId) => this.captureMessage(conversationId, message, messageId)) : Object.create(null)
-      if (!observation.snapshot) for (const message of observation.messages) {
-        const id = this.capture(conversationId, message)
-        if (id) messageIds[message.key] = id
-      }
-      for (const message of observation.messages) if (message.identityToken && messageIds[message.key])
-        this.mimoIdentities.set(`${conversationId}\u0000${message.key}`, message.identityToken)
+      const messageIds: Record<string, string> = observation.snapshot
+        ? this.graph.observe(conversationId, source.id, observation, (message, messageId) =>
+            this.captureMessage(conversationId, message, messageId),
+          )
+        : Object.create(null)
+      if (!observation.snapshot)
+        for (const message of observation.messages) {
+          const id = this.capture(conversationId, message)
+          if (id) messageIds[message.key] = id
+        }
+      for (const message of observation.messages)
+        if (message.identityToken && messageIds[message.key])
+          this.mimoIdentities.set(`${conversationId}\u0000${message.key}`, message.identityToken)
       if (observation.visitId) this.graph.viewEvent(conversationId, `web:${observation.visitId}`)
       // 观察未带对话名（SPA 固定平台标题）时保留已有标题，避免把真实名字改回占位
       const local = this.localTitle(conversationId)
       const incoming = observation.title.trim()
-      const stored = local || incoming ? undefined
-        : (this.db.prepare('SELECT title FROM conversations WHERE id = ?').get(conversationId) as { title: string } | undefined)?.title
+      const stored =
+        local || incoming
+          ? undefined
+          : (
+              this.db.prepare('SELECT title FROM conversations WHERE id = ?').get(conversationId) as
+                | { title: string }
+                | undefined
+            )?.title
       const title = local ?? (incoming || stored || '新对话')
-      this.db.prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND title != ?').run(title, Date.now(), conversationId, title)
+      this.db
+        .prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND title != ?')
+        .run(title, Date.now(), conversationId, title)
       return { conversationId, messageIds }
     })()
   }
 
-  private protectMiMoIdentity(source: AssetSource, id: string, observation: AssetObservation): AssetObservation {
-    try { if (source.type !== 'webview' || new URL(observation.url ?? '').hostname !== 'aistudio.xiaomimimo.com') return observation }
-    catch { return observation }
+  private protectMiMoIdentity(
+    source: AssetSource,
+    id: string,
+    observation: AssetObservation,
+  ): AssetObservation {
+    try {
+      if (
+        source.type !== 'webview' ||
+        new URL(observation.url ?? '').hostname !== 'aistudio.xiaomimimo.com'
+      )
+        return observation
+    } catch {
+      return observation
+    }
     const blocked = new Set<string>()
     const keys = new Set<string>()
     for (const message of observation.messages) {
       if (!/^(user|assistant):mimo:/.test(message.key)) continue
       if (keys.has(message.key)) blocked.add(message.key.replace(/^(user|assistant):/, ''))
       keys.add(message.key)
-      const previous = this.db.prepare(`SELECT m.content, s.reasoning, s.status, s.output_characters FROM asset_nodes n
+      const previous = this.db
+        .prepare(`SELECT m.content, s.reasoning, s.status, s.output_characters FROM asset_nodes n
         JOIN messages m ON m.id = n.message_id JOIN asset_message_state s ON s.message_id = m.id
         WHERE n.conversation_id = ? AND n.source_key = ? ORDER BY n.rowid DESC LIMIT 1`)
-        .get(id, message.key) as { content: string; reasoning: string; status: AssetMessageStatus; output_characters: number } | undefined
+        .get(id, message.key) as
+        | {
+            content: string
+            reasoning: string
+            status: AssetMessageStatus
+            output_characters: number
+          }
+        | undefined
       if (!previous) continue
-      const sameElement = message.identityToken && this.mimoIdentities.get(`${id}\u0000${message.key}`) === message.identityToken
+      const sameElement =
+        message.identityToken &&
+        this.mimoIdentities.get(`${id}\u0000${message.key}`) === message.identityToken
       const reasoning = message.reasoning ?? previous.reasoning
       const unchanged = message.content === previous.content && reasoning === previous.reasoning
-      const growing = ['streaming', 'failed', 'stopped'].includes(previous.status)
-        && message.content.startsWith(previous.content) && reasoning.startsWith(previous.reasoning)
+      const growing =
+        ['streaming', 'failed', 'stopped'].includes(previous.status) &&
+        message.content.startsWith(previous.content) &&
+        reasoning.startsWith(previous.reasoning)
       let completingReasoning = false
-      if (message.role === 'assistant' && previous.status === 'complete' && !previous.content
-        && previous.output_characters === 0 && message.content.trim() && previous.reasoning.trim() && message.reasoning === previous.reasoning) {
+      if (
+        message.role === 'assistant' &&
+        previous.status === 'complete' &&
+        !previous.content &&
+        previous.output_characters === 0 &&
+        message.content.trim() &&
+        previous.reasoning.trim() &&
+        message.reasoning === previous.reasoning
+      ) {
         const promptKey = message.key.replace(/^assistant:/, 'user:')
-        const prompt = observation.messages.find(item => item.key === promptKey && item.role === 'user')
-        const saved = this.db.prepare(`SELECT m.content FROM asset_nodes n JOIN messages m ON m.id = n.message_id
+        const prompt = observation.messages.find(
+          (item) => item.key === promptKey && item.role === 'user',
+        )
+        const saved = this.db
+          .prepare(`SELECT m.content FROM asset_nodes n JOIN messages m ON m.id = n.message_id
           WHERE n.conversation_id = ? AND n.source_key = ? AND m.role = 'user' ORDER BY n.rowid DESC LIMIT 1`)
           .get(id, promptKey) as { content: string } | undefined
-        completingReasoning = !!prompt && prompt.content === saved?.content
-          && observation.messages.indexOf(prompt) < observation.messages.indexOf(message)
-          && !!message.identityToken && prompt.identityToken === message.identityToken
+        completingReasoning =
+          !!prompt &&
+          prompt.content === saved?.content &&
+          observation.messages.indexOf(prompt) < observation.messages.indexOf(message) &&
+          !!message.identityToken &&
+          prompt.identityToken === message.identityToken
       }
-      if (!sameElement && !unchanged && !growing && !completingReasoning) blocked.add(message.key.replace(/^(user|assistant):/, ''))
+      if (!sameElement && !unchanged && !growing && !completingReasoning)
+        blocked.add(message.key.replace(/^(user|assistant):/, ''))
     }
     if (!blocked.size) return observation
-    const messages = observation.messages.filter(message => !blocked.has(message.key.replace(/^(user|assistant):/, '')))
-    for (const key of blocked) this.recordCleanup(source, observation.adapter ?? 'dom', 'ambiguous-message-identity',
-      observation.messages.filter(message => message.key.replace(/^(user|assistant):/, '') === key).length,
-      0, digest(JSON.stringify([observation.visitId, key, observation.messages])))
+    const messages = observation.messages.filter(
+      (message) => !blocked.has(message.key.replace(/^(user|assistant):/, '')),
+    )
+    for (const key of blocked)
+      this.recordCleanup(
+        source,
+        observation.adapter ?? 'dom',
+        'ambiguous-message-identity',
+        observation.messages.filter(
+          (message) => message.key.replace(/^(user|assistant):/, '') === key,
+        ).length,
+        0,
+        digest(JSON.stringify([observation.visitId, key, observation.messages])),
+      )
     return { ...observation, messages, completePath: false }
   }
 
   private registerApiConversation(conversationId: string, sourceId: string): string {
     const key = `api:${conversationId}`
-    this.db.prepare('INSERT OR IGNORE INTO asset_conversation_keys VALUES (?, ?, ?)').run(sourceId, key, conversationId)
+    this.db
+      .prepare('INSERT OR IGNORE INTO asset_conversation_keys VALUES (?, ?, ?)')
+      .run(sourceId, key, conversationId)
     return key
   }
 
-  capture(conversationId: string, observed: AssetObservedMessage, messageId?: string): string | undefined {
+  capture(
+    conversationId: string,
+    observed: AssetObservedMessage,
+    messageId?: string,
+  ): string | undefined {
     return this.db.transaction(() => {
-      const source = this.db.prepare('SELECT source_id, source_type FROM conversations WHERE id = ?').get(conversationId) as
-        { source_id: string; source_type: string } | undefined
+      const source = this.db
+        .prepare('SELECT source_id, source_type FROM conversations WHERE id = ?')
+        .get(conversationId) as { source_id: string; source_type: string } | undefined
       if (!source) return undefined
       if (source.source_type === 'api') {
         const key = this.registerApiConversation(conversationId, source.source_id)
-        if (this.db.prepare(`SELECT 1 FROM asset_exclusions WHERE source_id = ? AND conversation_key = ?
+        if (
+          this.db
+            .prepare(`SELECT 1 FROM asset_exclusions WHERE source_id = ? AND conversation_key = ?
           AND (source_key = '' OR source_key = ? OR source_key = ?)`)
-          .get(source.source_id, key, messageId ?? observed.key, observed.key)) return undefined
+            .get(source.source_id, key, messageId ?? observed.key, observed.key)
+        )
+          return undefined
       }
       return this.captureMessage(conversationId, observed, messageId)
     })()
   }
 
-  private captureMessage(conversationId: string, observed: AssetObservedMessage, messageId?: string): string {
+  private captureMessage(
+    conversationId: string,
+    observed: AssetObservedMessage,
+    messageId?: string,
+  ): string {
     const current = messageId
-      ? this.db.prepare('SELECT m.*, s.* FROM messages m LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.id = ?').get(messageId)
-      : this.db.prepare(`SELECT m.*, s.* FROM messages m JOIN asset_message_state s ON s.message_id = m.id
-          WHERE m.conversation_id = ? AND s.external_key = ?`).get(conversationId, observed.key)
+      ? this.db
+          .prepare(
+            'SELECT m.*, s.* FROM messages m LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.id = ?',
+          )
+          .get(messageId)
+      : this.db
+          .prepare(`SELECT m.*, s.* FROM messages m JOIN asset_message_state s ON s.message_id = m.id
+          WHERE m.conversation_id = ? AND s.external_key = ?`)
+          .get(conversationId, observed.key)
     const previous = current as (MessageState & { id: string; content: string }) | undefined
     const id = previous?.id ?? messageId ?? randomUUID()
     const now = Date.now()
-    if (!previous) this.db.prepare(`INSERT INTO messages (id, conversation_id, role, content, created_at, auto_grabbed)
+    if (!previous)
+      this.db
+        .prepare(`INSERT INTO messages (id, conversation_id, role, content, created_at, auto_grabbed)
       VALUES (?, ?, ?, ?, ?, (SELECT source_type = 'webview' FROM conversations WHERE id = ?))`)
-      .run(id, conversationId, observed.role, '', now, conversationId)
-    this.db.prepare('INSERT OR IGNORE INTO asset_message_state (message_id, external_key) VALUES (?, ?)').run(id, observed.key)
+        .run(id, conversationId, observed.role, '', now, conversationId)
+    this.db
+      .prepare('INSERT OR IGNORE INTO asset_message_state (message_id, external_key) VALUES (?, ?)')
+      .run(id, observed.key)
     const status = observed.status ?? 'complete'
     const previousText = previous?.message_id ? previous.content : ''
     const previousReasoning = previous?.reasoning ?? ''
-    const text = ['withdrawn', 'retained'].includes(status) && !observed.content ? previousText : observed.content
+    const text =
+      ['withdrawn', 'retained'].includes(status) && !observed.content
+        ? previousText
+        : observed.content
     const reasoning = observed.reasoning ?? previousReasoning
-    if (observed.markdownContent !== undefined) this.db.prepare(`INSERT INTO asset_message_formats VALUES (?, ?)
-      ON CONFLICT(message_id) DO UPDATE SET markdown = excluded.markdown`).run(id, observed.markdownContent)
+    if (observed.markdownContent !== undefined)
+      this.db
+        .prepare(`INSERT INTO asset_message_formats VALUES (?, ?)
+      ON CONFLICT(message_id) DO UPDATE SET markdown = excluded.markdown`)
+        .run(id, observed.markdownContent)
     const signature = digest(JSON.stringify([text, reasoning]))
-    const fresh = this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)').run(id, signature).changes > 0
+    const fresh =
+      this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)').run(id, signature)
+        .changes > 0
     const input = fresh && observed.role !== 'assistant' ? addedCharacters(previousText, text) : 0
     const output = fresh && observed.role === 'assistant' ? addedCharacters(previousText, text) : 0
     const thought = fresh ? addedCharacters(previousReasoning, reasoning) : 0
-    const changed = text !== previousText || reasoning !== previousReasoning || status !== previous?.status
+    const changed =
+      text !== previousText || reasoning !== previousReasoning || status !== previous?.status
     if (!fresh && !changed) return id
     // 修订只记录真实改写：空白/换行抖动与工具状态行不算差异，清理工具卡片残行也不回填修订
-    const textReal = captureRevisionSignature(text) !== captureRevisionSignature(previousText)
-      && !captureLeadingNoiseDifference(previousText, text)
-    const reasoningReal = captureRevisionSignature(reasoning) !== captureRevisionSignature(previousReasoning)
-      && !captureLeadingNoiseDifference(previousReasoning, reasoning)
-    const rewritten = (textReal && !captureRevisionSignature(text).startsWith(captureRevisionSignature(previousText)))
-      || (reasoningReal && !captureRevisionSignature(reasoning).startsWith(captureRevisionSignature(previousReasoning)))
-    const revision = previous && changed && (
-      status === 'withdrawn' || status === 'retained'
-      || rewritten
-      || (previous.status === 'complete' && (textReal || reasoningReal))
-    )
-    if (revision) this.db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
-      .run(randomUUID(), id, previousText, previousReasoning, previous.status ?? 'complete', now)
-    this.db.prepare('UPDATE messages SET content = ?, content_hash = NULL WHERE id = ?').run(text, id)
-    this.db.prepare(`UPDATE asset_message_state SET reasoning = ?, status = ?,
+    const textReal =
+      captureRevisionSignature(text) !== captureRevisionSignature(previousText) &&
+      !captureLeadingNoiseDifference(previousText, text)
+    const reasoningReal =
+      captureRevisionSignature(reasoning) !== captureRevisionSignature(previousReasoning) &&
+      !captureLeadingNoiseDifference(previousReasoning, reasoning)
+    const rewritten =
+      (textReal &&
+        !captureRevisionSignature(text).startsWith(captureRevisionSignature(previousText))) ||
+      (reasoningReal &&
+        !captureRevisionSignature(reasoning).startsWith(
+          captureRevisionSignature(previousReasoning),
+        ))
+    const revision =
+      previous &&
+      changed &&
+      (status === 'withdrawn' ||
+        status === 'retained' ||
+        rewritten ||
+        (previous.status === 'complete' && (textReal || reasoningReal)))
+    if (revision)
+      this.db
+        .prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), id, previousText, previousReasoning, previous.status ?? 'complete', now)
+    this.db
+      .prepare('UPDATE messages SET content = ?, content_hash = NULL WHERE id = ?')
+      .run(text, id)
+    this.db
+      .prepare(`UPDATE asset_message_state SET reasoning = ?, status = ?,
       input_characters = input_characters + ?, reasoning_characters = reasoning_characters + ?,
-      output_characters = output_characters + ? WHERE message_id = ?`).run(reasoning, status, input, thought, output, id)
-    if (input + output + thought) this.db.prepare('INSERT INTO asset_text_events VALUES (?, ?, ?, ?, ?, ?)')
-      .run(randomUUID(), id, input, thought, output, now)
+      output_characters = output_characters + ? WHERE message_id = ?`)
+      .run(reasoning, status, input, thought, output, id)
+    if (input + output + thought)
+      this.db
+        .prepare('INSERT INTO asset_text_events VALUES (?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), id, input, thought, output, now)
     this.db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(now, conversationId)
     return id
   }
 
-  captureApi(message: ChatMessage, status: AssetMessageStatus = 'complete', reasoning?: string): void {
-    this.capture(message.conversationId, { key: message.id, role: message.role, content: message.content, reasoning, status }, message.id)
+  captureApi(
+    message: ChatMessage,
+    status: AssetMessageStatus = 'complete',
+    reasoning?: string,
+  ): void {
+    this.capture(
+      message.conversationId,
+      { key: message.id, role: message.role, content: message.content, reasoning, status },
+      message.id,
+    )
   }
   recoverInterruptedStreams(): void {
-    this.db.prepare("UPDATE asset_message_state SET status = 'failed' WHERE status = 'streaming'").run()
+    this.db
+      .prepare("UPDATE asset_message_state SET status = 'failed' WHERE status = 'streaming'")
+      .run()
   }
 
   editMessage(id: string, updates: Partial<Pick<ChatMessage, 'content' | 'role'>>): void {
-    const message = this.db.prepare('SELECT m.*, s.external_key, s.reasoning FROM messages m LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.id = ?')
-      .get(id) as { conversation_id: string; content: string; role: ChatMessage['role']; external_key?: string; reasoning?: string } | undefined
+    const message = this.db
+      .prepare(
+        'SELECT m.*, s.external_key, s.reasoning FROM messages m LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.id = ?',
+      )
+      .get(id) as
+      | {
+          conversation_id: string
+          content: string
+          role: ChatMessage['role']
+          external_key?: string
+          reasoning?: string
+        }
+      | undefined
     if (!message || updates.content === undefined) return
     const content = updates.content
     if (updates.role && updates.role !== message.role) throw new Error('本地修订不能更改消息角色')
     this.db.transaction(() => {
-      if (!message.external_key) this.captureMessage(message.conversation_id, { key: id, role: message.role, content: message.content }, id)
-      const local = this.db.prepare('SELECT content FROM asset_local_edits WHERE message_id = ?').get(id) as { content: string } | undefined
+      if (!message.external_key)
+        this.captureMessage(
+          message.conversation_id,
+          { key: id, role: message.role, content: message.content },
+          id,
+        )
+      const local = this.db
+        .prepare('SELECT content FROM asset_local_edits WHERE message_id = ?')
+        .get(id) as { content: string } | undefined
       const previous = local?.content ?? message.content
       const signature = digest(JSON.stringify([content, message.reasoning ?? '']))
-      const fresh = this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)').run(id, signature).changes > 0
-      if (previous !== content) this.db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
-        .run(randomUUID(), id, previous, message.reasoning ?? '', 'complete', Date.now())
+      const fresh =
+        this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)').run(id, signature)
+          .changes > 0
+      if (previous !== content)
+        this.db
+          .prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
+          .run(randomUUID(), id, previous, message.reasoning ?? '', 'complete', Date.now())
       const count = fresh ? addedCharacters(previous, content) : 0
       const input = message.role === 'assistant' ? 0 : count
       const output = message.role === 'assistant' ? count : 0
-      this.db.prepare('UPDATE asset_message_state SET input_characters = input_characters + ?, output_characters = output_characters + ? WHERE message_id = ?').run(input, output, id)
-      if (count) this.db.prepare('INSERT INTO asset_text_events VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), id, input, 0, output, Date.now())
-      this.db.prepare('INSERT INTO asset_local_edits VALUES (?, ?) ON CONFLICT(message_id) DO UPDATE SET content = excluded.content').run(id, content)
-      this.db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(Date.now(), message.conversation_id)
+      this.db
+        .prepare(
+          'UPDATE asset_message_state SET input_characters = input_characters + ?, output_characters = output_characters + ? WHERE message_id = ?',
+        )
+        .run(input, output, id)
+      if (count)
+        this.db
+          .prepare('INSERT INTO asset_text_events VALUES (?, ?, ?, ?, ?, ?)')
+          .run(randomUUID(), id, input, 0, output, Date.now())
+      this.db
+        .prepare(
+          'INSERT INTO asset_local_edits VALUES (?, ?) ON CONFLICT(message_id) DO UPDATE SET content = excluded.content',
+        )
+        .run(id, content)
+      this.db
+        .prepare('UPDATE conversations SET updated_at = ? WHERE id = ?')
+        .run(Date.now(), message.conversation_id)
     })()
   }
   displayMessages(messages: ChatMessage[]): ChatMessage[] {
-    return messages.map(message => {
-      const edit = this.db.prepare('SELECT content FROM asset_local_edits WHERE message_id = ?').get(message.id) as { content: string } | undefined
+    return messages.map((message) => {
+      const edit = this.db
+        .prepare('SELECT content FROM asset_local_edits WHERE message_id = ?')
+        .get(message.id) as { content: string } | undefined
       return edit ? { ...message, content: edit.content } : message
     })
   }
   localTitle(id: string): string | undefined {
-    return (this.db.prepare('SELECT title FROM asset_local_titles WHERE conversation_id = ?').get(id) as { title: string } | undefined)?.title
+    return (
+      this.db.prepare('SELECT title FROM asset_local_titles WHERE conversation_id = ?').get(id) as
+        | { title: string }
+        | undefined
+    )?.title
   }
   renameConversation(id: string, title: string): void {
     const value = title.trim()
     if (!value || value.length > 500) throw new Error('请输入有效的对话名称')
     this.db.transaction(() => {
-      this.db.prepare('INSERT INTO asset_local_titles VALUES (?, ?) ON CONFLICT(conversation_id) DO UPDATE SET title = excluded.title').run(id, value)
-      this.db.prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?').run(value, Date.now(), id)
+      this.db
+        .prepare(
+          'INSERT INTO asset_local_titles VALUES (?, ?) ON CONFLICT(conversation_id) DO UPDATE SET title = excluded.title',
+        )
+        .run(id, value)
+      this.db
+        .prepare('UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?')
+        .run(value, Date.now(), id)
     })()
   }
   deleteConversation(id: string): void {
     this.db.transaction(() => {
-      const source = this.db.prepare('SELECT source_id FROM conversations WHERE id = ? AND source_type = ?').get(id, 'api') as { source_id: string } | undefined
+      const source = this.db
+        .prepare('SELECT source_id FROM conversations WHERE id = ? AND source_type = ?')
+        .get(id, 'api') as { source_id: string } | undefined
       if (source) this.registerApiConversation(id, source.source_id)
       this.graph.excludeConversation(id)
       this.db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
@@ -392,16 +684,22 @@ export class AiAssetsStore {
   }
   deleteMessage(id: string): void {
     this.db.transaction(() => {
-      const message = this.db.prepare(`SELECT m.conversation_id, c.source_id, s.external_key FROM messages m
+      const message = this.db
+        .prepare(`SELECT m.conversation_id, c.source_id, s.external_key FROM messages m
         JOIN conversations c ON c.id = m.conversation_id LEFT JOIN asset_message_state s ON s.message_id = m.id
-        WHERE m.id = ? AND c.source_type = 'api'`).get(id) as
-        { conversation_id: string; source_id: string; external_key: string | null } | undefined
+        WHERE m.id = ? AND c.source_type = 'api'`)
+        .get(id) as
+        | { conversation_id: string; source_id: string; external_key: string | null }
+        | undefined
       if (message) {
         const key = this.registerApiConversation(message.conversation_id, message.source_id)
         this.graph.ensure(message.conversation_id)
         if (message.external_key && message.external_key !== id) {
-          const node = this.db.prepare('SELECT parent_id FROM asset_nodes WHERE message_id = ?').get(id) as { parent_id: string | null }
-          this.db.prepare('INSERT OR IGNORE INTO asset_exclusions VALUES (?, ?, ?, ?, ?)')
+          const node = this.db
+            .prepare('SELECT parent_id FROM asset_nodes WHERE message_id = ?')
+            .get(id) as { parent_id: string | null }
+          this.db
+            .prepare('INSERT OR IGNORE INTO asset_exclusions VALUES (?, ?, ?, ?, ?)')
             .run(message.source_id, key, node.parent_id ?? '', message.external_key, '')
         }
       }
@@ -409,33 +707,76 @@ export class AiAssetsStore {
       this.db.prepare('DELETE FROM messages WHERE id = ?').run(id)
     })()
   }
-  recordCleanup(source: AssetSource, adapter: string, reason: string, messages: number, conversations: number, signature: string, apiOrigin?: string): void {
-    this.db.prepare('INSERT OR IGNORE INTO asset_cleanup_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(randomUUID(), Date.now(), source.id, source.type, adapter, reason, messages, conversations, signature, apiOrigin ?? null)
+  recordCleanup(
+    source: AssetSource,
+    adapter: string,
+    reason: string,
+    messages: number,
+    conversations: number,
+    signature: string,
+    apiOrigin?: string,
+  ): void {
+    this.db
+      .prepare('INSERT OR IGNORE INTO asset_cleanup_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(
+        randomUUID(),
+        Date.now(),
+        source.id,
+        source.type,
+        adapter,
+        reason,
+        messages,
+        conversations,
+        signature,
+        apiOrigin ?? null,
+      )
   }
   cleanupRecords(): import('../shared/ai-assets.types.js').AssetCleanupRecord[] {
-    return this.db.prepare(`SELECT id, created_at AS createdAt, source_id AS sourceId, source_type AS sourceType,
-      adapter, reason, messages, conversations, api_origin AS apiOrigin FROM asset_cleanup_events ORDER BY created_at DESC LIMIT 500`).all() as import('../shared/ai-assets.types.js').AssetCleanupRecord[]
+    return this.db
+      .prepare(`SELECT id, created_at AS createdAt, source_id AS sourceId, source_type AS sourceType,
+      adapter, reason, messages, conversations, api_origin AS apiOrigin FROM asset_cleanup_events ORDER BY created_at DESC LIMIT 500`)
+      .all() as import('../shared/ai-assets.types.js').AssetCleanupRecord[]
   }
   cleanupNoise(): { deletedCount: number; messages: number } {
     return this.db.transaction(() => {
-      const rows = this.db.prepare(`SELECT m.id, m.conversation_id, m.content, c.source_id FROM messages m JOIN conversations c ON c.id = m.conversation_id
-        WHERE c.source_type = 'webview' AND m.auto_grabbed = 1 AND NOT EXISTS (SELECT 1 FROM asset_local_edits e WHERE e.message_id = m.id)`).all() as Array<{ id: string; conversation_id: string; content: string; source_id: string }>
-      const affected = new Set<string>(); let messages = 0; let deletedCount = 0
+      const rows = this.db
+        .prepare(`SELECT m.id, m.conversation_id, m.content, c.source_id FROM messages m JOIN conversations c ON c.id = m.conversation_id
+        WHERE c.source_type = 'webview' AND m.auto_grabbed = 1 AND NOT EXISTS (SELECT 1 FROM asset_local_edits e WHERE e.message_id = m.id)`)
+        .all() as Array<{ id: string; conversation_id: string; content: string; source_id: string }>
+      const affected = new Set<string>()
+      let messages = 0
+      let deletedCount = 0
       for (const row of rows) {
         const reason = classifyCapturedNoise(row.content)
         if (!reason || reason === 'empty-capture') continue
         this.graph.excludeMessage(row.id)
         this.db.prepare('DELETE FROM messages WHERE id = ?').run(row.id)
-        this.recordCleanup({ id: row.source_id, type: 'webview' }, 'legacy-dom', reason, 1, 0, digest(row.content))
-        affected.add(row.conversation_id); messages++
+        this.recordCleanup(
+          { id: row.source_id, type: 'webview' },
+          'legacy-dom',
+          reason,
+          1,
+          0,
+          digest(row.content),
+        )
+        affected.add(row.conversation_id)
+        messages++
       }
-      const empty = this.db.prepare(`SELECT c.id, c.source_id FROM conversations c WHERE c.source_type = 'webview'
+      const empty = this.db
+        .prepare(`SELECT c.id, c.source_id FROM conversations c WHERE c.source_type = 'webview'
         AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
-        AND NOT EXISTS (SELECT 1 FROM asset_attachments a WHERE a.conversation_id = c.id)`).all() as Array<{ id: string; source_id: string }>
+        AND NOT EXISTS (SELECT 1 FROM asset_attachments a WHERE a.conversation_id = c.id)`)
+        .all() as Array<{ id: string; source_id: string }>
       for (const row of empty) {
         this.db.prepare('DELETE FROM conversations WHERE id = ?').run(row.id)
-        this.recordCleanup({ id: row.source_id, type: 'webview' }, 'legacy-dom', affected.has(row.id) ? 'invalid-conversation' : 'empty-conversation', 0, 1, row.id)
+        this.recordCleanup(
+          { id: row.source_id, type: 'webview' },
+          'legacy-dom',
+          affected.has(row.id) ? 'invalid-conversation' : 'empty-conversation',
+          0,
+          1,
+          row.id,
+        )
         deletedCount++
       }
       return { deletedCount, messages }
@@ -443,91 +784,194 @@ export class AiAssetsStore {
   }
 
   details(conversationId: string): AssetMessageDetail[] {
-    const rows = this.db.prepare(`SELECT m.id, m.content, m.role, s.* FROM messages m
+    const rows = this.db
+      .prepare(`SELECT m.id, m.content, m.role, s.* FROM messages m
       LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.conversation_id = ? ORDER BY m.created_at, m.rowid`)
       .all(conversationId) as Array<MessageState & { id: string; content: string; role: string }>
-    return rows.map(row => ({
-      markdownContent: (this.db.prepare('SELECT markdown FROM asset_message_formats WHERE message_id = ?').get(row.id) as { markdown: string } | undefined)?.markdown,
-      observations: (this.db.prepare('SELECT signature FROM asset_observations WHERE message_id = ?').all(row.id) as Array<{ signature: string }>).map(item => item.signature),
-      locallyEdited: !!this.db.prepare('SELECT 1 FROM asset_local_edits WHERE message_id = ?').get(row.id),
-      messageId: row.id, reasoning: row.reasoning ?? '', status: row.status ?? 'complete',
-      inputCharacters: row.input_characters ?? (row.role !== 'assistant' ? countCharacters(row.content) : 0),
+    return rows.map((row) => ({
+      markdownContent: (
+        this.db
+          .prepare('SELECT markdown FROM asset_message_formats WHERE message_id = ?')
+          .get(row.id) as { markdown: string } | undefined
+      )?.markdown,
+      observations: (
+        this.db
+          .prepare('SELECT signature FROM asset_observations WHERE message_id = ?')
+          .all(row.id) as Array<{ signature: string }>
+      ).map((item) => item.signature),
+      locallyEdited: !!this.db
+        .prepare('SELECT 1 FROM asset_local_edits WHERE message_id = ?')
+        .get(row.id),
+      messageId: row.id,
+      reasoning: row.reasoning ?? '',
+      status: row.status ?? 'complete',
+      inputCharacters:
+        row.input_characters ?? (row.role !== 'assistant' ? countCharacters(row.content) : 0),
       reasoningCharacters: row.reasoning_characters ?? 0,
-      outputCharacters: row.output_characters ?? (row.role === 'assistant' ? countCharacters(row.content) : 0),
-      revisions: (this.db.prepare('SELECT * FROM asset_revisions WHERE message_id = ? ORDER BY captured_at, rowid').all(row.id) as Array<{
-        id: string; message_id: string; content: string; reasoning: string; status: AssetMessageStatus; captured_at: number
-      }>).map(r => ({ id: r.id, messageId: r.message_id, content: r.content, reasoning: r.reasoning, status: r.status, capturedAt: r.captured_at } satisfies AssetRevision)),
+      outputCharacters:
+        row.output_characters ?? (row.role === 'assistant' ? countCharacters(row.content) : 0),
+      revisions: (
+        this.db
+          .prepare('SELECT * FROM asset_revisions WHERE message_id = ? ORDER BY captured_at, rowid')
+          .all(row.id) as Array<{
+          id: string
+          message_id: string
+          content: string
+          reasoning: string
+          status: AssetMessageStatus
+          captured_at: number
+        }>
+      ).map(
+        (r) =>
+          ({
+            id: r.id,
+            messageId: r.message_id,
+            content: r.content,
+            reasoning: r.reasoning,
+            status: r.status,
+            capturedAt: r.captured_at,
+          }) satisfies AssetRevision,
+      ),
     }))
   }
 
   usage(sourceId?: string, conversationId?: string): AssetTextUsage {
-    const row = this.db.prepare(`SELECT COALESCE(SUM(input_characters), 0) AS input,
+    const row = this.db
+      .prepare(`SELECT COALESCE(SUM(input_characters), 0) AS input,
       COALESCE(SUM(reasoning_characters), 0) AS reasoning, COALESCE(SUM(output_characters), 0) AS output
       FROM asset_message_state s JOIN messages m ON m.id = s.message_id
       JOIN conversations c ON c.id = m.conversation_id WHERE (? IS NULL OR c.source_id = ?) AND (? IS NULL OR c.id = ?)`)
-      .get(sourceId ?? null, sourceId ?? null, conversationId ?? null, conversationId ?? null) as { input: number; reasoning: number; output: number }
-    const legacy = this.db.prepare(`SELECT role, content FROM messages
+      .get(sourceId ?? null, sourceId ?? null, conversationId ?? null, conversationId ?? null) as {
+      input: number
+      reasoning: number
+      output: number
+    }
+    const legacy = this.db
+      .prepare(`SELECT role, content FROM messages
       WHERE NOT EXISTS (SELECT 1 FROM asset_message_state WHERE message_id = messages.id)
       AND conversation_id IN (SELECT id FROM conversations WHERE source_type != 'freeze-snapshot')
       AND (? IS NULL OR conversation_id IN (SELECT id FROM conversations WHERE source_id = ?)) AND (? IS NULL OR conversation_id = ?)`)
-      .all(sourceId ?? null, sourceId ?? null, conversationId ?? null, conversationId ?? null) as Array<{ role: string; content: string }>
-    for (const message of legacy) row[message.role === 'assistant' ? 'output' : 'input'] += countCharacters(message.content)
-    const start = new Date(); start.setHours(0, 0, 0, 0)
-    const today = this.db.prepare(`SELECT COALESCE(SUM(input_characters + reasoning_characters + output_characters), 0) AS count
+      .all(
+        sourceId ?? null,
+        sourceId ?? null,
+        conversationId ?? null,
+        conversationId ?? null,
+      ) as Array<{ role: string; content: string }>
+    for (const message of legacy)
+      row[message.role === 'assistant' ? 'output' : 'input'] += countCharacters(message.content)
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const today = this.db
+      .prepare(`SELECT COALESCE(SUM(input_characters + reasoning_characters + output_characters), 0) AS count
       FROM asset_text_events e JOIN messages m ON m.id = e.message_id
       JOIN conversations c ON c.id = m.conversation_id WHERE captured_at >= ? AND (? IS NULL OR c.source_id = ?) AND (? IS NULL OR c.id = ?)`)
-      .get(start.getTime(), sourceId ?? null, sourceId ?? null, conversationId ?? null, conversationId ?? null) as { count: number }
-    return { inputCharacters: row.input, reasoningCharacters: row.reasoning, outputCharacters: row.output,
-      totalCharacters: row.input + row.reasoning + row.output, todayCharacters: today.count }
+      .get(
+        start.getTime(),
+        sourceId ?? null,
+        sourceId ?? null,
+        conversationId ?? null,
+        conversationId ?? null,
+      ) as { count: number }
+    return {
+      inputCharacters: row.input,
+      reasoningCharacters: row.reasoning,
+      outputCharacters: row.output,
+      totalCharacters: row.input + row.reasoning + row.output,
+      todayCharacters: today.count,
+    }
   }
 
-  beginAttachment(source: AssetSource, input: AssetAttachmentInput, knownConversationId?: string): AssetAttachment {
-    if (this.attachmentExcluded(source.id, input.externalKey)) throw new Error('这份资料已从本地记录中排除')
+  beginAttachment(
+    source: AssetSource,
+    input: AssetAttachmentInput,
+    knownConversationId?: string,
+  ): AssetAttachment {
+    if (this.attachmentExcluded(source.id, input.externalKey))
+      throw new Error('这份资料已从本地记录中排除')
     const conversationId = knownConversationId ?? this.conversation(source, input)
-    const message = input.messageKey ? this.sourceMessage(conversationId, input.messageKey, input.messageId) : undefined
-    if (input.messageId !== undefined && !message) throw new Error('Original message identity is unavailable')
-    const known = this.db.prepare('SELECT * FROM asset_attachments WHERE conversation_id = ? AND external_key = ?')
+    const message = input.messageKey
+      ? this.sourceMessage(conversationId, input.messageKey, input.messageId)
+      : undefined
+    if (input.messageId !== undefined && !message)
+      throw new Error('Original message identity is unavailable')
+    const known = this.db
+      .prepare('SELECT * FROM asset_attachments WHERE conversation_id = ? AND external_key = ?')
       .get(conversationId, input.externalKey) as AttachmentRow | undefined
     if (known) {
       if (input.messageId !== undefined && known.message_id !== message!.id) {
-        this.db.prepare('UPDATE asset_attachments SET message_id = ? WHERE id = ?').run(message!.id, known.id)
+        this.db
+          .prepare('UPDATE asset_attachments SET message_id = ? WHERE id = ?')
+          .run(message!.id, known.id)
         known.message_id = message!.id
       }
       return attachment(known)
     }
     const id = randomUUID()
-    this.db.prepare(`INSERT INTO asset_attachments (id, conversation_id, message_id, source_id, external_key,
+    this.db
+      .prepare(`INSERT INTO asset_attachments (id, conversation_id, message_id, source_id, external_key,
       name, mime_type, source_url, direction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, conversationId, message?.id ?? null, source.id, input.externalKey, input.name,
-        input.mimeType || 'application/octet-stream', input.sourceUrl ?? null, input.direction, Date.now())
+      .run(
+        id,
+        conversationId,
+        message?.id ?? null,
+        source.id,
+        input.externalKey,
+        input.name,
+        input.mimeType || 'application/octet-stream',
+        input.sourceUrl ?? null,
+        input.direction,
+        Date.now(),
+      )
     return this.getAttachment(id)!
   }
 
   getAttachment(id: string): AssetAttachment | undefined {
-    const row = this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as AttachmentRow | undefined
+    const row = this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as
+      | AttachmentRow
+      | undefined
     return row && attachment(row)
   }
   attachmentExcluded(sourceId: string, externalKey: string): boolean {
-    return !!this.db.prepare('SELECT 1 FROM asset_attachment_exclusions WHERE source_id = ? AND external_key = ?').get(sourceId, externalKey)
+    return !!this.db
+      .prepare('SELECT 1 FROM asset_attachment_exclusions WHERE source_id = ? AND external_key = ?')
+      .get(sourceId, externalKey)
   }
   referencesOriginal(sha256: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM asset_attachments WHERE sha256 = ? LIMIT 1').get(sha256)
   }
   expiredAttachmentIds(cutoff: number, limit = 200): string[] {
-    return (this.db.prepare(`SELECT a.id FROM asset_attachments a JOIN conversations c ON c.id = a.conversation_id
+    return (
+      this.db
+        .prepare(`SELECT a.id FROM asset_attachments a JOIN conversations c ON c.id = a.conversation_id
       WHERE COALESCE(a.updated_at, a.created_at) <= ? AND c.source_type != 'freeze-snapshot'
-      ORDER BY COALESCE(a.updated_at, a.created_at), a.id LIMIT ?`).all(cutoff, limit) as Array<{ id: string }>).map(row => row.id)
+      ORDER BY COALESCE(a.updated_at, a.created_at), a.id LIMIT ?`)
+        .all(cutoff, limit) as Array<{ id: string }>
+    ).map((row) => row.id)
   }
   deleteAttachments(ids: string[], stage: (hashes: string[]) => void): number {
     return this.db.transaction(() => {
-      const records = ids.map(id => this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as (AttachmentRow & { external_key: string }) | undefined)
-      if (records.some(row => !row)) throw new Error('所选资料已发生变化，请刷新后重新选择')
+      const records = ids.map(
+        (id) =>
+          this.db.prepare('SELECT * FROM asset_attachments WHERE id = ?').get(id) as
+            | (AttachmentRow & { external_key: string })
+            | undefined,
+      )
+      if (records.some((row) => !row)) throw new Error('所选资料已发生变化，请刷新后重新选择')
       const selected = new Set(ids)
-      const hashes = [...new Set(records.flatMap(row => row?.sha256 ? [row.sha256] : []))]
-        .filter(hash => (this.db.prepare('SELECT id FROM asset_attachments WHERE sha256 = ?').all(hash) as Array<{ id: string }>).every(row => selected.has(row.id)))
+      const hashes = [
+        ...new Set(records.flatMap((row) => (row?.sha256 ? [row.sha256] : []))),
+      ].filter((hash) =>
+        (
+          this.db.prepare('SELECT id FROM asset_attachments WHERE sha256 = ?').all(hash) as Array<{
+            id: string
+          }>
+        ).every((row) => selected.has(row.id)),
+      )
       stage(hashes)
       for (const record of records) {
-        this.db.prepare('INSERT OR IGNORE INTO asset_attachment_exclusions VALUES (?, ?)').run(record!.source_id, record!.external_key)
+        this.db
+          .prepare('INSERT OR IGNORE INTO asset_attachment_exclusions VALUES (?, ?)')
+          .run(record!.source_id, record!.external_key)
         this.db.prepare('DELETE FROM asset_attachments WHERE id = ?').run(record!.id)
       }
       return records.length
@@ -536,7 +980,8 @@ export class AiAssetsStore {
   deleteConversations(ids: string[]): number {
     return this.db.transaction(() => {
       for (const id of ids) {
-        if (!this.db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(id)) throw new Error('所选对话已发生变化，请刷新后重新选择')
+        if (!this.db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(id))
+          throw new Error('所选对话已发生变化，请刷新后重新选择')
         this.deleteConversation(id)
       }
       return ids.length
@@ -544,21 +989,38 @@ export class AiAssetsStore {
   }
   attachments(conversationId?: string): AssetAttachment[] {
     const rows = conversationId
-      ? this.db.prepare('SELECT * FROM asset_attachments WHERE conversation_id = ? ORDER BY created_at DESC').all(conversationId)
+      ? this.db
+          .prepare(
+            'SELECT * FROM asset_attachments WHERE conversation_id = ? ORDER BY created_at DESC',
+          )
+          .all(conversationId)
       : this.db.prepare('SELECT * FROM asset_attachments ORDER BY created_at DESC').all()
     return (rows as AttachmentRow[]).map(attachment)
   }
   attachmentSaved(id: string, sha256: string, size: number, reused: boolean): void {
-    this.db.prepare('UPDATE asset_attachments SET status = ?, sha256 = ?, size = ?, error = NULL, updated_at = ? WHERE id = ?')
+    this.db
+      .prepare(
+        'UPDATE asset_attachments SET status = ?, sha256 = ?, size = ?, error = NULL, updated_at = ? WHERE id = ?',
+      )
       .run(reused ? 'reused' : 'saved', sha256, size, Date.now(), id)
   }
   attachmentFailed(id: string, error: string): void {
-    this.db.prepare("UPDATE asset_attachments SET status = 'failed', error = ? WHERE id = ?").run(error, id)
+    this.db
+      .prepare("UPDATE asset_attachments SET status = 'failed', error = ? WHERE id = ?")
+      .run(error, id)
   }
   attachmentPending(id: string): void {
-    this.db.prepare("UPDATE asset_attachments SET status = 'pending', error = NULL WHERE id = ?").run(id)
+    this.db
+      .prepare("UPDATE asset_attachments SET status = 'pending', error = NULL WHERE id = ?")
+      .run(id)
   }
-  importDetails(conversationId: string, sourceId: string, messages: Array<{ id?: string; asset?: AssetMessageDetail }>, files: AssetAttachment[], graph?: import('../shared/ai-assets.types.js').AssetGraphExport): void {
+  importDetails(
+    conversationId: string,
+    sourceId: string,
+    messages: Array<{ id?: string; asset?: AssetMessageDetail }>,
+    files: AssetAttachment[],
+    graph?: import('../shared/ai-assets.types.js').AssetGraphExport,
+  ): void {
     const current = this.details(conversationId)
     const mapped = new Map<string, string>()
     messages.forEach((message, index) => {
@@ -567,88 +1029,169 @@ export class AiAssetsStore {
       if (message.id) mapped.set(message.id, id)
       const value = message.asset
       if (!value) return
-      const count = (n: number) => Number.isSafeInteger(n) && n >= 0 ? n : 0
-      this.db.prepare(`INSERT INTO asset_message_state VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, id, typeof value.reasoning === 'string' ? value.reasoning : '',
-          ['streaming', 'complete', 'withdrawn', 'retained', 'stopped', 'failed'].includes(value.status) ? value.status : 'complete',
-          count(value.inputCharacters), count(value.reasoningCharacters), count(value.outputCharacters))
-      if (value.observations !== undefined && (!Array.isArray(value.observations) || value.observations.length > 100000)) throw new Error('Invalid known text versions')
-      const signatureStatement = this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
+      const count = (n: number) => (Number.isSafeInteger(n) && n >= 0 ? n : 0)
+      this.db
+        .prepare(`INSERT INTO asset_message_state VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(
+          id,
+          id,
+          typeof value.reasoning === 'string' ? value.reasoning : '',
+          ['streaming', 'complete', 'withdrawn', 'retained', 'stopped', 'failed'].includes(
+            value.status,
+          )
+            ? value.status
+            : 'complete',
+          count(value.inputCharacters),
+          count(value.reasoningCharacters),
+          count(value.outputCharacters),
+        )
+      if (
+        value.observations !== undefined &&
+        (!Array.isArray(value.observations) || value.observations.length > 100000)
+      )
+        throw new Error('Invalid known text versions')
+      const signatureStatement = this.db.prepare(
+        'INSERT OR IGNORE INTO asset_observations VALUES (?, ?)',
+      )
       for (const signature of value.observations ?? []) {
-        if (typeof signature !== 'string' || !/^[a-f0-9]{64}$/.test(signature)) throw new Error('Invalid text version signature')
+        if (typeof signature !== 'string' || !/^[a-f0-9]{64}$/.test(signature))
+          throw new Error('Invalid text version signature')
         signatureStatement.run(id, signature)
       }
-      if (typeof value.markdownContent === 'string') this.db.prepare('INSERT INTO asset_message_formats VALUES (?, ?)').run(id, value.markdownContent)
+      if (typeof value.markdownContent === 'string')
+        this.db
+          .prepare('INSERT INTO asset_message_formats VALUES (?, ?)')
+          .run(id, value.markdownContent)
       for (const revision of value.revisions ?? []) {
-        if (typeof revision.content !== 'string' || typeof revision.reasoning !== 'string') throw new Error('Invalid asset revision')
-        this.db.prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
-          .run(randomUUID(), id, revision.content, revision.reasoning, revision.status, count(revision.capturedAt))
+        if (typeof revision.content !== 'string' || typeof revision.reasoning !== 'string')
+          throw new Error('Invalid asset revision')
+        this.db
+          .prepare('INSERT INTO asset_revisions VALUES (?, ?, ?, ?, ?, ?)')
+          .run(
+            randomUUID(),
+            id,
+            revision.content,
+            revision.reasoning,
+            revision.status,
+            count(revision.capturedAt),
+          )
       }
     })
     if (graph) this.graph.import(conversationId, sourceId, graph, mapped)
     for (const item of files) {
-      if (typeof item.name !== 'string' || !['input', 'output'].includes(item.direction)) throw new Error('Invalid asset attachment')
-      this.db.prepare(`INSERT INTO asset_attachments (id, conversation_id, message_id, source_id, external_key,
+      if (typeof item.name !== 'string' || !['input', 'output'].includes(item.direction))
+        throw new Error('Invalid asset attachment')
+      this.db
+        .prepare(`INSERT INTO asset_attachments (id, conversation_id, message_id, source_id, external_key,
         name, mime_type, source_url, direction, status, sha256, size, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(randomUUID(), conversationId, item.messageId ? mapped.get(item.messageId) ?? null : null,
-          item.sourceId || sourceId, randomUUID(), item.name, item.mimeType || 'application/octet-stream', item.sourceUrl ?? null,
-          item.direction, 'pending', /^[a-f0-9]{64}$/.test(item.sha256 ?? '') ? item.sha256 : null,
+        .run(
+          randomUUID(),
+          conversationId,
+          item.messageId ? (mapped.get(item.messageId) ?? null) : null,
+          item.sourceId || sourceId,
+          randomUUID(),
+          item.name,
+          item.mimeType || 'application/octet-stream',
+          item.sourceUrl ?? null,
+          item.direction,
+          'pending',
+          /^[a-f0-9]{64}$/.test(item.sha256 ?? '') ? item.sha256 : null,
           Number.isSafeInteger(item.size) && item.size! >= 0 ? item.size : null,
-          '导入的是资料引用；原件需通过完整备份恢复或重新获取', Number.isSafeInteger(item.createdAt) ? item.createdAt : Date.now(),
-          Number.isSafeInteger(item.updatedAt) && item.updatedAt! >= 0 ? item.updatedAt : null)
+          '导入的是资料引用；原件需通过完整备份恢复或重新获取',
+          Number.isSafeInteger(item.createdAt) ? item.createdAt : Date.now(),
+          Number.isSafeInteger(item.updatedAt) && item.updatedAt! >= 0 ? item.updatedAt : null,
+        )
     }
   }
-  associateAttachments(sourceId: string, observation: Omit<AssetObservation, 'messages'>, messageKey: string, ids: string[], messageId?: string): void {
+  associateAttachments(
+    sourceId: string,
+    observation: Omit<AssetObservation, 'messages'>,
+    messageKey: string,
+    ids: string[],
+    messageId?: string,
+  ): void {
     const conversationId = this.conversation({ id: sourceId, type: 'webview' }, observation)
     const message = this.sourceMessage(conversationId, messageKey, messageId)
     if (!message) throw new Error('Attachment message not found')
     this.db.transaction(() => {
-      for (const id of ids) this.db.prepare('UPDATE asset_attachments SET conversation_id = ?, message_id = ? WHERE id = ? AND source_id = ?')
-        .run(conversationId, message.id, id, sourceId)
+      for (const id of ids)
+        this.db
+          .prepare(
+            'UPDATE asset_attachments SET conversation_id = ?, message_id = ? WHERE id = ? AND source_id = ?',
+          )
+          .run(conversationId, message.id, id, sourceId)
     })()
   }
-  associateCapturedInput(source: AssetSource, observation: Omit<AssetObservation, 'messages'>,
-    externalKey: string, messageKey: string, messageId: string): boolean {
-    if (this.graph.excluded(source.id, observation.conversationKey) || this.attachmentExcluded(source.id, externalKey)) return true
-    const known = this.db.prepare('SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?')
+  associateCapturedInput(
+    source: AssetSource,
+    observation: Omit<AssetObservation, 'messages'>,
+    externalKey: string,
+    messageKey: string,
+    messageId: string,
+  ): boolean {
+    if (
+      this.graph.excluded(source.id, observation.conversationKey) ||
+      this.attachmentExcluded(source.id, externalKey)
+    )
+      return true
+    const known = this.db
+      .prepare(
+        'SELECT conversation_id FROM asset_conversation_keys WHERE source_id = ? AND external_key = ?',
+      )
       .get(source.id, observation.conversationKey) as { conversation_id: string } | undefined
     if (!known || !this.sourceMessage(known.conversation_id, messageKey, messageId)) return true
-    const original = this.db.prepare('SELECT id FROM asset_attachments WHERE source_id = ? AND external_key = ? AND direction = ?')
+    const original = this.db
+      .prepare(
+        'SELECT id FROM asset_attachments WHERE source_id = ? AND external_key = ? AND direction = ?',
+      )
       .get(source.id, externalKey, 'input') as { id: string } | undefined
     if (!original) return false
     this.associateAttachments(source.id, observation, messageKey, [original.id], messageId)
     return true
   }
-  private sourceMessage(conversationId: string, key: string, messageId?: string): { id: string } | undefined {
-    if (messageId !== undefined) return this.db.prepare(`SELECT m.id FROM messages m
+  private sourceMessage(
+    conversationId: string,
+    key: string,
+    messageId?: string,
+  ): { id: string } | undefined {
+    if (messageId !== undefined)
+      return this.db
+        .prepare(`SELECT m.id FROM messages m
       LEFT JOIN asset_nodes n ON n.message_id = m.id LEFT JOIN asset_message_state s ON s.message_id = m.id
       WHERE m.id = ? AND m.conversation_id = ? AND (n.source_key = ? OR s.external_key = ?)`)
-      .get(messageId, conversationId, key, key) as { id: string } | undefined
-    const candidates = this.db.prepare(`SELECT m.id FROM messages m LEFT JOIN asset_nodes n ON n.message_id = m.id
+        .get(messageId, conversationId, key, key) as { id: string } | undefined
+    const candidates = this.db
+      .prepare(`SELECT m.id FROM messages m LEFT JOIN asset_nodes n ON n.message_id = m.id
       LEFT JOIN asset_message_state s ON s.message_id = m.id WHERE m.conversation_id = ? AND (n.source_key = ? OR s.external_key = ?)
-      ORDER BY m.created_at DESC, m.rowid DESC`).all(conversationId, key, key) as Array<{ id: string }>
-    const meta = this.db.prepare('SELECT source_leaf FROM asset_conversation_meta WHERE conversation_id = ?').get(conversationId) as { source_leaf: string } | undefined
+      ORDER BY m.created_at DESC, m.rowid DESC`)
+      .all(conversationId, key, key) as Array<{ id: string }>
+    const meta = this.db
+      .prepare('SELECT source_leaf FROM asset_conversation_meta WHERE conversation_id = ?')
+      .get(conversationId) as { source_leaf: string } | undefined
     if (meta?.source_leaf) {
       const path = new Set(this.graph.path(conversationId, meta.source_leaf))
-      return candidates.find(item => path.has(item.id)) ?? candidates[0]
+      return candidates.find((item) => path.has(item.id)) ?? candidates[0]
     }
     return candidates[0]
   }
   suggestions(): AssetPromptSuggestion[] {
-    const rows = this.db.prepare(`SELECT m.id, m.conversation_id AS conversationId, m.content,
+    const rows = this.db
+      .prepare(`SELECT m.id, m.conversation_id AS conversationId, m.content,
       COALESCE(CASE WHEN n.message_id IS NOT NULL THEN (SELECT content FROM messages WHERE id = n.parent_id)
         ELSE (SELECT content FROM messages p WHERE p.conversation_id = m.conversation_id AND p.rowid < m.rowid ORDER BY p.rowid DESC LIMIT 1) END, '') AS before,
       COALESCE(CASE WHEN n.message_id IS NOT NULL THEN (SELECT a.content FROM asset_nodes child JOIN messages a ON a.id = child.message_id
           WHERE child.parent_id = m.id AND child.conversation_id = m.conversation_id ORDER BY a.created_at DESC, a.rowid DESC LIMIT 1)
         ELSE (SELECT content FROM messages a WHERE a.conversation_id = m.conversation_id AND a.rowid > m.rowid ORDER BY a.rowid LIMIT 1) END, '') AS after
       FROM messages m LEFT JOIN asset_nodes n ON n.message_id = m.id
-      WHERE m.role = 'user' AND trim(m.content) != '' ORDER BY m.created_at DESC, m.rowid DESC LIMIT 500`).all() as PromptSample[]
+      WHERE m.role = 'user' AND trim(m.content) != '' ORDER BY m.created_at DESC, m.rowid DESC LIMIT 500`)
+      .all() as PromptSample[]
     return repeatedPromptSuggestions(rows)
   }
 
   searchConversations(query: string): string[] {
     if (!query.trim()) return []
-    const rows = this.db.prepare(`SELECT DISTINCT c.id FROM conversations c
+    const rows = this.db
+      .prepare(`SELECT DISTINCT c.id FROM conversations c
       LEFT JOIN messages m ON m.conversation_id = c.id
       LEFT JOIN asset_message_state s ON s.message_id = m.id
       WHERE instr(lower(c.title), lower(?)) > 0 OR instr(lower(m.content), lower(?)) > 0
@@ -656,7 +1199,8 @@ export class AiAssetsStore {
       OR EXISTS (SELECT 1 FROM asset_revisions r WHERE r.message_id = m.id
         AND instr(lower(r.content || r.reasoning), lower(?)) > 0)
       OR EXISTS (SELECT 1 FROM asset_attachments a WHERE a.conversation_id = c.id
-        AND instr(lower(a.name), lower(?)) > 0)`).all(query, query, query, query, query) as Array<{ id: string }>
-    return rows.map(row => row.id)
+        AND instr(lower(a.name), lower(?)) > 0)`)
+      .all(query, query, query, query, query) as Array<{ id: string }>
+    return rows.map((row) => row.id)
   }
 }

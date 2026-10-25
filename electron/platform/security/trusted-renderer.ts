@@ -7,16 +7,31 @@ import { __dirname as mainDirectory } from '../window/paths.js'
 export function isTrustedRendererUrl(value: string): boolean {
   try {
     const url = new URL(value)
-    const expected = new URL(!app.isPackaged && process.env.ELECTRON_RENDERER_URL
-      ? process.env.ELECTRON_RENDERER_URL : pathToFileURL(path.join(mainDirectory, '../renderer/index.html')).href)
-    return url.protocol === expected.protocol && url.host === expected.host && url.pathname === expected.pathname
-      && !url.username && !url.password
-  } catch { return false }
+    const expected = new URL(
+      !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+        ? process.env.ELECTRON_RENDERER_URL
+        : pathToFileURL(path.join(mainDirectory, '../renderer/index.html')).href,
+    )
+    return (
+      url.protocol === expected.protocol &&
+      url.host === expected.host &&
+      url.pathname === expected.pathname &&
+      !url.username &&
+      !url.password
+    )
+  } catch {
+    return false
+  }
 }
 
 export function assertTrustedRenderer(event: IpcMainInvokeEvent): void {
-  if (!event?.sender || event.sender.isDestroyed() || event.sender.getType() !== 'window'
-    || event.senderFrame !== event.sender.mainFrame || !isTrustedRendererUrl(event.sender.getURL())) {
+  if (
+    !event?.sender ||
+    event.sender.isDestroyed() ||
+    event.sender.getType() !== 'window' ||
+    event.senderFrame !== event.sender.mainFrame ||
+    !isTrustedRendererUrl(event.sender.getURL())
+  ) {
     throw new Error('此操作仅允许应用窗口调用。')
   }
   const window = BrowserWindow.fromWebContents(event.sender)

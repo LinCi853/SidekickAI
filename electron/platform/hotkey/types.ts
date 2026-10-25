@@ -9,7 +9,11 @@ export type HotkeyAction =
   | 'toggleAiAssets'
 
 /** 热键录制回调（主进程 → 渲染层：录制完成后通知；cleared=true 表示 Del/退格请求清除绑定） */
-export type HotkeyRecordingCallback = (result: { accelerator: string; reason?: string; cleared?: boolean }) => void
+export type HotkeyRecordingCallback = (result: {
+  accelerator: string
+  reason?: string
+  cleared?: boolean
+}) => void
 
 /** 热键录制实时反馈回调（每次按键时通知，用于 UI 实时显示当前组合） */
 export type HotkeyPartialCallback = (partial: { modifiers: string[]; key: string | null }) => void

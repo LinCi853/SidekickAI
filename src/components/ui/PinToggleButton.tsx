@@ -3,14 +3,15 @@
    统一各窗口顶栏的置顶按钮（替代 9 处分散的内联 SVG + 状态切换逻辑）
    ===================================================================== */
 
-import type { ButtonHTMLAttributes } from 'react';
-import IconButton from './IconButton';
+import type { ButtonHTMLAttributes } from 'react'
+import IconButton from './IconButton'
 
-export interface PinToggleButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'type' | 'aria-label'> {
+export interface PinToggleButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'type' | 'aria-label'> {
   /** 是否已置顶 */
-  isPinned: boolean;
+  isPinned: boolean
   /** 切换回调 */
-  onToggle: () => void;
+  onToggle: () => void
 }
 
 /**
@@ -51,5 +52,5 @@ export default function PinToggleButton({
         <path d="M5 21h14" />
       </svg>
     </IconButton>
-  );
+  )
 }

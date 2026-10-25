@@ -5,61 +5,63 @@
    统一委托给 lib/oxy-design-system.ts 控制器。
    ===================================================================== */
 
-import { create } from 'zustand';
+import { create } from 'zustand'
 import {
   type UiVersion,
   activateOxy,
   deactivateOxy,
   initOxy,
   OXY_STORAGE_KEY,
-} from '../lib/oxy-design-system';
-import { useThemeStore } from './useThemeStore';
-import { broadcastUiVersionChanged } from '../lib/electron-api';
+} from '../lib/oxy-design-system'
+import { useThemeStore } from './useThemeStore'
+import { broadcastUiVersionChanged } from '../lib/electron-api'
 
 // 从控制器重新导出类型，保持外部导入路径不变
-export type { UiVersion } from '../lib/oxy-design-system';
+export type { UiVersion } from '../lib/oxy-design-system'
 
 /** 从 localStorage 读取界面版本，处理旧值 'v2' → 'oxy' 迁移 */
 function readUiVersion(): UiVersion {
   try {
-    const v = localStorage.getItem(OXY_STORAGE_KEY);
-    if (v === 'classic') return 'classic';
-    return 'oxy';
+    const v = localStorage.getItem(OXY_STORAGE_KEY)
+    if (v === 'classic') return 'classic'
+    return 'oxy'
   } catch {
-    return 'oxy';
+    return 'oxy'
   }
 }
 
 export interface UiVersionState {
   /** 当前界面版本，默认 'oxy'（Oxy Design System） */
-  version: UiVersion;
+  version: UiVersion
   /** 切换界面版本：委托给 oxy-design-system 控制器执行所有联动 */
-  setVersion: (v: UiVersion) => void;
+  setVersion: (v: UiVersion) => void
   /** 初始化：委托给控制器执行（幂等，供 main.tsx 调用） */
-  initUiVersion: () => void;
+  initUiVersion: () => void
 }
 
-const initialVersion = readUiVersion();
+const initialVersion = readUiVersion()
 
 export const useUiVersionStore = create<UiVersionState>((set) => ({
   version: initialVersion,
 
   setVersion: (v) => {
     if (v === 'oxy') {
-      activateOxy();
+      activateOxy()
     } else {
-      deactivateOxy();
+      deactivateOxy()
     }
-    set({ version: v });
+    set({ version: v })
     // 广播 UI 版本变更到所有窗口（跨窗口同步 Oxy Design System 开关）
     try {
-      const theme = useThemeStore.getState().theme;
-      broadcastUiVersionChanged({ uiVersion: v, theme });
-    } catch { /* 非 Electron 环境忽略 */ }
+      const theme = useThemeStore.getState().theme
+      broadcastUiVersionChanged({ uiVersion: v, theme })
+    } catch {
+      /* 非 Electron 环境忽略 */
+    }
   },
 
   initUiVersion: () => {
-    initOxy();
-    set({ version: readUiVersion() });
+    initOxy()
+    set({ version: readUiVersion() })
   },
-}));
+}))

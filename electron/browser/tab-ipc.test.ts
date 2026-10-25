@@ -7,7 +7,10 @@ const runtime = vi.hoisted(() => {
     handleHandlers: new Map<string, (...args: any[]) => unknown>(),
     send,
     save: vi.fn(),
-    getOrDefault: vi.fn(() => ({ detachedProfiles: ['profile-1'], tabs: [{ id: 'tab-1', profileId: 'profile-1', detachedWindowId: 'browser-1' }] })),
+    getOrDefault: vi.fn(() => ({
+      detachedProfiles: ['profile-1'],
+      tabs: [{ id: 'tab-1', profileId: 'profile-1', detachedWindowId: 'browser-1' }],
+    })),
     fromWebContents: vi.fn((): any => null),
     isBackgroundClose: vi.fn((win: unknown): boolean => false),
     mainWindow: {
@@ -24,8 +27,10 @@ const runtime = vi.hoisted(() => {
 
 vi.mock('electron', () => ({
   ipcMain: {
-    on: (channel: string, handler: (...args: any[]) => unknown) => runtime.onHandlers.set(channel, handler),
-    handle: (channel: string, handler: (...args: any[]) => unknown) => runtime.handleHandlers.set(channel, handler),
+    on: (channel: string, handler: (...args: any[]) => unknown) =>
+      runtime.onHandlers.set(channel, handler),
+    handle: (channel: string, handler: (...args: any[]) => unknown) =>
+      runtime.handleHandlers.set(channel, handler),
   },
   BrowserWindow: { fromWebContents: runtime.fromWebContents },
 }))
@@ -33,10 +38,14 @@ vi.mock('../store/window-store.js', () => ({
   windowStore: { getOrDefault: runtime.getOrDefault, save: runtime.save },
 }))
 vi.mock('./profile-store.js', () => ({ profileStore: { get: () => ({ name: 'App' }) } }))
-vi.mock('../platform/window/window-state.js', () => ({ windowState: { mainWindow: runtime.mainWindow } }))
+vi.mock('../platform/window/window-state.js', () => ({
+  windowState: { mainWindow: runtime.mainWindow },
+}))
 vi.mock('./detach-profile.js', () => ({ detachProfileToBrowserWindow: vi.fn() }))
 vi.mock('../modules/registry.js', () => ({ isModuleEnabled: () => true }))
-vi.mock('../platform/window/window-retirement.js', () => ({ isBackgroundClose: runtime.isBackgroundClose }))
+vi.mock('../platform/window/window-retirement.js', () => ({
+  isBackgroundClose: runtime.isBackgroundClose,
+}))
 vi.mock('../platform/security/trusted-renderer.js', () => ({ assertTrustedRenderer: vi.fn() }))
 
 import { registerTabIpc } from './tab-ipc.js'
@@ -58,7 +67,10 @@ function reset() {
 
 function invokeMigrateBack(sender: unknown) {
   const handler = runtime.onHandlers.get(IPC_CHANNELS.BROWSER_TAB_MIGRATE_BACK)!
-  handler({ sender }, { profileId: 'profile-1', url: 'https://example.test/', title: 'Example', finalUrls: [] })
+  handler(
+    { sender },
+    { profileId: 'profile-1', url: 'https://example.test/', title: 'Example', finalUrls: [] },
+  )
 }
 
 function expectNoForegroundSteal() {

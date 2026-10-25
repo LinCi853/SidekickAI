@@ -28,9 +28,7 @@ function isValidAudioDevice(d: unknown): d is AudioDeviceInfo {
   if (!d || typeof d !== 'object') return false
   const o = d as Record<string, unknown>
   return (
-    typeof o.deviceId === 'string' &&
-    typeof o.label === 'string' &&
-    typeof o.groupId === 'string'
+    typeof o.deviceId === 'string' && typeof o.label === 'string' && typeof o.groupId === 'string'
   )
 }
 
@@ -73,16 +71,13 @@ export function registerVoiceIpc(deps: VoiceIpcDeps, scope?: EffectScope): void 
    * 测试当前 AI 接入配置连通性（用于设置页"测试连接"按钮）。
    * 发送 0.2s 静音 WAV，验证能拿到非空识别文本。
    */
-  handle(
-    IPC_CHANNELS.VOICE_TEST_AI,
-    async (_e: unknown, input: { providerId: string }) => {
-      try {
-        return await sttEngine.testAiProvider(input.providerId)
-      } catch (e) {
-        return { ok: false, message: e instanceof Error ? e.message : String(e) }
-      }
-    },
-  )
+  handle(IPC_CHANNELS.VOICE_TEST_AI, async (_e: unknown, input: { providerId: string }) => {
+    try {
+      return await sttEngine.testAiProvider(input.providerId)
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
+  })
 
   // 底栏语音按钮触发：走后台语音路径，显示独立预览窗
   handle(IPC_CHANNELS.VOICE_TRIGGER_START, async () => {

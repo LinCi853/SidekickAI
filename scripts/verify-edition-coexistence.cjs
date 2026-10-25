@@ -11,14 +11,25 @@ async function verify(peer) {
   const children = []
   const runtimes = new Map()
   for (const [index, workspace] of [root, peer].entries()) {
-    const edition = JSON.parse(fs.readFileSync(path.join(workspace, 'product-edition.json'))).edition
+    const edition = JSON.parse(
+      fs.readFileSync(path.join(workspace, 'product-edition.json')),
+    ).edition
     const bundle = path.join(evidence, `runtime-${index}.cjs`)
-    esbuild.buildSync({ entryPoints: [path.join(workspace, 'electron/edition-runtime.ts')], outfile: bundle, bundle: true, platform: 'node', format: 'cjs', external: ['electron'] })
+    esbuild.buildSync({
+      entryPoints: [path.join(workspace, 'electron/edition-runtime.ts')],
+      outfile: bundle,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      external: ['electron'],
+    })
     runtimes.set(edition, { edition, bundle, workspace })
   }
   assert.equal(runtimes.size, 2)
   const bootstrap = path.join(evidence, 'host.cjs')
-  fs.writeFileSync(bootstrap, `
+  fs.writeFileSync(
+    bootstrap,
+    `
 const { app, BrowserWindow, dialog } = require('electron');
 const fs = require('node:fs');
 const config = JSON.parse(process.env.EDITION_FIXTURE);
@@ -41,23 +52,43 @@ else app.whenReady().then(async () => {
   const timer = setInterval(() => { if (fs.existsSync(config.release)) { clearInterval(timer); app.quit(); } }, 50);
   setTimeout(() => app.exit(2), 45000).unref();
 }).catch(error => { console.error(error); app.exit(1); });
-`)
+`,
+  )
   async function wait(check) {
     const deadline = Date.now() + 15000
     while (!check()) {
       if (Date.now() > deadline) throw new Error('Isolated runtime verification timed out')
-      await new Promise(resolve => setTimeout(resolve, 30))
+      await new Promise((resolve) => setTimeout(resolve, 30))
     }
   }
   async function launch(edition, label) {
-    const config = { ...runtimes.get(edition), profile: path.join(evidence, label), saved: path.join(evidence, `${label}.saved`), release: path.join(evidence, `${label}.release`) }
-    const env = { ...process.env, SIDEKICK_TEST_SESSION: evidence, EDITION_FIXTURE: JSON.stringify(config) }
-    delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL
-    const child = spawn(require('electron'), [bootstrap], { cwd: config.workspace, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const config = {
+      ...runtimes.get(edition),
+      profile: path.join(evidence, label),
+      saved: path.join(evidence, `${label}.saved`),
+      release: path.join(evidence, `${label}.release`),
+    }
+    const env = {
+      ...process.env,
+      SIDEKICK_TEST_SESSION: evidence,
+      EDITION_FIXTURE: JSON.stringify(config),
+    }
+    delete env.ELECTRON_RUN_AS_NODE
+    delete env.ELECTRON_RENDERER_URL
+    const child = spawn(require('electron'), [bootstrap], {
+      cwd: config.workspace,
+      env,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     const result = { child, ...config, output: '' }
     children.push(result)
-    child.stdout.on('data', bytes => { result.output += bytes.toString() })
-    child.stderr.on('data', bytes => fs.appendFileSync(path.join(evidence, `${label}.log`), bytes))
+    child.stdout.on('data', (bytes) => {
+      result.output += bytes.toString()
+    })
+    child.stderr.on('data', (bytes) =>
+      fs.appendFileSync(path.join(evidence, `${label}.log`), bytes),
+    )
     await wait(() => result.output.includes('ready') || child.exitCode !== null)
     return result
   }
@@ -77,17 +108,38 @@ else app.whenReady().then(async () => {
     const duplicate = await launch('community', 'community-redirected')
     assert.equal(duplicate.child.exitCode, 0)
     assert.equal(duplicate.output.includes('ready'), false)
-    for (const instance of [concept, community]) assert.equal(fs.readFileSync(path.join(instance.profile, 'sentinel.txt'), 'utf8'), instance.edition)
+    for (const instance of [concept, community])
+      assert.equal(
+        fs.readFileSync(path.join(instance.profile, 'sentinel.txt'), 'utf8'),
+        instance.edition,
+      )
     fs.writeFileSync(community.release, '')
     await wait(() => community.child.exitCode !== null)
-    const report = { ok: true, evidence, checks: ['concept saves and exits before community becomes ready', 'concept launch activates community without opening another window', 'separate community data root cannot create another main instance', 'both edition data sentinels preserved'] }
+    const report = {
+      ok: true,
+      evidence,
+      checks: [
+        'concept saves and exits before community becomes ready',
+        'concept launch activates community without opening another window',
+        'separate community data root cannot create another main instance',
+        'both edition data sentinels preserved',
+      ],
+    }
     fs.writeFileSync(path.join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n')
     return report
   } finally {
-    for (const { child, release } of children) if (child.exitCode === null) fs.writeFileSync(release, '')
-    await wait(() => children.every(({ child }) => child.exitCode !== null)).catch(() => { for (const { child } of children) if (child.exitCode === null) child.kill() })
+    for (const { child, release } of children)
+      if (child.exitCode === null) fs.writeFileSync(release, '')
+    await wait(() => children.every(({ child }) => child.exitCode !== null)).catch(() => {
+      for (const { child } of children) if (child.exitCode === null) child.kill()
+    })
   }
 }
 
 if (!process.argv[2]) throw new Error('Usage: verify-edition-coexistence.cjs <peer-workspace>')
-verify(process.argv[2]).then(result => console.log(JSON.stringify(result, null, 2))).catch(error => { console.error(error); process.exitCode = 1 })
+verify(process.argv[2])
+  .then((result) => console.log(JSON.stringify(result, null, 2)))
+  .catch((error) => {
+    console.error(error)
+    process.exitCode = 1
+  })

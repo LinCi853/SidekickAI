@@ -17,7 +17,8 @@ export function clearAssetDirectories(userData: string, clearDatabase: () => voi
       const source = path.join(staging, name)
       const destination = path.join(root, name)
       if (!existsSync(source)) continue
-      if (existsSync(destination)) throw new Error('清除中断的原件与当前仓库同时存在，请先备份并检查')
+      if (existsSync(destination))
+        throw new Error('清除中断的原件与当前仓库同时存在，请先备份并检查')
       renameSync(source, destination)
     }
     rmSync(staging, { recursive: true, force: true })

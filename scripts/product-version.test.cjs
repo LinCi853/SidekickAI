@@ -29,20 +29,29 @@ function fixture(t, edition, version) {
   return root
 }
 
-test('each edition projects its own release version from package metadata', t => {
+test('each edition projects its own release version from package metadata', (t) => {
   const concept = fixture(t, 'concept', '0.1.5')
   const community = fixture(t, 'community', '0.1.0-beta.5')
-  for (const [root, version] of [[concept, '0.1.5'], [community, '0.1.0-beta.5']]) {
+  for (const [root, version] of [
+    [concept, '0.1.5'],
+    [community, '0.1.0-beta.5'],
+  ]) {
     assert.equal(synchronize(root, true).version, version)
     assert.deepEqual(synchronize(root).changed, [])
     assert.equal(productIdentity(root).version, version)
     assert.equal(readContext(root).product.version, version)
-    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'))).packages[''].version, version)
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'))).packages[''].version,
+      version,
+    )
   }
-  assert.deepEqual(fs.readFileSync(path.join(concept, 'packages/product-contract/manifest.json')), fs.readFileSync(path.join(community, 'packages/product-contract/manifest.json')))
+  assert.deepEqual(
+    fs.readFileSync(path.join(concept, 'packages/product-contract/manifest.json')),
+    fs.readFileSync(path.join(community, 'packages/product-contract/manifest.json')),
+  )
 })
 
-test('concept accepts numbered releases and rejects prerelease labels before writing', t => {
+test('concept accepts numbered releases and rejects prerelease labels before writing', (t) => {
   const root = fixture(t, 'concept', '0.1.5-beta.1')
   const file = path.join(root, 'package-lock.json')
   const before = fs.readFileSync(file)
@@ -55,5 +64,8 @@ test('shared source never pins edition-specific product version files', () => {
   const pinned = new Set(Object.keys(shared.files))
   assert(!pinned.has('package.json'))
   assert(!pinned.has('package-lock.json'))
-  assert.equal(Object.hasOwn(require('../packages/product-contract/manifest.json'), 'version'), false)
+  assert.equal(
+    Object.hasOwn(require('../packages/product-contract/manifest.json'), 'version'),
+    false,
+  )
 })

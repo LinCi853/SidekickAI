@@ -4,18 +4,14 @@
 // （Service Worker / Cache / Code Cache / GPUCache / blob_storage / File System + Crashpad），
 // 保留登录态与本地数据。存储分类常量与体积统计见 session-dirs.ts。
 
-import { session } from 'electron';
-import * as fs from 'fs';
-import * as path from 'path';
-import { profileStore } from '../browser/profile-store.js';
-import { formatBytes } from './backup-restore.js';
-import {
-  PARTITION_CACHE_DIRS,
-  getDataDir,
-  getDirSize,
-} from './session-dirs.js';
-import { tabHibernationStore } from '../browser/tab-hibernate-store.js';
-import type { TabHibernationPruneResult } from '../shared/tab-hibernation.types.js';
+import { session } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+import { profileStore } from '../browser/profile-store.js'
+import { formatBytes } from './backup-restore.js'
+import { PARTITION_CACHE_DIRS, getDataDir, getDirSize } from './session-dirs.js'
+import { tabHibernationStore } from '../browser/tab-hibernate-store.js'
+import type { TabHibernationPruneResult } from '../shared/tab-hibernation.types.js'
 
 /**
  * 估算当前缓存总体积（字节）。
@@ -24,42 +20,44 @@ import type { TabHibernationPruneResult } from '../shared/tab-hibernation.types.
  * 不读取文件内容，仅 stat 累加。Crashpad 也按缓存处理（Chromium 崩溃转储，可安全清理）。
  */
 export function estimateCacheSize(): number {
-  const dataDir = getDataDir();
-  let total = 0;
+  const dataDir = getDataDir()
+  let total = 0
 
   // 辅助：统计一个基础目录下的缓存子目录总体积
   const sumCacheDirs = (basePath: string): number => {
-    let size = 0;
+    let size = 0
     for (const dirName of PARTITION_CACHE_DIRS) {
-      const dirPath = path.join(basePath, dirName);
+      const dirPath = path.join(basePath, dirName)
       if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-        size += getDirSize(dirPath);
+        size += getDirSize(dirPath)
       }
     }
     // Crashpad 也视为缓存（Chromium 崩溃转储目录，可安全清理）
-    const crashpadPath = path.join(basePath, 'Crashpad');
+    const crashpadPath = path.join(basePath, 'Crashpad')
     if (fs.existsSync(crashpadPath) && fs.statSync(crashpadPath).isDirectory()) {
-      size += getDirSize(crashpadPath);
+      size += getDirSize(crashpadPath)
     }
-    return size;
-  };
-
-  // 默认 session（数据目录根级）
-  total += sumCacheDirs(dataDir);
-
-  // 各 profile session
-  const partitionsDir = path.join(dataDir, 'Partitions');
-  if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
-    try {
-      const entries = fs.readdirSync(partitionsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        total += sumCacheDirs(path.join(partitionsDir, entry.name));
-      }
-    } catch { /* ignore */ }
+    return size
   }
 
-  return total;
+  // 默认 session（数据目录根级）
+  total += sumCacheDirs(dataDir)
+
+  // 各 profile session
+  const partitionsDir = path.join(dataDir, 'Partitions')
+  if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
+    try {
+      const entries = fs.readdirSync(partitionsDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        total += sumCacheDirs(path.join(partitionsDir, entry.name))
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return total
 }
 
 /**
@@ -83,79 +81,99 @@ export function estimateCacheSize(): number {
 export async function cleanCacheData(
   policy: { retentionDays: number; maxCount: number } = { retentionDays: 7, maxCount: 40 },
 ): Promise<{ cleanedBytes: number }> {
-  const dataDir = getDataDir();
-  const cleanedBytes = estimateCacheSize();
-  console.log('[cache-maintenance] 开始清理缓存，当前体积:', formatBytes(cleanedBytes));
+  const dataDir = getDataDir()
+  const cleanedBytes = estimateCacheSize()
+  console.log('[cache-maintenance] 开始清理缓存，当前体积:', formatBytes(cleanedBytes))
 
   // 1. 收集所有 session
-  const sessionsToClean: Electron.Session[] = [session.defaultSession];
+  const sessionsToClean: Electron.Session[] = [session.defaultSession]
   try {
     for (const profile of profileStore.list()) {
       try {
-        sessionsToClean.push(session.fromPartition(`persist:${profile.id}`));
-      } catch { /* ignore */ }
+        sessionsToClean.push(session.fromPartition(`persist:${profile.id}`))
+      } catch {
+        /* ignore */
+      }
     }
   } catch (err) {
-    console.warn('[cache-maintenance] 收集 partition sessions 失败:', err);
+    console.warn('[cache-maintenance] 收集 partition sessions 失败:', err)
   }
 
   // 2. 调用 session API 清理（仅缓存类）
   await Promise.all(
     sessionsToClean.map(async (s) => {
-      try { await s.clearCache(); } catch { /* ignore */ }
-      try { await s.clearAuthCache(); } catch { /* ignore */ }
+      try {
+        await s.clearCache()
+      } catch {
+        /* ignore */
+      }
+      try {
+        await s.clearAuthCache()
+      } catch {
+        /* ignore */
+      }
       try {
         await s.clearStorageData({
           storages: ['serviceworkers', 'cachestorage'],
-        });
-      } catch { /* ignore */ }
+        })
+      } catch {
+        /* ignore */
+      }
     }),
-  );
+  )
 
   // 3. 磁盘兜底：删除缓存子目录 + Crashpad
-  const allCacheDirNames = [...PARTITION_CACHE_DIRS, 'Crashpad'];
+  const allCacheDirNames = [...PARTITION_CACHE_DIRS, 'Crashpad']
   const cleanBase = (basePath: string) => {
     for (const dirName of allCacheDirNames) {
-      const dirPath = path.join(basePath, dirName);
+      const dirPath = path.join(basePath, dirName)
       try {
         if (fs.existsSync(dirPath)) {
-          fs.rmSync(dirPath, { recursive: true, force: true });
+          fs.rmSync(dirPath, { recursive: true, force: true })
         }
       } catch (err) {
         // 单个目录删除失败不阻塞（可能被进程占用），下次清理会重试
-        console.warn(`[cache-maintenance] 删除缓存目录失败: ${dirPath}`, err);
+        console.warn(`[cache-maintenance] 删除缓存目录失败: ${dirPath}`, err)
       }
     }
-  };
+  }
 
   // 默认 session（数据目录根级）
-  cleanBase(dataDir);
+  cleanBase(dataDir)
   // 各 profile session
-  const partitionsDir = path.join(dataDir, 'Partitions');
+  const partitionsDir = path.join(dataDir, 'Partitions')
   if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
     try {
-      const entries = fs.readdirSync(partitionsDir, { withFileTypes: true });
+      const entries = fs.readdirSync(partitionsDir, { withFileTypes: true })
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        cleanBase(path.join(partitionsDir, entry.name));
+        if (!entry.isDirectory()) continue
+        cleanBase(path.join(partitionsDir, entry.name))
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // 4. 休眠占位快照：属于页面内容而非 Chromium 缓存，只在超过保留策略时清理。
   //    这里顺手按当前设置执行一次保留策略，避免手动清缓存后仍留着过期快照。
   try {
-    const removed = pruneTabHibernationSnapshots(policy);
+    const removed = pruneTabHibernationSnapshots(policy)
     if (removed.removed > 0) {
-      console.log('[cache-maintenance] 清理休眠占位快照:', removed.removed,
-        '其中超期', removed.expired, '孤儿', removed.orphans);
+      console.log(
+        '[cache-maintenance] 清理休眠占位快照:',
+        removed.removed,
+        '其中超期',
+        removed.expired,
+        '孤儿',
+        removed.orphans,
+      )
     }
   } catch (err) {
-    console.warn('[cache-maintenance] 清理休眠占位快照失败:', err);
+    console.warn('[cache-maintenance] 清理休眠占位快照失败:', err)
   }
 
-  console.log('[cache-maintenance] 缓存清理完成，已清理:', formatBytes(cleanedBytes));
-  return { cleanedBytes };
+  console.log('[cache-maintenance] 缓存清理完成，已清理:', formatBytes(cleanedBytes))
+  return { cleanedBytes }
 }
 
 /**

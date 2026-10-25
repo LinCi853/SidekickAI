@@ -30,9 +30,9 @@ export interface WindowBounds {
 
 /** 取消最大化的还原策略 */
 export type RestoreStrategy =
-  | 'normalBounds'   // 还原到进入最大化前的尺寸（主窗口 / 独立窗口 / Chat 窗口）
-  | 'centered70'     // 固定还原为工作区居中、占 70% 尺寸（浏览器窗口）
-  | 'defaultSize'    // 还原到预设默认尺寸并居中
+  | 'normalBounds' // 还原到进入最大化前的尺寸（主窗口 / 独立窗口 / Chat 窗口）
+  | 'centered70' // 固定还原为工作区居中、占 70% 尺寸（浏览器窗口）
+  | 'defaultSize' // 还原到预设默认尺寸并居中
 
 /** WindowMaximizeManager 配置 */
 export interface MaximizeManagerOptions {
@@ -122,7 +122,12 @@ export class WindowMaximizeManager {
         width: workArea.width,
         height: workArea.height,
       })
-      console.log(`[maximize:${this.windowId}] 最大化到工作区:`, workArea.width, 'x', workArea.height)
+      console.log(
+        `[maximize:${this.windowId}] 最大化到工作区:`,
+        workArea.width,
+        'x',
+        workArea.height,
+      )
     } catch (err) {
       console.error(`[maximize:${this.windowId}] setBounds 失败:`, err)
     }
@@ -134,7 +139,9 @@ export class WindowMaximizeManager {
       state.alwaysOnTop = false
       try {
         this.win.setAlwaysOnTop(false)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       this.notifyPinToggled(false)
       console.log(`[maximize:${this.windowId}] 最大化时自动取消置顶`)
     }
@@ -173,7 +180,13 @@ export class WindowMaximizeManager {
     if (restored) {
       try {
         this.win.setBounds(restored)
-        console.log(`[maximize:${this.windowId}] 还原:`, this.restoreStrategy, restored.width, 'x', restored.height)
+        console.log(
+          `[maximize:${this.windowId}] 还原:`,
+          this.restoreStrategy,
+          restored.width,
+          'x',
+          restored.height,
+        )
       } catch (err) {
         console.error(`[maximize:${this.windowId}] 还原 setBounds 失败:`, err)
       }
@@ -228,7 +241,9 @@ export class WindowMaximizeManager {
     if (!this.win.isDestroyed()) {
       try {
         this.win.webContents.send(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, maximized)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -237,7 +252,9 @@ export class WindowMaximizeManager {
     if (!this.win.isDestroyed()) {
       try {
         this.win.webContents.send(IPC_CHANNELS.WIN_CONTROL_PIN_TOGGLED, pinned)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 }

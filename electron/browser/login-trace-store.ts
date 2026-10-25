@@ -86,9 +86,7 @@ export class LoginTraceStore {
   /** 清空登录痕迹（可选按 profileId 过滤），返回删除的行数 */
   clearLoginTraces(profileId?: string): number {
     if (profileId) {
-      const result = this.db
-        .prepare('DELETE FROM login_traces WHERE profile_id = ?')
-        .run(profileId)
+      const result = this.db.prepare('DELETE FROM login_traces WHERE profile_id = ?').run(profileId)
       return result.changes
     }
     const result = this.db.prepare('DELETE FROM login_traces').run()

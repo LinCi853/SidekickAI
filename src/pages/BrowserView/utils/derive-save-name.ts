@@ -12,14 +12,22 @@
  * @returns 清理后的文件名（最长 80 字符）
  */
 export function deriveSaveName(url: string, title?: string): string {
-  const cleaned = (title || '').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
-  if (cleaned) return cleaned;
+  const cleaned = (title || '')
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .slice(0, 80)
+  if (cleaned) return cleaned
   try {
-    const u = new URL(url);
-    const last = u.pathname.split('/').filter(Boolean).pop();
-    if (last) return decodeURIComponent(last).replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || 'page';
-    return u.hostname.replace(/^www\./, '') || 'page';
+    const u = new URL(url)
+    const last = u.pathname.split('/').filter(Boolean).pop()
+    if (last)
+      return (
+        decodeURIComponent(last)
+          .replace(/[\\/:*?"<>|]/g, '_')
+          .slice(0, 80) || 'page'
+      )
+    return u.hostname.replace(/^www\./, '') || 'page'
   } catch {
-    return 'page';
+    return 'page'
   }
 }

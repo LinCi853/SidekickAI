@@ -175,7 +175,9 @@
   line-height: 1.4;
   cursor: pointer;
   text-align: left;
-  transition: background var(--duration-fast, 0.15s), color var(--duration-fast, 0.15s);
+  transition:
+    background var(--duration-fast, 0.15s),
+    color var(--duration-fast, 0.15s);
 }
 
 .popover-item:hover {
@@ -248,7 +250,7 @@
 
 /* ===== 标签页样式（用于 toggle 状态） ===== */
 .popover-item.toggle-on::before {
-  content: '\2713 ';
+  content: "\2713 ";
   color: var(--accent-bright, #c25a4a);
   flex: none;
   width: 12px;

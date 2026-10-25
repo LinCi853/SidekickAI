@@ -27,7 +27,10 @@ test('literal dynamic loading participates in cycles without becoming eager', ()
   assert.deepEqual(result.eagerCycles, [])
   assert.equal(result.loadedCycles.length, 1)
   assert.equal(result.violations.length, 2)
-  const baseline = { ...empty, cycleEdges: cycleEdges(dependencyGraph(files), ['value', 'dynamic']).edges }
+  const baseline = {
+    ...empty,
+    cycleEdges: cycleEdges(dependencyGraph(files), ['value', 'dynamic']).edges,
+  }
   assert.deepEqual(checkArchitecture(files, baseline).violations, [])
 })
 
@@ -51,11 +54,17 @@ test('erased type imports and per-specifier type exports remain visible without 
 
 test('writer checks distinguish runtime use from comments and type contracts', () => {
   const safe = new Map([
-    ['electron/a.ts', "import type { setModuleRuntime } from './modules/runtime-state.js'; type Setter = typeof setModuleRuntime; // setModuleRuntime"],
+    [
+      'electron/a.ts',
+      "import type { setModuleRuntime } from './modules/runtime-state.js'; type Setter = typeof setModuleRuntime; // setModuleRuntime",
+    ],
     ['electron/modules/runtime-state.ts', 'export function setModuleRuntime() {}'],
   ])
   assert.deepEqual(checkArchitecture(safe, empty).violations, [])
-  safe.set('electron/a.ts', "import { setModuleRuntime as write } from './modules/runtime-state.js'; write()")
+  safe.set(
+    'electron/a.ts',
+    "import { setModuleRuntime as write } from './modules/runtime-state.js'; write()",
+  )
   assert.match(checkArchitecture(safe, empty).violations.join(), /additional writer/)
 })
 
@@ -65,8 +74,13 @@ test('a foundation service may not import a higher layer', () => {
     ['electron/modules/b.ts', 'export const b = 1'],
   ])
   const result = checkArchitecture(files, empty, layersOf([foundation, plugins]))
-  assert.match(result.violations.join(), /Layer crossing: electron\/hotkey\/a.ts -> electron\/modules\/b.ts/)
-  assert.deepEqual(result.layerCrossings, [{ from: 'electron/hotkey/a.ts', to: 'electron/modules/b.ts' }])
+  assert.match(
+    result.violations.join(),
+    /Layer crossing: electron\/hotkey\/a.ts -> electron\/modules\/b.ts/,
+  )
+  assert.deepEqual(result.layerCrossings, [
+    { from: 'electron/hotkey/a.ts', to: 'electron/modules/b.ts' },
+  ])
   assert.equal(result.mappedFiles, 2)
 })
 
@@ -81,15 +95,29 @@ test('a higher layer may depend on a foundation service', () => {
 })
 
 test('level 2 containers may depend on the browser domain but not the reverse', () => {
-  const containers = { path: 'electron/platform/window/containers/', level: 2, domain: 'containers', allowedDomains: ['browser'] }
+  const containers = {
+    path: 'electron/platform/window/containers/',
+    level: 2,
+    domain: 'containers',
+    allowedDomains: ['browser'],
+  }
   const browser = { path: 'electron/browser/', level: 2, domain: 'browser' }
   const files = new Map([
-    ['electron/platform/window/containers/popup.ts', "import { tab } from '../../../browser/tabs.js'; export const popup = tab"],
-    ['electron/browser/tabs.ts', "import { popup } from '../platform/window/containers/popup.js'; export const tab = popup"],
+    [
+      'electron/platform/window/containers/popup.ts',
+      "import { tab } from '../../../browser/tabs.js'; export const popup = tab",
+    ],
+    [
+      'electron/browser/tabs.ts',
+      "import { popup } from '../platform/window/containers/popup.js'; export const tab = popup",
+    ],
   ])
   const result = checkArchitecture(files, empty, layersOf([containers, browser]))
   assert.equal(result.layerCrossings.length, 1)
-  assert.match(result.violations.join(), /Layer 2 domain crossing: electron\/browser\/tabs.ts -> electron\/platform\/window\/containers\/popup.ts/)
+  assert.match(
+    result.violations.join(),
+    /Layer 2 domain crossing: electron\/browser\/tabs.ts -> electron\/platform\/window\/containers\/popup.ts/,
+  )
 })
 
 test('the layer baseline ratchets known crossings and reports stale entries', () => {
@@ -97,10 +125,25 @@ test('the layer baseline ratchets known crossings and reports stale entries', ()
     ['electron/hotkey/a.ts', "import { b } from '../modules/b.js'; export const a = b"],
     ['electron/modules/b.ts', 'export const b = 1'],
   ])
-  const baseline = { ...empty, layerCrossings: [{ from: 'electron/hotkey/a.ts', to: 'electron/modules/b.ts' }] }
-  assert.deepEqual(checkArchitecture(files, baseline, layersOf([foundation, plugins])).violations, [])
-  const stale = { ...baseline, layerCrossings: [...baseline.layerCrossings, { from: 'electron/hotkey/gone.ts', to: 'electron/modules/gone.ts' }] }
-  assert.match(checkArchitecture(files, stale, layersOf([foundation, plugins])).violations.join(), /Stale layer crossing: electron\/hotkey\/gone.ts/)
+  const baseline = {
+    ...empty,
+    layerCrossings: [{ from: 'electron/hotkey/a.ts', to: 'electron/modules/b.ts' }],
+  }
+  assert.deepEqual(
+    checkArchitecture(files, baseline, layersOf([foundation, plugins])).violations,
+    [],
+  )
+  const stale = {
+    ...baseline,
+    layerCrossings: [
+      ...baseline.layerCrossings,
+      { from: 'electron/hotkey/gone.ts', to: 'electron/modules/gone.ts' },
+    ],
+  }
+  assert.match(
+    checkArchitecture(files, stale, layersOf([foundation, plugins])).violations.join(),
+    /Stale layer crossing: electron\/hotkey\/gone.ts/,
+  )
 })
 
 test('exempt assembly files and unmapped paths carry no layer constraint', () => {
@@ -109,7 +152,11 @@ test('exempt assembly files and unmapped paths carry no layer constraint', () =>
     ['electron/store/x.ts', "import { b } from '../modules/b.js'; export const store = b"],
     ['electron/modules/b.ts', 'export const b = 1'],
   ])
-  const result = checkArchitecture(files, empty, layersOf([foundation, plugins], ['electron/main.ts']))
+  const result = checkArchitecture(
+    files,
+    empty,
+    layersOf([foundation, plugins], ['electron/main.ts']),
+  )
   assert.deepEqual(result.violations, [])
   assert.equal(result.mappedFiles, 1)
 })

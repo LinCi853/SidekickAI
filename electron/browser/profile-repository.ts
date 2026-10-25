@@ -7,5 +7,7 @@ export const profileRepository = createSqliteJsonStore<{ profiles: Profile[]; ve
 })
 
 export function readProfile(id: string): Profile | null {
-  return (profileRepository.get('profiles') as Profile[]).find(profile => profile.id === id) ?? null
+  return (
+    (profileRepository.get('profiles') as Profile[]).find((profile) => profile.id === id) ?? null
+  )
 }

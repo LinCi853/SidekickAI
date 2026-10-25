@@ -86,7 +86,9 @@ export function buildCookieHandlerScript(hostname: string, config: CookieHandler
 
   // 黑名单：注入 CSS 隐藏所有 cookie 弹窗
   if (inBlacklist) {
-    const hideCss = COOKIE_CONTAINER_SELECTORS.map((s) => `${s} { display: none !important; }`).join('\n')
+    const hideCss = COOKIE_CONTAINER_SELECTORS.map(
+      (s) => `${s} { display: none !important; }`,
+    ).join('\n')
     const hostnameJson = JSON.stringify(hostname)
     return `(function() {
       if (window.__ai_cookie_handler__) window.__ai_cookie_handler__.dispose();

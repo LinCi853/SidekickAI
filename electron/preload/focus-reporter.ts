@@ -11,7 +11,20 @@ import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'IFRAME', 'OBJECT', 'EMBED'])
 // INPUT 要区分类型：复选框/单选框/滑块/按钮被点过一下不算"正在输入"，
 // 否则焦点停在它们身上时应用快捷键会整片失效。
-const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'password', 'url', 'tel', 'number', 'date', 'datetime-local', 'month', 'time', 'week'])
+const TEXT_INPUT_TYPES = new Set([
+  'text',
+  'search',
+  'email',
+  'password',
+  'url',
+  'tel',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'time',
+  'week',
+])
 
 function isEditableFocus(): boolean {
   const target = document.activeElement
@@ -27,11 +40,20 @@ function isEditableFocus(): boolean {
 
 export function installFocusReporter(): void {
   const report = () => {
-    try { ipcRenderer.sendSync(IPC_CHANNELS.WEBVIEW_FOCUS_EDITABLE, isEditableFocus()) }
-    catch { /* 通道未就绪时忽略 */ }
+    try {
+      ipcRenderer.sendSync(IPC_CHANNELS.WEBVIEW_FOCUS_EDITABLE, isEditableFocus())
+    } catch {
+      /* 通道未就绪时忽略 */
+    }
   }
   window.addEventListener('focusin', report, true)
   // focusout 先于新目标的 focusin 触发，延后一拍上报最终落点
-  window.addEventListener('focusout', () => { setTimeout(report, 0) }, true)
+  window.addEventListener(
+    'focusout',
+    () => {
+      setTimeout(report, 0)
+    },
+    true,
+  )
   report()
 }

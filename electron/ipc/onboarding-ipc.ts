@@ -11,10 +11,7 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { windowState } from '../platform/window/window-state.js'
-import {
-  getAppSettings,
-  updateAppSettings,
-} from '../store/app-settings-store.js'
+import { getAppSettings, updateAppSettings } from '../store/app-settings-store.js'
 import { showOnboardingWindow } from '../window-factory.js'
 
 /** 注册引导相关 IPC handler */
@@ -35,7 +32,10 @@ export function registerOnboardingIpc(): void {
   // ONBOARDING_COMPLETE：用户点「开始使用」→ 合并保存快速设置 + 标记完成 + 关闭引导窗 + 显示主窗口
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_COMPLETE, (_e, patch?: Record<string, unknown>) => {
     try {
-      updateAppSettings({ onboardingCompleted: true, ...(patch as Partial<ReturnType<typeof getAppSettings>> | undefined) })
+      updateAppSettings({
+        onboardingCompleted: true,
+        ...(patch as Partial<ReturnType<typeof getAppSettings>> | undefined),
+      })
     } catch (err) {
       console.error('[main] 保存 onboarding 设置失败:', err)
     }

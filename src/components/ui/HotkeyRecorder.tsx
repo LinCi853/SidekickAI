@@ -35,9 +35,13 @@ export interface HotkeyRecorderProps {
   /** 停止录制 */
   stopRecording: () => Promise<void>
   /** 监听录制结果（cleared=true 表示录制中按了 Del/退格，请求清除绑定） */
-  onRecordingResult: (cb: (result: { accelerator: string; reason?: string; cleared?: boolean }) => void) => () => void
+  onRecordingResult: (
+    cb: (result: { accelerator: string; reason?: string; cleared?: boolean }) => void,
+  ) => () => void
   /** 监听录制实时反馈（每次按键时推送当前组合，用于 UI 实时显示） */
-  onRecordingPartial: (cb: (partial: { modifiers: string[]; key: string | null }) => void) => () => void
+  onRecordingPartial: (
+    cb: (partial: { modifiers: string[]; key: string | null }) => void,
+  ) => () => void
   /** 传入的 CSS 类名 */
   className?: string
   /** 输入框 aria-label（供测试与无障碍定位） */
@@ -169,9 +173,7 @@ export default function HotkeyRecorder({
     }
   }, [disabled, startRecording])
 
-  const displayValue = recording
-    ? (partialText ?? '按下快捷键…（Esc 取消）')
-    : (value || '未绑定')
+  const displayValue = recording ? (partialText ?? '按下快捷键…（Esc 取消）') : value || '未绑定'
   const inputClass = [
     className ?? '',
     recording ? ' is-recording' : '',

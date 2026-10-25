@@ -1,4 +1,4 @@
-import type { BlockRule } from '../../../electron/shared/block-rules.types';
+import type { BlockRule } from '../../../electron/shared/block-rules.types'
 
 export const EMPTY_RULE_DRAFT: Omit<BlockRule, 'id' | 'builtin'> = {
   domainPattern: '*',
@@ -7,4 +7,4 @@ export const EMPTY_RULE_DRAFT: Omit<BlockRule, 'id' | 'builtin'> = {
   jsCode: '',
   label: '',
   enabled: true,
-};
+}

@@ -61,8 +61,12 @@
   color: var(--text-muted);
   line-height: 1.6;
 }
-.app-empty-state.compact { padding: var(--space-2) var(--space-2); }
-.app-empty-state.large { padding: var(--space-6) var(--space-4); }
+.app-empty-state.compact {
+  padding: var(--space-2) var(--space-2);
+}
+.app-empty-state.large {
+  padding: var(--space-6) var(--space-4);
+}
 
 /* ===== Toast ===== */
 .app-toast {
@@ -80,6 +84,12 @@
   animation: toast-in var(--duration-fast) ease-out;
 }
 @keyframes toast-in {
-  from { opacity: 0; transform: translate(-50%, 8px); }
-  to { opacity: 1; transform: translateX(-50%); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
 }

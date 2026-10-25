@@ -26,11 +26,17 @@ export interface BrowserSessionPort {
 }
 
 export interface WebviewRecordPort {
-  getRecordByWebContentsId(webContentsId: number): (WebviewRegistration & { registeredAt: number }) | null
+  getRecordByWebContentsId(
+    webContentsId: number,
+  ): (WebviewRegistration & { registeredAt: number }) | null
 }
 
 export interface WebviewAttachPort {
-  hotkeyRouter(webContents: WebContents, parentWebContents: WebContents, onCtrlKeyChange: (pressed: boolean) => void): void
+  hotkeyRouter(
+    webContents: WebContents,
+    parentWebContents: WebContents,
+    onCtrlKeyChange: (pressed: boolean) => void,
+  ): void
   antiDetection(parentWebContents: WebContents): void
 }
 

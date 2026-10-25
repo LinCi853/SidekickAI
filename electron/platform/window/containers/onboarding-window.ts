@@ -22,7 +22,10 @@ import { buildWindowConfig } from '../window-config-builder.js'
 let lifecycleCb: { onShow?: () => void; onClose?: () => void } = {}
 
 /** 注册引导窗口生命周期回调 */
-export function setOnboardingLifecycleCallbacks(cb: { onShow?: () => void; onClose?: () => void }): void {
+export function setOnboardingLifecycleCallbacks(cb: {
+  onShow?: () => void
+  onClose?: () => void
+}): void {
   lifecycleCb = cb
 }
 
@@ -44,27 +47,29 @@ export function showOnboardingWindow(): void {
   const x = workArea.x + Math.round((workArea.width - width) / 2)
   const y = workArea.y + Math.round((workArea.height - height) / 2)
 
-  const win = new BrowserWindow(buildWindowConfig({
-    width,
-    height,
-    x,
-    y,
-    minWidth: 560,
-    minHeight: 480,
-    show: false,
-    frame: false,
-    resizable: true,
-    // 引导窗口无需最大化，禁用系统级最大化（用户也不需要从窗口标题栏最大化）
-    maximizable: false,
-    // 禁用全屏，防止触发 Chromium 原生全屏（引导窗口不监听全屏热键）
-    fullscreenable: false,
-    backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: '工百窗 - 使用指南',
-    webPreferences: createDefaultWebPreferences({
-      preload: getPreloadPath(),
-      webviewTag: false,
+  const win = new BrowserWindow(
+    buildWindowConfig({
+      width,
+      height,
+      x,
+      y,
+      minWidth: 560,
+      minHeight: 480,
+      show: false,
+      frame: false,
+      resizable: true,
+      // 引导窗口无需最大化，禁用系统级最大化（用户也不需要从窗口标题栏最大化）
+      maximizable: false,
+      // 禁用全屏，防止触发 Chromium 原生全屏（引导窗口不监听全屏热键）
+      fullscreenable: false,
+      backgroundColor: WINDOW_BACKGROUND_COLOR,
+      title: '工百窗 - 使用指南',
+      webPreferences: createDefaultWebPreferences({
+        preload: getPreloadPath(),
+        webviewTag: false,
+      }),
     }),
-  }))
+  )
   windowState.onboardingWindow = win
   loadRenderer(win, ONBOARDING_WINDOW_ID, 'onboarding')
 

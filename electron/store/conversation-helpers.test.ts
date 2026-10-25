@@ -12,32 +12,56 @@ import {
 } from './conversation-helpers'
 
 const conversationRow: ConversationRow = {
-  id: 'c1', source_id: 'p1', source_type: 'webview', title: '标题',
-  created_at: 100, updated_at: 200, url: null,
+  id: 'c1',
+  source_id: 'p1',
+  source_type: 'webview',
+  title: '标题',
+  created_at: 100,
+  updated_at: 200,
+  url: null,
 }
 const messageRow: MessageRow = {
-  id: 'm1', conversation_id: 'c1', role: 'user', content: '内容',
-  tokens: null, created_at: 100, content_hash: 'h', auto_grabbed: 1,
+  id: 'm1',
+  conversation_id: 'c1',
+  role: 'user',
+  content: '内容',
+  tokens: null,
+  created_at: 100,
+  content_hash: 'h',
+  auto_grabbed: 1,
 }
 
 describe('conversation-helpers（行映射与纯工具）', () => {
   it('rowToConversation 映射下划线列为驼峰，null url 转 undefined', () => {
     expect(rowToConversation(conversationRow)).toEqual({
-      id: 'c1', sourceId: 'p1', sourceType: 'webview', title: '标题',
-      createdAt: 100, updatedAt: 200, url: undefined,
+      id: 'c1',
+      sourceId: 'p1',
+      sourceType: 'webview',
+      title: '标题',
+      createdAt: 100,
+      updatedAt: 200,
+      url: undefined,
     })
   })
 
   it('rowToMessage 映射 auto_grabbed 数值为布尔', () => {
-    expect(rowToMessage(messageRow)).toMatchObject({ id: 'm1', autoGrabbed: true, tokens: undefined })
+    expect(rowToMessage(messageRow)).toMatchObject({
+      id: 'm1',
+      autoGrabbed: true,
+      tokens: undefined,
+    })
     expect(rowToMessage({ ...messageRow, auto_grabbed: 0 }).autoGrabbed).toBe(false)
     expect(rowToMessage({ ...messageRow, auto_grabbed: null }).autoGrabbed).toBe(false)
   })
 
   it('computeContentHash 对相同输入稳定、不同输入不同', () => {
     expect(computeContentHash('c1', 'user', '你好')).toBe(computeContentHash('c1', 'user', '你好'))
-    expect(computeContentHash('c1', 'user', '你好')).not.toBe(computeContentHash('c1', 'user', '再见'))
-    expect(computeContentHash('c1', 'user', '你好')).not.toBe(computeContentHash('c2', 'user', '你好'))
+    expect(computeContentHash('c1', 'user', '你好')).not.toBe(
+      computeContentHash('c1', 'user', '再见'),
+    )
+    expect(computeContentHash('c1', 'user', '你好')).not.toBe(
+      computeContentHash('c2', 'user', '你好'),
+    )
   })
 
   it('shouldFilterShortMessage 过滤空白/过短/纯标点文本', () => {

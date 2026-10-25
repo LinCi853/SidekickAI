@@ -5,7 +5,10 @@
 // 通过 BrowserShortcutsHost 协作接口访问 manager 的字段与方法。
 
 import { globalShortcut } from 'electron'
-import type { HotkeyOwnership, HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
+import type {
+  HotkeyOwnership,
+  HotkeyLease,
+} from '../../../packages/desktop-common/hotkey-ownership.js'
 import { parseAccelerator } from './accelerator.js'
 import type { HotkeyRecordingCallback } from './types.js'
 
@@ -42,7 +45,11 @@ export interface BrowserShortcutsHost {
  *
  * @returns Whether an owned shortcut backend is available.
  */
-export function registerBrowserShortcut(host: BrowserShortcutsHost, accelerator: string, callback: () => void): boolean {
+export function registerBrowserShortcut(
+  host: BrowserShortcutsHost,
+  accelerator: string,
+  callback: () => void,
+): boolean {
   // 若已注册同名浏览器快捷键，先注销
   if (host.browserShortcuts.has(accelerator)) {
     unregisterBrowserShortcut(host, accelerator)
@@ -90,9 +97,7 @@ export function registerBrowserShortcut(host: BrowserShortcutsHost, accelerator:
       console.log(`[HotkeyManager] 浏览器全局快捷键注册成功: ${accelerator}`)
       return true
     }
-    console.warn(
-      `[HotkeyManager] 浏览器全局快捷键注册失败: ${accelerator}，已启用 uiohook 兜底`,
-    )
+    console.warn(`[HotkeyManager] 浏览器全局快捷键注册失败: ${accelerator}，已启用 uiohook 兜底`)
   } catch (err) {
     console.warn(`[HotkeyManager] 浏览器全局快捷键注册异常: ${accelerator}`, err)
     unregisterBrowserShortcut(host, accelerator)

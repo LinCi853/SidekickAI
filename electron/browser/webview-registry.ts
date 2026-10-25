@@ -16,23 +16,43 @@ export function registerWindowWebview(
   windowId: string | null,
   profileSession: Session | null,
 ): boolean {
-  if (!payload || typeof payload.tabId !== 'string' || !payload.tabId
-    || typeof payload.profileId !== 'string' || !payload.profileId
-    || !Number.isSafeInteger(payload.webContentsId) || payload.webContentsId <= 0
-    || !windowId || payload.windowId !== windowId || !profileSession
-    || event.sender.isDestroyed() || event.sender.getType() !== 'window'
-    || event.senderFrame !== event.sender.mainFrame) return false
+  if (
+    !payload ||
+    typeof payload.tabId !== 'string' ||
+    !payload.tabId ||
+    typeof payload.profileId !== 'string' ||
+    !payload.profileId ||
+    !Number.isSafeInteger(payload.webContentsId) ||
+    payload.webContentsId <= 0 ||
+    !windowId ||
+    payload.windowId !== windowId ||
+    !profileSession ||
+    event.sender.isDestroyed() ||
+    event.sender.getType() !== 'window' ||
+    event.senderFrame !== event.sender.mainFrame
+  )
+    return false
   const guest = webContents.fromId(payload.webContentsId)
-  if (!guest || guest.isDestroyed() || guest.getType() !== 'webview'
-    || guest.hostWebContents !== event.sender || guest.session !== profileSession) return false
+  if (
+    !guest ||
+    guest.isDestroyed() ||
+    guest.getType() !== 'webview' ||
+    guest.hostWebContents !== event.sender ||
+    guest.session !== profileSession
+  )
+    return false
   return registerWebview(guest, payload)
 }
 
 export function registerWebview(wc: WebContents, info: WebviewRegistration): boolean {
   if (wc.isDestroyed()) return false
   const current = byWebContentsId.get(wc.id)
-  if (current?.tabId === info.tabId && current.windowId === info.windowId
-    && current.profileId === info.profileId) return true
+  if (
+    current?.tabId === info.tabId &&
+    current.windowId === info.windowId &&
+    current.profileId === info.profileId
+  )
+    return true
 
   const previousId = byTabId.get(info.tabId)
   if (previousId !== undefined && previousId !== wc.id) unregisterWebview(previousId)

@@ -4,35 +4,35 @@
    Owns page recovery, guest identity registration, DevTools and dropped files.
    ===================================================================== */
 
-import { useCallback, useEffect } from 'react';
-import type { BrowserTabState, Profile } from '../../../lib/electron-api';
-import { registerWebview } from '../../../lib/electron-api';
-import type { WebviewElement } from '../../../lib/webview.js';
-import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js';
-import { leaseWebviewLifecycle } from '../../../lib/webview-lifecycle';
+import { useCallback, useEffect } from 'react'
+import type { BrowserTabState, Profile } from '../../../lib/electron-api'
+import { registerWebview } from '../../../lib/electron-api'
+import type { WebviewElement } from '../../../lib/webview.js'
+import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
+import { leaseWebviewLifecycle } from '../../../lib/webview-lifecycle'
 
 export interface UseWebviewLifecycleHandlers {
-  handleDomReady: () => Promise<void>;
-  handleNavigate: (e: Event) => void;
-  handleTitleUpdate: (e: Event) => void;
-  handleFaviconUpdate: (e: Event) => void;
-  handleStartLoading: () => void;
-  handleStopLoading: () => void;
-  handleFinishNavigation: () => void;
-  handleFinishLoad: () => void;
-  handleFailLoad: () => void;
-  handleMediaStartedPlaying: () => void;
-  handleMediaPaused: () => void;
+  handleDomReady: () => Promise<void>
+  handleNavigate: (e: Event) => void
+  handleTitleUpdate: (e: Event) => void
+  handleFaviconUpdate: (e: Event) => void
+  handleStartLoading: () => void
+  handleStopLoading: () => void
+  handleFinishNavigation: () => void
+  handleFinishLoad: () => void
+  handleFailLoad: () => void
+  handleMediaStartedPlaying: () => void
+  handleMediaPaused: () => void
 }
 
 export interface UseWebviewLifecycleParams {
-  webviewRef: React.MutableRefObject<WebviewElement | null>;
-  domReadyRef: React.MutableRefObject<boolean>;
-  remountKey: number;
-  setRemountKey: React.Dispatch<React.SetStateAction<number>>;
-  tab: BrowserTabState;
-  profile: Profile;
-  handlers: UseWebviewLifecycleHandlers;
+  webviewRef: React.MutableRefObject<WebviewElement | null>
+  domReadyRef: React.MutableRefObject<boolean>
+  remountKey: number
+  setRemountKey: React.Dispatch<React.SetStateAction<number>>
+  tab: BrowserTabState
+  profile: Profile
+  handlers: UseWebviewLifecycleHandlers
 }
 
 export function useWebviewLifecycle({
@@ -56,158 +56,203 @@ export function useWebviewLifecycle({
     handleFailLoad,
     handleMediaStartedPlaying,
     handleMediaPaused,
-  } = handlers;
+  } = handlers
 
   // Remount on fatal failure
   const handleFatalFailure = useCallback(() => {
-    console.warn('[BrowserWebviewTab] fatal failure, remounting:', tab.url);
-    domReadyRef.current = false;
-    setRemountKey((k) => k + 1);
-  }, [tab.url]);
+    console.warn('[BrowserWebviewTab] fatal failure, remounting:', tab.url)
+    domReadyRef.current = false
+    setRemountKey((k) => k + 1)
+  }, [tab.url])
 
   // Register event listeners
   useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
-    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current);
-    let recovering = false;
-    let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+    const webview = webviewRef.current
+    if (!webview) return
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current)
+    let recovering = false
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined
     const recoverOnce = () => {
-      if (recovering) return;
-      recovering = true;
-      handleFatalFailure();
-    };
+      if (recovering) return
+      recovering = true
+      handleFatalFailure()
+    }
 
-    webview.addEventListener('dom-ready', handleDomReady as EventListener);
-    webview.addEventListener('did-navigate', handleNavigate as EventListener);
-    webview.addEventListener('did-navigate-in-page', handleNavigate as EventListener);
-    webview.addEventListener('page-title-updated', handleTitleUpdate as EventListener);
-    webview.addEventListener('page-favicon-updated', handleFaviconUpdate as EventListener);
-    webview.addEventListener('did-start-loading', handleStartLoading as EventListener);
-    webview.addEventListener('did-stop-loading', handleStopLoading as EventListener);
+    webview.addEventListener('dom-ready', handleDomReady as EventListener)
+    webview.addEventListener('did-navigate', handleNavigate as EventListener)
+    webview.addEventListener('did-navigate-in-page', handleNavigate as EventListener)
+    webview.addEventListener('page-title-updated', handleTitleUpdate as EventListener)
+    webview.addEventListener('page-favicon-updated', handleFaviconUpdate as EventListener)
+    webview.addEventListener('did-start-loading', handleStartLoading as EventListener)
+    webview.addEventListener('did-stop-loading', handleStopLoading as EventListener)
     // B2: NavBar 进度条 —— 导航完成与页面完全加载事件
-    webview.addEventListener('did-finish-navigation', handleFinishNavigation as EventListener);
-    webview.addEventListener('did-finish-load', handleFinishLoad as EventListener);
+    webview.addEventListener('did-finish-navigation', handleFinishNavigation as EventListener)
+    webview.addEventListener('did-finish-load', handleFinishLoad as EventListener)
     // did-fail-load：UI 更新 + 代理兜底检测（先确认白屏再执行兜底）
     const PROXY_ERROR_CODES = new Set([
-      -100, -102, -103, -104, -105, -107,
-      -111, -118, -127, -130, -136, -137, -202, -300,
-    ]);
+      -100, -102, -103, -104, -105, -107, -111, -118, -127, -130, -136, -137, -202, -300,
+    ])
     let proxyFallbackTriggered = (window as any).__proxyFallbackGlobal ?? false
     const handleFailLoadWithProxy = (e: Event) => {
-      const ev = e as unknown as { errorCode?: number; errorDescription?: string; validatedURL?: string; isMainFrame?: boolean }
-      if (ev.errorCode === -3) return // ERR_ABORTED 忽略
-      handleFailLoad();
-      if (ev.errorCode === -2 && ev.isMainFrame && !recoveryTimer) {
-        recoveryTimer = lifecycle.delay(recoverOnce, 500);
+      const ev = e as unknown as {
+        errorCode?: number
+        errorDescription?: string
+        validatedURL?: string
+        isMainFrame?: boolean
       }
-      if (ev.isMainFrame && ev.errorCode != null && PROXY_ERROR_CODES.has(ev.errorCode) && !proxyFallbackTriggered) {
-        proxyFallbackTriggered = true;
-        (window as any).__proxyFallbackGlobal = true;
+      if (ev.errorCode === -3) return // ERR_ABORTED 忽略
+      handleFailLoad()
+      if (ev.errorCode === -2 && ev.isMainFrame && !recoveryTimer) {
+        recoveryTimer = lifecycle.delay(recoverOnce, 500)
+      }
+      if (
+        ev.isMainFrame &&
+        ev.errorCode != null &&
+        PROXY_ERROR_CODES.has(ev.errorCode) &&
+        !proxyFallbackTriggered
+      ) {
+        proxyFallbackTriggered = true
+        ;(window as any).__proxyFallbackGlobal = true
         const failedUrl = ev.validatedURL || ''
-        const page = lifecycle.capture();
-        console.warn(`[proxy-fallback][BrowserView] 检测到网络错误 ${ev.errorCode}，1.5s 后检查页面...`)
+        const page = lifecycle.capture()
+        console.warn(
+          `[proxy-fallback][BrowserView] 检测到网络错误 ${ev.errorCode}，1.5s 后检查页面...`,
+        )
         lifecycle.delay(() => {
-          void (webview as any).executeJavaScript(
-            '(function(){try{var b=document.body;if(!b)return{textLen:0,childCount:0,htmlLen:0};return{textLen:(b.innerText||"").trim().length,childCount:b.children?b.children.length:0,htmlLen:(b.innerHTML||"").length}}catch(e){return{textLen:0,childCount:0,htmlLen:0}}})()'
-          ).then((info: { textLen: number; childCount: number; htmlLen: number }) => {
-            if (!page.isCurrent()) return;
-            console.warn(`[proxy-fallback][BrowserView] textLen=${info.textLen} childCount=${info.childCount} htmlLen=${info.htmlLen}`)
-            if (info.textLen > 0 || info.childCount > 0 || info.htmlLen > 200) {
-              console.warn('[proxy-fallback][BrowserView] 页面有内容/结构，不触发兜底')
-              return
-            }
-            console.warn('[proxy-fallback][BrowserView] 确认白屏，执行兜底...')
-            return import('../../../lib/electron-api').then(api => page.isCurrent() ? api.applyProxyFallback() : undefined)
-          }).then((result: { switched: boolean; mode: string | null } | undefined) => {
-            if (!page.isCurrent()) return;
-            if (result?.switched) {
-              console.warn(`[proxy-fallback][BrowserView] 切换到 ${result.mode}，200ms 后重载`)
-              lifecycle.delay(() => {
-                try { failedUrl ? (webview as any).loadURL(failedUrl) : webview.reload() } catch { /* ignore */ }
-              }, 200)
-            }
-          }).catch((err: unknown) => {
-            console.error('[proxy-fallback][BrowserView] 异常:', err)
-          })
+          void (webview as any)
+            .executeJavaScript(
+              '(function(){try{var b=document.body;if(!b)return{textLen:0,childCount:0,htmlLen:0};return{textLen:(b.innerText||"").trim().length,childCount:b.children?b.children.length:0,htmlLen:(b.innerHTML||"").length}}catch(e){return{textLen:0,childCount:0,htmlLen:0}}})()',
+            )
+            .then((info: { textLen: number; childCount: number; htmlLen: number }) => {
+              if (!page.isCurrent()) return
+              console.warn(
+                `[proxy-fallback][BrowserView] textLen=${info.textLen} childCount=${info.childCount} htmlLen=${info.htmlLen}`,
+              )
+              if (info.textLen > 0 || info.childCount > 0 || info.htmlLen > 200) {
+                console.warn('[proxy-fallback][BrowserView] 页面有内容/结构，不触发兜底')
+                return
+              }
+              console.warn('[proxy-fallback][BrowserView] 确认白屏，执行兜底...')
+              return import('../../../lib/electron-api').then((api) =>
+                page.isCurrent() ? api.applyProxyFallback() : undefined,
+              )
+            })
+            .then((result: { switched: boolean; mode: string | null } | undefined) => {
+              if (!page.isCurrent()) return
+              if (result?.switched) {
+                console.warn(`[proxy-fallback][BrowserView] 切换到 ${result.mode}，200ms 后重载`)
+                lifecycle.delay(() => {
+                  try {
+                    failedUrl ? (webview as any).loadURL(failedUrl) : webview.reload()
+                  } catch {
+                    /* ignore */
+                  }
+                }, 200)
+              }
+            })
+            .catch((err: unknown) => {
+              console.error('[proxy-fallback][BrowserView] 异常:', err)
+            })
         }, 1500)
       }
     }
-    webview.addEventListener('did-fail-load', handleFailLoadWithProxy as EventListener);
+    webview.addEventListener('did-fail-load', handleFailLoadWithProxy as EventListener)
 
     // v0.0.9 音频事件（webview 的 media-started-playing / media-paused）
-    webview.addEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
-    webview.addEventListener('media-paused', handleMediaPaused as EventListener);
+    webview.addEventListener('media-started-playing', handleMediaStartedPlaying as EventListener)
+    webview.addEventListener('media-paused', handleMediaPaused as EventListener)
 
-    webview.addEventListener('ai-webview-fatal-failure', recoverOnce);
-    webview.addEventListener('render-process-gone', recoverOnce);
+    webview.addEventListener('ai-webview-fatal-failure', recoverOnce)
+    webview.addEventListener('render-process-gone', recoverOnce)
 
     // F12 → DevTools
     const handleBeforeInput = (e: Event) => {
-      const inputEvent = e as unknown as { type: string; key: string; modifiers: string[] };
-      if (inputEvent.type !== 'keyDown') return;
+      const inputEvent = e as unknown as { type: string; key: string; modifiers: string[] }
+      if (inputEvent.type !== 'keyDown') return
       if (inputEvent.key === 'F12') {
-        e.preventDefault();
+        e.preventDefault()
         const wv = webview as unknown as {
-          isDevToolsOpened: () => boolean;
-          openDevTools: () => void;
-          closeDevTools: () => void;
-        };
+          isDevToolsOpened: () => boolean
+          openDevTools: () => void
+          closeDevTools: () => void
+        }
         if (wv.isDevToolsOpened()) {
-          wv.closeDevTools();
+          wv.closeDevTools()
         } else {
-          wv.openDevTools();
+          wv.openDevTools()
         }
       }
-    };
-    webview.addEventListener('before-input-event', handleBeforeInput);
+    }
+    webview.addEventListener('before-input-event', handleBeforeInput)
 
     return () => {
-      lifecycle.dispose();
-      webview.removeEventListener('dom-ready', handleDomReady as EventListener);
-      webview.removeEventListener('did-navigate', handleNavigate as EventListener);
-      webview.removeEventListener('did-navigate-in-page', handleNavigate as EventListener);
-      webview.removeEventListener('page-title-updated', handleTitleUpdate as EventListener);
-      webview.removeEventListener('page-favicon-updated', handleFaviconUpdate as EventListener);
-      webview.removeEventListener('did-start-loading', handleStartLoading as EventListener);
-      webview.removeEventListener('did-stop-loading', handleStopLoading as EventListener);
-      webview.removeEventListener('did-finish-navigation', handleFinishNavigation as EventListener);
-      webview.removeEventListener('did-finish-load', handleFinishLoad as EventListener);
-      webview.removeEventListener('did-fail-load', handleFailLoadWithProxy as EventListener);
-      webview.removeEventListener('media-started-playing', handleMediaStartedPlaying as EventListener);
-      webview.removeEventListener('media-paused', handleMediaPaused as EventListener);
-      webview.removeEventListener('ai-webview-fatal-failure', recoverOnce);
-      webview.removeEventListener('render-process-gone', recoverOnce);
-      webview.removeEventListener('before-input-event', handleBeforeInput);
-    };
-  }, [handleDomReady, handleNavigate, handleTitleUpdate, handleFaviconUpdate, handleStartLoading, handleStopLoading, handleFinishNavigation, handleFinishLoad, handleFailLoad, handleFatalFailure, handleMediaStartedPlaying, handleMediaPaused, tab.id, remountKey]);
+      lifecycle.dispose()
+      webview.removeEventListener('dom-ready', handleDomReady as EventListener)
+      webview.removeEventListener('did-navigate', handleNavigate as EventListener)
+      webview.removeEventListener('did-navigate-in-page', handleNavigate as EventListener)
+      webview.removeEventListener('page-title-updated', handleTitleUpdate as EventListener)
+      webview.removeEventListener('page-favicon-updated', handleFaviconUpdate as EventListener)
+      webview.removeEventListener('did-start-loading', handleStartLoading as EventListener)
+      webview.removeEventListener('did-stop-loading', handleStopLoading as EventListener)
+      webview.removeEventListener('did-finish-navigation', handleFinishNavigation as EventListener)
+      webview.removeEventListener('did-finish-load', handleFinishLoad as EventListener)
+      webview.removeEventListener('did-fail-load', handleFailLoadWithProxy as EventListener)
+      webview.removeEventListener(
+        'media-started-playing',
+        handleMediaStartedPlaying as EventListener,
+      )
+      webview.removeEventListener('media-paused', handleMediaPaused as EventListener)
+      webview.removeEventListener('ai-webview-fatal-failure', recoverOnce)
+      webview.removeEventListener('render-process-gone', recoverOnce)
+      webview.removeEventListener('before-input-event', handleBeforeInput)
+    }
+  }, [
+    handleDomReady,
+    handleNavigate,
+    handleTitleUpdate,
+    handleFaviconUpdate,
+    handleStartLoading,
+    handleStopLoading,
+    handleFinishNavigation,
+    handleFinishLoad,
+    handleFailLoad,
+    handleFatalFailure,
+    handleMediaStartedPlaying,
+    handleMediaPaused,
+    tab.id,
+    remountKey,
+  ])
 
   // Register guest identity after attachment, including replacement guests.
   useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
+    const webview = webviewRef.current
+    if (!webview) return
     const register = () => {
       try {
-        const wcId = webview.getWebContentsId?.();
-        if (wcId === undefined) return;
-        const windowId = useBrowserTabStore.getState().windowId;
-        if (!windowId) return;
+        const wcId = webview.getWebContentsId?.()
+        if (wcId === undefined) return
+        const windowId = useBrowserTabStore.getState().windowId
+        if (!windowId) return
         void registerWebview({
           tabId: tab.id,
           windowId,
           profileId: profile.id,
           webContentsId: wcId,
-        }).catch(() => { /* ignore */ });
-      } catch { /* webview 未 attach，getWebContentsId 抛错 */ }
-    };
+        }).catch(() => {
+          /* ignore */
+        })
+      } catch {
+        /* webview 未 attach，getWebContentsId 抛错 */
+      }
+    }
     // did-attach 后 webContentsId 才可用
-    webview.addEventListener('did-attach', register as EventListener);
+    webview.addEventListener('did-attach', register as EventListener)
     // 兜底：dom-ready 时再注册一次（若 did-attach 已过则直接成功）
-    const domReadyReg = () => register();
-    webview.addEventListener('dom-ready', domReadyReg as EventListener);
+    const domReadyReg = () => register()
+    webview.addEventListener('dom-ready', domReadyReg as EventListener)
     return () => {
-      webview.removeEventListener('did-attach', register as EventListener);
-      webview.removeEventListener('dom-ready', domReadyReg as EventListener);
-    };
-  }, [tab.id, profile.id, remountKey]);
+      webview.removeEventListener('did-attach', register as EventListener)
+      webview.removeEventListener('dom-ready', domReadyReg as EventListener)
+    }
+  }, [tab.id, profile.id, remountKey])
 }

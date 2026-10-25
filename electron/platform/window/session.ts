@@ -60,7 +60,10 @@ export function applyClientHintsInterceptor(
  * 渲染进程的 <webview> 使用相同 partition（persist:${profileId}）即可继承这些设置，
  * 保证首屏即使用正确 UA，无需 dom-ready 后再 setUserAgent + reload。
  */
-export async function setupSession(profileId: string, clientHints: ClientHintsRegistry): Promise<void> {
+export async function setupSession(
+  profileId: string,
+  clientHints: ClientHintsRegistry,
+): Promise<void> {
   try {
     const profile = browserPorts().profiles.get(profileId)
     if (!profile) {
@@ -83,9 +86,7 @@ export async function setupSession(profileId: string, clientHints: ClientHintsRe
     applyClientHintsInterceptor(ses, profileId, clientHints)
   } catch (err) {
     console.error(`[WindowManager] setupSession 失败 (${profileId}):`, err)
-    throw new Error(
-      `setupSession 失败: ${err instanceof Error ? err.message : String(err)}`,
-    )
+    throw new Error(`setupSession 失败: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -98,7 +99,10 @@ export async function setupSession(profileId: string, clientHints: ClientHintsRe
  *   - 默认使用桌面端 UA（浏览器窗口是桌面尺寸）
  *   - 使用 region 感知代理（cn 直连 / global 系统代理）
  */
-export async function setupBrowserSession(profileId: string, clientHints: ClientHintsRegistry): Promise<void> {
+export async function setupBrowserSession(
+  profileId: string,
+  clientHints: ClientHintsRegistry,
+): Promise<void> {
   try {
     const profile = browserPorts().profiles.get(profileId)
     if (!profile) {
@@ -136,9 +140,7 @@ export async function setupBrowserSession(profileId: string, clientHints: Client
     await applyRegionBasedProxy(ses, profile)
   } catch (err) {
     console.error(`[WindowManager] setupBrowserSession 失败 (${profileId}):`, err)
-    throw new Error(
-      `setupBrowserSession 失败: ${err instanceof Error ? err.message : String(err)}`,
-    )
+    throw new Error(`setupBrowserSession 失败: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -154,9 +156,7 @@ export function buildClientHints(profile: Profile): ClientHints {
   // 仅当当前 UA 与预设 UA 一致时，才使用预设的品牌列表
   if (preset && preset.userAgent === profile.userAgent) {
     return {
-      secChUa: preset.brands
-        .map((b) => `"${b.brand}";v="${b.version}"`)
-        .join(', '),
+      secChUa: preset.brands.map((b) => `"${b.brand}";v="${b.version}"`).join(', '),
       secChUaMobile: preset.chMobile ? '?1' : '?0',
       secChUaPlatform: `"${preset.chPlatform}"`,
     }
@@ -166,12 +166,8 @@ export function buildClientHints(profile: Profile): ClientHints {
 }
 
 /** 从 UA 字符串推导 Client Hints（用于自定义 UA） */
-export function deriveClientHintsFromUA(
-  ua: string,
-  platform: Profile['platform'],
-): ClientHints {
-  const isMobile =
-    platform === 'mobile' || /Mobile|Mobi|Android|iPhone|iPad/i.test(ua)
+export function deriveClientHintsFromUA(ua: string, platform: Profile['platform']): ClientHints {
+  const isMobile = platform === 'mobile' || /Mobile|Mobi|Android|iPhone|iPad/i.test(ua)
 
   // 推导 Sec-CH-UA-Platform
   let chPlatform = 'Windows'

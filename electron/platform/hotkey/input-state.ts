@@ -1,14 +1,35 @@
 export type Modifier = 'alt' | 'ctrl' | 'shift' | 'meta'
 export type Modifiers = Record<Modifier, boolean>
-export type KeyObservation = { keycode: number; altKey: boolean; ctrlKey: boolean; shiftKey: boolean; metaKey: boolean }
+export type KeyObservation = {
+  keycode: number
+  altKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+  metaKey: boolean
+}
 export type KeyBinding = Modifiers & { keycode: number | null }
 const modifiers: Modifier[] = ['alt', 'ctrl', 'shift', 'meta']
 
 export function modifierKeyCodes(keys: Record<string, number>): Record<Modifier, Set<number>> {
-  const codes = { alt: new Set<number>(), ctrl: new Set<number>(), shift: new Set<number>(), meta: new Set<number>() }
+  const codes = {
+    alt: new Set<number>(),
+    ctrl: new Set<number>(),
+    shift: new Set<number>(),
+    meta: new Set<number>(),
+  }
   for (const [name, code] of Object.entries(keys)) {
     const normalized = name.toUpperCase().replace(/^(LEFT|RIGHT)|(?:LEFT|RIGHT)$/g, '')
-    const modifier = ({ ALT: 'alt', CTRL: 'ctrl', CONTROL: 'ctrl', SHIFT: 'shift', META: 'meta', SUPER: 'meta', COMMAND: 'meta' } as Record<string, Modifier>)[normalized]
+    const modifier = (
+      {
+        ALT: 'alt',
+        CTRL: 'ctrl',
+        CONTROL: 'ctrl',
+        SHIFT: 'shift',
+        META: 'meta',
+        SUPER: 'meta',
+        COMMAND: 'meta',
+      } as Record<string, Modifier>
+    )[normalized]
     if (modifier && typeof code === 'number') codes[modifier].add(code)
   }
   return codes
@@ -48,7 +69,9 @@ export class HotkeyInputState {
         }
       }
     }
-    const switchesWindow = (event.keycode === this.keys.Tab || event.keycode === this.keys.Escape) && (event.altKey || event.metaKey)
+    const switchesWindow =
+      (event.keycode === this.keys.Tab || event.keycode === this.keys.Escape) &&
+      (event.altKey || event.metaKey)
     const closesWindow = event.keycode === this.keys.F4 && event.altKey
     if (down && (switchesWindow || closesWindow)) {
       this.authorized.clear()
@@ -56,14 +79,29 @@ export class HotkeyInputState {
   }
 
   get modifiers(): Modifiers {
-    return Object.fromEntries(modifiers.map(modifier => [modifier, [...this.codes[modifier]].some(code => this.authorized.has(code))])) as Modifiers
+    return Object.fromEntries(
+      modifiers.map((modifier) => [
+        modifier,
+        [...this.codes[modifier]].some((code) => this.authorized.has(code)),
+      ]),
+    ) as Modifiers
   }
 
   matches(binding: KeyBinding): boolean {
     const event = this.observation
-    if (!event || event.keycode !== binding.keycode || !this.held.has(event.keycode) || this.consumed.has(event.keycode)) return false
+    if (
+      !event ||
+      event.keycode !== binding.keycode ||
+      !this.held.has(event.keycode) ||
+      this.consumed.has(event.keycode)
+    )
+      return false
     const observed = this.modifiers
-    return modifiers.every(modifier => observed[modifier] === binding[modifier] && Boolean(event[(modifier + 'Key') as keyof KeyObservation]) === binding[modifier])
+    return modifiers.every(
+      (modifier) =>
+        observed[modifier] === binding[modifier] &&
+        Boolean(event[(modifier + 'Key') as keyof KeyObservation]) === binding[modifier],
+    )
   }
 
   claim(binding: KeyBinding): boolean {

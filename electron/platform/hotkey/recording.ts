@@ -6,15 +6,14 @@
 // 通过 RecordingHost 协作接口访问 manager 的字段与方法。
 
 import { globalShortcut } from 'electron'
-import type { HotkeyOwnership, HotkeyLease } from '../../../packages/desktop-common/hotkey-ownership.js'
+import type {
+  HotkeyOwnership,
+  HotkeyLease,
+} from '../../../packages/desktop-common/hotkey-ownership.js'
 import { checkSystemHotkeyConflict } from '../../shared/system-hotkeys.js'
 import { UiohookKey } from './uiohook.js'
 import type { HotkeyInputState } from './input-state.js'
-import type {
-  HotkeyRecordingCallback,
-  HotkeyPartialCallback,
-  UiohookEvent,
-} from './types.js'
+import type { HotkeyRecordingCallback, HotkeyPartialCallback, UiohookEvent } from './types.js'
 
 /** 录制簇与 HotkeyManager 的协作接口：声明本模块用到的 manager 字段与方法 */
 export interface RecordingHost {
@@ -66,13 +65,32 @@ export function buildUiohookKeyMap(): void {
   }
   // 特殊键
   const specialMap: Array<[string, string]> = [
-    ['Space', 'Space'], ['Enter', 'Enter'], ['Escape', 'Esc'], ['Tab', 'Tab'],
-    ['Backspace', 'Backspace'], ['Delete', 'Delete'], ['Insert', 'Insert'],
-    ['Home', 'Home'], ['End', 'End'], ['PageUp', 'PageUp'], ['PageDown', 'PageDown'],
-    ['ArrowUp', 'Up'], ['ArrowDown', 'Down'], ['ArrowLeft', 'Left'], ['ArrowRight', 'Right'],
-    ['Equal', '='], ['Minus', '-'], ['Comma', ','], ['Period', '../../hotkey'],
-    ['Slash', '/'], ['Semicolon', ';'], ['Quote', "'"], ['Backquote', '`'],
-    ['BracketLeft', '['], ['BracketRight', ']'], ['Backslash', '\\'],
+    ['Space', 'Space'],
+    ['Enter', 'Enter'],
+    ['Escape', 'Esc'],
+    ['Tab', 'Tab'],
+    ['Backspace', 'Backspace'],
+    ['Delete', 'Delete'],
+    ['Insert', 'Insert'],
+    ['Home', 'Home'],
+    ['End', 'End'],
+    ['PageUp', 'PageUp'],
+    ['PageDown', 'PageDown'],
+    ['ArrowUp', 'Up'],
+    ['ArrowDown', 'Down'],
+    ['ArrowLeft', 'Left'],
+    ['ArrowRight', 'Right'],
+    ['Equal', '='],
+    ['Minus', '-'],
+    ['Comma', ','],
+    ['Period', '../../hotkey'],
+    ['Slash', '/'],
+    ['Semicolon', ';'],
+    ['Quote', "'"],
+    ['Backquote', '`'],
+    ['BracketLeft', '['],
+    ['BracketRight', ']'],
+    ['Backslash', '\\'],
   ]
   for (const [uk, name] of specialMap) {
     const kc = UiohookKey[uk]
@@ -133,8 +151,21 @@ export async function startRecording(
 
   // 临时注册常见 Windows 系统快捷键作为抑制器，阻止系统菜单/窗口操作弹出
   const systemSuppressors = [
-    'Alt+Space', 'Alt+F4', 'Alt+Esc',
-    'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+    'Alt+Space',
+    'Alt+F4',
+    'Alt+Esc',
+    'F1',
+    'F2',
+    'F3',
+    'F4',
+    'F5',
+    'F6',
+    'F7',
+    'F8',
+    'F9',
+    'F10',
+    'F11',
+    'F12',
   ]
   for (const supAcc of systemSuppressors) {
     let lease
@@ -143,7 +174,9 @@ export async function startRecording(
       if (host._recordingSuppressors.includes(supAcc)) continue
       // 跳过已被其他应用/进程注册的
       if (globalShortcut.isRegistered(supAcc)) continue
-      lease = host.ownership.retain(supAcc) || host.ownership.acquire(supAcc, `recording-suppressor:${supAcc}`)
+      lease =
+        host.ownership.retain(supAcc) ||
+        host.ownership.acquire(supAcc, `recording-suppressor:${supAcc}`)
       if (!lease) continue
       const ok = globalShortcut.register(supAcc, () => {})
       if (ok) {
@@ -197,7 +230,13 @@ export function handleRecordingKeydown(host: RecordingHost, e: UiohookEvent): vo
   }
 
   // Del/退格（无修饰键）：结束录制并返回清除结果（与 Esc 取消区分，渲染层据此清空绑定）
-  if ((keyName === 'Delete' || keyName === 'Backspace') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+  if (
+    (keyName === 'Delete' || keyName === 'Backspace') &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    !e.shiftKey
+  ) {
     finishRecording(host, '', undefined, true)
     return
   }
@@ -212,7 +251,9 @@ export function handleRecordingKeydown(host: RecordingHost, e: UiohookEvent): vo
   if (e.metaKey) accParts.push('Meta')
   accParts.push(keyName)
   const accelerator = accParts.join('+')
-  const lease = host.ownership.retain(accelerator) || host.ownership.acquire(accelerator, `recording-probe:${accelerator}`)
+  const lease =
+    host.ownership.retain(accelerator) ||
+    host.ownership.acquire(accelerator, `recording-probe:${accelerator}`)
   if (!lease) {
     finishRecording(host, accelerator, '此快捷键由另一个工百窗实例使用，请换一个组合。')
     return
@@ -247,7 +288,9 @@ export function handleRecordingKeydown(host: RecordingHost, e: UiohookEvent): vo
   } catch (err) {
     reason = `快捷键 ${accelerator} 格式不支持（${err instanceof Error ? err.message : String(err)}）`
     if (isSuppressed) {
-      try { globalShortcut.register(accelerator, () => {}) } catch {}
+      try {
+        globalShortcut.register(accelerator, () => {})
+      } catch {}
     }
   } finally {
     lease.release()
@@ -257,7 +300,12 @@ export function handleRecordingKeydown(host: RecordingHost, e: UiohookEvent): vo
 }
 
 /** 完成录制（成功或失败；cleared=true 表示用户以 Del/退格请求清除绑定） */
-export function finishRecording(host: RecordingHost, accelerator: string, reason?: string, cleared?: boolean): void {
+export function finishRecording(
+  host: RecordingHost,
+  accelerator: string,
+  reason?: string,
+  cleared?: boolean,
+): void {
   const cb = host._recordingCallback
   restoreAfterRecording(host)
   if (cb) {
@@ -271,7 +319,11 @@ export function restoreAfterRecording(host: RecordingHost): void {
   host.inputState.suspend()
   // 注销所有抑制器
   for (const supAcc of host._recordingSuppressors) {
-    try { globalShortcut.unregister(supAcc) } catch { /* ignore */ }
+    try {
+      globalShortcut.unregister(supAcc)
+    } catch {
+      /* ignore */
+    }
   }
   for (const lease of host.recordingLeases.values()) lease.release()
   host.recordingLeases.clear()

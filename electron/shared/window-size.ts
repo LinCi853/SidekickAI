@@ -30,22 +30,55 @@ export type UiScale = 'small' | 'medium' | 'large'
  *   textBase        ← --text-base               (design-tokens.css:180/197/214)
  *                     .top-bar-title font-size  (MainView/styles.css:77)
  */
-export const UI_SCALE_CONFIG: Record<UiScale, {
-  icon: number             // --titlebar-icon：按钮宽高
-  primaryGap: number       // --space-0-25：顶栏一级子元素间距
-  actionsGap: number       // --space-0-5：actions 内 gap / 分隔符 margin / nav margin-left
-  appSwitcherMargin: number // --space-1：AppSwitcher wrap 的 margin-left
-  sidePadding: number      // --space-2：顶栏单侧 padding（左右各一个）
-  separatorWidth: number   // .top-bar-separator width（三档固定 1px）
-  textBase: number         // --text-base：标题字号（.top-bar-title font-size）
-}> = {
-  small:  { icon: 22, primaryGap: 1,   actionsGap: 2,   appSwitcherMargin: 4, sidePadding: 8,  separatorWidth: 1, textBase: 13 },
-  medium: { icon: 28, primaryGap: 1,   actionsGap: 2.5, appSwitcherMargin: 5, sidePadding: 9,  separatorWidth: 1, textBase: 15 },
-  large:  { icon: 34, primaryGap: 1,   actionsGap: 3,   appSwitcherMargin: 6, sidePadding: 10, separatorWidth: 1, textBase: 17 },
+export const UI_SCALE_CONFIG: Record<
+  UiScale,
+  {
+    icon: number // --titlebar-icon：按钮宽高
+    primaryGap: number // --space-0-25：顶栏一级子元素间距
+    actionsGap: number // --space-0-5：actions 内 gap / 分隔符 margin / nav margin-left
+    appSwitcherMargin: number // --space-1：AppSwitcher wrap 的 margin-left
+    sidePadding: number // --space-2：顶栏单侧 padding（左右各一个）
+    separatorWidth: number // .top-bar-separator width（三档固定 1px）
+    textBase: number // --text-base：标题字号（.top-bar-title font-size）
+  }
+> = {
+  small: {
+    icon: 22,
+    primaryGap: 1,
+    actionsGap: 2,
+    appSwitcherMargin: 4,
+    sidePadding: 8,
+    separatorWidth: 1,
+    textBase: 13,
+  },
+  medium: {
+    icon: 28,
+    primaryGap: 1,
+    actionsGap: 2.5,
+    appSwitcherMargin: 5,
+    sidePadding: 9,
+    separatorWidth: 1,
+    textBase: 15,
+  },
+  large: {
+    icon: 34,
+    primaryGap: 1,
+    actionsGap: 3,
+    appSwitcherMargin: 6,
+    sidePadding: 10,
+    separatorWidth: 1,
+    textBase: 17,
+  },
 }
 
 /** 顶栏可自定义按钮组（与 api.types.ts TopBarButtonGroup 同步） */
-export type TopBarButtonGroup = 'uaToggle' | 'navBack' | 'navForward' | 'navHome' | 'themeToggle' | 'pinToggle'
+export type TopBarButtonGroup =
+  | 'uaToggle'
+  | 'navBack'
+  | 'navForward'
+  | 'navHome'
+  | 'themeToggle'
+  | 'pinToggle'
 
 /**
  * 拖拽区最小宽度下限。
@@ -79,10 +112,10 @@ export function estimateTextWidth(text: string, fontSize: number): number {
     const code = ch.codePointAt(0) ?? 0
     // CJK 统一表意文字 + CJK 扩展A + 全角标点 + 全角ASCII
     const isCJK =
-      (code >= 0x4e00 && code <= 0x9fff) ||  // CJK 统一表意文字
-      (code >= 0x3400 && code <= 0x4dbf) ||  // CJK 扩展A
-      (code >= 0x3000 && code <= 0x303f) ||  // CJK 标点
-      (code >= 0xff00 && code <= 0xffef)     // 全角形式
+      (code >= 0x4e00 && code <= 0x9fff) || // CJK 统一表意文字
+      (code >= 0x3400 && code <= 0x4dbf) || // CJK 扩展A
+      (code >= 0x3000 && code <= 0x303f) || // CJK 标点
+      (code >= 0xff00 && code <= 0xffef) // 全角形式
     width += isCJK ? fontSize : fontSize * 0.6
   }
   return width
@@ -132,7 +165,16 @@ export function calculateMainWindowMinWidth(
   titleText?: string,
 ): number {
   const cfg = UI_SCALE_CONFIG[uiScale]
-  const buttons = visibleButtons ?? (['uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle'] as TopBarButtonGroup[])
+  const buttons =
+    visibleButtons ??
+    ([
+      'uaToggle',
+      'navBack',
+      'navForward',
+      'navHome',
+      'themeToggle',
+      'pinToggle',
+    ] as TopBarButtonGroup[])
   const title = titleText ?? '工百窗'
 
   const hasUa = buttons.includes('uaToggle')
@@ -147,8 +189,12 @@ export function calculateMainWindowMinWidth(
   // ===== icon 按钮总数（常驻 6 + 可选可见数）=====
   const alwaysVisibleIcons = 6
   const optionalIcons =
-    (hasUa ? 1 : 0) + (hasNavBack ? 1 : 0) + (hasNavForward ? 1 : 0) +
-    (hasNavHome ? 1 : 0) + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+    (hasUa ? 1 : 0) +
+    (hasNavBack ? 1 : 0) +
+    (hasNavForward ? 1 : 0) +
+    (hasNavHome ? 1 : 0) +
+    (hasTheme ? 1 : 0) +
+    (hasPin ? 1 : 0)
   const iconCount = alwaysVisibleIcons + optionalIcons
 
   // ===== 一级子元素数与一级 gap 数 =====
@@ -180,14 +226,14 @@ export function calculateMainWindowMinWidth(
 
   // ===== 汇总 =====
   const total =
-    paddingTotal                          // 顶栏左右 padding
-    + cfg.appSwitcherMargin               // AppSwitcher wrap margin-left
-    + iconCount * cfg.icon                // 所有 icon 按钮总宽
-    + primaryGapCount * cfg.primaryGap    // 一级 gap 总宽
-    + navGroupExtra                       // nav-btn-group margin + 内部 gap
-    + dragRegionWidth                     // 拖拽区（标题×2，含 100% 余量）
-    + actionsGapCount * cfg.actionsGap    // actions 内 gap 总宽
-    + separatorTotal                      // 分隔符 width + 两侧 margin
+    paddingTotal + // 顶栏左右 padding
+    cfg.appSwitcherMargin + // AppSwitcher wrap margin-left
+    iconCount * cfg.icon + // 所有 icon 按钮总宽
+    primaryGapCount * cfg.primaryGap + // 一级 gap 总宽
+    navGroupExtra + // nav-btn-group margin + 内部 gap
+    dragRegionWidth + // 拖拽区（标题×2，含 100% 余量）
+    actionsGapCount * cfg.actionsGap + // actions 内 gap 总宽
+    separatorTotal // 分隔符 width + 两侧 margin
 
   return Math.ceil(total / 10) * 10
 }
@@ -297,18 +343,45 @@ export const ADVANCED_PANEL_MIN_HEIGHT = 560
 export type OxyScale = 'compact' | 'standard' | 'spacious'
 
 /** Oxy 三档尺寸常量（与 oxy-layout-engine.ts SCALE_CONFIG 同步，仅向后兼容） */
-export const OXY_SCALE_CONFIG: Record<OxyScale, {
-  icon: number
-  primaryGap: number
-  actionsGap: number
-  appSwitcherMargin: number
-  sidePadding: number
-  separatorWidth: number
-  textBase: number
-}> = {
-  compact:  { icon: 26, primaryGap: 1,   actionsGap: 2,   appSwitcherMargin: 4, sidePadding: 8,  separatorWidth: 1, textBase: 14 },
-  standard: { icon: 30, primaryGap: 1,   actionsGap: 2.5, appSwitcherMargin: 5, sidePadding: 9,  separatorWidth: 1, textBase: 15 },
-  spacious: { icon: 34, primaryGap: 1,   actionsGap: 3,   appSwitcherMargin: 6, sidePadding: 10, separatorWidth: 1, textBase: 16 },
+export const OXY_SCALE_CONFIG: Record<
+  OxyScale,
+  {
+    icon: number
+    primaryGap: number
+    actionsGap: number
+    appSwitcherMargin: number
+    sidePadding: number
+    separatorWidth: number
+    textBase: number
+  }
+> = {
+  compact: {
+    icon: 26,
+    primaryGap: 1,
+    actionsGap: 2,
+    appSwitcherMargin: 4,
+    sidePadding: 8,
+    separatorWidth: 1,
+    textBase: 14,
+  },
+  standard: {
+    icon: 30,
+    primaryGap: 1,
+    actionsGap: 2.5,
+    appSwitcherMargin: 5,
+    sidePadding: 9,
+    separatorWidth: 1,
+    textBase: 15,
+  },
+  spacious: {
+    icon: 34,
+    primaryGap: 1,
+    actionsGap: 3,
+    appSwitcherMargin: 6,
+    sidePadding: 10,
+    separatorWidth: 1,
+    textBase: 16,
+  },
 }
 
 /**
@@ -374,7 +447,16 @@ export function calculateOxyMainWindowMinWidth(
   titleText?: string,
 ): number {
   const cfg = OXY_SCALE_CONFIG[oxyScale]
-  const buttons = visibleButtons ?? (['uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle'] as TopBarButtonGroup[])
+  const buttons =
+    visibleButtons ??
+    ([
+      'uaToggle',
+      'navBack',
+      'navForward',
+      'navHome',
+      'themeToggle',
+      'pinToggle',
+    ] as TopBarButtonGroup[])
   const title = titleText ?? '工百窗'
 
   const hasUa = buttons.includes('uaToggle')
@@ -387,8 +469,12 @@ export function calculateOxyMainWindowMinWidth(
 
   const alwaysVisibleIcons = 6
   const optionalIcons =
-    (hasUa ? 1 : 0) + (hasNavBack ? 1 : 0) + (hasNavForward ? 1 : 0) +
-    (hasNavHome ? 1 : 0) + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+    (hasUa ? 1 : 0) +
+    (hasNavBack ? 1 : 0) +
+    (hasNavForward ? 1 : 0) +
+    (hasNavHome ? 1 : 0) +
+    (hasTheme ? 1 : 0) +
+    (hasPin ? 1 : 0)
   const iconCount = alwaysVisibleIcons + optionalIcons
 
   const primaryElementCount = 4 + (hasUa ? 1 : 0) + (hasNavGroup ? 1 : 0) + (hasNavHome ? 1 : 0)
@@ -408,14 +494,14 @@ export function calculateOxyMainWindowMinWidth(
   const dragRegionWidth = Math.max(DRAG_REGION_MIN_FLOOR, titleWidth * 2)
 
   const total =
-    paddingTotal
-    + cfg.appSwitcherMargin
-    + iconCount * cfg.icon
-    + primaryGapCount * cfg.primaryGap
-    + navGroupExtra
-    + dragRegionWidth
-    + actionsGapCount * cfg.actionsGap
-    + separatorTotal
+    paddingTotal +
+    cfg.appSwitcherMargin +
+    iconCount * cfg.icon +
+    primaryGapCount * cfg.primaryGap +
+    navGroupExtra +
+    dragRegionWidth +
+    actionsGapCount * cfg.actionsGap +
+    separatorTotal
 
   return Math.ceil(total / 10) * 10
 }
@@ -430,7 +516,16 @@ export function calculateOxyMainWindowMinWidthByScale(
   titleText?: string,
 ): number {
   const cfg = getOxyScaleConfigByScale(scale)
-  const buttons = visibleButtons ?? (['uaToggle', 'navBack', 'navForward', 'navHome', 'themeToggle', 'pinToggle'] as TopBarButtonGroup[])
+  const buttons =
+    visibleButtons ??
+    ([
+      'uaToggle',
+      'navBack',
+      'navForward',
+      'navHome',
+      'themeToggle',
+      'pinToggle',
+    ] as TopBarButtonGroup[])
   const title = titleText ?? '工百窗'
 
   const hasUa = buttons.includes('uaToggle')
@@ -443,8 +538,12 @@ export function calculateOxyMainWindowMinWidthByScale(
 
   const alwaysVisibleIcons = 6
   const optionalIcons =
-    (hasUa ? 1 : 0) + (hasNavBack ? 1 : 0) + (hasNavForward ? 1 : 0) +
-    (hasNavHome ? 1 : 0) + (hasTheme ? 1 : 0) + (hasPin ? 1 : 0)
+    (hasUa ? 1 : 0) +
+    (hasNavBack ? 1 : 0) +
+    (hasNavForward ? 1 : 0) +
+    (hasNavHome ? 1 : 0) +
+    (hasTheme ? 1 : 0) +
+    (hasPin ? 1 : 0)
   const iconCount = alwaysVisibleIcons + optionalIcons
 
   const primaryElementCount = 4 + (hasUa ? 1 : 0) + (hasNavGroup ? 1 : 0) + (hasNavHome ? 1 : 0)
@@ -464,14 +563,14 @@ export function calculateOxyMainWindowMinWidthByScale(
   const dragRegionWidth = Math.max(DRAG_REGION_MIN_FLOOR, titleWidth * 2)
 
   const total =
-    paddingTotal
-    + cfg.appSwitcherMargin
-    + iconCount * cfg.icon
-    + primaryGapCount * cfg.primaryGap
-    + navGroupExtra
-    + dragRegionWidth
-    + actionsGapCount * cfg.actionsGap
-    + separatorTotal
+    paddingTotal +
+    cfg.appSwitcherMargin +
+    iconCount * cfg.icon +
+    primaryGapCount * cfg.primaryGap +
+    navGroupExtra +
+    dragRegionWidth +
+    actionsGapCount * cfg.actionsGap +
+    separatorTotal
 
   return Math.ceil(total / 10) * 10
 }
@@ -513,4 +612,3 @@ export function calculateOxyAdvancedPanelMinWidthByScale(scale: number): number 
   const total = elementsWidth + gapsWidth + titleWidth + baseRedundancy
   return Math.ceil(total / 10) * 10
 }
-

@@ -1,4 +1,10 @@
-import { BrowserWindow, session, webContents, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import {
+  BrowserWindow,
+  session,
+  webContents,
+  type IpcMainInvokeEvent,
+  type WebContents,
+} from 'electron'
 import { browserPorts } from '../browser-port.js'
 import { findWindowIdByWin } from '../window/window-utils.js'
 import { windowState } from '../window/window-state.js'
@@ -7,9 +13,16 @@ import { assertTrustedRenderer } from './trusted-renderer.js'
 export function assertOwnedWebview(host: WebContents, guest: WebContents): void {
   const window = BrowserWindow.fromWebContents(host)
   const record = browserPorts().webviews.getRecordByWebContentsId(guest.id)
-  if (!window || window.isDestroyed() || guest.isDestroyed() || guest.getType() !== 'webview'
-    || guest.hostWebContents !== host || !record || record.windowId !== findWindowIdByWin(window)
-    || guest.session !== session.fromPartition(`persist:${record.profileId}`)) {
+  if (
+    !window ||
+    window.isDestroyed() ||
+    guest.isDestroyed() ||
+    guest.getType() !== 'webview' ||
+    guest.hostWebContents !== host ||
+    !record ||
+    record.windowId !== findWindowIdByWin(window) ||
+    guest.session !== session.fromPartition(`persist:${record.profileId}`)
+  ) {
     throw new Error('网页不属于当前应用窗口。')
   }
 }
@@ -22,14 +35,24 @@ export function ownedWebContents(event: IpcMainInvokeEvent, id: unknown): WebCon
   return guest
 }
 
-export function ownedProfileSession(event: IpcMainInvokeEvent, partition: unknown): Electron.Session {
+export function ownedProfileSession(
+  event: IpcMainInvokeEvent,
+  partition: unknown,
+): Electron.Session {
   assertTrustedRenderer(event)
-  if (typeof partition !== 'string' || !partition.startsWith('persist:') || partition.length > 160) throw new Error('网页会话无效。')
+  if (typeof partition !== 'string' || !partition.startsWith('persist:') || partition.length > 160)
+    throw new Error('网页会话无效。')
   const profileId = partition.slice(8)
   const window = BrowserWindow.fromWebContents(event.sender)
-  if (windowState.browserWindowsByProfile.get(profileId) === window) return session.fromPartition(partition)
+  if (windowState.browserWindowsByProfile.get(profileId) === window)
+    return session.fromPartition(partition)
   for (const guest of webContents.getAllWebContents()) {
-    if (guest.isDestroyed() || guest.hostWebContents !== event.sender || browserPorts().webviews.getRecordByWebContentsId(guest.id)?.profileId !== profileId) continue
+    if (
+      guest.isDestroyed() ||
+      guest.hostWebContents !== event.sender ||
+      browserPorts().webviews.getRecordByWebContentsId(guest.id)?.profileId !== profileId
+    )
+      continue
     assertOwnedWebview(event.sender, guest)
     return guest.session
   }

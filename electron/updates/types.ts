@@ -23,7 +23,12 @@ export interface UpdateRelease {
   recoveryProtocolVersion: 1
   assets: UpdateAsset[]
   publicAssetIds: string[]
-  architectureEvidence: Array<{ nativeArchitecture: NativeArchitecture; evidenceId: string; testedAt: string; nativePackageVerified: true }>
+  architectureEvidence: Array<{
+    nativeArchitecture: NativeArchitecture
+    evidenceId: string
+    testedAt: string
+    nativePackageVerified: true
+  }>
   notes: string
   createdAt: string
 }
@@ -52,6 +57,9 @@ export interface DistributionKey {
   publicKey: { kty: 'OKP'; crv: 'Ed25519'; x: string }
 }
 export const UPDATE_IPC = {
-  state: 'application-updates:state', check: 'application-updates:check', accept: 'application-updates:accept',
-  cancel: 'application-updates:cancel', releases: 'application-updates:releases',
+  state: 'application-updates:state',
+  check: 'application-updates:check',
+  accept: 'application-updates:accept',
+  cancel: 'application-updates:cancel',
+  releases: 'application-updates:releases',
 } as const

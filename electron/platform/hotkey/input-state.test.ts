@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { HotkeyInputState, modifierKeyCodes, type KeyObservation } from './input-state.js'
 
-const keys = { Alt: 56, AltRight: 3640, Ctrl: 29, CtrlRight: 3613, Shift: 42, ShiftRight: 54, Meta: 3675, MetaRight: 3676, Space: 57, Tab: 15, Escape: 1, F4: 62 }
+const keys = {
+  Alt: 56,
+  AltRight: 3640,
+  Ctrl: 29,
+  CtrlRight: 3613,
+  Shift: 42,
+  ShiftRight: 54,
+  Meta: 3675,
+  MetaRight: 3676,
+  Space: 57,
+  Tab: 15,
+  Escape: 1,
+  F4: 62,
+}
 const binding = { keycode: keys.Space, alt: true, ctrl: false, shift: false, meta: false }
-const event = (keycode: number, flags: Partial<KeyObservation> = {}): KeyObservation => ({ keycode, altKey: false, ctrlKey: false, shiftKey: false, metaKey: false, ...flags })
+const event = (keycode: number, flags: Partial<KeyObservation> = {}): KeyObservation => ({
+  keycode,
+  altKey: false,
+  ctrlKey: false,
+  shiftKey: false,
+  metaKey: false,
+  ...flags,
+})
 
 describe('physical shortcut input', () => {
   it('recognizes the installed hook right-side names', () => {
@@ -13,7 +33,7 @@ describe('physical shortcut input', () => {
     expect(codes.shift.has(keys.ShiftRight)).toBe(true)
     expect(codes.meta.has(keys.MetaRight)).toBe(true)
   })
-  it.each([keys.Alt, keys.AltRight])('accepts observed modifier %s once per press', alt => {
+  it.each([keys.Alt, keys.AltRight])('accepts observed modifier %s once per press', (alt) => {
     const input = new HotkeyInputState(keys)
     input.observe(event(alt, { altKey: true }), true)
     input.observe(event(keys.Space, { altKey: true }), true)
@@ -24,14 +44,17 @@ describe('physical shortcut input', () => {
     input.observe(event(keys.Space, { altKey: true }), true)
     expect(input.claim(binding)).toBe(true)
   })
-  it.each([false, true])('rejects a lost modifier release after switching windows, mask=%s', altKey => {
-    const input = new HotkeyInputState(keys)
-    input.observe(event(keys.Alt, { altKey: true }), true)
-    input.observe(event(keys.Tab, { altKey: true }), true)
-    input.observe(event(keys.Tab, { altKey: true }), false)
-    input.observe(event(keys.Space, { altKey }), true)
-    expect(input.claim(binding)).toBe(false)
-  })
+  it.each([false, true])(
+    'rejects a lost modifier release after switching windows, mask=%s',
+    (altKey) => {
+      const input = new HotkeyInputState(keys)
+      input.observe(event(keys.Alt, { altKey: true }), true)
+      input.observe(event(keys.Tab, { altKey: true }), true)
+      input.observe(event(keys.Tab, { altKey: true }), false)
+      input.observe(event(keys.Space, { altKey }), true)
+      expect(input.claim(binding)).toBe(false)
+    },
+  )
   it('invalidates Alt authorization after closing a window with Alt+F4', () => {
     const input = new HotkeyInputState(keys)
     input.observe(event(keys.Alt, { altKey: true }), true)

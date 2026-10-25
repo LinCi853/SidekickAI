@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isPlatformDefaultTitle, normalizeWebHostname, titleFromMessageContent } from './conversation-title'
+import {
+  isPlatformDefaultTitle,
+  normalizeWebHostname,
+  titleFromMessageContent,
+} from './conversation-title'
 
 describe('platform default titles', () => {
   it('treats the ChatGLM site title as a non-conversation name', () => {

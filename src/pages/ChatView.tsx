@@ -13,15 +13,15 @@
    - 窄屏适配：侧边栏折叠为抽屉
    ===================================================================== */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useShallow } from 'zustand/react/shallow';
-import WindowResizeHandles from '../components/WindowResizeHandles';
-import ShortcutHelp from '../components/ShortcutHelp';
-import { Button, IconButton, TitleBar, Combobox, PinToggleButton } from '../components/ui';
-import type { ComboboxOption } from '../components/ui';
-import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow';
-import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned';
-import { useChatStore } from '../store/useChatStore';
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import WindowResizeHandles from '../components/WindowResizeHandles'
+import ShortcutHelp from '../components/ShortcutHelp'
+import { Button, IconButton, TitleBar, Combobox, PinToggleButton } from '../components/ui'
+import type { ComboboxOption } from '../components/ui'
+import { useEscToCloseWindow } from '../hooks/useEscToCloseWindow'
+import { useWindowMaximizedAndPinned } from '../hooks/useWindowMaximizedAndPinned'
+import { useChatStore } from '../store/useChatStore'
 import {
   minimizeWindow,
   closeCurrentWindow,
@@ -31,31 +31,37 @@ import {
   onWindowShown,
   openAdvancedPanelWindow,
   updateChatDetachedWindow,
-} from '../lib/electron-api';
-import { requireElectron } from '../lib/electron-api/core';
-import type { AssetTextUsage } from '../../electron/shared/ai-assets.types';
-import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api';
-import { MessageBubble } from './MessageBubble';
-import { generateChatAccentVars } from '../lib/oxy-color-engine';
-import { AlertIcon, GearIcon } from '@/components/icons';
-import './ChatBubble.css';
-import './ChatView.css';
+} from '../lib/electron-api'
+import { requireElectron } from '../lib/electron-api/core'
+import type { AssetTextUsage } from '../../electron/shared/ai-assets.types'
+import type { ChatWindowConfig, ChatWindowStyle } from '../lib/electron-api'
+import { MessageBubble } from './MessageBubble'
+import { generateChatAccentVars } from '../lib/oxy-color-engine'
+import { AlertIcon, GearIcon } from '@/components/icons'
+import './ChatBubble.css'
+import './ChatView.css'
 
 /**
  * 流式气泡：单独订阅 streamingText，每个 chunk 只重渲染这一个气泡，
  * 并负责流式期间滚动到底部；thinking 占位（尚无文本时）也在这里切换。
  */
-function StreamingMessageBubble({ conversationId, endRef, providerName, showAvatar, showTimestamp }: {
-  conversationId: string;
-  endRef: React.MutableRefObject<HTMLDivElement | null>;
-  providerName?: string;
-  showAvatar: boolean;
-  showTimestamp: boolean;
+function StreamingMessageBubble({
+  conversationId,
+  endRef,
+  providerName,
+  showAvatar,
+  showTimestamp,
+}: {
+  conversationId: string
+  endRef: React.MutableRefObject<HTMLDivElement | null>
+  providerName?: string
+  showAvatar: boolean
+  showTimestamp: boolean
 }) {
-  const streamingText = useChatStore((s) => s.streamingText);
+  const streamingText = useChatStore((s) => s.streamingText)
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [streamingText, endRef]);
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [streamingText, endRef])
   if (!streamingText) {
     return (
       <div className="chat-msg-row assistant" data-name="chat.thinking-indicator">
@@ -70,7 +76,7 @@ function StreamingMessageBubble({ conversationId, endRef, providerName, showAvat
           </div>
         </div>
       </div>
-    );
+    )
   }
   return (
     <MessageBubble
@@ -86,21 +92,21 @@ function StreamingMessageBubble({ conversationId, endRef, providerName, showAvat
       showAvatar={showAvatar}
       showTimestamp={showTimestamp}
     />
-  );
+  )
 }
 
 export default function ChatView({ windowId }: { windowId?: string }) {
-  const [input, setInput] = useState('');
-  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned();
-  const [usageStats, setUsageStats] = useState<AssetTextUsage | null>(null);
+  const [input, setInput] = useState('')
+  const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned()
+  const [usageStats, setUsageStats] = useState<AssetTextUsage | null>(null)
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 600 : false,
-  );
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [chatConfig, setChatConfig] = useState<ChatWindowConfig | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  )
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [chatConfig, setChatConfig] = useState<ChatWindowConfig | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
   // useShallow 选择器订阅：排除 streamingText，流式期间每个 chunk 只重渲染
   // StreamingMessageBubble，不再让整个视图与全部历史消息气泡跟着重渲染。
@@ -125,95 +131,100 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     retryLastMessage,
     continueGeneration,
     registerStreamListeners,
-  } = useChatStore(useShallow((s) => ({
-    providers: s.providers,
-    currentProviderId: s.currentProviderId,
-    conversations: s.conversations,
-    currentConversationId: s.currentConversationId,
-    messages: s.messages,
-    streaming: s.streaming,
-    streamingConversationId: s.streamingConversationId,
-    streamError: s.streamError,
-    initProviders: s.initProviders,
-    initConversations: s.initConversations,
-    setCurrentProvider: s.setCurrentProvider,
-    selectConversation: s.selectConversation,
-    startNewConversation: s.startNewConversation,
-    removeConversation: s.removeConversation,
-    sendMessage: s.sendMessage,
-    cancelStream: s.cancelStream,
-    editMessage: s.editMessage,
-    retryLastMessage: s.retryLastMessage,
-    continueGeneration: s.continueGeneration,
-    registerStreamListeners: s.registerStreamListeners,
-  })));
+  } = useChatStore(
+    useShallow((s) => ({
+      providers: s.providers,
+      currentProviderId: s.currentProviderId,
+      conversations: s.conversations,
+      currentConversationId: s.currentConversationId,
+      messages: s.messages,
+      streaming: s.streaming,
+      streamingConversationId: s.streamingConversationId,
+      streamError: s.streamError,
+      initProviders: s.initProviders,
+      initConversations: s.initConversations,
+      setCurrentProvider: s.setCurrentProvider,
+      selectConversation: s.selectConversation,
+      startNewConversation: s.startNewConversation,
+      removeConversation: s.removeConversation,
+      sendMessage: s.sendMessage,
+      cancelStream: s.cancelStream,
+      editMessage: s.editMessage,
+      retryLastMessage: s.retryLastMessage,
+      continueGeneration: s.continueGeneration,
+      registerStreamListeners: s.registerStreamListeners,
+    })),
+  )
 
   // 获取当前窗口的 chatConfig（chat 脱离窗口专属配置）
   useEffect(() => {
-    if (!windowId) return;
+    if (!windowId) return
     void getChatConfig(windowId).then((cfg) => {
-      setChatConfig(cfg);
-    });
-  }, [windowId]);
+      setChatConfig(cfg)
+    })
+  }, [windowId])
 
   // 初始化
   useEffect(() => {
     void initProviders().then(() => {
       // initConversations 会在 setCurrentProvider 时自动触发
-    });
+    })
     // 注册流式监听
-    const off = registerStreamListeners();
-    return off;
+    const off = registerStreamListeners()
+    return off
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [])
 
   // Provider 加载后初始化会话列表（仅首次加载 providers 时触发，切换 Provider 不重新加载）
   // 切换模型时保持当前对话和消息，用户可在同一对话中任意切换模型继续对话
   // 需求 10：会话恢复改为读取 chatConfig.lastConversationId（替代 localStorage）
-  const initConversationsDoneRef = useRef(false);
+  const initConversationsDoneRef = useRef(false)
   useEffect(() => {
     if (currentProviderId && !initConversationsDoneRef.current) {
-      initConversationsDoneRef.current = true;
+      initConversationsDoneRef.current = true
       void initConversations().then(() => {
-        const state = useChatStore.getState();
-        if (state.currentConversationId) return; // 已有选中对话则跳过
+        const state = useChatStore.getState()
+        if (state.currentConversationId) return // 已有选中对话则跳过
         // 优先恢复该窗口上次对话（需求 10：按 windowId 持久化）
-        const lastConvId = chatConfig?.lastConversationId;
+        const lastConvId = chatConfig?.lastConversationId
         if (lastConvId && state.conversations.some((c) => c.id === lastConvId)) {
-          void selectConversation(lastConvId);
-          return;
+          void selectConversation(lastConvId)
+          return
         }
         // 兜底：旧版 localStorage（向后兼容）
-        const legacyLast = localStorage.getItem(`chat-last-conv-${currentProviderId}`);
+        const legacyLast = localStorage.getItem(`chat-last-conv-${currentProviderId}`)
         if (legacyLast && state.conversations.some((c) => c.id === legacyLast)) {
-          void selectConversation(legacyLast);
-          return;
+          void selectConversation(legacyLast)
+          return
         }
         // 无上次对话记录时，默认打开最新对话（按 updatedAt 降序取第一个）
         if (state.conversations.length > 0) {
           const sorted = [...state.conversations].sort((a, b) => {
-            const ta = a.updatedAt ?? a.createdAt ?? 0;
-            const tb = b.updatedAt ?? b.createdAt ?? 0;
-            return tb - ta;
-          });
-          void selectConversation(sorted[0].id);
+            const ta = a.updatedAt ?? a.createdAt ?? 0
+            const tb = b.updatedAt ?? b.createdAt ?? 0
+            return tb - ta
+          })
+          void selectConversation(sorted[0].id)
         }
-      });
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProviderId]);
+  }, [currentProviderId])
 
   // 需求 10：会话切换时持久化 lastConversationId 到 chatConfig（按 windowId 隔离）
   useEffect(() => {
-    if (!windowId || !chatConfig) return;
-    if (currentConversationId === chatConfig.lastConversationId) return;
-    const nextCfg: ChatWindowConfig = { ...chatConfig, lastConversationId: currentConversationId ?? undefined };
-    setChatConfig(nextCfg);
+    if (!windowId || !chatConfig) return
+    if (currentConversationId === chatConfig.lastConversationId) return
+    const nextCfg: ChatWindowConfig = {
+      ...chatConfig,
+      lastConversationId: currentConversationId ?? undefined,
+    }
+    setChatConfig(nextCfg)
     void updateChatDetachedWindow(windowId, nextCfg).catch((e) =>
       console.error('[ChatView] 持久化 lastConversationId 失败:', e),
-    );
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentConversationId]);
+  }, [currentConversationId])
 
   // F12 由主进程 attachWindowHotkeyInterceptor 在 before-input-event 中拦截处理，
   // 通过 onPinToggled IPC 通知更新状态（见上方监听器）。
@@ -225,133 +236,143 @@ export default function ChatView({ windowId }: { windowId?: string }) {
     docs: { escAction: '关闭窗口（侧栏打开时先收起侧栏）' },
     onEsc: () => {
       if (isNarrow && isSidebarOpen) {
-        setIsSidebarOpen(false);
-        return true;
+        setIsSidebarOpen(false)
+        return true
       }
-      return false;
+      return false
     },
-  });
+  })
 
   // 消息更新时滚动到底部（流式 chunk 的滚动由 StreamingMessageBubble 自行处理）
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   // 6.2: 窗口重新显示时（启动/Alt+Q 唤出/快捷键唤出后）聚焦输入框
   // 使用主进程 WINDOW_SHOWN IPC 代替 window.focus 事件（后者在 hide/show 循环后不稳定），
   // 延迟 100ms 让窗口完全显示后再聚焦，避免 focus 调用被吞。
   useEffect(() => {
     const focusInput = () => {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    };
+      setTimeout(() => inputRef.current?.focus(), 100)
+    }
     // IPC 通道：主进程 show/focus 后通知
-    const offShown = onWindowShown(focusInput);
+    const offShown = onWindowShown(focusInput)
     // 兜底：window focus 事件（直接点击窗口时触发）
-    window.addEventListener('focus', focusInput);
-    focusInput();
+    window.addEventListener('focus', focusInput)
+    focusInput()
     return () => {
-      offShown();
-      window.removeEventListener('focus', focusInput);
-    };
-  }, []);
+      offShown()
+      window.removeEventListener('focus', focusInput)
+    }
+  }, [])
 
   // 后台语音注入（Alt+V 全局快捷键，本窗口为最近聚焦窗口时收到）
   // 载荷 { text, enterToSend }：填入 textarea，enterToSend=true 时自动发送
   useEffect(() => {
     const off = onVoiceInjectAndSend(({ text, enterToSend }) => {
-      console.log('[ChatView] 收到后台语音注入指令，enterToSend=', enterToSend);
-      if (!text || !text.trim()) return;
-      setInput((prev) => (prev ? `${prev}\n${text}` : text));
+      console.log('[ChatView] 收到后台语音注入指令，enterToSend=', enterToSend)
+      if (!text || !text.trim()) return
+      setInput((prev) => (prev ? `${prev}\n${text}` : text))
       if (enterToSend && !streaming) {
         // 异步等待 setState 生效后再发送
         setTimeout(() => {
-          inputRef.current?.focus();
-        }, 0);
+          inputRef.current?.focus()
+        }, 0)
         // 直接用最新 text 发送（避免 setState 异步导致读到旧 input）
-        void sendMessage(text, chatConfig?.systemPrompt);
-        setInput('');
+        void sendMessage(text, chatConfig?.systemPrompt)
+        setInput('')
       } else {
-        inputRef.current?.focus();
+        inputRef.current?.focus()
       }
-    });
-    return () => off();
+    })
+    return () => off()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streaming, chatConfig]);
+  }, [streaming, chatConfig])
 
   // 加载 token 用量统计：初始化 + 流式结束（streaming 由 true→false）后刷新
   const refreshUsage = async () => {
     try {
-      const stats = await requireElectron().aiAssets.usage(currentProviderId ?? undefined);
-      setUsageStats(stats);
+      const stats = await requireElectron().aiAssets.usage(currentProviderId ?? undefined)
+      setUsageStats(stats)
     } catch (e) {
-      console.error('[ChatView] 加载用量统计失败:', e);
+      console.error('[ChatView] 加载用量统计失败:', e)
     }
-  };
+  }
   useEffect(() => {
-    void refreshUsage();
+    void refreshUsage()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProviderId]);
+  }, [currentProviderId])
   useEffect(() => {
     // 流式结束后刷新用量（streaming true→false 时触发）
-    if (!streaming) void refreshUsage();
+    if (!streaming) void refreshUsage()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streaming]);
+  }, [streaming])
 
-  useEffect(() => window.electron.onAiAssetsCleared(() => { void refreshUsage(); }), [currentProviderId]);
+  useEffect(
+    () =>
+      window.electron.onAiAssetsCleared(() => {
+        void refreshUsage()
+      }),
+    [currentProviderId],
+  )
 
   const handleSend = async () => {
-    const text = input;
-    setInput('');
-    await sendMessage(text, chatConfig?.systemPrompt);
-    inputRef.current?.focus();
-  };
+    const text = input
+    setInput('')
+    await sendMessage(text, chatConfig?.systemPrompt)
+    inputRef.current?.focus()
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      e.stopPropagation(); // 阻止冒泡触发路由回退（需求 14）
-      if (!streaming) void handleSend();
+      e.preventDefault()
+      e.stopPropagation() // 阻止冒泡触发路由回退（需求 14）
+      if (!streaming) void handleSend()
     }
-  };
+  }
 
   const handleSelectConversation = async (id: string) => {
-    await selectConversation(id);
-    if (isNarrow) setIsSidebarOpen(false);
-  };
+    await selectConversation(id)
+    if (isNarrow) setIsSidebarOpen(false)
+  }
 
   const handleNewConversation = async () => {
-    await startNewConversation();
-    if (isNarrow) setIsSidebarOpen(false);
+    await startNewConversation()
+    if (isNarrow) setIsSidebarOpen(false)
     // 若配置了默认提示词，自动作为首条 user 消息发送（连同 systemPrompt）
-    const dp = chatConfig?.defaultPrompt?.trim();
+    const dp = chatConfig?.defaultPrompt?.trim()
     if (dp && currentProviderId && !streaming) {
-      await sendMessage(dp, chatConfig?.systemPrompt);
+      await sendMessage(dp, chatConfig?.systemPrompt)
     }
-  };
+  }
 
-  const currentProvider = providers.find((p) => p.id === currentProviderId);
+  const currentProvider = providers.find((p) => p.id === currentProviderId)
 
   // chat 脱离窗口：加载 chatConfig 后自动切换到绑定的 provider（仅首次）
   useEffect(() => {
-    if (chatConfig?.providerId && providers.length > 0 && currentProviderId !== chatConfig.providerId) {
-      const exists = providers.some((p) => p.id === chatConfig.providerId);
-      if (exists) setCurrentProvider(chatConfig.providerId);
+    if (
+      chatConfig?.providerId &&
+      providers.length > 0 &&
+      currentProviderId !== chatConfig.providerId
+    ) {
+      const exists = providers.some((p) => p.id === chatConfig.providerId)
+      if (exists) setCurrentProvider(chatConfig.providerId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatConfig, providers]);
+  }, [chatConfig, providers])
 
   // 根据样式配置计算 CSS 变量与数据属性
-  const style: ChatWindowStyle = chatConfig?.style ?? {};
+  const style: ChatWindowStyle = chatConfig?.style ?? {}
   const cssVars = useMemo(() => {
     if (style.accentColor) {
-      return generateChatAccentVars(style.accentColor);
+      return generateChatAccentVars(style.accentColor)
     }
-    return {};
-  }, [style.accentColor]);
-  const density = style.density ?? 'comfortable';
-  const showAvatar = style.showAvatar !== false; // 默认 true
-  const showTimestamp = style.showTimestamp !== false; // 默认 true
-  const codeTheme = style.codeTheme ?? 'github-dark';
+    return {}
+  }, [style.accentColor])
+  const density = style.density ?? 'comfortable'
+  const showAvatar = style.showAvatar !== false // 默认 true
+  const showTimestamp = style.showTimestamp !== false // 默认 true
+  const codeTheme = style.codeTheme ?? 'github-dark'
 
   return (
     <>
@@ -378,11 +399,20 @@ export default function ChatView({ windowId }: { windowId?: string }) {
               aria-label="会话列表"
               title="会话列表"
               onClick={() => {
-                if (isNarrow) setIsSidebarOpen((v) => !v);
-                else setIsSidebarCollapsed((v) => !v);
+                if (isNarrow) setIsSidebarOpen((v) => !v)
+                else setIsSidebarCollapsed((v) => !v)
               }}
             >
-              <svg className="icon-svg" data-name="chat.top-bar.sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="icon-svg"
+                data-name="chat.top-bar.sidebar-toggle-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="18" x2="21" y2="18" />
@@ -391,12 +421,14 @@ export default function ChatView({ windowId }: { windowId?: string }) {
           }
           center={
             <div className="chat-top-drag" data-name="chat.top-bar.drag-area">
-              <span className="chat-top-title" data-name="chat.top-bar.title">{chatConfig?.title || 'AI 对话'}</span>
+              <span className="chat-top-title" data-name="chat.top-bar.title">
+                {chatConfig?.title || 'AI 对话'}
+              </span>
               {providers.length > 0 ? (
                 <Combobox
                   inputValue={(() => {
-                    const cur = providers.find((p) => p.id === currentProviderId);
-                    return cur ? `${cur.name} (${cur.model})` : '';
+                    const cur = providers.find((p) => p.id === currentProviderId)
+                    return cur ? `${cur.name} (${cur.model})` : ''
                   })()}
                   onInputChange={() => {}}
                   inputPlaceholder="选择 AI 提供商"
@@ -414,7 +446,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                   dataName="chat.top-bar.provider-select"
                 />
               ) : (
-                <span data-name="chat.top-bar.no-provider-text" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                <span
+                  data-name="chat.top-bar.no-provider-text"
+                  style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}
+                >
                   未配置提供商
                 </span>
               )}
@@ -458,7 +493,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
             onClick={() => setIsSidebarOpen(false)}
           />
           {/* 侧边会话列表 */}
-          <aside className={`chat-sidebar${isNarrow && isSidebarOpen ? ' open' : ''}${isSidebarCollapsed ? ' collapsed' : ''}`} data-name="chat.sidebar.container">
+          <aside
+            className={`chat-sidebar${isNarrow && isSidebarOpen ? ' open' : ''}${isSidebarCollapsed ? ' collapsed' : ''}`}
+            data-name="chat.sidebar.container"
+          >
             <div className="chat-sidebar-head" data-name="chat.sidebar.head">
               <Button
                 variant="outline"
@@ -467,7 +505,15 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                 data-name="chat.sidebar.new-conversation-button"
                 onClick={handleNewConversation}
               >
-                <svg className="icon-svg" data-name="chat.sidebar.new-conversation-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <svg
+                  className="icon-svg"
+                  data-name="chat.sidebar.new-conversation-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                >
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
@@ -489,7 +535,9 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                     className={`chat-conv-item${c.id === currentConversationId ? ' active' : ''}`}
                     onClick={() => void handleSelectConversation(c.id)}
                   >
-                    <span className="chat-conv-title" data-name="chat.sidebar.conversation-title">{c.title || '新对话'}</span>
+                    <span className="chat-conv-title" data-name="chat.sidebar.conversation-title">
+                      {c.title || '新对话'}
+                    </span>
                     <IconButton
                       type="button"
                       className="chat-conv-export"
@@ -497,10 +545,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                       aria-label="导出为 Markdown"
                       title="导出为 Markdown"
                       onClick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation()
                         void exportConversation(c.id, 'md').catch((err) =>
                           console.error('[ChatView] 导出 MD 失败:', err),
-                        );
+                        )
                       }}
                     >
                       MD
@@ -512,10 +560,10 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                       aria-label="导出为 JSON"
                       title="导出为 JSON"
                       onClick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation()
                         void exportConversation(c.id, 'json').catch((err) =>
                           console.error('[ChatView] 导出 JSON 失败:', err),
-                        );
+                        )
                       }}
                     >
                       JSON
@@ -528,11 +576,19 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                       aria-label="删除对话"
                       title="删除对话"
                       onClick={(e) => {
-                        e.stopPropagation();
-                        void removeConversation(c.id);
+                        e.stopPropagation()
+                        void removeConversation(c.id)
                       }}
                     >
-                      <svg className="icon-svg-sm" data-name="chat.sidebar.delete-conversation-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <svg
+                        className="icon-svg-sm"
+                        data-name="chat.sidebar.delete-conversation-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      >
                         <line x1="6" y1="6" x2="18" y2="18" />
                         <line x1="18" y1="6" x2="6" y2="18" />
                       </svg>
@@ -548,7 +604,9 @@ export default function ChatView({ windowId }: { windowId?: string }) {
             <div className="chat-messages" data-name="chat.messages-container">
               {messages.length === 0 && !streaming ? (
                 <div className="chat-empty" data-name="chat.empty-state">
-                  <div className="chat-empty-icon" data-name="chat.empty-state-icon">AI</div>
+                  <div className="chat-empty-icon" data-name="chat.empty-state-icon">
+                    AI
+                  </div>
                   <div data-name="chat.empty-state-text">
                     {currentProvider
                       ? `与 ${currentProvider.name} 开始对话`
@@ -585,7 +643,11 @@ export default function ChatView({ windowId }: { windowId?: string }) {
               )}
             </div>
 
-            {streamError && <div className="chat-error-bar" data-name="chat.error-bar"><AlertIcon className="chat-error-icon" /> {streamError}</div>}
+            {streamError && (
+              <div className="chat-error-bar" data-name="chat.error-bar">
+                <AlertIcon className="chat-error-icon" /> {streamError}
+              </div>
+            )}
 
             <div className="chat-input-area" data-name="chat.input-area">
               <div className="chat-input-wrap" data-name="chat.input-wrap">
@@ -593,7 +655,11 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                   ref={inputRef}
                   className="chat-input"
                   data-name="chat.input-textarea"
-                  placeholder={currentProvider ? `向 ${currentProvider.name} 发送消息...` : '请先配置 AI 提供商'}
+                  placeholder={
+                    currentProvider
+                      ? `向 ${currentProvider.name} 发送消息...`
+                      : '请先配置 AI 提供商'
+                  }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -618,7 +684,16 @@ export default function ChatView({ windowId }: { windowId?: string }) {
                   onClick={() => void handleSend()}
                   disabled={!currentProvider || !input.trim()}
                 >
-                  <svg className="icon-svg" data-name="chat.send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="icon-svg"
+                    data-name="chat.send-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
@@ -632,5 +707,5 @@ export default function ChatView({ windowId }: { windowId?: string }) {
       {/* 快捷键说明（` / ~ / ? 呼出） */}
       <ShortcutHelp />
     </>
-  );
+  )
 }

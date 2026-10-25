@@ -91,42 +91,54 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
     }
     savedBoundsValid = displays.some((d) => {
       const b = d.bounds
-      return center.x >= b.x && center.x <= b.x + b.width &&
-             center.y >= b.y && center.y <= b.y + b.height
+      return (
+        center.x >= b.x &&
+        center.x <= b.x + b.width &&
+        center.y >= b.y &&
+        center.y <= b.y + b.height
+      )
     })
   }
 
   // 默认尺寸 900×680，居中显示；用户已保存 bounds 且在屏幕内则优先用
   const width = (savedBoundsValid && restoreBounds.width) || Math.min(900, workArea.width - 80)
   const height = (savedBoundsValid && restoreBounds.height) || Math.min(680, workArea.height - 80)
-  const x = (savedBoundsValid && restoreBounds.x != null) ? restoreBounds.x : workArea.x + Math.round((workArea.width - width) / 2)
-  const y = (savedBoundsValid && restoreBounds.y != null) ? restoreBounds.y : workArea.y + Math.round((workArea.height - height) / 2)
+  const x =
+    savedBoundsValid && restoreBounds.x != null
+      ? restoreBounds.x
+      : workArea.x + Math.round((workArea.width - width) / 2)
+  const y =
+    savedBoundsValid && restoreBounds.y != null
+      ? restoreBounds.y
+      : workArea.y + Math.round((workArea.height - height) / 2)
 
   // 进阶窗口默认全屏（最大化）：首次打开（无保存状态）或用户上次以最大化关闭时
   // 白板模式始终最大化；其他模式恢复上次状态
-  const shouldMaximize = isWhiteboard ? true : (saved.isMaximized || !hasSavedBounds)
+  const shouldMaximize = isWhiteboard ? true : saved.isMaximized || !hasSavedBounds
 
   // 根据 UI 比例动态计算最小宽度（缓存值由主窗口计算并更新）
   const uiScale = getUiScaleFromSettings()
   const minWidth = getAdvancedPanelMinWidth(uiScale)
 
-  const win = new BrowserWindow(buildWindowConfig({
-    width,
-    height,
-    x,
-    y,
-    minWidth,
-    minHeight: ADVANCED_PANEL_MIN_HEIGHT,
-    show: false,
-    frame: false,
-    alwaysOnTop: saved.alwaysOnTop,
-    backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: '工百窗 - 进阶面板',
-    webPreferences: createDefaultWebPreferences({
-      preload: getPreloadPath(),
-      webviewTag: false, // 进阶面板不使用 webview（API 直连 + 内置平台网格只发 IPC）
+  const win = new BrowserWindow(
+    buildWindowConfig({
+      width,
+      height,
+      x,
+      y,
+      minWidth,
+      minHeight: ADVANCED_PANEL_MIN_HEIGHT,
+      show: false,
+      frame: false,
+      alwaysOnTop: saved.alwaysOnTop,
+      backgroundColor: WINDOW_BACKGROUND_COLOR,
+      title: '工百窗 - 进阶面板',
+      webPreferences: createDefaultWebPreferences({
+        preload: getPreloadPath(),
+        webviewTag: false, // 进阶面板不使用 webview（API 直连 + 内置平台网格只发 IPC）
+      }),
     }),
-  }))
+  )
 
   windowState.advancedPanelWindow = win
   focusManager.track(win)
@@ -179,9 +191,14 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
   win.once('closed', () => clearTimeout(showTimeout))
 
   // 进阶面板：保存 bounds（关闭时持久化位置/尺寸），下次打开恢复到上次位置
-  attachDetachedWindowLifecycle(win, ADVANCED_PANEL_WINDOW_ID, () => {
-    windowState.advancedPanelWindow = null
-  }, { trackBounds: true })
+  attachDetachedWindowLifecycle(
+    win,
+    ADVANCED_PANEL_WINDOW_ID,
+    () => {
+      windowState.advancedPanelWindow = null
+    },
+    { trackBounds: true },
+  )
 
   // 同步 normalBounds：用户移动/调整窗口尺寸时更新，确保取消最大化后恢复到正确位置
   const syncNormalBounds = () => {
@@ -205,15 +222,16 @@ export function createAdvancedPanelWindow(options?: AdvancedPanelWindowOptions):
  */
 export async function openAdvancedPanelWindow(options?: AdvancedPanelWindowOptions): Promise<void> {
   // 模块门控（11.10）：检查内置模块 + 插件声明的 advancedPanelTab
-  const builtinAvailable = isModuleEnabled('custom-chat') || isModuleEnabled('whiteboard') || isModuleEnabled('notes')
+  const builtinAvailable =
+    isModuleEnabled('custom-chat') || isModuleEnabled('whiteboard') || isModuleEnabled('notes')
   let pluginAvailable = false
   try {
     // 动态导入避免循环依赖
     const { listModuleInfos } = await import('../../../modules/registry.js')
-    pluginAvailable = listModuleInfos().some(
-      (m) => m.enabled && !!m.advancedPanelTab,
-    )
-  } catch { /* ignore */ }
+    pluginAvailable = listModuleInfos().some((m) => m.enabled && !!m.advancedPanelTab)
+  } catch {
+    /* ignore */
+  }
   if (!builtinAvailable && !pluginAvailable) {
     console.warn('[advanced-panel-window] 无可用面板模块，拒绝打开进阶面板')
     return
@@ -249,7 +267,12 @@ export function focusAdvancedPanelWindow(): void {
  */
 export function toggleAdvancedPanelWindow(): void {
   // 模块门控：面板无可用 tab 时直接忽略（Alt+Q 已由 hotkey-sync 注销，此处兜底）
-  if (!isModuleEnabled('custom-chat') && !isModuleEnabled('whiteboard') && !isModuleEnabled('notes')) return
+  if (
+    !isModuleEnabled('custom-chat') &&
+    !isModuleEnabled('whiteboard') &&
+    !isModuleEnabled('notes')
+  )
+    return
   const win = windowState.advancedPanelWindow
   if (win && !win.isDestroyed()) {
     if (win.isVisible()) {

@@ -57,8 +57,9 @@
   font-weight: 400;
   text-align: left;
   box-shadow: none;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .hd-sidebar-segment .seg-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
@@ -132,9 +133,10 @@
   background: var(--muted);
   border: 1px solid transparent;
   border-radius: var(--radius-full);
-  transition: border-color var(--duration-fast) var(--ease-out),
-              background var(--duration-fast) var(--ease-out),
-              box-shadow var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 .hd-toolbar-search:focus-within {
   background: var(--card);
@@ -315,8 +317,9 @@
   border-radius: var(--radius-lg);
   background: var(--card);
   box-shadow: var(--shadow-sm);
-  transition: border-color var(--duration-fast) var(--ease-out),
-              box-shadow var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 .hd-dl-item + .hd-dl-item {
   margin-top: var(--space-2-5);

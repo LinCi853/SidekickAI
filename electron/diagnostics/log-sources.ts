@@ -9,9 +9,17 @@ export function applicationLogSources(): LogSource[] {
   return [
     { id: 'runtime', directory: runtimeLogDirectory(), dated: true },
     { id: 'electron', directory: app.getPath('logs') },
-    { id: 'activity-legacy', directory: path.join(app.getPath('userData'), 'logs'), file: 'activity-records.json' },
+    {
+      id: 'activity-legacy',
+      directory: path.join(app.getPath('userData'), 'logs'),
+      file: 'activity-records.json',
+    },
     { id: 'maintenance', directory: path.join(local, 'SidekickAI', 'installer-logs') },
-    { id: 'installer-operations', directory: path.join(temporary, 'SidekickAI-Installer'), operationDirectories: true },
+    {
+      id: 'installer-operations',
+      directory: path.join(temporary, 'SidekickAI-Installer'),
+      operationDirectories: true,
+    },
     { id: 'installer-legacy', directory: temporary, file: 'SidekickAI-install.log' },
   ]
 }

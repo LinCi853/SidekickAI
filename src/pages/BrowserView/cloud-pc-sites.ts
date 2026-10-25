@@ -26,21 +26,21 @@ export const CLOUD_PC_SITES: { domain: string; name: string }[] = [
   { domain: 'parsec.app', name: 'Parsec' },
   { domain: 'web.parsec.gg', name: 'Parsec' },
   { domain: 'boosteroid.com', name: 'Boosteroid' },
-];
+]
 
 /** 检测 URL 是否属于云电脑/云游戏站点；返回匹配的平台名或 null */
 export function matchCloudPcSite(url: string): string | null {
-  if (!url || !/^https?:/i.test(url)) return null;
+  if (!url || !/^https?:/i.test(url)) return null
   try {
-    const host = new URL(url).hostname.toLowerCase();
+    const host = new URL(url).hostname.toLowerCase()
     for (const site of CLOUD_PC_SITES) {
-      const d = site.domain.toLowerCase();
+      const d = site.domain.toLowerCase()
       if (host === d || host.endsWith('.' + d)) {
-        return site.name;
+        return site.name
       }
     }
-    return null;
+    return null
   } catch {
-    return null;
+    return null
   }
 }

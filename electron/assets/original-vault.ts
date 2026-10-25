@@ -17,23 +17,36 @@ const publications = new Map<string, Promise<void>>()
 export class OriginalVault {
   private transfers = new Map<string, Transfer>()
   private starting = new Map<string, Promise<void>>()
-  constructor(readonly root: string, private temporaryRoot = path.join(root, '.pending')) {}
+  constructor(
+    readonly root: string,
+    private temporaryRoot = path.join(root, '.pending'),
+  ) {}
 
   pathFor(hash: string): string {
     if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid original digest')
     return path.join(this.root, 'objects', hash.slice(0, 2), hash)
   }
   async begin(id: string): Promise<void> {
-    if (this.transfers.has(id) || this.starting.has(id)) throw new Error('Original transfer already active')
+    if (this.transfers.has(id) || this.starting.has(id))
+      throw new Error('Original transfer already active')
     const operation = (async () => {
       await mkdir(this.temporaryRoot, { recursive: true })
       const file = path.join(this.temporaryRoot, randomUUID())
       const handle = await open(file, 'wx')
-      this.transfers.set(id, { file, handle, hash: createHash('sha256'), size: 0, tail: Promise.resolve() })
+      this.transfers.set(id, {
+        file,
+        handle,
+        hash: createHash('sha256'),
+        size: 0,
+        tail: Promise.resolve(),
+      })
     })()
     this.starting.set(id, operation)
-    try { await operation }
-    finally { if (this.starting.get(id) === operation) this.starting.delete(id) }
+    try {
+      await operation
+    } finally {
+      if (this.starting.get(id) === operation) this.starting.delete(id)
+    }
   }
   async append(id: string, offset: number, bytes: Uint8Array): Promise<void> {
     const transfer = this.transfers.get(id)
@@ -49,10 +62,17 @@ export class OriginalVault {
       transfer.hash.update(bytes)
       transfer.size += bytes.byteLength
     })
-    transfer.tail = operation.then(() => {}, () => {})
+    transfer.tail = operation.then(
+      () => {},
+      () => {},
+    )
     await operation
   }
-  async finish(id: string, expectedSize: number, expectedHash?: string): Promise<{ sha256: string; size: number; reused: boolean }> {
+  async finish(
+    id: string,
+    expectedSize: number,
+    expectedHash?: string,
+  ): Promise<{ sha256: string; size: number; reused: boolean }> {
     const transfer = this.transfers.get(id)
     if (!transfer) throw new Error('Original transfer not found')
     await transfer.tail
@@ -62,22 +82,40 @@ export class OriginalVault {
     this.transfers.delete(id)
     const sha256 = transfer.hash.digest('hex')
     try {
-      if (expectedHash && sha256 !== expectedHash) throw new Error('Original digest differs from the saved reference')
+      if (expectedHash && sha256 !== expectedHash)
+        throw new Error('Original digest differs from the saved reference')
       const reused = await this.publish(transfer.file, sha256, transfer.size, !!expectedHash)
       return { sha256, size: transfer.size, reused }
     } finally {
       await unlink(transfer.file).catch(() => {})
     }
   }
-  private async publish(file: string, hash: string, size: number, recover: boolean): Promise<boolean> {
+  private async publish(
+    file: string,
+    hash: string,
+    size: number,
+    recover: boolean,
+  ): Promise<boolean> {
     const destination = this.pathFor(hash)
     const operation = (publications.get(destination) ?? Promise.resolve()).then(async () => {
       await mkdir(path.dirname(destination), { recursive: true })
-      try { await link(file, destination); return false }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
-      try { await this.verify(hash, size); return true }
-      catch (error) {
-        if (!recover || !['Original size check failed', 'Original digest check failed'].includes((error as Error).message)) throw error
+      try {
+        await link(file, destination)
+        return false
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      }
+      try {
+        await this.verify(hash, size)
+        return true
+      } catch (error) {
+        if (
+          !recover ||
+          !['Original size check failed', 'Original digest check failed'].includes(
+            (error as Error).message,
+          )
+        )
+          throw error
       }
       const quarantine = path.join(this.root, 'quarantine')
       await mkdir(quarantine, { recursive: true })
@@ -85,10 +123,16 @@ export class OriginalVault {
       await link(file, destination)
       return false
     })
-    const completion = operation.then(() => {}, () => {})
+    const completion = operation.then(
+      () => {},
+      () => {},
+    )
     publications.set(destination, completion)
-    try { return await operation }
-    finally { if (publications.get(destination) === completion) publications.delete(destination) }
+    try {
+      return await operation
+    } finally {
+      if (publications.get(destination) === completion) publications.delete(destination)
+    }
   }
   async verify(hash: string, size?: number): Promise<string> {
     const file = this.pathFor(hash)

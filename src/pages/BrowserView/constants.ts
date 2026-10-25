@@ -10,31 +10,31 @@ export const INTERNAL_TAB_SOURCES: readonly string[] = [
   'downloads',
   'view-source',
   'print-preview',
-];
+]
 
 /** 从 URL 查询参数获取值 */
 export function getQueryParam(key: string): string | null {
-  if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get(key);
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get(key)
 }
 
 export interface WebviewElement {
-  canGoBack(): boolean;
-  canGoForward(): boolean;
-  goBack(): void;
-  goForward(): void;
-  reload(): void;
-  reloadIgnoringCache(): void;
-  stop(): void;
-  isDevToolsOpened(): boolean;
-  openDevTools(): void;
-  closeDevTools(): void;
-  getURL(): string;
-  getTitle(): string;
-  getWebContentsId(): number;
-  executeJavaScript(script: string): Promise<unknown>;
-  print(): void;
+  canGoBack(): boolean
+  canGoForward(): boolean
+  goBack(): void
+  goForward(): void
+  reload(): void
+  reloadIgnoringCache(): void
+  stop(): void
+  isDevToolsOpened(): boolean
+  openDevTools(): void
+  closeDevTools(): void
+  getURL(): string
+  getTitle(): string
+  getWebContentsId(): number
+  executeJavaScript(script: string): Promise<unknown>
+  print(): void
   /** 页面缩放级别（log2 尺度） */
-  getZoomLevel(): number;
-  setZoomLevel(level: number): void;
+  getZoomLevel(): number
+  setZoomLevel(level: number): void
 }

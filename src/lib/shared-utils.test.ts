@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  findProfilesByPlatform,
-  findProfileByPlatform,
-  findAiAppProfiles,
-} from './shared-utils.js'
+import { findProfilesByPlatform, findProfileByPlatform, findAiAppProfiles } from './shared-utils.js'
 
 // Note: isTypingTarget requires HTMLElement which is only available in browser environment
 // In vitest (node), we skip testing it directly
@@ -48,9 +44,7 @@ describe('findProfilesByPlatform', () => {
   })
 
   it('should return empty array when no match', () => {
-    const profiles = [
-      { id: '1', isAIPlatform: true, aiPlatformId: 'claude', order: 0 },
-    ] as any[]
+    const profiles = [{ id: '1', isAIPlatform: true, aiPlatformId: 'claude', order: 0 }] as any[]
 
     const result = findProfilesByPlatform(platform, profiles)
     expect(result).toHaveLength(0)
@@ -81,9 +75,7 @@ describe('findProfileByPlatform', () => {
   })
 
   it('should return undefined when no match', () => {
-    const profiles = [
-      { id: '1', isAIPlatform: true, aiPlatformId: 'claude', order: 0 },
-    ] as any[]
+    const profiles = [{ id: '1', isAIPlatform: true, aiPlatformId: 'claude', order: 0 }] as any[]
 
     const result = findProfileByPlatform(platform, profiles)
     expect(result).toBeUndefined()
@@ -105,9 +97,7 @@ describe('findAiAppProfiles', () => {
   })
 
   it('should return empty array when no AI profiles', () => {
-    const profiles = [
-      { id: '1', isAIPlatform: false, order: 0 },
-    ] as any[]
+    const profiles = [{ id: '1', isAIPlatform: false, order: 0 }] as any[]
 
     const result = findAiAppProfiles(profiles)
     expect(result).toHaveLength(0)

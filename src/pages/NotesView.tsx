@@ -11,17 +11,17 @@
    - flushDraft 将 draftRef 中的草稿同步保存到 SQLite
    ===================================================================== */
 
-import { useEffect } from 'react';
-import { useNotesData } from './hooks/useNotesData.js';
-import NotesSidebar from './components/NotesSidebar.js';
-import NotesEditor from './components/NotesEditor.js';
-import SaveAsPromptModal from '../components/SaveAsPromptModal.js';
-import './NotesView.css';
+import { useEffect } from 'react'
+import { useNotesData } from './hooks/useNotesData.js'
+import NotesSidebar from './components/NotesSidebar.js'
+import NotesEditor from './components/NotesEditor.js'
+import SaveAsPromptModal from '../components/SaveAsPromptModal.js'
+import './NotesView.css'
 
 interface NotesViewProps {
-  onClose?: () => void;
-  onOpenSettings?: () => void;
-  onBeforeLeaveReady?: (guard: ((commit: () => void) => Promise<void>) | null) => void;
+  onClose?: () => void
+  onOpenSettings?: () => void
+  onBeforeLeaveReady?: (guard: ((commit: () => void) => Promise<void>) | null) => void
 }
 
 export default function NotesView({ onOpenSettings, onBeforeLeaveReady }: NotesViewProps) {
@@ -52,12 +52,12 @@ export default function NotesView({ onOpenSettings, onBeforeLeaveReady }: NotesV
     handleTagsChange,
     handleSendToAi,
     handleSaveAsPrompt,
-  } = useNotesData();
+  } = useNotesData()
 
   useEffect(() => {
-    onBeforeLeaveReady?.(beforeLeave);
-    return () => onBeforeLeaveReady?.(null);
-  }, [beforeLeave, onBeforeLeaveReady]);
+    onBeforeLeaveReady?.(beforeLeave)
+    return () => onBeforeLeaveReady?.(null)
+  }, [beforeLeave, onBeforeLeaveReady])
 
   return (
     <div className="notes-view app-view-root" data-name="advanced-panel.notes-view">
@@ -88,17 +88,21 @@ export default function NotesView({ onOpenSettings, onBeforeLeaveReady }: NotesV
           onSaveAsPrompt={handleSaveAsPrompt}
         />
       </div>
-      {toast && <div className="notes-toast app-toast" data-name="advanced-panel.notes-toast">{toast}</div>}
+      {toast && (
+        <div className="notes-toast app-toast" data-name="advanced-panel.notes-toast">
+          {toast}
+        </div>
+      )}
       <SaveAsPromptModal
         open={saveAsPromptOpen}
         initialContent={saveAsPromptContent}
         initialTitle={saveAsPromptTitle}
         onSaved={() => {
-          setSaveAsPromptOpen(false);
-          showToast('已保存为提示词');
+          setSaveAsPromptOpen(false)
+          showToast('已保存为提示词')
         }}
         onClose={() => setSaveAsPromptOpen(false)}
       />
     </div>
-  );
+  )
 }

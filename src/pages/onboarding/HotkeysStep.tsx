@@ -7,16 +7,16 @@
    从 pages/OnboardingView.tsx 拆出，仅通过 props 回调操作状态，不改变任何行为。
    ===================================================================== */
 
-import type { HotkeyConfig } from '../../lib/electron-api';
-import { Toggle } from '../../components/ui';
-import { GLOBAL_HOTKEY_META } from '../../lib/shortcut-reference';
-import { ONBOARDING_HIGH_FREQ, resolveHotkey } from './onboardingData';
+import type { HotkeyConfig } from '../../lib/electron-api'
+import { Toggle } from '../../components/ui'
+import { GLOBAL_HOTKEY_META } from '../../lib/shortcut-reference'
+import { ONBOARDING_HIGH_FREQ, resolveHotkey } from './onboardingData'
 
 interface HotkeysStepProps {
-  hotkeys: HotkeyConfig[];
-  onToggleMainHotkey: (next: boolean) => Promise<void>;
-  onTogglePanelHotkey: (next: boolean) => Promise<void>;
-  onToggleVoiceHotkey: (next: boolean) => Promise<void>;
+  hotkeys: HotkeyConfig[]
+  onToggleMainHotkey: (next: boolean) => Promise<void>
+  onTogglePanelHotkey: (next: boolean) => Promise<void>
+  onToggleVoiceHotkey: (next: boolean) => Promise<void>
 }
 
 export default function HotkeysStep({
@@ -25,7 +25,7 @@ export default function HotkeysStep({
   onTogglePanelHotkey,
   onToggleVoiceHotkey,
 }: HotkeysStepProps) {
-  const frequentShortcuts = ONBOARDING_HIGH_FREQ;
+  const frequentShortcuts = ONBOARDING_HIGH_FREQ
 
   return (
     <div className="onboarding-page" data-name="onboarding.page-actions">
@@ -38,12 +38,13 @@ export default function HotkeysStep({
         </div>
         <div className="onboarding-shortcut-rows">
           {GLOBAL_HOTKEY_META.map((meta) => {
-            const d = resolveHotkey(hotkeys, meta.action, meta.fallbackKeys);
-            const toggleFn = meta.action === 'toggleMainWindow'
-              ? onToggleMainHotkey
-              : meta.action === 'toggleDetachedWindows'
-                ? onTogglePanelHotkey
-                : onToggleVoiceHotkey;
+            const d = resolveHotkey(hotkeys, meta.action, meta.fallbackKeys)
+            const toggleFn =
+              meta.action === 'toggleMainWindow'
+                ? onToggleMainHotkey
+                : meta.action === 'toggleDetachedWindows'
+                  ? onTogglePanelHotkey
+                  : onToggleVoiceHotkey
             return (
               <div
                 key={meta.action}
@@ -51,16 +52,14 @@ export default function HotkeysStep({
                 data-name={`onboarding.shortcut-row-${meta.action}`}
               >
                 <span className="onboarding-shortcut-keys">{d.keys}</span>
-                <span className="onboarding-shortcut-action">
-                  {meta.actionText}
-                </span>
+                <span className="onboarding-shortcut-action">{meta.actionText}</span>
                 <Toggle
                   checked={d.enabled}
                   onChange={(v) => void toggleFn(v)}
                   aria-label={meta.actionText}
                 />
               </div>
-            );
+            )
           })}
         </div>
         <div className="onboarding-shortcut-panel-head">
@@ -68,10 +67,16 @@ export default function HotkeysStep({
         </div>
         <div className="onboarding-shortcut-rows">
           {frequentShortcuts.map((s) => (
-            <div key={s.keys} className="onboarding-shortcut-row" data-name={`onboarding.shortcut-row-${s.keys}`}>
+            <div
+              key={s.keys}
+              className="onboarding-shortcut-row"
+              data-name={`onboarding.shortcut-row-${s.keys}`}
+            >
               <span className="onboarding-shortcut-keys">{s.keys}</span>
               <span className="onboarding-shortcut-action">{s.action}</span>
-              <span className={`onboarding-scope-badge ${s.scope === '窗口内' ? 'is-window' : 'is-app'}`}>
+              <span
+                className={`onboarding-scope-badge ${s.scope === '窗口内' ? 'is-window' : 'is-app'}`}
+              >
                 {s.scope}
               </span>
             </div>
@@ -82,5 +87,5 @@ export default function HotkeysStep({
         随时按 <kbd>`</kbd> 呼出<strong>完整快捷键速查</strong>（含各页面专属快捷键）。
       </p>
     </div>
-  );
+  )
 }

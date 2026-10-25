@@ -9,27 +9,27 @@
    许可证：Excalidraw 使用 MIT，可商用（替代 tldraw 专有许可证）
    ===================================================================== */
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   Excalidraw,
   serializeAsJSON,
   convertToExcalidrawElements,
   FONT_FAMILY,
   MIME_TYPES,
-} from '@excalidraw/excalidraw';
-import '@excalidraw/excalidraw/index.css';
+} from '@excalidraw/excalidraw'
+import '@excalidraw/excalidraw/index.css'
 import type {
   ExcalidrawImperativeAPI,
   AppState,
   BinaryFiles,
   BinaryFileData,
   DataURL,
-} from '@excalidraw/excalidraw/types';
+} from '@excalidraw/excalidraw/types'
 import type {
   ExcalidrawElement,
   FileId,
   OrderedExcalidrawElement,
-} from '@excalidraw/excalidraw/element/types';
+} from '@excalidraw/excalidraw/element/types'
 import {
   listWhiteboards,
   createWhiteboard,
@@ -43,14 +43,18 @@ import {
   onWhiteboardPushImage,
   getAppSettings,
   updateAppSettings,
-} from '../lib/electron-api';
-import type { WhiteboardMeta, WhiteboardState, WhiteboardPushImagePayload } from '../lib/electron-api';
-import { IconButton, EmptyState } from '../components/ui';
-import SidebarShell from '../components/SidebarShell';
-import { useToast } from '../hooks/useToast';
-import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft';
-import { createWhiteboardDraft, type WhiteboardBeforeLeave } from './whiteboard-draft';
-import './WhiteboardView.css';
+} from '../lib/electron-api'
+import type {
+  WhiteboardMeta,
+  WhiteboardState,
+  WhiteboardPushImagePayload,
+} from '../lib/electron-api'
+import { IconButton, EmptyState } from '../components/ui'
+import SidebarShell from '../components/SidebarShell'
+import { useToast } from '../hooks/useToast'
+import { useAutoSaveDraft } from '../hooks/useAutoSaveDraft'
+import { createWhiteboardDraft, type WhiteboardBeforeLeave } from './whiteboard-draft'
+import './WhiteboardView.css'
 
 // ============================================================================
 // 工具：whiteboard-asset:// → dataURL
@@ -58,30 +62,30 @@ import './WhiteboardView.css';
 // whiteboard-asset:// 协议路径。插入前先 fetch 转 dataURL。
 // ============================================================================
 async function assetUrlToDataUrl(url: string): Promise<string> {
-  if (url.startsWith('data:')) return url;
+  if (url.startsWith('data:')) return url
   try {
-    const res = await fetch(url);
-    const blob = await res.blob();
+    const res = await fetch(url)
+    const blob = await res.blob()
     return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
   } catch (err) {
-    console.error('[WhiteboardView] asset → dataURL 转换失败:', url, err);
-    throw err;
+    console.error('[WhiteboardView] asset → dataURL 转换失败:', url, err)
+    throw err
   }
 }
 
 /** 加载 dataURL 图片获取原始尺寸（用于 Excalidraw image 元素 width/height） */
 function loadImageSize(dataUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => reject(new Error('图片加载失败'));
-    img.src = dataUrl;
-  });
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    img.onerror = () => reject(new Error('图片加载失败'))
+    img.src = dataUrl
+  })
 }
 
 /**
@@ -94,15 +98,15 @@ async function injectPushedImageIntoCanvas(
   payload: WhiteboardPushImagePayload,
 ): Promise<void> {
   // 1. assetUrl → dataURL
-  const dataUrl = await assetUrlToDataUrl(payload.assetUrl);
+  const dataUrl = await assetUrlToDataUrl(payload.assetUrl)
   // 2. 加载图片获取原始尺寸
-  const { width: naturalWidth, height: naturalHeight } = await loadImageSize(dataUrl);
-  const MAX_W = 400;
-  const scale = naturalWidth > MAX_W ? MAX_W / naturalWidth : 1;
-  const width = Math.round(naturalWidth * scale);
-  const height = Math.round(naturalHeight * scale);
+  const { width: naturalWidth, height: naturalHeight } = await loadImageSize(dataUrl)
+  const MAX_W = 400
+  const scale = naturalWidth > MAX_W ? MAX_W / naturalWidth : 1
+  const width = Math.round(naturalWidth * scale)
+  const height = Math.round(naturalHeight * scale)
   // 3. 生成 fileId + BinaryFileData，添加到 Excalidraw files map
-  const fileId = `file_push_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` as FileId;
+  const fileId = `file_push_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` as FileId
   api.addFiles([
     {
       mimeType: MIME_TYPES.png,
@@ -110,7 +114,7 @@ async function injectPushedImageIntoCanvas(
       dataURL: dataUrl as DataURL,
       created: Date.now(),
     },
-  ]);
+  ])
   // 4. 创建 image 元素并追加到当前场景（保留已有元素）
   const newElements = convertToExcalidrawElements(
     [
@@ -125,11 +129,11 @@ async function injectPushedImageIntoCanvas(
       },
     ],
     { regenerateIds: false },
-  );
-  const existing = api.getSceneElements();
-  api.updateScene({ elements: [...existing, ...newElements] });
+  )
+  const existing = api.getSceneElements()
+  api.updateScene({ elements: [...existing, ...newElements] })
   // 5. 滚动视口到新元素
-  api.scrollToContent(newElements[0], { fitToContent: true });
+  api.scrollToContent(newElements[0], { fitToContent: true })
 }
 
 // ============================================================================
@@ -139,28 +143,28 @@ async function injectPushedImageIntoCanvas(
 async function convertLegacySnapshot(
   legacy: WhiteboardState,
 ): Promise<{ elements: ExcalidrawElement[]; appState: Partial<AppState>; files: BinaryFiles }> {
-  const skeleton: Parameters<typeof convertToExcalidrawElements>[0] = [];
-  const files: BinaryFiles = {};
-  const cardIndex = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const skeleton: Parameters<typeof convertToExcalidrawElements>[0] = []
+  const files: BinaryFiles = {}
+  const cardIndex = new Map<string, { x: number; y: number; w: number; h: number }>()
 
   for (const card of legacy.cards ?? []) {
-    const x = card.x ?? 0;
-    const y = card.y ?? 0;
-    const w = card.width ?? 240;
-    const h = card.height ?? 120;
-    cardIndex.set(card.id, { x, y, w, h });
+    const x = card.x ?? 0
+    const y = card.y ?? 0
+    const w = card.width ?? 240
+    const h = card.height ?? 120
+    cardIndex.set(card.id, { x, y, w, h })
 
     if (card.type === 'image') {
       // 图片：转 dataURL 后装入 files map
       try {
-        const dataUrl = await assetUrlToDataUrl(card.content);
-        const fileId = `file_${card.id}` as FileId;
+        const dataUrl = await assetUrlToDataUrl(card.content)
+        const fileId = `file_${card.id}` as FileId
         files[fileId] = {
           mimeType: MIME_TYPES.png,
           id: fileId,
           dataURL: dataUrl as DataURL,
           created: Date.now(),
-        };
+        }
         skeleton.push({
           type: 'image',
           x,
@@ -168,13 +172,13 @@ async function convertLegacySnapshot(
           width: w,
           height: h,
           fileId,
-        });
+        })
       } catch {
         // 图片转换失败则跳过
       }
     } else {
       // text / ai-reply → text 元素
-      const text = card.content || ' ';
+      const text = card.content || ' '
       skeleton.push({
         type: 'text',
         text,
@@ -183,15 +187,15 @@ async function convertLegacySnapshot(
         width: w,
         fontSize: 16,
         fontFamily: FONT_FAMILY.Virgil,
-      });
+      })
     }
   }
 
   // 箭头：根据 from/to 卡片坐标生成直线
   for (const arrow of legacy.arrows ?? []) {
-    const from = cardIndex.get(arrow.fromCardId);
-    const to = cardIndex.get(arrow.toCardId);
-    if (!from || !to) continue;
+    const from = cardIndex.get(arrow.fromCardId)
+    const to = cardIndex.get(arrow.toCardId)
+    if (!from || !to) continue
     skeleton.push({
       type: 'arrow',
       x: from.x + from.w,
@@ -200,15 +204,15 @@ async function convertLegacySnapshot(
         [0, 0],
         [to.x - from.x - from.w, to.y + to.h / 2 - (from.y + from.h / 2)],
       ],
-    });
+    })
   }
 
-  const elements = convertToExcalidrawElements(skeleton, { regenerateIds: false });
+  const elements = convertToExcalidrawElements(skeleton, { regenerateIds: false })
   return {
     elements,
     appState: { viewBackgroundColor: '#ffffff' },
     files,
-  };
+  }
 }
 
 // ============================================================================
@@ -216,35 +220,47 @@ async function convertLegacySnapshot(
 // ============================================================================
 
 interface WhiteboardSidebarProps {
-  whiteboards: WhiteboardMeta[];
-  activeId: string | null;
-  width: number;
-  collapsed: boolean;
-  onSelect: (id: string) => void;
-  onCreate: () => void;
-  onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
-  onResize: (w: number) => void;
-  onToggleCollapse: () => void;
-  onOpenSettings?: () => void;
+  whiteboards: WhiteboardMeta[]
+  activeId: string | null
+  width: number
+  collapsed: boolean
+  onSelect: (id: string) => void
+  onCreate: () => void
+  onRename: (id: string, title: string) => void
+  onDelete: (id: string) => void
+  onResize: (w: number) => void
+  onToggleCollapse: () => void
+  onOpenSettings?: () => void
 }
 
-function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, onCreate, onRename, onDelete, onResize, onToggleCollapse, onOpenSettings }: WhiteboardSidebarProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
+function WhiteboardSidebar({
+  whiteboards,
+  activeId,
+  width,
+  collapsed,
+  onSelect,
+  onCreate,
+  onRename,
+  onDelete,
+  onResize,
+  onToggleCollapse,
+  onOpenSettings,
+}: WhiteboardSidebarProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
 
   const handleStartRename = (wb: WhiteboardMeta) => {
-    setEditingId(wb.id);
-    setEditingTitle(wb.title);
-  };
+    setEditingId(wb.id)
+    setEditingTitle(wb.title)
+  }
 
   const handleCommitRename = () => {
     if (editingId && editingTitle.trim()) {
-      onRename(editingId, editingTitle.trim());
+      onRename(editingId, editingTitle.trim())
     }
-    setEditingId(null);
-    setEditingTitle('');
-  };
+    setEditingId(null)
+    setEditingTitle('')
+  }
 
   return (
     <SidebarShell
@@ -266,7 +282,13 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
             aria-label="新建白板"
             data-name="advanced-panel.wb-sidebar-create-button"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -275,13 +297,24 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
       }
     >
       <div className="sidebar-shell-list" data-name="advanced-panel.wb-sidebar-list">
-        {whiteboards.length === 0 && <EmptyState message="暂无白板" className="wb-sidebar-empty" data-name="advanced-panel.wb-sidebar-empty" />}
+        {whiteboards.length === 0 && (
+          <EmptyState
+            message="暂无白板"
+            className="wb-sidebar-empty"
+            data-name="advanced-panel.wb-sidebar-empty"
+          />
+        )}
         {whiteboards.map((wb, idx) => (
           <div
             key={wb.id}
             className={`wb-sidebar-item sidebar-list-item ${wb.id === activeId ? 'active' : ''}`}
             onClick={() => editingId !== wb.id && onSelect(wb.id)}
-            onKeyDown={(e) => { if (e.key === 'F2' && editingId !== wb.id) { e.preventDefault(); handleStartRename(wb); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'F2' && editingId !== wb.id) {
+                e.preventDefault()
+                handleStartRename(wb)
+              }
+            }}
             tabIndex={0}
             data-name={`advanced-panel.wb-sidebar-item-${idx + 1}`}
             data-index={idx + 1}
@@ -295,24 +328,49 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
                 onChange={(e) => setEditingTitle(e.target.value)}
                 onBlur={handleCommitRename}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCommitRename();
+                  if (e.key === 'Enter') handleCommitRename()
                   if (e.key === 'Escape') {
-                    setEditingId(null);
-                    setEditingTitle('');
+                    setEditingId(null)
+                    setEditingTitle('')
                   }
                 }}
                 data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-rename-input`}
               />
             ) : (
               <>
-                <span className="wb-sidebar-item-title" onDoubleClick={() => handleStartRename(wb)} data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-title`}>
+                <span
+                  className="wb-sidebar-item-title"
+                  onDoubleClick={() => handleStartRename(wb)}
+                  data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-title`}
+                >
                   {wb.title || '未命名白板'}
                 </span>
-                <div className="wb-sidebar-item-actions" data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-actions`}>
-                  <button className="wb-sidebar-item-btn" onClick={(e) => { e.stopPropagation(); handleStartRename(wb); }} title="重命名" aria-label="重命名" data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-rename-button`}>
+                <div
+                  className="wb-sidebar-item-actions"
+                  data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-actions`}
+                >
+                  <button
+                    className="wb-sidebar-item-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStartRename(wb)
+                    }}
+                    title="重命名"
+                    aria-label="重命名"
+                    data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-rename-button`}
+                  >
                     ✎
                   </button>
-                  <button className="wb-sidebar-item-btn danger" onClick={(e) => { e.stopPropagation(); onDelete(wb.id); }} title="删除" aria-label="删除白板" data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-delete-button`}>
+                  <button
+                    className="wb-sidebar-item-btn danger"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(wb.id)
+                    }}
+                    title="删除"
+                    aria-label="删除白板"
+                    data-name={`advanced-panel.wb-sidebar-item-${idx + 1}-delete-button`}
+                  >
                     ×
                   </button>
                 </div>
@@ -322,124 +380,145 @@ function WhiteboardSidebar({ whiteboards, activeId, width, collapsed, onSelect, 
         ))}
       </div>
     </SidebarShell>
-  );
+  )
 }
 
 // ============================================================================
 
 interface WhiteboardCanvasProps {
-  activeId: string;
-  snapshot: string | null;
-  onFlushReady: (flush: (() => Promise<void>) | null) => void;
+  activeId: string
+  snapshot: string | null
+  onFlushReady: (flush: (() => Promise<void>) | null) => void
 }
 
-type WhiteboardScene = { elements: readonly ExcalidrawElement[]; appState: AppState; files: BinaryFiles };
+type WhiteboardScene = {
+  elements: readonly ExcalidrawElement[]
+  appState: AppState
+  files: BinaryFiles
+}
 
 function WhiteboardCanvas({ activeId, snapshot, onFlushReady }: WhiteboardCanvasProps) {
-  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const draft = useMemo(() => createWhiteboardDraft<WhiteboardScene>({
-    serialize: (scene) => serializeAsJSON(scene.elements, scene.appState, scene.files, 'local'),
-    save: (json) => saveWhiteboardSnapshot(activeId, json),
-    saveSync: (json) => saveWhiteboardSnapshotSync(activeId, json),
-  }), [activeId]);
+  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const draft = useMemo(
+    () =>
+      createWhiteboardDraft<WhiteboardScene>({
+        serialize: (scene) => serializeAsJSON(scene.elements, scene.appState, scene.files, 'local'),
+        save: (json) => saveWhiteboardSnapshot(activeId, json),
+        saveSync: (json) => saveWhiteboardSnapshotSync(activeId, json),
+      }),
+    [activeId],
+  )
   // 是否完成首次加载（避免 initialData 还原触发保存覆盖空数据）
-  const hydratedRef = useRef(false);
+  const hydratedRef = useRef(false)
   // 需求 12：截图推送到达时若 Excalidraw API 尚未就绪，暂存待处理载荷
-  const pendingImageRef = useRef<WhiteboardPushImagePayload | null>(null);
+  const pendingImageRef = useRef<WhiteboardPushImagePayload | null>(null)
 
   // 初始化数据：snapshot 反序列化，或遗留数据转换，或空场景
   // initialData 接受 Promise，可异步处理遗留图片转换
   const initialData = useMemo(() => {
-    hydratedRef.current = false;
-    if (!snapshot) return null;
+    hydratedRef.current = false
+    if (!snapshot) return null
     try {
-      const parsed = JSON.parse(snapshot);
+      const parsed = JSON.parse(snapshot)
       // 遗留数据检测（v1 WhiteboardState）
       if (parsed.__legacy === true && parsed.cards) {
-        return convertLegacySnapshot(parsed as WhiteboardState);
+        return convertLegacySnapshot(parsed as WhiteboardState)
       }
       // Excalidraw 场景格式：直接返回（restore 由 Excalidraw 内部完成）
-      return parsed as { elements: ExcalidrawElement[]; appState: Partial<AppState>; files?: BinaryFiles };
+      return parsed as {
+        elements: ExcalidrawElement[]
+        appState: Partial<AppState>
+        files?: BinaryFiles
+      }
     } catch {
-      return null;
+      return null
     }
-  }, [snapshot]);
+  }, [snapshot])
 
   const { schedule: scheduleSave, flushNow } = useAutoSaveDraft<string>({
     data: activeId,
     save: async () => {
-      await draft.flush();
-      setSaveError(null);
+      await draft.flush()
+      setSaveError(null)
     },
     saveSync: () => {
-      draft.flushSync();
-      setSaveError(null);
+      draft.flushSync()
+      setSaveError(null)
     },
     onError: () => setSaveError('白板保存失败或尚未完成，已保留当前画面，请重试后再离开。'),
     debounceMs: 500,
-  });
+  })
 
   useEffect(() => {
-    onFlushReady(flushNow);
-    return () => onFlushReady(null);
-  }, [flushNow, onFlushReady]);
+    onFlushReady(flushNow)
+    return () => onFlushReady(null)
+  }, [flushNow, onFlushReady])
 
   // onChange：缓存最新场景 + 触发防抖保存
   const handleChange = useCallback(
     (elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       // Do not mark restoration as a user edit.
       if (hydratedRef.current) {
-        draft.update({ elements, appState, files });
-        scheduleSave();
+        draft.update({ elements, appState, files })
+        scheduleSave()
       }
     },
     [draft, scheduleSave],
-  );
+  )
 
   // excalidrawAPI 就绪回调
-  const handleAPIReady = useCallback(
-    (api: ExcalidrawImperativeAPI) => {
-      apiRef.current = api;
-      // 标记 hydration 完成（下一帧后允许保存）
-      requestAnimationFrame(() => {
-        hydratedRef.current = true;
-      });
-      // 需求 12：处理 API 就绪前到达的截图推送
-      const pending = pendingImageRef.current;
-      if (pending) {
-        pendingImageRef.current = null;
-        void injectPushedImageIntoCanvas(api, pending).catch((err) => {
-          console.error('[WhiteboardCanvas] 注入暂存截图失败:', err);
-        });
-      }
-    },
-    [],
-  );
+  const handleAPIReady = useCallback((api: ExcalidrawImperativeAPI) => {
+    apiRef.current = api
+    // 标记 hydration 完成（下一帧后允许保存）
+    requestAnimationFrame(() => {
+      hydratedRef.current = true
+    })
+    // 需求 12：处理 API 就绪前到达的截图推送
+    const pending = pendingImageRef.current
+    if (pending) {
+      pendingImageRef.current = null
+      void injectPushedImageIntoCanvas(api, pending).catch((err) => {
+        console.error('[WhiteboardCanvas] 注入暂存截图失败:', err)
+      })
+    }
+  }, [])
 
   // 需求 12：订阅主进程推送的截图，注入当前 Excalidraw 场景
   // 订阅在挂载时一次注册；回调读取 apiRef.current 判断 API 是否就绪
   useEffect(() => {
     const off = onWhiteboardPushImage((payload) => {
-      const api = apiRef.current;
+      const api = apiRef.current
       if (!api) {
         // API 未就绪：暂存，等 handleAPIReady 处理
-        pendingImageRef.current = payload;
-        return;
+        pendingImageRef.current = payload
+        return
       }
       void injectPushedImageIntoCanvas(api, payload).catch((err) => {
-        console.error('[WhiteboardCanvas] 注入截图失败:', err);
-      });
-    });
-    return off;
-  }, []);
+        console.error('[WhiteboardCanvas] 注入截图失败:', err)
+      })
+    })
+    return off
+  }, [])
 
   return (
     <div className="wb-canvas-wrap" data-name="advanced-panel.wb-canvas">
       {saveError && (
-        <div role="alert" className="whiteboard-toast app-toast" style={{ pointerEvents: 'auto', whiteSpace: 'normal' }} data-name="advanced-panel.wb-save-error">
+        <div
+          role="alert"
+          className="whiteboard-toast app-toast"
+          style={{ pointerEvents: 'auto', whiteSpace: 'normal' }}
+          data-name="advanced-panel.wb-save-error"
+        >
           {saveError}
-          <button type="button" onClick={() => { void flushNow().catch(() => {}); }}>重试保存</button>
+          <button
+            type="button"
+            onClick={() => {
+              void flushNow().catch(() => {})
+            }}
+          >
+            重试保存
+          </button>
         </div>
       )}
       <Excalidraw
@@ -450,7 +529,7 @@ function WhiteboardCanvas({ activeId, snapshot, onFlushReady }: WhiteboardCanvas
         name="SidekickAI 白板"
       />
     </div>
-  );
+  )
 }
 
 // ============================================================================
@@ -458,174 +537,206 @@ function WhiteboardCanvas({ activeId, snapshot, onFlushReady }: WhiteboardCanvas
 // ============================================================================
 
 interface WhiteboardViewProps {
-  onClose?: () => void;
-  sidebarVisible?: boolean;
-  onOpenSettings?: () => void;
-  onBeforeLeaveReady?: (guard: WhiteboardBeforeLeave | null) => void;
+  onClose?: () => void
+  sidebarVisible?: boolean
+  onOpenSettings?: () => void
+  onBeforeLeaveReady?: (guard: WhiteboardBeforeLeave | null) => void
 }
 
-function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings, onBeforeLeaveReady }: WhiteboardViewProps) {
-  const [whiteboards, setWhiteboards] = useState<WhiteboardMeta[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(130);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { toast, showToast } = useToast();
-  const [navigationError, setNavigationError] = useState<string | null>(null);
-  const flushRef = useRef<(() => Promise<void>) | null>(null);
-  const transitionRef = useRef(false);
-  const loadingRef = useRef(loading);
-  loadingRef.current = loading;
+function WhiteboardView({
+  onClose,
+  sidebarVisible = false,
+  onOpenSettings,
+  onBeforeLeaveReady,
+}: WhiteboardViewProps) {
+  const [whiteboards, setWhiteboards] = useState<WhiteboardMeta[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [snapshot, setSnapshot] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [sidebarWidth, setSidebarWidth] = useState(130)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { toast, showToast } = useToast()
+  const [navigationError, setNavigationError] = useState<string | null>(null)
+  const flushRef = useRef<(() => Promise<void>) | null>(null)
+  const transitionRef = useRef(false)
+  const loadingRef = useRef(loading)
+  loadingRef.current = loading
   const registerFlush = useCallback((flush: (() => Promise<void>) | null) => {
-    flushRef.current = flush;
-  }, []);
+    flushRef.current = flush
+  }, [])
 
   // Keep the old canvas mounted through I/O, then re-flush edits made during preparation.
   const transition = useCallback(async (prepare: () => Promise<() => void | Promise<void>>) => {
-    if (transitionRef.current || loadingRef.current) return;
-    transitionRef.current = true;
+    if (transitionRef.current || loadingRef.current) return
+    transitionRef.current = true
     try {
-      await flushRef.current?.();
-      const commit = await prepare();
-      await flushRef.current?.();
-      await commit();
-      setNavigationError(null);
+      await flushRef.current?.()
+      const commit = await prepare()
+      await flushRef.current?.()
+      await commit()
+      setNavigationError(null)
     } catch (error) {
-      console.error('[WhiteboardView] transition failed:', error);
-      setNavigationError('白板保存或切换失败，已保留当前画面，请重试。');
+      console.error('[WhiteboardView] transition failed:', error)
+      setNavigationError('白板保存或切换失败，已保留当前画面，请重试。')
     } finally {
-      transitionRef.current = false;
+      transitionRef.current = false
     }
-  }, []);
+  }, [])
   const beforeLeave = useCallback<WhiteboardBeforeLeave>(
-    (commit) => transition(async () => commit), [transition],
-  );
+    (commit) => transition(async () => commit),
+    [transition],
+  )
   useEffect(() => {
-    onBeforeLeaveReady?.(beforeLeave);
-    return () => onBeforeLeaveReady?.(null);
-  }, [beforeLeave, onBeforeLeaveReady]);
+    onBeforeLeaveReady?.(beforeLeave)
+    return () => onBeforeLeaveReady?.(null)
+  }, [beforeLeave, onBeforeLeaveReady])
 
   // 加载白板列表 + 激活白板 snapshot
   const refreshList = useCallback(async () => {
-    const list = await listWhiteboards();
-    setWhiteboards(list);
-    return list;
-  }, []);
+    const list = await listWhiteboards()
+    setWhiteboards(list)
+    return list
+  }, [])
 
   const loadSnapshotFor = useCallback(async (id: string) => {
-    const snap = await getWhiteboardSnapshot(id);
-    setSnapshot(snap);
-  }, []);
+    const snap = await getWhiteboardSnapshot(id)
+    setSnapshot(snap)
+  }, [])
 
   // 读取侧边栏宽度/收起设置
   useEffect(() => {
-    void getAppSettings().then((cfg) => {
-      setSidebarWidth(cfg.whiteboardSidebarWidth ?? 130);
-      setSidebarCollapsed(cfg.whiteboardSidebarCollapsed ?? false);
-    }).catch(() => {});
-  }, []);
+    void getAppSettings()
+      .then((cfg) => {
+        setSidebarWidth(cfg.whiteboardSidebarWidth ?? 130)
+        setSidebarCollapsed(cfg.whiteboardSidebarCollapsed ?? false)
+      })
+      .catch(() => {})
+  }, [])
 
-  const initialSidebarVisible = useRef(sidebarVisible);
+  const initialSidebarVisible = useRef(sidebarVisible)
   // Initialization must not replace a dirty canvas when the sidebar setting changes.
   useEffect(() => {
     void (async () => {
       try {
-        const list = await refreshList();
-        const active = await getActiveWhiteboardId();
+        const list = await refreshList()
+        const active = await getActiveWhiteboardId()
         if (active && list.some((w) => w.id === active)) {
-          setActiveId(active);
-          await loadSnapshotFor(active);
+          setActiveId(active)
+          await loadSnapshotFor(active)
         } else if (list.length > 0) {
-          setActiveId(list[0].id);
-          await setActiveWhiteboardId(list[0].id);
-          await loadSnapshotFor(list[0].id);
+          setActiveId(list[0].id)
+          await setActiveWhiteboardId(list[0].id)
+          await loadSnapshotFor(list[0].id)
         } else if (!initialSidebarVisible.current) {
           // 侧边栏隐藏时无白板：自动新建一个，避免用户无入口可点
-          const wb = await createWhiteboard();
-          await refreshList();
-          setActiveId(wb.id);
-          await setActiveWhiteboardId(wb.id);
-          setSnapshot(null);
+          const wb = await createWhiteboard()
+          await refreshList()
+          setActiveId(wb.id)
+          await setActiveWhiteboardId(wb.id)
+          setSnapshot(null)
         }
       } catch (err) {
-        console.error('[WhiteboardView] init failed:', err);
-        showToast('白板加载失败');
+        console.error('[WhiteboardView] init failed:', err)
+        showToast('白板加载失败')
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    })();
-  }, [refreshList, loadSnapshotFor, showToast]);
+    })()
+  }, [refreshList, loadSnapshotFor, showToast])
 
-  const handleCreate = useCallback(() => transition(async () => {
-    const wb = await createWhiteboard();
-    const list = await listWhiteboards();
-    if (!(await setActiveWhiteboardId(wb.id)).ok) throw new Error('Whiteboard activation failed');
-    return () => {
-      setWhiteboards(list);
-      setSnapshot(null);
-      setActiveId(wb.id);
-    };
-  }), [transition]);
+  const handleCreate = useCallback(
+    () =>
+      transition(async () => {
+        const wb = await createWhiteboard()
+        const list = await listWhiteboards()
+        if (!(await setActiveWhiteboardId(wb.id)).ok)
+          throw new Error('Whiteboard activation failed')
+        return () => {
+          setWhiteboards(list)
+          setSnapshot(null)
+          setActiveId(wb.id)
+        }
+      }),
+    [transition],
+  )
 
-  const handleSelect = useCallback((id: string) => {
-    if (id === activeId) return Promise.resolve();
-    return transition(async () => {
-      const nextSnapshot = await getWhiteboardSnapshot(id);
-      if (!(await setActiveWhiteboardId(id)).ok) throw new Error('Whiteboard activation failed');
-      return () => {
-        setSnapshot(nextSnapshot);
-        setActiveId(id);
-      };
-    });
-  }, [activeId, transition]);
+  const handleSelect = useCallback(
+    (id: string) => {
+      if (id === activeId) return Promise.resolve()
+      return transition(async () => {
+        const nextSnapshot = await getWhiteboardSnapshot(id)
+        if (!(await setActiveWhiteboardId(id)).ok) throw new Error('Whiteboard activation failed')
+        return () => {
+          setSnapshot(nextSnapshot)
+          setActiveId(id)
+        }
+      })
+    },
+    [activeId, transition],
+  )
 
   // 重命名
-  const handleRename = useCallback(async (id: string, title: string) => {
-    try {
-      await renameWhiteboard(id, title);
-      await refreshList();
-    } catch (err) {
-      console.error('[WhiteboardView] rename failed:', err);
-      showToast('重命名失败');
-    }
-  }, [refreshList, showToast]);
-
-  const handleDelete = useCallback((id: string) => transition(async () => {
-    const list = (await listWhiteboards()).filter((board) => board.id !== id);
-    const nextId = list[0]?.id ?? null;
-    const nextSnapshot = activeId === id && nextId ? await getWhiteboardSnapshot(nextId) : null;
-    return async () => {
-      // Deletion is an explicit destructive action; do it only after the final flush.
-      if (!(await deleteWhiteboard(id)).ok) throw new Error('Whiteboard deletion failed');
-      setWhiteboards(list);
-      if (activeId === id) {
-        setSnapshot(nextSnapshot);
-        setActiveId(nextId);
-        if (!(await setActiveWhiteboardId(nextId)).ok) throw new Error('Whiteboard activation failed');
+  const handleRename = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await renameWhiteboard(id, title)
+        await refreshList()
+      } catch (err) {
+        console.error('[WhiteboardView] rename failed:', err)
+        showToast('重命名失败')
       }
-    };
-  }), [activeId, transition]);
+    },
+    [refreshList, showToast],
+  )
+
+  const handleDelete = useCallback(
+    (id: string) =>
+      transition(async () => {
+        const list = (await listWhiteboards()).filter((board) => board.id !== id)
+        const nextId = list[0]?.id ?? null
+        const nextSnapshot = activeId === id && nextId ? await getWhiteboardSnapshot(nextId) : null
+        return async () => {
+          // Deletion is an explicit destructive action; do it only after the final flush.
+          if (!(await deleteWhiteboard(id)).ok) throw new Error('Whiteboard deletion failed')
+          setWhiteboards(list)
+          if (activeId === id) {
+            setSnapshot(nextSnapshot)
+            setActiveId(nextId)
+            if (!(await setActiveWhiteboardId(nextId)).ok)
+              throw new Error('Whiteboard activation failed')
+          }
+        }
+      }),
+    [activeId, transition],
+  )
 
   // 侧边栏拖拽调宽
   const handleSidebarResize = useCallback((w: number) => {
-    setSidebarWidth(w);
-    void updateAppSettings({ whiteboardSidebarWidth: w });
-  }, []);
+    setSidebarWidth(w)
+    void updateAppSettings({ whiteboardSidebarWidth: w })
+  }, [])
 
   // 侧边栏收起/展开
   const handleSidebarToggleCollapse = useCallback(() => {
-    const next = !sidebarCollapsed;
-    setSidebarCollapsed(next);
-    void updateAppSettings({ whiteboardSidebarCollapsed: next });
-  }, [sidebarCollapsed]);
+    const next = !sidebarCollapsed
+    setSidebarCollapsed(next)
+    void updateAppSettings({ whiteboardSidebarCollapsed: next })
+  }, [sidebarCollapsed])
 
   if (loading) {
     return (
-      <div className="whiteboard-view app-view-root" data-name="advanced-panel.whiteboard-view-loading">
-        <EmptyState message="加载中…" loading className="whiteboard-empty" data-name="advanced-panel.whiteboard-loading-text" />
+      <div
+        className="whiteboard-view app-view-root"
+        data-name="advanced-panel.whiteboard-view-loading"
+      >
+        <EmptyState
+          message="加载中…"
+          loading
+          className="whiteboard-empty"
+          data-name="advanced-panel.whiteboard-loading-text"
+        />
       </div>
-    );
+    )
   }
 
   return (
@@ -656,24 +767,42 @@ function WhiteboardView({ onClose, sidebarVisible = false, onOpenSettings, onBef
         ) : (
           <div className="wb-canvas-empty" data-name="advanced-panel.wb-canvas-empty">
             <EmptyState
-              message={<>
-                {sidebarVisible ? '点击左侧 "+" 新建白板' : '正在初始化白板…'}
-                {onClose && (
-                  <button className="btn-outline wb-canvas-empty-btn" onClick={onClose} data-name="advanced-panel.wb-canvas-empty-back-button">
-                    返回
-                  </button>
-                )}
-              </>}
+              message={
+                <>
+                  {sidebarVisible ? '点击左侧 "+" 新建白板' : '正在初始化白板…'}
+                  {onClose && (
+                    <button
+                      className="btn-outline wb-canvas-empty-btn"
+                      onClick={onClose}
+                      data-name="advanced-panel.wb-canvas-empty-back-button"
+                    >
+                      返回
+                    </button>
+                  )}
+                </>
+              }
               className="wb-canvas-empty-text"
               data-name="advanced-panel.wb-canvas-empty-text"
             />
           </div>
         )}
       </div>
-      {navigationError && <div role="alert" className="whiteboard-toast app-toast" data-name="advanced-panel.wb-navigation-error">{navigationError}</div>}
-      {!navigationError && toast && <div className="whiteboard-toast app-toast" data-name="advanced-panel.whiteboard-toast">{toast}</div>}
+      {navigationError && (
+        <div
+          role="alert"
+          className="whiteboard-toast app-toast"
+          data-name="advanced-panel.wb-navigation-error"
+        >
+          {navigationError}
+        </div>
+      )}
+      {!navigationError && toast && (
+        <div className="whiteboard-toast app-toast" data-name="advanced-panel.whiteboard-toast">
+          {toast}
+        </div>
+      )}
     </div>
-  );
+  )
 }
 
-export default WhiteboardView;
+export default WhiteboardView

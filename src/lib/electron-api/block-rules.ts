@@ -2,32 +2,29 @@
    lib/electron-api/block-rules.ts —— 页面组件屏蔽规则
    ===================================================================== */
 
-import type { BlockRule } from '../../../electron/shared/types';
-import { requireElectron } from './core';
+import type { BlockRule } from '../../../electron/shared/types'
+import { requireElectron } from './core'
 
 /** 读取全部屏蔽规则 */
 export function listBlockRules(): Promise<BlockRule[]> {
-  return requireElectron().blockRules.list();
+  return requireElectron().blockRules.list()
 }
 
 export function onBlockRulesChanged(callback: () => void): () => void {
-  return requireElectron().blockRules.onChanged(callback);
+  return requireElectron().blockRules.onChanged(callback)
 }
 
 /** 新增或更新屏蔽规则（upsert） */
 export function saveBlockRule(rule: BlockRule): Promise<BlockRule> {
-  return requireElectron().blockRules.save(rule);
+  return requireElectron().blockRules.save(rule)
 }
 
 /** 删除屏蔽规则（内置规则不可删除） */
 export function deleteBlockRule(id: string): Promise<void> {
-  return requireElectron().blockRules.delete(id);
+  return requireElectron().blockRules.delete(id)
 }
 
 /** 更新屏蔽规则（部分字段） */
-export function updateBlockRule(
-  id: string,
-  patch: Partial<BlockRule>,
-): Promise<BlockRule | null> {
-  return requireElectron().blockRules.update(id, patch);
+export function updateBlockRule(id: string, patch: Partial<BlockRule>): Promise<BlockRule | null> {
+  return requireElectron().blockRules.update(id, patch)
 }

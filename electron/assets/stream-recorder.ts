@@ -17,10 +17,15 @@ export class StreamAssetRecorder {
     if (this.finished || !delta) return
     if (kind === 'output') this.content += delta
     else this.reasoning += delta
-    if (!this.timer) this.timer = setTimeout(() => {
-      this.timer = undefined
-      try { this.flush('streaming') } catch (error) { this.failure = error instanceof Error ? error : new Error(String(error)) }
-    }, this.flushDelay())
+    if (!this.timer)
+      this.timer = setTimeout(() => {
+        this.timer = undefined
+        try {
+          this.flush('streaming')
+        } catch (error) {
+          this.failure = error instanceof Error ? error : new Error(String(error))
+        }
+      }, this.flushDelay())
   }
   /**
    * 流式刷盘间隔随累积体量放宽：每次刷盘都要整行重写累积全文并重算内容摘要，
@@ -34,7 +39,8 @@ export class StreamAssetRecorder {
     return 2000
   }
   private flush(status: AssetMessageStatus): void {
-    if (this.content || this.reasoning) this.persist({ content: this.content, reasoning: this.reasoning, status })
+    if (this.content || this.reasoning)
+      this.persist({ content: this.content, reasoning: this.reasoning, status })
   }
   finish(status: AssetMessageStatus, content?: string): void {
     if (this.finished) return
@@ -45,6 +51,10 @@ export class StreamAssetRecorder {
     this.finished = true
     this.failure = undefined
   }
-  get received(): boolean { return !!(this.content || this.reasoning) }
-  get persistenceError(): Error | undefined { return this.failure }
+  get received(): boolean {
+    return !!(this.content || this.reasoning)
+  }
+  get persistenceError(): Error | undefined {
+    return this.failure
+  }
 }

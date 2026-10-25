@@ -48,7 +48,8 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
   {
     id: 'custom-chat',
     name: '自定义对话 API',
-    description: 'OpenAI / Anthropic / Custom 三协议直连：自定义供应商、SSE 流式对话、SQLite 会话持久化',
+    description:
+      'OpenAI / Anthropic / Custom 三协议直连：自定义供应商、SSE 流式对话、SQLite 会话持久化',
     category: 'stable',
     sizeLevel: 'small',
     testBadge: false,
@@ -97,8 +98,7 @@ export const BUILTIN_MODULE_INSTALL_DATA: BuiltinModuleData[] = [
   {
     id: 'browser',
     name: '浏览器',
-    description:
-      '多标签浏览器：导航、书签、下载、历史、搜索及网页手柄映射',
+    description: '多标签浏览器：导航、书签、下载、历史、搜索及网页手柄映射',
     category: 'stable',
     sizeLevel: 'small',
     testBadge: false,

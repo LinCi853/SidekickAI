@@ -7,21 +7,21 @@
    - 在输入框/文本域中不触发（避免影响用户输入）
    ===================================================================== */
 
-import { useEffect, useRef } from 'react';
-import { usePromptStore } from '../store/usePromptStore';
-import { getHotkeys } from '../lib/electron-api';
-import { keyEventToAccelerator, detectPromptHotkeyConflicts } from '../lib/prompt-hotkey';
-import { isTypingTarget } from '../lib/shared-utils';
-import { registerShortcutDocs, unregisterShortcutDocs } from '../store/useShortcutDocStore';
-import { formatAcc } from '../lib/shortcut-reference';
-import type { PromptTemplate } from '../lib/electron-api';
-import { hasUsablePromptContent } from '../../electron/shared/prompt-template';
+import { useEffect, useRef } from 'react'
+import { usePromptStore } from '../store/usePromptStore'
+import { getHotkeys } from '../lib/electron-api'
+import { keyEventToAccelerator, detectPromptHotkeyConflicts } from '../lib/prompt-hotkey'
+import { isTypingTarget } from '../lib/shared-utils'
+import { registerShortcutDocs, unregisterShortcutDocs } from '../store/useShortcutDocStore'
+import { formatAcc } from '../lib/shortcut-reference'
+import type { PromptTemplate } from '../lib/electron-api'
+import { hasUsablePromptContent } from '../../electron/shared/prompt-template'
 
 export interface UsePromptHotkeysOptions {
   /** 命中快捷键时调用（传入匹配的 prompt 模板）
    *  options.skipPreview: true 表示用户在 800ms 内连续按两次同一快捷键，跳过预览直接注入
    */
-  onTriggered: (template: PromptTemplate, options?: { skipPreview?: boolean }) => void;
+  onTriggered: (template: PromptTemplate, options?: { skipPreview?: boolean }) => void
 }
 
 /**
@@ -33,98 +33,108 @@ export interface UsePromptHotkeysOptions {
  */
 export function usePromptHotkeys({ onTriggered }: UsePromptHotkeysOptions): void {
   // 最新的 onTriggered 回调（避免依赖变化导致频繁重注册监听器）
-  const onTriggeredRef = useRef(onTriggered);
-  onTriggeredRef.current = onTriggered;
+  const onTriggeredRef = useRef(onTriggered)
+  onTriggeredRef.current = onTriggered
 
   // 最新的 accelerator → prompt 映射（避免闭包过期）
-  const hotkeyMapRef = useRef<Map<string, PromptTemplate>>(new Map());
+  const hotkeyMapRef = useRef<Map<string, PromptTemplate>>(new Map())
 
   // 上次触发的 promptId 和时间戳，用于检测"双击跳过预览"
   // 800ms 内同一 prompt 快捷键按两次 → 第二次跳过预览直接注入
-  const lastTriggerRef = useRef<{ promptId: string; time: number } | null>(null);
+  const lastTriggerRef = useRef<{ promptId: string; time: number } | null>(null)
 
   useEffect(() => {
-    let cancelled = false;
-    let requestRevision = 0;
+    let cancelled = false
+    let requestRevision = 0
 
     const rebuildMap = async () => {
-      const revision = ++requestRevision;
+      const revision = ++requestRevision
       // 拉取主进程全局热键用于冲突检测
-      let appHotkeys: Awaited<ReturnType<typeof getHotkeys>> = [];
+      let appHotkeys: Awaited<ReturnType<typeof getHotkeys>> = []
       try {
-        appHotkeys = await getHotkeys();
+        appHotkeys = await getHotkeys()
       } catch (e) {
-        console.warn('[usePromptHotkeys] 加载全局热键失败，跳过冲突检测:', e);
+        console.warn('[usePromptHotkeys] 加载全局热键失败，跳过冲突检测:', e)
       }
-      if (cancelled || revision !== requestRevision) return;
-      const prompts = usePromptStore.getState().prompts.filter(hasUsablePromptContent);
+      if (cancelled || revision !== requestRevision) return
+      const prompts = usePromptStore.getState().prompts.filter(hasUsablePromptContent)
 
-      const conflicts = detectPromptHotkeyConflicts(prompts, appHotkeys);
+      const conflicts = detectPromptHotkeyConflicts(prompts, appHotkeys)
       for (const [, msg] of conflicts) {
-        console.warn(`[usePromptHotkeys] ${msg}`);
+        console.warn(`[usePromptHotkeys] ${msg}`)
       }
 
-      const map = new Map<string, PromptTemplate>();
+      const map = new Map<string, PromptTemplate>()
       for (const p of prompts) {
-        if (!p.hotkey) continue;
-        if (conflicts.has(p.id)) continue; // 跳过冲突的
-        map.set(p.hotkey, p);
+        if (!p.hotkey) continue
+        if (conflicts.has(p.id)) continue // 跳过冲突的
+        map.set(p.hotkey, p)
       }
-      hotkeyMapRef.current = map;
+      hotkeyMapRef.current = map
 
       // 注册即声明：实际生效的提示词快捷键登记进注册表（弹窗实时展示）
-      registerShortcutDocs('prompt-hotkeys', Array.from(map.entries()).map(([acc, p]) => ({
-        id: `prompt.${p.id}`,
-        keys: formatAcc(acc),
-        action: `插入提示词「${p.title}」`,
-        category: 'page' as const,
-        note: '短时间内的第二次按下跳过预览直接插入',
-      })));
-    };
+      registerShortcutDocs(
+        'prompt-hotkeys',
+        Array.from(map.entries()).map(([acc, p]) => ({
+          id: `prompt.${p.id}`,
+          keys: formatAcc(acc),
+          action: `插入提示词「${p.title}」`,
+          category: 'page' as const,
+          note: '短时间内的第二次按下跳过预览直接插入',
+        })),
+      )
+    }
 
-    void rebuildMap();
+    void rebuildMap()
 
     // 订阅 prompt store 变化
     const unsub = usePromptStore.subscribe(() => {
-      void rebuildMap();
-    });
+      void rebuildMap()
+    })
 
     return () => {
-      cancelled = true;
-      unsub();
-      unregisterShortcutDocs('prompt-hotkeys');
-    };
-  }, []);
+      cancelled = true
+      unsub()
+      unregisterShortcutDocs('prompt-hotkeys')
+    }
+  }, [])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // 在输入框/文本域/contenteditable 中不触发
-      if (isTypingTarget(e.target)) return;
-      const acc = keyEventToAccelerator(e);
-      if (!acc) return;
-      const mapped = hotkeyMapRef.current.get(acc);
-      const matched = mapped && usePromptStore.getState().prompts.find(prompt => prompt.id === mapped.id && prompt.hotkey === acc && hasUsablePromptContent(prompt));
+      if (isTypingTarget(e.target)) return
+      const acc = keyEventToAccelerator(e)
+      if (!acc) return
+      const mapped = hotkeyMapRef.current.get(acc)
+      const matched =
+        mapped &&
+        usePromptStore
+          .getState()
+          .prompts.find(
+            (prompt) =>
+              prompt.id === mapped.id && prompt.hotkey === acc && hasUsablePromptContent(prompt),
+          )
       if (matched) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault()
+        e.stopPropagation()
         // 双击跳过预览：800ms 内同一 prompt 快捷键按两次，第二次直接注入不弹预览
-        const now = Date.now();
-        const last = lastTriggerRef.current;
+        const now = Date.now()
+        const last = lastTriggerRef.current
         if (last && last.promptId === matched.id && now - last.time < 800) {
           // 第二次触发：跳过预览，并清除 lastTrigger
-          lastTriggerRef.current = null;
-          onTriggeredRef.current(matched, { skipPreview: true });
+          lastTriggerRef.current = null
+          onTriggeredRef.current(matched, { skipPreview: true })
         } else {
           // 第一次触发：记录时间戳，正常弹预览
-          lastTriggerRef.current = { promptId: matched.id, time: now };
-          onTriggeredRef.current(matched, { skipPreview: false });
+          lastTriggerRef.current = { promptId: matched.id, time: now }
+          onTriggeredRef.current(matched, { skipPreview: false })
         }
       }
-    };
+    }
     // 使用捕获阶段，确保在 webview 等子元素之前拦截
-    window.addEventListener('keydown', handler, true);
+    window.addEventListener('keydown', handler, true)
     return () => {
-      window.removeEventListener('keydown', handler, true);
-    };
-  }, []);
+      window.removeEventListener('keydown', handler, true)
+    }
+  }, [])
 }

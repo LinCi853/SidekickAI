@@ -5,18 +5,30 @@ const fixture = vi.hoisted(() => ({
   failures: new Set<string>(),
   hook: { on: vi.fn(), start: vi.fn(), stop: vi.fn() },
 }))
-vi.mock('electron', () => ({ globalShortcut: {
-  register: (accelerator: string, callback: () => void) => {
-    if (fixture.failures.has(accelerator) || fixture.callbacks.has(accelerator)) return false
-    fixture.callbacks.set(accelerator, callback)
-    return true
+vi.mock('electron', () => ({
+  globalShortcut: {
+    register: (accelerator: string, callback: () => void) => {
+      if (fixture.failures.has(accelerator) || fixture.callbacks.has(accelerator)) return false
+      fixture.callbacks.set(accelerator, callback)
+      return true
+    },
+    unregister: (accelerator: string) => fixture.callbacks.delete(accelerator),
+    unregisterAll: () => fixture.callbacks.clear(),
+    isRegistered: (accelerator: string) => fixture.callbacks.has(accelerator),
   },
-  unregister: (accelerator: string) => fixture.callbacks.delete(accelerator),
-  unregisterAll: () => fixture.callbacks.clear(),
-  isRegistered: (accelerator: string) => fixture.callbacks.has(accelerator),
-} }))
+}))
 vi.mock('./uiohook.js', () => ({
-  UiohookKey: { Space: 32, Q: 81, K: 75, V: 86, Escape: 27, LeftAlt: 56, LeftControl: 29, LeftShift: 42, LeftMeta: 3675 },
+  UiohookKey: {
+    Space: 32,
+    Q: 81,
+    K: 75,
+    V: 86,
+    Escape: 27,
+    LeftAlt: 56,
+    LeftControl: 29,
+    LeftShift: 42,
+    LeftMeta: 3675,
+  },
   EventType: { EVENT_KEY_PRESSED: 7, EVENT_KEY_RELEASED: 8 },
   uIOhook: fixture.hook,
   getUiohookAvailability: () => ({ available: true, error: null }),
@@ -29,7 +41,9 @@ vi.mock('./store.js', () => ({
   enabledStoreKey: (action: string) => action,
 }))
 vi.mock('../../utils/permission-manager.js', () => ({ checkAccessibilityPermission: () => true }))
-vi.mock('../../utils/browser-hotkey-fallback.js', () => ({ dispatchBrowserHotkeyFallback: vi.fn() }))
+vi.mock('../../utils/browser-hotkey-fallback.js', () => ({
+  dispatchBrowserHotkeyFallback: vi.fn(),
+}))
 
 import { HotkeyManager } from './manager'
 
@@ -79,7 +93,8 @@ describe('recording registration restoration', () => {
   })
 
   it('restores the current callback when a binding changes during recording', async () => {
-    const previous = vi.fn(), current = vi.fn()
+    const previous = vi.fn(),
+      current = vi.fn()
     await manager.register('Alt+Q', previous)
     const previousSystemCallback = fixture.callbacks.get('Alt+Q')!
     await manager.startRecording(vi.fn())

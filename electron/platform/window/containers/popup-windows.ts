@@ -4,10 +4,7 @@ import { setAssetNavigation } from '../../../assets/navigation.js'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels.js'
 import type { AssetNavigation } from '../../../shared/ai-assets.types.js'
 import type { SettingsCategory } from '../../../shared/api/settings-options.js'
-import {
-  PROMPT_WINDOW_ID,
-  createSingletonPopupWindow,
-} from '../helpers.js'
+import { PROMPT_WINDOW_ID, createSingletonPopupWindow } from '../helpers.js'
 
 /** The legacy search action opens the shared asset window. */
 export function showHistoryWindow(): void {
@@ -28,7 +25,9 @@ export function showPromptWindow(request: AssetNavigation = {}): void {
     mode: 'prompts',
     ownerModule: 'prompt-library',
     getExisting: () => windowState.promptWindow,
-    setWindow: (win) => { windowState.promptWindow = win },
+    setWindow: (win) => {
+      windowState.promptWindow = win
+    },
   })
   win.webContents.send(IPC_CHANNELS.ASSET_NAVIGATION, navigation)
 }
@@ -40,15 +39,13 @@ export function showPromptWindow(request: AssetNavigation = {}): void {
  * windowId 编码全部 opts（Base64 JSON），供渲染器解析。
  */
 export function showAiAppEditorWindow(opts: {
-  platformId?: string;
-  profileId?: string;
-  mode?: 'edit' | 'create';
+  platformId?: string
+  profileId?: string
+  mode?: 'edit' | 'create'
 }): void {
   // 单例 key：编辑模式用 profileId，新建模式固定 'create'
   const windowKey =
-    opts.mode === 'create'
-      ? 'create'
-      : opts.profileId ?? opts.platformId ?? 'default'
+    opts.mode === 'create' ? 'create' : (opts.profileId ?? opts.platformId ?? 'default')
 
   // windowId 编码全部 opts（Base64 JSON），供渲染器解析
   const encodedOpts = Buffer.from(JSON.stringify(opts)).toString('base64')
@@ -84,7 +81,9 @@ export function showDataExportWindow(): void {
     windowId: 'data-export',
     mode: 'data-export',
     getExisting: () => windowState.dataExportWindow,
-    setWindow: (win) => { windowState.dataExportWindow = win },
+    setWindow: (win) => {
+      windowState.dataExportWindow = win
+    },
   })
 }
 
@@ -103,7 +102,9 @@ export function showSettingsWindow(category?: SettingsCategory): void {
     windowId: 'settings',
     mode: 'settings',
     getExisting: () => windowState.settingsWindow,
-    setWindow: (win) => { windowState.settingsWindow = win },
+    setWindow: (win) => {
+      windowState.settingsWindow = win
+    },
     extraQuery: category ? { category } : undefined,
   })
   // 单例复用时通知切换分类；新建窗口也发一次（渲染层已挂载则立即生效，未挂载则由 URL query 兜底）

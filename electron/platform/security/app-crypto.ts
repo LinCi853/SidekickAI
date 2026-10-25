@@ -159,10 +159,7 @@ export function decryptWithPassword(ciphertext: string, password: string): strin
   const salt = combined.subarray(0, PW_SALT_LENGTH)
   const iv = combined.subarray(PW_SALT_LENGTH, PW_SALT_LENGTH + IV_LENGTH)
   const authTag = combined.subarray(combined.length - AUTH_TAG_LENGTH)
-  const encrypted = combined.subarray(
-    PW_SALT_LENGTH + IV_LENGTH,
-    combined.length - AUTH_TAG_LENGTH,
-  )
+  const encrypted = combined.subarray(PW_SALT_LENGTH + IV_LENGTH, combined.length - AUTH_TAG_LENGTH)
 
   const key = pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256')
   const decipher = createDecipheriv('aes-256-gcm', key, iv)

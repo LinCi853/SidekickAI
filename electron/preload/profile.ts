@@ -6,7 +6,8 @@ export const profileApi = {
   profile: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_LIST),
     create: (partial: Partial<Profile>) => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_CREATE, partial),
-    update: (id: string, patch: Partial<Profile>) => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_UPDATE, id, patch),
+    update: (id: string, patch: Partial<Profile>) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PROFILE_UPDATE, id, patch),
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_DELETE, id),
     duplicate: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_DUPLICATE, id),
     reorder: (orderedIds: string[]) => ipcRenderer.invoke(IPC_CHANNELS.PROFILE_REORDER, orderedIds),
@@ -41,7 +42,8 @@ export const profileApi = {
     get: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PRESETS_GET, id),
     save: (preset: unknown) => ipcRenderer.invoke(IPC_CHANNELS.PRESETS_SAVE, preset),
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PRESETS_DELETE, id),
-    update: (id: string, patch: unknown) => ipcRenderer.invoke(IPC_CHANNELS.PRESETS_UPDATE, id, patch),
+    update: (id: string, patch: unknown) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PRESETS_UPDATE, id, patch),
   },
   // 指纹脚本（单页架构：渲染进程取脚本注入 webview）
   fingerprint: {

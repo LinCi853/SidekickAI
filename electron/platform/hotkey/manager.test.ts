@@ -19,11 +19,20 @@ const fixture = vi.hoisted(() => ({
 vi.mock('electron', () => ({ globalShortcut: fixture.globalShortcut }))
 vi.mock('./uiohook.js', () => ({
   UiohookKey: {
-    Space: 32, Q: 81, V: 86, Escape: 27,
-    A: 65, K: 75, LeftAlt: 56, RightAlt: 584,
-    LeftControl: 29, RightControl: 585,
-    LeftShift: 42, RightShift: 54,
-    LeftMeta: 3675, RightMeta: 3676,
+    Space: 32,
+    Q: 81,
+    V: 86,
+    Escape: 27,
+    A: 65,
+    K: 75,
+    LeftAlt: 56,
+    RightAlt: 584,
+    LeftControl: 29,
+    RightControl: 585,
+    LeftShift: 42,
+    RightShift: 54,
+    LeftMeta: 3675,
+    RightMeta: 3676,
   },
   EventType: { EVENT_KEY_PRESSED: 7, EVENT_KEY_RELEASED: 8 },
   uIOhook: fixture.uiohook,
@@ -31,7 +40,10 @@ vi.mock('./uiohook.js', () => ({
 }))
 vi.mock('./store.js', () => ({
   DEFAULT_HOTKEYS: { toggleMainWindow: 'Alt+Space', toggleDetachedWindows: 'Alt+Q' },
-  HOTKEY_LABELS: { toggleMainWindow: '显示/隐藏主窗口', toggleDetachedWindows: '显示/隐藏脱离窗口' },
+  HOTKEY_LABELS: {
+    toggleMainWindow: '显示/隐藏主窗口',
+    toggleDetachedWindows: '显示/隐藏脱离窗口',
+  },
   hotkeyStore: { get: fixture.storeGet, set: vi.fn() },
   storeKey: (action: string) => `hotkey.${action}`,
   enabledStoreKey: (action: string) => `hotkey.enabled.${action}`,
@@ -86,7 +98,11 @@ describe('HotkeyManager 编排', () => {
   })
 
   it('registerVoiceHotkey：uiohook 路径注册成功，cleanup 后状态复位', () => {
-    const cleanup = manager.registerVoiceHotkey('Alt+V', () => {}, () => {})
+    const cleanup = manager.registerVoiceHotkey(
+      'Alt+V',
+      () => {},
+      () => {},
+    )
     expect(typeof cleanup).toBe('function')
     expect(manager.getStatus()).toMatchObject({ voiceHotkeyRegistered: true, uiohookStarted: true })
     cleanup()
@@ -94,7 +110,10 @@ describe('HotkeyManager 编排', () => {
   })
 
   it('registerDefaultShortcuts：默认两个内置热键注册成功并记录 accelerator', async () => {
-    const results = await manager.registerDefaultShortcuts({ toggleMainWindow: () => {}, toggleDetachedWindows: () => {} })
+    const results = await manager.registerDefaultShortcuts({
+      toggleMainWindow: () => {},
+      toggleDetachedWindows: () => {},
+    })
     expect(results).toEqual({ toggleMainWindow: true, toggleDetachedWindows: true })
     expect(manager.getActionAccelerator('toggleMainWindow')).toBe('Alt+Space')
     expect(manager.getAllHotkeys()).toHaveLength(2)

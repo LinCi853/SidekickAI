@@ -12,9 +12,9 @@ import {
   type AppSettings,
   type DevicePreset,
   type TopBarButtonGroup,
-} from '../../lib/electron-api';
-import type { ThemeMode } from '../../store/useThemeStore';
-import { Chip, Toggle } from '../../components/ui';
+} from '../../lib/electron-api'
+import type { ThemeMode } from '../../store/useThemeStore'
+import { Chip, Toggle } from '../../components/ui'
 
 /** 顶栏按钮组 → 展示名 */
 const TOP_BAR_BUTTON_LABELS: Record<TopBarButtonGroup, string> = {
@@ -24,18 +24,18 @@ const TOP_BAR_BUTTON_LABELS: Record<TopBarButtonGroup, string> = {
   navHome: '主页',
   themeToggle: '主题',
   pinToggle: '置顶',
-};
+}
 
 interface PersonalizeStepProps {
-  settings: AppSettings;
-  presets: DevicePreset[];
-  isOxy: boolean;
-  theme: ThemeMode;
-  setTheme: (mode: ThemeMode) => void;
+  settings: AppSettings
+  presets: DevicePreset[]
+  isOxy: boolean
+  theme: ThemeMode
+  setTheme: (mode: ThemeMode) => void
   /** Oxy 界面系统开关（开启后主题/界面大小由系统自动管理；关闭时恢复用户手动比例） */
-  onOxyToggle: (next: boolean) => Promise<void>;
-  updateField: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>;
-  toggleTopBarGroup: (group: TopBarButtonGroup) => void;
+  onOxyToggle: (next: boolean) => Promise<void>
+  updateField: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
+  toggleTopBarGroup: (group: TopBarButtonGroup) => void
 }
 
 export default function PersonalizeStep({
@@ -48,10 +48,13 @@ export default function PersonalizeStep({
   updateField,
   toggleTopBarGroup,
 }: PersonalizeStepProps) {
-  const desktopPresets = presets.filter((p) => p.platform === 'desktop');
+  const desktopPresets = presets.filter((p) => p.platform === 'desktop')
 
   return (
-    <div className="onboarding-page onboarding-page-scrollable" data-name="onboarding.page-personalize">
+    <div
+      className="onboarding-page onboarding-page-scrollable"
+      data-name="onboarding.page-personalize"
+    >
       <h2 className="onboarding-page-title">个性化</h2>
       <p className="onboarding-page-desc">按你的习惯调整，稍后可在设置中修改。</p>
       <div className="onboarding-settings-grid">
@@ -65,11 +68,7 @@ export default function PersonalizeStep({
                 : '开启后自动管理主题、界面大小与整体布局'}
             </span>
           </div>
-          <Toggle
-            checked={isOxy}
-            onChange={(v) => void onOxyToggle(v)}
-            aria-label="Oxy 界面系统"
-          />
+          <Toggle checked={isOxy} onChange={(v) => void onOxyToggle(v)} aria-label="Oxy 界面系统" />
         </div>
         {/* Oxy 关闭时：主题与界面大小手动配置 */}
         {!isOxy && (
@@ -79,7 +78,12 @@ export default function PersonalizeStep({
               <div className="onboarding-radio-row">
                 {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => (
                   <label key={m} className={`onboarding-radio${theme === m ? ' is-active' : ''}`}>
-                    <input type="radio" name="theme" checked={theme === m} onChange={() => setTheme(m)} />
+                    <input
+                      type="radio"
+                      name="theme"
+                      checked={theme === m}
+                      onChange={() => setTheme(m)}
+                    />
                     <span>{m === 'light' ? '亮色' : m === 'dark' ? '暗色' : '跟随系统'}</span>
                   </label>
                 ))}
@@ -89,8 +93,16 @@ export default function PersonalizeStep({
               <label className="onboarding-setting-label">界面大小</label>
               <div className="onboarding-radio-row">
                 {(['small', 'medium', 'large'] as const).map((s) => (
-                  <label key={s} className={`onboarding-radio${settings.uiScale === s ? ' is-active' : ''}`}>
-                    <input type="radio" name="uiScale" checked={settings.uiScale === s} onChange={() => void updateField('uiScale', s)} />
+                  <label
+                    key={s}
+                    className={`onboarding-radio${settings.uiScale === s ? ' is-active' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="uiScale"
+                      checked={settings.uiScale === s}
+                      onChange={() => void updateField('uiScale', s)}
+                    />
                     <span>{s === 'small' ? '紧凑' : s === 'medium' ? '标准' : '大号'}</span>
                   </label>
                 ))}
@@ -103,8 +115,16 @@ export default function PersonalizeStep({
           <label className="onboarding-setting-label">关闭按钮</label>
           <div className="onboarding-radio-row">
             {(['minimize', 'close'] as const).map((b) => (
-              <label key={b} className={`onboarding-radio${settings.closeBehavior === b ? ' is-active' : ''}`}>
-                <input type="radio" name="closeBehavior" checked={settings.closeBehavior === b} onChange={() => void updateField('closeBehavior', b)} />
+              <label
+                key={b}
+                className={`onboarding-radio${settings.closeBehavior === b ? ' is-active' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="closeBehavior"
+                  checked={settings.closeBehavior === b}
+                  onChange={() => void updateField('closeBehavior', b)}
+                />
                 <span>{b === 'minimize' ? '最小化到托盘' : '直接退出'}</span>
               </label>
             ))}
@@ -115,8 +135,16 @@ export default function PersonalizeStep({
           <label className="onboarding-setting-label">启动时打开</label>
           <div className="onboarding-radio-row">
             {(['home', 'lastConversation'] as const).map((s) => (
-              <label key={s} className={`onboarding-radio${settings.startupOpen === s ? ' is-active' : ''}`}>
-                <input type="radio" name="startupOpen" checked={settings.startupOpen === s} onChange={() => void updateField('startupOpen', s)} />
+              <label
+                key={s}
+                className={`onboarding-radio${settings.startupOpen === s ? ' is-active' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="startupOpen"
+                  checked={settings.startupOpen === s}
+                  onChange={() => void updateField('startupOpen', s)}
+                />
                 <span>{s === 'home' ? '平台首页' : '最近对话'}</span>
               </label>
             ))}
@@ -158,7 +186,9 @@ export default function PersonalizeStep({
         <div className="onboarding-setting-item onboarding-setting-row-wide">
           <div className="onboarding-setting-text">
             <label className="onboarding-setting-label">默认桌面 UA</label>
-            <span className="onboarding-setting-hint">新建应用的默认桌面 User-Agent 预设，顶栏可随时切换</span>
+            <span className="onboarding-setting-hint">
+              新建应用的默认桌面 User-Agent 预设，顶栏可随时切换
+            </span>
           </div>
           <div className="onboarding-chip-row">
             {desktopPresets.map((p, idx) => (
@@ -178,7 +208,9 @@ export default function PersonalizeStep({
         <div className="onboarding-setting-item onboarding-setting-row-wide">
           <div className="onboarding-setting-text">
             <label className="onboarding-setting-label">导入智能体 API</label>
-            <span className="onboarding-setting-hint">添加自定义 AI 应用，接入 OpenAI 兼容协议等任意服务</span>
+            <span className="onboarding-setting-hint">
+              添加自定义 AI 应用，接入 OpenAI 兼容协议等任意服务
+            </span>
           </div>
           <button
             type="button"
@@ -191,5 +223,5 @@ export default function PersonalizeStep({
         </div>
       </div>
     </div>
-  );
+  )
 }

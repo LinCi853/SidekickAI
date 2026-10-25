@@ -12,32 +12,29 @@
    - 头部徽标标明当前页面（内容随页面实时变化）
    ===================================================================== */
 
-import './ShortcutsModal.css';
-import { useMemo } from 'react';
-import { IconButton } from './ui';
-import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow';
-import { useShortcutDocStore, selectShortcutDocs } from '../store/useShortcutDocStore';
-import { getShortcutPageId, SHORTCUT_PAGE_TITLES } from '../lib/shortcut-reference';
-import type { ShortcutPageId } from '../lib/shortcut-reference';
+import './ShortcutsModal.css'
+import { useMemo } from 'react'
+import { IconButton } from './ui'
+import { useEscToCloseOverlay } from '../hooks/useEscToCloseWindow'
+import { useShortcutDocStore, selectShortcutDocs } from '../store/useShortcutDocStore'
+import { getShortcutPageId, SHORTCUT_PAGE_TITLES } from '../lib/shortcut-reference'
+import type { ShortcutPageId } from '../lib/shortcut-reference'
 
 export interface ShortcutsModalProps {
-  open: boolean;
-  onClose: () => void;
+  open: boolean
+  onClose: () => void
   /** 页面 ID（默认按当前 URL 推导；测试或特殊场景可显式传入） */
-  pageId?: ShortcutPageId;
+  pageId?: ShortcutPageId
 }
 
 export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModalProps) {
   // ESC 关闭快捷键说明面板
-  useEscToCloseOverlay(open, onClose);
+  useEscToCloseOverlay(open, onClose)
 
-  const resolvedPageId = pageId ?? getShortcutPageId();
-  const pageTitle = SHORTCUT_PAGE_TITLES[resolvedPageId];
-  const sources = useShortcutDocStore((s) => s.sources);
-  const docs = useMemo(
-    () => selectShortcutDocs(sources).filter((s) => !s.disabled),
-    [sources],
-  );
+  const resolvedPageId = pageId ?? getShortcutPageId()
+  const pageTitle = SHORTCUT_PAGE_TITLES[resolvedPageId]
+  const sources = useShortcutDocStore((s) => s.sources)
+  const docs = useMemo(() => selectShortcutDocs(sources).filter((s) => !s.disabled), [sources])
 
   return (
     <div
@@ -99,11 +96,24 @@ export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModal
                 >
                   {s.keys}
                 </div>
-                <div className="shortcuts-action" data-name={`component.shortcuts-modal.item-action-${s.id}`}>
-                  <span className="shortcuts-action-text" data-name={`component.shortcuts-modal.item-action-text-${s.id}`}>
+                <div
+                  className="shortcuts-action"
+                  data-name={`component.shortcuts-modal.item-action-${s.id}`}
+                >
+                  <span
+                    className="shortcuts-action-text"
+                    data-name={`component.shortcuts-modal.item-action-text-${s.id}`}
+                  >
                     {s.action}
                   </span>
-                  {s.note && <div className="shortcuts-note" data-name={`component.shortcuts-modal.item-note-${s.id}`}>{s.note}</div>}
+                  {s.note && (
+                    <div
+                      className="shortcuts-note"
+                      data-name={`component.shortcuts-modal.item-note-${s.id}`}
+                    >
+                      {s.note}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -111,5 +121,5 @@ export default function ShortcutsModal({ open, onClose, pageId }: ShortcutsModal
         </div>
       </div>
     </div>
-  );
+  )
 }

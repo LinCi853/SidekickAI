@@ -42,7 +42,10 @@ vi.mock('../store/low-memory-mode.js', () => ({
   isLowMemoryMode: () => settings.lowMemoryMode === true,
 }))
 
-function makeWin(id: string, options: { visible?: boolean; minimized?: boolean; audible?: boolean } = {}): FakeWin {
+function makeWin(
+  id: string,
+  options: { visible?: boolean; minimized?: boolean; audible?: boolean } = {},
+): FakeWin {
   const win: FakeWin = {
     id,
     visible: options.visible ?? false,
@@ -61,8 +64,9 @@ function makeWin(id: string, options: { visible?: boolean; minimized?: boolean; 
   return win
 }
 
-const { closeSecondaryWindows, scheduleBackgroundRelease, cancelBackgroundRelease } =
-  await import('./background-release.js')
+const { closeSecondaryWindows, scheduleBackgroundRelease, cancelBackgroundRelease } = await import(
+  './background-release.js'
+)
 const { isBackgroundClose } = await import('../platform/window/window-retirement.js')
 
 beforeEach(() => {

@@ -90,7 +90,9 @@
   padding: var(--space-0-5) var(--space-1);
   border-radius: 6px;
   border: 1px solid transparent;
-  transition: border-color var(--duration-fast), color var(--duration-fast);
+  transition:
+    border-color var(--duration-fast),
+    color var(--duration-fast);
   max-width: 100%;
   max-height: calc(var(--titlebar-h) - var(--space-1-75));
   box-sizing: border-box;
@@ -110,9 +112,15 @@
 }
 /* 标题编辑态紧凑模式：空间不足时隐藏导航按钮组 + 部分右侧操作按钮，
    标题输入区脱离绝对居中，占满顶栏中间区域，避免输入框被挤压。 */
-.top-bar[data-title-edit="compact"] .nav-btn-group { display: none; }
-.top-bar[data-title-edit="compact"] .ua-toggle-btn { display: none; }
-.top-bar[data-title-edit="compact"] .top-bar-actions .top-bar-separator { display: none; }
+.top-bar[data-title-edit="compact"] .nav-btn-group {
+  display: none;
+}
+.top-bar[data-title-edit="compact"] .ua-toggle-btn {
+  display: none;
+}
+.top-bar[data-title-edit="compact"] .top-bar-actions .top-bar-separator {
+  display: none;
+}
 .top-bar-title-input {
   font-family: var(--font-sans);
   font-size: var(--text-base, 13px);
@@ -174,7 +182,9 @@
   position: relative;
   z-index: 19;
   padding: 0 var(--space-1);
-  transition: height var(--duration-fast) var(--ease-out), min-height var(--duration-fast) var(--ease-out);
+  transition:
+    height var(--duration-fast) var(--ease-out),
+    min-height var(--duration-fast) var(--ease-out);
 }
 /* 收起态呼吸效果：仅当前激活标签的颜色条脉动，提示当前页面（其他标签不脉动） */
 .tab-bar.is-collapsible:not(.is-expanded) .tab-indicator.active {
@@ -186,7 +196,7 @@
 }
 /* 收起态透明 hover 检测区：在红线下方延伸 12px，让 2px 红线易于悬停 */
 .tab-bar.is-collapsible:not(.is-expanded)::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   right: 0;
@@ -196,8 +206,15 @@
   pointer-events: auto;
 }
 @keyframes tab-indicator-breath {
-  0%, 100% { opacity: 0.5; transform: scaleY(1); }
-  50%      { opacity: 1; transform: scaleY(2); }
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(2);
+  }
 }
 /* 展开态：is-expanded 取代旧的 :hover */
 .tab-bar.is-expanded {
@@ -241,7 +258,9 @@
   /* 收起态：所有指示器统一使用 muted 色，明确"未激活"语义 */
   background: var(--muted-foreground);
   opacity: 0.35;
-  transition: opacity var(--duration-fast), background var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    background var(--duration-fast);
 }
 .tab-indicator.active {
   /* 仅 active 位置以主题色高亮，配合呼吸动画突出"当前页面"位置 */
@@ -275,7 +294,9 @@
   line-height: 1.4;
   color: var(--foreground);
   white-space: nowrap;
-  transition: color var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast);
   position: relative;
 }
 .tab-chip:hover {
@@ -292,7 +313,8 @@
   border-bottom-color: var(--ring);
 }
 .tab-chip-icon {
-  width: var(--titlebar-icon); height: var(--titlebar-icon);
+  width: var(--titlebar-icon);
+  height: var(--titlebar-icon);
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -337,7 +359,8 @@
 }
 /* 标签脱离/关闭小按钮（放在文档流末尾，自然占据空间，避免与文本重叠） */
 .tab-action {
-  width: var(--icon-svg-sm); height: var(--icon-svg-sm);
+  width: var(--icon-svg-sm);
+  height: var(--icon-svg-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -348,15 +371,23 @@
   border-radius: var(--radius-2xs);
   opacity: 0;
   flex: none;
-  transition: opacity var(--duration-fast), color var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    color var(--duration-fast);
 }
 .tab-action svg {
   width: var(--icon-svg-sm);
   height: var(--icon-svg-sm);
 }
-.tab-chip:hover .tab-action { opacity: 1; }
-.tab-chip.active .tab-action { opacity: 1; }
-.tab-action:hover { color: var(--foreground); }
+.tab-chip:hover .tab-action {
+  opacity: 1;
+}
+.tab-chip.active .tab-action {
+  opacity: 1;
+}
+.tab-action:hover {
+  color: var(--foreground);
+}
 
 /* ===== 底栏遮罩：展开时覆盖正文区域，点击收起 ===== */
 .bottom-bar-overlay {
@@ -370,13 +401,17 @@
 /* ===== 底栏（抽屉式收起：仅露居中红色短横手柄，点击展开/收起，拖动调高） ===== */
 .bottom-region {
   position: fixed;
-  bottom: 0; left: 0; right: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 10001;
   pointer-events: none;
 }
 .bottom-bar {
   position: absolute;
-  bottom: 0; left: 0; right: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
   background: var(--card);
   border-top: 1px solid var(--border);
   user-select: none;
@@ -441,7 +476,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .app-grid-item:hover {
   background: var(--background);
@@ -517,7 +554,9 @@
   min-height: 0;
   line-height: 1.4;
   cursor: pointer;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
   flex: 0 1 var(--expanded-btn-w);
   min-width: calc(var(--expanded-btn-w) * 0.7);
   max-width: calc(var(--expanded-btn-w) * 1.3);
@@ -550,7 +589,9 @@
   background: linear-gradient(90deg, var(--brand-600), var(--brand-700));
   border-radius: var(--radius-2xs);
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.4);
-  transition: width var(--duration-fast), height var(--duration-fast);
+  transition:
+    width var(--duration-fast),
+    height var(--duration-fast);
   cursor: pointer;
 }
 .bottom-handle:hover .bottom-handle-bar {
@@ -582,7 +623,9 @@
   line-height: 1.4;
   color: var(--foreground);
   white-space: nowrap;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .tab-manage-chip:hover {
   background: var(--input);
@@ -713,7 +756,9 @@
   border-radius: var(--radius-xs);
   border: 0;
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
 }
 .tab-context-menu-confirm {
   background: var(--primary);

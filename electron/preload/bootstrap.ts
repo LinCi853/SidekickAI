@@ -4,9 +4,9 @@ import { IPC_CHANNELS } from '../shared/types.js'
 export const bootstrapApi = {
   /** 打开 AI 应用编辑窗口（多例；编辑模式按 profileId 单例，新建模式固定 'create' 单例） */
   openAiAppEditor: (opts: {
-    platformId?: string;
-    profileId?: string;
-    mode?: 'edit' | 'create';
+    platformId?: string
+    profileId?: string
+    mode?: 'edit' | 'create'
   }) => {
     return ipcRenderer.invoke(IPC_CHANNELS.AI_APP_EDITOR_OPEN, opts)
   },
@@ -16,10 +16,14 @@ export const bootstrapApi = {
   },
   /** 主→渲染：设置窗口单例复用时通知切换分类 */
   onSettingsNavigate: (
-    callback: (payload: { category: import('../shared/api/settings-options.js').SettingsCategory }) => void,
+    callback: (payload: {
+      category: import('../shared/api/settings-options.js').SettingsCategory
+    }) => void,
   ) => {
-    const handler = (_e: unknown, payload: { category: import('../shared/api/settings-options.js').SettingsCategory }) =>
-      callback(payload)
+    const handler = (
+      _e: unknown,
+      payload: { category: import('../shared/api/settings-options.js').SettingsCategory },
+    ) => callback(payload)
     ipcRenderer.on(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, handler)
   },
@@ -36,9 +40,7 @@ export const bootstrapApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.ADVANCED_PANEL_TOGGLE)
   },
   /** 主→渲染：单例窗口复用时通知切换 tab/provider */
-  onAdvancedPanelNavigate: (
-    callback: (payload: { tab: string; providerId?: string }) => void,
-  ) => {
+  onAdvancedPanelNavigate: (callback: (payload: { tab: string; providerId?: string }) => void) => {
     const handler = (_e: unknown, payload: { tab: string; providerId?: string }) =>
       callback(payload)
     ipcRenderer.on(IPC_CHANNELS.ADVANCED_PANEL_NAVIGATE, handler)
@@ -61,9 +63,14 @@ export function setupDomSideEffects() {
   // 监听窗口最大化/全屏状态，设置 html data 属性以控制窗口级圆角。
   // 普通窗口保持圆角；最大化/全屏时移除圆角，避免黑边。
   function updateWindowShapeAttributes() {
-    ipcRenderer.invoke(IPC_CHANNELS.WIN_CONTROL_IS_MAXIMIZED).then((isMax: boolean) => {
-      document.documentElement?.setAttribute('data-maximized', String(isMax))
-    }).catch(() => { /* ignore */ })
+    ipcRenderer
+      .invoke(IPC_CHANNELS.WIN_CONTROL_IS_MAXIMIZED)
+      .then((isMax: boolean) => {
+        document.documentElement?.setAttribute('data-maximized', String(isMax))
+      })
+      .catch(() => {
+        /* ignore */
+      })
   }
   ipcRenderer.on(IPC_CHANNELS.WIN_CONTROL_MAXIMIZE_TOGGLED, (_e, isMax: boolean) => {
     document.documentElement?.setAttribute('data-maximized', String(isMax))
@@ -102,7 +109,9 @@ export function setupDomSideEffects() {
           if (name === lastClickName && now - lastClickTs < 100) return
           lastClickName = name
           lastClickTs = now
-          ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_LOG_CLICK, name, windowType).catch(() => { /* ignore */ })
+          ipcRenderer.invoke(IPC_CHANNELS.USAGE_TRACE_LOG_CLICK, name, windowType).catch(() => {
+            /* ignore */
+          })
         } catch {
           // 点击日志失败不影响正常交互
         }

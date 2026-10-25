@@ -25,6 +25,8 @@ export function showHistoryDownloadWindow(): void {
     mode: 'history-download',
     ownerModule: 'browser',
     getExisting: () => windowState.historyDownloadWindow,
-    setWindow: (win) => { windowState.historyDownloadWindow = win },
+    setWindow: (win) => {
+      windowState.historyDownloadWindow = win
+    },
   })
 }

@@ -60,32 +60,40 @@ export function createSingletonPopupWindow(opts: {
   const hasSavedBounds = !!windowStore.get(opts.windowId)
   const workArea = screen.getPrimaryDisplay().workArea
   const width = (hasSavedBounds && saved.bounds.width) || Math.min(opts.width, workArea.width - 80)
-  const height = (hasSavedBounds && saved.bounds.height) || Math.min(opts.height, workArea.height - 80)
-  const x = (hasSavedBounds && saved.bounds.x != null)
-    ? saved.bounds.x
-    : workArea.x + Math.round((workArea.width - width) / 2)
-  const y = (hasSavedBounds && saved.bounds.y != null)
-    ? saved.bounds.y
-    : workArea.y + Math.round((workArea.height - height) / 2)
+  const height =
+    (hasSavedBounds && saved.bounds.height) || Math.min(opts.height, workArea.height - 80)
+  const x =
+    hasSavedBounds && saved.bounds.x != null
+      ? saved.bounds.x
+      : workArea.x + Math.round((workArea.width - width) / 2)
+  const y =
+    hasSavedBounds && saved.bounds.y != null
+      ? saved.bounds.y
+      : workArea.y + Math.round((workArea.height - height) / 2)
 
   // 3. 创建 BrowserWindow
-  const win = new BrowserWindow(buildWindowConfig({
-    width,
-    height,
-    x,
-    y,
-    minWidth: opts.minWidth,
-    minHeight: opts.minHeight,
-    show: false,
-    frame: false,
-    alwaysOnTop: saved.alwaysOnTop,
-    backgroundColor: WINDOW_BACKGROUND_COLOR,
-    title: opts.title,
-    webPreferences: { ...createDefaultWebPreferences({
-      preload: getPreloadPath(),
-      webviewTag: false,
-    }), plugins: opts.mode === 'prompts' },
-  }))
+  const win = new BrowserWindow(
+    buildWindowConfig({
+      width,
+      height,
+      x,
+      y,
+      minWidth: opts.minWidth,
+      minHeight: opts.minHeight,
+      show: false,
+      frame: false,
+      alwaysOnTop: saved.alwaysOnTop,
+      backgroundColor: WINDOW_BACKGROUND_COLOR,
+      title: opts.title,
+      webPreferences: {
+        ...createDefaultWebPreferences({
+          preload: getPreloadPath(),
+          webviewTag: false,
+        }),
+        plugins: opts.mode === 'prompts',
+      },
+    }),
+  )
 
   // 恢复最大化状态（与主窗口/进阶面板一致）
   if (saved.isMaximized) {

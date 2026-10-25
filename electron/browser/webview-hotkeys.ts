@@ -17,10 +17,7 @@ import { findWindowIdByWin } from '../platform/window/window-utils.js'
 import { windowStore } from '../store/window-store.js'
 import { isTrackedFullscreen } from '../utils/fullscreen-tracker.js'
 import { captureWebviewHotkeyTarget, trackWebviewHotkeyTarget } from './webview-hotkey-target.js'
-import {
-  setAlwaysOnTopForWindow,
-  toggleMaximizeForWindow,
-} from '../ipc/window-control-ipc.js'
+import { setAlwaysOnTopForWindow, toggleMaximizeForWindow } from '../ipc/window-control-ipc.js'
 
 // ── 快捷键描述符 ──────────────────────────────────────────────────────────
 
@@ -101,7 +98,14 @@ const commonHotkeys: HotkeyDef[] = [
   { key: 'F5', log: 'F5 → 刷新', action: () => ({ action: 'navRefresh' }) },
 
   // Ctrl+Shift+R / Ctrl+F5：强制刷新（清除缓存）
-  { key: 'r', ctrl: true, shift: true, toLower: true, log: 'Ctrl+Shift+R → 强制刷新', action: () => ({ action: 'forceRefresh' }) },
+  {
+    key: 'r',
+    ctrl: true,
+    shift: true,
+    toLower: true,
+    log: 'Ctrl+Shift+R → 强制刷新',
+    action: () => ({ action: 'forceRefresh' }),
+  },
   { key: 'F5', ctrl: true, log: 'Ctrl+F5 → 强制刷新', action: () => ({ action: 'forceRefresh' }) },
 
   // F6：聚焦循环（主窗口聚焦 AI 输入框，浏览器窗口循环聚焦）
@@ -112,7 +116,9 @@ const commonHotkeys: HotkeyDef[] = [
 
   // Alt+1~9：切换到第 N 个标签
   {
-    key: '', alt: true, codePrefixes: ['Digit', 'Numpad'],
+    key: '',
+    alt: true,
+    codePrefixes: ['Digit', 'Numpad'],
     log: 'Alt+{0} → 切换标签 #{0}',
     action: (ctx) => {
       for (const prefix of ['Digit', 'Numpad']) {
@@ -126,60 +132,167 @@ const commonHotkeys: HotkeyDef[] = [
 
   // Ctrl+Tab / Ctrl+Shift+Tab：循环切换标签
   {
-    key: 'Tab', ctrl: true,
+    key: 'Tab',
+    ctrl: true,
     log: `Ctrl+Tab → 循环切换标签`,
     action: () => ({ action: 'cycleTab', data: { reverse: false } }),
   },
   {
-    key: 'Tab', ctrl: true, shift: true,
+    key: 'Tab',
+    ctrl: true,
+    shift: true,
     log: 'Ctrl+Shift+Tab → 反向切换标签',
     action: () => ({ action: 'cycleTab', data: { reverse: true } }),
   },
 
   // Ctrl+T：当前窗口独立（脱离当前标签为新窗口）
-  { key: 't', ctrl: true, toLower: true, log: 'Ctrl+T → 当前窗口独立', action: () => ({ action: 'detachCurrent' }) },
+  {
+    key: 't',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+T → 当前窗口独立',
+    action: () => ({ action: 'detachCurrent' }),
+  },
 
   // Ctrl+W：关闭当前标签
-  { key: 'w', ctrl: true, toLower: true, log: 'Ctrl+W → 关闭当前标签', action: () => ({ action: 'closeTab' }) },
+  {
+    key: 'w',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+W → 关闭当前标签',
+    action: () => ({ action: 'closeTab' }),
+  },
 
   // Ctrl+G：切换手柄/键盘空间导航模式
-  { key: 'g', ctrl: true, toLower: true, passWhenTyping: true, log: 'Ctrl+G → 切换空间导航模式', action: () => ({ action: 'toggleSpatialNav' }) },
+  {
+    key: 'g',
+    ctrl: true,
+    toLower: true,
+    passWhenTyping: true,
+    log: 'Ctrl+G → 切换空间导航模式',
+    action: () => ({ action: 'toggleSpatialNav' }),
+  },
 
   // Ctrl+D：添加当前页面到书签
-  { key: 'd', ctrl: true, toLower: true, log: 'Ctrl+D → 添加书签', action: () => ({ action: 'addBookmark' }) },
+  {
+    key: 'd',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+D → 添加书签',
+    action: () => ({ action: 'addBookmark' }),
+  },
 
   // Ctrl+H：打开历史标签
-  { key: 'h', ctrl: true, toLower: true, log: 'Ctrl+H → 打开历史', action: () => ({ action: 'openHistory' }) },
+  {
+    key: 'h',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+H → 打开历史',
+    action: () => ({ action: 'openHistory' }),
+  },
 
   // Ctrl+J：打开下载标签
-  { key: 'j', ctrl: true, toLower: true, log: 'Ctrl+J → 打开下载', action: () => ({ action: 'openDownloads' }) },
+  {
+    key: 'j',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+J → 打开下载',
+    action: () => ({ action: 'openDownloads' }),
+  },
 
   // Ctrl+K / Ctrl+E：聚焦地址栏并进入搜索模式
-  { key: 'k', ctrl: true, toLower: true, passWhenTyping: true, log: `Ctrl+K → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
-  { key: 'e', ctrl: true, toLower: true, passWhenTyping: true, log: `Ctrl+E → 聚焦搜索`, action: () => ({ action: 'focusSearch' }) },
+  {
+    key: 'k',
+    ctrl: true,
+    toLower: true,
+    passWhenTyping: true,
+    log: `Ctrl+K → 聚焦搜索`,
+    action: () => ({ action: 'focusSearch' }),
+  },
+  {
+    key: 'e',
+    ctrl: true,
+    toLower: true,
+    passWhenTyping: true,
+    log: `Ctrl+E → 聚焦搜索`,
+    action: () => ({ action: 'focusSearch' }),
+  },
 
   // Ctrl+Shift+Del：清除浏览数据
-  { key: 'Delete', ctrl: true, shift: true, log: 'Ctrl+Shift+Del → 清除浏览数据', action: () => ({ action: 'clearBrowsingData' }) },
+  {
+    key: 'Delete',
+    ctrl: true,
+    shift: true,
+    log: 'Ctrl+Shift+Del → 清除浏览数据',
+    action: () => ({ action: 'clearBrowsingData' }),
+  },
 
   // Ctrl+F：页内查找
-  { key: 'f', ctrl: true, toLower: true, passWhenTyping: true, log: 'Ctrl+F → 页内查找', action: () => ({ action: 'findInPage' }) },
+  {
+    key: 'f',
+    ctrl: true,
+    toLower: true,
+    passWhenTyping: true,
+    log: 'Ctrl+F → 页内查找',
+    action: () => ({ action: 'findInPage' }),
+  },
 
   // Ctrl+P：打印当前页面
-  { key: 'p', ctrl: true, toLower: true, passWhenTyping: true, log: 'Ctrl+P → 打印', action: () => ({ action: 'print' }) },
+  {
+    key: 'p',
+    ctrl: true,
+    toLower: true,
+    passWhenTyping: true,
+    log: 'Ctrl+P → 打印',
+    action: () => ({ action: 'print' }),
+  },
 
   // Ctrl+S：另存为当前页面（仅浏览器窗口；AI 应用窗口保留页面自身行为）
-  { key: 's', ctrl: true, toLower: true, condition: 'only', passWhenTyping: true, log: 'Ctrl+S → 另存为当前页面', action: () => ({ action: 'savePageAs' }) },
+  {
+    key: 's',
+    ctrl: true,
+    toLower: true,
+    condition: 'only',
+    passWhenTyping: true,
+    log: 'Ctrl+S → 另存为当前页面',
+    action: () => ({ action: 'savePageAs' }),
+  },
 
   // Ctrl+U：查看网页源代码（仅浏览器窗口）
-  { key: 'u', ctrl: true, toLower: true, condition: 'only', passWhenTyping: true, log: 'Ctrl+U → 查看网页源代码', action: () => ({ action: 'viewSource' }) },
+  {
+    key: 'u',
+    ctrl: true,
+    toLower: true,
+    condition: 'only',
+    passWhenTyping: true,
+    log: 'Ctrl+U → 查看网页源代码',
+    action: () => ({ action: 'viewSource' }),
+  },
 
   // Ctrl+= / Ctrl+- / Ctrl+0：页面缩放（仅浏览器窗口）
   {
-    key: '=', keyAlt: '+', ctrl: true, toLower: true, condition: 'only',
-    log: 'Ctrl+= → 页面放大', action: () => ({ action: 'zoomIn' }),
+    key: '=',
+    keyAlt: '+',
+    ctrl: true,
+    toLower: true,
+    condition: 'only',
+    log: 'Ctrl+= → 页面放大',
+    action: () => ({ action: 'zoomIn' }),
   },
-  { key: '-', ctrl: true, condition: 'only', log: 'Ctrl+- → 页面缩小', action: () => ({ action: 'zoomOut' }) },
-  { key: '0', ctrl: true, condition: 'only', log: 'Ctrl+0 → 重置缩放', action: () => ({ action: 'zoomReset' }) },
+  {
+    key: '-',
+    ctrl: true,
+    condition: 'only',
+    log: 'Ctrl+- → 页面缩小',
+    action: () => ({ action: 'zoomOut' }),
+  },
+  {
+    key: '0',
+    ctrl: true,
+    condition: 'only',
+    log: 'Ctrl+0 → 重置缩放',
+    action: () => ({ action: 'zoomReset' }),
+  },
 
   // 反引号(`) 呼出快捷键说明窗口（仅非浏览器窗口；浏览器窗口内按键属于页面）
 
@@ -189,21 +302,63 @@ const commonHotkeys: HotkeyDef[] = [
 /** 浏览器窗口专用快捷键（非浏览器窗口不匹配，按键穿透到页面） */
 const browserHotkeys: HotkeyDef[] = [
   // Ctrl+L / Alt+D：聚焦地址栏
-  { key: 'l', ctrl: true, toLower: true, log: 'Ctrl+L → 聚焦地址栏 (browser)', action: () => ({ action: 'focusAddressBar' }) },
-  { key: 'd', alt: true, toLower: true, log: 'Alt+D → 聚焦地址栏 (browser)', action: () => ({ action: 'focusAddressBar' }) },
+  {
+    key: 'l',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+L → 聚焦地址栏 (browser)',
+    action: () => ({ action: 'focusAddressBar' }),
+  },
+  {
+    key: 'd',
+    alt: true,
+    toLower: true,
+    log: 'Alt+D → 聚焦地址栏 (browser)',
+    action: () => ({ action: 'focusAddressBar' }),
+  },
 
   // Ctrl+R：刷新（F5 已在通用处理）
-  { key: 'r', ctrl: true, toLower: true, log: 'Ctrl+R → 刷新 (browser)', action: () => ({ action: 'navRefresh' }) },
+  {
+    key: 'r',
+    ctrl: true,
+    toLower: true,
+    log: 'Ctrl+R → 刷新 (browser)',
+    action: () => ({ action: 'navRefresh' }),
+  },
 
   // Ctrl+Shift+B：切换书签栏
-  { key: 'b', ctrl: true, shift: true, toLower: true, log: 'Ctrl+Shift+B → 切换书签栏 (browser)', action: () => ({ action: 'toggleBookmarkBar' }) },
+  {
+    key: 'b',
+    ctrl: true,
+    shift: true,
+    toLower: true,
+    log: 'Ctrl+Shift+B → 切换书签栏 (browser)',
+    action: () => ({ action: 'toggleBookmarkBar' }),
+  },
 
   // Ctrl+Shift+T：恢复最近关闭的标签
-  { key: 't', ctrl: true, shift: true, toLower: true, log: 'Ctrl+Shift+T → 恢复最近关闭标签 (browser)', action: () => ({ action: 'reopenClosed' }) },
+  {
+    key: 't',
+    ctrl: true,
+    shift: true,
+    toLower: true,
+    log: 'Ctrl+Shift+T → 恢复最近关闭标签 (browser)',
+    action: () => ({ action: 'reopenClosed' }),
+  },
 
   // Alt+Left / Alt+Right：后退 / 前进
-  { key: 'ArrowLeft', alt: true, log: 'Alt+← → 后退 (browser)', action: () => ({ action: 'navBack' }) },
-  { key: 'ArrowRight', alt: true, log: 'Alt+→ → 前进 (browser)', action: () => ({ action: 'navForward' }) },
+  {
+    key: 'ArrowLeft',
+    alt: true,
+    log: 'Alt+← → 后退 (browser)',
+    action: () => ({ action: 'navBack' }),
+  },
+  {
+    key: 'ArrowRight',
+    alt: true,
+    log: 'Alt+→ → 前进 (browser)',
+    action: () => ({ action: 'navForward' }),
+  },
 ]
 
 // ── 匹配引擎 ──────────────────────────────────────────────────────────────
@@ -220,7 +375,7 @@ function matchHotkey(def: HotkeyDef, ctx: HotkeyCtx): boolean {
   if (def.condition === 'never' && ctx.isBrowser) return false
 
   if (def.code) return ctx.code === def.code
-  if (def.codePrefixes) return def.codePrefixes.some(prefix => ctx.code.startsWith(prefix))
+  if (def.codePrefixes) return def.codePrefixes.some((prefix) => ctx.code.startsWith(prefix))
 
   // 标准 key 匹配
   const k = def.toLower ? def.key.toLowerCase() : def.key
@@ -235,10 +390,7 @@ function matchHotkey(def: HotkeyDef, ctx: HotkeyCtx): boolean {
 }
 
 /** 在描述符数组中查找匹配的快捷键定义 */
-function findMatch(
-  defs: HotkeyDef[],
-  ctx: HotkeyCtx,
-): HotkeyDef | undefined {
+function findMatch(defs: HotkeyDef[], ctx: HotkeyCtx): HotkeyDef | undefined {
   // 输入中的字符键（passWhenTyping）放行给页面输入，不作为快捷键
   return defs.find((d) => !(d.passWhenTyping && ctx.focusEditable) && matchHotkey(d, ctx))
 }
@@ -298,8 +450,18 @@ export function attachWebviewHotkeyRouter(
     const isBrowser = isBrowserWindowContents(parentWebContents)
 
     const ctx: HotkeyCtx = {
-      mods, key, code, hasCtrl, hasAlt, hasShift, hasMeta,
-      isBrowser, focusEditable: isGuestFocusEditable(wc), wc, parentWebContents, win,
+      mods,
+      key,
+      code,
+      hasCtrl,
+      hasAlt,
+      hasShift,
+      hasMeta,
+      isBrowser,
+      focusEditable: isGuestFocusEditable(wc),
+      wc,
+      parentWebContents,
+      win,
     }
 
     // Ctrl+Alt+C：进入/退出云电脑模式（最高优先级，云电脑模式下同样可用——
@@ -379,8 +541,11 @@ export function attachWebviewHotkeyRouter(
             windowStore.save(wid, state)
           }
         }
-        try { win.setFullScreen(!wasFs) }
-        catch (err) { console.error('[hotkey] 切换全屏失败:', err) }
+        try {
+          win.setFullScreen(!wasFs)
+        } catch (err) {
+          console.error('[hotkey] 切换全屏失败:', err)
+        }
         return
       }
       console.log('[hotkey] F11 → 切换最大化')
@@ -396,7 +561,11 @@ export function attachWebviewHotkeyRouter(
       if (isBrowser && wasFs) {
         console.log('[hotkey] Escape → 退出浏览器窗口全屏')
         e.preventDefault()
-        try { win.setFullScreen(false) } catch { /* ignore */ }
+        try {
+          win.setFullScreen(false)
+        } catch {
+          /* ignore */
+        }
         return
       }
     }

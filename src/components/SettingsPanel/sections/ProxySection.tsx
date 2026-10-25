@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Button, SegmentedControl, Toggle, SectionTitle } from '../../ui';
-import type { ProxySettings } from '../types';
+import { useState } from 'react'
+import { Button, SegmentedControl, Toggle, SectionTitle } from '../../ui'
+import type { ProxySettings } from '../types'
 import {
   updateAppSettings,
   testProxy,
@@ -8,22 +8,22 @@ import {
   updateProfile,
   applyProfileProxy,
   testProfileProxy,
-} from '../../../lib/electron-api';
-import type { ProfileProxyConfig } from '../../../lib/electron-api';
-import { useDraftState } from '../../../hooks/useDraftState';
+} from '../../../lib/electron-api'
+import type { ProfileProxyConfig } from '../../../lib/electron-api'
+import { useDraftState } from '../../../hooks/useDraftState'
 
 interface ProxySectionProps {
-  proxy: ProxySettings;
-  onChange: (patch: Partial<ProxySettings>) => void;
+  proxy: ProxySettings
+  onChange: (patch: Partial<ProxySettings>) => void
   /**
    * 作用域：
    * - 'global'（默认）：读写全局 AppSettings 代理
    * - 'profile'：读写 Profile.proxyConfig（当前 AI 应用窗口独立代理）
    * profile scope 时需提供 profileId。
    */
-  scope?: 'global' | 'profile';
+  scope?: 'global' | 'profile'
   /** Profile id（scope='profile' 时必需） */
-  profileId?: string;
+  profileId?: string
 }
 
 export default function ProxySection({
@@ -32,7 +32,7 @@ export default function ProxySection({
   scope = 'global',
   profileId,
 }: ProxySectionProps) {
-  const isProfile = scope === 'profile';
+  const isProfile = scope === 'profile'
 
   // 重命名解构：保持内部代码对字段名的引用不变，避免大量改动
   const {
@@ -42,41 +42,46 @@ export default function ProxySection({
     proxyPassword,
     proxyBypass,
     proxyFallbackEnabled,
-  } = proxy;
+  } = proxy
 
   // setter 包装：仅更新父组件本地 state（即时 UI 反馈），持久化由本 Section 内部完成
-  const setProxyMode = (v: 'system' | 'direct' | 'custom') => onChange({ proxyMode: v });
-  const setCustomProxy = (v: string) => onChange({ customProxy: v });
-  const setProxyUsername = (v: string) => onChange({ proxyUsername: v });
-  const setProxyPassword = (v: string) => onChange({ proxyPassword: v });
-  const setProxyBypass = (v: string) => onChange({ proxyBypass: v });
-  const setProxyFallbackEnabled = (v: boolean) => onChange({ proxyFallbackEnabled: v });
-  const setProxyFallbackMode = (v: 'direct' | 'system') => onChange({ proxyFallbackMode: v });
+  const setProxyMode = (v: 'system' | 'direct' | 'custom') => onChange({ proxyMode: v })
+  const setCustomProxy = (v: string) => onChange({ customProxy: v })
+  const setProxyUsername = (v: string) => onChange({ proxyUsername: v })
+  const setProxyPassword = (v: string) => onChange({ proxyPassword: v })
+  const setProxyBypass = (v: string) => onChange({ proxyBypass: v })
+  const setProxyFallbackEnabled = (v: boolean) => onChange({ proxyFallbackEnabled: v })
+  const setProxyFallbackMode = (v: 'direct' | 'system') => onChange({ proxyFallbackMode: v })
 
   /** 持久化 patch + 即时生效（按 scope 分发） */
   const persist = async (patch: Partial<ProxySettings>) => {
     if (isProfile) {
-      if (!profileId) return;
+      if (!profileId) return
       // proxyConfig 在主进程 update() 中深合并，此处传部分字段即可；
       // 类型上 ProfileProxyConfig 要求完整对象，故用 as 转换（运行时安全）。
-      await updateProfile(profileId, { proxyConfig: patch as ProfileProxyConfig });
-      await applyProfileProxy(profileId);
+      await updateProfile(profileId, { proxyConfig: patch as ProfileProxyConfig })
+      await applyProfileProxy(profileId)
     } else {
-      await updateAppSettings(patch);
-      await applyProxy();
+      await updateAppSettings(patch)
+      await applyProxy()
     }
-  };
+  }
 
   /** 测试连通性（按 scope 分发） */
   const runTest = async () => {
     if (isProfile && profileId) {
-      return testProfileProxy(profileId);
+      return testProfileProxy(profileId)
     }
-    return testProxy();
-  };
+    return testProxy()
+  }
 
   // 草稿：编辑中的值（保存前不写回父级 state）
-  const { draft: proxyDraft, setDraft: setProxyDraft, isDirty: dirty, save: saveProxyDraft } = useDraftState({
+  const {
+    draft: proxyDraft,
+    setDraft: setProxyDraft,
+    isDirty: dirty,
+    save: saveProxyDraft,
+  } = useDraftState({
     initial: { proxy: customProxy, user: proxyUsername, pass: proxyPassword, bypass: proxyBypass },
     onSave: async (d) => {
       await persist({
@@ -84,16 +89,20 @@ export default function ProxySection({
         proxyUsername: d.user,
         proxyPassword: d.pass,
         proxyBypass: d.bypass,
-      });
-      setCustomProxy(d.proxy);
-      setProxyUsername(d.user);
-      setProxyPassword(d.pass);
-      setProxyBypass(d.bypass);
+      })
+      setCustomProxy(d.proxy)
+      setProxyUsername(d.user)
+      setProxyPassword(d.pass)
+      setProxyBypass(d.bypass)
     },
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs?: number; message: string } | null>(null);
+  })
+  const [isSaving, setIsSaving] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    ok: boolean
+    latencyMs?: number
+    message: string
+  } | null>(null)
 
   // 当前生效代理描述
   const effectiveDesc =
@@ -103,44 +112,44 @@ export default function ProxySection({
         ? '直连（不使用代理）'
         : customProxy.trim()
           ? customProxy.trim()
-          : '未配置';
+          : '未配置'
 
   const handleModeChange = async (mode: 'system' | 'direct' | 'custom') => {
-    setProxyMode(mode);
+    setProxyMode(mode)
     try {
-      await persist({ proxyMode: mode });
+      await persist({ proxyMode: mode })
     } catch (e) {
-      console.error('保存代理模式失败:', e);
+      console.error('保存代理模式失败:', e)
     }
-  };
+  }
 
   const handleSave = async () => {
-    setIsSaving(true);
+    setIsSaving(true)
     try {
-      await saveProxyDraft();
+      await saveProxyDraft()
     } catch (e) {
-      console.error('保存代理配置失败:', e);
+      console.error('保存代理配置失败:', e)
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   const handleTest = async () => {
     // 若有未保存修改，先保存再测试
     if (dirty) {
-      await handleSave();
+      await handleSave()
     }
-    setIsTesting(true);
-    setTestResult(null);
+    setIsTesting(true)
+    setTestResult(null)
     try {
-      const result = await runTest();
-      setTestResult(result);
+      const result = await runTest()
+      setTestResult(result)
     } catch (e) {
-      setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
+      setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) })
     } finally {
-      setIsTesting(false);
+      setIsTesting(false)
     }
-  };
+  }
 
   return (
     <section data-name="settings.proxy.section">
@@ -156,8 +165,13 @@ export default function ProxySection({
       <div className="proxy-section-block" data-name="settings.proxy.block">
         {/* 当前生效状态 */}
         <div className="proxy-status-row" data-name="settings.proxy.status-row">
-          <span className={`proxy-status-dot mode-${proxyMode}`} data-name="settings.proxy.status-dot" />
-          <span className="proxy-status-text" data-name="settings.proxy.status-text">{effectiveDesc}</span>
+          <span
+            className={`proxy-status-dot mode-${proxyMode}`}
+            data-name="settings.proxy.status-dot"
+          />
+          <span className="proxy-status-text" data-name="settings.proxy.status-text">
+            {effectiveDesc}
+          </span>
         </div>
 
         <SegmentedControl
@@ -176,7 +190,9 @@ export default function ProxySection({
           <div className="proxy-custom-block" data-name="settings.proxy.custom-block">
             {/* 代理地址 */}
             <div className="proxy-field" data-name="settings.proxy.address-field">
-              <label className="proxy-field-label" data-name="settings.proxy.address-label">代理地址</label>
+              <label className="proxy-field-label" data-name="settings.proxy.address-label">
+                代理地址
+              </label>
               <input
                 type="text"
                 className="input-underline"
@@ -184,7 +200,7 @@ export default function ProxySection({
                 value={proxyDraft.proxy}
                 onChange={(e) => setProxyDraft({ ...proxyDraft, proxy: e.target.value })}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && dirty) handleSave();
+                  if (e.key === 'Enter' && dirty) handleSave()
                 }}
                 data-name="settings.proxy.address-input"
               />
@@ -193,7 +209,9 @@ export default function ProxySection({
             {/* 认证 */}
             <div className="proxy-field-row" data-name="settings.proxy.auth-row">
               <div className="proxy-field" data-name="settings.proxy.username-field">
-                <label className="proxy-field-label" data-name="settings.proxy.username-label">用户名</label>
+                <label className="proxy-field-label" data-name="settings.proxy.username-label">
+                  用户名
+                </label>
                 <input
                   type="text"
                   className="input-underline"
@@ -205,7 +223,9 @@ export default function ProxySection({
                 />
               </div>
               <div className="proxy-field" data-name="settings.proxy.password-field">
-                <label className="proxy-field-label" data-name="settings.proxy.password-label">密码</label>
+                <label className="proxy-field-label" data-name="settings.proxy.password-label">
+                  密码
+                </label>
                 <input
                   type="password"
                   className="input-underline"
@@ -220,7 +240,9 @@ export default function ProxySection({
 
             {/* 绕过列表 */}
             <div className="proxy-field" data-name="settings.proxy.bypass-field">
-              <label className="proxy-field-label" data-name="settings.proxy.bypass-label">绕过列表</label>
+              <label className="proxy-field-label" data-name="settings.proxy.bypass-label">
+                绕过列表
+              </label>
               <input
                 type="text"
                 className="input-underline"
@@ -228,7 +250,7 @@ export default function ProxySection({
                 value={proxyDraft.bypass}
                 onChange={(e) => setProxyDraft({ ...proxyDraft, bypass: e.target.value })}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && dirty) handleSave();
+                  if (e.key === 'Enter' && dirty) handleSave()
                 }}
                 data-name="settings.proxy.bypass-input"
               />
@@ -260,7 +282,10 @@ export default function ProxySection({
 
             {/* 测试结果 */}
             {testResult && (
-              <div className={`proxy-test-result test-result ${testResult.ok ? 'ok' : 'fail'}`} data-name="settings.proxy.test-result">
+              <div
+                className={`proxy-test-result test-result ${testResult.ok ? 'ok' : 'fail'}`}
+                data-name="settings.proxy.test-result"
+              >
                 {testResult.ok ? '✓ ' : '✗ '}
                 {testResult.message}
               </div>
@@ -271,15 +296,17 @@ export default function ProxySection({
         {/* 代理失败兜底：加载失败时自动切换到反向模式（system↔direct，custom→direct） */}
         <div className="proxy-fallback-block" data-name="settings.proxy.fallback-block">
           <div className="proxy-fallback-header" data-name="settings.proxy.fallback-header">
-            <div className="proxy-field-label" data-name="settings.proxy.fallback-label">代理失败自动切换</div>
+            <div className="proxy-field-label" data-name="settings.proxy.fallback-label">
+              代理失败自动切换
+            </div>
             <Toggle
               checked={proxyFallbackEnabled}
               onChange={async (checked) => {
-                setProxyFallbackEnabled(checked);
+                setProxyFallbackEnabled(checked)
                 try {
-                  await persist({ proxyFallbackEnabled: checked });
+                  await persist({ proxyFallbackEnabled: checked })
                 } catch (e) {
-                  console.error('保存代理兜底开关失败:', e);
+                  console.error('保存代理兜底开关失败:', e)
                 }
               }}
               data-name="settings.proxy.fallback-toggle"
@@ -293,5 +320,5 @@ export default function ProxySection({
         </div>
       </div>
     </section>
-  );
+  )
 }

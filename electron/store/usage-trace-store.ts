@@ -148,7 +148,13 @@ export class UsageTraceStore {
       .prepare(
         'INSERT INTO click_logs (id, timestamp, element_name, window_type, detail) VALUES (?, ?, ?, ?, ?)',
       )
-      .run(randomUUID(), Date.now(), elementName, windowType, detail != null ? JSON.stringify(detail) : null)
+      .run(
+        randomUUID(),
+        Date.now(),
+        elementName,
+        windowType,
+        detail != null ? JSON.stringify(detail) : null,
+      )
   }
 
   /**
@@ -225,11 +231,22 @@ export class UsageTraceStore {
   }
 
   exportRecords(): { startupRecords: AppStart[]; clickRecords: Array<Omit<ClickLog, 'detail'>> } {
-    const starts = this.db.prepare('SELECT * FROM app_starts ORDER BY start_time DESC').all() as AppStartRow[]
-    const clicks = this.db.prepare('SELECT id, timestamp, element_name, window_type FROM click_logs ORDER BY timestamp DESC').all() as ClickLogRow[]
+    const starts = this.db
+      .prepare('SELECT * FROM app_starts ORDER BY start_time DESC')
+      .all() as AppStartRow[]
+    const clicks = this.db
+      .prepare(
+        'SELECT id, timestamp, element_name, window_type FROM click_logs ORDER BY timestamp DESC',
+      )
+      .all() as ClickLogRow[]
     return {
       startupRecords: starts.map(rowToAppStart),
-      clickRecords: clicks.map(row => ({ id: row.id, timestamp: row.timestamp, elementName: row.element_name, windowType: row.window_type })),
+      clickRecords: clicks.map((row) => ({
+        id: row.id,
+        timestamp: row.timestamp,
+        elementName: row.element_name,
+        windowType: row.window_type,
+      })),
     }
   }
 

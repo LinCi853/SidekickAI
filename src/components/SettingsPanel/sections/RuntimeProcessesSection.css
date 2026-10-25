@@ -20,7 +20,9 @@
   font-weight: 600;
 }
 
-.runtime-process-total small { font-weight: 400; }
+.runtime-process-total small {
+  font-weight: 400;
+}
 
 .runtime-process-hint {
   margin: 8px 0;
@@ -29,7 +31,9 @@
   line-height: 1.6;
 }
 
-.runtime-process-hint > span { display: block; }
+.runtime-process-hint > span {
+  display: block;
+}
 
 .runtime-process-scroll {
   max-height: 340px;
@@ -45,10 +49,18 @@
   line-height: 1.5;
 }
 
-.runtime-process-table .process-role-column { width: 78px; }
-.runtime-process-table .process-pid-column { width: 58px; }
-.runtime-process-table .process-cpu-column { width: 60px; }
-.runtime-process-table .process-memory-column { width: 84px; }
+.runtime-process-table .process-role-column {
+  width: 78px;
+}
+.runtime-process-table .process-pid-column {
+  width: 58px;
+}
+.runtime-process-table .process-cpu-column {
+  width: 60px;
+}
+.runtime-process-table .process-memory-column {
+  width: 84px;
+}
 
 .runtime-process-table th,
 .runtime-process-table td {
@@ -71,8 +83,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.runtime-process-target + .runtime-process-target { margin-top: 6px; }
-.runtime-process-target span { display: block; }
+.runtime-process-target + .runtime-process-target {
+  margin-top: 6px;
+}
+.runtime-process-target span {
+  display: block;
+}
 .runtime-process-target small {
   display: block;
   color: var(--text-muted);

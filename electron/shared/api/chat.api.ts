@@ -21,7 +21,12 @@ export interface ChatAPI {
   /** 列出会话（按 sourceId 过滤；不传则列出全部） */
   listConversations(sourceId?: string): Promise<Conversation[]>
   /** 创建会话 */
-  createConversation(sourceId: string, sourceType: ConversationSourceType, title: string, url?: string): Promise<Conversation>
+  createConversation(
+    sourceId: string,
+    sourceType: ConversationSourceType,
+    title: string,
+    url?: string,
+  ): Promise<Conversation>
   /** 查询指定来源最近一条带 URL 的对话 URL（用于"启动时打开最近对话"） */
   getLastConversationUrl(sourceId: string): Promise<string | null>
   /** 删除会话（连同消息级联删除） */
@@ -45,19 +50,31 @@ export interface ChatAPI {
   /** 监听流式分块推送（主进程 → 渲染层） */
   onStreamChunk(callback: (chunk: ChatStreamChunk) => void): () => void
   /** 监听流式结束 */
-  onStreamEnd(callback: (info: { conversationId: string; ok: boolean; error?: string }) => void): () => void
+  onStreamEnd(
+    callback: (info: { conversationId: string; ok: boolean; error?: string }) => void,
+  ): () => void
   /** 记录登录痕迹 */
-  logLoginTrace(trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>): Promise<void>
+  logLoginTrace(
+    trace: Omit<LoginTrace, 'id' | 'loginTime'> & Partial<Pick<LoginTrace, 'id' | 'loginTime'>>,
+  ): Promise<void>
   /** 列出窗口操作痕迹（按时间倒序，limit 默认 200） */
   listWindowTraces(windowId?: string, limit?: number): Promise<WindowTrace[]>
   /** 列出登录痕迹 */
   listLoginTraces(profileId?: string): Promise<LoginTrace[]>
   /** token 用量统计（可选按 sourceId 过滤） */
-  getUsageStats(sourceId?: string): Promise<{ totalTokens: number; todayTokens: number; todayCount: number }>
+  getUsageStats(
+    sourceId?: string,
+  ): Promise<{ totalTokens: number; todayTokens: number; todayCount: number }>
   /** 导出会话为 MD/JSON 并落盘（主进程弹保存对话框） */
-  exportConversation(conversationId: string, format: 'md' | 'json'): Promise<{ ok: boolean; filePath?: string; canceled?: boolean }>
+  exportConversation(
+    conversationId: string,
+    format: 'md' | 'json',
+  ): Promise<{ ok: boolean; filePath?: string; canceled?: boolean }>
   /** 导入会话（从文件），format 支持 json/deepseek/md */
-  importConversation(format: 'json' | 'deepseek' | 'md', sourceId: string): Promise<{ ok: boolean; canceled?: boolean; conversation?: Conversation }>
+  importConversation(
+    format: 'json' | 'deepseek' | 'md',
+    sourceId: string,
+  ): Promise<{ ok: boolean; canceled?: boolean; conversation?: Conversation }>
   /** 清空所有对话（可选按 sourceId 过滤） */
   clearConversations(sourceId?: string): Promise<{ ok: boolean; count: number }>
   /** 清空登录痕迹（可选按 profileId 过滤） */
@@ -67,7 +84,10 @@ export interface ChatAPI {
   /** 清空所有使用统计与点击日志 */
   clearUsageTraces(): Promise<{ ok: boolean; count: number }>
   /** 更新消息内容 */
-  updateMessage(messageId: string, updates: Partial<Pick<ChatMessage, 'content' | 'role'>>): Promise<{ ok: boolean }>
+  updateMessage(
+    messageId: string,
+    updates: Partial<Pick<ChatMessage, 'content' | 'role'>>,
+  ): Promise<{ ok: boolean }>
   /** 删除单条消息 */
   deleteMessage(messageId: string): Promise<{ ok: boolean }>
   /** 更新会话（标题等） */
@@ -101,7 +121,13 @@ export interface PromptAPI {
   /** 导出全部提示词为 JSON 文件（主进程弹保存对话框 + 写文件） */
   exportPrompts(): Promise<{ ok: boolean; filePath?: string; canceled?: boolean; error?: string }>
   /** 导入提示词 JSON 文件（主进程弹打开对话框 + 读文件 + 合并入库） */
-  importPrompts(): Promise<{ ok: boolean; added?: number; updated?: number; canceled?: boolean; error?: string }>
+  importPrompts(): Promise<{
+    ok: boolean
+    added?: number
+    updated?: number
+    canceled?: boolean
+    error?: string
+  }>
   /** 打开提示词库独立窗口（单例） */
   openWindow(request?: AssetNavigation): Promise<void>
   navigation(): Promise<AssetNavigationEvent>

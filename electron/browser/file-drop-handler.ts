@@ -1,7 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { BrowserWindow, type IpcMainInvokeEvent, type WebContents, type WebFrameMain } from 'electron'
+import {
+  BrowserWindow,
+  type IpcMainInvokeEvent,
+  type WebContents,
+  type WebFrameMain,
+} from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { assertOwnedWebview } from '../platform/security/webview-owner.js'
@@ -15,9 +20,19 @@ export interface DroppedFile {
   mime: string
   size: number
 }
-interface Owner { sender: WebContents; frame: WebFrameMain; host: WebContents }
-interface Challenge extends Owner { nonce: string; timer: NodeJS.Timeout }
-interface Captured extends Owner { files: { name: string; bytes: Buffer }[]; timer: NodeJS.Timeout }
+interface Owner {
+  sender: WebContents
+  frame: WebFrameMain
+  host: WebContents
+}
+interface Challenge extends Owner {
+  nonce: string
+  timer: NodeJS.Timeout
+}
+interface Captured extends Owner {
+  files: { name: string; bytes: Buffer }[]
+  timer: NodeJS.Timeout
+}
 const challenges = new Map<WebContents, Challenge>()
 const captured = new Map<string, Captured>()
 const observed = new WeakSet<WebContents>()
@@ -26,7 +41,13 @@ const MAX_TOTAL = 100 * 1024 * 1024
 
 function owner(event: IpcMainInvokeEvent): Owner {
   const sender = event.sender
-  if (!sender || sender.isDestroyed() || !event.senderFrame || event.senderFrame !== sender.mainFrame) throw new Error('拖放来源无效。')
+  if (
+    !sender ||
+    sender.isDestroyed() ||
+    !event.senderFrame ||
+    event.senderFrame !== sender.mainFrame
+  )
+    throw new Error('拖放来源无效。')
   const host = sender.getType() === 'webview' ? sender.hostWebContents : sender
   if (!host) throw new Error('拖放窗口已关闭。')
   assertTrustedRenderer({ ...event, sender: host, senderFrame: host.mainFrame })
@@ -44,14 +65,17 @@ function revoke(sender: WebContents): void {
   const challenge = challenges.get(sender)
   if (challenge) clearTimeout(challenge.timer)
   challenges.delete(sender)
-  for (const [token, value] of captured) if (value.sender === sender || value.host === sender) discard(token)
+  for (const [token, value] of captured)
+    if (value.sender === sender || value.host === sender) discard(token)
 }
 
 function observe(sender: WebContents): void {
   if (observed.has(sender)) return
   observed.add(sender)
   sender.once('destroyed', () => revoke(sender))
-  sender.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revoke(sender) })
+  sender.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => {
+    if (mainFrame) revoke(sender)
+  })
   sender.on('render-process-gone', () => revoke(sender))
 }
 
@@ -61,7 +85,10 @@ function canOpen(source: Owner): boolean {
 }
 
 /** This challenge is visible only to the isolated native-drop listener. */
-export function prepareFileDrop(event: IpcMainInvokeEvent): { nonce: string; fallbackAllowed: boolean } {
+export function prepareFileDrop(event: IpcMainInvokeEvent): {
+  nonce: string
+  fallbackAllowed: boolean
+} {
   const source = owner(event)
   revoke(source.sender)
   observe(source.sender)
@@ -77,18 +104,32 @@ export function captureFileDrop(event: IpcMainInvokeEvent, input: unknown): { to
   const source = owner(event)
   const value = input as { nonce?: unknown; paths?: unknown } | null
   const challenge = challenges.get(source.sender)
-  if (!challenge || challenge.frame !== source.frame || challenge.host !== source.host || value?.nonce !== challenge.nonce) throw new Error('拖放凭据无效，请重新拖入文件。')
+  if (
+    !challenge ||
+    challenge.frame !== source.frame ||
+    challenge.host !== source.host ||
+    value?.nonce !== challenge.nonce
+  )
+    throw new Error('拖放凭据无效，请重新拖入文件。')
   clearTimeout(challenge.timer)
   challenges.delete(source.sender)
-  if (!Array.isArray(value.paths) || !value.paths.length || value.paths.length > 32 || value.paths.some(p => typeof p !== 'string')) throw new Error('拖放文件列表无效。')
+  if (
+    !Array.isArray(value.paths) ||
+    !value.paths.length ||
+    value.paths.length > 32 ||
+    value.paths.some((p) => typeof p !== 'string')
+  )
+    throw new Error('拖放文件列表无效。')
   let total = 0
-  const files = value.paths.map(selected => {
+  const files = value.paths.map((selected) => {
     const file = openNativeFile(selected)
     try {
       const bytes = readNativeFile(file, Math.min(MAX_FILE, MAX_TOTAL - total))
       total += bytes.length
       return { name: file.name, bytes }
-    } finally { fs.closeSync(file.descriptor) }
+    } finally {
+      fs.closeSync(file.descriptor)
+    }
   })
   const token = randomUUID()
   const timer = setTimeout(() => discard(token), 60000)
@@ -101,7 +142,13 @@ function take(event: IpcMainInvokeEvent, input: unknown): Captured {
   const source = owner(event)
   const token = (input as { token?: unknown } | null)?.token
   const value = typeof token === 'string' ? captured.get(token) : undefined
-  if (!value || value.sender !== source.sender || value.frame !== source.frame || value.host !== source.host) throw new Error('拖放文件已失效，请重新拖入。')
+  if (
+    !value ||
+    value.sender !== source.sender ||
+    value.frame !== source.frame ||
+    value.host !== source.host
+  )
+    throw new Error('拖放文件已失效，请重新拖入。')
   discard(token as string)
   return value
 }
@@ -109,18 +156,26 @@ function take(event: IpcMainInvokeEvent, input: unknown): Captured {
 export function readDroppedFiles(event: IpcMainInvokeEvent, input: unknown): DroppedFile[] {
   return take(event, input).files.map(({ name, bytes }) => {
     const mime = guessMime(path.extname(name).slice(1).toLowerCase())
-    return { filename: name, dataUrl: `data:${mime};base64,${bytes.toString('base64')}`, mime, size: bytes.length }
+    return {
+      filename: name,
+      dataUrl: `data:${mime};base64,${bytes.toString('base64')}`,
+      mime,
+      size: bytes.length,
+    }
   })
 }
 
 export function openDroppedFiles(event: IpcMainInvokeEvent, input: unknown): void {
   const value = take(event, input)
   if (!canOpen(value)) throw new Error('此窗口不提供本地文件预览。')
-  const files = value.files.map(file => {
+  const files = value.files.map((file) => {
     const preview = createLocalPreview(file.bytes, file.name, value.host)
     return { name: file.name, url: preview.url, kind: preview.kind }
   })
-  value.host.send(IPC_CHANNELS.LOCAL_FILES_DROPPED, { guestId: value.sender === value.host ? null : value.sender.id, files })
+  value.host.send(IPC_CHANNELS.LOCAL_FILES_DROPPED, {
+    guestId: value.sender === value.host ? null : value.sender.id,
+    files,
+  })
 }
 
 function guessMime(ext: string): string {

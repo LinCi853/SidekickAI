@@ -89,7 +89,9 @@
   align-items: center;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .advanced-panel-chat-conv-item:hover {
   background: var(--glass-bg-2);
@@ -127,7 +129,9 @@
   font-size: var(--text-md);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
 }
 .advanced-panel-chat-conv-del:hover {
   color: var(--destructive);
@@ -230,5 +234,3 @@
 .advanced-panel-chat-send.cancel {
   background: var(--window-close);
 }
-
-

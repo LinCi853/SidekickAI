@@ -56,7 +56,9 @@ function jaccardSimilarity(a: string, b: string): number {
  * 注入历史持久化存储：log / listRecent / findSimilar / clear
  */
 export class InjectionHistoryStore {
-  invalidate(): void { store.invalidate() }
+  invalidate(): void {
+    store.invalidate()
+  }
   /** 记录一次注入。超出 MAX_RECORDS 时淘汰最旧记录。 */
   log(record: Omit<InjectionRecord, 'id' | 'createdAt'>): InjectionRecord {
     const records = store.get('records') as InjectionRecord[]

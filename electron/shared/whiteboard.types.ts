@@ -78,5 +78,5 @@ export interface WhiteboardMeta {
 }
 
 /** 外部推送卡片输入（截图 / AI 回复 → 白板；id/x/y 可选） */
-export type WhiteboardCardInput = Omit<WhiteboardCard, 'id' | 'x' | 'y'>
-  & Partial<Pick<WhiteboardCard, 'id' | 'x' | 'y'>>
+export type WhiteboardCardInput = Omit<WhiteboardCard, 'id' | 'x' | 'y'> &
+  Partial<Pick<WhiteboardCard, 'id' | 'x' | 'y'>>

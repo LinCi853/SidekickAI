@@ -1,36 +1,36 @@
-import { updateAppSettings } from '../../../lib/electron-api';
-import { useThemeStore, type ThemeMode } from '../../../store/useThemeStore';
-import { useUiVersionStore } from '../../../store/useUiVersionStore';
+import { updateAppSettings } from '../../../lib/electron-api'
+import { useThemeStore, type ThemeMode } from '../../../store/useThemeStore'
+import { useUiVersionStore } from '../../../store/useUiVersionStore'
 import {
   detectUiScale,
   persistUserUiScale,
   readUserUiScale,
   type UiScale,
-} from '../../../lib/oxy-design-system';
-import SegmentedControl from '../../ui/SegmentedControl';
-import Toggle from '../../ui/Toggle';
-import { SectionTitle, FormRow } from '../../ui';
+} from '../../../lib/oxy-design-system'
+import SegmentedControl from '../../ui/SegmentedControl'
+import Toggle from '../../ui/Toggle'
+import { SectionTitle, FormRow } from '../../ui'
 
 interface AppearanceSectionProps {
   /** 标签栏是否默认收起 */
-  tabBarCollapsed: boolean;
-  setTabBarCollapsed: (v: boolean) => void;
+  tabBarCollapsed: boolean
+  setTabBarCollapsed: (v: boolean) => void
   /** UI 比例：small/medium/large（经典版使用） */
-  uiScale: UiScale;
-  setUiScale: (v: UiScale) => void;
+  uiScale: UiScale
+  setUiScale: (v: UiScale) => void
 }
 
 const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
   { value: 'light', label: '亮色' },
   { value: 'dark', label: '暗色' },
   { value: 'system', label: '跟随系统' },
-];
+]
 
 const UI_SCALE_OPTIONS: Array<{ value: UiScale; label: string }> = [
   { value: 'small', label: '紧凑' },
   { value: 'medium', label: '中档' },
   { value: 'large', label: '大号' },
-];
+]
 
 export default function AppearanceSection({
   tabBarCollapsed,
@@ -38,34 +38,34 @@ export default function AppearanceSection({
   uiScale,
   setUiScale,
 }: AppearanceSectionProps) {
-  const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
-  const uiVersion = useUiVersionStore((s) => s.version);
-  const setUiVersion = useUiVersionStore((s) => s.setVersion);
+  const theme = useThemeStore((s) => s.theme)
+  const setTheme = useThemeStore((s) => s.setTheme)
+  const uiVersion = useUiVersionStore((s) => s.version)
+  const setUiVersion = useUiVersionStore((s) => s.setVersion)
 
-  const isOxy = uiVersion === 'oxy';
+  const isOxy = uiVersion === 'oxy'
 
   const handleOxyToggle = async (next: boolean) => {
     if (next) {
-      setUiVersion('oxy');
+      setUiVersion('oxy')
     } else {
-      const saved = readUserUiScale();
-      setUiScale(saved);
-      document.documentElement.setAttribute('data-ui-scale', saved);
-      setUiVersion('classic');
+      const saved = readUserUiScale()
+      setUiScale(saved)
+      document.documentElement.setAttribute('data-ui-scale', saved)
+      setUiVersion('classic')
     }
-  };
+  }
 
   const handleUiScaleChange = async (v: UiScale) => {
-    setUiScale(v);
-    persistUserUiScale(v);
-    document.documentElement.setAttribute('data-ui-scale', v);
+    setUiScale(v)
+    persistUserUiScale(v)
+    document.documentElement.setAttribute('data-ui-scale', v)
     try {
-      await updateAppSettings({ uiScale: v });
+      await updateAppSettings({ uiScale: v })
     } catch (e) {
-      console.error('保存 UI 比例失败:', e);
+      console.error('保存 UI 比例失败:', e)
     }
-  };
+  }
 
   return (
     <section data-name="settings.appearance.section">
@@ -112,12 +112,12 @@ export default function AppearanceSection({
           <Toggle
             checked={tabBarCollapsed}
             onChange={async (next) => {
-              setTabBarCollapsed(next);
+              setTabBarCollapsed(next)
               try {
-                await updateAppSettings({ tabBarCollapsed: next });
+                await updateAppSettings({ tabBarCollapsed: next })
               } catch (e) {
-                console.error('保存标签栏收起设置失败:', e);
-                setTabBarCollapsed(!next);
+                console.error('保存标签栏收起设置失败:', e)
+                setTabBarCollapsed(!next)
               }
             }}
             aria-label="标签栏收起"
@@ -126,5 +126,5 @@ export default function AppearanceSection({
         </FormRow>
       )}
     </section>
-  );
+  )
 }

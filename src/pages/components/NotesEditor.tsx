@@ -3,21 +3,21 @@
    markdown 编辑器 + 标题 + 标签 + 置顶 + 工具栏
    ===================================================================== */
 
-import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import type { Note } from '../../../electron/shared/types.js';
-import { EmptyState } from '../../components/ui';
-import { useNotesEditor } from '../hooks/useNotesEditor.js';
+import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
+import type { Note } from '../../../electron/shared/types.js'
+import { EmptyState } from '../../components/ui'
+import { useNotesEditor } from '../hooks/useNotesEditor.js'
 
 interface NotesEditorProps {
-  note: Note | null;
-  onContentChange: (content: string, contentJson: string) => void;
-  onTogglePin: () => void;
-  onTagsChange: (tags: string[]) => void;
-  onSendToAi: () => void;
-  onSaveAsPrompt: () => void;
+  note: Note | null
+  onContentChange: (content: string, contentJson: string) => void
+  onTogglePin: () => void
+  onTagsChange: (tags: string[]) => void
+  onSendToAi: () => void
+  onSaveAsPrompt: () => void
 }
 
 export default function NotesEditor({
@@ -28,7 +28,7 @@ export default function NotesEditor({
   onSendToAi,
   onSaveAsPrompt,
 }: NotesEditorProps) {
-  const [tagInput, setTagInput] = useState('');
+  const [tagInput, setTagInput] = useState('')
   const {
     markdownText,
     mode,
@@ -41,29 +41,33 @@ export default function NotesEditor({
     handlePaste,
     handleDrop,
     saveCursorPosition,
-  } = useNotesEditor(note, onContentChange);
+  } = useNotesEditor(note, onContentChange)
 
   const handleAddTag = () => {
-    const tag = tagInput.trim();
-    if (!tag) return;
-    const currentTags = note?.tags ?? [];
+    const tag = tagInput.trim()
+    if (!tag) return
+    const currentTags = note?.tags ?? []
     if (!currentTags.includes(tag)) {
-      onTagsChange([...currentTags, tag]);
+      onTagsChange([...currentTags, tag])
     }
-    setTagInput('');
-  };
+    setTagInput('')
+  }
 
   const handleRemoveTag = (tag: string) => {
-    const currentTags = note?.tags ?? [];
-    onTagsChange(currentTags.filter((t) => t !== tag));
-  };
+    const currentTags = note?.tags ?? []
+    onTagsChange(currentTags.filter((t) => t !== tag))
+  }
 
   if (!note) {
     return (
       <div className="notes-editor-empty" data-name="advanced-panel.notes-editor-empty">
-        <EmptyState message="选择或新建一条笔记" className="notes-editor-empty-text" data-name="advanced-panel.notes-editor-empty-text" />
+        <EmptyState
+          message="选择或新建一条笔记"
+          className="notes-editor-empty-text"
+          data-name="advanced-panel.notes-editor-empty-text"
+        />
       </div>
-    );
+    )
   }
 
   return (
@@ -71,9 +75,21 @@ export default function NotesEditor({
       <div className="notes-editor-toolbar-top" data-name="advanced-panel.notes-editor-toolbar-top">
         <div className="notes-tags-row" data-name="advanced-panel.notes-editor-tags-row">
           {note.tags.map((tag, idx) => (
-            <span key={tag} className="notes-tag-chip removable" data-name={`advanced-panel.notes-editor-tag-${idx + 1}`} data-tag={tag}>
+            <span
+              key={tag}
+              className="notes-tag-chip removable"
+              data-name={`advanced-panel.notes-editor-tag-${idx + 1}`}
+              data-tag={tag}
+            >
               {tag}
-              <button className="notes-tag-remove" onClick={() => handleRemoveTag(tag)} aria-label={`移除标签 ${tag}`} data-name={`advanced-panel.notes-editor-tag-${idx + 1}-remove`}>×</button>
+              <button
+                className="notes-tag-remove"
+                onClick={() => handleRemoveTag(tag)}
+                aria-label={`移除标签 ${tag}`}
+                data-name={`advanced-panel.notes-editor-tag-${idx + 1}-remove`}
+              >
+                ×
+              </button>
             </span>
           ))}
           <input
@@ -83,7 +99,7 @@ export default function NotesEditor({
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAddTag();
+              if (e.key === 'Enter') handleAddTag()
             }}
             onBlur={handleAddTag}
             data-name="advanced-panel.notes-editor-tag-input"
@@ -192,7 +208,10 @@ export default function NotesEditor({
                 {markdownText}
               </ReactMarkdown>
             ) : (
-              <EmptyState message={<>记录你的灵感…（点击 {'</>'} 切换到源码编辑）</>} className="notes-editor-empty-text" />
+              <EmptyState
+                message={<>记录你的灵感…（点击 {'</>'} 切换到源码编辑）</>}
+                className="notes-editor-empty-text"
+              />
             )}
           </div>
         )}
@@ -203,14 +222,22 @@ export default function NotesEditor({
           {markdownText.length} 字
         </span>
         <div className="notes-bottom-actions" data-name="advanced-panel.notes-bottom-actions">
-          <button className="btn-outline btn-text" onClick={onSaveAsPrompt} data-name="advanced-panel.notes-save-as-prompt-button">
+          <button
+            className="btn-outline btn-text"
+            onClick={onSaveAsPrompt}
+            data-name="advanced-panel.notes-save-as-prompt-button"
+          >
             存为提示词
           </button>
-          <button className="btn-primary-flat" onClick={onSendToAi} data-name="advanced-panel.notes-send-to-ai-button">
+          <button
+            className="btn-primary-flat"
+            onClick={onSendToAi}
+            data-name="advanced-panel.notes-send-to-ai-button"
+          >
             发送到 AI
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }

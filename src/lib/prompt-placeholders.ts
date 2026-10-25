@@ -3,12 +3,12 @@
    - {{body}}：当前输入框内容
    ===================================================================== */
 
-import type { PromptTemplate } from '../../electron/shared/types';
+import type { PromptTemplate } from '../../electron/shared/types'
 
 /** 占位符替换上下文 */
 export interface PlaceholderContext {
   /** 当前输入框内容（webview 抓取） */
-  body: string;
+  body: string
 }
 
 /**
@@ -25,5 +25,5 @@ export function composeFinalText(
   template: Pick<PromptTemplate, 'content'>,
   context: PlaceholderContext,
 ): string {
-  return (template.content ?? '').replace(/\{\{body\}\}/g, context.body ?? '');
+  return (template.content ?? '').replace(/\{\{body\}\}/g, context.body ?? '')
 }

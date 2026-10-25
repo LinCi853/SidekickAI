@@ -20,10 +20,10 @@ export const OXY_DPI_CONFIG = {
    */
   exponent: 0.5,
   /** scale 下限：低分辨率不再继续缩小 */
-  scaleFloor: 0.70,
+  scaleFloor: 0.7,
   /** scale 上限：高分辨率不再继续放大 */
   scaleCeiling: 1.12,
-} as const;
+} as const
 
 // ═══════════════════════════════════════════
 // 属性调节器
@@ -31,24 +31,24 @@ export const OXY_DPI_CONFIG = {
 // ═══════════════════════════════════════════
 
 export interface AdjusterConfig {
-  min: number | null;
-  max: number | null;
+  min: number | null
+  max: number | null
 }
 
 export const OXY_ADJUSTERS = {
   /** 文字字号：低 scale 时适当拉高，高 scale 时限制增幅 */
-  text:     { min: 1.0, max: 1.05 } as AdjusterConfig,
+  text: { min: 1.0, max: 1.05 } as AdjusterConfig,
   /** 图标尺寸：低 scale 时保证最小可识别尺寸 */
-  icon:     { min: 0.95, max: 1.08 } as AdjusterConfig,
+  icon: { min: 0.95, max: 1.08 } as AdjusterConfig,
   /** 间距：全范围跟随 */
-  spacing:  { min: null, max: null } as AdjusterConfig,
+  spacing: { min: null, max: null } as AdjusterConfig,
   /** 圆角：过大/过小视觉不协调 */
-  radius:   { min: 0.85, max: 1.15 } as AdjusterConfig,
+  radius: { min: 0.85, max: 1.15 } as AdjusterConfig,
   /** 标题栏/标签栏高度：低 scale 时保持可操作高度 */
   titlebar: { min: 1.0, max: 1.05 } as AdjusterConfig,
   /** 窗口尺寸上限：全范围跟随 */
-  window:   { min: null, max: null } as AdjusterConfig,
-} as const;
+  window: { min: null, max: null } as AdjusterConfig,
+} as const
 
 // ═══════════════════════════════════════════
 // 基础尺寸（standard 档位，作为 scale=1.0 的基准）
@@ -62,13 +62,13 @@ export const OXY_BASE_VALUES = {
   textBase: 16,
   spaceUnit: 5,
   radius: 12,
-} as const;
+} as const
 
 /**
  * textBase 绝对下限：保证低分辨率（720p）时字号不低于 12。
  * 旧版 small textBase=13，720p 比其略小合理。
  */
-export const OXY_TEXT_FLOOR = 12;
+export const OXY_TEXT_FLOOR = 12
 
 // ═══════════════════════════════════════════
 // 窗口尺寸
@@ -100,7 +100,7 @@ export const OXY_WINDOWS = {
     heightScreenRatioMin: 0.7,
     heightScreenRatioMax: 0.85,
   },
-} as const;
+} as const
 
 // ═══════════════════════════════════════════
 // 面板尺寸
@@ -108,8 +108,8 @@ export const OXY_WINDOWS = {
 
 export const OXY_PANELS = {
   settings: { widthMin: 300, widthMax: 720, parentRatio: 0.7 },
-  sidebar:  { widthMin: 120, widthMax: 400, parentRatio: 0.25 },
-} as const;
+  sidebar: { widthMin: 120, widthMax: 400, parentRatio: 0.25 },
+} as const
 
 // ═══════════════════════════════════════════
 // 二级页面/遮罩
@@ -117,9 +117,9 @@ export const OXY_PANELS = {
 
 export const OXY_OVERLAYS = {
   contextMenu: { widthMin: 160, parentRatio: 0.8 },
-  modal:       { widthMin: 320, widthMax: 600, parentRatio: 0.5, heightMin: 200, heightParentRatio: 0.8 },
-  tooltip:     { widthMin: 200, parentRatio: 0.7 },
-} as const;
+  modal: { widthMin: 320, widthMax: 600, parentRatio: 0.5, heightMin: 200, heightParentRatio: 0.8 },
+  tooltip: { widthMin: 200, parentRatio: 0.7 },
+} as const
 
 // ═══════════════════════════════════════════
 // 颜色对比度（WCAG）
@@ -134,7 +134,7 @@ export const OXY_CONTRAST = {
   border: 1.5,
   /** 语义色 foreground vs 背景最低对比度 */
   semantic: 4.5,
-} as const;
+} as const
 
 // ═══════════════════════════════════════════
 // localStorage 键
@@ -145,7 +145,7 @@ export const OXY_STORAGE_KEYS = {
   uiVersion: 'sidekick-ui-version',
   userUiScale: 'sidekick-user-ui-scale',
   appColor: 'sidekick-active-app-color',
-} as const;
+} as const
 
 // ═══════════════════════════════════════════
 // 辅助函数
@@ -158,9 +158,9 @@ export const OXY_STORAGE_KEYS = {
  * @returns 调节后的有效 scale
  */
 export function applyAdjuster(scale: number, adjuster: AdjusterConfig): number {
-  if (adjuster.min !== null && scale < adjuster.min) return adjuster.min;
-  if (adjuster.max !== null && scale > adjuster.max) return adjuster.max;
-  return scale;
+  if (adjuster.min !== null && scale < adjuster.min) return adjuster.min
+  if (adjuster.max !== null && scale > adjuster.max) return adjuster.max
+  return scale
 }
 
 /**
@@ -174,8 +174,8 @@ export function applyAdjuster(scale: number, adjuster: AdjusterConfig): number {
  * @returns scale 系数
  */
 export function computeDpiScale(logicalWidth: number, logicalHeight: number): number {
-  const { referenceDimension, exponent, scaleFloor, scaleCeiling } = OXY_DPI_CONFIG;
-  const minDim = Math.min(logicalWidth, logicalHeight);
-  const raw = Math.pow(minDim / referenceDimension, exponent);
-  return Math.max(scaleFloor, Math.min(scaleCeiling, raw));
+  const { referenceDimension, exponent, scaleFloor, scaleCeiling } = OXY_DPI_CONFIG
+  const minDim = Math.min(logicalWidth, logicalHeight)
+  const raw = Math.pow(minDim / referenceDimension, exponent)
+  return Math.max(scaleFloor, Math.min(scaleCeiling, raw))
 }

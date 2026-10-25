@@ -5,7 +5,7 @@
    指针捕获）已按定位调整移除，如需完整云游戏客户端由社区版实现。
    ===================================================================== */
 
-export { GamepadCollector, buildGamepadFrame } from './gamepad';
-export type { GamepadConnection, GamepadCollectorOptions } from './gamepad';
-export { serializeFrame, deserializeFrame } from './input-frame';
-export type { InputFrame, GamepadInputFrame } from './input-frame';
+export { GamepadCollector, buildGamepadFrame } from './gamepad'
+export type { GamepadConnection, GamepadCollectorOptions } from './gamepad'
+export { serializeFrame, deserializeFrame } from './input-frame'
+export type { InputFrame, GamepadInputFrame } from './input-frame'

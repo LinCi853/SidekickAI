@@ -40,14 +40,25 @@ class BrowserDownloadStore {
 
   /** 添加一条下载记录 */
   add(record: BrowserDownloadRecord): void {
-    this.db.prepare(
-      `INSERT INTO browser_downloads (id, window_id, profile_id, url, filename, save_path, state, total_bytes, received_bytes, start_time, end_time, mime_type)
+    this.db
+      .prepare(
+        `INSERT INTO browser_downloads (id, window_id, profile_id, url, filename, save_path, state, total_bytes, received_bytes, start_time, end_time, mime_type)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      record.id, record.windowId, record.profileId, record.url, record.filename,
-      record.savePath, record.state, record.totalBytes, record.receivedBytes,
-      record.startTime, record.endTime ?? null, record.mimeType ?? null,
-    )
+      )
+      .run(
+        record.id,
+        record.windowId,
+        record.profileId,
+        record.url,
+        record.filename,
+        record.savePath,
+        record.state,
+        record.totalBytes,
+        record.receivedBytes,
+        record.startTime,
+        record.endTime ?? null,
+        record.mimeType ?? null,
+      )
   }
 
   /** 更新下载记录 */
@@ -55,16 +66,27 @@ class BrowserDownloadStore {
     const existing = this.get(id)
     if (!existing) return
     const merged = { ...existing, ...patch }
-    this.db.prepare(
-      `UPDATE browser_downloads SET state = ?, total_bytes = ?, received_bytes = ?, end_time = ?, save_path = ? WHERE id = ?`,
-    ).run(merged.state, merged.totalBytes, merged.receivedBytes, merged.endTime ?? null, merged.savePath, id)
+    this.db
+      .prepare(
+        `UPDATE browser_downloads SET state = ?, total_bytes = ?, received_bytes = ?, end_time = ?, save_path = ? WHERE id = ?`,
+      )
+      .run(
+        merged.state,
+        merged.totalBytes,
+        merged.receivedBytes,
+        merged.endTime ?? null,
+        merged.savePath,
+        id,
+      )
   }
 
   /** 获取单条下载记录 */
   get(id: string): BrowserDownloadRecord | null {
-    const row = this.db.prepare(
-      `SELECT id, window_id as windowId, profile_id as profileId, url, filename, save_path as savePath, state, total_bytes as totalBytes, received_bytes as receivedBytes, start_time as startTime, end_time as endTime, mime_type as mimeType FROM browser_downloads WHERE id = ?`,
-    ).get(id) as BrowserDownloadRecord | undefined
+    const row = this.db
+      .prepare(
+        `SELECT id, window_id as windowId, profile_id as profileId, url, filename, save_path as savePath, state, total_bytes as totalBytes, received_bytes as receivedBytes, start_time as startTime, end_time as endTime, mime_type as mimeType FROM browser_downloads WHERE id = ?`,
+      )
+      .get(id) as BrowserDownloadRecord | undefined
     return row ?? null
   }
 

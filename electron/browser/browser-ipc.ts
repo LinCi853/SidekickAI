@@ -108,9 +108,7 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
   handle(IPC_CHANNELS.BROWSER_NAVIGATE, (_e, windowId: string, tabId: string, url: string) => {
     const state = browserWindowStore.get(windowId)
     if (!state) return
-    state.tabs = state.tabs.map((t) =>
-      t.id === tabId ? { ...t, url } : t,
-    )
+    state.tabs = state.tabs.map((t) => (t.id === tabId ? { ...t, url } : t))
     browserWindowStore.save(windowId, state)
   })
 
@@ -142,18 +140,24 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
       enterCloudPc(win.webContents.id, win)
       try {
         if (!wasFs) win.setFullScreen(true)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else {
       exitCloudPc(win.webContents.id)
       const wid = findWindowIdByWin(win)
       const wasFs = wid ? isTrackedFullscreen(wid) : win.isFullScreen()
       try {
         if (wasFs) win.setFullScreen(false)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     try {
       win.webContents.send(IPC_CHANNELS.BROWSER_CLOUD_PC_CHANGED, enter)
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return { ok: true }
   })
 
@@ -167,120 +171,170 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
   // ===== 另存为（页面 / 链接 / 图片） =====
 
   // 另存为当前页面：主进程弹保存对话框后以 HTMLComplete 格式保存
-  handle(IPC_CHANNELS.BROWSER_SAVE_PAGE_AS, async (e, webContentsId: number, suggestedName?: string) => {
-    const wc = ownedWebContents(e, webContentsId)
-    const win = BrowserWindow.fromWebContents(wc) ?? getSenderWindow(e as IpcMainInvokeEvent)
-    if (!win || win.isDestroyed()) return { ok: false, error: 'window not found' }
-    const url = wc.getURL() || ''
-    // 仅允许保存可另存为的页面（http/https/file/data；view-source 等内部协议跳过）
-    if (!/^(https?:|file:|data:)/i.test(url)) return { ok: false, error: 'unsupported url' }
+  handle(
+    IPC_CHANNELS.BROWSER_SAVE_PAGE_AS,
+    async (e, webContentsId: number, suggestedName?: string) => {
+      const wc = ownedWebContents(e, webContentsId)
+      const win = BrowserWindow.fromWebContents(wc) ?? getSenderWindow(e as IpcMainInvokeEvent)
+      if (!win || win.isDestroyed()) return { ok: false, error: 'window not found' }
+      const url = wc.getURL() || ''
+      // 仅允许保存可另存为的页面（http/https/file/data；view-source 等内部协议跳过）
+      if (!/^(https?:|file:|data:)/i.test(url)) return { ok: false, error: 'unsupported url' }
 
-    // 默认文件名：优先渲染层建议名（页面标题），再回退 'page'；无扩展名补 .html
-    let defaultName = (suggestedName || '').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 120)
-    if (!defaultName) defaultName = 'page'
-    if (!/\.[a-z0-9]{1,5}$/i.test(defaultName)) defaultName += '.html'
+      // 默认文件名：优先渲染层建议名（页面标题），再回退 'page'；无扩展名补 .html
+      let defaultName = (suggestedName || '')
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .slice(0, 120)
+      if (!defaultName) defaultName = 'page'
+      if (!/\.[a-z0-9]{1,5}$/i.test(defaultName)) defaultName += '.html'
 
-    const result = dialog.showSaveDialogSync(win, {
-      title: '另存为',
-      defaultPath: defaultName,
-      filters: [
-        { name: 'HTML 文件', extensions: ['html', 'htm'] },
-        { name: '所有文件', extensions: ['*'] },
-      ],
-    })
-    if (!result) return { ok: false, canceled: true }
-    try {
-      await wc.savePage(result, 'HTMLComplete')
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
-  })
+      const result = dialog.showSaveDialogSync(win, {
+        title: '另存为',
+        defaultPath: defaultName,
+        filters: [
+          { name: 'HTML 文件', extensions: ['html', 'htm'] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      })
+      if (!result) return { ok: false, canceled: true }
+      try {
+        await wc.savePage(result, 'HTMLComplete')
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
 
   // 另存为链接/图片：标记一次性「询问保存路径」后触发下载，will-download 中弹保存对话框
   // partition 为 webview 的 session 分区（persist:profileId），与下载记录注册的 session 一致
-  handle(IPC_CHANNELS.BROWSER_DOWNLOAD_AS, (event, partition: string, url: string, _suggestedFilename?: string) => {
-    if (!/^(https?:|data:|blob:)/i.test(url)) return { ok: false, error: 'invalid url' }
-    let cancelSaveIntent: (() => void) | undefined
-    try {
-      const initiatingSession = ownedProfileSession(event, partition)
-      cancelSaveIntent = markAskSavePath(initiatingSession, url)
-      initiatingSession.downloadURL(url)
-      return { ok: true }
-    } catch (err) {
-      cancelSaveIntent?.()
-      return { ok: false, error: String(err) }
-    }
-  })
+  handle(
+    IPC_CHANNELS.BROWSER_DOWNLOAD_AS,
+    (event, partition: string, url: string, _suggestedFilename?: string) => {
+      if (!/^(https?:|data:|blob:)/i.test(url)) return { ok: false, error: 'invalid url' }
+      let cancelSaveIntent: (() => void) | undefined
+      try {
+        const initiatingSession = ownedProfileSession(event, partition)
+        cancelSaveIntent = markAskSavePath(initiatingSession, url)
+        initiatingSession.downloadURL(url)
+        return { ok: true }
+      } catch (err) {
+        cancelSaveIntent?.()
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
 
   // ===== 查看网页源代码 =====
   // Source reads retain session cookies and validate every network destination.
   handle(IPC_CHANNELS.BROWSER_VIEW_SOURCE, async (event, partition: string, url: string) => {
     try {
       const ses = ownedProfileSession(event, partition)
-      return await withPublicResponse(ses, url, AbortSignal.timeout(30000), async response => {
-        if (response.statusCode < 200 || response.statusCode >= 300) throw new Error('HTTP ' + response.statusCode)
+      return await withPublicResponse(ses, url, AbortSignal.timeout(30000), async (response) => {
+        if (response.statusCode < 200 || response.statusCode >= 300)
+          throw new Error('HTTP ' + response.statusCode)
         const limit = 3 * 1024 * 1024
         const chunks: Buffer[] = []
-        let size = 0, truncated = false
+        let size = 0,
+          truncated = false
         for await (const chunk of response.body) {
           const bytes = Buffer.from(chunk)
           const remaining = limit - size
           chunks.push(bytes.subarray(0, remaining))
           size += Math.min(bytes.length, remaining)
-          if (bytes.length > remaining) { truncated = true; break }
+          if (bytes.length > remaining) {
+            truncated = true
+            break
+          }
         }
-        const html = Buffer.concat(chunks).toString('utf8') + (truncated ? '\n<!-- 源码过大已截断 -->' : '')
+        const html =
+          Buffer.concat(chunks).toString('utf8') + (truncated ? '\n<!-- 源码过大已截断 -->' : '')
         return { ok: true, html, contentType: response.headers['content-type'] || 'text/html' }
       })
-    } catch (err) { return { ok: false, error: String(err) } }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
   })
-  handle(IPC_CHANNELS.BROWSER_PRINT_PREVIEW, async (event, webContentsId: number, title?: string) => {
-    try {
-      const wc = ownedWebContents(event, webContentsId)
-      const pdf = await wc.printToPDF({ printBackground: true, preferCSSPageSize: true })
-      assertTrustedRenderer(event)
-      const safeTitle = (typeof title === 'string' ? title : 'page').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'page'
-      return { ok: true, filePath: createPdfPreview(pdf, event.sender), title: safeTitle }
-    } catch (err) { return { ok: false, error: String(err) } }
-  })
+  handle(
+    IPC_CHANNELS.BROWSER_PRINT_PREVIEW,
+    async (event, webContentsId: number, title?: string) => {
+      try {
+        const wc = ownedWebContents(event, webContentsId)
+        const pdf = await wc.printToPDF({ printBackground: true, preferCSSPageSize: true })
+        assertTrustedRenderer(event)
+        const safeTitle =
+          (typeof title === 'string' ? title : 'page')
+            .trim()
+            .replace(/[\\/:*?"<>|]/g, '_')
+            .slice(0, 60) || 'page'
+        return { ok: true, filePath: createPdfPreview(pdf, event.sender), title: safeTitle }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
 
   handle(IPC_CHANNELS.BROWSER_SAVE_PDF_AS, (event, token: string, suggestedName?: string) => {
     try {
       assertTrustedRenderer(event)
       const bytes = readPdfPreview(token, event.sender)
       const win = getSenderWindow(event)!
-      const defaultName = (typeof suggestedName === 'string' ? suggestedName : 'page').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) + '.pdf'
-      const selected = dialog.showSaveDialogSync(win, { title: '另存为 PDF', defaultPath: defaultName,
-        filters: [{ name: 'PDF 文件', extensions: ['pdf'] }, { name: '所有文件', extensions: ['*'] }] })
+      const defaultName =
+        (typeof suggestedName === 'string' ? suggestedName : 'page')
+          .trim()
+          .replace(/[\\/:*?"<>|]/g, '_')
+          .slice(0, 60) + '.pdf'
+      const selected = dialog.showSaveDialogSync(win, {
+        title: '另存为 PDF',
+        defaultPath: defaultName,
+        filters: [
+          { name: 'PDF 文件', extensions: ['pdf'] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      })
       if (!selected) return { ok: false, canceled: true }
       const file = openNativeFile(selected, true)
       try {
         fs.writeFileSync(file.descriptor, bytes)
         fs.ftruncateSync(file.descriptor, bytes.length)
         fs.fsyncSync(file.descriptor)
-      } finally { fs.closeSync(file.descriptor) }
+      } finally {
+        fs.closeSync(file.descriptor)
+      }
       return { ok: true }
-    } catch (err) { return { ok: false, error: String(err) } }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
   })
 
   handle(IPC_CHANNELS.BROWSER_DELETE_TEMP_PDF, (event, token: string) => {
     try {
       assertTrustedRenderer(event)
       return { ok: deletePdfPreview(token, event.sender) }
-    } catch { return { ok: false } }
+    } catch {
+      return { ok: false }
+    }
   })
   // ===== 网页截图 =====
   // 保存截图 PNG（渲染层 capturePage 的 dataURL）到用户指定路径
   handle(IPC_CHANNELS.BROWSER_SAVE_CAPTURE, (e, dataUrl: string, suggestedName?: string) => {
-    if (!dataUrl || !dataUrl.startsWith('data:image/')) return { ok: false, error: 'invalid image data' }
+    if (!dataUrl || !dataUrl.startsWith('data:image/'))
+      return { ok: false, error: 'invalid image data' }
     const win = getSenderWindow(e as IpcMainInvokeEvent)
     if (!win || win.isDestroyed()) return { ok: false, error: 'window not found' }
-    const defaultName = (suggestedName || '截图').trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) + '.png'
+    const defaultName =
+      (suggestedName || '截图')
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .slice(0, 60) + '.png'
     const result = dialog.showSaveDialogSync(win, {
       title: '保存截图',
       defaultPath: defaultName,
-      filters: [{ name: 'PNG 图片', extensions: ['png'] }, { name: '所有文件', extensions: ['*'] }],
+      filters: [
+        { name: 'PNG 图片', extensions: ['png'] },
+        { name: '所有文件', extensions: ['*'] },
+      ],
     })
     if (!result) return { ok: false, canceled: true }
     try {
@@ -294,15 +348,21 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
 
   // ===== 搜索历史 =====
 
-  handle(IPC_CHANNELS.BROWSER_SEARCH_HISTORY_ADD, (_e, entry: { profileId: string; query: string; url: string }) => {
-    const store = deps.getSearchHistoryStore?.()
-    if (store) store.add(entry)
-  })
+  handle(
+    IPC_CHANNELS.BROWSER_SEARCH_HISTORY_ADD,
+    (_e, entry: { profileId: string; query: string; url: string }) => {
+      const store = deps.getSearchHistoryStore?.()
+      if (store) store.add(entry)
+    },
+  )
 
-  handle(IPC_CHANNELS.BROWSER_SEARCH_HISTORY_LIST, (_e, profileId: string, keyword?: string, limit?: number) => {
-    const store = deps.getSearchHistoryStore?.()
-    return store ? store.list(profileId, keyword, limit) : []
-  })
+  handle(
+    IPC_CHANNELS.BROWSER_SEARCH_HISTORY_LIST,
+    (_e, profileId: string, keyword?: string, limit?: number) => {
+      const store = deps.getSearchHistoryStore?.()
+      return store ? store.list(profileId, keyword, limit) : []
+    },
+  )
 
   // ===== 下载记录 =====
 

@@ -1,6 +1,12 @@
 import type { ChatMessage, ChatRole, ConversationSourceType } from './chat.types.js'
 
-export type AssetMessageStatus = 'streaming' | 'complete' | 'withdrawn' | 'retained' | 'stopped' | 'failed'
+export type AssetMessageStatus =
+  | 'streaming'
+  | 'complete'
+  | 'withdrawn'
+  | 'retained'
+  | 'stopped'
+  | 'failed'
 export interface AssetObservedMessage {
   key: string
   role: ChatRole
@@ -27,7 +33,11 @@ export interface AssetObservation {
   adapter?: string
   rejected?: AssetRejectedCapture[]
 }
-export interface AssetRejectedCapture { key: string; reason: string; signature: string }
+export interface AssetRejectedCapture {
+  key: string
+  reason: string
+  signature: string
+}
 export interface AssetObservationReceipt {
   durable?: boolean
   observationId?: string
@@ -78,17 +88,34 @@ export interface AssetConversationGraph {
   path: string[]
   sourcePath: string[]
 }
-export interface AssetConversationSummary { conversationId: string; views: number }
+export interface AssetConversationSummary {
+  conversationId: string
+  views: number
+}
 export interface AssetCleanupRecord {
-  id: string; createdAt: number; sourceId: string; sourceType: string; adapter: string
-  reason: string; messages: number; conversations: number; apiOrigin?: string
+  id: string
+  createdAt: number
+  sourceId: string
+  sourceType: string
+  adapter: string
+  reason: string
+  messages: number
+  conversations: number
+  apiOrigin?: string
 }
 export interface AssetSettings {
   sort: 'recent' | 'views'
   expandReasoning: boolean
   revisionDisplay: 'history' | 'diff'
   fileRetentionDays: 0 | 14 | 30 | 120
-  localShortcuts: { search: string; conversations: string; prompts: string; files: string; previousBranch: string; nextBranch: string }
+  localShortcuts: {
+    search: string
+    conversations: string
+    prompts: string
+    files: string
+    previousBranch: string
+    nextBranch: string
+  }
 }
 export interface AssetRetentionStatus {
   state: 'disabled' | 'idle' | 'waiting' | 'error'
@@ -102,8 +129,18 @@ export type AssetAttachmentPreview =
   | { ok: true; kind: 'image' | 'pdf'; bytes: Uint8Array; mimeType: string }
   | { ok: false; error: string }
 export interface AssetGraphExport {
-  nodes: Array<{ id: string; parentId?: string; sourceKey: string; versionKey: string; branchIndex?: number; branchCount?: number; localContent?: string }>
-  selectedLeaf?: string; sourceLeaf?: string; views: number
+  nodes: Array<{
+    id: string
+    parentId?: string
+    sourceKey: string
+    versionKey: string
+    branchIndex?: number
+    branchCount?: number
+    localContent?: string
+  }>
+  selectedLeaf?: string
+  sourceLeaf?: string
+  views: number
   exclusions: Array<{ parentId?: string; sourceKey: string; versionKey: string }>
 }
 export interface AssetTextUsage {
@@ -163,7 +200,10 @@ export interface AiAssetsAPI {
   recordView(conversationId: string, eventId: string): Promise<void>
   deleteConversation(conversationId: string): Promise<void>
   deleteMessage(messageId: string): Promise<void>
-  deleteSelection(kind: 'files' | 'conversations', ids: string[]): Promise<{ deleted: number; cleanupPending: boolean }>
+  deleteSelection(
+    kind: 'files' | 'conversations',
+    ids: string[],
+  ): Promise<{ deleted: number; cleanupPending: boolean }>
   renameConversation(conversationId: string, title: string): Promise<void>
   cleanupRecords(): Promise<AssetCleanupRecord[]>
   settings(): Promise<AssetSettings>
@@ -173,7 +213,10 @@ export interface AiAssetsAPI {
   onRetentionStatusChanged(callback: (status: AssetRetentionStatus) => void): () => void
   openExternal(url: string): Promise<void>
   copyText(content: string): Promise<void>
-  previewCode(content: string, language: 'html' | 'css' | 'javascript'): Promise<{ ok: boolean; error?: string }>
+  previewCode(
+    content: string,
+    language: 'html' | 'css' | 'javascript',
+  ): Promise<{ ok: boolean; error?: string }>
   attachments(conversationId?: string): Promise<AssetAttachment[]>
   openAttachment(id: string): Promise<{ ok: boolean; error?: string }>
   previewAttachment(id: string): Promise<AssetAttachmentPreview>
@@ -190,7 +233,9 @@ export interface AssetNavigation {
   createPrompt?: boolean
 }
 
-export interface AssetNavigationEvent extends AssetNavigation { revision: number }
+export interface AssetNavigationEvent extends AssetNavigation {
+  revision: number
+}
 
 export interface AssetSource {
   id: string

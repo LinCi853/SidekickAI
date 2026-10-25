@@ -13,11 +13,22 @@
 //   同时 window-factory.ts（文件）与 window-factory/（目录）在文件系统上名称
 //   不同，可以共存，且 .js 扩展名 import 优先解析到文件，无歧义。
 
-export { getSenderWindow, loadRenderer, getFormBounds, findWindowIdByWin } from './platform/window/helpers.js'
+export {
+  getSenderWindow,
+  loadRenderer,
+  getFormBounds,
+  findWindowIdByWin,
+} from './platform/window/helpers.js'
 export { createMainWindow } from './platform/window/main-window.js'
 export { createBrowserWindow, toggleBrowserWindow } from './browser/browser-window.js'
 export { createChatWindow } from './platform/window/containers/chat-window.js'
-export { showHistoryWindow, showPromptWindow, showAiAppEditorWindow, showDataExportWindow, showSettingsWindow } from './platform/window/containers/popup-windows.js'
+export {
+  showHistoryWindow,
+  showPromptWindow,
+  showAiAppEditorWindow,
+  showDataExportWindow,
+  showSettingsWindow,
+} from './platform/window/containers/popup-windows.js'
 export { showHistoryDownloadWindow } from './browser/history-download-window.js'
 export {
   createAdvancedPanelWindow,
@@ -26,4 +37,7 @@ export {
   focusAdvancedPanelWindow,
   toggleAdvancedPanelWindow,
 } from './platform/window/containers/advanced-panel-window.js'
-export { showOnboardingWindow, setOnboardingLifecycleCallbacks } from './platform/window/containers/onboarding-window.js'
+export {
+  showOnboardingWindow,
+  setOnboardingLifecycleCallbacks,
+} from './platform/window/containers/onboarding-window.js'

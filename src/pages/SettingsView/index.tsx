@@ -4,59 +4,80 @@
     复用 SettingsPanel/sections 下所有 section 组件。
    ===================================================================== */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import type { TopBarButtonGroup } from '../../lib/electron-api';
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import type { TopBarButtonGroup } from '../../lib/electron-api'
 import {
   updateAppSettings,
   getAppSettings,
   setMinimumSize,
   onSettingsNavigate,
-} from '../../lib/electron-api';
-import { useTabStore } from '../../store/useTabStore';
-import { useModuleStore } from '../../store/useModuleStore';
-import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData';
-import { createPlatformSettingsActions } from '../../hooks/platform-settings-actions';
-import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow';
-import StandaloneWindowHeader from '../../components/StandaloneWindowHeader';
-import ShortcutHelp from '../../components/ShortcutHelp';
-import WindowResizeHandles from '../../components/WindowResizeHandles';
-import Toggle from '../../components/ui/Toggle';
-import { SectionTitle, FormRow, Combobox } from '../../components/ui';
-import type { ComboboxOption } from '../../components/ui';
-import type { VoiceSettings, GeneralSettings, ProxySettings } from '../../components/SettingsPanel/types';
-import AppearanceSection from '../../components/SettingsPanel/sections/AppearanceSection';
-import GeneralSection from '../../components/SettingsPanel/sections/GeneralSection';
-import HotkeySection from '../../components/SettingsPanel/sections/HotkeySection';
-import TopBarSection from '../../components/SettingsPanel/sections/TopBarSection';
-import DrawerMenuSection from '../../components/SettingsPanel/sections/DrawerMenuSection';
-import { useUiVersionStore } from '../../store/useUiVersionStore';
-import AiAppSection from '../../components/SettingsPanel/sections/AiAppSection';
-import ProviderSection from '../../components/SettingsPanel/sections/ProviderSection';
-import VoiceSection from '../../components/SettingsPanel/sections/VoiceSection';
-import ProxySection from '../../components/SettingsPanel/sections/ProxySection';
-import PresetSection from '../../components/SettingsPanel/sections/PresetSection';
-import CookieSection from '../../components/SettingsPanel/sections/CookieSection';
-import StorageSection from '../../components/SettingsPanel/sections/StorageSection';
-import LogFolderSection from '../../components/SettingsPanel/sections/LogFolderSection';
-import AboutSection from '../../components/SettingsPanel/sections/AboutSection';
-import ModuleManagementSection from '../../components/SettingsPanel/sections/ModuleManagementSection';
-import DeveloperOptionsSection from '../../components/SettingsPanel/sections/DeveloperOptionsSection';
-import AiAppEditorModal from '../../components/AiAppEditorModal';
-import '../../components/SettingsPanel/styles.css';
-import '../../components/ui/TitleBar.css';
-import './index.css';
+} from '../../lib/electron-api'
+import { useTabStore } from '../../store/useTabStore'
+import { useModuleStore } from '../../store/useModuleStore'
+import { useAppSettings, useVoiceConfig, useHotkeys, usePresets } from '../../hooks/useSettingsData'
+import { createPlatformSettingsActions } from '../../hooks/platform-settings-actions'
+import { useEscToCloseWindow } from '../../hooks/useEscToCloseWindow'
+import StandaloneWindowHeader from '../../components/StandaloneWindowHeader'
+import ShortcutHelp from '../../components/ShortcutHelp'
+import WindowResizeHandles from '../../components/WindowResizeHandles'
+import Toggle from '../../components/ui/Toggle'
+import { SectionTitle, FormRow, Combobox } from '../../components/ui'
+import type { ComboboxOption } from '../../components/ui'
+import type {
+  VoiceSettings,
+  GeneralSettings,
+  ProxySettings,
+} from '../../components/SettingsPanel/types'
+import AppearanceSection from '../../components/SettingsPanel/sections/AppearanceSection'
+import GeneralSection from '../../components/SettingsPanel/sections/GeneralSection'
+import HotkeySection from '../../components/SettingsPanel/sections/HotkeySection'
+import TopBarSection from '../../components/SettingsPanel/sections/TopBarSection'
+import DrawerMenuSection from '../../components/SettingsPanel/sections/DrawerMenuSection'
+import { useUiVersionStore } from '../../store/useUiVersionStore'
+import AiAppSection from '../../components/SettingsPanel/sections/AiAppSection'
+import ProviderSection from '../../components/SettingsPanel/sections/ProviderSection'
+import VoiceSection from '../../components/SettingsPanel/sections/VoiceSection'
+import ProxySection from '../../components/SettingsPanel/sections/ProxySection'
+import PresetSection from '../../components/SettingsPanel/sections/PresetSection'
+import CookieSection from '../../components/SettingsPanel/sections/CookieSection'
+import StorageSection from '../../components/SettingsPanel/sections/StorageSection'
+import LogFolderSection from '../../components/SettingsPanel/sections/LogFolderSection'
+import AboutSection from '../../components/SettingsPanel/sections/AboutSection'
+import ModuleManagementSection from '../../components/SettingsPanel/sections/ModuleManagementSection'
+import DeveloperOptionsSection from '../../components/SettingsPanel/sections/DeveloperOptionsSection'
+import AiAppEditorModal from '../../components/AiAppEditorModal'
+import '../../components/SettingsPanel/styles.css'
+import '../../components/ui/TitleBar.css'
+import './index.css'
 
-type CategoryId = 'appearance' | 'ai' | 'voice' | 'network' | 'advanced' | 'modules' | 'developer' | 'about';
+type CategoryId =
+  | 'appearance'
+  | 'ai'
+  | 'voice'
+  | 'network'
+  | 'advanced'
+  | 'modules'
+  | 'developer'
+  | 'about'
 
-const CATEGORY_IDS: CategoryId[] = ['appearance', 'ai', 'voice', 'network', 'advanced', 'modules', 'developer', 'about'];
+const CATEGORY_IDS: CategoryId[] = [
+  'appearance',
+  'ai',
+  'voice',
+  'network',
+  'advanced',
+  'modules',
+  'developer',
+  'about',
+]
 
 function parseCategory(value: string | null | undefined): CategoryId | null {
-  return value && (CATEGORY_IDS as string[]).includes(value) ? (value as CategoryId) : null;
+  return value && (CATEGORY_IDS as string[]).includes(value) ? (value as CategoryId) : null
 }
 
 function readInitialCategory(): CategoryId {
-  const search = typeof window !== 'undefined' ? window.location?.search : undefined;
-  return parseCategory(search ? new URLSearchParams(search).get('category') : null) ?? 'appearance';
+  const search = typeof window !== 'undefined' ? window.location?.search : undefined
+  return parseCategory(search ? new URLSearchParams(search).get('category') : null) ?? 'appearance'
 }
 
 const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
@@ -68,175 +89,187 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: string }> = [
   { id: 'modules', label: '模块管理', icon: '▦' },
   { id: 'developer', label: '开发者选项', icon: '⚗' },
   { id: 'about', label: '关于', icon: 'ℹ' },
-];
+]
 
 export default function SettingsView() {
-  useEscToCloseWindow({ windowControls: true });
+  useEscToCloseWindow({ windowControls: true })
 
-  const [activeCategory, setActiveCategory] = useState<CategoryId>(readInitialCategory);
-  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>(readInitialCategory)
+  const isOxy = useUiVersionStore((s) => s.version === 'oxy')
 
   // 单例窗口复用时切换到请求的分类
   useEffect(() => {
     try {
       return onSettingsNavigate(({ category }) => {
-        const next = parseCategory(category);
-        if (next) setActiveCategory(next);
-      });
+        const next = parseCategory(category)
+        if (next) setActiveCategory(next)
+      })
     } catch {
       // 非 Electron 测试环境无 window.electron，跳过监听
-      return undefined;
+      return undefined
     }
-  }, []);
+  }, [])
 
   // ===== 状态 hook =====
-  const app = useAppSettings(true);
+  const app = useAppSettings(true)
   const {
     toggleForeignModels: handleToggleHideForeignModels,
     toggleBlocking: handleToggleDisableAllBlockRules,
     changeThreshold: handleAltSpaceThresholdChange,
-  } = createPlatformSettingsActions(app, 'SettingsView');
-  const voice = useVoiceConfig(true);
-  const hotkeys = useHotkeys(true);
-  const presetsState = usePresets(true);
+  } = createPlatformSettingsActions(app, 'SettingsView')
+  const voice = useVoiceConfig(true)
+  const hotkeys = useHotkeys(true)
+  const presetsState = usePresets(true)
 
-  const [providerEditing, setProviderEditing] = useState(false);
+  const [providerEditing, setProviderEditing] = useState(false)
 
   // ===== AI 应用编辑器遮罩状态 =====
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorProfileId, setEditorProfileId] = useState<string | undefined>(undefined);
-  const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit');
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorProfileId, setEditorProfileId] = useState<string | undefined>(undefined)
+  const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit')
 
   const handleOpenEditorEdit = useCallback((profileId: string) => {
-    setEditorProfileId(profileId);
-    setEditorMode('edit');
-    setEditorOpen(true);
-  }, []);
+    setEditorProfileId(profileId)
+    setEditorMode('edit')
+    setEditorOpen(true)
+  }, [])
 
   const handleOpenEditorCreate = useCallback(() => {
-    setEditorProfileId(undefined);
-    setEditorMode('create');
-    setEditorOpen(true);
-  }, []);
+    setEditorProfileId(undefined)
+    setEditorMode('create')
+    setEditorOpen(true)
+  }, [])
 
   const handleCloseEditor = useCallback(() => {
-    setEditorOpen(false);
-  }, []);
+    setEditorOpen(false)
+  }, [])
 
-  const tabs = useTabStore((s) => s.tabs);
-  const activeTabId = useTabStore((s) => s.activeTabId);
+  const tabs = useTabStore((s) => s.tabs)
+  const activeTabId = useTabStore((s) => s.activeTabId)
 
   // ===== UA 预设相关状态（从 AdvancedSection 内联） =====
   const desktopPresets = useMemo(
     () => presetsState.presets.filter((p) => p.platform === 'desktop'),
     [presetsState.presets],
-  );
+  )
   const mobilePresets = useMemo(
     () => presetsState.presets.filter((p) => p.platform === 'mobile'),
     [presetsState.presets],
-  );
+  )
   const desktopPlaceholder = desktopPresets.some((p) => p.id === app.defaultDesktopUaPreset)
     ? null
-    : { id: app.defaultDesktopUaPreset, name: '（已失效，请重选）' };
+    : { id: app.defaultDesktopUaPreset, name: '（已失效，请重选）' }
   const mobilePlaceholder = mobilePresets.some((p) => p.id === app.defaultMobileUaPreset)
     ? null
-    : { id: app.defaultMobileUaPreset, name: '（已失效，请重选）' };
+    : { id: app.defaultMobileUaPreset, name: '（已失效，请重选）' }
 
   // ===== Alt+Space 阈值相关状态（从 AdvancedSection 内联） =====
-  const [thresholdDraft, setThresholdDraft] = useState<string>(String(app.altSpaceResetThreshold));
+  const [thresholdDraft, setThresholdDraft] = useState<string>(String(app.altSpaceResetThreshold))
   useEffect(() => {
-    setThresholdDraft(String(app.altSpaceResetThreshold));
-  }, [app.altSpaceResetThreshold]);
+    setThresholdDraft(String(app.altSpaceResetThreshold))
+  }, [app.altSpaceResetThreshold])
 
   const handleThresholdBlur = () => {
-    const parsed = parseInt(thresholdDraft, 10);
+    const parsed = parseInt(thresholdDraft, 10)
     if (!Number.isFinite(parsed)) {
-      setThresholdDraft(String(app.altSpaceResetThreshold));
-      return;
+      setThresholdDraft(String(app.altSpaceResetThreshold))
+      return
     }
-    const clamped = Math.max(3, Math.min(20, parsed));
-    setThresholdDraft(String(clamped));
+    const clamped = Math.max(3, Math.min(20, parsed))
+    setThresholdDraft(String(clamped))
     if (clamped !== app.altSpaceResetThreshold) {
-      void handleAltSpaceThresholdChange(clamped);
+      void handleAltSpaceThresholdChange(clamped)
     }
-  };
+  }
 
-  const handleToggleDrawerMenuItem = async (item: import('../../lib/electron-api').DrawerMenuItem) => {
-    const current = app.drawerMenuItems;
-    const next = current.includes(item)
-      ? current.filter((g) => g !== item)
-      : [...current, item];
-    app.setDrawerMenuItems(next);
+  const handleToggleDrawerMenuItem = async (
+    item: import('../../lib/electron-api').DrawerMenuItem,
+  ) => {
+    const current = app.drawerMenuItems
+    const next = current.includes(item) ? current.filter((g) => g !== item) : [...current, item]
+    app.setDrawerMenuItems(next)
     try {
-      await updateAppSettings({ drawerMenuItems: next });
+      await updateAppSettings({ drawerMenuItems: next })
     } catch (e) {
-      console.error('[SettingsView] 切换侧边菜单入口失败:', e);
-      app.setDrawerMenuItems(current);
+      console.error('[SettingsView] 切换侧边菜单入口失败:', e)
+      app.setDrawerMenuItems(current)
     }
-  };
+  }
 
   const handleToggleTopBarButton = async (group: TopBarButtonGroup) => {
-    const current = app.topBarVisibleButtons;
-    const next = current.includes(group)
-      ? current.filter((g) => g !== group)
-      : [...current, group];
-    app.setTopBarVisibleButtons(next);
+    const current = app.topBarVisibleButtons
+    const next = current.includes(group) ? current.filter((g) => g !== group) : [...current, group]
+    app.setTopBarVisibleButtons(next)
     try {
-      await updateAppSettings({ topBarVisibleButtons: next });
+      await updateAppSettings({ topBarVisibleButtons: next })
       try {
         const { calculateMainWindowMinWidth, MAIN_WINDOW_MIN_HEIGHT } = await import(
           '../../../electron/shared/window-size'
-        );
-        const cfg = await getAppSettings();
-        const uiScale = (cfg.uiScale ?? 'medium') as 'small' | 'medium' | 'large';
-        const activeTab = tabs.find((t) => t.id === activeTabId);
-        const newMinWidth = calculateMainWindowMinWidth(uiScale, next, activeTab?.title);
-        await setMinimumSize(newMinWidth, MAIN_WINDOW_MIN_HEIGHT);
+        )
+        const cfg = await getAppSettings()
+        const uiScale = (cfg.uiScale ?? 'medium') as 'small' | 'medium' | 'large'
+        const activeTab = tabs.find((t) => t.id === activeTabId)
+        const newMinWidth = calculateMainWindowMinWidth(uiScale, next, activeTab?.title)
+        await setMinimumSize(newMinWidth, MAIN_WINDOW_MIN_HEIGHT)
       } catch (e) {
-        console.warn('[SettingsView] 更新窗口最小宽度失败:', e);
+        console.warn('[SettingsView] 更新窗口最小宽度失败:', e)
       }
     } catch (e) {
-      console.error('[SettingsView] 切换顶栏按钮显隐失败:', e);
-      app.setTopBarVisibleButtons(current);
+      console.error('[SettingsView] 切换顶栏按钮显隐失败:', e)
+      app.setTopBarVisibleButtons(current)
     }
-  };
+  }
 
-  const handleVoiceChange = useCallback((patch: Partial<VoiceSettings>) => {
-    if (patch.confirmMode !== undefined) voice.setConfirmMode(patch.confirmMode);
-    if (patch.inputMethod !== undefined) voice.setInputMethod(patch.inputMethod);
-    if (patch.enterToSend !== undefined) voice.setEnterToSend(patch.enterToSend);
-    if (patch.sttMode !== undefined) voice.setSttMode(patch.sttMode);
-    if (patch.aiProvider !== undefined) voice.setAiProvider(patch.aiProvider);
-    if (patch.language !== undefined) voice.setLanguage(patch.language);
-    if (patch.localExePath !== undefined) voice.setLocalExePath(patch.localExePath);
-    if (patch.localArgs !== undefined) voice.setLocalArgs(patch.localArgs);
-    if (patch.inputDeviceId !== undefined) voice.setInputDeviceId(patch.inputDeviceId);
-    if (patch.ttsMode !== undefined) voice.setTtsMode(patch.ttsMode);
-    if (patch.ttsProvider !== undefined) voice.setTtsProvider(patch.ttsProvider);
-  }, [voice]);
+  const handleVoiceChange = useCallback(
+    (patch: Partial<VoiceSettings>) => {
+      if (patch.confirmMode !== undefined) voice.setConfirmMode(patch.confirmMode)
+      if (patch.inputMethod !== undefined) voice.setInputMethod(patch.inputMethod)
+      if (patch.enterToSend !== undefined) voice.setEnterToSend(patch.enterToSend)
+      if (patch.sttMode !== undefined) voice.setSttMode(patch.sttMode)
+      if (patch.aiProvider !== undefined) voice.setAiProvider(patch.aiProvider)
+      if (patch.language !== undefined) voice.setLanguage(patch.language)
+      if (patch.localExePath !== undefined) voice.setLocalExePath(patch.localExePath)
+      if (patch.localArgs !== undefined) voice.setLocalArgs(patch.localArgs)
+      if (patch.inputDeviceId !== undefined) voice.setInputDeviceId(patch.inputDeviceId)
+      if (patch.ttsMode !== undefined) voice.setTtsMode(patch.ttsMode)
+      if (patch.ttsProvider !== undefined) voice.setTtsProvider(patch.ttsProvider)
+    },
+    [voice],
+  )
 
-  const handleGeneralChange = useCallback((patch: Partial<GeneralSettings>) => {
-    if (patch.startupOpen !== undefined) app.setStartupOpen(patch.startupOpen);
-    if (patch.closeBehavior !== undefined) app.setCloseBehavior(patch.closeBehavior);
-    if (patch.enterToSend !== undefined) app.setEnterToSend(patch.enterToSend);
-    if (patch.appClickBehavior !== undefined) app.setAppClickBehavior(patch.appClickBehavior);
-    if (patch.usageTrackingEnabled !== undefined) app.setUsageTrackingEnabled(patch.usageTrackingEnabled);
-  }, [app]);
+  const handleGeneralChange = useCallback(
+    (patch: Partial<GeneralSettings>) => {
+      if (patch.startupOpen !== undefined) app.setStartupOpen(patch.startupOpen)
+      if (patch.closeBehavior !== undefined) app.setCloseBehavior(patch.closeBehavior)
+      if (patch.enterToSend !== undefined) app.setEnterToSend(patch.enterToSend)
+      if (patch.appClickBehavior !== undefined) app.setAppClickBehavior(patch.appClickBehavior)
+      if (patch.usageTrackingEnabled !== undefined)
+        app.setUsageTrackingEnabled(patch.usageTrackingEnabled)
+    },
+    [app],
+  )
 
-  const handleProxyChange = useCallback((patch: Partial<ProxySettings>) => {
-    if (patch.proxyMode !== undefined) app.setProxyMode(patch.proxyMode);
-    if (patch.customProxy !== undefined) app.setCustomProxy(patch.customProxy);
-    if (patch.proxyUsername !== undefined) app.setProxyUsername(patch.proxyUsername);
-    if (patch.proxyPassword !== undefined) app.setProxyPassword(patch.proxyPassword);
-    if (patch.proxyBypass !== undefined) app.setProxyBypass(patch.proxyBypass);
-    if (patch.proxyFallbackEnabled !== undefined) app.setProxyFallbackEnabled(patch.proxyFallbackEnabled);
-    if (patch.proxyFallbackMode !== undefined) app.setProxyFallbackMode(patch.proxyFallbackMode);
-  }, [app]);
+  const handleProxyChange = useCallback(
+    (patch: Partial<ProxySettings>) => {
+      if (patch.proxyMode !== undefined) app.setProxyMode(patch.proxyMode)
+      if (patch.customProxy !== undefined) app.setCustomProxy(patch.customProxy)
+      if (patch.proxyUsername !== undefined) app.setProxyUsername(patch.proxyUsername)
+      if (patch.proxyPassword !== undefined) app.setProxyPassword(patch.proxyPassword)
+      if (patch.proxyBypass !== undefined) app.setProxyBypass(patch.proxyBypass)
+      if (patch.proxyFallbackEnabled !== undefined)
+        app.setProxyFallbackEnabled(patch.proxyFallbackEnabled)
+      if (patch.proxyFallbackMode !== undefined) app.setProxyFallbackMode(patch.proxyFallbackMode)
+    },
+    [app],
+  )
 
   return (
     <>
       <WindowResizeHandles />
-      <div className="settings-window-root app-shell app-view-root" data-name="settings.window.root">
+      <div
+        className="settings-window-root app-shell app-view-root"
+        data-name="settings.window.root"
+      >
         <StandaloneWindowHeader title="设置" dataNamePrefix="settings.topbar" showMinMax={false} />
 
         <div className="settings-window-body">
@@ -245,9 +278,12 @@ export default function SettingsView() {
             {CATEGORIES.filter((cat) => {
               // 模块联动：语音输入与 TTS 全关时隐藏「语音」分类
               if (cat.id === 'voice') {
-                return useModuleStore.getState().isEnabled('voice') || useModuleStore.getState().isEnabled('tts');
+                return (
+                  useModuleStore.getState().isEnabled('voice') ||
+                  useModuleStore.getState().isEnabled('tts')
+                )
               }
-              return true;
+              return true
             }).map((cat) => (
               <button
                 key={cat.id}
@@ -255,7 +291,9 @@ export default function SettingsView() {
                 onClick={() => setActiveCategory(cat.id)}
                 data-name={`settings.nav.${cat.id}`}
               >
-                <span className="settings-nav-icon" aria-hidden="true">{cat.icon}</span>
+                <span className="settings-nav-icon" aria-hidden="true">
+                  {cat.icon}
+                </span>
                 <span className="settings-nav-label">{cat.label}</span>
               </button>
             ))}
@@ -263,231 +301,233 @@ export default function SettingsView() {
 
           {/* 右内容区 */}
           <main className="settings-content" data-name="settings.content">
-        {activeCategory === 'appearance' && (
-          <>
-            <AppearanceSection
-              tabBarCollapsed={app.tabBarCollapsed}
-              setTabBarCollapsed={app.setTabBarCollapsed}
-              uiScale={app.uiScale}
-              setUiScale={app.setUiScale}
-            />
-            <GeneralSection
-              general={{
-                startupOpen: app.startupOpen,
-                closeBehavior: app.closeBehavior,
-                enterToSend: app.enterToSend,
-                defaultDesktopUaPreset: app.defaultDesktopUaPreset,
-                defaultMobileUaPreset: app.defaultMobileUaPreset,
-                appClickBehavior: app.appClickBehavior,
-                usageTrackingEnabled: app.usageTrackingEnabled,
-              }}
-              onChange={handleGeneralChange}
-            />
-            {!isOxy && (
+            {activeCategory === 'appearance' && (
               <>
-                <TopBarSection
-                  visibleButtons={app.topBarVisibleButtons}
-                  onToggle={handleToggleTopBarButton}
+                <AppearanceSection
+                  tabBarCollapsed={app.tabBarCollapsed}
+                  setTabBarCollapsed={app.setTabBarCollapsed}
+                  uiScale={app.uiScale}
+                  setUiScale={app.setUiScale}
                 />
-                <DrawerMenuSection
-                  visibleItems={app.drawerMenuItems}
-                  onToggle={handleToggleDrawerMenuItem}
+                <GeneralSection
+                  general={{
+                    startupOpen: app.startupOpen,
+                    closeBehavior: app.closeBehavior,
+                    enterToSend: app.enterToSend,
+                    defaultDesktopUaPreset: app.defaultDesktopUaPreset,
+                    defaultMobileUaPreset: app.defaultMobileUaPreset,
+                    appClickBehavior: app.appClickBehavior,
+                    usageTrackingEnabled: app.usageTrackingEnabled,
+                  }}
+                  onChange={handleGeneralChange}
                 />
+                {!isOxy && (
+                  <>
+                    <TopBarSection
+                      visibleButtons={app.topBarVisibleButtons}
+                      onToggle={handleToggleTopBarButton}
+                    />
+                    <DrawerMenuSection
+                      visibleItems={app.drawerMenuItems}
+                      onToggle={handleToggleDrawerMenuItem}
+                    />
+                  </>
+                )}
+                <HotkeySection
+                  hotkeys={hotkeys.hotkeys}
+                  drafts={hotkeys.drafts}
+                  savingAction={hotkeys.savingAction}
+                  feedback={hotkeys.feedback}
+                  setDrafts={hotkeys.setDrafts}
+                  handleSaveHotkey={hotkeys.saveHotkey}
+                  onToggleEnabled={hotkeys.toggleEnabled}
+                />
+                {/* Alt+Space 位置恢复触发次数 */}
+                <section data-name="settings.appearance.alt-space.section">
+                  <SectionTitle>Alt+Space 位置恢复</SectionTitle>
+                  <FormRow label="触发次数" mutedLabel>
+                    <input
+                      type="number"
+                      className="input-underline hotkey-threshold-input"
+                      min={3}
+                      max={20}
+                      value={thresholdDraft}
+                      onChange={(e) => setThresholdDraft(e.target.value)}
+                      onBlur={handleThresholdBlur}
+                      data-name="settings.appearance.alt-space-threshold-input"
+                    />
+                  </FormRow>
+                </section>
               </>
             )}
-            <HotkeySection
-              hotkeys={hotkeys.hotkeys}
-              drafts={hotkeys.drafts}
-              savingAction={hotkeys.savingAction}
-              feedback={hotkeys.feedback}
-              setDrafts={hotkeys.setDrafts}
-              handleSaveHotkey={hotkeys.saveHotkey}
-              onToggleEnabled={hotkeys.toggleEnabled}
-            />
-            {/* Alt+Space 位置恢复触发次数 */}
-            <section data-name="settings.appearance.alt-space.section">
-              <SectionTitle>Alt+Space 位置恢复</SectionTitle>
-              <FormRow label="触发次数" mutedLabel>
-                <input
-                  type="number"
-                  className="input-underline hotkey-threshold-input"
-                  min={3}
-                  max={20}
-                  value={thresholdDraft}
-                  onChange={(e) => setThresholdDraft(e.target.value)}
-                  onBlur={handleThresholdBlur}
-                  data-name="settings.appearance.alt-space-threshold-input"
-                />
-              </FormRow>
-            </section>
-          </>
-        )}
 
-        {activeCategory === 'ai' && (
-          <>
-            <AiAppSection
-              platforms={presetsState.platforms}
-              onEditApp={handleOpenEditorEdit}
-              onCreateNew={handleOpenEditorCreate}
-              hideForeignModels={app.hideForeignModels}
-              collapsibleTitle={false}
-            />
-            <PresetSection
-              presets={presetsState.presets}
-              loading={presetsState.isLoading}
-              presetExpanded={true}
-              setPresetExpanded={() => {}}
-              onReload={() => { void presetsState.load(); }}
-              collapsibleTitle={false}
-            />
-            {/* 默认 UA 预设 */}
-            <section data-name="settings.ai.ua-preset.section">
-              <SectionTitle>默认 UA 预设</SectionTitle>
-              <FormRow label="默认桌面端 UA" mutedLabel>
-                <Combobox
-                  inputValue={
-                    desktopPlaceholder
-                      ? desktopPlaceholder.name
-                      : desktopPresets.find((p) => p.id === app.defaultDesktopUaPreset)?.name ?? ''
-                  }
-                  onInputChange={() => {}}
-                  inputPlaceholder="选择桌面端 UA"
-                  inputClassName="ua-preset-select"
-                  inputReadOnly
-                  options={desktopPresets.map<ComboboxOption>((p) => ({
-                    value: p.id,
-                    label: p.name,
-                    selected: p.id === app.defaultDesktopUaPreset,
-                  }))}
-                  onSelect={async (v) => {
-                    app.setDefaultDesktopUaPreset(v);
-                    try {
-                      await updateAppSettings({ defaultDesktopUaPreset: v });
-                    } catch (err) {
-                      console.error('保存默认桌面端 UA 失败:', err);
-                    }
-                  }}
-                  searchable
-                  searchPlaceholder="搜索 UA 预设…"
-                  emptyText="无匹配预设"
-                  dataName="settings.ai.desktop-ua-select"
+            {activeCategory === 'ai' && (
+              <>
+                <AiAppSection
+                  platforms={presetsState.platforms}
+                  onEditApp={handleOpenEditorEdit}
+                  onCreateNew={handleOpenEditorCreate}
+                  hideForeignModels={app.hideForeignModels}
+                  collapsibleTitle={false}
                 />
-              </FormRow>
-              <FormRow label="默认移动端 UA" mutedLabel>
-                <Combobox
-                  inputValue={
-                    mobilePlaceholder
-                      ? mobilePlaceholder.name
-                      : mobilePresets.find((p) => p.id === app.defaultMobileUaPreset)?.name ?? ''
-                  }
-                  onInputChange={() => {}}
-                  inputPlaceholder="选择移动端 UA"
-                  inputClassName="ua-preset-select"
-                  inputReadOnly
-                  options={mobilePresets.map<ComboboxOption>((p) => ({
-                    value: p.id,
-                    label: p.name,
-                    selected: p.id === app.defaultMobileUaPreset,
-                  }))}
-                  onSelect={async (v) => {
-                    app.setDefaultMobileUaPreset(v);
-                    try {
-                      await updateAppSettings({ defaultMobileUaPreset: v });
-                    } catch (err) {
-                      console.error('保存默认移动端 UA 失败:', err);
-                    }
+                <PresetSection
+                  presets={presetsState.presets}
+                  loading={presetsState.isLoading}
+                  presetExpanded={true}
+                  setPresetExpanded={() => {}}
+                  onReload={() => {
+                    void presetsState.load()
                   }}
-                  searchable
-                  searchPlaceholder="搜索 UA 预设…"
-                  emptyText="无匹配预设"
-                  dataName="settings.ai.mobile-ua-select"
+                  collapsibleTitle={false}
                 />
-              </FormRow>
-            </section>
-            {useModuleStore.getState().isEnabled('custom-chat') && (
-              <ProviderSection
-                defaultCollapsed={false}
-                collapsibleTitle={false}
-                onEditingChange={setProviderEditing}
+                {/* 默认 UA 预设 */}
+                <section data-name="settings.ai.ua-preset.section">
+                  <SectionTitle>默认 UA 预设</SectionTitle>
+                  <FormRow label="默认桌面端 UA" mutedLabel>
+                    <Combobox
+                      inputValue={
+                        desktopPlaceholder
+                          ? desktopPlaceholder.name
+                          : (desktopPresets.find((p) => p.id === app.defaultDesktopUaPreset)
+                              ?.name ?? '')
+                      }
+                      onInputChange={() => {}}
+                      inputPlaceholder="选择桌面端 UA"
+                      inputClassName="ua-preset-select"
+                      inputReadOnly
+                      options={desktopPresets.map<ComboboxOption>((p) => ({
+                        value: p.id,
+                        label: p.name,
+                        selected: p.id === app.defaultDesktopUaPreset,
+                      }))}
+                      onSelect={async (v) => {
+                        app.setDefaultDesktopUaPreset(v)
+                        try {
+                          await updateAppSettings({ defaultDesktopUaPreset: v })
+                        } catch (err) {
+                          console.error('保存默认桌面端 UA 失败:', err)
+                        }
+                      }}
+                      searchable
+                      searchPlaceholder="搜索 UA 预设…"
+                      emptyText="无匹配预设"
+                      dataName="settings.ai.desktop-ua-select"
+                    />
+                  </FormRow>
+                  <FormRow label="默认移动端 UA" mutedLabel>
+                    <Combobox
+                      inputValue={
+                        mobilePlaceholder
+                          ? mobilePlaceholder.name
+                          : (mobilePresets.find((p) => p.id === app.defaultMobileUaPreset)?.name ??
+                            '')
+                      }
+                      onInputChange={() => {}}
+                      inputPlaceholder="选择移动端 UA"
+                      inputClassName="ua-preset-select"
+                      inputReadOnly
+                      options={mobilePresets.map<ComboboxOption>((p) => ({
+                        value: p.id,
+                        label: p.name,
+                        selected: p.id === app.defaultMobileUaPreset,
+                      }))}
+                      onSelect={async (v) => {
+                        app.setDefaultMobileUaPreset(v)
+                        try {
+                          await updateAppSettings({ defaultMobileUaPreset: v })
+                        } catch (err) {
+                          console.error('保存默认移动端 UA 失败:', err)
+                        }
+                      }}
+                      searchable
+                      searchPlaceholder="搜索 UA 预设…"
+                      emptyText="无匹配预设"
+                      dataName="settings.ai.mobile-ua-select"
+                    />
+                  </FormRow>
+                </section>
+                {useModuleStore.getState().isEnabled('custom-chat') && (
+                  <ProviderSection
+                    defaultCollapsed={false}
+                    collapsibleTitle={false}
+                    onEditingChange={setProviderEditing}
+                  />
+                )}
+              </>
+            )}
+
+            {activeCategory === 'voice' &&
+              (useModuleStore.getState().isEnabled('voice') ||
+                useModuleStore.getState().isEnabled('tts')) && (
+                <VoiceSection
+                  voice={{
+                    confirmMode: voice.confirmMode,
+                    inputMethod: voice.inputMethod,
+                    enterToSend: voice.enterToSend,
+                    sttMode: voice.sttMode,
+                    aiProvider: voice.aiProvider,
+                    language: voice.language,
+                    localExePath: voice.localExePath,
+                    localArgs: voice.localArgs,
+                    inputDeviceId: voice.inputDeviceId,
+                    ttsMode: voice.ttsMode,
+                    ttsProvider: voice.ttsProvider,
+                  }}
+                  onChange={handleVoiceChange}
+                  collapsibleTitle={false}
+                />
+              )}
+
+            {activeCategory === 'network' && (
+              <>
+                <ProxySection
+                  proxy={{
+                    proxyMode: app.proxyMode,
+                    customProxy: app.customProxy,
+                    proxyUsername: app.proxyUsername,
+                    proxyPassword: app.proxyPassword,
+                    proxyBypass: app.proxyBypass,
+                    proxyFallbackEnabled: app.proxyFallbackEnabled,
+                    proxyFallbackMode: app.proxyFallbackMode,
+                  }}
+                  onChange={handleProxyChange}
+                />
+                <CookieSection />
+              </>
+            )}
+
+            {activeCategory === 'advanced' && (
+              <>
+                {/* 屏蔽与过滤 */}
+                <section data-name="settings.advanced.filter.section">
+                  <SectionTitle>屏蔽与过滤</SectionTitle>
+                  <FormRow label="屏蔽国外模型">
+                    <Toggle
+                      checked={app.hideForeignModels}
+                      onChange={handleToggleHideForeignModels}
+                      aria-label="屏蔽国外模型"
+                      data-name="settings.advanced.hide-foreign-models-toggle"
+                    />
+                  </FormRow>
+                </section>
+                {/* 下载与缓存清理 */}
+                <StorageSection />
+                {!isOxy && <LogFolderSection />}
+              </>
+            )}
+
+            {activeCategory === 'modules' && <ModuleManagementSection />}
+
+            {activeCategory === 'developer' && (
+              <DeveloperOptionsSection
+                lowMemoryMode={app.lowMemoryMode}
+                onChangeLowMemoryMode={(enabled) => app.update({ lowMemoryMode: enabled })}
+                disableAllBlockRules={app.disableAllBlockRules}
+                onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
               />
             )}
-          </>
-        )}
 
-        {activeCategory === 'voice' && (useModuleStore.getState().isEnabled('voice') || useModuleStore.getState().isEnabled('tts')) && (
-          <VoiceSection
-            voice={{
-              confirmMode: voice.confirmMode,
-              inputMethod: voice.inputMethod,
-              enterToSend: voice.enterToSend,
-              sttMode: voice.sttMode,
-              aiProvider: voice.aiProvider,
-              language: voice.language,
-              localExePath: voice.localExePath,
-              localArgs: voice.localArgs,
-              inputDeviceId: voice.inputDeviceId,
-              ttsMode: voice.ttsMode,
-              ttsProvider: voice.ttsProvider,
-            }}
-            onChange={handleVoiceChange}
-            collapsibleTitle={false}
-          />
-        )}
-
-        {activeCategory === 'network' && (
-          <>
-            <ProxySection
-              proxy={{
-                proxyMode: app.proxyMode,
-                customProxy: app.customProxy,
-                proxyUsername: app.proxyUsername,
-                proxyPassword: app.proxyPassword,
-                proxyBypass: app.proxyBypass,
-                proxyFallbackEnabled: app.proxyFallbackEnabled,
-                proxyFallbackMode: app.proxyFallbackMode,
-              }}
-              onChange={handleProxyChange}
-            />
-            <CookieSection />
-          </>
-        )}
-
-        {activeCategory === 'advanced' && (
-          <>
-            {/* 屏蔽与过滤 */}
-            <section data-name="settings.advanced.filter.section">
-              <SectionTitle>屏蔽与过滤</SectionTitle>
-              <FormRow label="屏蔽国外模型">
-                <Toggle
-                  checked={app.hideForeignModels}
-                  onChange={handleToggleHideForeignModels}
-                  aria-label="屏蔽国外模型"
-                  data-name="settings.advanced.hide-foreign-models-toggle"
-                />
-              </FormRow>
-            </section>
-            {/* 下载与缓存清理 */}
-            <StorageSection />
-                        {!isOxy && <LogFolderSection />}
-          </>
-        )}
-
-        {activeCategory === 'modules' && (
-  <ModuleManagementSection />
-)}
-
-{activeCategory === 'developer' && (
-  <DeveloperOptionsSection
-    lowMemoryMode={app.lowMemoryMode}
-        onChangeLowMemoryMode={(enabled) => app.update({ lowMemoryMode: enabled })}
-        disableAllBlockRules={app.disableAllBlockRules}
-    onToggleDisableAllBlockRules={handleToggleDisableAllBlockRules}
-  />
-)}
-
-          {activeCategory === 'about' && (
-          <AboutSection />
-        )}
+            {activeCategory === 'about' && <AboutSection />}
           </main>
         </div>
       </div>
@@ -502,5 +542,5 @@ export default function SettingsView() {
       {/* 快捷键说明（` / ~ / ? 呼出） */}
       <ShortcutHelp />
     </>
-  );
+  )
 }

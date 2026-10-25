@@ -5,25 +5,25 @@
    经 WEBVIEW_HOTKEY IPC 以 action: 'openShortcuts' | 'closeShortcuts' 转发。
    ===================================================================== */
 
-import { useEffect, useRef } from 'react';
-import { onWebviewHotkey } from '../lib/electron-api';
+import { useEffect, useRef } from 'react'
+import { onWebviewHotkey } from '../lib/electron-api'
 
 export function useOpenShortcutsForward(onOpen: () => void, onClose: () => void): void {
-  const onOpenRef = useRef(onOpen);
-  const onCloseRef = useRef(onClose);
-  onOpenRef.current = onOpen;
-  onCloseRef.current = onClose;
+  const onOpenRef = useRef(onOpen)
+  const onCloseRef = useRef(onClose)
+  onOpenRef.current = onOpen
+  onCloseRef.current = onClose
 
   useEffect(() => {
-    let off: (() => void) | undefined;
+    let off: (() => void) | undefined
     try {
       off = onWebviewHotkey((payload) => {
-        if (payload.action === 'openShortcuts') onOpenRef.current();
-        else if (payload.action === 'closeShortcuts') onCloseRef.current();
-      });
+        if (payload.action === 'openShortcuts') onOpenRef.current()
+        else if (payload.action === 'closeShortcuts') onCloseRef.current()
+      })
     } catch {
       // preload 未就绪或测试环境：无 webview 转发通道
     }
-    return () => off?.();
-  }, []);
+    return () => off?.()
+  }, [])
 }

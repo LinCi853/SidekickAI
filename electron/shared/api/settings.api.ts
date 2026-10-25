@@ -147,7 +147,9 @@ export interface AppSettingsAPI {
   /** 将 Profile.proxyConfig 即时应用到其 session（无需重启） */
   applyProfileProxy(profileId: string): Promise<void>
   /** Profile 级代理失败兜底（浏览器窗口 webview 加载失败时触发） */
-  applyProfileProxyFallback(profileId: string): Promise<{ switched: boolean; mode: 'direct' | 'system' | null }>
+  applyProfileProxyFallback(
+    profileId: string,
+  ): Promise<{ switched: boolean; mode: 'direct' | 'system' | null }>
   /**
    * 保存/清除指定 Profile 的浏览器窗口脱离/回归快捷键。
    * 主进程会调用 reregisterProfileShortcuts() 重注册全局快捷键。
@@ -168,19 +170,26 @@ export interface AppSettingsAPI {
   exportData(
     targetPath: string,
     options: {
-      basicData: boolean;
-      cookies: boolean;
-      indexedDB: boolean;
-      cache: boolean;
-      voiceAssets: boolean;
+      basicData: boolean
+      cookies: boolean
+      indexedDB: boolean
+      cache: boolean
+      voiceAssets: boolean
     },
     encrypt?: { password: string },
   ): Promise<{ success: boolean; filePath?: string; error?: string }>
   /** 从 zip/sabackup 文件导入所有数据（导入后应用自动重启）。加密文件返回 encrypted: true */
   inspectBackup(filePath: string, password?: string): Promise<BackupInspection>
-  importData(filePath: string, fingerprint?: string): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }>
+  importData(
+    filePath: string,
+    fingerprint?: string,
+  ): Promise<{ success: boolean; error?: string; encrypted?: boolean; sourceDeviceId?: string }>
   /** 从加密的 .sabackup 文件导入（输入密码解密后导入） */
-  importDataDecrypted(filePath: string, password: string, fingerprint?: string): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }>
+  importDataDecrypted(
+    filePath: string,
+    password: string,
+    fingerprint?: string,
+  ): Promise<{ success: boolean; error?: string; sourceDeviceId?: string }>
   /** 选文件后立即检测是否 SABK 加密备份 */
   detectBackupEncrypted(filePath: string): Promise<boolean>
   /**
@@ -189,11 +198,11 @@ export interface AppSettingsAPI {
    * total 由渲染层按选中项累加
    */
   estimateExportSizes(): Promise<{
-    basicData: number;
-    cookies: number;
-    indexedDB: number;
-    cache: number;
-    voiceAssets: number;
+    basicData: number
+    cookies: number
+    indexedDB: number
+    cache: number
+    voiceAssets: number
   }>
   /** 打开数据导出独立窗口（细粒度选择 + 体积提示，单例） */
   openExportWindow(): Promise<void>
@@ -249,25 +258,56 @@ export interface PlatformCapabilitiesAPI {
 // ── ElectronAPI 根级设置/UI 成员（就近归类） ──
 
 /** 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后通知各窗口重新计算最小尺寸） */
-export type OnUiScaleChangedCallback = (callback: (uiScale: 'small' | 'medium' | 'large') => void) => () => void
+export type OnUiScaleChangedCallback = (
+  callback: (uiScale: 'small' | 'medium' | 'large') => void,
+) => () => void
 
 /** 主→渲染：应用设置变更广播（任意窗口修改设置后通知所有窗口同步） */
 export type OnAppSettingsChangedCallback = (callback: (settings: AppSettings) => void) => () => void
 
 /** 渲染→主：请求广播 UI 版本/主题变更到所有窗口 */
-export type BroadcastUiVersionChangedFn = (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void
+export type BroadcastUiVersionChangedFn = (payload: {
+  uiVersion: 'classic' | 'oxy'
+  theme: 'light' | 'dark' | 'system'
+}) => void
 
 /** 主→渲染：UI 版本/主题变更广播 */
-export type OnUiVersionChangedCallback = (callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void) => () => void
+export type OnUiVersionChangedCallback = (
+  callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void,
+) => () => void
 
 /** webview 快捷键 action 联合类型（主进程 webview-hotkeys.ts 实际发送的完整集合） */
 export type WebviewHotkeyAction =
-  | 'switchTab' | 'cycleTab' | 'toggleSpatialNav' | 'openShortcuts' | 'closeShortcuts' | 'toggleTheme'
-  | 'navBack' | 'navForward' | 'navRefresh' | 'forceRefresh' | 'newTab' | 'closeTab'
-  | 'detachCurrent' | 'focusCycle' | 'addBookmark' | 'openHistory'
-  | 'openDownloads' | 'focusSearch' | 'clearBrowsingData' | 'findInPage' | 'print'
-  | 'toggleCloudPc' | 'focusAddressBar' | 'toggleBookmarkBar' | 'reopenClosed'
-  | 'savePageAs' | 'viewSource' | 'zoomOut' | 'zoomReset' | 'zoomIn'
+  | 'switchTab'
+  | 'cycleTab'
+  | 'toggleSpatialNav'
+  | 'openShortcuts'
+  | 'closeShortcuts'
+  | 'toggleTheme'
+  | 'navBack'
+  | 'navForward'
+  | 'navRefresh'
+  | 'forceRefresh'
+  | 'newTab'
+  | 'closeTab'
+  | 'detachCurrent'
+  | 'focusCycle'
+  | 'addBookmark'
+  | 'openHistory'
+  | 'openDownloads'
+  | 'focusSearch'
+  | 'clearBrowsingData'
+  | 'findInPage'
+  | 'print'
+  | 'toggleCloudPc'
+  | 'focusAddressBar'
+  | 'toggleBookmarkBar'
+  | 'reopenClosed'
+  | 'savePageAs'
+  | 'viewSource'
+  | 'zoomOut'
+  | 'zoomReset'
+  | 'zoomIn'
 
 /** 主→渲染：webview 内应用快捷键转发（主进程 before-input-event 拦截后通知渲染层执行） */
 export type OnWebviewHotkeyCallback = (
@@ -290,7 +330,9 @@ export interface WebviewHotkeyPayload {
 }
 
 /** 主→提示词库窗口渲染：注入结果回传 */
-export type OnPromptInjectResultCallback = (cb: (result: { success: boolean; platformName?: string }) => void) => () => void
+export type OnPromptInjectResultCallback = (
+  cb: (result: { success: boolean; platformName?: string }) => void,
+) => () => void
 
 /** 主窗口渲染 → 主进程：回传注入结果（主进程转发到提示词库窗口，供其显示 toast） */
 export type SendPromptInjectResultFn = (result: { success: boolean; platformName?: string }) => void

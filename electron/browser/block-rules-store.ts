@@ -75,12 +75,8 @@ export const blockRulesStore = new BlockRulesStore()
 export function registerBlockRulesIPC(): void {
   const ipc = IPC_CHANNELS
   ipcMain.handle(ipc.BLOCK_RULES_LIST, () => blockRulesStore.list())
-  ipcMain.handle(ipc.BLOCK_RULES_SAVE, (_e, rule: BlockRule) =>
-    blockRulesStore.save(rule),
-  )
-  ipcMain.handle(ipc.BLOCK_RULES_DELETE, (_e, id: string) =>
-    blockRulesStore.delete(id),
-  )
+  ipcMain.handle(ipc.BLOCK_RULES_SAVE, (_e, rule: BlockRule) => blockRulesStore.save(rule))
+  ipcMain.handle(ipc.BLOCK_RULES_DELETE, (_e, id: string) => blockRulesStore.delete(id))
   ipcMain.handle(ipc.BLOCK_RULES_UPDATE, (_e, id: string, patch: Partial<BlockRule>) =>
     blockRulesStore.update(id, patch),
   )
@@ -109,7 +105,11 @@ export function ensureDefaultBlockRules(): void {
     if (idx !== -1) {
       const current = existing[idx]
       // 仅在内置规则内容有变化时更新，保留用户对 enabled 的修改
-      if (current.selector !== defRule.selector || current.jsCode !== defRule.jsCode || current.label !== defRule.label) {
+      if (
+        current.selector !== defRule.selector ||
+        current.jsCode !== defRule.jsCode ||
+        current.label !== defRule.label
+      ) {
         existing[idx] = { ...defRule, enabled: current.enabled }
         updated++
       }

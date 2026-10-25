@@ -233,12 +233,7 @@ export async function streamChat(
       headers['x-api-key'] = provider.apiKey
       headers['anthropic-version'] = '2023-06-01'
       body = JSON.stringify(
-        toAnthropicPayload(
-          messages,
-          provider.model,
-          provider.maxTokens,
-          provider.temperature,
-        ),
+        toAnthropicPayload(messages, provider.model, provider.maxTokens, provider.temperature),
       )
     } else {
       // openai / custom
@@ -300,56 +295,65 @@ export async function streamChat(
         }
 
         let json
-        try { json = JSON.parse(data) } catch (error) {
-          console.warn('[ai-client] Invalid stream JSON:', error, data.slice(0, ERROR_LOG_MAX_LEN_SHORT))
+        try {
+          json = JSON.parse(data)
+        } catch (error) {
+          console.warn(
+            '[ai-client] Invalid stream JSON:',
+            error,
+            data.slice(0, ERROR_LOG_MAX_LEN_SHORT),
+          )
           continue
         }
-          if (provider.protocol === 'anthropic') {
-            if (json.type === 'content_block_delta' && typeof json.delta?.thinking === 'string') {
-              onReasoningDelta?.(json.delta.thinking)
-            }
-            if (json.type === 'content_block_start' && typeof json.content_block?.thinking === 'string') {
-              onReasoningDelta?.(json.content_block.thinking)
-            }
-            // Anthropic 流式事件格式
-            if (json.type === 'content_block_delta' && json.delta?.text) {
-              fullText += json.delta.text
-              onDelta(json.delta.text)
-            } else if (json.type === 'message_start' && json.message?.usage) {
-              // 输入 token 用量
-              promptTokens = json.message.usage.input_tokens || 0
-            } else if (json.type === 'message_delta' && json.usage) {
-              // 输出 token 用量（累积）
-              completionTokens = json.usage.output_tokens || 0
-            } else if (json.type === 'message_stop') {
-              reportUsage()
-              onDone(fullText)
-              return
-            } else if (json.type === 'error') {
-              throw new Error(json.error?.message || 'Anthropic 流式错误')
-            }
-          } else {
-            // OpenAI 流式格式
-            const delta = json.choices?.[0]?.delta?.content
-            const reasoning = json.choices?.[0]?.delta?.reasoning_content ?? json.choices?.[0]?.delta?.reasoning
-            if (typeof reasoning === 'string') onReasoningDelta?.(reasoning)
-            if (delta) {
-              fullText += delta
-              onDelta(delta)
-            }
-            // usage（流式最后一帧携带，需 stream_options.include_usage:true）
-            if (json.usage) {
-              promptTokens = json.usage.prompt_tokens || promptTokens
-              completionTokens = json.usage.completion_tokens || completionTokens
-            }
-            // finish_reason 表示「本段生成已完成」，但部分兼容服务会在每一帧
-            // 都带上它。因此只记录标记，等本帧无新增内容时才真正收尾；
-            // 若下一帧还有内容，说明该服务属于「每帧都带 finish_reason」的写法。
-            const finishReason = json.choices?.[0]?.finish_reason
-            if (finishReason) sawFinishReason = true
-            if (finishReason && !delta) break streamLoop
+        if (provider.protocol === 'anthropic') {
+          if (json.type === 'content_block_delta' && typeof json.delta?.thinking === 'string') {
+            onReasoningDelta?.(json.delta.thinking)
           }
-
+          if (
+            json.type === 'content_block_start' &&
+            typeof json.content_block?.thinking === 'string'
+          ) {
+            onReasoningDelta?.(json.content_block.thinking)
+          }
+          // Anthropic 流式事件格式
+          if (json.type === 'content_block_delta' && json.delta?.text) {
+            fullText += json.delta.text
+            onDelta(json.delta.text)
+          } else if (json.type === 'message_start' && json.message?.usage) {
+            // 输入 token 用量
+            promptTokens = json.message.usage.input_tokens || 0
+          } else if (json.type === 'message_delta' && json.usage) {
+            // 输出 token 用量（累积）
+            completionTokens = json.usage.output_tokens || 0
+          } else if (json.type === 'message_stop') {
+            reportUsage()
+            onDone(fullText)
+            return
+          } else if (json.type === 'error') {
+            throw new Error(json.error?.message || 'Anthropic 流式错误')
+          }
+        } else {
+          // OpenAI 流式格式
+          const delta = json.choices?.[0]?.delta?.content
+          const reasoning =
+            json.choices?.[0]?.delta?.reasoning_content ?? json.choices?.[0]?.delta?.reasoning
+          if (typeof reasoning === 'string') onReasoningDelta?.(reasoning)
+          if (delta) {
+            fullText += delta
+            onDelta(delta)
+          }
+          // usage（流式最后一帧携带，需 stream_options.include_usage:true）
+          if (json.usage) {
+            promptTokens = json.usage.prompt_tokens || promptTokens
+            completionTokens = json.usage.completion_tokens || completionTokens
+          }
+          // finish_reason 表示「本段生成已完成」，但部分兼容服务会在每一帧
+          // 都带上它。因此只记录标记，等本帧无新增内容时才真正收尾；
+          // 若下一帧还有内容，说明该服务属于「每帧都带 finish_reason」的写法。
+          const finishReason = json.choices?.[0]?.finish_reason
+          if (finishReason) sawFinishReason = true
+          if (finishReason && !delta) break streamLoop
+        }
       }
     }
 
@@ -489,15 +493,13 @@ export async function listModels(input: CustomAIProviderInput): Promise<string[]
   // 其他非 2xx 错误
   if (response.statusCode < 200 || response.statusCode >= 300) {
     const errText = await response.body.text().catch(() => '')
-    throw new Error(
-      `HTTP ${response.statusCode}${errText ? `：${errText.slice(0, 120)}` : ''}`,
-    )
+    throw new Error(`HTTP ${response.statusCode}${errText ? `：${errText.slice(0, 120)}` : ''}`)
   }
 
   // 解析响应体
   let body: { data?: Array<{ id?: string }> }
   try {
-    body = await response.body.json() as { data?: Array<{ id?: string }> }
+    body = (await response.body.json()) as { data?: Array<{ id?: string }> }
   } catch {
     // 部分端点返回非 JSON 格式（如 HTML 错误页）
     throw new Error('响应格式异常（非 JSON），该端点可能不支持 /v1/models')

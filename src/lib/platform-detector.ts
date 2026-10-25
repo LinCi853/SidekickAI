@@ -20,13 +20,19 @@ export function detectPlatform(): Platform {
   // Capacitor 原生平台（Android / iOS）
   if (
     typeof window !== 'undefined' &&
-    typeof (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor !== 'undefined' &&
-    (window as unknown as { Capacitor: { isNativePlatform: () => boolean } }).Capacitor.isNativePlatform()
+    typeof (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor !==
+      'undefined' &&
+    (
+      window as unknown as { Capacitor: { isNativePlatform: () => boolean } }
+    ).Capacitor.isNativePlatform()
   ) {
     return 'mobile'
   }
   // Electron（preload 注入 window.electron）
-  if (typeof window !== 'undefined' && typeof (window as unknown as { electron?: unknown }).electron !== 'undefined') {
+  if (
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { electron?: unknown }).electron !== 'undefined'
+  ) {
     return 'electron'
   }
   return 'web'

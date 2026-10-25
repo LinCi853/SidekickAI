@@ -4,25 +4,25 @@
           智能判断与最近 N 条已注入提示词的相似度，超过阈值提醒"重复添加，是否继续"。
    ===================================================================== */
 
-import { useEffect, useState } from 'react';
-import type { SimilarInjectionResult } from '../lib/electron-api';
-import { formatTime } from '../lib/datetime';
-import Button from './ui/Button';
-import IconButton from './ui/IconButton';
-import { AlertIcon } from '@/components/icons';
-import './InjectionPreviewModal.css';
+import { useEffect, useState } from 'react'
+import type { SimilarInjectionResult } from '../lib/electron-api'
+import { formatTime } from '../lib/datetime'
+import Button from './ui/Button'
+import IconButton from './ui/IconButton'
+import { AlertIcon } from '@/components/icons'
+import './InjectionPreviewModal.css'
 
 export interface InjectionPreviewModalProps {
   /** 是否打开 */
-  open: boolean;
+  open: boolean
   /** 预填充的可编辑文本（composeFinalText 的结果） */
-  composedText: string;
+  composedText: string
   /** 相似度命中的最近注入记录（按相似度倒序），无则空数组 */
-  similarRecords: SimilarInjectionResult[];
+  similarRecords: SimilarInjectionResult[]
   /** 用户确认注入：传入编辑后的文本 */
-  onConfirm: (editedText: string) => void;
+  onConfirm: (editedText: string) => void
   /** 用户取消 */
-  onCancel: () => void;
+  onCancel: () => void
 }
 
 export default function InjectionPreviewModal({
@@ -32,52 +32,52 @@ export default function InjectionPreviewModal({
   onConfirm,
   onCancel,
 }: InjectionPreviewModalProps) {
-  const [editedText, setEditedText] = useState(composedText);
+  const [editedText, setEditedText] = useState(composedText)
 
   // composedText 变化时（用户点击不同模板）同步到编辑框
   useEffect(() => {
-    setEditedText(composedText);
-  }, [composedText]);
+    setEditedText(composedText)
+  }, [composedText])
 
   // ESC 关闭 + 长按任意键退出预览（按键持续按下 ≥ 500ms 自动关闭）
   useEffect(() => {
-    if (!open) return;
-    let longPressTimer: number | null = null;
+    if (!open) return
+    let longPressTimer: number | null = null
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-        return;
+        e.preventDefault()
+        onCancel()
+        return
       }
       // 长按检测：首次 keydown（非 repeat）启动定时器，500ms 后关闭预览
       // repeat 事件不重复启动定时器
       if (!e.repeat && longPressTimer === null) {
         longPressTimer = window.setTimeout(() => {
-          onCancel();
-        }, 500);
+          onCancel()
+        }, 500)
       }
-    };
+    }
     const handleKeyUp = () => {
       // 松开按键时清除长按定时器
       if (longPressTimer !== null) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
+        clearTimeout(longPressTimer)
+        longPressTimer = null
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      if (longPressTimer !== null) clearTimeout(longPressTimer);
-    };
-  }, [open, onCancel]);
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      if (longPressTimer !== null) clearTimeout(longPressTimer)
+    }
+  }, [open, onCancel])
 
-  if (!open) return null;
+  if (!open) return null
 
-  const hasSimilar = similarRecords.length > 0;
+  const hasSimilar = similarRecords.length > 0
   // 显示最相似的一条作为提示
-  const topSimilar = similarRecords[0];
+  const topSimilar = similarRecords[0]
 
   return (
     <div
@@ -124,7 +124,12 @@ export default function InjectionPreviewModal({
               className="injection-preview-warning"
               data-name="component.injection-preview.warning"
             >
-              <span className="injection-preview-warning-icon" data-name="component.injection-preview.warning-icon"><AlertIcon className="injection-preview-warning-svg" /></span>
+              <span
+                className="injection-preview-warning-icon"
+                data-name="component.injection-preview.warning-icon"
+              >
+                <AlertIcon className="injection-preview-warning-svg" />
+              </span>
               <span data-name="component.injection-preview.warning-text">
                 与 {formatTime(topSimilar.createdAt)} 注入的内容相似度 ≥{' '}
                 {(topSimilar.similarity * 100).toFixed(0)}%，是否继续？
@@ -143,13 +148,13 @@ export default function InjectionPreviewModal({
         </div>
 
         <div className="injection-preview-footer" data-name="component.injection-preview.footer">
-          <span
-            className="injection-preview-meta"
-            data-name="component.injection-preview.meta"
-          >
+          <span className="injection-preview-meta" data-name="component.injection-preview.meta">
             {editedText.length} 字
           </span>
-          <div className="injection-preview-actions" data-name="component.injection-preview.actions">
+          <div
+            className="injection-preview-actions"
+            data-name="component.injection-preview.actions"
+          >
             <Button
               variant="outline"
               className="injection-preview-btn"
@@ -170,5 +175,5 @@ export default function InjectionPreviewModal({
         </div>
       </div>
     </div>
-  );
+  )
 }

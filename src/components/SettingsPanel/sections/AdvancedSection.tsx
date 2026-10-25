@@ -6,34 +6,34 @@
    折叠子 section 已移至设置面板顶层作为独立 section。
    ===================================================================== */
 
-import { useEffect, useMemo, useState } from 'react';
-import type { DevicePreset } from '../../../lib/electron-api';
-import { updateAppSettings } from '../../../lib/electron-api';
-import { SectionTitle, FormRow, Combobox } from '../../ui';
-import type { ComboboxOption } from '../../ui';
-import StorageSection from './StorageSection';
-import LogFolderSection from './LogFolderSection';
-import { useUiVersionStore } from '../../../store/useUiVersionStore';
-import ProxySection from './ProxySection';
-import CookieSection from './CookieSection';
-import type { ProxySettings } from '../types';
+import { useEffect, useMemo, useState } from 'react'
+import type { DevicePreset } from '../../../lib/electron-api'
+import { updateAppSettings } from '../../../lib/electron-api'
+import { SectionTitle, FormRow, Combobox } from '../../ui'
+import type { ComboboxOption } from '../../ui'
+import StorageSection from './StorageSection'
+import LogFolderSection from './LogFolderSection'
+import { useUiVersionStore } from '../../../store/useUiVersionStore'
+import ProxySection from './ProxySection'
+import CookieSection from './CookieSection'
+import type { ProxySettings } from '../types'
 
 interface AdvancedSectionProps {
   // 设备预设（用于 UA 选择器选项）
-  presets: DevicePreset[];
+  presets: DevicePreset[]
   // Alt+Space 阈值
-  altSpaceResetThreshold: number;
-  onAltSpaceThresholdChange: (value: number) => Promise<void>;
+  altSpaceResetThreshold: number
+  onAltSpaceThresholdChange: (value: number) => Promise<void>
   // 默认 UA 预设
-  defaultDesktopUaPreset: string;
-  defaultMobileUaPreset: string;
-  onDefaultDesktopUaPresetChange: (value: string) => void;
-  onDefaultMobileUaPresetChange: (value: string) => void;
+  defaultDesktopUaPreset: string
+  defaultMobileUaPreset: string
+  onDefaultDesktopUaPresetChange: (value: string) => void
+  onDefaultMobileUaPresetChange: (value: string) => void
   // 区域与代理（compact 模式下不渲染，由外部独立分类承载）
-  proxy?: ProxySettings;
-  onProxyChange?: (patch: Partial<ProxySettings>) => void;
+  proxy?: ProxySettings
+  onProxyChange?: (patch: Partial<ProxySettings>) => void
   // compact 模式：跳过 ProxySection/CookieSection，避免与独立分类重复
-  compact?: boolean;
+  compact?: boolean
 }
 
 export default function AdvancedSection({
@@ -48,45 +48,41 @@ export default function AdvancedSection({
   onProxyChange,
   compact = false,
 }: AdvancedSectionProps) {
-  const [collapsed, setCollapsed] = useState(true);
-  const isOxy = useUiVersionStore((s) => s.version === 'oxy');
+  const [collapsed, setCollapsed] = useState(true)
+  const isOxy = useUiVersionStore((s) => s.version === 'oxy')
 
   // ===== 默认 UA 预设 =====
-  const desktopPresets = useMemo(() => presets.filter((p) => p.platform === 'desktop'), [presets]);
-  const mobilePresets = useMemo(() => presets.filter((p) => p.platform === 'mobile'), [presets]);
+  const desktopPresets = useMemo(() => presets.filter((p) => p.platform === 'desktop'), [presets])
+  const mobilePresets = useMemo(() => presets.filter((p) => p.platform === 'mobile'), [presets])
   const desktopPlaceholder = desktopPresets.some((p) => p.id === defaultDesktopUaPreset)
     ? null
-    : { id: defaultDesktopUaPreset, name: '（已失效，请重选）' };
+    : { id: defaultDesktopUaPreset, name: '（已失效，请重选）' }
   const mobilePlaceholder = mobilePresets.some((p) => p.id === defaultMobileUaPreset)
     ? null
-    : { id: defaultMobileUaPreset, name: '（已失效，请重选）' };
+    : { id: defaultMobileUaPreset, name: '（已失效，请重选）' }
 
   // ===== Alt+Space 阈值 =====
-  const [thresholdDraft, setThresholdDraft] = useState<string>(String(altSpaceResetThreshold));
+  const [thresholdDraft, setThresholdDraft] = useState<string>(String(altSpaceResetThreshold))
   useEffect(() => {
-    setThresholdDraft(String(altSpaceResetThreshold));
-  }, [altSpaceResetThreshold]);
+    setThresholdDraft(String(altSpaceResetThreshold))
+  }, [altSpaceResetThreshold])
 
   const handleThresholdBlur = () => {
-    const parsed = parseInt(thresholdDraft, 10);
+    const parsed = parseInt(thresholdDraft, 10)
     if (!Number.isFinite(parsed)) {
-      setThresholdDraft(String(altSpaceResetThreshold));
-      return;
+      setThresholdDraft(String(altSpaceResetThreshold))
+      return
     }
-    const clamped = Math.max(3, Math.min(20, parsed));
-    setThresholdDraft(String(clamped));
+    const clamped = Math.max(3, Math.min(20, parsed))
+    setThresholdDraft(String(clamped))
     if (clamped !== altSpaceResetThreshold) {
-      void onAltSpaceThresholdChange(clamped);
+      void onAltSpaceThresholdChange(clamped)
     }
-  };
+  }
 
   return (
     <section data-name="settings.advanced.section">
-      <SectionTitle
-        collapsible
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((v) => !v)}
-      >
+      <SectionTitle collapsible collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)}>
         进阶配置
       </SectionTitle>
 
@@ -98,7 +94,7 @@ export default function AdvancedSection({
               inputValue={
                 desktopPlaceholder
                   ? desktopPlaceholder.name
-                  : desktopPresets.find((p) => p.id === defaultDesktopUaPreset)?.name ?? ''
+                  : (desktopPresets.find((p) => p.id === defaultDesktopUaPreset)?.name ?? '')
               }
               onInputChange={() => {}}
               inputPlaceholder="选择桌面端 UA"
@@ -110,11 +106,11 @@ export default function AdvancedSection({
                 selected: p.id === defaultDesktopUaPreset,
               }))}
               onSelect={async (v) => {
-                onDefaultDesktopUaPresetChange(v);
+                onDefaultDesktopUaPresetChange(v)
                 try {
-                  await updateAppSettings({ defaultDesktopUaPreset: v });
+                  await updateAppSettings({ defaultDesktopUaPreset: v })
                 } catch (err) {
-                  console.error('保存默认桌面端 UA 失败:', err);
+                  console.error('保存默认桌面端 UA 失败:', err)
                 }
               }}
               searchable
@@ -128,7 +124,7 @@ export default function AdvancedSection({
               inputValue={
                 mobilePlaceholder
                   ? mobilePlaceholder.name
-                  : mobilePresets.find((p) => p.id === defaultMobileUaPreset)?.name ?? ''
+                  : (mobilePresets.find((p) => p.id === defaultMobileUaPreset)?.name ?? '')
               }
               onInputChange={() => {}}
               inputPlaceholder="选择移动端 UA"
@@ -140,11 +136,11 @@ export default function AdvancedSection({
                 selected: p.id === defaultMobileUaPreset,
               }))}
               onSelect={async (v) => {
-                onDefaultMobileUaPresetChange(v);
+                onDefaultMobileUaPresetChange(v)
                 try {
-                  await updateAppSettings({ defaultMobileUaPreset: v });
+                  await updateAppSettings({ defaultMobileUaPreset: v })
                 } catch (err) {
-                  console.error('保存默认移动端 UA 失败:', err);
+                  console.error('保存默认移动端 UA 失败:', err)
                 }
               }}
               searchable
@@ -182,5 +178,5 @@ export default function AdvancedSection({
         </div>
       )}
     </section>
-  );
+  )
 }

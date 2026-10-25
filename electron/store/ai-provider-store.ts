@@ -17,11 +17,14 @@ import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
+import { isSafeStorageAvailable, xorDecrypt } from '../utils/permission-manager.js'
 import {
-  isSafeStorageAvailable,
-  xorDecrypt,
-} from '../utils/permission-manager.js'
-import { encryptString, decryptString, isAesEncrypted, encryptWithPassword, decryptWithPassword } from '../platform/security/app-crypto.js'
+  encryptString,
+  decryptString,
+  isAesEncrypted,
+  encryptWithPassword,
+  decryptWithPassword,
+} from '../platform/security/app-crypto.js'
 
 /** 落盘的 Provider 结构（apiKey 为加密后的 base64 字符串） */
 interface PersistedProvider extends Omit<CustomAIProvider, 'apiKey' | 'apiKeyUnavailable'> {
@@ -34,7 +37,10 @@ interface PersistedProvider extends Omit<CustomAIProvider, 'apiKey' | 'apiKeyUna
  * - apiEndpoint 含 /chat/completions → 替换为 /audio/{path}
  * - 否则 → 追加 /audio/{path}
  */
-export function deriveAudioEndpoint(apiEndpoint: string, path: 'speech' | 'transcriptions'): string {
+export function deriveAudioEndpoint(
+  apiEndpoint: string,
+  path: 'speech' | 'transcriptions',
+): string {
   if (apiEndpoint.includes('/chat/completions')) {
     return apiEndpoint.replace('/chat/completions', `/audio/${path}`)
   }
@@ -170,7 +176,9 @@ export class AIProviderStore {
       maxTokens: patch.maxTokens ?? current.maxTokens,
       // v0.5.2 regress-4：仅在 patch 显式提供非空 apiKey 时才更新（避免误清空）
       apiKeyCipher:
-        patch.apiKey !== undefined && patch.apiKey !== '' ? encryptApiKey(patch.apiKey) : current.apiKeyCipher,
+        patch.apiKey !== undefined && patch.apiKey !== ''
+          ? encryptApiKey(patch.apiKey)
+          : current.apiKeyCipher,
       // v0.5.2 R-5：TTS/STT per-provider 配置
       ttsEnabled: patch.ttsEnabled ?? current.ttsEnabled,
       ttsModel: patch.ttsModel ?? current.ttsModel,
@@ -214,9 +222,8 @@ export class AIProviderStore {
    */
   exportEncrypted(password: string, selectedIds?: string[]): string {
     const all = store.get('providers') as PersistedProvider[]
-    const targets = selectedIds && selectedIds.length > 0
-      ? all.filter((p) => selectedIds.includes(p.id))
-      : all
+    const targets =
+      selectedIds && selectedIds.length > 0 ? all.filter((p) => selectedIds.includes(p.id)) : all
     const providers = targets.map((p) => {
       let apiKeyPlain: string
       try {
@@ -317,7 +324,10 @@ export class AIProviderStore {
    * 解密加密串并返回 provider 列表 + 与现有 provider 的 id 冲突列表，**不持久化**。
    * 渲染层可基于此显示导入预览（哪些是新增、哪些是覆盖）。
    */
-  previewImport(encrypted: string, password: string): {
+  previewImport(
+    encrypted: string,
+    password: string,
+  ): {
     ok: boolean
     error?: string
     providers?: Array<{
@@ -431,26 +441,22 @@ export function registerAIProviderIPC(scope?: EffectScope): void {
   handle(ipc.AI_PROVIDER_CREATE, (_e: unknown, input: CustomAIProviderInput) =>
     aiProviderStore.create(input),
   )
-  handle(
-    ipc.AI_PROVIDER_UPDATE,
-    (_e: unknown, id: string, patch: Partial<CustomAIProviderInput>) =>
-      aiProviderStore.update(id, patch),
+  handle(ipc.AI_PROVIDER_UPDATE, (_e: unknown, id: string, patch: Partial<CustomAIProviderInput>) =>
+    aiProviderStore.update(id, patch),
   )
   handle(ipc.AI_PROVIDER_DELETE, (_e: unknown, id: string) => aiProviderStore.delete(id))
   // 需求 9：加密导出 / 导入（v0.5.2 regress-3：支持 selectedIds 选择性导出）
-  handle(ipc.AI_PROVIDER_EXPORT_ENCRYPTED, (_e: unknown, password: string, selectedIds?: string[]) =>
-    aiProviderStore.exportEncrypted(password, selectedIds),
-  )
   handle(
-    ipc.AI_PROVIDER_IMPORT_ENCRYPTED,
-    (_e: unknown, encrypted: string, password: string) =>
-      aiProviderStore.importEncrypted(encrypted, password),
+    ipc.AI_PROVIDER_EXPORT_ENCRYPTED,
+    (_e: unknown, password: string, selectedIds?: string[]) =>
+      aiProviderStore.exportEncrypted(password, selectedIds),
+  )
+  handle(ipc.AI_PROVIDER_IMPORT_ENCRYPTED, (_e: unknown, encrypted: string, password: string) =>
+    aiProviderStore.importEncrypted(encrypted, password),
   )
   // v0.5.2 B-4：预览导入（dry-run，不持久化）
-  handle(
-    ipc.AI_PROVIDER_PREVIEW_IMPORT,
-    (_e: unknown, encrypted: string, password: string) =>
-      aiProviderStore.previewImport(encrypted, password),
+  handle(ipc.AI_PROVIDER_PREVIEW_IMPORT, (_e: unknown, encrypted: string, password: string) =>
+    aiProviderStore.previewImport(encrypted, password),
   )
   handle(
     ipc.AI_PROVIDER_WRITE_EXPORT_FILE,
@@ -464,18 +470,15 @@ export function registerAIProviderIPC(scope?: EffectScope): void {
       }
     },
   )
-  handle(
-    ipc.AI_PROVIDER_READ_IMPORT_FILE,
-    (event: IpcMainInvokeEvent, token: string) => {
-      try {
-        assertTrustedRenderer(event)
-        const content = selections.read(event, token)
-        return { ok: true, content }
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
-      }
-    },
-  )
+  handle(ipc.AI_PROVIDER_READ_IMPORT_FILE, (event: IpcMainInvokeEvent, token: string) => {
+    try {
+      assertTrustedRenderer(event)
+      const content = selections.read(event, token)
+      return { ok: true, content }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
   handle(ipc.AI_PROVIDER_SELECT_EXPORT_PATH, async (event: IpcMainInvokeEvent) => {
     assertTrustedRenderer(event)
     const frame = event.senderFrame
@@ -492,7 +495,10 @@ export function registerAIProviderIPC(scope?: EffectScope): void {
     assertTrustedRenderer(event)
     const frame = event.senderFrame
     const result = await dialog.showOpenDialog({
-      filters: [{ name: 'Sidekick AI Providers', extensions: ['sapp'] }, { name: 'All Files', extensions: ['*'] }],
+      filters: [
+        { name: 'Sidekick AI Providers', extensions: ['sapp'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
       properties: ['openFile'],
     })
     if (result.canceled || !result.filePaths[0]) return null

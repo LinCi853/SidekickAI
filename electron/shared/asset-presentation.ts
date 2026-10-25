@@ -1,9 +1,16 @@
-export function isAssetInterfaceImage(item: { direction: string; mimeType: string; sourceUrl?: string }): boolean {
-  if (item.direction !== 'output' || !item.mimeType.startsWith('image/') || !item.sourceUrl) return false
+export function isAssetInterfaceImage(item: {
+  direction: string
+  mimeType: string
+  sourceUrl?: string
+}): boolean {
+  if (item.direction !== 'output' || !item.mimeType.startsWith('image/') || !item.sourceUrl)
+    return false
   try {
     const url = new URL(item.sourceUrl)
     return url.hostname === 'cdn.deepseek.com' && url.pathname.startsWith('/site-icons/')
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 export function cleanCapturedCodeToolbar(markdown: string): string {
@@ -13,7 +20,10 @@ export function cleanCapturedCodeToolbar(markdown: string): string {
   const output: string[] = []
   for (let index = 0; index < lines.length; index++) {
     if (!fence) {
-      const header = lines.slice(index, index + 14).join('\n').match(/^([a-z][\w+#.-]{0,23})\s*复制\s*\n+下载\s*\n+运行\s*\n+(`{3,})\n/i)
+      const header = lines
+        .slice(index, index + 14)
+        .join('\n')
+        .match(/^([a-z][\w+#.-]{0,23})\s*复制\s*\n+下载\s*\n+运行\s*\n+(`{3,})\n/i)
       if (header) {
         output.push(header[2] + header[1])
         fence = { char: '`', length: header[2].length }
@@ -24,7 +34,12 @@ export function cleanCapturedCodeToolbar(markdown: string): string {
     const delimiter = lines[index].match(/^\s{0,3}(`{3,}|~{3,})(.*)$/)
     if (delimiter) {
       if (!fence) fence = { char: delimiter[1][0], length: delimiter[1].length }
-      else if (delimiter[1][0] === fence.char && delimiter[1].length >= fence.length && !delimiter[2].trim()) fence = undefined
+      else if (
+        delimiter[1][0] === fence.char &&
+        delimiter[1].length >= fence.length &&
+        !delimiter[2].trim()
+      )
+        fence = undefined
     }
     output.push(lines[index])
   }
@@ -41,7 +56,12 @@ export function stripToolCallLines(content: string): string {
     const delimiter = line.match(/^\s{0,3}(`{3,}|~{3,})/)
     if (delimiter) {
       if (!fence) fence = delimiter[1]
-      else if (delimiter[1][0] === fence[0] && delimiter[1].length >= fence.length && !line.slice(delimiter[0].length).trim()) fence = undefined
+      else if (
+        delimiter[1][0] === fence[0] &&
+        delimiter[1].length >= fence.length &&
+        !line.slice(delimiter[0].length).trim()
+      )
+        fence = undefined
       output.push(line)
       continue
     }
@@ -65,7 +85,7 @@ export function captureDroppedLeadingNoise(previous: string, next: string): bool
   if (!after || !before.endsWith(after)) return false
   const extra = before.slice(0, before.length - after.length).replace(/\s+$/, '')
   const lines = extra.split(/\s+/).filter(Boolean)
-  return lines.length > 0 && lines.every(line => noiseLine.test(line))
+  return lines.length > 0 && lines.every((line) => noiseLine.test(line))
 }
 
 /** 两段收录文本的差异是否只是工具卡片残行的出现或清理 */

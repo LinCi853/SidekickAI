@@ -15,18 +15,31 @@ function fixture(t) {
   })
   const source = path.join(root, 'concept')
   const consumer = path.join(root, 'community')
-  for (const [directory, edition] of [[source, 'concept'], [consumer, 'community']]) {
+  for (const [directory, edition] of [
+    [source, 'concept'],
+    [consumer, 'community'],
+  ]) {
     fs.mkdirSync(path.join(directory, 'contracts'), { recursive: true })
     fs.writeFileSync(path.join(directory, 'product-edition.json'), JSON.stringify({ edition }))
     fs.writeFileSync(path.join(directory, 'shared.txt'), 'original')
-    fs.writeFileSync(path.join(directory, 'contracts/shared-source.json'), JSON.stringify({ schemaVersion: 1, owner: 'concept', files: { 'shared.txt': crypto.createHash('sha256').update('original').digest('hex') } }))
+    fs.writeFileSync(
+      path.join(directory, 'contracts/shared-source.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        owner: 'concept',
+        files: { 'shared.txt': crypto.createHash('sha256').update('original').digest('hex') },
+      }),
+    )
   }
   shared.refresh(source)
-  fs.copyFileSync(path.join(source, 'contracts/shared-source.json'), path.join(consumer, 'contracts/shared-source.json'))
+  fs.copyFileSync(
+    path.join(source, 'contracts/shared-source.json'),
+    path.join(consumer, 'contracts/shared-source.json'),
+  )
   return { source, consumer }
 }
 
-test('a pinned consumer builds independently and accepts an explicit shared update', t => {
+test('a pinned consumer builds independently and accepts an explicit shared update', (t) => {
   const { source, consumer } = fixture(t)
   assert.equal(shared.check(consumer).files, 1)
   fs.writeFileSync(path.join(source, 'shared.txt'), 'updated')
@@ -37,7 +50,7 @@ test('a pinned consumer builds independently and accepts an explicit shared upda
   assert.equal(shared.check(consumer).revision, shared.check(source).revision)
 })
 
-test('a local consumer edit is never overwritten by synchronization', t => {
+test('a local consumer edit is never overwritten by synchronization', (t) => {
   const { source, consumer } = fixture(t)
   fs.writeFileSync(path.join(source, 'shared.txt'), 'updated')
   shared.refresh(source)
@@ -47,50 +60,67 @@ test('a local consumer edit is never overwritten by synchronization', t => {
   assert.throws(() => shared.refresh(consumer), /Only the concept/)
 })
 
-test('the shared manifest cannot select a file outside the workspace', t => {
+test('the shared manifest cannot select a file outside the workspace', (t) => {
   const { source } = fixture(t)
-  for (const relative of ['../private.json', '/private.json', 'nested/../../private.json', 'nested\\private.json', 'file:stream', 'nested./file', 'nested /file']) {
+  for (const relative of [
+    '../private.json',
+    '/private.json',
+    'nested/../../private.json',
+    'nested\\private.json',
+    'file:stream',
+    'nested./file',
+    'nested /file',
+  ]) {
     assert.throws(() => shared.resolveFile(source, relative), /shared path|Shared path/i)
   }
 })
 
-test('synchronization preserves a locally deleted shared file', t => {
+test('synchronization preserves a locally deleted shared file', (t) => {
   const { source, consumer } = fixture(t)
   fs.unlinkSync(path.join(consumer, 'shared.txt'))
   assert.throws(() => shared.synchronize(source, consumer), /local changes/)
   assert.equal(fs.existsSync(path.join(consumer, 'shared.txt')), false)
 })
 
-test('an interrupted write restores earlier files and retains recovery evidence', t => {
+test('an interrupted write restores earlier files and retains recovery evidence', (t) => {
   const { source, consumer } = fixture(t)
   fs.writeFileSync(path.join(source, 'shared.txt'), 'updated')
   shared.refresh(source)
   const before = fs.readFileSync(path.join(consumer, 'contracts/shared-source.json'))
-  const io = { ...fs, renameSync(from, to) {
-    if (to === path.join(consumer, 'contracts/shared-source.json')) throw new Error('fixture write failure')
-    fs.renameSync(from, to)
-  } }
+  const io = {
+    ...fs,
+    renameSync(from, to) {
+      if (to === path.join(consumer, 'contracts/shared-source.json'))
+        throw new Error('fixture write failure')
+      fs.renameSync(from, to)
+    },
+  }
   assert.throws(() => shared.synchronize(source, consumer, io), /fixture write failure/)
   assert.equal(fs.readFileSync(path.join(consumer, 'shared.txt'), 'utf8'), 'original')
   assert.deepEqual(fs.readFileSync(path.join(consumer, 'contracts/shared-source.json')), before)
   assert.equal(shared.check(consumer).files, 1)
-  const evidence = fs.readdirSync(path.join(consumer, 'build')).find(name => name.startsWith('shared-sync-'))
+  const evidence = fs
+    .readdirSync(path.join(consumer, 'build'))
+    .find((name) => name.startsWith('shared-sync-'))
   const report = JSON.parse(fs.readFileSync(path.join(consumer, 'build', evidence, 'report.json')))
   assert.equal(report.status, 'rolled-back')
   assert.equal(shared.synchronize(source, consumer).revision, shared.check(source).revision)
 })
 
-test('new user edits during a failed synchronization survive rollback', t => {
+test('new user edits during a failed synchronization survive rollback', (t) => {
   const { source, consumer } = fixture(t)
   fs.writeFileSync(path.join(source, 'shared.txt'), 'updated')
   shared.refresh(source)
-  const io = { ...fs, renameSync(from, to) {
-    if (to === path.join(consumer, 'contracts/shared-source.json')) {
-      fs.writeFileSync(path.join(consumer, 'shared.txt'), 'new user work')
-      throw new Error('fixture write failure')
-    }
-    fs.renameSync(from, to)
-  } }
+  const io = {
+    ...fs,
+    renameSync(from, to) {
+      if (to === path.join(consumer, 'contracts/shared-source.json')) {
+        fs.writeFileSync(path.join(consumer, 'shared.txt'), 'new user work')
+        throw new Error('fixture write failure')
+      }
+      fs.renameSync(from, to)
+    },
+  }
   assert.throws(() => shared.synchronize(source, consumer, io), /fixture write failure/)
   assert.equal(fs.readFileSync(path.join(consumer, 'shared.txt'), 'utf8'), 'new user work')
   assert.throws(() => shared.check(consumer), /differs/)

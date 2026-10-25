@@ -2,8 +2,8 @@
    lib/electron-api/profile.ts —— Profile 管理与指纹脚本
    ===================================================================== */
 
-import type { Profile } from '../../../electron/shared/types';
-import { requireElectron } from './core';
+import type { Profile } from '../../../electron/shared/types'
+import { requireElectron } from './core'
 
 /* =====================================================================
    Profile 管理 —— 对应 window.electron.profile
@@ -11,32 +11,32 @@ import { requireElectron } from './core';
 
 /** 加载全部 Profile 列表 */
 export async function listProfiles(): Promise<Profile[]> {
-  const api = requireElectron();
-  return api.profile.list();
+  const api = requireElectron()
+  return api.profile.list()
 }
 
 /** 创建 Profile（合并默认值后由主进程持久化） */
 export async function createProfile(partial: Partial<Profile>): Promise<Profile> {
-  const api = requireElectron();
-  return api.profile.create(partial);
+  const api = requireElectron()
+  return api.profile.create(partial)
 }
 
 /** 更新 Profile（合并 patch，嵌套对象深合并） */
 export async function updateProfile(id: string, patch: Partial<Profile>): Promise<Profile> {
-  const api = requireElectron();
-  return api.profile.update(id, patch);
+  const api = requireElectron()
+  return api.profile.update(id, patch)
 }
 
 /** 删除 Profile */
 export async function deleteProfile(id: string): Promise<void> {
-  const api = requireElectron();
-  return api.profile.delete(id);
+  const api = requireElectron()
+  return api.profile.delete(id)
 }
 
 /** 复制 Profile（生成新 id） */
 export async function duplicateProfile(id: string): Promise<Profile> {
-  const api = requireElectron();
-  return api.profile.duplicate(id);
+  const api = requireElectron()
+  return api.profile.duplicate(id)
 }
 
 /**
@@ -44,8 +44,8 @@ export async function duplicateProfile(id: string): Promise<Profile> {
  * 主进程持久化后向所有窗口广播 PROFILE_REORDERED。
  */
 export async function reorderProfiles(orderedIds: string[]): Promise<boolean> {
-  const api = requireElectron();
-  return api.profile.reorder(orderedIds);
+  const api = requireElectron()
+  return api.profile.reorder(orderedIds)
 }
 
 /**
@@ -56,8 +56,8 @@ export async function reorderProfiles(orderedIds: string[]): Promise<boolean> {
 export function onProfileUpdated(
   callback: (data: { id: string; profile: Profile }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.profile.onUpdated(callback);
+  const api = requireElectron()
+  return api.profile.onUpdated(callback)
 }
 
 /**
@@ -66,8 +66,8 @@ export function onProfileUpdated(
  * 返回取消监听函数。
  */
 export function onProfileCreated(callback: (profile: Profile) => void): () => void {
-  const api = requireElectron();
-  return api.profile.onCreated(callback);
+  const api = requireElectron()
+  return api.profile.onCreated(callback)
 }
 
 /**
@@ -76,8 +76,8 @@ export function onProfileCreated(callback: (profile: Profile) => void): () => vo
  * 返回取消监听函数。
  */
 export function onProfileDeleted(callback: (profileId: string) => void): () => void {
-  const api = requireElectron();
-  return api.profile.onDeleted(callback);
+  const api = requireElectron()
+  return api.profile.onDeleted(callback)
 }
 
 /**
@@ -86,32 +86,36 @@ export function onProfileDeleted(callback: (profileId: string) => void): () => v
  * 返回取消监听函数。
  */
 export function onProfileReordered(callback: (orderedIds: string[]) => void): () => void {
-  const api = requireElectron();
-  return api.profile.onReordered(callback);
+  const api = requireElectron()
+  return api.profile.onReordered(callback)
 }
 
 /** 打开 AI 应用编辑窗口（编辑模式按 profileId 单例，新建模式固定 'create' 单例） */
 export function openAiAppEditor(opts: {
-  platformId?: string;
-  profileId?: string;
-  mode?: 'edit' | 'create';
+  platformId?: string
+  profileId?: string
+  mode?: 'edit' | 'create'
 }): Promise<void> {
-  const api = requireElectron();
-  return api.openAiAppEditor(opts);
+  const api = requireElectron()
+  return api.openAiAppEditor(opts)
 }
 
 /** 打开设置独立窗口（单例，左导航+右内容布局）。可选 category：打开后定位到指定分类 */
-export function openSettingsWindow(category?: import('../../../electron/shared/api/settings-options').SettingsCategory): Promise<void> {
-  const api = requireElectron();
-  return api.openSettingsWindow(category);
+export function openSettingsWindow(
+  category?: import('../../../electron/shared/api/settings-options').SettingsCategory,
+): Promise<void> {
+  const api = requireElectron()
+  return api.openSettingsWindow(category)
 }
 
 /** 监听设置窗口单例复用时的分类切换通知 */
 export function onSettingsNavigate(
-  callback: (payload: { category: import('../../../electron/shared/api/settings-options').SettingsCategory }) => void,
+  callback: (payload: {
+    category: import('../../../electron/shared/api/settings-options').SettingsCategory
+  }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onSettingsNavigate(callback);
+  const api = requireElectron()
+  return api.onSettingsNavigate(callback)
 }
 
 /**
@@ -119,16 +123,16 @@ export function onSettingsNavigate(
  * 可选 providerId：若提供则切换到对应自定义供应商的对话页。
  */
 export function openAdvancedPanelWindow(providerId?: string): Promise<void> {
-  const api = requireElectron();
-  return api.openAdvancedPanelWindow(providerId);
+  const api = requireElectron()
+  return api.openAdvancedPanelWindow(providerId)
 }
 
 /** 监听单例窗口复用时的 tab/provider 切换通知 */
 export function onAdvancedPanelNavigate(
   callback: (payload: { tab: string; providerId?: string }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onAdvancedPanelNavigate(callback);
+  const api = requireElectron()
+  return api.onAdvancedPanelNavigate(callback)
 }
 
 /**
@@ -138,8 +142,8 @@ export function onAdvancedPanelNavigate(
 export function onUiScaleChanged(
   callback: (uiScale: 'small' | 'medium' | 'large') => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onUiScaleChanged(callback);
+  const api = requireElectron()
+  return api.onUiScaleChanged(callback)
 }
 
 /**
@@ -149,17 +153,20 @@ export function onUiScaleChanged(
 export function onAppSettingsChanged(
   callback: (settings: import('../../../electron/shared/types').AppSettings) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onAppSettingsChanged(callback);
+  const api = requireElectron()
+  return api.onAppSettingsChanged(callback)
 }
 
 /**
  * 请求广播 UI 版本/主题变更到所有窗口（Oxy Design System 切换 / 主题模式切换时调用）。
  * 调用后主进程向所有 BrowserWindow 推送最新 uiVersion + theme。
  */
-export function broadcastUiVersionChanged(payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }): void {
-  const api = requireElectron();
-  api.broadcastUiVersionChanged(payload);
+export function broadcastUiVersionChanged(payload: {
+  uiVersion: 'classic' | 'oxy'
+  theme: 'light' | 'dark' | 'system'
+}): void {
+  const api = requireElectron()
+  api.broadcastUiVersionChanged(payload)
 }
 
 /**
@@ -169,24 +176,24 @@ export function broadcastUiVersionChanged(payload: { uiVersion: 'classic' | 'oxy
 export function onUiVersionChanged(
   callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void,
 ): () => void {
-  const api = requireElectron();
-  return api.onUiVersionChanged(callback);
+  const api = requireElectron()
+  return api.onUiVersionChanged(callback)
 }
 
 /**
  * 请求广播 Oxy 主题色变更到所有窗口（主窗口切换 AI 应用时调用）。
  */
 export function broadcastThemeColorChanged(hex: string): void {
-  const api = requireElectron();
-  api.broadcastThemeColorChanged(hex);
+  const api = requireElectron()
+  api.broadcastThemeColorChanged(hex)
 }
 
 /**
  * 监听 Oxy 主题色变更广播（主窗口切换 AI 应用后，主进程向所有窗口推送）。
  */
 export function onThemeColorChanged(callback: (hex: string) => void): () => void {
-  const api = requireElectron();
-  return api.onThemeColorChanged(callback);
+  const api = requireElectron()
+  return api.onThemeColorChanged(callback)
 }
 
 /* =====================================================================
@@ -198,6 +205,6 @@ export function onThemeColorChanged(callback: (hex: string) => void): () => void
  * 单页架构：渲染进程在 <webview> dom-ready 后调用 webview.executeJavaScript 注入。
  */
 export async function getFingerprintScript(profileId: string): Promise<string> {
-  const api = requireElectron();
-  return api.fingerprint.getScript(profileId);
+  const api = requireElectron()
+  return api.fingerprint.getScript(profileId)
 }

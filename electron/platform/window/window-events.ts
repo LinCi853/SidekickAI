@@ -7,14 +7,14 @@ import { BrowserWindow } from 'electron'
 import { windowStore } from '../../store/window-store.js'
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import { windowState } from './window-state.js'
-import {
-  setAlwaysOnTopForWindow,
-  toggleMaximizeForWindow,
-} from '../../ipc/window-control-ipc.js'
+import { setAlwaysOnTopForWindow, toggleMaximizeForWindow } from '../../ipc/window-control-ipc.js'
 import { safeLogWindowTrace, findWindowIdByWin } from './window-utils.js'
 import { isTrackedFullscreen } from '../../utils/fullscreen-tracker.js'
 import { forgetWindow as forgetWindowPriorityState } from '../../diagnostics/tab-process-priority.js'
-import { scheduleBackgroundRelease, cancelBackgroundRelease } from '../../diagnostics/background-release.js'
+import {
+  scheduleBackgroundRelease,
+  cancelBackgroundRelease,
+} from '../../diagnostics/background-release.js'
 import { reapplyWindowIcon } from './app-icon.js'
 
 /** 获取调用方所在的 BrowserWindow */
@@ -35,7 +35,9 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
   let lastPinActionAt = 0
   // WIN_CONTROL_PIN_TOGGLED 中带 isUserAction 标记时更新时间戳
   // 本函数也接受外部调用来标记用户操作
-  const markUserPinAction = () => { lastPinActionAt = Date.now() }
+  const markUserPinAction = () => {
+    lastPinActionAt = Date.now()
+  }
   // 暴露给窗口生命周期调用方（如热键、按钮）
   ;(win as any).__markUserPinAction = markUserPinAction
 
@@ -139,7 +141,9 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
   // 与 setupMaximizeSync 一致：用户置顶操作后 2s 内不自动覆盖，
   // 否则 focus-manager 的短暂置顶抢焦点会被 show/focus 上的 reapply 立刻取消。
   let lastPinActionAt = 0
-  ;(win as any).__markUserPinAction = () => { lastPinActionAt = Date.now() }
+  ;(win as any).__markUserPinAction = () => {
+    lastPinActionAt = Date.now()
+  }
   win.once('closed', () => {
     if (!pendingTimer) return
     clearTimeout(pendingTimer)

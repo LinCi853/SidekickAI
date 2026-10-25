@@ -4,62 +4,143 @@ import { browserPorts } from '../browser-port.js'
 import { isTrustedRendererUrl } from './trusted-renderer.js'
 
 const configuredSessions = new WeakSet<Session>()
-const profilePermissions = new Set(['media', 'geolocation', 'fullscreen', 'clipboard-read', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock', 'speaker-selection'])
-interface RequestDetails { requestingUrl?: string; isMainFrame: boolean }
+const profilePermissions = new Set([
+  'media',
+  'geolocation',
+  'fullscreen',
+  'clipboard-read',
+  'clipboard-sanitized-write',
+  'pointerLock',
+  'keyboardLock',
+  'speaker-selection',
+])
+interface RequestDetails {
+  requestingUrl?: string
+  isMainFrame: boolean
+}
 
 function webOrigin(value: string | undefined): string | null {
   try {
     const url = new URL(value ?? '')
-    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.origin : null
-  } catch { return null }
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password
+      ? url.origin
+      : null
+  } catch {
+    return null
+  }
 }
 
 function sameOrigin(value: string, documentUrl: string): boolean {
   try {
-    const origin = new URL(value), document = new URL(documentUrl)
-    return !origin.username && !origin.password && origin.protocol === document.protocol && origin.host === document.host
-  } catch { return false }
+    const origin = new URL(value),
+      document = new URL(documentUrl)
+    return (
+      !origin.username &&
+      !origin.password &&
+      origin.protocol === document.protocol &&
+      origin.host === document.host
+    )
+  } catch {
+    return false
+  }
 }
 
 export function installProfilePermissions(session: Session, profileId: string): void {
   if (configuredSessions.has(session)) return
   configuredSessions.add(session)
-  const allowed = (contents: WebContents | null, permission: string, details: RequestDetails, requestingOrigin?: string) => {
-    if (!contents || contents.isDestroyed() || contents.session !== session || !details.isMainFrame || !profilePermissions.has(permission)) return false
+  const allowed = (
+    contents: WebContents | null,
+    permission: string,
+    details: RequestDetails,
+    requestingOrigin?: string,
+  ) => {
+    if (
+      !contents ||
+      contents.isDestroyed() ||
+      contents.session !== session ||
+      !details.isMainFrame ||
+      !profilePermissions.has(permission)
+    )
+      return false
     // 免管理员（便携）安装无法注册防火墙兜底规则：拒绝媒体捕获，WebRTC 不建立
     // 媒体通道也就不绑定 UDP 端口，从源头避免网络弹窗；代价是内嵌页面的语音/视频降级。
     if (isPortableMode() && permission === 'media') return false
     const record = browserPorts().webviews.getRecordByWebContentsId(contents.id)
-    if (record && record.profileId !== profileId || contents.getType() === 'webview' && !record) return false
+    if ((record && record.profileId !== profileId) || (contents.getType() === 'webview' && !record))
+      return false
     const profile = browserPorts().profiles.get(profileId)
     if (!profile) return false
     const expected = [profile.aiPlatformUrl, profile.browserHomePage].map(webOrigin).filter(Boolean)
-    const current = webOrigin(contents.getURL()), requester = webOrigin(details.requestingUrl)
-    return Boolean(current && requester === current && expected.includes(current) && (!requestingOrigin || webOrigin(requestingOrigin) === current))
+    const current = webOrigin(contents.getURL()),
+      requester = webOrigin(details.requestingUrl)
+    return Boolean(
+      current &&
+        requester === current &&
+        expected.includes(current) &&
+        (!requestingOrigin || webOrigin(requestingOrigin) === current),
+    )
   }
-  session.setPermissionRequestHandler((contents, permission, callback, details) => callback(allowed(contents, permission, details)))
-  session.setPermissionCheckHandler((contents, permission, origin, details) => allowed(contents, permission, details, origin))
+  session.setPermissionRequestHandler((contents, permission, callback, details) =>
+    callback(allowed(contents, permission, details)),
+  )
+  session.setPermissionCheckHandler((contents, permission, origin, details) =>
+    allowed(contents, permission, details, origin),
+  )
   session.setDevicePermissionHandler(() => false)
 }
 
-export function installApplicationPermissions(session: Session, clipboardAllowed: (contents: WebContents, permission: string, details: RequestDetails) => boolean): void {
-  const allowed = (contents: WebContents | null, permission: string, details: RequestDetails, mediaTypes: string[]) => {
-    if (!contents || contents.isDestroyed() || contents.session !== session || contents.getType() !== 'window' || !details.isMainFrame
-      || !isTrustedRendererUrl(contents.getURL()) || !isTrustedRendererUrl(details.requestingUrl ?? '')) return false
+export function installApplicationPermissions(
+  session: Session,
+  clipboardAllowed: (contents: WebContents, permission: string, details: RequestDetails) => boolean,
+): void {
+  const allowed = (
+    contents: WebContents | null,
+    permission: string,
+    details: RequestDetails,
+    mediaTypes: string[],
+  ) => {
+    if (
+      !contents ||
+      contents.isDestroyed() ||
+      contents.session !== session ||
+      contents.getType() !== 'window' ||
+      !details.isMainFrame ||
+      !isTrustedRendererUrl(contents.getURL()) ||
+      !isTrustedRendererUrl(details.requestingUrl ?? '')
+    )
+      return false
     const window = BrowserWindow.fromWebContents(contents)
     if (!window || window.isDestroyed()) return false
     if (permission === 'media') {
       if (process.platform !== 'darwin') return true
-      try { return mediaTypes.every(type => systemPreferences.getMediaAccessStatus(type === 'video' ? 'camera' : 'microphone') === 'granted') }
-      catch { return false }
+      try {
+        return mediaTypes.every(
+          (type) =>
+            systemPreferences.getMediaAccessStatus(type === 'video' ? 'camera' : 'microphone') ===
+            'granted',
+        )
+      } catch {
+        return false
+      }
     }
     return clipboardAllowed(contents, permission, details)
   }
   session.setPermissionRequestHandler((contents, permission, callback, details) => {
-    callback(allowed(contents, permission, details, ('mediaTypes' in details ? details.mediaTypes : undefined) ?? ['audio']))
+    callback(
+      allowed(
+        contents,
+        permission,
+        details,
+        ('mediaTypes' in details ? details.mediaTypes : undefined) ?? ['audio'],
+      ),
+    )
   })
   session.setPermissionCheckHandler((contents, permission, origin, details) => {
-    return Boolean(contents && sameOrigin(origin, contents.getURL()) && allowed(contents, permission, details, [details.mediaType ?? 'audio']))
+    return Boolean(
+      contents &&
+        sameOrigin(origin, contents.getURL()) &&
+        allowed(contents, permission, details, [details.mediaType ?? 'audio']),
+    )
   })
   session.setDevicePermissionHandler(() => false)
 }

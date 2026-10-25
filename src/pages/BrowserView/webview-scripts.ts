@@ -5,14 +5,14 @@
    ===================================================================== */
 
 /** 读取页面标题（executeJavaScript 直传脚本） */
-export const GET_TITLE_SCRIPT = 'document.title';
+export const GET_TITLE_SCRIPT = 'document.title'
 
 /** 空间导航开关脚本：开启手柄/键盘空间导航 */
 export const SPATIAL_NAV_ENABLE_SCRIPT =
-  'window.__ai_spatial_nav__ && window.__ai_spatial_nav__.toggle(true)';
+  'window.__ai_spatial_nav__ && window.__ai_spatial_nav__.toggle(true)'
 
 /** 读取 guest 注入的右键坐标（contextmenu DOM 事件记录的 clientX/clientY） */
-export const READ_CONTEXT_COORD_SCRIPT = 'window.__sidekickCtx || null';
+export const READ_CONTEXT_COORD_SCRIPT = 'window.__sidekickCtx || null'
 
 /** 右键坐标记录脚本：guest 的 contextmenu DOM 事件提供精确的 clientX/clientY
  * （viewport CSS 坐标），供右键菜单定位、聚焦输入框、检查元素使用
@@ -39,7 +39,7 @@ export const CONTEXT_COORD_HOOK_SCRIPT = `
     };
   }, true);
 })()
-`;
+`
 
 /**
  * 共享 canvas→dataURL 转码体（3 处 favicon 转换脚本去重后的公共部分）：
@@ -62,7 +62,7 @@ function canvasToDataUrlBody(imgSrcExpr: string, canvasErrorValue: string): stri
           } catch(e) { resolve(${canvasErrorValue}); }
         };
         img.onerror = function() { resolve(''); };
-        img.src = ${imgSrcExpr};`;
+        img.src = ${imgSrcExpr};`
 }
 
 /** 从 <link rel="icon"> 发现 favicon 并转 data URL（dom-ready / did-stop-loading 兜底） */
@@ -79,7 +79,7 @@ export function buildFaviconToDataUrlScript(): string {
             try { href = new URL(href, document.baseURI).href; } catch(e) {}
 ${canvasToDataUrlBody('href', 'href')}
           });
-        })()`;
+        })()`
 }
 
 /** 将指定图片 URL 转 data URL（page-favicon-updated 事件：img.src 直接指向已知 URL） */
@@ -88,7 +88,7 @@ export function buildImageUrlToDataUrlScript(imgSrcExpr: string): string {
           return new Promise(function(resolve) {
 ${canvasToDataUrlBody(imgSrcExpr, "''")}
           });
-        })()`;
+        })()`
 }
 
 /** 复制图片脚本：把真实图片写入剪贴板前，先在 guest 内转成 data URL
@@ -111,7 +111,7 @@ export function buildCopyImageToDataUrlScript(imageUrlJson: string): string {
             img.onerror = function() { resolve(''); };
             img.src = url;
           });
-        })(${imageUrlJson})`;
+        })(${imageUrlJson})`
 }
 
 /** 聚焦 guest 页面内右键位置的输入元素（elementFromPoint + 祖先回溯） */
@@ -126,10 +126,10 @@ export function buildFocusEditableAtScript(x: number, y: number): string {
             el = el.parentElement;
           }
           return false;
-        })()`;
+        })()`
 }
 
 /** 输入框编辑命令脚本（撤销/重做/剪切/复制/全选） */
 export function buildExecCommandScript(cmd: string): string {
-  return `document.execCommand("${cmd}")`;
+  return `document.execCommand("${cmd}")`
 }

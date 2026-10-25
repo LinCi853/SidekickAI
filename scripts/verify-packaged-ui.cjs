@@ -9,12 +9,18 @@ const { EventEmitter } = require('node:events')
 
 const { chromium } = require('playwright-core')
 const asar = require('@electron/asar')
-const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 function packagedIdentity(runtime) {
   const archive = path.join(runtime, 'resources/app.asar')
   const metadata = JSON.parse(asar.extractFile(archive, 'package.json').toString())
   assert.equal(metadata.main, 'out/main/index.cjs')
-  return { name: metadata.name, version: metadata.version, main: metadata.main, exeSha256: sha256(path.join(runtime, 'SidekickAI.exe')), asarSha256: sha256(archive) }
+  return {
+    name: metadata.name,
+    version: metadata.version,
+    main: metadata.main,
+    exeSha256: sha256(path.join(runtime, 'SidekickAI.exe')),
+    asarSha256: sha256(archive),
+  }
 }
 
 class Inspector extends EventEmitter {
@@ -23,18 +29,22 @@ class Inspector extends EventEmitter {
     this.socket = socket
     this.nextId = 0
     this.pending = new Map()
-    socket.addEventListener('message', event => {
+    socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data))
       if (message.id) {
         const request = this.pending.get(message.id)
         if (!request) return
-        this.pending.delete(message.id); clearTimeout(request.timer)
+        this.pending.delete(message.id)
+        clearTimeout(request.timer)
         if (message.error) request.reject(new Error(JSON.stringify(message.error)))
         else request.resolve(message.result)
       } else this.emit(message.method, message.params)
     })
     socket.addEventListener('close', () => {
-      for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Inspector closed')) }
+      for (const request of this.pending.values()) {
+        clearTimeout(request.timer)
+        request.reject(new Error('Inspector closed'))
+      }
       this.pending.clear()
       this.emit('closed')
     })
@@ -43,32 +53,62 @@ class Inspector extends EventEmitter {
     const socket = new WebSocket(url)
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Inspector connection timed out')), 15000)
-      socket.addEventListener('open', () => { clearTimeout(timer); resolve() }, { once: true })
-      socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Inspector connection failed')) }, { once: true })
+      socket.addEventListener(
+        'open',
+        () => {
+          clearTimeout(timer)
+          resolve()
+        },
+        { once: true },
+      )
+      socket.addEventListener(
+        'error',
+        () => {
+          clearTimeout(timer)
+          reject(new Error('Inspector connection failed'))
+        },
+        { once: true },
+      )
     })
     return new Inspector(socket)
   }
   send(method, params = {}) {
     const id = ++this.nextId
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`Inspector command timed out: ${method}`)) }, 15000)
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        reject(new Error(`Inspector command timed out: ${method}`))
+      }, 15000)
       this.pending.set(id, { resolve, reject, timer })
       this.socket.send(JSON.stringify({ id, method, params }))
     })
   }
   event(name, timeout = 15000) {
     return new Promise((resolve, reject) => {
-      const listener = value => { clearTimeout(timer); resolve(value) }
-      const timer = setTimeout(() => { this.removeListener(name, listener); reject(new Error(`Inspector event timed out: ${name}`)) }, timeout)
+      const listener = (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      }
+      const timer = setTimeout(() => {
+        this.removeListener(name, listener)
+        reject(new Error(`Inspector event timed out: ${name}`))
+      }, timeout)
       this.once(name, listener)
     })
   }
   async evaluate(expression) {
-    const result = await this.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, includeCommandLineAPI: true })
+    const result = await this.send('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+      includeCommandLineAPI: true,
+    })
     assert(!result.exceptionDetails, JSON.stringify(result.exceptionDetails))
     return result.result?.value
   }
-  close() { this.socket.close() }
+  close() {
+    this.socket.close()
+  }
 }
 
 function bootstrapExpression(configuration) {
@@ -163,34 +203,76 @@ async function launch(options, report) {
   const bootstrap = path.join(logs, 'bootstrap-profile')
   const appData = options.appData || path.join(sandbox, 'roaming')
   const stateFile = path.join(logs, 'state.json')
-  const environment = { ...process.env, APPDATA: appData, LOCALAPPDATA: path.join(sandbox, 'local'), TEMP: path.join(sandbox, 'temp'), TMP: path.join(sandbox, 'temp'), SIDEKICK_TEST_SESSION: namespace, ELECTRON_RENDERER_URL: 'http://127.0.0.1:9/forbidden-development-renderer' }
-  for (const key of ['SIDEKICK_DATA_DIR', 'ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS']) delete environment[key]
+  const environment = {
+    ...process.env,
+    APPDATA: appData,
+    LOCALAPPDATA: path.join(sandbox, 'local'),
+    TEMP: path.join(sandbox, 'temp'),
+    TMP: path.join(sandbox, 'temp'),
+    SIDEKICK_TEST_SESSION: namespace,
+    ELECTRON_RENDERER_URL: 'http://127.0.0.1:9/forbidden-development-renderer',
+  }
+  for (const key of ['SIDEKICK_DATA_DIR', 'ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS'])
+    delete environment[key]
   if (options.portable) environment.SIDEKICK_DATA_DIR = path.join(sandbox, 'portable-profile')
-  for (const directory of [bootstrap, appData, environment.LOCALAPPDATA, environment.TEMP]) fs.mkdirSync(directory, { recursive: true })
+  for (const directory of [bootstrap, appData, environment.LOCALAPPDATA, environment.TEMP])
+    fs.mkdirSync(directory, { recursive: true })
   const log = fs.createWriteStream(path.join(logs, 'process.log'))
-  const child = spawn(path.join(runtime, 'SidekickAI.exe'), ['--inspect-brk=0', '--remote-debugging-port=0', `--user-data-dir=${bootstrap}`, '--skip-guide'], { cwd: runtime, env: environment, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+  const child = spawn(
+    path.join(runtime, 'SidekickAI.exe'),
+    [
+      '--inspect-brk=0',
+      '--remote-debugging-port=0',
+      `--user-data-dir=${bootstrap}`,
+      '--skip-guide',
+    ],
+    { cwd: runtime, env: environment, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+  )
   let output = ''
   const lines = new EventEmitter()
-  for (const stream of [child.stdout, child.stderr]) stream.on('data', bytes => {
-    log.write(bytes)
-    output += String(bytes)
-    for (const line of output.split(/\r?\n/)) lines.emit('line', line)
-  })
-  const exit = new Promise(resolve => child.once('exit', (code, signal) => { log.end(); resolve({ code, signal }) }))
-  const waitLine = pattern => {
+  for (const stream of [child.stdout, child.stderr])
+    stream.on('data', (bytes) => {
+      log.write(bytes)
+      output += String(bytes)
+      for (const line of output.split(/\r?\n/)) lines.emit('line', line)
+    })
+  const exit = new Promise((resolve) =>
+    child.once('exit', (code, signal) => {
+      log.end()
+      resolve({ code, signal })
+    }),
+  )
+  const waitLine = (pattern) => {
     const current = output.match(pattern)
     if (current) return Promise.resolve(current[1])
     return new Promise((resolve, reject) => {
-      const listener = line => { const match = line.match(pattern); if (match) { clearTimeout(timer); lines.removeListener('line', listener); resolve(match[1]) } }
-      const timer = setTimeout(() => { lines.removeListener('line', listener); reject(new Error(`Missing debugger endpoint: ${label}`)) }, 20000)
+      const listener = (line) => {
+        const match = line.match(pattern)
+        if (match) {
+          clearTimeout(timer)
+          lines.removeListener('line', listener)
+          resolve(match[1])
+        }
+      }
+      const timer = setTimeout(() => {
+        lines.removeListener('line', listener)
+        reject(new Error(`Missing debugger endpoint: ${label}`))
+      }, 20000)
       lines.on('line', listener)
-      child.once('exit', () => { clearTimeout(timer); lines.removeListener('line', listener); reject(new Error(`Process exited before debugger endpoint: ${label}`)) })
+      child.once('exit', () => {
+        clearTimeout(timer)
+        lines.removeListener('line', listener)
+        reject(new Error(`Process exited before debugger endpoint: ${label}`))
+      })
     })
   }
   let inspector, browser
   let isolated = false
   const stop = async () => {
-    if (child.exitCode !== null || child.signalCode !== null) { inspector?.close(); return }
+    if (child.exitCode !== null || child.signalCode !== null) {
+      inspector?.close()
+      return
+    }
     if (!isolated) {
       child.kill()
       await exit
@@ -198,11 +280,22 @@ async function launch(options, report) {
       report.cleanup.push({ label, abortedBeforeIsolation: true, pid: child.pid })
       return
     }
-    try { await inspector?.evaluate("require('electron').app.quit()") } catch {}
+    try {
+      await inspector?.evaluate("require('electron').app.quit()")
+    } catch {}
     inspector?.close()
-    const ended = await Promise.race([exit, new Promise(resolve => setTimeout(() => resolve(null), 10000))])
-    if (!ended) { child.kill(); await exit; report.cleanup.push({ label, forced: true, pid: child.pid }) }
-    try { await browser?.close() } catch {}
+    const ended = await Promise.race([
+      exit,
+      new Promise((resolve) => setTimeout(() => resolve(null), 10000)),
+    ])
+    if (!ended) {
+      child.kill()
+      await exit
+      report.cleanup.push({ label, forced: true, pid: child.pid })
+    }
+    try {
+      await browser?.close()
+    } catch {}
   }
   try {
     inspector = await Inspector.connect(await waitLine(/Debugger listening on (ws:\/\/[^\s]+)/))
@@ -212,104 +305,232 @@ async function launch(options, report) {
     await inspector.send('Runtime.runIfWaitingForDebugger')
     const pause = await paused
     const frame = pause.callFrames[0]
-    const script = await inspector.send('Debugger.getScriptSource', { scriptId: frame.location.scriptId })
-    const actualEntry = asar.extractFile(path.join(runtime, 'resources/app.asar'), path.normalize(identity.main)).toString()
-    assert.equal(crypto.createHash('sha256').update(script.scriptSource).digest('hex'), crypto.createHash('sha256').update(actualEntry).digest('hex'), 'Debugger must pause in the unchanged packaged main entry')
-    assert(frame.location.lineNumber < 5, 'Main entry isolation was not established before application initialization')
-    const injected = await inspector.send('Debugger.evaluateOnCallFrame', { callFrameId: frame.callFrameId, expression: bootstrapExpression({ productName: 'SidekickAI', packageName: identity.name, appData, bootstrap, temp: environment.TEMP, logs, stateFile,  }), returnByValue: true })
+    const script = await inspector.send('Debugger.getScriptSource', {
+      scriptId: frame.location.scriptId,
+    })
+    const actualEntry = asar
+      .extractFile(path.join(runtime, 'resources/app.asar'), path.normalize(identity.main))
+      .toString()
+    assert.equal(
+      crypto.createHash('sha256').update(script.scriptSource).digest('hex'),
+      crypto.createHash('sha256').update(actualEntry).digest('hex'),
+      'Debugger must pause in the unchanged packaged main entry',
+    )
+    assert(
+      frame.location.lineNumber < 5,
+      'Main entry isolation was not established before application initialization',
+    )
+    const injected = await inspector.send('Debugger.evaluateOnCallFrame', {
+      callFrameId: frame.callFrameId,
+      expression: bootstrapExpression({
+        productName: 'SidekickAI',
+        packageName: identity.name,
+        appData,
+        bootstrap,
+        temp: environment.TEMP,
+        logs,
+        stateFile,
+      }),
+      returnByValue: true,
+    })
     assert(!injected.exceptionDetails, JSON.stringify(injected.exceptionDetails))
-    assert(injected.result?.value?.isolation === 'main-entry-inspector', 'Isolation bootstrap did not finish')
-    assert(injected.result.value.keyboardBindingLoaded && injected.result.value.nativeInputSuppressed, 'Native input was not isolated')
+    assert(
+      injected.result?.value?.isolation === 'main-entry-inspector',
+      'Isolation bootstrap did not finish',
+    )
+    assert(
+      injected.result.value.keyboardBindingLoaded && injected.result.value.nativeInputSuppressed,
+      'Native input was not isolated',
+    )
     isolated = true
     await inspector.send('Debugger.resume')
-    browser = await chromium.connectOverCDP(await waitLine(/DevTools listening on (ws:\/\/[^\s]+)/), { timeout: 20000, slowMo: 80 })
+    browser = await chromium.connectOverCDP(
+      await waitLine(/DevTools listening on (ws:\/\/[^\s]+)/),
+      { timeout: 20000, slowMo: 80 },
+    )
     const context = browser.contexts()[0]
     await context.setOffline(true)
     await context.tracing.start({ screenshots: true, snapshots: true })
-    const captureErrors = page => page.on('pageerror', error => report.pageErrors.push({ label, message: error.message }))
+    const captureErrors = (page) =>
+      page.on('pageerror', (error) => report.pageErrors.push({ label, message: error.message }))
     context.on('page', captureErrors)
     context.pages().forEach(captureErrors)
-    const page = await findPage(context, page => page.url().includes('windowId=main') || page.url().endsWith('/index.html'))
-    await page.waitForFunction(() => !!window.electron && document.body.innerText.trim().length > 10, null, { timeout: 20000 })
+    const page = await findPage(
+      context,
+      (page) => page.url().includes('windowId=main') || page.url().endsWith('/index.html'),
+    )
+    await page.waitForFunction(
+      () => !!window.electron && document.body.innerText.trim().length > 10,
+      null,
+      { timeout: 20000 },
+    )
     assert(page.url().startsWith('file:'), `Packaged renderer must use a local file: ${page.url()}`)
-    const paths = await inspector.evaluate("({ appData: require('electron').app.getPath('appData'), userData: require('electron').app.getPath('userData'), sessionData: require('electron').app.getPath('sessionData'), isPackaged: require('electron').app.isPackaged, version: require('electron').app.getVersion() })")
-    assert.equal(path.resolve(paths.userData).toLowerCase(), path.resolve(options.portable ? environment.SIDEKICK_DATA_DIR : path.join(appData, identity.name)).toLowerCase())
+    const paths = await inspector.evaluate(
+      "({ appData: require('electron').app.getPath('appData'), userData: require('electron').app.getPath('userData'), sessionData: require('electron').app.getPath('sessionData'), isPackaged: require('electron').app.isPackaged, version: require('electron').app.getVersion() })",
+    )
+    assert.equal(
+      path.resolve(paths.userData).toLowerCase(),
+      path
+        .resolve(
+          options.portable ? environment.SIDEKICK_DATA_DIR : path.join(appData, identity.name),
+        )
+        .toLowerCase(),
+    )
     assert.equal(paths.sessionData, paths.userData)
     assert.equal(paths.version, report.expectedVersion)
-    const blockedNode = await inspector.evaluate("(() => { try { new (require('node:net').Socket)().connect({ host: '127.0.0.1', port: 9 }); return false; } catch (error) { return error.message === 'Acceptance offline network boundary'; } })()")
+    const blockedNode = await inspector.evaluate(
+      "(() => { try { new (require('node:net').Socket)().connect({ host: '127.0.0.1', port: 9 }); return false; } catch (error) { return error.message === 'Acceptance offline network boundary'; } })()",
+    )
     assert.equal(blockedNode, true)
-    assert.equal(await page.evaluate(() => fetch('https://example.invalid/sidekick-offline-probe').then(() => false, () => true)), true)
-    assert(!fs.existsSync(path.join(runtime, 'data')), 'No architecture-local data directory may be created')
+    assert.equal(
+      await page.evaluate(() =>
+        fetch('https://example.invalid/sidekick-offline-probe').then(
+          () => false,
+          () => true,
+        ),
+      ),
+      true,
+    )
+    assert(
+      !fs.existsSync(path.join(runtime, 'data')),
+      'No architecture-local data directory may be created',
+    )
     await page.screenshot({ path: path.join(logs, 'main.png') })
-    report.checks.push({ label, identity, paths, localRenderer: page.url(), visible: true, nodeTcpBlocked: true, allNetworkBlocked: true, isolation: 'Instrumented system paths and side effects; unchanged candidate app bytes' })
+    report.checks.push({
+      label,
+      identity,
+      paths,
+      localRenderer: page.url(),
+      visible: true,
+      nodeTcpBlocked: true,
+      allNetworkBlocked: true,
+      isolation: 'Instrumented system paths and side effects; unchanged candidate app bytes',
+    })
     return { child, inspector, browser, context, page, stop, logs, stateFile, identity, paths }
-  } catch (error) { await stop(); throw error }
+  } catch (error) {
+    await stop()
+    throw error
+  }
 }
 
 async function findPage(context, predicate) {
   for (const page of context.pages()) if (predicate(page)) return page
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { context.removeListener('page', listener); reject(new Error('Expected application page did not open')) }, 20000)
-    const inspect = async page => {
+    const timer = setTimeout(() => {
+      context.removeListener('page', listener)
+      reject(new Error('Expected application page did not open'))
+    }, 20000)
+    const inspect = async (page) => {
       try {
-        await page.waitForURL(url => predicate({ url: () => url.toString() }), { waitUntil: 'domcontentloaded', timeout: 20000 })
-        clearTimeout(timer); context.removeListener('page', listener); resolve(page)
+        await page.waitForURL((url) => predicate({ url: () => url.toString() }), {
+          waitUntil: 'domcontentloaded',
+          timeout: 20000,
+        })
+        clearTimeout(timer)
+        context.removeListener('page', listener)
+        resolve(page)
       } catch {}
     }
-    const listener = page => { void inspect(page) }
+    const listener = (page) => {
+      void inspect(page)
+    }
     context.on('page', listener)
     for (const page of context.pages()) void inspect(page)
   })
 }
 
-
 async function verifyPackagedUi(runtime, output) {
   require('./check-node-version.cjs').assertNodeVersion()
-  assert(runtime && output, 'Usage: verify-packaged-ui.cjs <unpacked-directory> <new-evidence-directory>')
+  assert(
+    runtime && output,
+    'Usage: verify-packaged-ui.cjs <unpacked-directory> <new-evidence-directory>',
+  )
   runtime = path.resolve(runtime)
-  const sandbox = path.resolve(output), label = 'application'
+  const sandbox = path.resolve(output),
+    label = 'application'
   assert(!fs.existsSync(sandbox), 'Evidence output already exists')
   const portable = fs.existsSync(path.join(runtime, 'portable.txt'))
   const relative = path.relative(runtime, sandbox)
-  assert(relative.startsWith('..') || path.isAbsolute(relative), 'Evidence must be outside the application directory')
+  assert(
+    relative.startsWith('..') || path.isAbsolute(relative),
+    'Evidence must be outside the application directory',
+  )
   const before = packagedIdentity(runtime)
   fs.mkdirSync(sandbox, { recursive: true })
-  const report={expectedVersion:before.version,checks:[],cleanup:[],pageErrors:[],limitations:['Actual x64 packaged application with isolated paths, blocked network, and suppressed OS hotkeys, native hooks and login startup writes.','No real installation, UAC, physical input, games or ARM64 execution.']};
-  let instance;
+  const report = {
+    expectedVersion: before.version,
+    checks: [],
+    cleanup: [],
+    pageErrors: [],
+    limitations: [
+      'Actual x64 packaged application with isolated paths, blocked network, and suppressed OS hotkeys, native hooks and login startup writes.',
+      'No real installation, UAC, physical input, games or ARM64 execution.',
+    ],
+  }
+  let instance
   try {
-    instance=await launch({runtime,label,sandbox,namespace:sandbox, portable},report);
-    if(instance) {
-      const page=instance.page;
-      report.main=await page.evaluate(()=>({url:location.href,text:document.body.innerText,preload:!!window.electron,buttons:[...document.querySelectorAll('button')].map(b=>({text:b.innerText,name:b.getAttribute('data-name')}))}));
-      const consent=page.getByRole('button',{name:'不共享并继续',exact:true});
-      if(await consent.isVisible()) await consent.click();
-      await page.locator('[data-dom-id="aw-main-bottom-handle"]').click();
-      await page.locator('[data-name="main.bottom-bar.settings-button"]').click();
-      const settings=await findPage(instance.context,p=>p.url().includes('windowId=settings'));
-      await settings.waitForFunction(()=>!!window.electron&&document.body.innerText.length>30);
-      report.settings=await settings.evaluate(()=>({url:location.href,text:document.body.innerText,preload:!!window.electron}));
-      await settings.screenshot({path:path.join(instance.logs,'settings.png')});
-      await page.screenshot({path:path.join(instance.logs,'main.png')});
-      report.state=await instance.inspector.evaluate('globalThis.__sidekickAcceptance');
-      assert.deepEqual(report.state.loadFailures,[]);
-      assert.deepEqual(report.state.preloadFailures,[]);
-      assert.deepEqual(report.state.uncaught,[]);
-      assert.deepEqual(report.pageErrors,[]);
-      await instance.context.tracing.stop({path:path.join(instance.logs,'trace.zip')});
-      report.passed=true;
+    instance = await launch({ runtime, label, sandbox, namespace: sandbox, portable }, report)
+    if (instance) {
+      const page = instance.page
+      report.main = await page.evaluate(() => ({
+        url: location.href,
+        text: document.body.innerText,
+        preload: !!window.electron,
+        buttons: [...document.querySelectorAll('button')].map((b) => ({
+          text: b.innerText,
+          name: b.getAttribute('data-name'),
+        })),
+      }))
+      const consent = page.getByRole('button', { name: '不共享并继续', exact: true })
+      if (await consent.isVisible()) await consent.click()
+      await page.locator('[data-dom-id="aw-main-bottom-handle"]').click()
+      await page.locator('[data-name="main.bottom-bar.settings-button"]').click()
+      const settings = await findPage(instance.context, (p) =>
+        p.url().includes('windowId=settings'),
+      )
+      await settings.waitForFunction(() => !!window.electron && document.body.innerText.length > 30)
+      report.settings = await settings.evaluate(() => ({
+        url: location.href,
+        text: document.body.innerText,
+        preload: !!window.electron,
+      }))
+      await settings.screenshot({ path: path.join(instance.logs, 'settings.png') })
+      await page.screenshot({ path: path.join(instance.logs, 'main.png') })
+      report.state = await instance.inspector.evaluate('globalThis.__sidekickAcceptance')
+      assert.deepEqual(report.state.loadFailures, [])
+      assert.deepEqual(report.state.preloadFailures, [])
+      assert.deepEqual(report.state.uncaught, [])
+      assert.deepEqual(report.pageErrors, [])
+      await instance.context.tracing.stop({ path: path.join(instance.logs, 'trace.zip') })
+      report.passed = true
     }
-  } catch(error) { report.error=String(error.stack||error); }
-  finally {
-    if(instance) await instance.stop();
-    try { assert.deepEqual(packagedIdentity(runtime), before) } catch(error) { report.error=String(error); report.passed=false }
-    if (report.cleanup.some(item => item.forced)) { report.error='Application did not exit normally'; report.passed=false }
+  } catch (error) {
+    report.error = String(error.stack || error)
+  } finally {
+    if (instance) await instance.stop()
+    try {
+      assert.deepEqual(packagedIdentity(runtime), before)
+    } catch (error) {
+      report.error = String(error)
+      report.passed = false
+    }
+    if (report.cleanup.some((item) => item.forced)) {
+      report.error = 'Application did not exit normally'
+      report.passed = false
+    }
     const stateFile = path.join(sandbox, label, 'state.json')
     if (fs.existsSync(stateFile)) report.state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
-    fs.writeFileSync(path.join(sandbox,'report.json'),JSON.stringify(report,null,2));
-
+    fs.writeFileSync(path.join(sandbox, 'report.json'), JSON.stringify(report, null, 2))
   }
-  if (!report.passed || report.error) throw new Error(`Packaged UI verification failed: ${report.error}; evidence: ${sandbox}`)
+  if (!report.passed || report.error)
+    throw new Error(`Packaged UI verification failed: ${report.error}; evidence: ${sandbox}`)
   return { report: path.join(sandbox, 'report.json'), identity: before, passed: true }
 }
 module.exports = { verifyPackagedUi, bootstrapExpression }
-if (require.main === module) verifyPackagedUi(...process.argv.slice(2)).then(result => console.log(JSON.stringify(result))).catch(error => { console.error(error); process.exitCode = 1 })
+if (require.main === module)
+  verifyPackagedUi(...process.argv.slice(2))
+    .then((result) => console.log(JSON.stringify(result)))
+    .catch((error) => {
+      console.error(error)
+      process.exitCode = 1
+    })

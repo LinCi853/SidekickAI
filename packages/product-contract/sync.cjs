@@ -5,11 +5,19 @@ const path = require('node:path')
 const { rootPackageVersion } = require('../../scripts/sync-versions.cjs')
 
 function synchronize(root, apply = false) {
-  const product = { ...JSON.parse(fs.readFileSync(path.join(root, 'packages/product-contract/manifest.json'), 'utf8')), version: rootPackageVersion(root) }
-  const { edition: id } = JSON.parse(fs.readFileSync(path.join(root, 'product-edition.json'), 'utf8'))
+  const product = {
+    ...JSON.parse(
+      fs.readFileSync(path.join(root, 'packages/product-contract/manifest.json'), 'utf8'),
+    ),
+    version: rootPackageVersion(root),
+  }
+  const { edition: id } = JSON.parse(
+    fs.readFileSync(path.join(root, 'product-edition.json'), 'utf8'),
+  )
   const edition = product.editions[id]
   if (!edition) throw new Error('Invalid product configuration')
-  if (id === 'concept' && !/^\d+\.\d+\.\d+$/.test(product.version)) throw new Error('概念版只使用三段数字的正式版本号。')
+  if (id === 'concept' && !/^\d+\.\d+\.\d+$/.test(product.version))
+    throw new Error('概念版只使用三段数字的正式版本号。')
   const changed = []
   function update(relative, transform) {
     const file = path.join(root, relative)
@@ -21,31 +29,46 @@ function synchronize(root, apply = false) {
     if (apply) fs.writeFileSync(file, result)
   }
   function json(relative, transform) {
-    update(relative, source => {
+    update(relative, (source) => {
       const value = JSON.parse(source)
       const before = JSON.stringify(value)
       transform(value)
       return before === JSON.stringify(value) ? source : JSON.stringify(value, null, 2) + '\n'
     })
   }
-  json('package.json', value => {
+  json('package.json', (value) => {
     value.version = product.version
     value.name = edition.packageName
     delete value.productName
   })
-  json('package-lock.json', value => {
+  json('package-lock.json', (value) => {
     value.version = product.version
     if (value.packages?.['']) value.packages[''].version = product.version
   })
   for (const file of ['electron-builder.yml', 'electron-builder.portable.yml']) {
-    update(file, source => source.replace(/^appId: .+$/m, 'appId: ' + edition.appId).replace(/^productName: .+$/m, 'productName: ' + product.name))
+    update(file, (source) =>
+      source
+        .replace(/^appId: .+$/m, 'appId: ' + edition.appId)
+        .replace(/^productName: .+$/m, 'productName: ' + product.name),
+    )
   }
-  if (changed.length && !apply) throw new Error('Product configuration drift: ' + changed.join(', '))
+  if (changed.length && !apply)
+    throw new Error('Product configuration drift: ' + changed.join(', '))
   return { edition: id, version: product.version, changed, applied: apply }
 }
 
 module.exports = { synchronize }
 if (require.main === module) {
-  try { console.log(JSON.stringify(synchronize(path.resolve(__dirname, '../..'), process.argv.includes('--apply')), null, 2)) }
-  catch (error) { console.error(error.message); process.exitCode = 1 }
+  try {
+    console.log(
+      JSON.stringify(
+        synchronize(path.resolve(__dirname, '../..'), process.argv.includes('--apply')),
+        null,
+        2,
+      ),
+    )
+  } catch (error) {
+    console.error(error.message)
+    process.exitCode = 1
+  }
 }

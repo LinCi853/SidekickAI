@@ -161,8 +161,9 @@
   line-height: 1.4;
   outline: none;
   box-sizing: border-box;
-  transition: border-color var(--duration-fast) var(--ease-out),
-              box-shadow var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 .browser-settings-page input.input-underline:focus,
 .browser-settings-page select.input-underline:focus,
@@ -192,9 +193,10 @@
   color: var(--foreground);
   font-size: var(--text-sm);
   font-weight: 500;
-  transition: background var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .browser-settings-page .btn-outline:hover:not(:disabled) {
   background: var(--accent-05);
@@ -216,9 +218,10 @@
   line-height: 1.4;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .browser-settings-cloud-pc-btn:hover {
   background: color-mix(in srgb, var(--accent-bright) 18%, transparent);

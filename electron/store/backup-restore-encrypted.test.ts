@@ -14,15 +14,35 @@ import Database from 'better-sqlite3'
 const fixture = vi.hoisted(() => ({ paths: {} as Record<string, string> }))
 vi.mock('../edition-runtime.js', () => ({ prepareDataRestoreHandoff: async () => () => {} }))
 vi.mock('electron', () => ({
-  app: { isReady: () => true, isPackaged: true, getPath: (name: string) => fixture.paths[name], getVersion: () => '0.1.5', relaunch: vi.fn(), exit: vi.fn() },
-  BrowserWindow: { getAllWindows: () => [] }, dialog: { showErrorBox: vi.fn() },
-  session: { defaultSession: { clearCache: async () => {}, clearAuthCache: async () => {}, clearStorageData: async () => {}, flushStorageData() {}, cookies: { flushStore: async () => {} } } },
+  app: {
+    isReady: () => true,
+    isPackaged: true,
+    getPath: (name: string) => fixture.paths[name],
+    getVersion: () => '0.1.5',
+    relaunch: vi.fn(),
+    exit: vi.fn(),
+  },
+  BrowserWindow: { getAllWindows: () => [] },
+  dialog: { showErrorBox: vi.fn() },
+  session: {
+    defaultSession: {
+      clearCache: async () => {},
+      clearAuthCache: async () => {},
+      clearStorageData: async () => {},
+      flushStorageData() {},
+      cookies: { flushStore: async () => {} },
+    },
+  },
 }))
 vi.mock('./chat-store.js', () => ({ closeChatStore() {} }))
 vi.mock('../modules/plugins/whiteboard/whiteboard-db.js', () => ({ closeWhiteboardDb() {} }))
 vi.mock('../modules/plugins/notes/notes-db.js', () => ({ closeNotesDb() {} }))
 vi.mock('../browser/bookmark-store.js', () => ({ closeBookmarkStore() {} }))
-vi.mock('./module-state-store.js', () => ({ closeModuleStateDb() {}, createSqliteJsonStore() {}, clearSqliteStore() {} }))
+vi.mock('./module-state-store.js', () => ({
+  closeModuleStateDb() {},
+  createSqliteJsonStore() {},
+  clearSqliteStore() {},
+}))
 vi.mock('../browser/profile-store.js', () => ({ profileStore: { list: () => [] } }))
 vi.mock('./device-id.js', () => ({ getDeviceId: () => 'fixture-device' }))
 vi.mock('../browser/search-history-store.js', () => ({ closeSearchHistoryStore() {} }))
@@ -30,7 +50,10 @@ vi.mock('../browser/browser-download-store.js', () => ({ closeBrowserDownloadSto
 vi.mock('../browser/nav-history-store.js', () => ({ closeNavHistoryStore() {} }))
 vi.mock('./accumulated-links-store.js', () => ({ accumulatedLinksStore: { close() {} } }))
 vi.mock('./install-config-seed.js', () => ({ stampInstallConfigHashAfterImport() {} }))
-vi.mock('../modules/registry.js', () => ({ collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }), closeAllModuleDbs() {} }))
+vi.mock('../modules/registry.js', () => ({
+  collectModuleDataFiles: () => ({ dbFiles: [], assetDirs: [] }),
+  closeAllModuleDbs() {},
+}))
 import { exportAllData, importAllData, importAllDataDecrypted } from './backup-restore'
 import { applyPendingRestore, finishPendingRestore } from '../../packages/backup-core/transaction'
 import { setImportingData } from './import-guard'
@@ -46,7 +69,9 @@ beforeEach(() => {
 })
 afterEach(() => {
   setImportingData(false)
-  vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllEnvs()
+  vi.clearAllTimers()
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
   fs.rmSync(root, { recursive: true, force: true })
 })
 
@@ -63,16 +88,28 @@ function seedData(value: string): string {
 }
 function sentinel(file: string): string {
   const db = new Database(file, { readonly: true })
-  try { return (db.prepare('SELECT value FROM app_settings WHERE key = ?').get('sentinel') as { value: string }).value }
-  finally { db.close() }
+  try {
+    return (
+      db.prepare('SELECT value FROM app_settings WHERE key = ?').get('sentinel') as {
+        value: string
+      }
+    ).value
+  } finally {
+    db.close()
+  }
 }
 
 describe('加密备份回环（exportAllData + importAllDataDecrypted）', () => {
   it('加密导出产生 SABK 头文件；错误密码拒绝且数据原样保留', async () => {
     seedData('original')
     const backup = path.join(root, 'backup.sabackup')
-    expect(await exportAllData(backup, { basicData: true, cookies: false, indexedDB: false, cache: false }, { password: PASSWORD }))
-      .toMatchObject({ success: true, filePath: backup })
+    expect(
+      await exportAllData(
+        backup,
+        { basicData: true, cookies: false, indexedDB: false, cache: false },
+        { password: PASSWORD },
+      ),
+    ).toMatchObject({ success: true, filePath: backup })
     // SABK 魔数 + 版本头（file-crypto 格式约定）
     expect(fs.readFileSync(backup).subarray(0, 4).toString('ascii')).toBe('SABK')
 
@@ -85,7 +122,11 @@ describe('加密备份回环（exportAllData + importAllDataDecrypted）', () =>
   it('正确密码解密恢复 sentinel 与设备归因', async () => {
     seedData('before-encrypt')
     const backup = path.join(root, 'backup.sabackup')
-    await exportAllData(backup, { basicData: true, cookies: false, indexedDB: false, cache: false }, { password: PASSWORD })
+    await exportAllData(
+      backup,
+      { basicData: true, cookies: false, indexedDB: false, cache: false },
+      { password: PASSWORD },
+    )
 
     // 换一批新数据，恢复后应回到备份时的快照
     const db = new Database(path.join(fixture.paths.userData, 'settings.db'))
@@ -104,16 +145,29 @@ describe('加密备份回环（exportAllData + importAllDataDecrypted）', () =>
   it('明文 zip 与加密标记：importAllData 识别加密备份并要求密码；解密器拒绝非 SABK 文件', async () => {
     seedData('plain')
     const plainZip = path.join(root, 'plain.zip')
-    expect(await exportAllData(plainZip, { basicData: true, cookies: false, indexedDB: false, cache: false }))
-      .toMatchObject({ success: true })
+    expect(
+      await exportAllData(plainZip, {
+        basicData: true,
+        cookies: false,
+        indexedDB: false,
+        cache: false,
+      }),
+    ).toMatchObject({ success: true })
     expect(fs.readFileSync(plainZip).subarray(0, 2).toString('ascii')).toBe('PK')
     // 加密解密器对非 SABK 文件如实提示格式不符，不做部分导入
     const refused = await importAllDataDecrypted(plainZip, PASSWORD)
-    expect(refused).toMatchObject({ success: false, error: '该文件不是加密备份，请改用普通导入（无需密码）' })
+    expect(refused).toMatchObject({
+      success: false,
+      error: '该文件不是加密备份，请改用普通导入（无需密码）',
+    })
 
     // 加密备份直接走 importAllData（无密码）→ 提示需要密码
     const backup = path.join(root, 'backup.sabackup')
-    await exportAllData(backup, { basicData: true, cookies: false, indexedDB: false, cache: false }, { password: PASSWORD })
+    await exportAllData(
+      backup,
+      { basicData: true, cookies: false, indexedDB: false, cache: false },
+      { password: PASSWORD },
+    )
     expect(await importAllData(backup)).toMatchObject({ success: false, encrypted: true })
     expect(sentinel(path.join(fixture.paths.userData, 'settings.db'))).toBe('plain')
   })

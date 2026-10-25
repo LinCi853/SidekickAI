@@ -13,7 +13,9 @@ describe('preload document readiness', () => {
     const document = {
       readyState: 'loading',
       documentElement: null as typeof root | null,
-      addEventListener: vi.fn((event: string, callback: () => void) => listeners.set(event, callback)),
+      addEventListener: vi.fn((event: string, callback: () => void) =>
+        listeners.set(event, callback),
+      ),
     }
     vi.stubGlobal('document', document)
     vi.stubGlobal('window', {})

@@ -5,7 +5,7 @@
  * 等多个模块中重复实现的逻辑，集中维护避免修改遗漏。
  */
 
-import type { AIPlatform, Profile } from './electron-api';
+import type { AIPlatform, Profile } from './electron-api'
 
 /**
  * 判断事件目标是否为可输入元素（input/textarea/select/contenteditable）。
@@ -13,9 +13,9 @@ import type { AIPlatform, Profile } from './electron-api';
  * 用于快捷键处理：当焦点在输入元素时跳过全局快捷键，避免影响正常输入。
  */
 export function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName.toLowerCase()
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable
 }
 
 /**
@@ -29,7 +29,7 @@ export function findProfilesByPlatform(platform: AIPlatform, profiles: Profile[]
     .filter(
       (p) => p.isAIPlatform && (p.aiPlatformId === platform.id || p.aiPlatformUrl === platform.url),
     )
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }
 
 /**
@@ -39,8 +39,11 @@ export function findProfilesByPlatform(platform: AIPlatform, profiles: Profile[]
  * 为什么同时匹配 id 和 url：历史数据中部分 Profile 仅有 aiPlatformUrl 而无 aiPlatformId，
  * 双重匹配保证旧数据兼容。
  */
-export function findProfileByPlatform(platform: AIPlatform, profiles: Profile[]): Profile | undefined {
-  return findProfilesByPlatform(platform, profiles)[0];
+export function findProfileByPlatform(
+  platform: AIPlatform,
+  profiles: Profile[],
+): Profile | undefined {
+  return findProfilesByPlatform(platform, profiles)[0]
 }
 
 /**
@@ -52,7 +55,5 @@ export function findProfileByPlatform(platform: AIPlatform, profiles: Profile[])
  * 拖拽排序时直接基于返回的 Profile.id 数组重新排序。
  */
 export function findAiAppProfiles(profiles: Profile[]): Profile[] {
-  return profiles
-    .filter((p) => p.isAIPlatform)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return profiles.filter((p) => p.isAIPlatform).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }

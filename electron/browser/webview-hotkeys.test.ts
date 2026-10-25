@@ -12,18 +12,38 @@ const fixture = vi.hoisted(() => ({
   top: vi.fn(),
 }))
 
-vi.mock('../platform/window/renderer-loader.js', () => ({ isBrowserWindowContents: () => fixture.browser }))
+vi.mock('../platform/window/renderer-loader.js', () => ({
+  isBrowserWindowContents: () => fixture.browser,
+}))
 vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: () => 'window-a' }))
 vi.mock('./webview-focus.js', () => ({ isGuestFocusEditable: () => fixture.editable }))
-vi.mock('../utils/cloud-pc.js', () => ({ isCloudPc: () => fixture.cloud, forceExitCloudPc: fixture.exitCloud }))
+vi.mock('../utils/cloud-pc.js', () => ({
+  isCloudPc: () => fixture.cloud,
+  forceExitCloudPc: fixture.exitCloud,
+}))
 vi.mock('../utils/browser-hotkey-fallback.js', () => ({ tryForward: () => fixture.forward }))
 vi.mock('../utils/fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
-vi.mock('../store/window-store.js', () => ({ windowStore: { getOrDefault: () => ({}), save: vi.fn() } }))
-vi.mock('../ipc/window-control-ipc.js', () => ({ setAlwaysOnTopForWindow: fixture.top, toggleMaximizeForWindow: fixture.maximize }))
+vi.mock('../store/window-store.js', () => ({
+  windowStore: { getOrDefault: () => ({}), save: vi.fn() },
+}))
+vi.mock('../ipc/window-control-ipc.js', () => ({
+  setAlwaysOnTopForWindow: fixture.top,
+  toggleMaximizeForWindow: fixture.maximize,
+}))
 vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: () => fixture.window } }))
 vi.mock('./webview-hotkey-target.js', () => ({
   trackWebviewHotkeyTarget: vi.fn(),
-  captureWebviewHotkeyTarget: () => fixture.targetAvailable ? { webContentsId: 12, documentGeneration: 2, url: 'https://example.test/chat', tabId: 'tab-a', profileId: 'profile-a', windowId: 'window-a' } : null,
+  captureWebviewHotkeyTarget: () =>
+    fixture.targetAvailable
+      ? {
+          webContentsId: 12,
+          documentGeneration: 2,
+          url: 'https://example.test/chat',
+          tabId: 'tab-a',
+          profileId: 'profile-a',
+          windowId: 'window-a',
+        }
+      : null,
 }))
 
 import { attachWebviewHotkeyRouter } from './webview-hotkeys'
@@ -31,9 +51,22 @@ import { attachWebviewHotkeyRouter } from './webview-hotkeys'
 let guest: any
 let parent: any
 let handlers: Array<(event: any, input: any) => void>
-function press(key: string, code: string, modifiers: string[] = [], extra: Record<string, unknown> = {}) {
+function press(
+  key: string,
+  code: string,
+  modifiers: string[] = [],
+  extra: Record<string, unknown> = {},
+) {
   const event = { preventDefault: vi.fn() }
-  const input = { type: 'keyDown', key, code, modifiers, isAutoRepeat: false, isComposing: false, ...extra }
+  const input = {
+    type: 'keyDown',
+    key,
+    code,
+    modifiers,
+    isAutoRepeat: false,
+    isComposing: false,
+    ...extra,
+  }
   for (const handler of handlers) handler(event, input)
   return event
 }
@@ -47,7 +80,12 @@ beforeEach(() => {
   fixture.editable = false
   parent = { id: 11, send: vi.fn(), isDestroyed: () => false }
   handlers = []
-  guest = { id: 12, isDestroyed: () => false, isFocused: () => true, on: (_event: string, handler: any) => handlers.push(handler) }
+  guest = {
+    id: 12,
+    isDestroyed: () => false,
+    isFocused: () => true,
+    on: (_event: string, handler: any) => handlers.push(handler),
+  }
   fixture.window = {
     isDestroyed: () => false,
     isFocused: () => true,
@@ -89,18 +127,27 @@ describe('guest input behavior contract', () => {
   it('cycles backward for control shift tab', () => {
     const event = press('Tab', 'Tab', ['control', 'shift'])
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'cycleTab', data: { reverse: true } }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'cycleTab', data: { reverse: true } }),
+    )
   })
 
   it('allows auto-repeat for tab-switch keys (hold Ctrl+Tab / Alt+1)', () => {
     const heldTab = press('Tab', 'Tab', ['control'], { isAutoRepeat: true })
     expect(heldTab.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'cycleTab' }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'cycleTab' }),
+    )
 
     parent.send.mockClear()
     const heldDigit = press('1', 'Digit1', ['alt'], { isAutoRepeat: true })
     expect(heldDigit.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'switchTab' }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'switchTab' }),
+    )
 
     parent.send.mockClear()
     const heldOther = press('w', 'KeyW', ['control'], { isAutoRepeat: true })
@@ -112,14 +159,20 @@ describe('guest input behavior contract', () => {
     fixture.browser = false
     const event = press(String.fromCharCode(96), 'Backquote')
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'openShortcuts' }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'openShortcuts' }),
+    )
   })
 
   it('hold backquote opens shortcuts in browser windows too', () => {
     fixture.browser = true
     const event = press(String.fromCharCode(96), 'Backquote')
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'openShortcuts' }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'openShortcuts' }),
+    )
   })
 
   it('question mark is no longer a shortcuts trigger', () => {
@@ -142,7 +195,13 @@ describe('guest input behavior contract', () => {
     // 不能被应用抢走（此前 passWhenTyping 从未被任何快捷键使用）。
     fixture.browser = false
     fixture.editable = true
-    for (const [key, code] of [['f', 'KeyF'], ['e', 'KeyE'], ['k', 'KeyK'], ['p', 'KeyP'], ['g', 'KeyG']] as const) {
+    for (const [key, code] of [
+      ['f', 'KeyF'],
+      ['e', 'KeyE'],
+      ['k', 'KeyK'],
+      ['p', 'KeyP'],
+      ['g', 'KeyG'],
+    ] as const) {
       parent.send.mockClear()
       const event = press(key, code, ['ctrl'])
       expect(event.preventDefault).not.toHaveBeenCalled()
@@ -155,14 +214,20 @@ describe('guest input behavior contract', () => {
     fixture.editable = false
     const event = press('f', 'KeyF', ['ctrl'])
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'findInPage' }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'findInPage' }),
+    )
   })
 
   it('releasing backquote closes shortcuts (keyup)', () => {
     fixture.browser = false
     const event = press(String.fromCharCode(96), 'Backquote', [], { type: 'keyUp' })
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(parent.send).toHaveBeenCalledWith('webview:hotkey', expect.objectContaining({ action: 'closeShortcuts' }))
+    expect(parent.send).toHaveBeenCalledWith(
+      'webview:hotkey',
+      expect.objectContaining({ action: 'closeShortcuts' }),
+    )
   })
 
   it('consumes a browser fullscreen duplicate without invoking maximize', () => {
@@ -217,7 +282,14 @@ describe('guest input behavior contract', () => {
     press('w', 'KeyW', ['control'])
     expect(parent.send).toHaveBeenCalledWith('webview:hotkey', {
       action: 'closeTab',
-      target: { webContentsId: 12, documentGeneration: 2, url: 'https://example.test/chat', tabId: 'tab-a', profileId: 'profile-a', windowId: 'window-a' },
+      target: {
+        webContentsId: 12,
+        documentGeneration: 2,
+        url: 'https://example.test/chat',
+        tabId: 'tab-a',
+        profileId: 'profile-a',
+        windowId: 'window-a',
+      },
     })
   })
 })

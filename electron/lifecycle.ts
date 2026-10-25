@@ -29,11 +29,9 @@ export function runUiohookHealthCheck(hotkeyManager: HotkeyManager): void {
     console.log('[main] 启动后状态检查:', JSON.stringify(status))
     if (!status.uiohookStarted) {
       const title = '语音热键未就绪'
-      let body =
-        '后台键盘监听（uiohook）启动失败，Alt+V 等语音热键将无法使用。'
+      let body = '后台键盘监听（uiohook）启动失败，Alt+V 等语音热键将无法使用。'
       if (process.platform === 'darwin') {
-        body +=
-          '\nmacOS 需要授予「辅助功能」权限：系统设置 > 隐私与安全性 > 辅助功能，添加本应用。'
+        body += '\nmacOS 需要授予「辅助功能」权限：系统设置 > 隐私与安全性 > 辅助功能，添加本应用。'
       } else {
         body +=
           '可能原因：被安全软件拦截、权限不足、驱动冲突。\n' +

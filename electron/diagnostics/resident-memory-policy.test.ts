@@ -3,25 +3,53 @@ import { createResidentMemoryPolicy, type ResidentSample } from './resident-memo
 
 const MiB = 1024 * 1024
 const sample = (now = 30000): ResidentSample => ({
-  now, totalPhysicalBytes: 8 * 1024 * MiB, availablePhysicalBytes: 4 * 1024 * MiB,
-  lastActivityAt: 0, protected: false,
-  processes: [{ pid: 2, creationTime: 1000, type: 'Tab', workingSetBytes: 200 * MiB, privateBytes: 300 * MiB, cpuPercent: 0 }],
+  now,
+  totalPhysicalBytes: 8 * 1024 * MiB,
+  availablePhysicalBytes: 4 * 1024 * MiB,
+  lastActivityAt: 0,
+  protected: false,
+  processes: [
+    {
+      pid: 2,
+      creationTime: 1000,
+      type: 'Tab',
+      workingSetBytes: 200 * MiB,
+      privateBytes: 300 * MiB,
+      cpuPercent: 0,
+    },
+  ],
 })
 const result = { beforeBytes: 200 * MiB, afterBytes: 60 * MiB, durationMs: 17 }
 
 describe('resident memory policy', () => {
   it('uses proven background renderer idle without exempting it from CPU or task protection', () => {
-    const background = { ...sample(), lastActivityAt: 29000, processes: [{ ...sample().processes[0], lastActivityAt: 0 }] }
+    const background = {
+      ...sample(),
+      lastActivityAt: 29000,
+      processes: [{ ...sample().processes[0], lastActivityAt: 0 }],
+    }
     expect(createResidentMemoryPolicy().select(background)).not.toBeNull()
     expect(createResidentMemoryPolicy().select({ ...background, protected: true })).toBeNull()
-    expect(createResidentMemoryPolicy().select({ ...background, processes: [{ ...background.processes[0], lastActivityAt: 29000 }] })).toBeNull()
-    expect(createResidentMemoryPolicy().select({ ...background, processes: [{ ...background.processes[0], cpuPercent: 2 }] })).toBeNull()
+    expect(
+      createResidentMemoryPolicy().select({
+        ...background,
+        processes: [{ ...background.processes[0], lastActivityAt: 29000 }],
+      }),
+    ).toBeNull()
+    expect(
+      createResidentMemoryPolicy().select({
+        ...background,
+        processes: [{ ...background.processes[0], cpuPercent: 2 }],
+      }),
+    ).toBeNull()
   })
   it('protects busy work, recent application input and CPU activity', () => {
     const policy = createResidentMemoryPolicy()
     expect(policy.select({ ...sample(), protected: true })).toBeNull()
     expect(policy.select({ ...sample(), lastActivityAt: 20000 })).toBeNull()
-    expect(policy.select({ ...sample(), processes: [{ ...sample().processes[0], cpuPercent: 1.01 }] })).toBeNull()
+    expect(
+      policy.select({ ...sample(), processes: [{ ...sample().processes[0], cpuPercent: 1.01 }] }),
+    ).toBeNull()
   })
 
   it('permits quiet housekeeping below one percent of a core only after application idle', () => {
@@ -80,7 +108,10 @@ describe('resident memory policy', () => {
 
   it('does not increase successful spacing while the whole application remains large', () => {
     const policy = createResidentMemoryPolicy()
-    const large = (now: number) => ({ ...sample(now), processes: [{ ...sample().processes[0], workingSetBytes: 400 * MiB }] })
+    const large = (now: number) => ({
+      ...sample(now),
+      processes: [{ ...sample().processes[0], workingSetBytes: 400 * MiB }],
+    })
     for (const now of [30000, 90000, 150000]) {
       const candidate = policy.select(large(now))!
       expect(candidate).not.toBeNull()
@@ -101,7 +132,11 @@ describe('resident memory policy', () => {
 
   it('uses the multi-window allowance when increasing successful spacing', () => {
     const policy = createResidentMemoryPolicy()
-    const multi = (now: number) => ({ ...sample(now), workingSetBudgetBytes: 4 * 1024 * MiB, processes: [{ ...sample().processes[0], workingSetBytes: 400 * MiB }] })
+    const multi = (now: number) => ({
+      ...sample(now),
+      workingSetBudgetBytes: 4 * 1024 * MiB,
+      processes: [{ ...sample().processes[0], workingSetBytes: 400 * MiB }],
+    })
     const cleared = { ...result, beforeBytes: 400 * MiB }
     policy.recordResult(policy.select(multi(30000))!, cleared, 30000)
     policy.recordResult(policy.select(multi(90000))!, cleared, 90000)
@@ -113,13 +148,28 @@ describe('resident memory policy', () => {
     const policy = createResidentMemoryPolicy()
     expect(policy.select({ ...sample(), totalPhysicalBytes: NaN })).toBeNull()
     expect(policy.select({ ...sample(), availablePhysicalBytes: -1 })).toBeNull()
-    expect(policy.select({ ...sample(), processes: [{ ...sample().processes[0], workingSetBytes: 40 * MiB }] })).not.toBeNull()
+    expect(
+      policy.select({
+        ...sample(),
+        processes: [{ ...sample().processes[0], workingSetBytes: 40 * MiB }],
+      }),
+    ).not.toBeNull()
   })
 
   it('permits later idle reclaim on roomy machines', () => {
     const policy = createResidentMemoryPolicy()
-    const roomy = { ...sample(), totalPhysicalBytes: 24 * 1024 * MiB, availablePhysicalBytes: 12 * 1024 * MiB }
+    const roomy = {
+      ...sample(),
+      totalPhysicalBytes: 24 * 1024 * MiB,
+      availablePhysicalBytes: 12 * 1024 * MiB,
+    }
     expect(policy.select(roomy)).toMatchObject({ reason: 'startup' })
-    expect(policy.select({ ...roomy, now: 200000, processes: [{ ...roomy.processes[0], creationTime: 2000 }] })).toMatchObject({ reason: 'idle' })
+    expect(
+      policy.select({
+        ...roomy,
+        now: 200000,
+        processes: [{ ...roomy.processes[0], creationTime: 2000 }],
+      }),
+    ).toMatchObject({ reason: 'idle' })
   })
 })

@@ -151,10 +151,7 @@ function tagSessionWithProfile(ses: Session, profileId: string): void {
  * 优先级：profile.proxyConfig（结构化）> profile.proxy（旧字符串）> 全局 AppSettings。
  * 传入 profile 时会在 session 上标记 profileId，供代理认证使用。
  */
-export async function applyProxyToSession(
-  ses: Session,
-  profile?: Profile,
-): Promise<void> {
+export async function applyProxyToSession(ses: Session, profile?: Profile): Promise<void> {
   if (profile) {
     tagSessionWithProfile(ses, profile.id)
     // 1. Profile 级结构化配置
@@ -184,10 +181,7 @@ export async function applyProxyToSession(
  * - region = global → 系统代理
  * - 其他情况 → 回退到全局 AppSettings 代理
  */
-export async function applyRegionBasedProxy(
-  ses: Session,
-  profile: Profile,
-): Promise<void> {
+export async function applyRegionBasedProxy(ses: Session, profile: Profile): Promise<void> {
   tagSessionWithProfile(ses, profile.id)
   // 1. Profile 级结构化配置
   if (profile.proxyConfig) {
@@ -424,7 +418,9 @@ export async function applyProxyFallback(profileId?: string): Promise<{
   switched: boolean
   mode: 'direct' | 'system' | null
 }> {
-  console.warn(`[proxy-fallback] === applyProxyFallback 开始 === profileId=${profileId ?? '(全局)'}`)
+  console.warn(
+    `[proxy-fallback] === applyProxyFallback 开始 === profileId=${profileId ?? '(全局)'}`,
+  )
 
   // Profile 级兜底
   if (profileId) {
@@ -436,7 +432,9 @@ export async function applyProxyFallback(profileId?: string): Promise<{
     const pc = profile.proxyConfig
     const effectiveMode = pc?.proxyMode ?? getAppSettings().proxyMode
     const fallbackEnabled = pc?.proxyFallbackEnabled ?? getAppSettings().proxyFallbackEnabled
-    console.warn(`[proxy-fallback] Profile 兜底检查: effectiveMode=${effectiveMode} fallbackEnabled=${fallbackEnabled} hasProxyConfig=${!!pc}`)
+    console.warn(
+      `[proxy-fallback] Profile 兜底检查: effectiveMode=${effectiveMode} fallbackEnabled=${fallbackEnabled} hasProxyConfig=${!!pc}`,
+    )
 
     if (!fallbackEnabled) {
       console.warn('[proxy-fallback] 兜底开关未开启，跳过')
@@ -453,7 +451,9 @@ export async function applyProxyFallback(profileId?: string): Promise<{
       console.warn(`[proxy-fallback] 已切换 persist:${profileId} → ${JSON.stringify(config)}`)
       const browserSes = session.fromPartition(`persist:${profileId}-browser`)
       await browserSes.setProxy(config)
-      console.warn(`[proxy-fallback] 已切换 persist:${profileId}-browser → ${JSON.stringify(config)}`)
+      console.warn(
+        `[proxy-fallback] 已切换 persist:${profileId}-browser → ${JSON.stringify(config)}`,
+      )
     } catch (err) {
       console.error(`[proxy-fallback] Profile ${profileId} session 切换失败:`, err)
       return { switched: false, mode: null }
@@ -464,7 +464,9 @@ export async function applyProxyFallback(profileId?: string): Promise<{
 
   // 全局兜底
   const cfg = getAppSettings()
-  console.warn(`[proxy-fallback] 全局兜底检查: proxyMode=${cfg.proxyMode} proxyFallbackEnabled=${cfg.proxyFallbackEnabled}`)
+  console.warn(
+    `[proxy-fallback] 全局兜底检查: proxyMode=${cfg.proxyMode} proxyFallbackEnabled=${cfg.proxyFallbackEnabled}`,
+  )
 
   if (!cfg.proxyFallbackEnabled) {
     console.warn('[proxy-fallback] 全局兜底开关未开启，跳过')

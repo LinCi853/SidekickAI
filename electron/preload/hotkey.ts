@@ -41,7 +41,8 @@ export const hotkeyApi = {
     startRecording: () => ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_START_RECORDING),
     stopRecording: () => ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_STOP_RECORDING),
     onRecordingResult: (callback: (result: { accelerator: string; reason?: string }) => void) => {
-      const handler = (_e: unknown, result: { accelerator: string; reason?: string }) => callback(result)
+      const handler = (_e: unknown, result: { accelerator: string; reason?: string }) =>
+        callback(result)
       ipcRenderer.on(IPC_CHANNELS.HOTKEY_START_RECORDING, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_START_RECORDING, handler)
     },
@@ -50,8 +51,11 @@ export const hotkeyApi = {
      * 用于录制 UI 实时显示用户按下的组合，无需等到最终键按下。
      * @returns 取消监听函数
      */
-    onRecordingPartial: (callback: (partial: { modifiers: string[]; key: string | null }) => void) => {
-      const handler = (_e: unknown, partial: { modifiers: string[]; key: string | null }) => callback(partial)
+    onRecordingPartial: (
+      callback: (partial: { modifiers: string[]; key: string | null }) => void,
+    ) => {
+      const handler = (_e: unknown, partial: { modifiers: string[]; key: string | null }) =>
+        callback(partial)
       ipcRenderer.on(IPC_CHANNELS.HOTKEY_RECORDING_PARTIAL, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_RECORDING_PARTIAL, handler)
     },
@@ -60,7 +64,8 @@ export const hotkeyApi = {
      * @param callback 状态：{ uiohookStarted, voiceHotkeyRegistered, voiceKeyPressed, pollingActive }
      */
     onChanged: (callback: (config: import('../shared/types.js').HotkeyConfig[]) => void) => {
-      const handler = (_event: unknown, config: import('../shared/types.js').HotkeyConfig[]) => callback(config)
+      const handler = (_event: unknown, config: import('../shared/types.js').HotkeyConfig[]) =>
+        callback(config)
       ipcRenderer.on(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.HOTKEY_CONFIG_CHANGED, handler)
     },
@@ -74,7 +79,8 @@ export const hotkeyApi = {
   onWebviewHotkey: (
     callback: (payload: import('../shared/types.js').WebviewHotkeyPayload) => void,
   ) => {
-    const handler = (_e: unknown, payload: unknown) => callback(payload as Parameters<typeof callback>[0])
+    const handler = (_e: unknown, payload: unknown) =>
+      callback(payload as Parameters<typeof callback>[0])
     ipcRenderer.on(IPC_CHANNELS.WEBVIEW_HOTKEY, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.WEBVIEW_HOTKEY, handler)
   },

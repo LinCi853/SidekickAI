@@ -5,73 +5,72 @@ import { getDataDir, getDirSize, collectSessionSizesFromBase } from '../session-
 import { collectPluginExtraFiles } from './collect.js'
 import type { ExportSizeEstimate } from './types.js'
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
-
 export async function estimateExportSizes(): Promise<ExportSizeEstimate> {
-  const dataDir = getDataDir();
-  let basicDataSize = 0;
-  let cookiesSize = 0;
-  let indexedDBSize = 0;
-  let cacheSize = 0;
+  const dataDir = getDataDir()
+  let basicDataSize = 0
+  let cookiesSize = 0
+  let indexedDBSize = 0
+  let cacheSize = 0
 
-  
   const pluginExtra = await collectPluginExtraFiles(false)
   const allBackupFiles = [...BACKUP_FILES]
   for (const db of pluginExtra.dbFiles) {
     allBackupFiles.push(db, db + '-wal', db + '-shm')
   }
   for (const fileName of allBackupFiles) {
-    const filePath = path.join(dataDir, fileName);
+    const filePath = path.join(dataDir, fileName)
     if (fs.existsSync(filePath)) {
       try {
-        const stat = fs.statSync(filePath);
-        if (stat.isFile()) basicDataSize += stat.size;
-      } catch { /* ignore */ }
+        const stat = fs.statSync(filePath)
+        if (stat.isFile()) basicDataSize += stat.size
+      } catch {
+        /* ignore */
+      }
     }
   }
-  
+
   const allAssetDirs = [...ASSET_DIRS, ...pluginExtra.assetDirs]
   for (const dirName of allAssetDirs) {
-    const dirPath = path.join(dataDir, dirName);
+    const dirPath = path.join(dataDir, dirName)
     if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      basicDataSize += getDirSize(dirPath);
+      basicDataSize += getDirSize(dirPath)
     }
   }
 
-  
-  const partitionsDir = path.join(dataDir, 'Partitions');
+  const partitionsDir = path.join(dataDir, 'Partitions')
   if (fs.existsSync(partitionsDir) && fs.statSync(partitionsDir).isDirectory()) {
     try {
-      const partitionEntries = fs.readdirSync(partitionsDir, { withFileTypes: true });
+      const partitionEntries = fs.readdirSync(partitionsDir, { withFileTypes: true })
       for (const entry of partitionEntries) {
-        if (!entry.isDirectory()) continue;
-        const partitionPath = path.join(partitionsDir, entry.name);
-        const sizes = collectSessionSizesFromBase(partitionPath);
-        cookiesSize += sizes.cookies;
-        indexedDBSize += sizes.indexedDB;
-        cacheSize += sizes.cache;
+        if (!entry.isDirectory()) continue
+        const partitionPath = path.join(partitionsDir, entry.name)
+        const sizes = collectSessionSizesFromBase(partitionPath)
+        cookiesSize += sizes.cookies
+        indexedDBSize += sizes.indexedDB
+        cacheSize += sizes.cache
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
-  
-  
-  const defaultSessionSizes = collectSessionSizesFromBase(dataDir);
-  cookiesSize += defaultSessionSizes.cookies;
-  indexedDBSize += defaultSessionSizes.indexedDB;
-  cacheSize += defaultSessionSizes.cache;
+  const defaultSessionSizes = collectSessionSizesFromBase(dataDir)
+  cookiesSize += defaultSessionSizes.cookies
+  indexedDBSize += defaultSessionSizes.indexedDB
+  cacheSize += defaultSessionSizes.cache
 
   return {
     basicData: basicDataSize,
     cookies: cookiesSize,
     indexedDB: indexedDBSize,
     cache: cacheSize,
-    voiceAssets: 0, 
-    total: 0, 
-  };
+    voiceAssets: 0,
+    total: 0,
+  }
 }

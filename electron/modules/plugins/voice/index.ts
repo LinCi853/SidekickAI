@@ -21,7 +21,6 @@ import { getHotkeyManagerInstance } from '../../../platform/hotkey/manager.js'
 /** 模块级 EffectScope */
 const scope = new EffectScope('voice', 'voice')
 
-
 let sttEngine: SttEngine | null = null
 
 /** 获取/创建 SttEngine（语音模块启用后才应被调用） */
@@ -82,11 +81,14 @@ export async function initVoiceModule(): Promise<void> {
   // 运行期启用：注册语音热键（启动期由 registerHotkeyIpc 调用 sync，二者幂等）
   syncVoiceHotkeyRegistration()
   // 传递 scope 给 registerVoiceIpc，使其使用 EffectScope 管理 IPC handler
-  registerVoiceIpc({
-    sttEngine: engine,
-    startBackgroundVoice: () => startBackgroundVoiceImpl(engine),
-    stopBackgroundVoice: () => stopBackgroundVoiceImpl(engine),
-  }, scope)
+  registerVoiceIpc(
+    {
+      sttEngine: engine,
+      startBackgroundVoice: () => startBackgroundVoiceImpl(engine),
+      stopBackgroundVoice: () => stopBackgroundVoiceImpl(engine),
+    },
+    scope,
+  )
 }
 
 export async function teardownVoiceModule(): Promise<void> {

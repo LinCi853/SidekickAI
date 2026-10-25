@@ -1,6 +1,15 @@
 export type RuntimeProcessRole =
-  | 'main' | 'interface' | 'webpage' | 'renderer' | 'mixed'
-  | 'gpu' | 'network' | 'audio' | 'video' | 'utility' | 'other'
+  | 'main'
+  | 'interface'
+  | 'webpage'
+  | 'renderer'
+  | 'mixed'
+  | 'gpu'
+  | 'network'
+  | 'audio'
+  | 'video'
+  | 'utility'
+  | 'other'
 
 export interface RuntimeProcessTarget {
   webContentsId: number

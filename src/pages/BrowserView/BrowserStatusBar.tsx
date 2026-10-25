@@ -4,51 +4,49 @@
    - 状态文本："正在连接..." → "等待响应..." → "已完成"
    ===================================================================== */
 
-import { useEffect, useRef, useState } from 'react';
-import { useBrowserTabStore } from '../../store/useBrowserTabStore';
+import { useEffect, useRef, useState } from 'react'
+import { useBrowserTabStore } from '../../store/useBrowserTabStore'
 
-type Phase = 'hidden' | 'loading' | 'completed';
+type Phase = 'hidden' | 'loading' | 'completed'
 
 export default function BrowserStatusBar() {
-  const tabs = useBrowserTabStore((s) => s.tabs);
-  const activeTabId = useBrowserTabStore((s) => s.activeTabId);
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const tabs = useBrowserTabStore((s) => s.tabs)
+  const activeTabId = useBrowserTabStore((s) => s.activeTabId)
+  const activeTab = tabs.find((t) => t.id === activeTabId)
 
-  const isLoading = activeTab?.isLoading ?? false;
-  const progress = activeTab?.loadingProgress ?? 0;
-  const statusText = activeTab?.loadingStatus ?? '';
+  const isLoading = activeTab?.isLoading ?? false
+  const progress = activeTab?.loadingProgress ?? 0
+  const statusText = activeTab?.loadingStatus ?? ''
 
-  const [phase, setPhase] = useState<Phase>('hidden');
-  const prevLoadingRef = useRef(false);
-  const prevTabIdRef = useRef(activeTabId);
+  const [phase, setPhase] = useState<Phase>('hidden')
+  const prevLoadingRef = useRef(false)
+  const prevTabIdRef = useRef(activeTabId)
 
   useEffect(() => {
     // 切换标签：重置为当前标签的加载状态
     if (prevTabIdRef.current !== activeTabId) {
-      prevTabIdRef.current = activeTabId;
-      prevLoadingRef.current = isLoading;
-      setPhase(isLoading ? 'loading' : 'hidden');
-      return;
+      prevTabIdRef.current = activeTabId
+      prevLoadingRef.current = isLoading
+      setPhase(isLoading ? 'loading' : 'hidden')
+      return
     }
 
     if (isLoading) {
-      setPhase('loading');
-      prevLoadingRef.current = true;
+      setPhase('loading')
+      prevLoadingRef.current = true
     } else if (prevLoadingRef.current) {
       // 从加载中变为非加载：显示"已完成"后延迟隐藏
-      setPhase('completed');
-      prevLoadingRef.current = false;
-      const timer = setTimeout(() => setPhase('hidden'), 800);
-      return () => clearTimeout(timer);
+      setPhase('completed')
+      prevLoadingRef.current = false
+      const timer = setTimeout(() => setPhase('hidden'), 800)
+      return () => clearTimeout(timer)
     }
-  }, [isLoading, activeTabId]);
+  }, [isLoading, activeTabId])
 
-  if (phase === 'hidden') return null;
+  if (phase === 'hidden') return null
 
-  const showProgress = phase === 'loading';
-  const displayText = phase === 'loading'
-    ? (statusText || '正在连接...')
-    : '已完成';
+  const showProgress = phase === 'loading'
+  const displayText = phase === 'loading' ? statusText || '正在连接...' : '已完成'
 
   return (
     <div
@@ -95,5 +93,5 @@ export default function BrowserStatusBar() {
         {displayText}
       </span>
     </div>
-  );
+  )
 }

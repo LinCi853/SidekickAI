@@ -12,7 +12,9 @@ const fixture = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => fixture.guests.get(id) },
 }))
-vi.mock('../modules/target-registry.js', () => ({ targetRegistry: { register: fixture.register, unregister: fixture.unregister } }))
+vi.mock('../modules/target-registry.js', () => ({
+  targetRegistry: { register: fixture.register, unregister: fixture.unregister },
+}))
 
 let registry: typeof import('./webview-registry')
 
@@ -31,16 +33,32 @@ function guest(id: number, host: WebContents) {
 
 function request() {
   const mainFrame = {}
-  const host = { mainFrame, getType: () => 'window', isDestroyed: () => false } as unknown as WebContents
+  const host = {
+    mainFrame,
+    getType: () => 'window',
+    isDestroyed: () => false,
+  } as unknown as WebContents
   const view = guest(12, host)
   const event = { sender: host, senderFrame: mainFrame } as IpcMainInvokeEvent
-  const payload: WebviewRegistration = { tabId: 'tab-a', profileId: 'profile-a', windowId: 'main', webContentsId: 12 }
+  const payload: WebviewRegistration = {
+    tabId: 'tab-a',
+    profileId: 'profile-a',
+    windowId: 'main',
+    webContentsId: 12,
+  }
   return { host, event, payload, ...view }
 }
 
 function register(value: ReturnType<typeof request>, windowId: string | null = 'main') {
-  const profileSession = fixture.sessions.get(`persist:${value.payload?.profileId}`) as Session | undefined
-  return registry.registerWindowWebview(value.event, value.payload, windowId, profileSession ?? null)
+  const profileSession = fixture.sessions.get(`persist:${value.payload?.profileId}`) as
+    | Session
+    | undefined
+  return registry.registerWindowWebview(
+    value.event,
+    value.payload,
+    windowId,
+    profileSession ?? null,
+  )
 }
 
 beforeEach(async () => {
@@ -59,8 +77,14 @@ describe('window guest identity', () => {
     expect(register(value)).toBe(true)
     expect(registry.getRecordByWebContentsId(12)).toMatchObject(value.payload)
     expect(registry.getRecordByTabId('tab-a')).toMatchObject(value.payload)
-    expect(fixture.register).toHaveBeenCalledWith({ targetId: 'webview-12', type: 'webview', nativeId: '12',
-      profileId: 'profile-a', windowId: 'main', webContentsId: 12 })
+    expect(fixture.register).toHaveBeenCalledWith({
+      targetId: 'webview-12',
+      type: 'webview',
+      nativeId: '12',
+      profileId: 'profile-a',
+      windowId: 'main',
+      webContentsId: 12,
+    })
   })
 
   it('does not retire the shared target or add listeners on repeated page readiness', () => {
@@ -106,9 +130,19 @@ describe('window guest identity', () => {
     expect(fixture.unregister).toHaveBeenCalledWith('webview-12')
   })
 
-  it.each(['unknown-window', 'wrong-window', 'subframe', 'guest-sender', 'wrong-host', 'wrong-profile',
-    'unknown-profile', 'missing-guest', 'destroyed-guest', 'destroyed-host', 'window-target'] as const)
-  ('rejects %s registration without changing targets', reason => {
+  it.each([
+    'unknown-window',
+    'wrong-window',
+    'subframe',
+    'guest-sender',
+    'wrong-host',
+    'wrong-profile',
+    'unknown-profile',
+    'missing-guest',
+    'destroyed-guest',
+    'destroyed-host',
+    'window-target',
+  ] as const)('rejects %s registration without changing targets', (reason) => {
     const value = request()
     let windowId: string | null = 'main'
     if (reason === 'unknown-window') windowId = null
@@ -128,11 +162,19 @@ describe('window guest identity', () => {
     expect(fixture.unregister).not.toHaveBeenCalled()
   })
 
-  it.each([null, {}, { tabId: '' }, { profileId: '' }, { webContentsId: 0 }, { webContentsId: 12.5 },
-    { webContentsId: '12' }])('rejects incomplete identity %j', changes => {
+  it.each([
+    null,
+    {},
+    { tabId: '' },
+    { profileId: '' },
+    { webContentsId: 0 },
+    { webContentsId: 12.5 },
+    { webContentsId: '12' },
+  ])('rejects incomplete identity %j', (changes) => {
     const value = request()
     const payload = changes === null ? null : { ...value.payload, ...changes }
-    if (changes && !Object.keys(changes).length) delete (payload as Partial<WebviewRegistration>).tabId
+    if (changes && !Object.keys(changes).length)
+      delete (payload as Partial<WebviewRegistration>).tabId
     expect(register({ ...value, payload: payload as WebviewRegistration })).toBe(false)
     expect(fixture.register).not.toHaveBeenCalled()
   })

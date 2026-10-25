@@ -68,10 +68,12 @@ export class WhiteboardDb {
 
   /** 列出全部白板（按 sort_order ASC, updated_at DESC） */
   listWhiteboards(): WhiteboardMeta[] {
-    const rows = this.db.prepare(
-      `SELECT id, title, created_at AS createdAt, updated_at AS updatedAt, sort_order AS sortOrder
+    const rows = this.db
+      .prepare(
+        `SELECT id, title, created_at AS createdAt, updated_at AS updatedAt, sort_order AS sortOrder
        FROM whiteboards ORDER BY sort_order ASC, updated_at DESC`,
-    ).all() as WhiteboardMeta[]
+      )
+      .all() as WhiteboardMeta[]
     return rows
   }
 
@@ -79,16 +81,31 @@ export class WhiteboardDb {
   createWhiteboard(title?: string): WhiteboardMeta {
     const now = Date.now()
     const id = randomUUID()
-    const maxSort = (this.db.prepare('SELECT MAX(sort_order) AS m FROM whiteboards').get() as { m: number | null }).m ?? 0
-    this.db.prepare(
-      'INSERT INTO whiteboards (id, title, created_at, updated_at, sort_order) VALUES (?, ?, ?, ?, ?)',
-    ).run(id, title || '未命名白板', now, now, maxSort + 1)
-    return { id, title: title || '未命名白板', createdAt: now, updatedAt: now, sortOrder: maxSort + 1 }
+    const maxSort =
+      (
+        this.db.prepare('SELECT MAX(sort_order) AS m FROM whiteboards').get() as {
+          m: number | null
+        }
+      ).m ?? 0
+    this.db
+      .prepare(
+        'INSERT INTO whiteboards (id, title, created_at, updated_at, sort_order) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(id, title || '未命名白板', now, now, maxSort + 1)
+    return {
+      id,
+      title: title || '未命名白板',
+      createdAt: now,
+      updatedAt: now,
+      sortOrder: maxSort + 1,
+    }
   }
 
   /** 重命名白板 */
   renameWhiteboard(id: string, title: string): void {
-    this.db.prepare('UPDATE whiteboards SET title = ?, updated_at = ? WHERE id = ?').run(title, Date.now(), id)
+    this.db
+      .prepare('UPDATE whiteboards SET title = ?, updated_at = ? WHERE id = ?')
+      .run(title, Date.now(), id)
   }
 
   /** 删除白板（级联删 snapshot） */
@@ -116,17 +133,21 @@ export class WhiteboardDb {
 
   /** 加载白板 snapshot（无则返回 null） */
   loadSnapshot(id: string): string | null {
-    const row = this.db.prepare('SELECT snapshot FROM whiteboard_snapshots WHERE whiteboard_id = ?').get(id) as { snapshot: string } | undefined
+    const row = this.db
+      .prepare('SELECT snapshot FROM whiteboard_snapshots WHERE whiteboard_id = ?')
+      .get(id) as { snapshot: string } | undefined
     return row?.snapshot ?? null
   }
 
   /** 保存白板 snapshot（全量 upsert，单次写入） */
   saveSnapshot(id: string, snapshot: string): void {
     const now = Date.now()
-    this.db.prepare(
-      `INSERT INTO whiteboard_snapshots (whiteboard_id, snapshot, updated_at) VALUES (?, ?, ?)
+    this.db
+      .prepare(
+        `INSERT INTO whiteboard_snapshots (whiteboard_id, snapshot, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(whiteboard_id) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at`,
-    ).run(id, snapshot, now)
+      )
+      .run(id, snapshot, now)
     this.db.prepare('UPDATE whiteboards SET updated_at = ? WHERE id = ?').run(now, id)
   }
 

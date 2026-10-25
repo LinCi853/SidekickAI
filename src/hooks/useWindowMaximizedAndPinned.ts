@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react'
 import {
   isWindowMaximized,
   isWindowAlwaysOnTop,
@@ -8,7 +8,7 @@ import {
   onPinToggled,
   onMaximizeToggled,
   onFullscreenToggled,
-} from '@/lib/electron-api';
+} from '@/lib/electron-api'
 
 /**
  * 窗口最大化/置顶/全屏状态统一管理 hook
@@ -28,40 +28,44 @@ import {
  *   const handleMaximize = async () => { const next = await maximizeToggleWindow(); setIsMaximized(next); };
  */
 export function useWindowMaximizedAndPinned() {
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
-    void isWindowMaximized().then(setIsMaximized).catch(() => {});
-    void isWindowAlwaysOnTop().then(setIsPinned).catch(() => {});
-    const offPin = onPinToggled((pinned) => setIsPinned(pinned));
-    const offMax = onMaximizeToggled((maximized) => setIsMaximized(maximized));
-    const offFs = onFullscreenToggled((fullscreen) => setIsFullscreen(fullscreen));
+    void isWindowMaximized()
+      .then(setIsMaximized)
+      .catch(() => {})
+    void isWindowAlwaysOnTop()
+      .then(setIsPinned)
+      .catch(() => {})
+    const offPin = onPinToggled((pinned) => setIsPinned(pinned))
+    const offMax = onMaximizeToggled((maximized) => setIsMaximized(maximized))
+    const offFs = onFullscreenToggled((fullscreen) => setIsFullscreen(fullscreen))
     return () => {
-      offPin();
-      offMax();
-      offFs();
-    };
-  }, []);
+      offPin()
+      offMax()
+      offFs()
+    }
+  }, [])
 
   /** 切换最大化/还原（统一入口，替代各组件重复的 handleMaximize） */
   const handleMaximize = useCallback(async () => {
-    const next = await maximizeToggleWindow();
-    setIsMaximized(next);
-  }, []);
+    const next = await maximizeToggleWindow()
+    setIsMaximized(next)
+  }, [])
 
   /** 切换置顶（统一入口） */
   const handleTogglePin = useCallback(async () => {
-    const next = !isPinned;
-    setIsPinned(next);
-    await pinCurrentWindow(next);
-  }, [isPinned]);
+    const next = !isPinned
+    setIsPinned(next)
+    await pinCurrentWindow(next)
+  }, [isPinned])
 
   /** 切换全屏（统一入口） */
   const handleToggleFullscreen = useCallback(async () => {
-    await toggleFullscreenWindow();
-  }, []);
+    await toggleFullscreenWindow()
+  }, [])
 
   return {
     isMaximized,
@@ -73,5 +77,5 @@ export function useWindowMaximizedAndPinned() {
     handleMaximize,
     handleTogglePin,
     handleToggleFullscreen,
-  };
+  }
 }

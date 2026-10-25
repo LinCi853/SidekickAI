@@ -1,7 +1,7 @@
 /* Global styles and resets. */
-@import './design-tokens.css';
-@import './forms.css';
-@import './cards.css';
+@import "./design-tokens.css";
+@import "./forms.css";
+@import "./cards.css";
 
 /* 统一 SVG 图标尺寸工具类（跟随 UI 三档缩放） */
 .icon-svg {
@@ -14,11 +14,24 @@
 }
 
 /* HTML hidden 属性优先级提升 —— 覆盖 display:flex/inline-flex 等声明 */
-[hidden] { display: none !important; }
+[hidden] {
+  display: none !important;
+}
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body, #root { height: 100%; }
-html, body {
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+html,
+body {
   /* 窗口本体取消圆角设计（用户决策：圆角怎么调整都不合适，统一取消） */
   border-radius: 0;
   overflow: hidden;
@@ -57,12 +70,24 @@ body.window-minimizing {
 }
 
 @keyframes window-minimize-out {
-  0% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(0.85); }
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
 }
 
-a { color: var(--accent-bright); text-decoration: none; transition: color var(--duration-fast) var(--ease-out); }
-a:hover { color: var(--accent-light); }
+a {
+  color: var(--accent-bright);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+a:hover {
+  color: var(--accent-light);
+}
 
 /* select 元素的下拉列表（option）在暗色模式下默认为白色背景，导致文字不可见 */
 option {
@@ -70,8 +95,20 @@ option {
   color: var(--foreground);
 }
 
-h1, h2, h3, h4, h5, h6 { font-weight: 700; line-height: 1.15; color: var(--foreground); }
-code { font-family: var(--font-mono); font-size: 0.92em; }
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--foreground);
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
 
 /* ===== 玻璃卡片 ===== */
 .glass {
@@ -85,13 +122,20 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   overflow: hidden;
 }
 .glass-bar {
-  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
   background: linear-gradient(90deg, transparent, var(--accent-50), transparent);
 }
 
 /* Shared action buttons. */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   padding: 6px 14px;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -100,13 +144,17 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
   user-select: none;
   white-space: nowrap;
 }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .btn-primary {
   background: var(--primary);
   color: var(--primary-foreground);
@@ -143,7 +191,10 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   padding: 0;
   border-radius: 0;
 }
-.btn-link:hover { color: var(--accent-light); text-decoration: underline; }
+.btn-link:hover {
+  color: var(--accent-light);
+  text-decoration: underline;
+}
 
 /* icon 变体（替代 .nav-btn / .expanded-btn / .win-btn / 各种 *-close） */
 .btn-icon {
@@ -164,14 +215,27 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   width: var(--icon-svg);
   height: var(--icon-svg);
 }
-.btn-icon:hover:not(:disabled) { background: var(--accent-10); color: var(--accent-bright); }
-.btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-icon:hover:not(:disabled) {
+  background: var(--accent-10);
+  color: var(--accent-bright);
+}
+.btn-icon:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 .btn-icon.is-close:hover:not(:disabled) {
   background: var(--destructive);
   color: var(--destructive-foreground);
 }
-.btn-icon.is-active { background: var(--accent-bright); color: var(--accent-bright-foreground); }
-.btn-icon.is-active:hover:not(:disabled) { background: var(--primary); color: var(--primary-foreground); filter: brightness(1.08); }
+.btn-icon.is-active {
+  background: var(--accent-bright);
+  color: var(--accent-bright-foreground);
+}
+.btn-icon.is-active:hover:not(:disabled) {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  filter: brightness(1.08);
+}
 
 /* primary-compact 变体（替代 SettingsPanel border-radius:0 系列） */
 .btn-primary-compact {
@@ -184,8 +248,13 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   cursor: pointer;
   transition: filter var(--duration-fast) var(--ease-out);
 }
-.btn-primary-compact:hover:not(:disabled) { filter: brightness(1.08); }
-.btn-primary-compact:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary-compact:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-primary-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ===== 扁平主按钮（统一替代各处 .btn-primary 渐变风格，复制自 onboarding-next-btn） ===== */
 .btn-primary-flat {
@@ -232,10 +301,21 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
 }
-.btn-text:hover:not(:disabled) { color: var(--accent-bright); font-weight: 600; }
-.btn-text:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-text.is-danger { color: var(--destructive); }
-.btn-text.is-danger:hover:not(:disabled) { color: var(--danger); font-weight: 600; }
+.btn-text:hover:not(:disabled) {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.btn-text:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-text.is-danger {
+  color: var(--destructive);
+}
+.btn-text.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+  font-weight: 600;
+}
 
 /* outline 变体（带边框的简洁操作按钮，统一用于"添加 / 新建 / 搜索"等动作）
    设计基准来自 SettingsPanel 原 .btn-outline-sm，迁移到 globals 以供跨页面复用 */
@@ -256,8 +336,9 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-  transition: border-color var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .btn-outline:hover:not(:disabled) {
   border-color: var(--accent-50);
@@ -284,8 +365,13 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   transition: all var(--duration-fast) var(--ease-out);
   white-space: nowrap;
 }
-.seg-btn:hover:not(:disabled) { color: var(--accent-bright); }
-.seg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.seg-btn:hover:not(:disabled) {
+  color: var(--accent-bright);
+}
+.seg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .seg-btn.is-active {
   color: var(--accent-bright);
   font-weight: 600;
@@ -324,11 +410,12 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
-  transition: background var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
 }
 .toggle-track::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: var(--toggle-pad);
@@ -346,9 +433,8 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   border-color: var(--accent-bright);
 }
 .toggle input:checked + .toggle-track::before {
-  transform: translateY(-50%) translateX(
-    calc(var(--toggle-w) - var(--toggle-knob) - var(--toggle-pad) * 2)
-  );
+  transform: translateY(-50%)
+    translateX(calc(var(--toggle-w) - var(--toggle-knob) - var(--toggle-pad) * 2));
 }
 .toggle input:focus-visible + .toggle-track {
   outline: 2px solid var(--accent-bright);
@@ -384,8 +470,14 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
 }
-.chip-toggle:hover:not(:disabled) { border-color: var(--accent-25); color: var(--accent-bright); }
-.chip-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.chip-toggle:hover:not(:disabled) {
+  border-color: var(--accent-25);
+  color: var(--accent-bright);
+}
+.chip-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .chip-toggle.is-on {
   background: var(--accent-bright);
   color: var(--accent-bright-foreground);
@@ -439,7 +531,9 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   gap: 0;
   align-items: center;
 }
-.win-controls .btn-icon { border-radius: 0; }
+.win-controls .btn-icon {
+  border-radius: 0;
+}
 
 /* ===== Input 输入框基类 ===== */
 .input {
@@ -457,8 +551,13 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   border-color: var(--accent-bright);
   box-shadow: 0 0 0 2px var(--accent-25);
 }
-.input::placeholder { color: var(--text-muted); }
-.input:disabled { opacity: 0.5; cursor: not-allowed; }
+.input::placeholder {
+  color: var(--text-muted);
+}
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ===== Modal 模态容器基类 ===== */
 .modal-overlay {
@@ -528,7 +627,9 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 
 /* ===== 徽章 ===== */
 .badge {
-  display: inline-flex; align-items: center; gap: var(--space-0-5);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
   padding: var(--space-0-25) var(--space-1-25);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -545,7 +646,9 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   border-color: var(--accent-50);
 }
 .badge-dot {
-  width: var(--space-1-25); height: var(--space-1-25); border-radius: 50%;
+  width: var(--space-1-25);
+  height: var(--space-1-25);
+  border-radius: 50%;
   background: var(--accent-bright);
   box-shadow: none;
 }
@@ -565,10 +668,20 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 }
 
 /* ===== 滚动条 ===== */
-::-webkit-scrollbar { width: var(--space-1-25); height: var(--space-1-25); }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--popover); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+::-webkit-scrollbar {
+  width: var(--space-1-25);
+  height: var(--space-1-25);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--popover);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
+}
 
 /* =====================================================================
    跨平台拖拽区域适配

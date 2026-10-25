@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { closeCurrentWindow } from '@/lib/electron-api';
-import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
+import { useEffect, useRef } from 'react'
+import { closeCurrentWindow } from '@/lib/electron-api'
+import { useRegisterShortcutDocs } from '../store/useShortcutDocStore'
 
 /* =====================================================================
    全局浮窗栈：管理同时打开的多个浮窗的 ESC 优先级
@@ -9,25 +9,25 @@ import { useRegisterShortcutDocs } from '../store/useShortcutDocStore';
    - 只有栈顶的浮窗处理 ESC 并 stopImmediatePropagation，阻止下层浮窗/窗口响应
    ===================================================================== */
 
-const overlayStack: Array<() => void> = [];
+const overlayStack: Array<() => void> = []
 
 /** 将 close 函数压入栈顶，返回移除函数 */
 export function pushOverlay(close: () => void): () => void {
-  overlayStack.push(close);
+  overlayStack.push(close)
   return () => {
-    const idx = overlayStack.indexOf(close);
-    if (idx !== -1) overlayStack.splice(idx, 1);
-  };
+    const idx = overlayStack.indexOf(close)
+    if (idx !== -1) overlayStack.splice(idx, 1)
+  }
 }
 
 /** 判断 close 是否在栈顶 */
 export function isTopOverlay(close: () => void): boolean {
-  return overlayStack[overlayStack.length - 1] === close;
+  return overlayStack[overlayStack.length - 1] === close
 }
 
 /** 判断栈中是否还有任何打开的浮窗 */
 export function hasOverlay(): boolean {
-  return overlayStack.length > 0;
+  return overlayStack.length > 0
 }
 
 /**
@@ -51,55 +51,92 @@ export function hasOverlay(): boolean {
  * @param opts.windowControls 是否登记 F11/F12 窗口控制说明（默认 false）
  * @param opts.docs    覆盖默认说明文字（各窗口 Esc/Ctrl+W 语义有差异时）
  */
-export function useEscToCloseWindow(opts: {
-  onEsc?: (e: KeyboardEvent) => boolean;
-  ctrlW?: boolean;
-  windowControls?: boolean;
-  docs?: { escAction?: string; escNote?: string; ctrlWAction?: string };
-} = {}): void {
-  const { onEsc, ctrlW = true, windowControls = false, docs } = opts;
-  const onEscRef = useRef(onEsc);
-  onEscRef.current = onEsc;
+export function useEscToCloseWindow(
+  opts: {
+    onEsc?: (e: KeyboardEvent) => boolean
+    ctrlW?: boolean
+    windowControls?: boolean
+    docs?: { escAction?: string; escNote?: string; ctrlWAction?: string }
+  } = {},
+): void {
+  const { onEsc, ctrlW = true, windowControls = false, docs } = opts
+  const onEscRef = useRef(onEsc)
+  onEscRef.current = onEsc
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // ESC：浮窗栈非空时由栈顶浮窗的 onClose 先执行（不关窗）
       // 能到达这里说明栈空或栈顶浮窗未处理（如输入框焦点时跳过）
       if (e.key === 'Escape') {
-        const target = e.target as HTMLElement;
-        const tag = target.tagName;
+        const target = e.target as HTMLElement
+        const tag = target.tagName
         // 焦点在输入框内时，先 blur 退出输入态，下次 ESC 再执行关闭
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-          (target as HTMLElement).blur();
-          e.preventDefault();
-          return;
+          ;(target as HTMLElement).blur()
+          e.preventDefault()
+          return
         }
         // 浮窗栈非空时，让栈顶浮窗的 onClose 先执行（不关窗）
-        if (hasOverlay()) return;
-        if (onEscRef.current?.(e)) return;
-        e.preventDefault();
-        void closeCurrentWindow();
-        return;
+        if (hasOverlay()) return
+        if (onEscRef.current?.(e)) return
+        e.preventDefault()
+        void closeCurrentWindow()
+        return
       }
       // Ctrl+W：直接关窗（与浏览器 Ctrl+W 语义一致，用户主动关闭窗口）
-      if (ctrlW && e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && (e.key === 'w' || e.key === 'W')) {
-        e.preventDefault();
-        void closeCurrentWindow();
+      if (
+        ctrlW &&
+        e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        (e.key === 'w' || e.key === 'W')
+      ) {
+        e.preventDefault()
+        void closeCurrentWindow()
       }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [ctrlW]);
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [ctrlW])
 
   // 注册即声明：本 hook 与主进程窗口级拦截实现的键位
   useRegisterShortcutDocs('window-behavior', [
-    { id: 'window.esc', keys: 'Esc', action: docs?.escAction ?? '关闭窗口（浮窗打开时先关闭浮窗）', category: 'page', note: docs?.escNote },
-    ...(ctrlW ? [{ id: 'window.close', keys: 'Ctrl + W', action: docs?.ctrlWAction ?? '关闭窗口', category: 'page' as const }] : []),
-    ...(windowControls ? [
-      { id: 'window.maximize', keys: 'F11', action: '切换最大化/还原', category: 'page' as const },
-      { id: 'window.always-on-top', keys: 'F12', action: '切换窗口置顶', category: 'page' as const, note: '最大化/全屏时不可用' },
-    ] : []),
-  ]);
+    {
+      id: 'window.esc',
+      keys: 'Esc',
+      action: docs?.escAction ?? '关闭窗口（浮窗打开时先关闭浮窗）',
+      category: 'page',
+      note: docs?.escNote,
+    },
+    ...(ctrlW
+      ? [
+          {
+            id: 'window.close',
+            keys: 'Ctrl + W',
+            action: docs?.ctrlWAction ?? '关闭窗口',
+            category: 'page' as const,
+          },
+        ]
+      : []),
+    ...(windowControls
+      ? [
+          {
+            id: 'window.maximize',
+            keys: 'F11',
+            action: '切换最大化/还原',
+            category: 'page' as const,
+          },
+          {
+            id: 'window.always-on-top',
+            keys: 'F12',
+            action: '切换窗口置顶',
+            category: 'page' as const,
+            note: '最大化/全屏时不可用',
+          },
+        ]
+      : []),
+  ])
 }
 
 /**
@@ -112,35 +149,35 @@ export function useEscToCloseWindow(opts: {
  * 监听注册在 capture 阶段，先于 useEscToCloseWindow 执行，通过 stopImmediatePropagation 阻止关窗。
  */
 export function useEscToCloseOverlay(open: boolean, onClose: () => void): void {
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
-    if (!open) return;
-    const close = () => onCloseRef.current();
-    const removeFromStack = pushOverlay(close);
+    if (!open) return
+    const close = () => onCloseRef.current()
+    const removeFromStack = pushOverlay(close)
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      const target = e.target as HTMLElement;
-      const tag = target.tagName;
+      if (e.key !== 'Escape') return
+      const target = e.target as HTMLElement
+      const tag = target.tagName
       // 焦点在输入框内时，先 blur 退出输入态，下次 ESC 再关闭浮窗
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-        (target as HTMLElement).blur();
-        e.preventDefault();
-        return;
+        ;(target as HTMLElement).blur()
+        e.preventDefault()
+        return
       }
       // 只有栈顶浮窗处理 ESC（后打开的优先）
-      if (!isTopOverlay(close)) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      close();
-    };
+      if (!isTopOverlay(close)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      close()
+    }
 
-    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keydown', onKeyDown, true)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      removeFromStack();
-    };
-  }, [open]);
+      window.removeEventListener('keydown', onKeyDown, true)
+      removeFromStack()
+    }
+  }, [open])
 }

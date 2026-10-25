@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 export class RestoreRecoveryError extends Error {
-  constructor(readonly recoveryDirectory: string, cause: unknown) {
+  constructor(
+    readonly recoveryDirectory: string,
+    cause: unknown,
+  ) {
     super(`Restore requires manual recovery from ${recoveryDirectory}`, { cause })
   }
 }
@@ -22,9 +25,12 @@ export function validateRestoreDirectory(directory: string): void {
       else if (entry.name.endsWith('.db')) {
         const db = new Database(file, { readonly: true, fileMustExist: true })
         try {
-          if (db.pragma('quick_check', { simple: true }) !== 'ok') throw new Error(`Invalid database: ${entry.name}`)
+          if (db.pragma('quick_check', { simple: true }) !== 'ok')
+            throw new Error(`Invalid database: ${entry.name}`)
           if (file === settings) db.prepare('SELECT key, value FROM app_settings LIMIT 0').all()
-        } finally { db.close() }
+        } finally {
+          db.close()
+        }
       }
     }
   }
@@ -32,7 +38,11 @@ export function validateRestoreDirectory(directory: string): void {
 }
 
 /** Replace included roots and retain their original bytes for rollback. */
-export function replaceRestoreEntries(staging: string, destination: string, recovery: string): void {
+export function replaceRestoreEntries(
+  staging: string,
+  destination: string,
+  recovery: string,
+): void {
   const roots = fs.readdirSync(staging)
   const entries = new Set(roots)
   for (const name of roots) {
@@ -66,11 +76,15 @@ export function replaceRestoreEntries(staging: string, destination: string, reco
     }
   } catch (error) {
     try {
-      for (const name of installed.reverse()) fs.renameSync(path.join(destination, name), path.join(staging, name))
-      for (const name of moved.reverse()) fs.renameSync(path.join(recovery, name), path.join(destination, name))
+      for (const name of installed.reverse())
+        fs.renameSync(path.join(destination, name), path.join(staging, name))
+      for (const name of moved.reverse())
+        fs.renameSync(path.join(recovery, name), path.join(destination, name))
     } catch (rollbackError) {
       throw new RestoreRecoveryError(recovery, rollbackError)
     }
-    throw new Error(`Restore failed; original data was retained: ${(error as Error).message}`, { cause: error })
+    throw new Error(`Restore failed; original data was retained: ${(error as Error).message}`, {
+      cause: error,
+    })
   }
 }

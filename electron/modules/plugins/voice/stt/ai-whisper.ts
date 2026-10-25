@@ -24,11 +24,17 @@ export async function recognizeWithOpenAiWhisper(
   const parts: Buffer[] = []
 
   // model 字段
-  parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${model}\r\n`))
+  parts.push(
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${model}\r\n`,
+    ),
+  )
   // file 字段（WAV 音频）
-  parts.push(Buffer.from(
-    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
-  ))
+  parts.push(
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
+    ),
+  )
   parts.push(wavBuf)
   parts.push(Buffer.from(`\r\n--${boundary}--\r\n`))
 

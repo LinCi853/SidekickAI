@@ -11,33 +11,33 @@
      全局条目排前、页面条目在后
    ===================================================================== */
 
-import { useEffect } from 'react';
-import { create } from 'zustand';
+import { useEffect } from 'react'
+import { create } from 'zustand'
 
 /** 快捷键类别（弹窗仅两类，颜色区分） */
-export type ShortcutDocCategory = 'global' | 'page';
+export type ShortcutDocCategory = 'global' | 'page'
 
 /** 一条快捷键说明（注册时随行为一并声明） */
 export interface ShortcutDoc {
   /** 稳定唯一 ID，如 'main.tab-detach' */
-  id: string;
+  id: string
   /** 展示键位，如 'Ctrl + T'、'Alt + 1~9' */
-  keys: string;
+  keys: string
   /** 动作描述 */
-  action: string;
-  category: ShortcutDocCategory;
-  note?: string;
+  action: string
+  category: ShortcutDocCategory
+  note?: string
   /** 运行时灰显（如全局热键被用户禁用、云电脑模式键位直通远端） */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 interface ShortcutDocState {
   /** 来源 → 该来源声明的条目（注册顺序即展示顺序） */
-  sources: Record<string, ShortcutDoc[]>;
+  sources: Record<string, ShortcutDoc[]>
   /** 注册（整体替换该来源的条目） */
-  register: (source: string, entries: ShortcutDoc[]) => void;
+  register: (source: string, entries: ShortcutDoc[]) => void
   /** 注销来源（实现方卸载时清理） */
-  unregister: (source: string) => void;
+  unregister: (source: string) => void
 }
 
 export const useShortcutDocStore = create<ShortcutDocState>((set) => ({
@@ -46,35 +46,35 @@ export const useShortcutDocStore = create<ShortcutDocState>((set) => ({
     set((state) => ({ sources: { ...state.sources, [source]: entries } })),
   unregister: (source) =>
     set((state) => {
-      if (!(source in state.sources)) return state;
-      const sources = { ...state.sources };
-      delete sources[source];
-      return { sources };
+      if (!(source in state.sources)) return state
+      const sources = { ...state.sources }
+      delete sources[source]
+      return { sources }
     }),
-}));
+}))
 
 /** 展示快照：全局在前、页面在后，按来源注册顺序，id 去重 */
 export function selectShortcutDocs(sources: Record<string, ShortcutDoc[]>): ShortcutDoc[] {
-  const global: ShortcutDoc[] = [];
-  const page: ShortcutDoc[] = [];
-  const seen = new Set<string>();
+  const global: ShortcutDoc[] = []
+  const page: ShortcutDoc[] = []
+  const seen = new Set<string>()
   for (const entries of Object.values(sources)) {
     for (const entry of entries) {
-      if (seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      (entry.category === 'global' ? global : page).push(entry);
+      if (seen.has(entry.id)) continue
+      seen.add(entry.id)
+      ;(entry.category === 'global' ? global : page).push(entry)
     }
   }
-  return [...global, ...page];
+  return [...global, ...page]
 }
 
 /** 非 React 上下文的注册入口（异步扫描流程内使用，语义与 hook 相同） */
 export function registerShortcutDocs(source: string, entries: ShortcutDoc[]): void {
-  useShortcutDocStore.getState().register(source, entries);
+  useShortcutDocStore.getState().register(source, entries)
 }
 
 export function unregisterShortcutDocs(source: string): void {
-  useShortcutDocStore.getState().unregister(source);
+  useShortcutDocStore.getState().unregister(source)
 }
 
 /**
@@ -85,10 +85,10 @@ export function unregisterShortcutDocs(source: string): void {
  * 兼容不带 useSyncExternalStore 的 hook 测试 harness。
  */
 export function useRegisterShortcutDocs(source: string, entries: ShortcutDoc[]): void {
-  const serialized = JSON.stringify(entries);
+  const serialized = JSON.stringify(entries)
   useEffect(() => {
-    const { register, unregister } = useShortcutDocStore.getState();
-    register(source, JSON.parse(serialized) as ShortcutDoc[]);
-    return () => unregister(source);
-  }, [source, serialized]);
+    const { register, unregister } = useShortcutDocStore.getState()
+    register(source, JSON.parse(serialized) as ShortcutDoc[])
+    return () => unregister(source)
+  }, [source, serialized])
 }

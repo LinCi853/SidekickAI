@@ -3,19 +3,19 @@
    统一列表/面板/编辑器无数据时的占位样式（替代各页面分散的 app-empty-state div）
    ===================================================================== */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from 'react'
 
 export interface EmptyStateProps {
   /** 提示文案 */
-  message: ReactNode;
+  message: ReactNode
   /** 尺寸变体（默认 default） */
-  size?: 'default' | 'large';
+  size?: 'default' | 'large'
   /** 是否为加载态（显示"加载中…"） */
-  loading?: boolean;
+  loading?: boolean
   /** 附加类名 */
-  className?: string;
+  className?: string
   /** data-name 属性（自动化测试定位） */
-  'data-name'?: string;
+  'data-name'?: string
 }
 
 /**
@@ -33,15 +33,13 @@ export default function EmptyState({
   className,
   'data-name': dataName,
 }: EmptyStateProps) {
-  const cls = [
-    'app-empty-state',
-    size === 'large' ? 'large' : '',
-    className ?? '',
-  ].filter(Boolean).join(' ');
+  const cls = ['app-empty-state', size === 'large' ? 'large' : '', className ?? '']
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div className={cls} data-name={dataName}>
       {loading ? '加载中…' : message}
     </div>
-  );
+  )
 }

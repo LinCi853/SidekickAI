@@ -6,10 +6,10 @@
    数据来自 useGamepadStore（宿主 GamepadCollector 驱动，20Hz 节流刷新）。
    ===================================================================== */
 
-import { useState } from 'react';
-import Popover from '../../../components/ui/Popover';
-import { useGamepadStore } from '../../../store/useGamepadStore';
-import type { GamepadInputFrame } from '../../../lib/gamepad-input/input-frame';
+import { useState } from 'react'
+import Popover from '../../../components/ui/Popover'
+import { useGamepadStore } from '../../../store/useGamepadStore'
+import type { GamepadInputFrame } from '../../../lib/gamepad-input/input-frame'
 
 function GamepadIcon({ active }: { active: boolean }) {
   return (
@@ -35,7 +35,7 @@ function GamepadIcon({ active }: { active: boolean }) {
       <circle cx="13.5" cy="9" r="0.5" fill="currentColor" stroke="none" />
       <circle cx="10.5" cy="9" r="0.5" fill="currentColor" stroke="none" />
     </svg>
-  );
+  )
 }
 
 /** 按钮位掩码网格：0..15，按下高亮 */
@@ -52,12 +52,12 @@ function ButtonGrid({ buttons }: { buttons: number }) {
         </span>
       ))}
     </div>
-  );
+  )
 }
 
 /** 轴进度条（-1..1 → 0..100%） */
 function AxisBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(((value / 32767 + 1) / 2) * 100);
+  const pct = Math.round(((value / 32767 + 1) / 2) * 100)
   return (
     <div className="gamepad-panel-axis" data-name="browser.gamepad-panel.axis">
       <span className="gamepad-panel-axis-label">{label}</span>
@@ -65,15 +65,23 @@ function AxisBar({ label, value }: { label: string; value: number }) {
         <div className="gamepad-panel-axis-fill" style={{ width: `${pct}%` }} />
         <div className="gamepad-panel-axis-center" />
       </div>
-      <span className="gamepad-panel-axis-value">{Math.round(value / 32767 * 100)}%</span>
+      <span className="gamepad-panel-axis-value">{Math.round((value / 32767) * 100)}%</span>
     </div>
-  );
+  )
 }
 
-function PadDetails({ index, id, frame }: { index: number; id: string; frame: GamepadInputFrame | null }) {
-  const axes = frame?.axes ?? [0, 0, 0, 0];
-  const triggers = frame?.triggers ?? [0, 0];
-  const dpad = frame?.dpad ?? 0;
+function PadDetails({
+  index,
+  id,
+  frame,
+}: {
+  index: number
+  id: string
+  frame: GamepadInputFrame | null
+}) {
+  const axes = frame?.axes ?? [0, 0, 0, 0]
+  const triggers = frame?.triggers ?? [0, 0]
+  const dpad = frame?.dpad ?? 0
   return (
     <div className="gamepad-panel-pad" data-name="browser.gamepad-panel.pad">
       <div className="gamepad-panel-pad-header">
@@ -96,24 +104,24 @@ function PadDetails({ index, id, frame }: { index: number; id: string; frame: Ga
         <span className={dpad & 0b1000 ? 'pressed' : ''}>▶</span>
       </div>
     </div>
-  );
+  )
 }
 
 export default function GamepadIndicator() {
-  const pads = useGamepadStore((s) => s.pads);
-  const connectedCount = useGamepadStore((s) => s.connectedCount);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const connectedPads = Object.values(pads).filter((p) => p.connected);
+  const pads = useGamepadStore((s) => s.pads)
+  const connectedCount = useGamepadStore((s) => s.connectedCount)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const connectedPads = Object.values(pads).filter((p) => p.connected)
 
   const togglePanel = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!panelOpen) {
-      const rect = e.currentTarget.getBoundingClientRect();
+      const rect = e.currentTarget.getBoundingClientRect()
       // 面板宽度 320，右对齐到按钮右侧，按钮下方 8px
-      setPanelPos({ x: rect.right - 320, y: rect.bottom + 8 });
+      setPanelPos({ x: rect.right - 320, y: rect.bottom + 8 })
     }
-    setPanelOpen((v) => !v);
-  };
+    setPanelOpen((v) => !v)
+  }
 
   return (
     <div className="gamepad-indicator" data-name="browser.gamepad-indicator">
@@ -121,7 +129,11 @@ export default function GamepadIndicator() {
         type="button"
         className={`gamepad-indicator-btn${connectedCount > 0 ? ' active' : ''}`}
         onClick={togglePanel}
-        title={connectedCount > 0 ? `已连接 ${connectedCount} 个手柄（点击查看状态）` : '未检测到手柄（Gamepad API）'}
+        title={
+          connectedCount > 0
+            ? `已连接 ${connectedCount} 个手柄（点击查看状态）`
+            : '未检测到手柄（Gamepad API）'
+        }
         data-name="browser.gamepad.btn"
       >
         <GamepadIcon active={connectedCount > 0} />
@@ -155,5 +167,5 @@ export default function GamepadIndicator() {
         </Popover>
       )}
     </div>
-  );
+  )
 }

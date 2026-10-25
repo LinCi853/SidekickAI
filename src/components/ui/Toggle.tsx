@@ -6,13 +6,13 @@
 
 export interface ToggleProps {
   /** 当前开关状态 */
-  checked: boolean;
+  checked: boolean
   /** 状态变更回调 */
-  onChange: (checked: boolean) => void;
+  onChange: (checked: boolean) => void
   /** 无障碍标签 */
-  'aria-label'?: string;
+  'aria-label'?: string
   /** 是否禁用 */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 /**
@@ -21,12 +21,7 @@ export interface ToggleProps {
  * @example
  * <Toggle checked={enterToSend} onChange={setEnterToSend} aria-label="回车发送" />
  */
-export default function Toggle({
-  checked,
-  onChange,
-  disabled = false,
-  ...rest
-}: ToggleProps) {
+export default function Toggle({ checked, onChange, disabled = false, ...rest }: ToggleProps) {
   return (
     <label className="toggle">
       <input
@@ -38,5 +33,5 @@ export default function Toggle({
       />
       <span className="toggle-track" />
     </label>
-  );
+  )
 }

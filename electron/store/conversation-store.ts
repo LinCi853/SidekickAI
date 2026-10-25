@@ -164,7 +164,8 @@ export class ConversationStore {
       // 单次聚合扫描替代逐会话加载全部消息：原实现把每条消息内容搬进 JS（N+1），
       // 启动耗时随 chat.db 体积线性增长且全程阻塞主进程。规则 1/2 在 SQLite 内部
       // 聚合判定；规则 3 用去空白归一的 INSTR/LIKE 预筛候选，仅候选会话逐条正则复核。
-      const stats = this.db.prepare(`
+      const stats = this.db
+        .prepare(`
         SELECT c.id AS id, COUNT(m.id) AS total,
           COALESCE(SUM(m.role = 'assistant'), 0) AS assistants,
           COALESCE(SUM(CASE WHEN m.content LIKE '%登录%'
@@ -173,7 +174,8 @@ export class ConversationStore {
           THEN 1 ELSE 0 END), 0) AS loginish
         FROM conversations c LEFT JOIN messages m ON m.conversation_id = c.id
         GROUP BY c.id
-      `).all() as Array<{ id: string; total: number; assistants: number; loginish: number }>
+      `)
+        .all() as Array<{ id: string; total: number; assistants: number; loginish: number }>
 
       const toDelete: string[] = []
       for (const row of stats) {
@@ -226,7 +228,9 @@ export class ConversationStore {
       content: msg.content,
       tokens: msg.tokens,
       createdAt: msg.createdAt ?? Date.now(),
-      contentHash: msg.id ? undefined : computeContentHash(msg.conversationId, msg.role, msg.content),
+      contentHash: msg.id
+        ? undefined
+        : computeContentHash(msg.conversationId, msg.role, msg.content),
       autoGrabbed: msg.autoGrabbed,
     }
     // INSERT OR IGNORE：命中 (conversation_id, content_hash) 唯一索引时跳过，防止重复抓取入库
@@ -293,9 +297,7 @@ export class ConversationStore {
   }
 
   /** 全文搜索消息（返回带会话标题） */
-  search(
-    query: string,
-  ): Array<ChatMessage & { conversationTitle: string }> {
+  search(query: string): Array<ChatMessage & { conversationTitle: string }> {
     const trimmed = query.trim()
     if (!trimmed) return []
     // FTS5 MATCH 语法：使用简单词组匹配；特殊字符用双引号包裹
@@ -326,9 +328,7 @@ export class ConversationStore {
 
   /** 更新指定消息的 token 数（流式结束后回填用量） */
   updateMessageTokens(messageId: string, tokens: number): void {
-    this.db
-      .prepare('UPDATE messages SET tokens = ? WHERE id = ?')
-      .run(tokens, messageId)
+    this.db.prepare('UPDATE messages SET tokens = ? WHERE id = ?').run(tokens, messageId)
   }
 
   /** 更新消息内容 */
@@ -345,9 +345,7 @@ export class ConversationStore {
     }
     if (fields.length === 0) return
     values.push(messageId)
-    this.db
-      .prepare(`UPDATE messages SET ${fields.join(', ')} WHERE id = ?`)
-      .run(...values)
+    this.db.prepare(`UPDATE messages SET ${fields.join(', ')} WHERE id = ?`).run(...values)
     // 更新会话更新时间
     const row = this.db
       .prepare('SELECT conversation_id FROM messages WHERE id = ?')
@@ -453,12 +451,13 @@ export class ConversationStore {
         createdAt?: number
       }>
       const conv = this.createConversation(
-          sourceId,
-          'webview',
-          (parsed.title as string) || '导入的对话',
-        )
+        sourceId,
+        'webview',
+        (parsed.title as string) || '导入的对话',
+      )
       for (const m of messages) {
-        if (!['user', 'assistant', 'system'].includes(m.role) || typeof m.content !== 'string') continue
+        if (!['user', 'assistant', 'system'].includes(m.role) || typeof m.content !== 'string')
+          continue
         this.saveMessage({
           id: randomUUID(),
           conversationId: conv.id,
@@ -579,7 +578,11 @@ export class ConversationStore {
    * @param sourceId 可选，按会话来源（Provider id / Profile id）过滤
    * @returns { totalTokens, todayTokens, todayCount }
    */
-  getUsageStats(sourceId?: string): { totalTokens: number; todayTokens: number; todayCount: number } {
+  getUsageStats(sourceId?: string): {
+    totalTokens: number
+    todayTokens: number
+    todayCount: number
+  } {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
     const todayMs = todayStart.getTime()

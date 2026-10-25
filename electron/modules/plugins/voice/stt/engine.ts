@@ -131,7 +131,10 @@ export class SttEngine {
     this.clearLastError()
     try {
       await this.audioCapture.start()
-      if (generation !== this.generation) { await this.audioCapture.cancel(); return }
+      if (generation !== this.generation) {
+        await this.audioCapture.cancel()
+        return
+      }
       this.recording = true
       this.currentEngine = null
       console.info('[SttEngine] 开始录音')
@@ -184,7 +187,10 @@ export class SttEngine {
     if (config.sttMode === 'ai') {
       try {
         this.currentEngine = 'ai'
-        const text = await this.recognizeWithAiApi(pcm, { providerId: config.aiProvider, language: config.language })
+        const text = await this.recognizeWithAiApi(pcm, {
+          providerId: config.aiProvider,
+          language: config.language,
+        })
         if (generation !== this.generation) return ''
         if (text) {
           this.notifyResult(text)
@@ -217,7 +223,7 @@ export class SttEngine {
 
   /** 清理资源（应用退出时调用） */
   cleanup(): void {
-    void this.cancel().catch(error => console.warn('[SttEngine] Cancellation failed:', error))
+    void this.cancel().catch((error) => console.warn('[SttEngine] Cancellation failed:', error))
   }
 
   async cancel(): Promise<void> {
@@ -233,7 +239,9 @@ export class SttEngine {
    * 发送 0.3s 静音样本，验证能正常请求并解析。
    * 返回 { ok: boolean, message: string, text?: string } 便于设置页展示
    */
-  async testAiProvider(providerId: string): Promise<{ ok: boolean; message: string; text?: string }> {
+  async testAiProvider(
+    providerId: string,
+  ): Promise<{ ok: boolean; message: string; text?: string }> {
     const provider = aiProviderStore.get(providerId)
     if (!provider) {
       return { ok: false, message: '供应商不存在' }
@@ -287,7 +295,12 @@ export class SttEngine {
     }
 
     // 标准 OpenAI Whisper 格式：multipart/form-data 上传 WAV
-    return recognizeWithOpenAiWhisper(pcm, provider, deriveAudioEndpoint(provider.apiEndpoint, 'transcriptions'), config.language)
+    return recognizeWithOpenAiWhisper(
+      pcm,
+      provider,
+      deriveAudioEndpoint(provider.apiEndpoint, 'transcriptions'),
+      config.language,
+    )
   }
 
   /** 通知前端识别结果（STT_RESULT 无 preload listener，暂为 no-op） */

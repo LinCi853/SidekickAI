@@ -60,7 +60,9 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
 }
 .sidebar-shell-new-btn:hover {
   background: var(--accent-25);
@@ -138,7 +140,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
   flex-shrink: 0;
 }
 .sidebar-shell-collapsed-item:hover {

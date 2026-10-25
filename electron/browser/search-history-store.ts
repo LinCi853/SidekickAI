@@ -33,9 +33,11 @@ class SearchHistoryStore {
 
   /** 记录一条搜索历史 */
   add(entry: { profileId: string; query: string; url: string }): void {
-    this.db.prepare(
-      `INSERT INTO search_history (id, profile_id, query, url, timestamp) VALUES (?, ?, ?, ?, ?)`,
-    ).run(crypto.randomUUID(), entry.profileId, entry.query, entry.url, Date.now())
+    this.db
+      .prepare(
+        `INSERT INTO search_history (id, profile_id, query, url, timestamp) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(crypto.randomUUID(), entry.profileId, entry.query, entry.url, Date.now())
   }
 
   /** 查询搜索历史（按 profileId，可选关键词过滤，按时间倒序） */

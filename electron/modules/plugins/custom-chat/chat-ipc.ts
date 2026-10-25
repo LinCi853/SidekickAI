@@ -50,90 +50,78 @@ export function registerAIChatIPC(scope?: EffectScope): void {
     : (channel: string, fn: (...args: any[]) => any) => ipcMain.handle(channel, fn as any)
 
   // ===== AI Provider 测试连通性 =====
-  handle(
-    ipc.AI_PROVIDER_TEST,
-    async (_e: unknown, input: CustomAIProviderInput) => {
-      // 构造临时 Provider 对象（不需要 id/时间戳）
-      const provider = {
-        id: 'test',
-        createdAt: 0,
-        updatedAt: 0,
-        ...input,
-      }
-      return testProvider(provider)
-    },
-  )
+  handle(ipc.AI_PROVIDER_TEST, async (_e: unknown, input: CustomAIProviderInput) => {
+    // 构造临时 Provider 对象（不需要 id/时间戳）
+    const provider = {
+      id: 'test',
+      createdAt: 0,
+      updatedAt: 0,
+      ...input,
+    }
+    return testProvider(provider)
+  })
 
   // 需求 9：列出 Provider 可用模型（自动搜索）
-  handle(
-    ipc.AI_PROVIDER_LIST_MODELS,
-    async (_e: unknown, input: CustomAIProviderInput) => {
-      return listModels(input)
-    },
-  )
+  handle(ipc.AI_PROVIDER_LIST_MODELS, async (_e: unknown, input: CustomAIProviderInput) => {
+    return listModels(input)
+  })
 
   // ===== 发送消息（核心：流式 API + SQLite 入库；会话 CRUD 在基础层）=====
-  handle(
-    ipc.CHAT_SEND,
-    async (e: any, payload: ChatSendPayload) => {
-      const sender = e.sender
-      const chatStore = getChatStore()
-      const provider = aiProviderStore.get(payload.providerId)
-      if (!provider) {
-        throw new Error(`Provider 不存在: ${payload.providerId}`)
-      }
+  handle(ipc.CHAT_SEND, async (e: any, payload: ChatSendPayload) => {
+    const sender = e.sender
+    const chatStore = getChatStore()
+    const provider = aiProviderStore.get(payload.providerId)
+    if (!provider) {
+      throw new Error(`Provider 不存在: ${payload.providerId}`)
+    }
 
-      // 1. 创建或复用会话
-      let conversationId = payload.conversationId
-      if (!conversationId) {
-        const title = payload.title || payload.message.slice(0, 30) || '新对话'
-        const conv = chatStore.createConversation(provider.id, 'api', title)
-        conversationId = conv.id
-      }
+    // 1. 创建或复用会话
+    let conversationId = payload.conversationId
+    if (!conversationId) {
+      const title = payload.title || payload.message.slice(0, 30) || '新对话'
+      const conv = chatStore.createConversation(provider.id, 'api', title)
+      conversationId = conv.id
+    }
 
-      // 2. 保存用户消息
-      const userMessageId = chatStore.assets.capture(conversationId, {
-        key: randomUUID(), role: 'user', content: payload.message, status: 'complete',
-      })
-      if (!userMessageId) throw new Error('对话已删除，无法继续发送')
+    // 2. 保存用户消息
+    const userMessageId = chatStore.assets.capture(conversationId, {
+      key: randomUUID(),
+      role: 'user',
+      content: payload.message,
+      status: 'complete',
+    })
+    if (!userMessageId) throw new Error('对话已删除，无法继续发送')
 
-      // 3. 取消该会话之前未完成的流式请求（如果有）
-      const prev = activeStreams.get(conversationId)
-      if (prev) prev.abort()
+    // 3. 取消该会话之前未完成的流式请求（如果有）
+    const prev = activeStreams.get(conversationId)
+    if (prev) prev.abort()
 
-      // 4. 创建 AbortController 并登记
-      const controller = new AbortController()
-      activeStreams.set(conversationId, controller)
+    // 4. 创建 AbortController 并登记
+    const controller = new AbortController()
+    activeStreams.set(conversationId, controller)
 
-      // 5. 加载历史消息（含刚保存的 user 消息）作为 API 上下文
-      const history = chatStore.listMessages(conversationId)
+    // 5. 加载历史消息（含刚保存的 user 消息）作为 API 上下文
+    const history = chatStore.listMessages(conversationId)
 
-      // 若指定了 systemPrompt，在历史消息前注入 system 消息（不入库，仅用于 API 请求）
-      const messages: ChatMessage[] = payload.systemPrompt?.trim()
-        ? [
-            {
-              id: 'system',
-              conversationId,
-              role: 'system' as const,
-              content: payload.systemPrompt,
-              createdAt: Date.now(),
-            },
-            ...history,
-          ]
-        : history
+    // 若指定了 systemPrompt，在历史消息前注入 system 消息（不入库，仅用于 API 请求）
+    const messages: ChatMessage[] = payload.systemPrompt?.trim()
+      ? [
+          {
+            id: 'system',
+            conversationId,
+            role: 'system' as const,
+            content: payload.systemPrompt,
+            createdAt: Date.now(),
+          },
+          ...history,
+        ]
+      : history
 
-      // 6. 异步发起流式调用（不 await，立即返回 conversationId）
-      void runStream(
-        sender,
-        conversationId,
-        provider,
-        messages,
-        controller,
-      )
+    // 6. 异步发起流式调用（不 await，立即返回 conversationId）
+    void runStream(sender, conversationId, provider, messages, controller)
 
-      return { conversationId, userMessageId: userMessageId }
-    },
-  )
+    return { conversationId, userMessageId: userMessageId }
+  })
 
   // ===== 取消流式请求 =====
   handle(ipc.CHAT_CANCEL, (_e: unknown, conversationId: string) => {
@@ -154,13 +142,10 @@ export function registerAIChatIPC(scope?: EffectScope): void {
   )
 
   // ===== 删除单条消息 =====
-  ipcMain.handle(
-    ipc.CHAT_DELETE_MESSAGE,
-    (_e, messageId: string) => {
-      getChatStore().deleteMessage(messageId)
-      return { ok: true }
-    },
-  )
+  ipcMain.handle(ipc.CHAT_DELETE_MESSAGE, (_e, messageId: string) => {
+    getChatStore().deleteMessage(messageId)
+    return { ok: true }
+  })
 }
 
 /**
@@ -175,19 +160,26 @@ async function runStream(
   history: ChatMessage[],
   controller: AbortController,
 ): Promise<void> {
-
   const release = trackAssetStream(controller)
   const assistantMessageId = randomUUID()
   let assistantMessageStored = false
-  const recorder = new StreamAssetRecorder(value => {
-    const captured = getChatStore().assets.capture(conversationId, {
-      key: assistantMessageId, role: 'assistant', content: value.content,
-      reasoning: value.reasoning, status: value.status,
-    }, assistantMessageId)
+  const recorder = new StreamAssetRecorder((value) => {
+    const captured = getChatStore().assets.capture(
+      conversationId,
+      {
+        key: assistantMessageId,
+        role: 'assistant',
+        content: value.content,
+        reasoning: value.reasoning,
+        status: value.status,
+      },
+      assistantMessageId,
+    )
     assistantMessageStored = !!captured
     if (!captured) return
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.CHAT_CONVERSATION_PERSISTED, { sourceId: provider.id })
+      if (!window.isDestroyed())
+        window.webContents.send(IPC_CHANNELS.CHAT_CONVERSATION_PERSISTED, { sourceId: provider.id })
     }
   })
   const sendChunk = (delta: string) => {
@@ -197,33 +189,47 @@ async function runStream(
   }
   const sendEnd = (ok: boolean, error?: string) => {
     if (activeStreams.get(conversationId) === controller) activeStreams.delete(conversationId)
-    if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.CHAT_STREAM_END, {
-      conversationId, ok, error, assistantMessageId: assistantMessageStored ? assistantMessageId : undefined,
-    })
+    if (!sender.isDestroyed())
+      sender.send(IPC_CHANNELS.CHAT_STREAM_END, {
+        conversationId,
+        ok,
+        error,
+        assistantMessageId: assistantMessageStored ? assistantMessageId : undefined,
+      })
   }
   try {
-    await streamChat(provider, history, {
-      onDelta: sendChunk,
-      onReasoningDelta: delta => recorder.append('reasoning', delta),
-      onDone: text => {
-        const stopped = controller.signal.aborted
-        recorder.finish(stopped ? 'stopped' : 'complete', text)
-        sendEnd(!stopped, stopped ? 'aborted' : undefined)
-        const window = BrowserWindow.fromWebContents(sender)
-        if (!stopped && (!window || !window.isFocused())) showNotification('AI 回复完成', `${provider.name} 已完成本轮响应`)
+    await streamChat(
+      provider,
+      history,
+      {
+        onDelta: sendChunk,
+        onReasoningDelta: (delta) => recorder.append('reasoning', delta),
+        onDone: (text) => {
+          const stopped = controller.signal.aborted
+          recorder.finish(stopped ? 'stopped' : 'complete', text)
+          sendEnd(!stopped, stopped ? 'aborted' : undefined)
+          const window = BrowserWindow.fromWebContents(sender)
+          if (!stopped && (!window || !window.isFocused()))
+            showNotification('AI 回复完成', `${provider.name} 已完成本轮响应`)
+        },
+        onError: (error) => {
+          recorder.finish('failed')
+          sendEnd(false, error.message)
+        },
       },
-      onError: error => {
-        recorder.finish('failed')
-        sendEnd(false, error.message)
-      },
-    }, { signal: controller.signal })
+      { signal: controller.signal },
+    )
   } catch (error) {
-    try { recorder.finish(controller.signal.aborted ? 'stopped' : 'failed') } catch (saveError) {
+    try {
+      recorder.finish(controller.signal.aborted ? 'stopped' : 'failed')
+    } catch (saveError) {
       sendEnd(false, `本地记录保存失败：${String(saveError)}`)
       return
     }
     sendEnd(false, error instanceof Error ? error.message : String(error))
-  } finally { release() }
+  } finally {
+    release()
+  }
 }
 
 /** 清理所有进行中的流式请求（模块停用 / app before-quit 时调用） */

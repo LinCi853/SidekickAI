@@ -14,7 +14,9 @@
 
 .glass-card.interactive {
   cursor: pointer;
-  transition: border-color var(--duration-fast), background var(--duration-fast);
+  transition:
+    border-color var(--duration-fast),
+    background var(--duration-fast);
 }
 
 .glass-card.interactive:hover {

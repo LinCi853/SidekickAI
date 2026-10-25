@@ -12,27 +12,32 @@ export const appSettingsApi = {
     testProxy: () => ipcRenderer.invoke(IPC_CHANNELS.APP_TEST_PROXY),
     applyProxy: () => ipcRenderer.invoke(IPC_CHANNELS.APP_APPLY_PROXY),
     applyProxyFallback: () => ipcRenderer.invoke(IPC_CHANNELS.APP_PROXY_FALLBACK),
-    testProfileProxy: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_TEST_PROFILE_PROXY, profileId),
-    applyProfileProxy: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_APPLY_PROFILE_PROXY, profileId),
-    applyProfileProxyFallback: (profileId: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_PROFILE_PROXY_FALLBACK, profileId),
+    testProfileProxy: (profileId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_TEST_PROFILE_PROXY, profileId),
+    applyProfileProxy: (profileId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_APPLY_PROFILE_PROXY, profileId),
+    applyProfileProxyFallback: (profileId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_PROFILE_PROXY_FALLBACK, profileId),
     // 每应用浏览器窗口脱离/回归快捷键（保存 accelerator 或传 null 清除）
     setProfileShortcut: (profileId: string, accelerator: string | null) =>
       ipcRenderer.invoke(IPC_CHANNELS.PROFILE_SHORTCUT_SET, { profileId, accelerator }),
     clearAllData: () => ipcRenderer.invoke(IPC_CHANNELS.APP_CLEAR_ALL_DATA),
-    selectExportPath: (encrypted?: boolean) => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_EXPORT_PATH, encrypted),
+    selectExportPath: (encrypted?: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_EXPORT_PATH, encrypted),
     selectImportFile: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_IMPORT_FILE),
     exportData: (
       targetPath: string,
       options: {
-        basicData: boolean;
-        cookies: boolean;
-        indexedDB: boolean;
-        cache: boolean;
-        voiceAssets: boolean;
+        basicData: boolean
+        cookies: boolean
+        indexedDB: boolean
+        cache: boolean
+        voiceAssets: boolean
       },
       encrypt?: { password: string },
     ) => ipcRenderer.invoke(IPC_CHANNELS.APP_EXPORT_DATA, targetPath, options, encrypt),
-    inspectBackup: (filePath: string, password?: string) => ipcRenderer.invoke(IPC_CHANNELS.APP_INSPECT_BACKUP, filePath, password),
+    inspectBackup: (filePath: string, password?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_INSPECT_BACKUP, filePath, password),
     importData: (filePath: string, fingerprint?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_IMPORT_DATA, filePath, fingerprint),
     importDataDecrypted: (filePath: string, password: string, fingerprint?: string) =>
@@ -50,7 +55,8 @@ export const appSettingsApi = {
     selectDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_DOWNLOAD_DIR),
     // 下载：在系统文件管理器中打开下载目录
     openDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR),
-    openLogsFolder: (options?: LogExportOptions) => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, options),
+    openLogsFolder: (options?: LogExportOptions) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, options),
     dropFiles: readDroppedFiles,
     openDroppedFiles,
     onLocalFilesDropped: (callback: (info: LocalFilesDroppedEvent) => void) => {
@@ -88,7 +94,8 @@ export const appSettingsApi = {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_LIST),
     save: (rule: unknown) => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_SAVE, rule),
     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_DELETE, id),
-    update: (id: string, patch: unknown) => ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_UPDATE, id, patch),
+    update: (id: string, patch: unknown) =>
+      ipcRenderer.invoke(IPC_CHANNELS.BLOCK_RULES_UPDATE, id, patch),
     onChanged: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on(IPC_CHANNELS.BLOCK_RULES_CHANGED, handler)
@@ -102,12 +109,23 @@ export const appSettingsApi = {
     return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_SETTINGS_CHANGED, handler)
   },
   /** 渲染→主：请求广播 UI 版本/主题变更到所有窗口（Oxy 切换 / 主题模式切换时调用） */
-  broadcastUiVersionChanged: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => {
+  broadcastUiVersionChanged: (payload: {
+    uiVersion: 'classic' | 'oxy'
+    theme: 'light' | 'dark' | 'system'
+  }) => {
     ipcRenderer.send(IPC_CHANNELS.APP_UI_VERSION_CHANGED, payload)
   },
   /** 主→渲染：UI 版本/主题变更广播（任意窗口切换 Oxy 或主题后通知所有窗口同步） */
-  onUiVersionChanged: (callback: (payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => void) => {
-    const handler = (_e: unknown, payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' }) => callback(payload)
+  onUiVersionChanged: (
+    callback: (payload: {
+      uiVersion: 'classic' | 'oxy'
+      theme: 'light' | 'dark' | 'system'
+    }) => void,
+  ) => {
+    const handler = (
+      _e: unknown,
+      payload: { uiVersion: 'classic' | 'oxy'; theme: 'light' | 'dark' | 'system' },
+    ) => callback(payload)
     ipcRenderer.on(IPC_CHANNELS.APP_UI_VERSION_CHANGED, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_UI_VERSION_CHANGED, handler)
   },

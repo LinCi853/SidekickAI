@@ -19,7 +19,9 @@ vi.mock('./win32-foreground.js', () => ({
   getForegroundHandle: fixture.getForegroundHandle,
   setForegroundHandle: fixture.setForegroundHandle,
 }))
-vi.mock('../platform/window/window-utils.js', () => ({ findWindowIdByWin: fixture.findWindowIdByWin }))
+vi.mock('../platform/window/window-utils.js', () => ({
+  findWindowIdByWin: fixture.findWindowIdByWin,
+}))
 vi.mock('./fullscreen-tracker.js', () => ({ isTrackedFullscreen: () => false }))
 
 import { track, show, hide, close } from './focus-manager'
@@ -57,8 +59,9 @@ function makeWindow(overrides: Partial<Record<string, unknown>> = {}): BrowserWi
 
 /** 触发 track() 注册的 closed 处理器（模拟窗口销毁清理） */
 function fireClosed(win: BrowserWindow): void {
-  const closedHandler = (win.on as ReturnType<typeof vi.fn>).mock.calls
-    .find(([event]) => event === 'closed')?.[1] as (() => void) | undefined
+  const closedHandler = (win.on as ReturnType<typeof vi.fn>).mock.calls.find(
+    ([event]) => event === 'closed',
+  )?.[1] as (() => void) | undefined
   closedHandler?.()
 }
 
@@ -142,8 +145,8 @@ describe('代际取消与 close 交还', () => {
     const win = makeWindow()
     track(win)
     await show(win)
-    hide(win)              // 安排 60ms 后交还
-    await show(win)        // 新唤出 → 代际递增，旧交还作废
+    hide(win) // 安排 60ms 后交还
+    await show(win) // 新唤出 → 代际递增，旧交还作废
     fixture.setForegroundHandle.mockClear()
     await vi.advanceTimersByTimeAsync(2000)
     // 激活重试会对自身句柄夺焦点；本用例只禁止交还旧的 4242
@@ -158,7 +161,7 @@ describe('代际取消与 close 交还', () => {
 
     fixture.getForegroundHandle.mockResolvedValue(7777)
     close(win)
-    fireClosed(win)        // 状态清理不得取消交还
+    fireClosed(win) // 状态清理不得取消交还
     await vi.advanceTimersByTimeAsync(2000)
     expect(fixture.setForegroundHandle).toHaveBeenCalledWith(4242)
   })

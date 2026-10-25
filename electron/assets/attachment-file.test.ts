@@ -19,7 +19,11 @@ describe('attachment file names', () => {
     ['', 'application/octet-stream', 'asset.bin'],
     ['image', 'IMAGE/PNG; charset=utf-8', 'image.png'],
     ['report', 'application/pdf', 'report.pdf'],
-    ['report', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'report.docx'],
+    [
+      'report',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'report.docx',
+    ],
     ['unknown', 'unknown/type', 'unknown.bin'],
     ['unknown', '__proto__', 'unknown.bin'],
     ['unknown', 'constructor', 'unknown.bin'],
@@ -32,8 +36,12 @@ describe('attachment file names', () => {
     expect(name.length).toBeLessThanOrEqual(120)
     expect(name.endsWith('.docx')).toBe(true)
     expect(name).not.toMatch(/[\uD800-\uDBFF]\.docx$/)
-    expect(attachmentFileName({ name: 'x'.repeat(200) + '.pdf', mimeType: '' }, 40)).toHaveLength(40)
-    expect(() => attachmentFileName({ name: 'report.' + 'x'.repeat(30), mimeType: '' }, 20)).toThrow('path')
+    expect(attachmentFileName({ name: 'x'.repeat(200) + '.pdf', mimeType: '' }, 40)).toHaveLength(
+      40,
+    )
+    expect(() =>
+      attachmentFileName({ name: 'report.' + 'x'.repeat(30), mimeType: '' }, 20),
+    ).toThrow('path')
   })
 })
 
@@ -47,12 +55,24 @@ describe('attachment file copies', () => {
     await writeFile(path.join(root, sha256), bytes)
   })
   afterEach(async () => {
-    if (path.dirname(root) !== path.resolve('build') || !path.basename(root).startsWith('attachment-copy-test-')) throw new Error('Unexpected fixture path')
+    if (
+      path.dirname(root) !== path.resolve('build') ||
+      !path.basename(root).startsWith('attachment-copy-test-')
+    )
+      throw new Error('Unexpected fixture path')
     await rm(root, { recursive: true, force: true })
   })
   it('keeps different names for the same object and independent bytes for repeated access', async () => {
-    const first = await createAttachmentCopy(root, path.join(root, sha256), { name: 'one.pdf', mimeType: '', sha256 })
-    const second = await createAttachmentCopy(root, path.join(root, sha256), { name: 'two.pdf', mimeType: '', sha256 })
+    const first = await createAttachmentCopy(root, path.join(root, sha256), {
+      name: 'one.pdf',
+      mimeType: '',
+      sha256,
+    })
+    const second = await createAttachmentCopy(root, path.join(root, sha256), {
+      name: 'two.pdf',
+      mimeType: '',
+      sha256,
+    })
     expect(path.basename(first)).toBe('one.pdf')
     expect(path.basename(second)).toBe('two.pdf')
     await writeFile(first, 'edited copy')
@@ -63,8 +83,16 @@ describe('attachment file copies', () => {
     const changed = Buffer.from('different attachment')
     const otherHash = createHash('sha256').update(changed).digest('hex')
     await writeFile(path.join(root, otherHash), changed)
-    const first = await createAttachmentCopy(root, path.join(root, sha256), { name: 'report.pdf', mimeType: '', sha256 })
-    const second = await createAttachmentCopy(root, path.join(root, otherHash), { name: 'report.pdf', mimeType: '', sha256: otherHash })
+    const first = await createAttachmentCopy(root, path.join(root, sha256), {
+      name: 'report.pdf',
+      mimeType: '',
+      sha256,
+    })
+    const second = await createAttachmentCopy(root, path.join(root, otherHash), {
+      name: 'report.pdf',
+      mimeType: '',
+      sha256: otherHash,
+    })
     expect(path.basename(first)).toBe(path.basename(second))
     expect(first).not.toBe(second)
     expect(await readFile(first)).toEqual(bytes)
@@ -74,8 +102,12 @@ describe('attachment file copies', () => {
     const item = { name: '../../report.pdf', mimeType: '', sha256 }
     const before = await readdir(root)
     await expect(createAttachmentCopy(root, path.join(root, 'missing'), item)).rejects.toThrow()
-    await expect(createAttachmentCopy(root, path.join(root, sha256), { ...item, size: 999 })).rejects.toThrow('size')
-    await expect(createAttachmentCopy(root, path.join(root, sha256), { ...item, sha256: '0'.repeat(64) })).rejects.toThrow('digest')
+    await expect(
+      createAttachmentCopy(root, path.join(root, sha256), { ...item, size: 999 }),
+    ).rejects.toThrow('size')
+    await expect(
+      createAttachmentCopy(root, path.join(root, sha256), { ...item, sha256: '0'.repeat(64) }),
+    ).rejects.toThrow('digest')
     expect(await readdir(root)).toEqual(before)
   })
 })

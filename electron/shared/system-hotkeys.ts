@@ -11,9 +11,9 @@
 /** 系统快捷键占用信息 */
 export interface SystemHotkeyConflict {
   /** accelerator 字符串 */
-  accelerator: string;
+  accelerator: string
   /** 系统功能描述 */
-  label: string;
+  label: string
 }
 
 /**
@@ -59,20 +59,26 @@ export const COMMON_WIN_SYSTEM_HOTKEYS: SystemHotkeyConflict[] = [
   { accelerator: 'Ctrl+A', label: '全选（通用）' },
   { accelerator: 'Ctrl+S', label: '保存（通用）' },
   { accelerator: 'Ctrl+P', label: '打印（通用）' },
-];
+]
 
 /**
  * 归一化 accelerator 字符串用于比较
  * 去除空格、统一大小写、按 + 分割后排序修饰键
  */
 export function normalizeAccelerator(acc: string): string {
-  if (!acc) return '';
-  const parts = acc.split('+').map((p) => p.trim()).filter(Boolean);
-  if (parts.length === 0) return '';
+  if (!acc) return ''
+  const parts = acc
+    .split('+')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return ''
   // 最后一个视为非修饰键（主键），前面的为修饰键
-  const mainKey = parts[parts.length - 1].toLowerCase();
-  const mods = parts.slice(0, -1).map((p) => p.toLowerCase()).sort();
-  return [...mods, mainKey].join('+');
+  const mainKey = parts[parts.length - 1].toLowerCase()
+  const mods = parts
+    .slice(0, -1)
+    .map((p) => p.toLowerCase())
+    .sort()
+  return [...mods, mainKey].join('+')
 }
 
 /**
@@ -81,12 +87,12 @@ export function normalizeAccelerator(acc: string): string {
  * @returns 匹配的系统快捷键信息，无匹配返回 null
  */
 export function checkSystemHotkeyConflict(acc: string): SystemHotkeyConflict | null {
-  if (!acc) return null;
-  const normalized = normalizeAccelerator(acc);
+  if (!acc) return null
+  const normalized = normalizeAccelerator(acc)
   for (const sys of COMMON_WIN_SYSTEM_HOTKEYS) {
     if (normalizeAccelerator(sys.accelerator) === normalized) {
-      return sys;
+      return sys
     }
   }
-  return null;
+  return null
 }

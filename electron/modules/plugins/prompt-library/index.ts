@@ -22,7 +22,6 @@ import { windowState } from '../../../platform/window/window-state.js'
 /** Module-owned effects. */
 const scope = new EffectScope('prompt-library', 'prompt-library')
 
-
 export async function initPromptLibraryModule(): Promise<void> {
   // Registration is idempotent.
   await scope.dispose()
@@ -32,11 +31,14 @@ export async function initPromptLibraryModule(): Promise<void> {
   registerPromptIPC(scope)
   registerInjectionIpc(scope)
 
-  registerPromptIpc({
-    showPromptWindow,
-    getMainWindow: () => windowState.mainWindow,
-    getPromptWindow: () => windowState.promptWindow,
-  }, scope)
+  registerPromptIpc(
+    {
+      showPromptWindow,
+      getMainWindow: () => windowState.mainWindow,
+      getPromptWindow: () => windowState.promptWindow,
+    },
+    scope,
+  )
 }
 
 export async function teardownPromptLibraryModule(): Promise<void> {
@@ -49,13 +51,23 @@ export async function teardownPromptLibraryModule(): Promise<void> {
 }
 
 export function clearPromptLibraryData(): void {
-  assertAssetClearAllowed(isModuleEnabled('prompt-library'), hasActiveAssetStreams() || hasLinkedOriginalTransfers() || hasWebOriginalTransfers() || hasActiveAssetImports() || hasActiveBackupExports() || isImportingData)
+  assertAssetClearAllowed(
+    isModuleEnabled('prompt-library'),
+    hasActiveAssetStreams() ||
+      hasLinkedOriginalTransfers() ||
+      hasWebOriginalTransfers() ||
+      hasActiveAssetImports() ||
+      hasActiveBackupExports() ||
+      isImportingData,
+  )
   promptStore.list()
   injectionHistoryStore.listRecent()
   let cleared = false
   try {
     clearAssetDirectories(app.getPath('userData'), () => {
-      clearAssetCollectionJournal(journalPath => getChatStore().assets.clearData(getModuleStateDb().name, journalPath))
+      clearAssetCollectionJournal((journalPath) =>
+        getChatStore().assets.clearData(getModuleStateDb().name, journalPath),
+      )
       cleared = true
       promptStore.invalidate()
       injectionHistoryStore.invalidate()

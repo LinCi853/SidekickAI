@@ -1,14 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { injectTextToWebview, type WebviewLike } from '../../../hooks/useWebViewControl';
-import { findSimilarInjection, logInjection, onPromptInjectRequest, sendPromptInjectResult } from '../../../lib/electron-api';
-import { composeFinalText } from '../../../lib/prompt-placeholders';
-import { usePromptHotkeys } from '../../../hooks/usePromptHotkeys';
-import type { AIPlatform, Profile, PromptTemplate, SimilarInjectionResult } from '../../../lib/electron-api';
-import { hasUsablePromptContent } from '../../../../electron/shared/prompt-template';
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { injectTextToWebview, type WebviewLike } from '../../../hooks/useWebViewControl'
+import {
+  findSimilarInjection,
+  logInjection,
+  onPromptInjectRequest,
+  sendPromptInjectResult,
+} from '../../../lib/electron-api'
+import { composeFinalText } from '../../../lib/prompt-placeholders'
+import { usePromptHotkeys } from '../../../hooks/usePromptHotkeys'
+import type {
+  AIPlatform,
+  Profile,
+  PromptTemplate,
+  SimilarInjectionResult,
+} from '../../../lib/electron-api'
+import { hasUsablePromptContent } from '../../../../electron/shared/prompt-template'
 
 interface Tab {
-  id: string;
-  profileId: string;
+  id: string
+  profileId: string
 }
 
 /**
@@ -21,19 +31,19 @@ export function usePromptInjection(
   platforms: AIPlatform[],
 ) {
   const [previewState, setPreviewState] = useState<{
-    open: boolean;
-    composedText: string;
-    similarRecords: SimilarInjectionResult[];
-  }>({ open: false, composedText: '', similarRecords: [] });
+    open: boolean
+    composedText: string
+    similarRecords: SimilarInjectionResult[]
+  }>({ open: false, composedText: '', similarRecords: [] })
 
   const pendingInjectionRef = useRef<{
-    template: PromptTemplate;
-    source: 'inline' | 'detached';
-    webview: WebviewLike;
-    selector: string | null;
-    platformName?: string;
-    resolve: (result: { success: boolean; platformName?: string }) => void;
-  } | null>(null);
+    template: PromptTemplate
+    source: 'inline' | 'detached'
+    webview: WebviewLike
+    selector: string | null
+    platformName?: string
+    resolve: (result: { success: boolean; platformName?: string }) => void
+  } | null>(null)
 
   const handleInjectPrompt = useCallback(
     async (
@@ -42,19 +52,21 @@ export function usePromptInjection(
       skipPreview = false,
     ): Promise<{ success: boolean; platformName?: string }> => {
       if (!hasUsablePromptContent(template)) {
-        if (source === 'detached') sendPromptInjectResult({ success: false });
-        return { success: false };
+        if (source === 'detached') sendPromptInjectResult({ success: false })
+        return { success: false }
       }
-      if (!activeTab) return { success: false };
-      const profile = getProfile(activeTab.profileId);
+      if (!activeTab) return { success: false }
+      const profile = getProfile(activeTab.profileId)
       const platform = profile?.aiPlatformUrl
         ? platforms.find((p) => p.url === profile.aiPlatformUrl)
-        : undefined;
-      const selector = profile?.aiInputSelector || platform?.inputSelector || null;
-      const el = document.querySelector(`webview[data-tab-id="${activeTab.id}"]`) as WebviewLike | null;
-      if (!el) return { success: false };
+        : undefined
+      const selector = profile?.aiInputSelector || platform?.inputSelector || null
+      const el = document.querySelector(
+        `webview[data-tab-id="${activeTab.id}"]`,
+      ) as WebviewLike | null
+      if (!el) return { success: false }
 
-      let selection = '';
+      let selection = ''
       try {
         const script = `(function(sel) {
           var el = null;
@@ -72,37 +84,37 @@ export function usePromptInjection(
           if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return el.value || '';
           if (el.isContentEditable) return el.innerText || el.textContent || '';
           return '';
-        })(${JSON.stringify(selector)})`;
-        const result = await el.executeJavaScript(script);
-        selection = typeof result === 'string' ? result : '';
+        })(${JSON.stringify(selector)})`
+        const result = await el.executeJavaScript(script)
+        selection = typeof result === 'string' ? result : ''
       } catch (e) {
-        console.warn('[MainView] 读取 webview 输入框内容失败:', e);
+        console.warn('[MainView] 读取 webview 输入框内容失败:', e)
       }
 
-      const composedText = composeFinalText(template, { body: selection });
+      const composedText = composeFinalText(template, { body: selection })
 
       if (skipPreview) {
-        const ok = await injectTextToWebview(el, composedText, selector);
+        const ok = await injectTextToWebview(el, composedText, selector)
         try {
           await logInjection({
             composedText,
             templateId: template.id,
             windowId: source === 'detached' ? 'detached-prompt-window' : 'main',
-          });
+          })
         } catch (e) {
-          console.warn('[MainView] 记录注入历史失败:', e);
+          console.warn('[MainView] 记录注入历史失败:', e)
         }
         if (source === 'detached') {
-          sendPromptInjectResult({ success: ok, platformName: platform?.name });
+          sendPromptInjectResult({ success: ok, platformName: platform?.name })
         }
-        return { success: ok, platformName: platform?.name };
+        return { success: ok, platformName: platform?.name }
       }
 
-      let similarRecords: SimilarInjectionResult[] = [];
+      let similarRecords: SimilarInjectionResult[] = []
       try {
-        similarRecords = await findSimilarInjection(composedText, 20, 0.85);
+        similarRecords = await findSimilarInjection(composedText, 20, 0.85)
       } catch (e) {
-        console.warn('[MainView] 查询相似注入记录失败:', e);
+        console.warn('[MainView] 查询相似注入记录失败:', e)
       }
 
       return new Promise<{ success: boolean; platformName?: string }>((resolve) => {
@@ -113,74 +125,71 @@ export function usePromptInjection(
           selector,
           platformName: platform?.name,
           resolve,
-        };
-        setPreviewState({ open: true, composedText, similarRecords });
-      });
+        }
+        setPreviewState({ open: true, composedText, similarRecords })
+      })
     },
     [activeTab, getProfile, platforms],
-  );
+  )
 
-  const handleConfirmInjection = useCallback(
-    async (editedText: string) => {
-      const pending = pendingInjectionRef.current;
-      if (!pending) {
-        setPreviewState((s) => ({ ...s, open: false }));
-        return;
-      }
-      const { template, source, webview, selector, platformName, resolve } = pending;
-      const ok = await injectTextToWebview(webview, editedText, selector);
-      try {
-        await logInjection({
-          composedText: editedText,
-          templateId: template.id,
-          windowId: source === 'detached' ? 'detached-prompt-window' : 'main',
-        });
-      } catch (e) {
-        console.warn('[MainView] 记录注入历史失败:', e);
-      }
-      if (source === 'detached') {
-        sendPromptInjectResult({ success: ok, platformName });
-      }
-      resolve({ success: ok, platformName });
-      pendingInjectionRef.current = null;
-      setPreviewState({ open: false, composedText: '', similarRecords: [] });
-    },
-    [],
-  );
+  const handleConfirmInjection = useCallback(async (editedText: string) => {
+    const pending = pendingInjectionRef.current
+    if (!pending) {
+      setPreviewState((s) => ({ ...s, open: false }))
+      return
+    }
+    const { template, source, webview, selector, platformName, resolve } = pending
+    const ok = await injectTextToWebview(webview, editedText, selector)
+    try {
+      await logInjection({
+        composedText: editedText,
+        templateId: template.id,
+        windowId: source === 'detached' ? 'detached-prompt-window' : 'main',
+      })
+    } catch (e) {
+      console.warn('[MainView] 记录注入历史失败:', e)
+    }
+    if (source === 'detached') {
+      sendPromptInjectResult({ success: ok, platformName })
+    }
+    resolve({ success: ok, platformName })
+    pendingInjectionRef.current = null
+    setPreviewState({ open: false, composedText: '', similarRecords: [] })
+  }, [])
 
   const handleCancelInjection = useCallback(() => {
-    const pending = pendingInjectionRef.current;
+    const pending = pendingInjectionRef.current
     if (!pending) {
-      setPreviewState({ open: false, composedText: '', similarRecords: [] });
-      return;
+      setPreviewState({ open: false, composedText: '', similarRecords: [] })
+      return
     }
     if (pending.source === 'detached') {
-      sendPromptInjectResult({ success: false });
+      sendPromptInjectResult({ success: false })
     }
-    pending.resolve({ success: false });
-    pendingInjectionRef.current = null;
-    setPreviewState({ open: false, composedText: '', similarRecords: [] });
-  }, []);
+    pending.resolve({ success: false })
+    pendingInjectionRef.current = null
+    setPreviewState({ open: false, composedText: '', similarRecords: [] })
+  }, [])
 
   usePromptHotkeys({
     onTriggered: (template, options) => {
-      void handleInjectPrompt(template, 'inline', options?.skipPreview);
+      void handleInjectPrompt(template, 'inline', options?.skipPreview)
     },
-  });
+  })
 
   useEffect(() => {
     const off = onPromptInjectRequest((template) => {
       void (async () => {
-        await handleInjectPrompt(template, 'detached');
-      })();
-    });
-    return () => off();
-  }, [handleInjectPrompt]);
+        await handleInjectPrompt(template, 'detached')
+      })()
+    })
+    return () => off()
+  }, [handleInjectPrompt])
 
   return {
     previewState,
     handleInjectPrompt,
     handleConfirmInjection,
     handleCancelInjection,
-  };
+  }
 }

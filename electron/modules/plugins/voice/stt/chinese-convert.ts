@@ -41,7 +41,7 @@ function resolveConverterFactory(): ConverterFactory | null {
   const def = OpenCC
   if (def && typeof def.Converter === 'function') return def.Converter.bind(def)
   // 兜底：从模块 namespace 取
-  const mod = (OpenCC as unknown as { Converter?: ConverterFactory })
+  const mod = OpenCC as unknown as { Converter?: ConverterFactory }
   if (mod && typeof mod.Converter === 'function') return mod.Converter
   return null
 }
@@ -62,7 +62,9 @@ function getTraditionalToSimplifiedConverter(): ConverterFn | null {
     const converter = factory({ from: 'twp', to: 'cn' })
     // 自检：确保 converter 真的能转换（防止 Vite SSR 打包后部分代码丢失导致 converter 静默失败）
     const selfTest = converter('測試')
-    console.log(`[chinese-convert] 自检：factory=${typeof factory} converter=${typeof converter} "測試" → "${selfTest}"`)
+    console.log(
+      `[chinese-convert] 自检：factory=${typeof factory} converter=${typeof converter} "測試" → "${selfTest}"`,
+    )
     if (!selfTest || selfTest === '測試') {
       console.warn('[chinese-convert] 自检失败：converter 返回值异常（与原文相同或为空）')
     }

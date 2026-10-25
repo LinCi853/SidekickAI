@@ -84,7 +84,12 @@ export function getPreset(id: string): DevicePreset | null {
  * 用户设置偏好 → 使用用户偏好；未设置 → 第一个代码项
  */
 export function getDefaultDesktopPreset(userPreferredId?: string | null): DevicePreset {
-  return getDefault(PRESETS.filter((p) => p.platform === 'desktop'), userPreferredId) ?? PRESETS[0]
+  return (
+    getDefault(
+      PRESETS.filter((p) => p.platform === 'desktop'),
+      userPreferredId,
+    ) ?? PRESETS[0]
+  )
 }
 
 /**
@@ -92,7 +97,14 @@ export function getDefaultDesktopPreset(userPreferredId?: string | null): Device
  * 用户设置偏好 → 使用用户偏好；未设置 → 第一个移动端代码项
  */
 export function getDefaultMobilePreset(userPreferredId?: string | null): DevicePreset {
-  return getDefault(PRESETS.filter((p) => p.platform === 'mobile'), userPreferredId) ?? PRESETS.find((p) => p.platform === 'mobile') ?? PRESETS[0]
+  return (
+    getDefault(
+      PRESETS.filter((p) => p.platform === 'mobile'),
+      userPreferredId,
+    ) ??
+    PRESETS.find((p) => p.platform === 'mobile') ??
+    PRESETS[0]
+  )
 }
 
 /**
@@ -102,12 +114,8 @@ export function getDefaultMobilePreset(userPreferredId?: string | null): DeviceP
  */
 export function registerPresetsIPC(): void {
   const ipc = IPC_CHANNELS
-  ipcMain.handle(ipc.PRESETS_SAVE, (_e, preset: DevicePreset) =>
-    presetStore.save(preset),
-  )
-  ipcMain.handle(ipc.PRESETS_DELETE, (_e, id: string) =>
-    presetStore.delete(id),
-  )
+  ipcMain.handle(ipc.PRESETS_SAVE, (_e, preset: DevicePreset) => presetStore.save(preset))
+  ipcMain.handle(ipc.PRESETS_DELETE, (_e, id: string) => presetStore.delete(id))
   ipcMain.handle(ipc.PRESETS_UPDATE, (_e, id: string, patch: Partial<DevicePreset>) =>
     presetStore.update(id, patch),
   )

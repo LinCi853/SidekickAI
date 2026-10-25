@@ -3,20 +3,20 @@
    显示 favicon / 标题 / 静音指示 / 关闭按钮；固定标签仅 favicon 窄形态。
    ===================================================================== */
 
-import { memo } from 'react';
-import type { BrowserTabState } from '../../../lib/electron-api';
-import { extractDomainInitial } from '../utils/favicon-placeholder';
+import { memo } from 'react'
+import type { BrowserTabState } from '../../../lib/electron-api'
+import { extractDomainInitial } from '../utils/favicon-placeholder'
 
 interface BrowserTabItemProps {
-  tab: BrowserTabState;
-  active: boolean;
-  themeColor: string;
-  onClick: () => void;
-  onClose: (e: React.MouseEvent) => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
+  tab: BrowserTabState
+  active: boolean
+  themeColor: string
+  onClick: () => void
+  onClose: (e: React.MouseEvent) => void
+  onContextMenu: (e: React.MouseEvent) => void
+  onDragStart: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent) => void
 }
 
 function BrowserTabItemInner({
@@ -35,7 +35,9 @@ function BrowserTabItemInner({
     active ? 'active' : '',
     tab.pinned ? 'pinned' : '',
     tab.audible ? 'audible' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div
@@ -57,14 +59,26 @@ function BrowserTabItemInner({
       )}
       <span className="browser-tab-favicon" data-name="browser.tab-favicon">
         {tab.favicon ? (
-          <img src={tab.favicon} alt="" width={14} height={14} data-name="browser.tab-favicon-img" />
+          <img
+            src={tab.favicon}
+            alt=""
+            width={14}
+            height={14}
+            data-name="browser.tab-favicon-img"
+          />
         ) : (
-          <span className="browser-tab-favicon-placeholder" style={{ background: tab.themeColor || themeColor }} data-name="browser.tab-favicon-placeholder">
+          <span
+            className="browser-tab-favicon-placeholder"
+            style={{ background: tab.themeColor || themeColor }}
+            data-name="browser.tab-favicon-placeholder"
+          >
             {extractDomainInitial(tab.url) || (tab.title || '?').charAt(0).toUpperCase()}
           </span>
         )}
       </span>
-      <span className="browser-tab-title" data-name="browser.tab-title">{tab.title || '新标签'}</span>
+      <span className="browser-tab-title" data-name="browser.tab-title">
+        {tab.title || '新标签'}
+      </span>
       {/* 静音/正在播放指示器 */}
       {(tab.muted || tab.audible) && (
         <svg
@@ -95,14 +109,22 @@ function BrowserTabItemInner({
         className="browser-tab-close"
         onClick={onClose}
         title="关闭标签 (Ctrl+W)"
-       data-name="browser.tab-close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        data-name="browser.tab-close"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>
-  );
+  )
 }
 
-export const BrowserTabItem = memo(BrowserTabItemInner);
+export const BrowserTabItem = memo(BrowserTabItemInner)
