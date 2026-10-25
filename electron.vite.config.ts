@@ -96,6 +96,7 @@ export default defineConfig({
         '@lib': resolve(__dirname, 'src/lib'),
         '@store': resolve(__dirname, 'src/store'),
         '@styles': resolve(__dirname, 'src/styles'),
+        '@shared': resolve(__dirname, 'electron/shared'),
         // ── 构建噪音优化 ──────────────────────────────────
         // mermaid / katex 是 @excalidraw/excalidraw 的传递依赖，
         // 但源码从未 import mermaid（不使用 Mermaid→Excalidraw 转换功能）。

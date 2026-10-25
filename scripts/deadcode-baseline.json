@@ -76,10 +76,6 @@
       "name": "resolveUserAgent"
     },
     {
-      "file": "electron/presets/devices.ts",
-      "name": "PRESETS"
-    },
-    {
       "file": "electron/shared/background-policy.ts",
       "name": "BROWSER_WINDOW_RETIREMENT_SECONDS"
     },
@@ -94,6 +90,10 @@
     {
       "file": "electron/shared/ipc-utils.ts",
       "name": "requireSenderWindow"
+    },
+    {
+      "file": "electron/shared/presets/devices.ts",
+      "name": "PRESETS"
     },
     {
       "file": "electron/shared/window-size.ts",

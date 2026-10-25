@@ -6,7 +6,7 @@ import { useProfileStore } from '../../../store/useProfileStore'
 import { useThemeStore } from '../../../store/useThemeStore'
 import { safeReloadWebview, type WebviewElement } from '../../../lib/webview'
 import { focusInputInWebview } from '../../../hooks/useWebViewControl'
-import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 import {
   leaseWebviewLifecycle,
   matchesWebviewHotkeyTarget,

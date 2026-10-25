@@ -21,8 +21,8 @@ import {
   setProfileShortcut,
 } from '../../lib/electron-api'
 import type { AppSettings, BlockRule, DevicePreset } from '../../lib/electron-api'
-import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms'
-import { WIN_CHROME_UA } from '../../../electron/presets/devices'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
+import { WIN_CHROME_UA } from '@shared/presets/devices'
 import ProxySection from '../../components/SettingsPanel/sections/ProxySection'
 import type { ProxySettings } from '../../components/SettingsPanel/types'
 import { useProfileStore } from '../../store/useProfileStore'

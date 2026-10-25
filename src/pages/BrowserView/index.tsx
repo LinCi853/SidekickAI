@@ -11,7 +11,7 @@
    useBrowserWebview / useBrowserShortcuts 四个 hook，并渲染子组件。
    ===================================================================== */
 
-import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms.js'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 import TabsPanel from './TabBar/TabsPanel.js'
 import NavBar from './NavBar/NavBar.js'
 import BookmarksBar from './BookmarksBar/BookmarksBar.js'

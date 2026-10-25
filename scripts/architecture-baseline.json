@@ -303,57 +303,6 @@
       "kind": "value"
     }
   ],
-  "processCrossings": [
-    {
-      "from": "src/pages/BrowserView/BookmarksBar/BookmarkItem.tsx",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/BrowserSettingsTab.tsx",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/BrowserSettingsTab.tsx",
-      "to": "electron/presets/devices.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/BrowserWebviewTab.tsx",
-      "to": "electron/presets/devices.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/hooks/useWebviewDomReady.ts",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/hooks/useWebviewNavigation.ts",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/index.tsx",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/BrowserView/TabBar/TabSearchPanel.tsx",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/MainView/hooks/useWebviewHotkeyDispatch.ts",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    },
-    {
-      "from": "src/pages/MainView/index.tsx",
-      "to": "electron/presets/ai-platforms.ts",
-      "kind": "value"
-    }
-  ],
+  "processCrossings": [],
   "layerCrossings": []
 }

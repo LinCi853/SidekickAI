@@ -1,9 +1,9 @@
-// electron/presets/devices.ts — 设备预设字典
+// electron/shared/presets/devices.ts — 设备预设字典
 //
 // 内置 5 个常见设备配置，每个预设包含 UA + viewport + DPR + Client Hints 一致性配置。
 // 用户创建 Profile 时引用预设 id，避免手动填写易错的 UA 字符串。
 
-import type { DevicePreset } from '../shared/types.js'
+import type { DevicePreset } from '../types.js'
 
 /** iPhone 15 Pro / Safari 移动端 UA（单一数据源，供 devices.ts 预设与 ai-platforms.ts 共用） */
 export const IPHONE_UA =

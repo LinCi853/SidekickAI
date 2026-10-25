@@ -34,7 +34,7 @@ import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewCon
 import { useProfileStore } from '../../store/useProfileStore'
 import { useTabStore } from '../../store/useTabStore'
 import { useThemeStore } from '../../store/useThemeStore'
-import { AI_PLATFORMS } from '../../../electron/presets/ai-platforms'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 import './styles.css'
 import { WebviewTab } from './WebviewTab'
 import DeferredTab from '../../components/DeferredTab'

@@ -11,7 +11,7 @@ import { safeLoadURLWebview, type WebviewElement } from '../../../lib/webview.js
 import { matchCloudPcSite } from '../cloud-pc-sites.js'
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
 import { leaseWebviewLifecycle, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle'
-import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms.js'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 import { GET_TITLE_SCRIPT, buildImageUrlToDataUrlScript } from '../webview-scripts.js'
 
 export interface UseWebviewNavigationParams {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Profile } from '../shared/types'
+import type { Profile } from '../types'
 import { AI_PLATFORMS } from './ai-platforms'
 import { hasQianwenProfile, upgradeAIPlatformProfile } from './platform-profile-upgrade'
 

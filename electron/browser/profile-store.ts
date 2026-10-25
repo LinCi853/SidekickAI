@@ -11,8 +11,11 @@ import { IPC_CHANNELS } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 import { generateUniqueName } from '../shared/naming.js'
 import { getDefaultProfileParams, createDefaultProfileParams } from '../store/default-config.js'
-import { AI_PLATFORMS } from '../presets/ai-platforms.js'
-import { hasQianwenProfile, upgradeAIPlatformProfile } from '../presets/platform-profile-upgrade.js'
+import { AI_PLATFORMS } from '../shared/presets/ai-platforms.js'
+import {
+  hasQianwenProfile,
+  upgradeAIPlatformProfile,
+} from '../shared/presets/platform-profile-upgrade.js'
 import { getPreset } from './preset-store.js'
 import { profileRepository as store, readProfile } from './profile-repository.js'
 

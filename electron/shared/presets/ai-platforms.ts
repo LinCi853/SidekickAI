@@ -1,9 +1,9 @@
-// electron/presets/ai-platforms.ts — 内置 AI 平台列表
+// electron/shared/presets/ai-platforms.ts — 内置 AI 平台列表
 //
 // AI 窗口核心功能：聚合 9 个内置 AI 平台网页版。
 // 每个 AI 平台可作为特殊 Profile 类型创建（isAIPlatform=true）。
 
-import type { AIPlatform } from '../shared/types.js'
+import type { AIPlatform } from '../types.js'
 import { IPHONE_UA, IPHONE_VIEWPORT } from './devices.js'
 
 const semanticEdit = (rootSelector: string) => ({

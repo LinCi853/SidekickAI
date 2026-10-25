@@ -12,7 +12,7 @@ import { focusBrowserWindow } from '../../../lib/electron-api'
 import { useRecentClosedStore } from '../RecentClosedStore'
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore'
 import { useProfileStore } from '../../../store/useProfileStore'
-import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 import { extractDomainInitial } from '../utils/favicon-placeholder'
 import { VolumeIcon, PinIcon, RotateIcon } from '@/components/icons'
 

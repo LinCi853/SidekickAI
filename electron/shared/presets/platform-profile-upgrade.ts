@@ -1,4 +1,4 @@
-import type { Profile } from '../shared/types.js'
+import type { Profile } from '../types.js'
 import { AI_PLATFORMS } from './ai-platforms.js'
 
 const previousColors: Record<string, string> = {

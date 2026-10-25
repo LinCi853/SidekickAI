@@ -6,7 +6,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { BrowserTabState, Profile } from '../../lib/electron-api'
 import { sanitizeUrl, type WebviewElement } from '../../lib/webview.js'
-import { WIN_CHROME_UA } from '../../../electron/presets/devices.js'
+import { WIN_CHROME_UA } from '@shared/presets/devices'
 import WebviewContextMenu from './WebviewContextMenu.js'
 import { useWebviewDomReady } from './hooks/useWebviewDomReady.js'
 import { useWebviewNavigation } from './hooks/useWebviewNavigation.js'

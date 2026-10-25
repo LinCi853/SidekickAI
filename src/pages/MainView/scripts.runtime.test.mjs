@@ -32,7 +32,7 @@ before(async () => {
     stdin: {
       contents:
         bytes.toString() +
-        '\nexport { AI_PLATFORMS } from "../../../electron/presets/ai-platforms.ts"; export { injectTextToWebview, triggerSendInWebview } from "../../hooks/useWebViewControl.ts"',
+        '\nexport { AI_PLATFORMS } from "../../../electron/shared/presets/ai-platforms.ts"; export { injectTextToWebview, triggerSendInWebview } from "../../hooks/useWebViewControl.ts"',
       loader: 'ts',
       resolveDir: path.dirname(source),
     },

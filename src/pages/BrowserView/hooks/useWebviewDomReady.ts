@@ -13,7 +13,7 @@ import { leaseWebviewLifecycle, type WebviewLifecycleLease } from '../../../lib/
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
 import { useCloudPcStore } from '../../../store/useCloudPcStore.js'
 import { useGamepadStore } from '../../../store/useGamepadStore.js'
-import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms.js'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 import { extractThemeColor } from '../utils/favicon-placeholder.js'
 import {
   GET_TITLE_SCRIPT,

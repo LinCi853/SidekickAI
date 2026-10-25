@@ -6,7 +6,7 @@
 import { memo, useMemo } from 'react'
 import type { Bookmark } from '../../../lib/electron-api'
 import { useProfileStore } from '../../../store/useProfileStore'
-import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms'
+import { AI_PLATFORMS } from '@shared/presets/ai-platforms'
 
 interface BookmarkItemProps {
   bookmark: Bookmark

@@ -153,7 +153,7 @@ async function detachProfileToBrowserWindowWithin(
   const profile = profileStore.get(profileId)
   const aiPlatformId = profile?.aiPlatformId
   const platformName = profile?.aiPlatformId
-    ? (await import('../presets/ai-platforms.js')).AI_PLATFORMS.find(
+    ? (await import('../shared/presets/ai-platforms.js')).AI_PLATFORMS.find(
         (p) => p.id === profile.aiPlatformId,
       )?.name
     : undefined

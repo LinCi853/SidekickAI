@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import { IPC_CHANNELS, type AIPlatform, type ChatStreamChunk } from '../shared/types.js'
-import { AI_PLATFORMS } from '../presets/ai-platforms.js'
+import { AI_PLATFORMS } from '../shared/presets/ai-platforms.js'
 
 export const chatApi = {
   // 对话持久化（SQLite）

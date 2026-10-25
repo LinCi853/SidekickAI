@@ -14,8 +14,8 @@
 //   3. 如需便捷路由函数，在对应 Store 中添加
 
 import type { DevicePreset, PromptTemplate, Profile, FingerprintConfig } from '../shared/types.js'
-import { AI_PLATFORMS } from '../presets/ai-platforms.js'
-import { IPHONE_VIEWPORT } from '../presets/devices.js'
+import { AI_PLATFORMS } from '../shared/presets/ai-platforms.js'
+import { IPHONE_VIEWPORT } from '../shared/presets/devices.js'
 
 // =============================================================================
 // 路由器核心
@@ -261,7 +261,7 @@ export const PROMPTS: Array<Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt
 // AI Platforms 导出（单一数据源）
 // =============================================================================
 
-/** 内置 AI 平台列表（从 presets/ai-platforms.ts 重导出） */
+/** 内置 AI 平台列表（从 shared/presets/ai-platforms.ts 重导出） */
 export { AI_PLATFORMS }
 
 // =============================================================================
@@ -339,7 +339,7 @@ export function getDefaultProfileParams(): DefaultProfileParams[] {
 // Profile 默认值（创建新 Profile 时使用）
 // =============================================================================
 
-/** Windows Chrome 125 默认 UA（与 presets/devices.ts 中 win-chrome-125 预设一致） */
+/** Windows Chrome 125 默认 UA（与 shared/presets/devices.ts 中 win-chrome-125 预设一致） */
 const WINDOWS_CHROME_125_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 

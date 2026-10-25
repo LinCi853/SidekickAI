@@ -1,6 +1,13 @@
+import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    // 与 electron.vite.config.ts / tsconfig paths 保持一致（渲染层测试会从 src/ 导入共享常量）
+    alias: {
+      '@shared': resolve(__dirname, 'electron/shared'),
+    },
+  },
   test: {
     // packages/** 的备份核心测试由 `npm run test:backup` 单独跑（`--root packages/backup-core`）：
     // 它们依赖 better-sqlite3 原生模块，而 CI 用 `npm ci --ignore-scripts` 不编译原生模块，
