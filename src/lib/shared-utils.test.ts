@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { findProfilesByPlatform, findProfileByPlatform, findAiAppProfiles } from './shared-utils.js'
 
 // Note: isTypingTarget requires HTMLElement which is only available in browser environment

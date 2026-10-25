@@ -31,6 +31,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "lint:check": "biome lint .",
     "clean": "npm run clean:build && npm run clean:temp",
     "clean:budget": "node scripts/clean-budget.cjs && node scripts/clean-temp.cjs",
     "clean:temp": "node scripts/clean-temp.cjs",
@@ -38,7 +39,7 @@
     "product:check": "node packages/product-contract/sync.cjs",
     "product:sync": "node packages/product-contract/sync.cjs --apply",
     "shared:check": "node scripts/shared-source.cjs",
-    "prebuild": "npm run product:check && npm run shared:check && npm run architecture:check",
+    "prebuild": "npm run product:check && npm run shared:check && npm run format:check && npm run lint:check && npm run architecture:check",
     "workspace:menu": "node scripts/workspace-menu.cjs",
     "test:workspace-menu": "node --test scripts/workspace-menu.test.cjs",
     "test:distribution": "node --test scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs",
@@ -58,7 +59,7 @@
     "versions:check": "node scripts/sync-versions.cjs --check",
     "test:tooling": "node --test scripts/workspace-menu.test.cjs scripts/shared-source.test.cjs scripts/sync-versions.test.cjs scripts/product-version.test.cjs scripts/local-build-config.test.cjs scripts/incremental-build.test.cjs scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs scripts/clean-temp.test.cjs",
     "test:backup": "vitest run --root packages/backup-core",
-    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test && npm run test:backup"
+    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run format:check && npm run lint:check && npm run architecture:check && npm run typecheck && npm run test:tooling && npm test && npm run test:backup"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

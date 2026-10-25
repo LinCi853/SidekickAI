@@ -51,7 +51,7 @@ export default function ProxySection({
   const setProxyPassword = (v: string) => onChange({ proxyPassword: v })
   const setProxyBypass = (v: string) => onChange({ proxyBypass: v })
   const setProxyFallbackEnabled = (v: boolean) => onChange({ proxyFallbackEnabled: v })
-  const setProxyFallbackMode = (v: 'direct' | 'system') => onChange({ proxyFallbackMode: v })
+  const _setProxyFallbackMode = (v: 'direct' | 'system') => onChange({ proxyFallbackMode: v })
 
   /** 持久化 patch + 即时生效（按 scope 分发） */
   const persist = async (patch: Partial<ProxySettings>) => {

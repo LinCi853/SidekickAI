@@ -115,7 +115,7 @@ export default function RecordIndicator() {
     if (audioContextRef.current) {
       try {
         void audioContextRef.current.close()
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       audioContextRef.current = null

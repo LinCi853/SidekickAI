@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
-import Popover, { PopoverItem, PopoverDivider } from '../../components/ui/Popover'
+import { type MutableRefObject } from 'react'
+import Popover, { PopoverItem } from '../../components/ui/Popover'
 import { GearIcon } from '../../components/icons'
 import { useModuleStore } from '../../store/useModuleStore'
-import type { WebviewElement } from '../../lib/webview'
 
 /* =====================================================================
    TabContextMenu —— 标签右键菜单（地址编辑 / 页面操作 / 首页设置 / 标签管理）
@@ -29,7 +28,6 @@ export interface TabContextMenuActions {
 export interface TabContextMenuProps {
   position: { x: number; y: number }
   tabId: string
-  homeUrl: string
   urlDraft: string
   editingTabUrl: boolean
   urlInputRef: MutableRefObject<HTMLInputElement | null>
@@ -40,7 +38,6 @@ export interface TabContextMenuProps {
 export default function TabContextMenu({
   position,
   tabId,
-  homeUrl,
   urlDraft,
   editingTabUrl,
   urlInputRef,

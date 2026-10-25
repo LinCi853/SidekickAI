@@ -4,7 +4,6 @@
    页面徽标与非打开态的 aria 约定。
    ===================================================================== */
 
-import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 

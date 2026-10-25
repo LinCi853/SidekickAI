@@ -420,7 +420,7 @@ export default function ProviderSection({
   }
 
   // 主模型 input 失焦：若值与某个备选重复，则从备选移除
-  const handleModelInputBlur = () => {
+  const _handleModelInputBlur = () => {
     if (!editing) return
     if (editing.model && editing.alternativeModels?.includes(editing.model)) {
       updateField(

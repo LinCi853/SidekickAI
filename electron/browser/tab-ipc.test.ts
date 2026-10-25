@@ -12,7 +12,7 @@ const runtime = vi.hoisted(() => {
       tabs: [{ id: 'tab-1', profileId: 'profile-1', detachedWindowId: 'browser-1' }],
     })),
     fromWebContents: vi.fn((): any => null),
-    isBackgroundClose: vi.fn((win: unknown): boolean => false),
+    isBackgroundClose: vi.fn((_win: unknown): boolean => false),
     mainWindow: {
       isDestroyed: () => false,
       isMinimized: vi.fn(() => false),

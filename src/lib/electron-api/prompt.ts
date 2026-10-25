@@ -84,5 +84,5 @@ export function onPromptInjectResult(
 /** 回传注入结果到提示词库窗口（主窗口渲染 → 主进程 → 提示词库窗口渲染，供其显示 toast） */
 export function sendPromptInjectResult(result: { success: boolean; platformName?: string }): void {
   const api = requireElectron()
-  return api.sendPromptInjectResult(result)
+  api.sendPromptInjectResult(result)
 }

@@ -11,7 +11,6 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 // 首屏关键组件：同步导入，避免 CSS 异步加载导致布局紊乱
 import MainView from './pages/MainView'
-import Button from './components/ui/Button'
 import { useProfileStore } from './store/useProfileStore'
 import { useTabStore } from './store/useTabStore'
 import { useWindowStore } from './store/useWindowStore'
@@ -34,12 +33,10 @@ import {
   MAIN_WINDOW_MIN_HEIGHT,
   CHAT_WINDOW_MIN_HEIGHT,
   ADVANCED_PANEL_MIN_HEIGHT,
-  calculateOxyMainWindowMinWidth,
   calculateOxyMainWindowMinWidthByScale,
   calculateOxyChatWindowMinWidthByScale,
   calculateOxyAdvancedPanelMinWidthByScale,
   type UiScale,
-  type OxyScale,
 } from '../electron/shared/window-size'
 import { useUiVersionStore } from './store/useUiVersionStore'
 import { useThemeStore } from './store/useThemeStore'

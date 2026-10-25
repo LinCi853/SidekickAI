@@ -309,7 +309,7 @@ function transferPlan(
         validate(item)
         accepted.push(item)
         report.imported.push({ category: key, id })
-      } catch (error) {
+      } catch (_error) {
         const reason =
           key === 'providers' &&
           value &&

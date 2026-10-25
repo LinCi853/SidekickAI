@@ -1,6 +1,6 @@
 // Tracks native targets and their module, profile and document ownership.
 
-import type { WebContents, BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron'
 
 /** 目标类型 */
 export type TargetType = 'window' | 'webview' | 'tab' | 'profile' | 'document'

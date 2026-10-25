@@ -22,7 +22,6 @@ import type {
   ExcalidrawImperativeAPI,
   AppState,
   BinaryFiles,
-  BinaryFileData,
   DataURL,
 } from '@excalidraw/excalidraw/types'
 import type {

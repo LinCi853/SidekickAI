@@ -4,7 +4,7 @@
 // 每个 AI 平台可作为特殊 Profile 类型创建（isAIPlatform=true）。
 
 import type { AIPlatform } from '../shared/types.js'
-import { IPHONE_UA, IPHONE_VIEWPORT, WIN_CHROME_UA } from './devices.js'
+import { IPHONE_UA, IPHONE_VIEWPORT } from './devices.js'
 
 const semanticEdit = (rootSelector: string) => ({
   rootSelector,

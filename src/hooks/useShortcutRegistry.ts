@@ -49,7 +49,7 @@ export interface ShortcutEntry {
 }
 
 /** 修饰键名 → 是否为修饰键 */
-const MODIFIER_NAMES = new Set([
+const _MODIFIER_NAMES = new Set([
   'CTRL',
   'CONTROL',
   'ALT',

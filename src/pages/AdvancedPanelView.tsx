@@ -117,8 +117,7 @@ export default function AdvancedPanelView() {
       .filter(([, entry]) => enabledModuleIds.includes(entry.moduleId))
       .map(([key]) => key)
   }, [tabRegistry, enabledModuleIds, modulesInitialized])
-  const { isMaximized, isPinned, setIsMaximized, setIsPinned, handleMaximize } =
-    useWindowMaximizedAndPinned()
+  const { isMaximized, isPinned, setIsPinned, handleMaximize } = useWindowMaximizedAndPinned()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const initialProviderId = useMemo(() => readInitialProviderId(), [])
   useEffect(() => {

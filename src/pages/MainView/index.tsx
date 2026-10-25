@@ -80,10 +80,8 @@ export default function MainView() {
     updateTabHomeUrl,
     moveTab,
     detachTab,
-    setAlwaysOnTop,
     setMaximized,
     toggleBottomBar,
-    setBottomBarHeight,
     detachedProfiles,
     addDetachedProfile,
     removeDetachedProfile,
@@ -155,7 +153,8 @@ export default function MainView() {
     [profiles],
   )
 
-  const { injectAndSendVoice } = useVoiceInjection(activeTab, getProfile, platforms)
+  // 后台语音注入监听在 hook 内部注册；返回的注入函数此处不再直接使用
+  useVoiceInjection(activeTab, getProfile, platforms)
   const { previewState, handleInjectPrompt, handleConfirmInjection, handleCancelInjection } =
     usePromptInjection(activeTab, getProfile, platforms)
 
@@ -174,7 +173,7 @@ export default function MainView() {
   const { isOxy } = useOxyTheme(activeTabId, tabs, profiles, platforms)
 
   // Remaining inline state
-  const [isBottomHovered, setIsBottomHovered] = useState(false)
+  const [_isBottomHovered, _setIsBottomHovered] = useState(false)
 
   // Keyboard shortcuts
   useHotkeys({})
@@ -308,7 +307,7 @@ export default function MainView() {
     useTabStore.getState().toggleMaximize()
   }, [])
 
-  const handleCloseActiveTab = useCallback(() => {
+  const _handleCloseActiveTab = useCallback(() => {
     if (activeTabId) void closeTab(activeTabId)
   }, [activeTabId, closeTab])
 
@@ -429,7 +428,6 @@ export default function MainView() {
     urlDraft,
     editingTabUrl,
     urlInputRef,
-    contextMenuHomeUrl,
     contextMenuIsAiPlatform,
     closeContextMenu,
     refreshTab,
@@ -620,7 +618,6 @@ export default function MainView() {
           <TabContextMenu
             position={contextMenuPosition}
             tabId={contextMenuTabId}
-            homeUrl={contextMenuHomeUrl}
             urlDraft={urlDraft}
             editingTabUrl={editingTabUrl}
             urlInputRef={urlInputRef}

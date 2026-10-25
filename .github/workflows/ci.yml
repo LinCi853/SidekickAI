@@ -32,6 +32,9 @@ jobs:
       - name: 安装依赖
         run: npm ci --ignore-scripts
 
+      - name: 格式与 lint 检查
+        run: npm run format:check && npm run lint:check
+
       - name: 类型检查
         run: npm run typecheck
 

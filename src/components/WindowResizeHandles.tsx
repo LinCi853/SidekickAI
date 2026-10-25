@@ -141,7 +141,7 @@ export default function WindowResizeHandles({
   fullscreenMode = 'block',
 }: WindowResizeHandlesProps) {
   // 仅用于触发光标样式重渲染；拖拽逻辑全部用 ref，避免闭包陈旧
-  const [activeEdge, setActiveEdge] = useState<Edge | null>(null)
+  const [_activeEdge, setActiveEdge] = useState<Edge | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
 

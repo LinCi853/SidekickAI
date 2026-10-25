@@ -35,7 +35,7 @@ const GROUP_LABEL: Record<GroupKey, string> = {
 
 /** 计算时间分组：以本地日期边界为准，本周 = 今天往前到本周一 */
 function resolveGroup(ts: number, now: Date): GroupKey {
-  const d = new Date(ts)
+  const _d = new Date(ts)
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const dayMs = 24 * 60 * 60 * 1000
   if (ts >= startOfToday) return 'today'

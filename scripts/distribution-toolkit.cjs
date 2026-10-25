@@ -365,7 +365,7 @@ async function download(reference, destination, options = {}) {
   }
   let written = 0
   const limit = new Transform({
-    transform(chunk, encoding, callback) {
+    transform(chunk, _encoding, callback) {
       written += chunk.length
       callback(
         written > reference.archive.size

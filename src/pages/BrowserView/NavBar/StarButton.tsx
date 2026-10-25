@@ -3,7 +3,7 @@
    已收藏=实心星（主题色），未收藏=空心星。点击 toggle 添加/移除书签。
    ===================================================================== */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { Profile } from '../../../lib/electron-api'
 import { useBookmarkStore } from '../../../store/useBookmarkStore'
 

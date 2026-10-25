@@ -33,7 +33,7 @@ import { useBrowserWebview } from './hooks/useBrowserWebview.js'
 import { useBrowserShortcuts } from './hooks/useBrowserShortcuts.js'
 import { useTabProcessPriority } from '../../hooks/useTabProcessPriority'
 import { useBrowserTabStore } from '../../store/useBrowserTabStore'
-import { useEffect, useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import './styles.css'
 import '../HistoryDownloadView/styles.css'
 
@@ -263,7 +263,6 @@ export default function BrowserView() {
           themeColor={themeColor}
           tabs={tabs}
           activeTabId={activeTabId}
-          onOpenSettings={navigation.handleOpenSettings}
         />
         <div className="browser-bar-divider" data-name="browser.bar-divider-1" />
         {/* 第二栏：导航与功能栏 */}

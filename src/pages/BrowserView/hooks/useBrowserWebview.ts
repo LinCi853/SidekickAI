@@ -285,7 +285,7 @@ export function useBrowserWebview({
       /* webview 未 attach */
     }
     if (wcId === null) return
-    const url = webview.getURL() || ''
+    const _url = webview.getURL() || ''
     const tab = useBrowserTabStore.getState().tabs.find((t) => t.id === activeTabId)
     // 从标题或 URL 推导默认文件名
     const title = (tab?.title || '')

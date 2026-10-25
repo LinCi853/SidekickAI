@@ -243,13 +243,9 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     closeContextMenu()
   }, [contextMenuTabId, urlDraft, tabs, updateTabUrl, closeContextMenu])
 
-  // 右键菜单"回到首页"所需：当前标签 profile 的 AI 平台 URL
   const contextMenuTab = contextMenuTabId
     ? (tabs.find((t) => t.id === contextMenuTabId) ?? null)
     : null
-  const contextMenuHomeUrl = contextMenuTab
-    ? (getProfile(contextMenuTab.profileId)?.aiPlatformUrl ?? '')
-    : ''
   const contextMenuIsAiPlatform = contextMenuTab
     ? (getProfile(contextMenuTab.profileId)?.isAIPlatform ?? false)
     : false
@@ -262,7 +258,6 @@ export function useTabContextMenu(params: TabContextMenuParams) {
     editingTabUrl,
     urlInputRef,
     // 派生
-    contextMenuHomeUrl,
     contextMenuIsAiPlatform,
     // 处理函数
     closeContextMenu,

@@ -202,6 +202,7 @@ const isFixtureRoot = (candidate: string) =>
   path.basename(candidate).startsWith('asset-ipc-test-')
 afterEach(async () => {
   const root = state.root
+  let unsafePath: Error | null = null
   try {
     stopAssetRetention()
     vi.useRealTimers()
@@ -213,10 +214,12 @@ afterEach(async () => {
   } finally {
     // 先清理再断言：早期实现把路径安全断言放在 rm 之前，
     // 用例内抛错时整轮清理被跳过，build/ 下会堆积夹具目录。
+    // 断言错误不直接在 finally 抛出，避免覆盖用例本身的失败原因。
     const safe = isFixtureRoot(root)
     if (safe) await rm(root, { recursive: true, force: true })
-    if (!safe) throw new Error('Unexpected fixture path')
+    else unsafePath = new Error('Unexpected fixture path')
   }
+  if (unsafePath) throw unsafePath
 })
 
 describe('asset original admission and recovery', () => {

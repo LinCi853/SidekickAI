@@ -3,7 +3,6 @@ import type { LogExportOptions, LogExportResult } from '../log-export.js'
 // settings.api.ts — AppSettings / Onboarding / BlockRules / Fingerprint / PlatformCapabilities 接口
 
 import type { BlockRule } from '../block-rules.types.js'
-import type { PromptTemplate } from '../chat.types.js'
 import type { PlatformCapabilities } from '../../utils/platform-info.js'
 
 // re-export 供渲染进程通过 shared/types 桶导出使用

@@ -176,7 +176,7 @@ test('captures MiMo UltraSpeed code without language labels, hidden copies or du
   const answer = (await f.parse()).messages[1]
   assert.equal(answer.content, `Answer paragraph.\n${code}\nLast paragraph.`)
   assert(answer.markdownContent.includes('```html\n' + code + '\n```'))
-  assert.match(answer.markdownContent, /^Answer paragraph\.\n{2,}[^]*\n{2,}Last paragraph\.$/)
+  assert.match(answer.markdownContent, /^Answer paragraph\.\n{2,}[\s\S]*\n{2,}Last paragraph\.$/)
   assert.equal(answer.markdownContent.match(/```html/g).length, 1)
 })
 

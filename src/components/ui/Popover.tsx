@@ -27,8 +27,6 @@ export interface PopoverConfig {
   closeOnEsc?: boolean
   /** 是否启用点击外部关闭（默认 true） */
   closeOnOutsideClick?: boolean
-  /** 是否使用 Portal 渲染到 body（默认 false） */
-  usePortal?: boolean
   /** z-index（默认 200） */
   zIndex?: number
   /** 背景样式：'solid' | 'glass'（默认 'solid'） */
@@ -199,7 +197,6 @@ export default function Popover({
     closeOnOverlayClick = true,
     closeOnEsc = true,
     closeOnOutsideClick = true,
-    usePortal = false,
     zIndex = 200,
     background = 'solid',
   } = config

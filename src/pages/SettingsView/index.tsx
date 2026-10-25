@@ -121,7 +121,7 @@ export default function SettingsView() {
   const hotkeys = useHotkeys(true)
   const presetsState = usePresets(true)
 
-  const [providerEditing, setProviderEditing] = useState(false)
+  const [_providerEditing, setProviderEditing] = useState(false)
 
   // ===== AI 应用编辑器遮罩状态 =====
   const [editorOpen, setEditorOpen] = useState(false)

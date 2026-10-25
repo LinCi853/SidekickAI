@@ -1,12 +1,7 @@
 import { updateAppSettings } from '../../../lib/electron-api'
 import { useThemeStore, type ThemeMode } from '../../../store/useThemeStore'
 import { useUiVersionStore } from '../../../store/useUiVersionStore'
-import {
-  detectUiScale,
-  persistUserUiScale,
-  readUserUiScale,
-  type UiScale,
-} from '../../../lib/oxy-design-system'
+import { persistUserUiScale, readUserUiScale, type UiScale } from '../../../lib/oxy-design-system'
 import SegmentedControl from '../../ui/SegmentedControl'
 import Toggle from '../../ui/Toggle'
 import { SectionTitle, FormRow } from '../../ui'

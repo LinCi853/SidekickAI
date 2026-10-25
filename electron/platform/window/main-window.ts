@@ -4,7 +4,6 @@
 // 函数体与原文件逐字一致，仅 import 来源调整为从 ./helpers.js 与上级模块。
 
 import { app, BrowserWindow, screen } from 'electron'
-import path from 'path'
 import { windowStore, MAIN_WINDOW_ID } from '../../store/window-store.js'
 import { isImportingData } from '../../store/import-guard.js'
 import { windowState } from './window-state.js'
@@ -13,7 +12,6 @@ import { getAppSettings } from '../../store/app-settings-store.js'
 import { forgetWindow as forgetPriorityWindow } from '../../diagnostics/tab-process-priority.js'
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js'
 import {
-  __dirname,
   getPreloadPath,
   createDefaultWebPreferences,
   attachWebviewPopupInterceptor,

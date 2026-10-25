@@ -61,8 +61,6 @@ export interface ComboboxProps {
   loadingText?: string
   /** data-name 前缀（用于测试定位） */
   dataName?: string
-  /** 输入框的右键菜单关闭时是否自动聚焦输入框 */
-  autoFocusInput?: boolean
   /**
    * 输入框是否只读（默认 false）。
    *
@@ -159,7 +157,6 @@ export default function Combobox({
   loading = false,
   loadingText = '加载中…',
   dataName = 'combobox',
-  autoFocusInput = false,
   inputReadOnly = false,
   panelMinWidth,
   panelClassName,

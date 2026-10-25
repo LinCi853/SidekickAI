@@ -8,7 +8,6 @@
 
 import { useEffect, type MutableRefObject } from 'react'
 import { useBrowserKeyboard } from '../useBrowserKeyboard.js'
-import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
 import { onToggleDevTools, maximizeToggleWindow } from '../../../lib/electron-api/index.js'
 
 interface UseBrowserShortcutsParams {

@@ -25,7 +25,7 @@ import type {
   AppSettings,
 } from './settings.api.js'
 import type { NotesAPI, WhiteboardAPI } from './notes-whiteboard.api.js'
-import type { BrowserAPI, BookmarkAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
+import type { BrowserAPI, NavHistoryAPI, HotkeyAPI } from './browser.api.js'
 import type { ModuleInfo, ModuleStateChangedPayload } from '../module-manifest.types.js'
 import type { PromptTemplate } from '../chat.types.js'
 import type { AiAssetsAPI } from '../ai-assets.types.js'

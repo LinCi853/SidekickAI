@@ -99,7 +99,7 @@ export default function ChatView({ windowId }: { windowId?: string }) {
   const [input, setInput] = useState('')
   const { isMaximized, isPinned, handleMaximize, handleTogglePin } = useWindowMaximizedAndPinned()
   const [usageStats, setUsageStats] = useState<AssetTextUsage | null>(null)
-  const [isNarrow, setIsNarrow] = useState(
+  const [isNarrow, _setIsNarrow] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 600 : false,
   )
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)

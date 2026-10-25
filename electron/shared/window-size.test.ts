@@ -3,7 +3,6 @@ import {
   estimateTextWidth,
   calculateMainWindowMinWidth,
   UI_SCALE_CONFIG,
-  type UiScale,
   type TopBarButtonGroup,
 } from './window-size.js'
 

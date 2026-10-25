@@ -9,7 +9,7 @@ import {
 } from '../packages/backup-core/transaction.js'
 import { parseBackupManifest } from '../packages/backup-core/format.js'
 import { readFileSync } from 'node:fs'
-import { app, BrowserWindow, Menu, ipcMain, protocol, screen, session, dialog } from 'electron'
+import { app, BrowserWindow, Menu, ipcMain, screen, session, dialog } from 'electron'
 import { allowWhiteboardClipboard } from './assets/whiteboard-clipboard.js'
 import { installApplicationPermissions } from './platform/security/session-permissions.js'
 import { installRendererContentSecurity } from './platform/security/renderer-csp.js'
@@ -41,7 +41,6 @@ import { registerNavHistoryIpc } from './browser/nav-history-ipc.js'
 import { WindowManager } from './platform/window/containers/profile-window.js'
 import { FingerprintEngine } from './browser/fingerprint.js'
 import { HotkeyManager } from './platform/hotkey/manager.js'
-import { SttEngine } from './modules/plugins/voice/stt/engine.js'
 import { IPC_CHANNELS } from './shared/types.js'
 import { registerWindowControlIpc } from './ipc/window-control-ipc.js'
 import { installWebviewFocusTracking } from './browser/webview-focus.js'
@@ -59,10 +58,7 @@ import { registerPlatformInfoIPC } from './utils/platform-info.js'
 import { registerRuntimeProcessesIPC } from './diagnostics/runtime-processes.js'
 import { registerTabHibernationIPC } from './browser/tab-hibernate-store.js'
 import { createResidentMemoryMonitor } from './diagnostics/resident-memory-monitor.js'
-import {
-  registerTabProcessPriorityIPC,
-  forgetWindow as forgetPriorityWindow,
-} from './diagnostics/tab-process-priority.js'
+import { registerTabProcessPriorityIPC } from './diagnostics/tab-process-priority.js'
 import { EffectScope } from './modules/effect-scope.js'
 import {
   attachDownloadHandlersForAllProfiles,
@@ -78,10 +74,8 @@ import {
   createBrowserWindow,
   createChatWindow,
   showHistoryWindow,
-  showPromptWindow,
   showAiAppEditorWindow,
   showSettingsWindow,
-  showHistoryDownloadWindow,
   openAdvancedPanelWindow,
   toggleAdvancedPanelWindow,
   showOnboardingWindow,
@@ -123,8 +117,8 @@ import {
   isTrustedRendererUrl,
 } from './platform/security/trusted-renderer.js'
 import { installBrowserDomainPorts } from './browser/ports.js'
-const DEFAULT_MAIN_WINDOW_WIDTH = 420
-const DEFAULT_MAIN_WINDOW_HEIGHT = 820
+const _DEFAULT_MAIN_WINDOW_WIDTH = 420
+const _DEFAULT_MAIN_WINDOW_HEIGHT = 820
 /** 应用自身的特权 scheme：will-navigate 守卫放行这些内部协议的页面导航 */
 const INTERNAL_NAVIGATION_SCHEMES = new Set([
   'sidekickai',

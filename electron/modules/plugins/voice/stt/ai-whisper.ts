@@ -14,7 +14,7 @@ export async function recognizeWithOpenAiWhisper(
   pcm: Float32Array,
   provider: CustomAIProvider,
   endpoint: string,
-  language?: string,
+  _language?: string,
 ): Promise<string> {
   const wavBuf = encodeWav(pcm, SAMPLE_RATE)
   const model = provider.sttModel || 'whisper-1'

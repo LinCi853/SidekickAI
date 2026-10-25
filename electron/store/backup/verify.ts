@@ -1,4 +1,3 @@
-import * as fs from 'fs'
 import { sha256FileSync, exportTreeDigest } from '../../../packages/backup-core/files.js'
 import { selectedCategoryKeys, collectEntryCategories } from './collect.js'
 import type { ExportCategory, ExportOptions, SelectedExportEntry } from './types.js'

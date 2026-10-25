@@ -29,7 +29,6 @@ import {
   createDefaultWebPreferences,
   attachDetachedWindowLifecycle,
   safeLogWindowTrace,
-  setupBoundsTracking,
 } from '../platform/window/helpers.js'
 import { attachWebviewAntiDetection } from './webview-anti-detection.js'
 import { isCloudPc, exitCloudPc } from '../utils/cloud-pc.js'
@@ -38,7 +37,6 @@ import { buildWindowConfig } from '../platform/window/window-config-builder.js'
 import { AI_PLATFORMS } from '../presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'
 import { registerBrowserDownloads } from './browser-downloads.js'
-import type { BrowserTabState, BrowserWindowState } from '../shared/browser.types.js'
 
 /** app 是否正在退出（云电脑模式 close 保护的放行条件） */
 let appQuitting = false

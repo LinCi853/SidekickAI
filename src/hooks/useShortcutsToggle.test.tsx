@@ -1,4 +1,3 @@
-import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it, vi } from 'vitest'
 import type { ShortcutEntry } from './useShortcutRegistry'

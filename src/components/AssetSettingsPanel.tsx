@@ -202,7 +202,7 @@ export default function AssetSettingsPanel(_props: Record<string, never> = {}) {
       <fieldset>
         <legend>AI资产窗口内快捷键</legend>
         {(Object.keys(ASSET_SHORTCUT_LABELS) as Array<keyof typeof drafts>).map(
-          (key, index, keys) => (
+          (key, _index, keys) => (
             <label key={key}>
               {ASSET_SHORTCUT_LABELS[key]}
               <HotkeyRecorder

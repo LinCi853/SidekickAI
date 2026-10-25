@@ -159,7 +159,7 @@ export class ChatStore {
         db.exec(
           'CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_content_hash ON messages(conversation_id, content_hash)',
         )
-      } catch (e) {
+      } catch (_e) {
         // UNIQUE constraint failed：表中存在重复数据，去重后重试
         db.exec(`
           DELETE FROM messages WHERE id NOT IN (

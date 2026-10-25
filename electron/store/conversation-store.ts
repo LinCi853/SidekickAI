@@ -439,7 +439,7 @@ export class ConversationStore {
     data: string,
     sourceId: string,
   ): Conversation {
-    const now = Date.now()
+    const _now = Date.now()
 
     if (format === 'json') {
       // 本软件 JSON 格式（与 exportConversation('json') 对应）

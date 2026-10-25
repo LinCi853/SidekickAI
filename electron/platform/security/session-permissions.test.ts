@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Session, WebContents } from 'electron'
+import type { Session } from 'electron'
 
 const state = vi.hoisted(() => ({
   profile: vi.fn(),

@@ -583,7 +583,7 @@ export function registerAppSettingsIPC(
   ipcMain.handle(IPC_CHANNELS.APP_CLEAN_CACHE, async () => {
     const { cleanCacheData } = await import('./cache-maintenance.js')
     // 休眠快照的保留策略来自设置，此处一并传入，使保留策略与设置页显示一致
-    const current = getAppSettings()
+    const _current = getAppSettings()
     const result = await cleanCacheData({
       retentionDays: 7,
       maxCount: 40,

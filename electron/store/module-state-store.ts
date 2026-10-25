@@ -147,7 +147,7 @@ export function saveModuleState(rec: ModuleStateRecord): void {
  *
  * 每个 store 的数据存为 settings.db 中独立的 KV 表（单行 key='__data__', value=JSON）。
  */
-export interface JsonStore<T> {
+export interface JsonStore<_T> {
   invalidate(): void
   get(key: string): any
   set(key: string, value: any): void

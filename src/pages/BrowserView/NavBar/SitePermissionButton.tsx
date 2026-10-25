@@ -4,7 +4,7 @@
    ===================================================================== */
 
 import { useCallback, useRef, useState } from 'react'
-import Popover, { PopoverItem } from '../../../components/ui/Popover'
+import Popover from '../../../components/ui/Popover'
 
 import type { BrowserTabState } from '../../../lib/electron-api'
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore'

@@ -7,7 +7,7 @@
 //
 // session 级设置（UA / 代理 / Client Hints）在 ../session.ts，本文件只负责窗口。
 
-import { BrowserWindow, session, type WebContents } from 'electron'
+import { BrowserWindow, session } from 'electron'
 import type { FingerprintEngine } from '../../../browser/fingerprint.js'
 import type { Profile } from '../../../shared/types.js'
 import { profileStore } from '../../../browser/profile-store.js'
@@ -420,25 +420,5 @@ export class WindowManager {
 </html>`
     // encodeURIComponent 保证特殊字符安全嵌入 data URI
     return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
-  }
-
-  /**
-   * 应用设备模拟
-   * 移动端 Profile 启用 mobile 模式（screenPosition + screenSize + DPR）。
-   * 桌面端不启用设备模拟，使用窗口自然视口。
-   */
-  private applyDeviceEmulation(webContents: WebContents, profile: Profile): void {
-    if (profile.platform === 'mobile') {
-      webContents.enableDeviceEmulation({
-        screenPosition: 'mobile',
-        screenSize: profile.viewport,
-        viewPosition: { x: 0, y: 0 },
-        deviceScaleFactor: profile.devicePixelRatio,
-        // viewSize 使用实际视口尺寸，避免传 0 导致渲染崩溃
-        viewSize: profile.viewport,
-        scale: 1,
-      })
-    }
-    // desktop：不启用设备模拟，使用窗口自然视口
   }
 }

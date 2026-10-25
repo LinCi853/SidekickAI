@@ -13,7 +13,6 @@
 
 import { useEffect, useMemo } from 'react'
 import { useTabStore } from '../../store/useTabStore'
-import { useProfileStore } from '../../store/useProfileStore'
 import { hasOverlay } from '../../hooks/useEscToCloseWindow'
 import { maximizeToggleWindow } from '../../lib/electron-api'
 import { focusInputInWebview, type WebviewLike } from '../../hooks/useWebViewControl'

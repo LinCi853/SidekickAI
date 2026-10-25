@@ -257,7 +257,7 @@ export function reportTabEnsureAndDetachResult(payload: {
   tabId: string | null
 }): void {
   const api = requireElectron()
-  return api.tab.reportEnsureAndDetachResult(payload)
+  api.tab.reportEnsureAndDetachResult(payload)
 }
 
 /* =====================================================================

@@ -27,8 +27,27 @@
     }
   },
   "linter": {
-    "enabled": false
+    "enabled": true,
+    "rules": {
+      "preset": "none",
+      "correctness": {
+        "recommended": true,
+        "noUnusedPrivateClassMembers": "off"
+      }
+    }
   },
+  "overrides": [
+    {
+      "includes": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnknownTypeSelector": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": false
   }

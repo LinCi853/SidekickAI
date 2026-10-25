@@ -9,7 +9,6 @@ import {
   OXY_ADJUSTERS,
   OXY_TEXT_FLOOR,
   applyAdjuster,
-  computeDpiScale,
   type AdjusterConfig,
 } from './oxy-config'
 

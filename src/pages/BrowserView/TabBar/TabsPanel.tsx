@@ -26,16 +26,9 @@ interface TabsPanelProps {
   themeColor: string
   tabs: BrowserTabState[]
   activeTabId: string | null
-  onOpenSettings: () => void
 }
 
-export default function TabsPanel({
-  profile,
-  themeColor,
-  tabs,
-  activeTabId,
-  onOpenSettings,
-}: TabsPanelProps) {
+export default function TabsPanel({ profile, themeColor, tabs, activeTabId }: TabsPanelProps) {
   const {
     switchTab,
     closeTab,
@@ -210,7 +203,7 @@ export default function TabsPanel({
             triggerRef={searchBtnRef}
             onClose={() => setShowSearch(false)}
             onSwitchTab={switchTab}
-            onRestoreClosed={(url, title) => newTab(url, { kind: 'web' })}
+            onRestoreClosed={(url, _title) => newTab(url, { kind: 'web' })}
           />
         )}
       </div>

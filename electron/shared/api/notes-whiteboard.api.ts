@@ -1,7 +1,7 @@
 // notes-whiteboard.api.ts — Notes / Whiteboard 接口
 
 import type { Note, NoteSaveInput } from '../notes.types.js'
-import type { WhiteboardState, WhiteboardMeta } from '../whiteboard.types.js'
+import type { WhiteboardMeta } from '../whiteboard.types.js'
 
 /** 笔记列表筛选条件 */
 export interface NoteListFilter {

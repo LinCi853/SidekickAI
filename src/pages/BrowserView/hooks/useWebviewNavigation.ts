@@ -12,11 +12,7 @@ import { matchCloudPcSite } from '../cloud-pc-sites.js'
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
 import { leaseWebviewLifecycle, type WebviewLifecycleLease } from '../../../lib/webview-lifecycle'
 import { AI_PLATFORMS } from '../../../../electron/presets/ai-platforms.js'
-import {
-  GET_TITLE_SCRIPT,
-  buildFaviconToDataUrlScript,
-  buildImageUrlToDataUrlScript,
-} from '../webview-scripts.js'
+import { GET_TITLE_SCRIPT, buildImageUrlToDataUrlScript } from '../webview-scripts.js'
 
 export interface UseWebviewNavigationParams {
   webviewRef: React.MutableRefObject<WebviewElement | null>

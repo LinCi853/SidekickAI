@@ -49,7 +49,7 @@ function applyUiVersion(version: UiVersion): void {
   document.documentElement.setAttribute('data-ui-version', version)
 }
 
-function applyTheme(mode: 'light'): void {
+function applyTheme(_mode: 'light'): void {
   const html = document.documentElement
   html.classList.remove('dark')
   html.setAttribute('data-theme', 'light')
@@ -208,7 +208,7 @@ function rgbToHex(rgb: string): string | null {
  * 获取当前 :root 上 --background 的实际颜色值（hex）。
  * Oxy 模式强制亮色背景，如果读取失败或得到深色值，使用默认浅灰。
  */
-function getBackgroundHex(): string {
+function _getBackgroundHex(): string {
   if (typeof window === 'undefined') return '#f4f4f5'
   const raw = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
   let hex = '#f4f4f5'

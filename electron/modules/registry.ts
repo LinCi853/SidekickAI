@@ -1,6 +1,5 @@
 // Owns built-in module lifecycle, persisted state and window notifications.
 
-import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../shared/types.js'
 import type { ModuleInfo, ModuleManifest } from '../shared/types.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'

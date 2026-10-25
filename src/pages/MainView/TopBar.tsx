@@ -88,7 +88,6 @@ export default function TopBar({ data, actions }: TopBarProps) {
     hasActiveTab,
     canGoBack,
     canGoForward,
-    activeTabDomReady,
     titleInputRef,
     platforms,
     isDark,

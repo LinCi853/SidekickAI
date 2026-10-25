@@ -1,7 +1,7 @@
 // profile-window.api.ts — Profile / Window / Tab / Presets 管理接口
 
 import type { Profile, DevicePreset } from '../profile.types.js'
-import type { WindowStateData, TabState } from '../window.types.js'
+import type { WindowStateData } from '../window.types.js'
 
 /** Profile 管理接口 */
 export interface ProfileAPI {

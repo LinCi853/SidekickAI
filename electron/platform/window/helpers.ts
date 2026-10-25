@@ -210,7 +210,7 @@ export function attachWebviewPopupInterceptor(parentWebContents: Electron.WebCon
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(wc as any).on(
       'new-window',
-      (e: Event, url: string, _frameName: string, disposition: string) => {
+      (_e: Event, url: string, _frameName: string, disposition: string) => {
         // foreground-tab / background-tab 是同域链接打开（已由 setWindowOpenHandler 处理）
         // new-window 是真正的弹窗（已由 setWindowOpenHandler allow/deny）
         // 此处仅记录日志，不做任何拦截，避免与 setWindowOpenHandler 决策冲突

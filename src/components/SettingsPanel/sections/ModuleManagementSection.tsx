@@ -14,7 +14,7 @@ export default function ModuleManagementSection() {
   const clearData = useModuleStore((s) => s.clearData)
 
   const [pendingClear, setPendingClear] = useState<ModuleInfo | null>(null)
-  const [clearing, setClearing] = useState(false)
+  const [_clearing, setClearing] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
 

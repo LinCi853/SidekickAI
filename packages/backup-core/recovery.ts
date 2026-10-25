@@ -466,21 +466,22 @@ export async function finishBackupRecovery(
     else console.warn('[backup] Result dialog failed:', (error as Error).message)
   } finally {
     recovering = false
-    if (completed && directory) {
-      try {
-        const guardianFile = path.join(directory, 'guardian.json')
-        const guardianPid = fs.existsSync(guardianFile)
-          ? (JSON.parse(fs.readFileSync(guardianFile, 'utf8')).pid as number)
-          : undefined
-        if (guardianPid !== undefined && (!Number.isSafeInteger(guardianPid) || guardianPid <= 0))
-          throw new Error('Invalid backup guardian identity.')
-        await until(
-          () => !!workerPid && !alive(workerPid) && (!guardianPid || !alive(guardianPid)),
-          5_000,
-        )
-        jobDirectory(backupResultRequest)
-        fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-      } catch {}
-    }
+  }
+  // 收尾清理放在 finally 之后：finally 内的 throw/await 会覆盖 try/catch 的控制流
+  if (completed && directory) {
+    try {
+      const guardianFile = path.join(directory, 'guardian.json')
+      const guardianPid = fs.existsSync(guardianFile)
+        ? (JSON.parse(fs.readFileSync(guardianFile, 'utf8')).pid as number)
+        : undefined
+      if (guardianPid !== undefined && (!Number.isSafeInteger(guardianPid) || guardianPid <= 0))
+        throw new Error('Invalid backup guardian identity.')
+      await until(
+        () => !!workerPid && !alive(workerPid) && (!guardianPid || !alive(guardianPid)),
+        5_000,
+      )
+      jobDirectory(backupResultRequest)
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    } catch {}
   }
 }

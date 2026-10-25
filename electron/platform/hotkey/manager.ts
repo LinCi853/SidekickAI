@@ -157,8 +157,6 @@ export class HotkeyManager {
   voiceLastKeydownAt = 0
   /** 500ms 轮询 timer id（兜底检测 keyup 丢失，阈值放宽避免误判 auto-repeat）；@internal manager 拆分模块协作字段 */
   voicePollingTimer: ReturnType<typeof setInterval> | null = null
-  /** keydown 日志节流时间戳（避免 OS 重复 keydown 打爆日志） */
-  private _lastKeydownLogAt = 0
   /**
    * 当前语音热键注销函数（由 registerVoiceHotkey 返回，外部保存以便重注册时调用）。
    * HOTKEY_SET（backgroundVoice 自定义）与 HOTKEY_SET_ENABLED（启用/禁用）共用此字段。
@@ -462,7 +460,7 @@ export class HotkeyManager {
         dispatchBrowserHotkeyFallback(observedBinding)
       }
       // 主映射（globalShortcut 兜底）：使用追踪的修饰键状态而非事件自带字段
-      for (const [acc, matcher] of this.uiohookMatchers) {
+      for (const [_acc, matcher] of this.uiohookMatchers) {
         if (!matcher.keycode) continue
         if (
           e.keycode === matcher.keycode &&

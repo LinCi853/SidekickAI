@@ -8,7 +8,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useEscToCloseOverlay } from '../../hooks/useEscToCloseWindow'
 import { useUiVersionStore } from '../../store/useUiVersionStore'
-import { getOxyLayout } from '../../lib/oxy-design-system'
 import { resolveParam, setManualOverride, isManual } from '../../lib/oxy-override-store'
 import { OXY_PANELS } from '../../lib/oxy-config'
 import '../ui/TitleBar.css' // 复用毛玻璃风格的 header 背景
