@@ -52,20 +52,36 @@ export function useMainViewData() {
 
   // Window focus: focus active webview input
   useEffect(() => {
-    const focusActiveInput = () => {
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    const runFocus = (attempt: number) => {
       const activeTabId = useTabStore.getState().activeTabId
       if (!activeTabId) return
       const el = document.querySelector(
         `webview[data-tab-id="${activeTabId}"]`,
       ) as WebviewLike | null
+      const scheduleRetry = () => {
+        // webview 尚未挂载或注入失败时补试一次（快速连按唤出后的常见竞态）
+        if (retryTimer || attempt >= 1) return
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          runFocus(attempt + 1)
+        }, 350)
+      }
       if (el) {
         el?.focus?.()
-        focusInputInWebview(el, null).catch((e) => console.warn('[main-view] 操作失败:', e))
+        focusInputInWebview(el, null).catch((e) => {
+          console.warn('[main-view] 操作失败:', e)
+          scheduleRetry()
+        })
+      } else {
+        scheduleRetry()
       }
     }
+    const focusActiveInput = () => runFocus(0)
     const offShown = onWindowShown(focusActiveInput)
     window.addEventListener('focus', focusActiveInput)
     return () => {
+      if (retryTimer) clearTimeout(retryTimer)
       offShown()
       window.removeEventListener('focus', focusActiveInput)
     }

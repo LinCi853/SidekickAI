@@ -267,11 +267,19 @@ async function restoreReturnAsync(handle: number, isCancelled: () => boolean): P
   // 自然激活已经落对（或前台读不到、无从判断）→ 零干预路径在 fg === handle 时成立；
   // fg 为 null（读失败）时仍尝试交还：目标是本轮新鲜句柄，语义上就是正确落点
   if (foreground === handle) return
-  const ok = await setForegroundHandle(handle)
+  let ok = await setForegroundHandle(handle)
   if (isCancelled()) return
   if (!ok) {
-    console.warn('[focus-manager] 交还前台失败（句柄失效或被前台锁定）:', handle)
-    return
+    // 前台锁常在隐藏后片刻才放开：短暂等待后补试一次，仍失败则保持现状
+    //（宁可不动，也不拿句柄反复抢焦点）
+    await delay(RESTORE_VERIFY_DELAY_MS)
+    if (isCancelled()) return
+    ok = await setForegroundHandle(handle)
+    if (isCancelled()) return
+    if (!ok) {
+      console.warn('[focus-manager] 交还前台失败（句柄失效或被前台锁定）:', handle)
+      return
+    }
   }
   await delay(RESTORE_VERIFY_DELAY_MS)
   if (isCancelled()) return
