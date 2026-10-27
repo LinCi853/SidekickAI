@@ -68,10 +68,27 @@ describe('physical shortcut input', () => {
     input.observe(event(keys.Space, { altKey: true }), true)
     expect(input.claim(binding)).toBe(true)
   })
-  it('reconciles a missed release from an unmodified observation', () => {
+  it('keeps the chord live across unreliable false masks (consecutive presses)', () => {
     const input = new HotkeyInputState(keys)
-    input.observe(event(keys.Alt, { altKey: true }), true)
-    input.observe(event(keys.Space), true)
+    // uiohook 的 mask 在注入输入/焦点切换后可能恒 false，不得因此撤销授权
+    input.observe(event(keys.Alt), true, 1000)
+    input.observe(event(keys.Space), true, 1100)
+    expect(input.claim(binding)).toBe(true)
+    input.observe(event(keys.Space), false, 1130)
+    input.observe(event(keys.Space), true, 1400)
+    expect(input.claim(binding)).toBe(true)
+    input.observe(event(keys.Space), false, 1430)
+    input.observe(event(keys.Space), true, 1700)
+    expect(input.claim(binding)).toBe(true)
+  })
+  it('heals a lost modifier release after the silence window', () => {
+    const input = new HotkeyInputState(keys)
+    input.observe(event(keys.Alt), true, 1000)
+    input.observe(event(keys.Space), true, 1100)
+    expect(input.claim(binding)).toBe(true)
+    input.observe(event(keys.Space), false, 1130)
+    // Alt 的 keyup 丢失：超过静默上限后下一按键应撤销残留授权，避免单键误触发
+    input.observe(event(keys.Space), true, 2600)
     expect(input.claim(binding)).toBe(false)
   })
   it('rejects stale positive masks and additional unobserved modifiers', () => {

@@ -35,12 +35,17 @@ export function modifierKeyCodes(keys: Record<string, number>): Record<Modifier,
   return codes
 }
 
+/** 修饰键授权静默上限：超过该时长没有任何自身事件，视为 keyup 丢失并撤销授权 */
+export const MODIFIER_SILENCE_HEAL_MS = 1500
+
 /** Only an observed, unreleased modifier press can authorize a hook chord. */
 export class HotkeyInputState {
   readonly codes: Record<Modifier, Set<number>>
   private readonly held = new Set<number>()
   private readonly consumed = new Set<number>()
   private readonly authorized = new Set<number>()
+  /** 各按键最近一次事件时刻，供「keyup 丢失」自愈判定 */
+  private readonly lastEventAt = new Map<number, number>()
   private observation: KeyObservation | null = null
   freshPress = false
 
@@ -48,8 +53,10 @@ export class HotkeyInputState {
     this.codes = modifierKeyCodes(keys)
   }
 
-  observe(event: KeyObservation, down: boolean): void {
+  observe(event: KeyObservation, down: boolean, now: number = Date.now()): void {
+    this.healStaleModifiers(now)
     this.observation = event
+    this.lastEventAt.set(event.keycode, now)
     const wasHeld = this.held.has(event.keycode)
     this.freshPress = down && !wasHeld
     if (down) this.held.add(event.keycode)
@@ -62,19 +69,32 @@ export class HotkeyInputState {
       const codes = this.codes[modifier]
       if (codes.has(event.keycode)) {
         if (down && !wasHeld) this.authorized.add(event.keycode)
-      } else if (!event[(modifier + 'Key') as keyof KeyObservation]) {
-        for (const code of codes) {
-          this.authorized.delete(code)
-          this.held.delete(code)
-        }
       }
+      // 不再依据事件 mask 撤销授权：uiohook 的 mask 不可靠（注入输入恒 false、
+      // 焦点切换后失真），会造成连按中途整段失灵；授权以按键事件流为准，
+      // 丢 keyup 的残留授权由 healStaleModifiers 按静默时长自愈。
     }
     const switchesWindow =
       (event.keycode === this.keys.Tab || event.keycode === this.keys.Escape) &&
-      (event.altKey || event.metaKey)
-    const closesWindow = event.keycode === this.keys.F4 && event.altKey
+      (this.modifiers.alt || this.modifiers.meta)
+    const closesWindow = event.keycode === this.keys.F4 && this.modifiers.alt
     if (down && (switchesWindow || closesWindow)) {
       this.authorized.clear()
+    }
+  }
+
+  /**
+   * 自愈：授权中的修饰键若超过 MODIFIER_SILENCE_HEAL_MS 没有任何自身事件
+   *（长按时系统 auto-repeat 会持续转发 keydown），视为 keyup 已丢失，撤销授权。
+   * 防止残留授权使后续单键误匹配组合键。
+   */
+  private healStaleModifiers(now: number): void {
+    for (const code of [...this.authorized]) {
+      const at = this.lastEventAt.get(code)
+      if (at != null && now - at >= MODIFIER_SILENCE_HEAL_MS) {
+        this.authorized.delete(code)
+        this.held.delete(code)
+      }
     }
   }
 
@@ -97,11 +117,16 @@ export class HotkeyInputState {
     )
       return false
     const observed = this.modifiers
-    return modifiers.every(
-      (modifier) =>
-        observed[modifier] === binding[modifier] &&
-        Boolean(event[(modifier + 'Key') as keyof KeyObservation]) === binding[modifier],
-    )
+    return modifiers.every((modifier) => {
+      if (observed[modifier] !== binding[modifier]) return false
+      // mask 只作反向否决：mask 声称存在事件流未观察到的修饰键按下时拒绝
+      //（漏 keydown 的场景防误触发）；mask 为 false 不否决——uiohook 的 mask
+      // 不可靠，组合键成立与否以按键事件流为准。
+      if (Boolean(event[(modifier + 'Key') as keyof KeyObservation]) && !observed[modifier]) {
+        return false
+      }
+      return true
+    })
   }
 
   claim(binding: KeyBinding): boolean {
@@ -124,6 +149,7 @@ export class HotkeyInputState {
     this.held.clear()
     this.authorized.clear()
     this.consumed.clear()
+    this.lastEventAt.clear()
     this.observation = null
   }
 }
