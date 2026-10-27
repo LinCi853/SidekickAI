@@ -16,6 +16,10 @@ export const HIDDEN_RELEASE_DELAY_MS = 10 * MINUTE_MS
 export const BACKGROUND_RELEASE_DELAY_MS = 15 * MINUTE_MS
 export const BACKGROUND_RELEASE_DELAY_DEFAULT_MS = 30 * MINUTE_MS
 
+/** 全部窗口进入后台后的轻释放（仅工作集裁剪，不关窗不卸页）：低内存模式 30 秒，默认 60 秒 */
+export const ALL_BACKGROUND_TRIM_DELAY_MS = 30 * 1000
+export const ALL_BACKGROUND_TRIM_DELAY_DEFAULT_MS = 60 * 1000
+
 // —— 窗口退役（对齐社区版 docs/specs/background-window-retirement.md）——
 // 以下为低内存模式档。历史/提示词等轻量面板 30s；设置等默认 60s；主窗 180s；
 // 对话/数据迁移/引导 300s；浏览器与独立 AI 网页窗更长（600s）。默认模式整体 ×2。
@@ -70,4 +74,9 @@ export function browserWindowRetirementSeconds(lowMemoryMode = false): number {
 /** 纯后台次窗口释放延迟：低内存模式 15 分钟，默认 30 分钟 */
 export function backgroundReleaseDelayMs(lowMemoryMode = false): number {
   return lowMemoryMode ? BACKGROUND_RELEASE_DELAY_MS : BACKGROUND_RELEASE_DELAY_DEFAULT_MS
+}
+
+/** 全部窗口进入后台后的裁剪延迟：低内存模式 30 秒，默认 60 秒 */
+export function allBackgroundTrimDelayMs(lowMemoryMode = false): number {
+  return lowMemoryMode ? ALL_BACKGROUND_TRIM_DELAY_MS : ALL_BACKGROUND_TRIM_DELAY_DEFAULT_MS
 }

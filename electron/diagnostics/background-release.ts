@@ -4,9 +4,10 @@
 // 只负责次窗口生命周期；主窗口及其已加载网页保持运行态。
 import { BrowserWindow } from 'electron'
 import { windowState } from '../platform/window/window-state.js'
-import { backgroundReleaseDelayMs } from '../shared/background-policy.js'
+import { allBackgroundTrimDelayMs, backgroundReleaseDelayMs } from '../shared/background-policy.js'
 import { isWindowAudible, markBackgroundClose } from '../platform/window/window-retirement.js'
 import { isLowMemoryMode } from '../store/low-memory-mode.js'
+import { trimBackgroundWorkingSets } from './resident-memory-monitor.js'
 
 export interface BackgroundReleaseResult {
   windowsClosed: number
@@ -75,5 +76,34 @@ export function cancelBackgroundRelease(): void {
     clearTimeout(releaseTimer)
     releaseTimer = null
     console.log('[background-release] 重新获得焦点，取消后台释放')
+  }
+}
+
+let trimTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 全部窗口进入后台后的轻释放计划：仅工作集裁剪，不关窗、不卸页、不打断
+ * 出声/下载/录制。低内存模式 30 秒，默认 60 秒；期间重新获得焦点则取消。
+ */
+export function scheduleBackgroundTrim(delayMs?: number): void {
+  cancelBackgroundTrim()
+  const effectiveDelayMs = delayMs ?? allBackgroundTrimDelayMs(isLowMemoryMode())
+  console.log(
+    `[background-release] 已计划 ${Math.round(effectiveDelayMs / 1000)} 秒后裁剪后台工作集`,
+  )
+  trimTimer = setTimeout(() => {
+    trimTimer = null
+    const focused = BrowserWindow.getFocusedWindow()
+    if (focused && !focused.isDestroyed()) return
+    console.log('[background-release] 应用无焦点，裁剪后台工作集')
+    trimBackgroundWorkingSets()
+  }, effectiveDelayMs)
+}
+
+export function cancelBackgroundTrim(): void {
+  if (trimTimer) {
+    clearTimeout(trimTimer)
+    trimTimer = null
+    console.log('[background-release] 重新获得焦点，取消后台裁剪')
   }
 }

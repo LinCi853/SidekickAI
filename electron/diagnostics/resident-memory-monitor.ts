@@ -11,6 +11,21 @@ const MAX_RECLAIMS_PER_TICK = 8
 const RECLAIM_BATCH_MS = 150
 const MiB = 1024 * 1024
 
+/** 全后台裁剪的本地空闲下限（全后台 30/60 秒后触发，窗口保持挂载） */
+const ALL_BACKGROUND_TRIM_IDLE_MS = 15_000
+
+type BackgroundTrimmer = { backgroundTrim: () => Promise<void> }
+let activeTrimmer: BackgroundTrimmer | null = null
+
+/**
+ * 全部窗口进入后台后的一次性轻释放：仅工作集裁剪，不关窗、不卸页、不打断
+ * 出声/下载/录制（保护与本地空闲复查照常）。低内存开关不决定是否执行，
+ * 只影响触发时长（见 shared/background-policy.allBackgroundTrimDelayMs）。
+ */
+export function trimBackgroundWorkingSets(): void {
+  void activeTrimmer?.backgroundTrim()
+}
+
 function workingSetBudgetBytes(): number {
   const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
   const browsers = windows.filter((window) => {
@@ -265,6 +280,35 @@ export function createResidentMemoryMonitor(
       running = false
     }
   }
+  /**
+   * 全后台轻释放：只裁剪属于「无焦点窗口」的渲染进程工作集。
+   * 保护（出声/下载/录制/导入等）与本地空闲复查照常执行；
+   * 不受低内存开关与回收冷却限制——进入后台本就是一次性时机。
+   */
+  const backgroundTrim = async () => {
+    if (stopped || process.platform !== 'win32') return
+    try {
+      if (isProtected()) return
+      const contents = readContentProtection()
+      for (const m of app.getAppMetrics()) {
+        if (stopped || isProtected()) return
+        if (m.type !== 'Tab') continue
+        const background = backgroundWindowForProcess(m.pid)
+        if (!background) continue
+        if (protectsProcess(contents, m.pid, background)) continue
+        if (Date.now() - localActivityAt(m.pid, background) < ALL_BACKGROUND_TRIM_IDLE_MS) continue
+        await trimWorkingSet(
+          m.pid,
+          m.creationTime,
+          Number.MAX_SAFE_INTEGER,
+          ALL_BACKGROUND_TRIM_IDLE_MS,
+          background,
+        )
+      }
+    } catch (error) {
+      console.warn('[resident-memory] background trim failed:', error)
+    }
+  }
   const timer = setInterval(() => {
     void tick()
   }, POLL_MS)
@@ -279,17 +323,21 @@ export function createResidentMemoryMonitor(
   })
   const diagnosticApp = app as typeof app & { __residentMemoryDiagnostics?: typeof diagnostics }
   diagnosticApp.__residentMemoryDiagnostics = diagnostics
-  return {
+  const monitor = {
     diagnostics,
     tick,
+    backgroundTrim,
     stop: () => {
       stopped = true
       clearInterval(timer)
       for (const cleanup of [...cleanups]) cleanup()
       cleanups.clear()
       cpuSamples.clear()
+      if (activeTrimmer === monitor) activeTrimmer = null
       if (diagnosticApp.__residentMemoryDiagnostics === diagnostics)
         delete diagnosticApp.__residentMemoryDiagnostics
     },
   }
+  activeTrimmer = monitor
+  return monitor
 }

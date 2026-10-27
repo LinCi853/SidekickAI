@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ALL_BACKGROUND_TRIM_DELAY_MS,
+  ALL_BACKGROUND_TRIM_DELAY_DEFAULT_MS,
   BACKGROUND_RELEASE_DELAY_MS,
   BACKGROUND_RELEASE_DELAY_DEFAULT_MS,
+  allBackgroundTrimDelayMs,
   browserWindowRetirementSeconds,
   backgroundReleaseDelayMs,
   windowRetirementSeconds,
@@ -35,5 +38,12 @@ describe('background policy low-memory tiers', () => {
     expect(backgroundReleaseDelayMs(true)).toBe(15 * 60_000)
     expect(backgroundReleaseDelayMs(false)).toBe(30 * 60_000)
     expect(backgroundReleaseDelayMs(true) * 2).toBe(backgroundReleaseDelayMs(false))
+  })
+
+  it('trims all background working sets after 30s in low memory mode and 60s by default', () => {
+    expect(ALL_BACKGROUND_TRIM_DELAY_MS).toBe(30_000)
+    expect(ALL_BACKGROUND_TRIM_DELAY_DEFAULT_MS).toBe(60_000)
+    expect(allBackgroundTrimDelayMs(true)).toBe(30_000)
+    expect(allBackgroundTrimDelayMs(false)).toBe(60_000)
   })
 })

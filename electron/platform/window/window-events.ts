@@ -14,6 +14,8 @@ import { forgetWindow as forgetWindowPriorityState } from '../../diagnostics/tab
 import {
   scheduleBackgroundRelease,
   cancelBackgroundRelease,
+  scheduleBackgroundTrim,
+  cancelBackgroundTrim,
 } from '../../diagnostics/background-release.js'
 import { reapplyWindowIcon } from './app-icon.js'
 
@@ -101,6 +103,7 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
       scheduleBackgroundRelease()
+      scheduleBackgroundTrim()
     }
   })
   win.on('restore', () => {
@@ -109,6 +112,7 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
       cancelBackgroundRelease()
+      cancelBackgroundTrim()
     }
   })
   win.on('show', () => {
@@ -117,6 +121,7 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
       cancelBackgroundRelease()
+      cancelBackgroundTrim()
     }
   })
   win.on('hide', () => {
@@ -124,6 +129,7 @@ export function setupMaximizeSync(win: BrowserWindow, windowId: string): void {
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
       scheduleBackgroundRelease()
+      scheduleBackgroundTrim()
     }
   })
 }
@@ -241,6 +247,7 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
       scheduleBackgroundRelease()
+      scheduleBackgroundTrim()
     }
   })
   win.on('restore', () => {
@@ -249,6 +256,7 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
       cancelBackgroundRelease()
+      cancelBackgroundTrim()
     }
   })
   win.on('show', () => {
@@ -257,6 +265,7 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_SHOWN)
       cancelBackgroundRelease()
+      cancelBackgroundTrim()
     }
   })
   win.on('hide', () => {
@@ -265,6 +274,7 @@ export function setupBoundsTracking(win: BrowserWindow, windowId: string): void 
     if (!win.isDestroyed()) {
       win.webContents.send(IPC_CHANNELS.WINDOW_HIDDEN)
       scheduleBackgroundRelease()
+      scheduleBackgroundTrim()
     }
   })
 }
@@ -300,11 +310,13 @@ export function attachDetachedWindowLifecycle(
   win.on('focus', () => {
     windowState.lastFocusedWin = win
     cancelBackgroundRelease()
+    cancelBackgroundTrim()
   })
 
   // 失焦即可能已进后台（窗口未 hide 也会），动态调控从这里起算
   win.on('blur', () => {
     scheduleBackgroundRelease()
+    scheduleBackgroundTrim()
   })
 
   win.on('close', () => {
