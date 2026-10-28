@@ -111,7 +111,7 @@ describe('AI asset collection', () => {
       { content: '旧的回答', status: 'complete' },
     ])
   })
-  it('cleans capture noise revisions at startup while keeping genuine rewrites', () => {
+  it('cleans capture noise revisions once at bootstrap and skips later startups', () => {
     const { conversationId } = observe('ANSWER', 'complete')
     const { id } = db
       .prepare('SELECT id FROM messages WHERE conversation_id = ?')
@@ -120,8 +120,17 @@ describe('AI asset collection', () => {
     insert.run('r1', id, 'ANSWER ', '', 'complete', 1)
     insert.run('r2', id, '搜索词\nANSWER', '', 'complete', 2)
     insert.run('r3', id, 'older rewrite', '', 'complete', 3)
+    // 模拟功能上线前的存量库：迁移标记尚未写入，启动清理应生效一次
+    db.prepare("DELETE FROM asset_store_meta WHERE key = 'observation_seed_v1'").run()
     new AiAssetsStore(db)
     expect(db.prepare('SELECT id FROM asset_revisions ORDER BY id').all()).toEqual([{ id: 'r3' }])
+    // 迁移完成后再次启动不再重扫（全量内容摘要是 10 秒级开销，标记生效后跳过）
+    insert.run('r4', id, 'ANSWER ', '', 'complete', 4)
+    new AiAssetsStore(db)
+    expect(db.prepare('SELECT id FROM asset_revisions ORDER BY id').all()).toEqual([
+      { id: 'r3' },
+      { id: 'r4' },
+    ])
   })
   it('excludes deleted API output by both its explicit id and external key before graph reads', () => {
     const api = { id: 'provider-a', type: 'api' as const }

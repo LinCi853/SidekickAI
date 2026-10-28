@@ -124,6 +124,9 @@ export class AiAssetsStore {
       CREATE TABLE IF NOT EXISTS asset_attachment_exclusions (
         source_id TEXT NOT NULL, external_key TEXT NOT NULL, PRIMARY KEY(source_id, external_key)
       );
+      CREATE TABLE IF NOT EXISTS asset_store_meta (
+        key TEXT PRIMARY KEY, value TEXT NOT NULL
+      );
     `)
     const attachmentColumns = db.prepare('PRAGMA table_info(asset_attachments)').all() as Array<{
       name: string
@@ -131,15 +134,31 @@ export class AiAssetsStore {
     if (!attachmentColumns.some((column) => column.name === 'updated_at'))
       db.exec('ALTER TABLE asset_attachments ADD COLUMN updated_at INTEGER')
     this.graph = new AssetGraphStore(db)
-    this.cleanupNoiseRevisions()
-    const seed = db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
-    const versions = db
-      .prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
+    this.bootstrapObservations()
+  }
+
+  /**
+   * 存量一次性迁移：清理收录抖动误记修订 + 回填观察签名。
+   * 正常收录/修订/导入路径都即时播种观察（见各处 INSERT），本回填只补功能上线前的存量。
+   * 全量内容摘要对大库是 10 秒级启动开销（323MB 库实测约 13.6 秒），
+   * 因此迁移完成即写入标记，后续启动直接跳过；将来需要重跑时提升键名版本（v2）。
+   */
+  private bootstrapObservations(): void {
+    const marker = 'observation_seed_v1'
+    const done = this.db.prepare('SELECT value FROM asset_store_meta WHERE key = ?').get(marker) as
+      | { value: string }
+      | undefined
+    if (done) return
+    this.db.transaction(() => {
+      this.cleanupNoiseRevisions()
+      const seed = this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
+      const versions = this.db
+        .prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
       UNION ALL SELECT message_id AS id, content, reasoning FROM asset_revisions`)
-      .all() as Array<{ id: string; content: string; reasoning: string }>
-    db.transaction(() => {
+        .all() as Array<{ id: string; content: string; reasoning: string }>
       for (const item of versions)
         seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning])))
+      this.db.prepare('INSERT OR REPLACE INTO asset_store_meta VALUES (?, ?)').run(marker, '1')
     })()
   }
 
