@@ -162,9 +162,13 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   handle(IPC_CHANNELS.HOTKEY_GET_ALL, async () => {
     return hotkeyManager.getAllHotkeys()
   })
-  // 唤出键冲突定位：返回可能的占用者候选（进程 + 处置指引），不结束任何进程
+  // 唤出键冲突定位：返回可能的占用者候选（进程 + 处置指引），不结束任何进程。
+  // 打开检测即先尝试一次即时接管：键已释放时无需等待下一轮重试。
   handle(IPC_CHANNELS.HOTKEY_CONFLICT_SCAN, async (_e: unknown, accelerator: string) => {
     if (typeof accelerator !== 'string' || !accelerator) throw new Error('Invalid accelerator')
+    if (hotkeyManager.registrationStates.get(accelerator) === 'fallback') {
+      await hotkeyManager.retryRegistration(accelerator)
+    }
     const state = hotkeyManager.registrationStates.get(accelerator)
     const candidates = await locateHotkeyConflict()
     return {

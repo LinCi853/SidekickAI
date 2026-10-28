@@ -91,8 +91,8 @@ export function getHotkeyManagerInstance(): HotkeyManager | null {
 /** 系统通路长按连切的时间窗口兜底（钩子不可用/未观察到按下时） */
 const SYSTEM_REPEAT_FALLBACK_MS = 300
 
-/** 兜底态静默重试系统注册的间隔（持有者退出后自动接管） */
-export const FALLBACK_RETRY_INTERVAL_MS = 45_000
+/** 兜底态静默重试系统注册的间隔（持有者退出后尽快自动接管） */
+export const FALLBACK_RETRY_INTERVAL_MS = 15_000
 /** 系统通路按住抑制的时间上限（钩子中途失效导致 held 状态滞留时自愈） */
 const SYSTEM_HOLD_CAP_MS = 3000
 

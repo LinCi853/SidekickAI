@@ -212,10 +212,14 @@ export interface HotkeyConfig {
   registrationReason?: string
 }
 
-/** 唤出键冲突候选（进程 + 怀疑理由 + 处置指引） */
+/** 唤出键冲突候选（进程 + 置信分级 + 怀疑理由 + 处置指引） */
 export interface HotkeyConflictCandidate {
   pid: number
   name: string
+  /** 同名进程数（>1 时按去重聚合展示） */
+  instances: number
+  /** high=明确抢注者；medium=常见抢注者（输入法 AI 键/聊天/安全/浏览器类）；low=一般用户程序 */
+  confidence: 'high' | 'medium' | 'low'
   reason: string
   hint: string | null
 }

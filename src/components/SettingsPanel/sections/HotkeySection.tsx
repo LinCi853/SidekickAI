@@ -50,7 +50,14 @@ export default function HotkeySection({
   const [conflictScan, setConflictScan] = useState<{
     accelerator: string
     scanning: boolean
-    candidates: Array<{ pid: number; name: string; reason: string; hint: string | null }>
+    candidates: Array<{
+      pid: number
+      name: string
+      instances: number
+      confidence: 'high' | 'medium' | 'low'
+      reason: string
+      hint: string | null
+    }>
   } | null>(null)
   const runConflictScan = async (accelerator: string) => {
     setConflictScan({ accelerator, scanning: true, candidates: [] })
@@ -214,7 +221,16 @@ export default function HotkeySection({
                       >
                         {conflictScan.candidates.slice(0, 5).map((c) => (
                           <li key={`${c.pid}-${c.name}`}>
-                            <strong>{c.name}</strong>（PID {c.pid}）：{c.reason}
+                            <strong>{c.name}</strong>
+                            {c.instances > 1 ? ` ×${c.instances}` : ''}（PID {c.pid}）
+                            <em className="hotkey-conflict-tier">
+                              {c.confidence === 'high'
+                                ? '［明确占用者］'
+                                : c.confidence === 'medium'
+                                  ? '［可能占用］'
+                                  : ''}
+                            </em>
+                            ：{c.reason}
                             {c.hint && <span className="hotkey-conflict-hint">—— {c.hint}</span>}
                           </li>
                         ))}
