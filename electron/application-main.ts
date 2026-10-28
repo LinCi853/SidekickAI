@@ -89,8 +89,10 @@ import {
   peekSttEngine,
   startBackgroundVoiceGated,
   stopBackgroundVoiceGated,
+  syncVoiceHotkeyRegistration,
   toggleVoiceRecordingGated,
 } from './modules/plugins/voice/index.js'
+import { syncAdvancedPanelHotkey, syncBrowserProfileShortcuts } from './modules/hotkey-sync.js'
 import { createTray, hasTray } from './platform/window/tray.js'
 import { cleanupOnQuit, runUiohookHealthCheck } from './lifecycle.js'
 import { BUILTIN_MODULES } from './modules/manifests.js'
@@ -233,6 +235,17 @@ app
     windowState.windowManager = windowManager
     hotkeyManager = new HotkeyManager()
     setCloudPcHotkeyManager(hotkeyManager)
+    // 抢先注册唤出键：自启动竞速中先于其它应用拿到系统注册。
+    // 回调全部为惰性引用（窗口/模块尚未装配，触发时已就绪），不拖慢启动；
+    // 模块/Profile 就绪后在下方原位重新同步各扩展热键（幂等）。
+    registerHotkeyIpc({
+      hotkeyManager,
+      getMainWindow: () => windowState.mainWindow,
+      toggleAdvancedPanelWindow,
+      startBackgroundVoice: startBackgroundVoiceGated,
+      stopBackgroundVoice: stopBackgroundVoiceGated,
+      toggleVoiceRecording: toggleVoiceRecordingGated,
+    })
     setBrowserHotkeyFallback((e) => {
       const action = matchBrowserHotkeyFallback(e)
       if (!action) return
@@ -482,14 +495,10 @@ app
     registerRuntimeProcessesIPC()
     registerTabProcessPriorityIPC()
     registerTabHibernationIPC(new EffectScope('tab-hibernation', 'tab-hibernation'))
-    registerHotkeyIpc({
-      hotkeyManager,
-      getMainWindow: () => windowState.mainWindow,
-      toggleAdvancedPanelWindow,
-      startBackgroundVoice: startBackgroundVoiceGated,
-      stopBackgroundVoice: stopBackgroundVoiceGated,
-      toggleVoiceRecording: toggleVoiceRecordingGated,
-    })
+    // 模块/Profile 就绪后重新同步扩展热键（早注册时模块表尚未装配；各同步均幂等）
+    syncAdvancedPanelHotkey()
+    void syncBrowserProfileShortcuts()
+    syncVoiceHotkeyRegistration()
     runUiohookHealthCheck(hotkeyManager)
     bindEditionActivation(
       () =>

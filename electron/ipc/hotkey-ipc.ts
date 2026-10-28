@@ -37,6 +37,9 @@ import { normalizeAssetAccelerator, validateAssetAccelerator } from '../shared/a
 import { windowState } from '../platform/window/window-state.js'
 import { broadcastToAllWindows } from '../shared/broadcast.js'
 
+/** 接管提示与冲突扫描的延后：避开启动关键路径，保证自启动速度 */
+const TAKEOVER_PROMPT_DEFER_MS = 5_000
+
 /** 进阶面板是否可用（内置模块或插件声明了 advancedPanelTab 的已启用模块） */
 function isAdvancedPanelAvailable(): boolean {
   return (
@@ -371,7 +374,12 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
 
   // 注册 2 个默认内置热键（从持久化配置读取 accelerator）
   void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks).then(() => {
-    void settleTakeoverPolicy()
+    // 弹窗与进程枚举（PowerShell）延后到启动稳定后执行：接管提示不拖慢自启动；
+    // 注册本身已在启动最早期完成，不受此延后影响。
+    const timer = setTimeout(() => {
+      void settleTakeoverPolicy()
+    }, TAKEOVER_PROMPT_DEFER_MS)
+    timer.unref?.()
   })
 
   /**
