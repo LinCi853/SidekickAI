@@ -13,11 +13,14 @@
 //
 // 已迁移到统一注入管线：支持 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain, type BrowserWindow } from 'electron'
+import { dialog, ipcMain, type BrowserWindow } from 'electron'
 import type { EffectScope } from '../modules/effect-scope.js'
 import { IPC_CHANNELS, type HotkeyAction } from '../shared/types.js'
 import { isModuleEnabled, listModuleInfos, observeModuleState } from '../modules/registry.js'
 import { syncVoiceHotkeyRegistration } from '../modules/plugins/voice/index.js'
+import { locateHotkeyConflict } from '../platform/hotkey/hotkey-conflict.js'
+import { getAppSettings } from '../store/app-settings-repository.js'
+import { updateAppSettings } from '../store/app-settings-store.js'
 import {
   setAdvancedPanelAvailability,
   setAdvancedPanelCallback,
@@ -159,6 +162,28 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   handle(IPC_CHANNELS.HOTKEY_GET_ALL, async () => {
     return hotkeyManager.getAllHotkeys()
   })
+  // 唤出键冲突定位：返回可能的占用者候选（进程 + 处置指引），不结束任何进程
+  handle(IPC_CHANNELS.HOTKEY_CONFLICT_SCAN, async (_e: unknown, accelerator: string) => {
+    if (typeof accelerator !== 'string' || !accelerator) throw new Error('Invalid accelerator')
+    const state = hotkeyManager.registrationStates.get(accelerator)
+    const candidates = await locateHotkeyConflict()
+    return {
+      accelerator,
+      systemRegistered: state === 'registered',
+      candidates: candidates.slice(0, 12),
+    }
+  })
+  // 接管策略：takeover=持续重试接管系统注册；compat=只用兼容模式；null=下次注册时再询问
+  handle(
+    IPC_CHANNELS.HOTKEY_TAKEOVER_SET,
+    async (_e: unknown, choice: 'takeover' | 'compat' | null) => {
+      if (choice !== 'takeover' && choice !== 'compat' && choice !== null)
+        throw new Error('Invalid choice')
+      updateAppSettings({ hotkeyTakeoverChoice: choice })
+      hotkeyManager.setFallbackRetryEnabled(choice !== 'compat')
+      return true
+    },
+  )
   handle(
     IPC_CHANNELS.HOTKEY_SET,
     async (_e: unknown, action: HotkeyAction, accelerator: string) => {
@@ -341,7 +366,52 @@ export function registerHotkeyIpc(deps: HotkeyIpcDeps, scope?: EffectScope): voi
   setBrowserAvailability(() => isModuleEnabled('browser'))
 
   // 注册 2 个默认内置热键（从持久化配置读取 accelerator）
-  void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks)
+  void hotkeyManager.registerDefaultShortcuts(hotkeyCallbacks).then(() => {
+    void settleTakeoverPolicy()
+  })
+
+  /**
+   * 唤出键被占用时的接管策略（注册期至多提示一次，选择记入设置）：
+   *   - 未选择过 → 弹一次提示，列出可能的占用者与处置指引；
+   *   - 'takeover' → 静默持续重试系统注册，持有者退出即自动接管；
+   *   - 'compat'  → 只用钩子兼容模式，不打扰用户。
+   */
+  async function settleTakeoverPolicy(): Promise<void> {
+    const summon = hotkeyManager.getAllHotkeys().find((h) => h.action === 'toggleMainWindow')
+    if (!summon?.accelerator || summon.registration !== 'fallback') return
+    const choice = getAppSettings().hotkeyTakeoverChoice
+    if (choice) {
+      hotkeyManager.setFallbackRetryEnabled(choice === 'takeover')
+      return
+    }
+    let detail = '持续尝试接管会在占用者退出后自动恢复系统级快捷键。'
+    try {
+      const candidates = (await locateHotkeyConflict()).slice(0, 3)
+      if (candidates.length) {
+        const lines = candidates.map((c) => `· ${c.name}${c.hint ? `：${c.hint}` : ''}`)
+        detail = `可能的占用者：\n${lines.join('\n')}\n\n${detail}`
+      }
+    } catch {
+      /* 定位失败不阻塞提示 */
+    }
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      title: '唤出键被占用',
+      message: `唤出键 ${summon.accelerator} 当前被其他程序占用，已临时切换兼容模式，功能不受影响。`,
+      detail,
+      buttons: ['持续尝试接管', '暂用兼容模式'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    })
+    const picked = response === 0 ? ('takeover' as const) : ('compat' as const)
+    try {
+      updateAppSettings({ hotkeyTakeoverChoice: picked })
+    } catch {
+      /* 设置持久化失败不影响本次决策 */
+    }
+    hotkeyManager.setFallbackRetryEnabled(picked === 'takeover')
+  }
 
   // 热键运行状态推送：注册状态/钩子可用性/暂停变化时同步到主窗口渲染层，
   // 供设置页如实展示（HOTKEY_GET_ALL 是拉取兜底，本订阅是变化推送）

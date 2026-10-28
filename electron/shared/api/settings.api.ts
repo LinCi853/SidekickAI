@@ -108,6 +108,11 @@ export interface AppSettings {
   browserTabPersistence: 'memory' | 'persistent'
   /** 开发者选项：空闲回收与后台冷标签卸载 */
   lowMemoryMode: boolean
+  /**
+   * 唤出键被占用时的接管策略：null=注册时询问一次；
+   * 'takeover'=持续静默重试接管系统注册；'compat'=只用钩子兼容模式不接管。
+   */
+  hotkeyTakeoverChoice: 'takeover' | 'compat' | null
   /** 默认搜索引擎配置（G1：地址栏非 URL 输入时使用，urlTemplate 使用 {query} 占位符） */
   defaultSearchEngine: {
     name: string

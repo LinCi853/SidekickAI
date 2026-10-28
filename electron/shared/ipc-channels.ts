@@ -125,6 +125,8 @@ export const IPC_CHANNELS = {
   HOTKEY_SET: 'hotkey:set', // 设置某个内置热键（action, accelerator）
   HOTKEY_SET_ENABLED: 'hotkey:setEnabled', // 启用/禁用某个内置热键（action, enabled）
   HOTKEY_STATUS: 'hotkey:status', // 主进程推送热键管理器状态（启动后 / 状态变化时）
+  HOTKEY_CONFLICT_SCAN: 'hotkey:conflictScan', // 唤出键冲突定位（返回候选进程与处置指引）
+  HOTKEY_TAKEOVER_SET: 'hotkey:takeoverSet', // 设置唤出键接管策略（takeover/compat/null）
   HOTKEY_START_RECORDING: 'hotkey:startRecording', // 开始录制热键（主进程临时注册 globalShortcut 捕获按键）
   HOTKEY_STOP_RECORDING: 'hotkey:stopRecording', // 停止录制热键
   HOTKEY_RECORDING_PARTIAL: 'hotkey:recordingPartial', // 录制实时反馈（主进程 → 渲染层：每次按键时推送当前组合）

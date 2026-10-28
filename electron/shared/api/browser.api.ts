@@ -212,6 +212,14 @@ export interface HotkeyConfig {
   registrationReason?: string
 }
 
+/** 唤出键冲突候选（进程 + 怀疑理由 + 处置指引） */
+export interface HotkeyConflictCandidate {
+  pid: number
+  name: string
+  reason: string
+  hint: string | null
+}
+
 /** 热键接口 */
 export interface HotkeyAPI {
   register(accelerator: string, callback: () => void): Promise<boolean>
@@ -223,6 +231,14 @@ export interface HotkeyAPI {
   set(action: HotkeyAction, accelerator: string): Promise<boolean>
   /** 启用/禁用某个内置热键（禁用时注销，启用时注册；持久化） */
   setEnabled(action: HotkeyAction, enabled: boolean): Promise<void>
+  /** 唤出键冲突定位：返回可能的占用者候选（进程 + 处置指引），不结束任何进程 */
+  conflictScan(accelerator: string): Promise<{
+    accelerator: string
+    systemRegistered: boolean
+    candidates: HotkeyConflictCandidate[]
+  }>
+  /** 设置唤出键接管策略（takeover=持续重试接管；compat=只用兼容模式；null=下次注册时再询问） */
+  takeoverSet(choice: 'takeover' | 'compat' | null): Promise<boolean>
   /** 开始录制热键（主进程临时注册 globalShortcut 捕获按键组合） */
   startRecording(): Promise<boolean>
   /** 停止录制热键 */

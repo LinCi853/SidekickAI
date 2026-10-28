@@ -90,6 +90,9 @@ export function getHotkeyManagerInstance(): HotkeyManager | null {
 
 /** 系统通路长按连切的时间窗口兜底（钩子不可用/未观察到按下时） */
 const SYSTEM_REPEAT_FALLBACK_MS = 300
+
+/** 兜底态静默重试系统注册的间隔（持有者退出后自动接管） */
+export const FALLBACK_RETRY_INTERVAL_MS = 45_000
 /** 系统通路按住抑制的时间上限（钩子中途失效导致 held 状态滞留时自愈） */
 const SYSTEM_HOLD_CAP_MS = 3000
 
@@ -135,6 +138,12 @@ export class HotkeyManager {
   private readonly statusListeners = new Set<
     (status: ReturnType<HotkeyManager['getStatus']>) => void
   >()
+  /** accelerator -> 原始回调（供兜底态静默重试系统注册时复用） */
+  private readonly rawCallbacks = new Map<string, () => void>()
+  /** 兜底态静默重试定时器（持有者退出后自动接管系统注册） */
+  private fallbackRetryTimer: ReturnType<typeof setInterval> | null = null
+  /** 兜底态是否允许重试接管（用户选择「兼容模式」时关闭） */
+  private fallbackRetryEnabled = true
   /** 语音热键匹配器（独立于主映射，仅 uiohook keydown/keyup，不走 globalShortcut）；@internal manager 拆分模块协作字段 */
   voiceMatcher: VoiceMatcher | null = null
   /** @internal —— manager 拆分模块协作字段 */
@@ -249,6 +258,7 @@ export class HotkeyManager {
       this.trigger(accelerator, callback, 'hook')
     }
     this.registered.set(accelerator, systemCallback)
+    this.rawCallbacks.set(accelerator, callback)
 
     // 加入 uiohook 匹配器（兜底）
     this.uiohookMatchers.set(accelerator, {
@@ -302,6 +312,7 @@ export class HotkeyManager {
       // 清掉残留的 claim/授权状态，兜底通路从干净状态开始
       this.inputState.suspend()
       this.registrationStates.set(accelerator, 'fallback')
+      this.ensureFallbackRetryTimer()
       this.notifyStatus()
       return true
     }
@@ -377,6 +388,56 @@ export class HotkeyManager {
       return !!observation?.recovered || now - (observation?.at ?? last) >= SYSTEM_HOLD_CAP_MS
     }
     return now - last >= SYSTEM_REPEAT_FALLBACK_MS
+  }
+
+  /**
+   * 兜底态热键静默重试系统注册：注册被占用后走钩子兜底，持有者一退出即自动接管，
+   * 无需用户干预。成功后 register() 内的 notifyStatus 会把新状态推送到设置页。
+   * @returns 是否真正接管了系统注册（仅落回兜底不算成功）
+   */
+  async retryRegistration(accelerator: string): Promise<boolean> {
+    if (this._paused || this._recordingCallback) return false
+    if (this.registrationStates.get(accelerator) !== 'fallback') return false
+    const callback = this.rawCallbacks.get(accelerator)
+    if (!callback) return false
+    await this.register(accelerator, callback)
+    return this.registrationStates.get(accelerator) === 'registered'
+  }
+
+  /** 用户接管策略：false=只用钩子兼容模式，不重试系统注册（设置页可改） */
+  setFallbackRetryEnabled(enabled: boolean): void {
+    this.fallbackRetryEnabled = enabled
+    if (!enabled && this.fallbackRetryTimer) {
+      clearInterval(this.fallbackRetryTimer)
+      this.fallbackRetryTimer = null
+    } else if (enabled && [...this.registrationStates.values()].includes('fallback')) {
+      this.ensureFallbackRetryTimer()
+    }
+  }
+
+  /** 启动兜底态重试定时器（幂等；所有兜底热键恢复系统注册后自动停止） */
+  private ensureFallbackRetryTimer(): void {
+    if (this.fallbackRetryTimer || !this.fallbackRetryEnabled) return
+    this.fallbackRetryTimer = setInterval(() => {
+      void this.retryFallbackRegistrations()
+    }, FALLBACK_RETRY_INTERVAL_MS)
+    this.fallbackRetryTimer.unref?.()
+  }
+
+  private async retryFallbackRegistrations(): Promise<void> {
+    if (this._paused || this._recordingCallback) return
+    const fallbacks = [...this.registrationStates.entries()]
+      .filter(([, state]) => state === 'fallback')
+      .map(([accelerator]) => accelerator)
+    for (const accelerator of fallbacks) {
+      if (await this.retryRegistration(accelerator)) {
+        console.log(`[HotkeyManager] 兜底热键已接管系统注册: ${accelerator}`)
+      }
+    }
+    if (![...this.registrationStates.values()].includes('fallback') && this.fallbackRetryTimer) {
+      clearInterval(this.fallbackRetryTimer)
+      this.fallbackRetryTimer = null
+    }
   }
 
   private syncModifierState(): void {

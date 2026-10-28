@@ -40,6 +40,10 @@ export const hotkeyApi = {
       ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_SET_ENABLED, action, enabled),
     startRecording: () => ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_START_RECORDING),
     stopRecording: () => ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_STOP_RECORDING),
+    conflictScan: (accelerator: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_CONFLICT_SCAN, accelerator),
+    takeoverSet: (choice: 'takeover' | 'compat' | null) =>
+      ipcRenderer.invoke(IPC_CHANNELS.HOTKEY_TAKEOVER_SET, choice),
     onRecordingResult: (callback: (result: { accelerator: string; reason?: string }) => void) => {
       const handler = (_e: unknown, result: { accelerator: string; reason?: string }) =>
         callback(result)

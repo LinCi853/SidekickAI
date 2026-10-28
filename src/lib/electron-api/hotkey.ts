@@ -62,6 +62,30 @@ export async function stopHotkeyRecording(): Promise<void> {
 }
 
 /**
+ * 唤出键冲突定位：返回可能的占用者候选（进程 + 怀疑理由 + 处置指引），
+ * 供设置页在系统注册失败时展示「被谁占用、怎么处理」。
+ */
+export async function scanHotkeyConflict(accelerator: string): Promise<{
+  accelerator: string
+  systemRegistered: boolean
+  candidates: Array<{ pid: number; name: string; reason: string; hint: string | null }>
+}> {
+  const api = requireElectron()
+  return api.hotkey.conflictScan(accelerator)
+}
+
+/**
+ * 设置唤出键接管策略：'takeover'=占用者退出后自动接管系统注册；
+ * 'compat'=只用钩子兼容模式；null=下次注册时重新询问。
+ */
+export async function setHotkeyTakeoverChoice(
+  choice: 'takeover' | 'compat' | null,
+): Promise<boolean> {
+  const api = requireElectron()
+  return api.hotkey.takeoverSet(choice)
+}
+
+/**
  * 监听热键录制结果（主进程 → 渲染层：录制完成后通知）。
  * @returns 取消监听函数
  */

@@ -85,6 +85,8 @@ export function getDefaultAppSettings(isPortable: boolean): DefaultAppSettings {
     browserTabPersistence: 'memory',
     // 开发者可一键启用空闲回收；默认关闭，已加载页面保持挂载。
     lowMemoryMode: false,
+    // 唤出键被占用时的接管策略：null=注册时询问一次；takeover=持续重试接管；compat=只用兼容模式
+    hotkeyTakeoverChoice: null,
     defaultSearchEngine: { name: 'Bing', urlTemplate: 'https://www.bing.com/search?q={query}' },
   }
 }

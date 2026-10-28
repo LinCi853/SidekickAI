@@ -1,10 +1,11 @@
-import { type Dispatch, type SetStateAction } from 'react'
+import { type Dispatch, type SetStateAction, useState } from 'react'
 import type { HotkeyConfig, HotkeyAction } from '../../../lib/electron-api'
 import {
   startHotkeyRecording,
   stopHotkeyRecording,
   onHotkeyRecordingResult,
   onHotkeyRecordingPartial,
+  scanHotkeyConflict,
 } from '../../../lib/electron-api'
 import Button from '../../ui/Button'
 import { useModuleStore } from '../../../store/useModuleStore'
@@ -45,6 +46,21 @@ export default function HotkeySection({
   const enabledModuleIds = useModuleStore(
     useShallow((s) => s.modules.filter((m) => m.enabled).map((m) => m.id)),
   )
+  // 唤出键冲突定位结果（按 accelerator 存储，展示在对应热键项下）
+  const [conflictScan, setConflictScan] = useState<{
+    accelerator: string
+    scanning: boolean
+    candidates: Array<{ pid: number; name: string; reason: string; hint: string | null }>
+  } | null>(null)
+  const runConflictScan = async (accelerator: string) => {
+    setConflictScan({ accelerator, scanning: true, candidates: [] })
+    try {
+      const result = await scanHotkeyConflict(accelerator)
+      setConflictScan({ accelerator, scanning: false, candidates: result.candidates })
+    } catch {
+      setConflictScan(null)
+    }
+  }
   const advancedPanelAvailable =
     enabledModuleIds.includes('custom-chat') ||
     enabledModuleIds.includes('whiteboard') ||
@@ -168,11 +184,49 @@ export default function HotkeySection({
                   </Button>
                 )}
               </div>
-              {/* 系统注册失败但钩子兜底可用：仅在主进程给出原因时降级警告
-                  （Alt+Space 等系统保留键走键盘监听是预期行为，registrationReason 为空则不提示） */}
-              {h.enabled && h.registration === 'fallback' && h.registrationReason && (
-                <div role="status" className="hotkey-feedback feedback-text warn">
-                  {h.registrationReason}
+              {/* 系统注册失败但钩子兜底可用：给出原因 + 可一键定位占用者（不结束任何进程） */}
+              {h.enabled && h.registration === 'fallback' && (
+                <div
+                  role="status"
+                  className="hotkey-feedback feedback-text warn"
+                  data-name={`settings.hotkey.item-${idx + 1}-fallback`}
+                >
+                  {h.registrationReason ?? '系统级注册未启用，当前使用键盘监听兼容模式。'}
+                  {h.accelerator && (
+                    <Button
+                      variant="link"
+                      className="hotkey-conflict-scan"
+                      disabled={conflictScan?.scanning}
+                      onClick={() => void runConflictScan(h.accelerator)}
+                      data-name={`settings.hotkey.item-${idx + 1}-conflict-scan-button`}
+                    >
+                      {conflictScan?.accelerator === h.accelerator && conflictScan.scanning
+                        ? '定位中…'
+                        : '查看占用者'}
+                    </Button>
+                  )}
+                  {conflictScan?.accelerator === h.accelerator &&
+                    !conflictScan.scanning &&
+                    conflictScan.candidates.length > 0 && (
+                      <ul
+                        className="hotkey-conflict-list"
+                        data-name={`settings.hotkey.item-${idx + 1}-conflict-list`}
+                      >
+                        {conflictScan.candidates.slice(0, 5).map((c) => (
+                          <li key={`${c.pid}-${c.name}`}>
+                            <strong>{c.name}</strong>（PID {c.pid}）：{c.reason}
+                            {c.hint && <span className="hotkey-conflict-hint">—— {c.hint}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  {conflictScan?.accelerator === h.accelerator &&
+                    !conflictScan.scanning &&
+                    conflictScan.candidates.length === 0 && (
+                      <span className="hotkey-conflict-hint">
+                        未发现可疑进程；可尝试关闭最近启动的工具类应用后重试。
+                      </span>
+                    )}
                 </div>
               )}
               {h.enabled && (h.registration === 'conflict' || h.registration === 'unavailable') && (

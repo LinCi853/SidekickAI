@@ -119,3 +119,41 @@ describe('HotkeyManager 编排', () => {
     expect(manager.getAllHotkeys()).toHaveLength(2)
   })
 })
+
+describe('HotkeyManager 兜底接管', () => {
+  it('系统注册失败进入兜底，retryRegistration 在占用释放后可接管', async () => {
+    fixture.globalShortcut.register.mockReturnValueOnce(false)
+    const ok = await manager.register('Alt+Space', () => {})
+    expect(ok).toBe(true) // 钩子可用时兜底也算注册成功
+    expect(manager.registrationStates.get('Alt+Space')).toBe('fallback')
+    fixture.globalShortcut.register.mockReturnValue(true)
+    await expect(manager.retryRegistration('Alt+Space')).resolves.toBe(true)
+    expect(manager.registrationStates.get('Alt+Space')).toBe('registered')
+  })
+
+  it('retryRegistration 对未注册或已注册的键不动作', async () => {
+    await expect(manager.retryRegistration('Alt+Space')).resolves.toBe(false)
+    await manager.register('Alt+Space', () => {})
+    expect(manager.registrationStates.get('Alt+Space')).toBe('registered')
+    await expect(manager.retryRegistration('Alt+Space')).resolves.toBe(false)
+  })
+
+  it('接管策略关闭时定时器不重试，开启后自动接管系统注册', async () => {
+    vi.useFakeTimers()
+    try {
+      fixture.globalShortcut.register.mockReturnValueOnce(false)
+      await manager.register('Alt+Space', () => {})
+      expect(manager.registrationStates.get('Alt+Space')).toBe('fallback')
+      manager.setFallbackRetryEnabled(false)
+      const calls = fixture.globalShortcut.register.mock.calls.length
+      await vi.advanceTimersByTimeAsync(45_000)
+      expect(fixture.globalShortcut.register.mock.calls.length).toBe(calls)
+      manager.setFallbackRetryEnabled(true)
+      fixture.globalShortcut.register.mockReturnValue(true)
+      await vi.advanceTimersByTimeAsync(45_000)
+      expect(manager.registrationStates.get('Alt+Space')).toBe('registered')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
