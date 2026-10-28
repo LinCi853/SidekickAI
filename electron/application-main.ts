@@ -405,6 +405,19 @@ app
       }
     } catch {}
     createTray()
+    // AI 资产存量迁移（一次性）推迟到窗口就绪后后台分批执行：首启动立即见窗，迁移不冻结界面
+    let assetBootstrapScheduled = false
+    const runAssetBootstrap = () => {
+      if (assetBootstrapScheduled) return
+      assetBootstrapScheduled = true
+      void getChatStore()
+        .bootstrapAiAssets()
+        .catch((error) => console.warn('[ai-assets] 存量迁移失败:', error))
+    }
+    const bootstrapWindow = windowState.mainWindow
+    if (bootstrapWindow && !bootstrapWindow.isDestroyed())
+      bootstrapWindow.once('ready-to-show', runAssetBootstrap)
+    setTimeout(runAssetBootstrap, 5_000).unref?.()
     let pendingOnboarding = showGuideRequested
     try {
       if (!pendingOnboarding && !skipGuideRequested && !silentStartRequested) {

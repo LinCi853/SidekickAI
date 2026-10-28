@@ -69,6 +69,8 @@ const attachment = (row: AttachmentRow): AssetAttachment => ({
 export class AiAssetsStore {
   readonly graph: AssetGraphStore
   private mimoIdentities = new Map<string, string>()
+  /** 存量迁移单飞：并发调用共享同一个进行中的迁移 */
+  private bootstrap: Promise<void> | null = null
   constructor(private db: Database.Database) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS asset_conversation_keys (
@@ -134,65 +136,96 @@ export class AiAssetsStore {
     if (!attachmentColumns.some((column) => column.name === 'updated_at'))
       db.exec('ALTER TABLE asset_attachments ADD COLUMN updated_at INTEGER')
     this.graph = new AssetGraphStore(db)
-    this.bootstrapObservations()
   }
 
   /**
-   * 存量一次性迁移：清理收录抖动误记修订 + 回填观察签名。
-   * 正常收录/修订/导入路径都即时播种观察（见各处 INSERT），本回填只补功能上线前的存量。
-   * 全量内容摘要对大库是 10 秒级启动开销（323MB 库实测约 13.6 秒），
-   * 因此迁移完成即写入标记，后续启动直接跳过；将来需要重跑时提升键名版本（v2）。
+   * 存量一次性迁移（异步分批）：清理收录抖动误记修订 + 回填观察签名。
+   * 刻意不在构造器执行——首启动要立即见窗；正常收录/修订/导入路径都即时播种观察
+   * （见各处 INSERT），本回填只补功能上线前的存量。按批处理、批次间让出事件循环，
+   * 迁移期间界面保持可用；完成写入标记后，后续启动与重复调用直接跳过。
+   * 将来需要重跑时提升键名版本（v2）。
    */
-  private bootstrapObservations(): void {
+  bootstrapObservations(): Promise<void> {
+    if (!this.bootstrap) this.bootstrap = this.runObservationBootstrap()
+    return this.bootstrap
+  }
+
+  private async runObservationBootstrap(): Promise<void> {
     const marker = 'observation_seed_v1'
     const done = this.db.prepare('SELECT value FROM asset_store_meta WHERE key = ?').get(marker) as
       | { value: string }
       | undefined
     if (done) return
-    this.db.transaction(() => {
-      this.cleanupNoiseRevisions()
-      const seed = this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
-      const versions = this.db
-        .prepare(`SELECT m.id, m.content, s.reasoning FROM messages m JOIN asset_message_state s ON s.message_id = m.id
-      UNION ALL SELECT message_id AS id, content, reasoning FROM asset_revisions`)
-        .all() as Array<{ id: string; content: string; reasoning: string }>
-      for (const item of versions)
-        seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning])))
-      this.db.prepare('INSERT OR REPLACE INTO asset_store_meta VALUES (?, ?)').run(marker, '1')
-    })()
-  }
-
-  /** 收录抖动留下的历史版本不是真实修订：与当前内容仅空白/工具状态行差异、或只是清掉工具卡片残行的，启动时清理 */
-  private cleanupNoiseRevisions(): void {
-    const rows = this.db
-      .prepare(`SELECT r.rowid AS rowid, r.content AS content, r.reasoning AS reasoning,
+    const started = Date.now()
+    const batchSize = 200
+    const yieldToEventLoop = () => new Promise((resolve) => setImmediate(resolve))
+    // 1) 噪声修订清理：按 rowid 键集分批（收录抖动留下的历史版本不是真实修订：
+    //    与当前内容仅空白/工具状态行差异、或只是清掉工具卡片残行的）
+    const noiseQuery =
+      this.db.prepare(`SELECT r.rowid AS rowid, r.content AS content, r.reasoning AS reasoning,
       m.content AS current, COALESCE(s.reasoning, '') AS current_reasoning
       FROM asset_revisions r JOIN messages m ON m.id = r.message_id
-      LEFT JOIN asset_message_state s ON s.message_id = m.id`)
-      .all() as Array<{
-      rowid: number
-      content: string
-      reasoning: string
-      current: string
-      current_reasoning: string
-    }>
+      LEFT JOIN asset_message_state s ON s.message_id = m.id
+      WHERE r.rowid > ? ORDER BY r.rowid LIMIT ?`)
     const remove = this.db.prepare('DELETE FROM asset_revisions WHERE rowid = ?')
-    this.db.transaction(() => {
-      for (const row of rows) {
-        const settled =
-          captureRevisionSignature(row.content) === captureRevisionSignature(row.current) &&
-          captureRevisionSignature(row.reasoning) ===
-            captureRevisionSignature(row.current_reasoning)
-        const empty =
-          !captureRevisionSignature(row.content) && !captureRevisionSignature(row.reasoning)
-        const noise =
-          captureLeadingNoiseDifference(row.content, row.current) &&
-          (captureRevisionSignature(row.reasoning) ===
-            captureRevisionSignature(row.current_reasoning) ||
-            captureLeadingNoiseDifference(row.reasoning, row.current_reasoning))
-        if (settled || empty || noise) remove.run(row.rowid)
+    let cursor = 0
+    for (;;) {
+      const rows = noiseQuery.all(cursor, batchSize) as Array<{
+        rowid: number
+        content: string
+        reasoning: string
+        current: string
+        current_reasoning: string
+      }>
+      if (!rows.length) break
+      cursor = rows[rows.length - 1].rowid
+      this.db.transaction(() => {
+        for (const row of rows) {
+          const settled =
+            captureRevisionSignature(row.content) === captureRevisionSignature(row.current) &&
+            captureRevisionSignature(row.reasoning) ===
+              captureRevisionSignature(row.current_reasoning)
+          const empty =
+            !captureRevisionSignature(row.content) && !captureRevisionSignature(row.reasoning)
+          const noise =
+            captureLeadingNoiseDifference(row.content, row.current) &&
+            (captureRevisionSignature(row.reasoning) ===
+              captureRevisionSignature(row.current_reasoning) ||
+              captureLeadingNoiseDifference(row.reasoning, row.current_reasoning))
+          if (settled || empty || noise) remove.run(row.rowid)
+        }
+      })()
+      await yieldToEventLoop()
+    }
+    // 2) 观察签名播种：清理后的存量版本逐批补记（digest 与写入路径保持一致）
+    const seed = this.db.prepare('INSERT OR IGNORE INTO asset_observations VALUES (?, ?)')
+    const stateQuery =
+      this.db.prepare(`SELECT m.rowid AS rowid, m.id AS id, m.content AS content, s.reasoning AS reasoning
+      FROM messages m JOIN asset_message_state s ON s.message_id = m.id
+      WHERE m.rowid > ? ORDER BY m.rowid LIMIT ?`)
+    const revisionQuery =
+      this.db.prepare(`SELECT rowid AS rowid, message_id AS id, content, reasoning
+      FROM asset_revisions WHERE rowid > ? ORDER BY rowid LIMIT ?`)
+    for (const query of [stateQuery, revisionQuery]) {
+      cursor = 0
+      for (;;) {
+        const versions = query.all(cursor, batchSize) as Array<{
+          rowid: number
+          id: string
+          content: string
+          reasoning: string
+        }>
+        if (!versions.length) break
+        cursor = versions[versions.length - 1].rowid
+        this.db.transaction(() => {
+          for (const item of versions)
+            seed.run(item.id, digest(JSON.stringify([item.content, item.reasoning])))
+        })()
+        await yieldToEventLoop()
       }
-    })()
+    }
+    this.db.prepare('INSERT OR REPLACE INTO asset_store_meta VALUES (?, ?)').run(marker, '1')
+    console.log('[ai-assets] 存量迁移完成，用时', Date.now() - started, 'ms')
   }
 
   clearData(settingsPath: string, collectionJournalPath?: string): void {

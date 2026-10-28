@@ -449,6 +449,14 @@ export class ChatStore {
     return this.usageTraces.logAppStart()
   }
 
+  /**
+   * AI 资产存量迁移（一次性，异步分批）：由启动流程在窗口就绪后调度，
+   * 不阻塞启动；完成写标记后重复调用直接跳过。
+   */
+  bootstrapAiAssets(): Promise<void> {
+    return this.assets.bootstrapObservations()
+  }
+
   /** 记录应用退出时间（更新最近一条启动记录的 end_time） */
   logAppEnd(): void {
     this.usageTraces.logAppEnd()
