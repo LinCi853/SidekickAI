@@ -406,29 +406,33 @@ export default function BottomBar({
                 </svg>
                 快捷键
               </button>
-              <button
-                type="button"
-                className="expanded-btn"
-                onClick={onToggle}
-                title="收起底栏"
-                data-name="main.bottom-bar.collapse-button"
-              >
-                <svg
-                  className="icon-svg-sm"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  data-name="main.bottom-bar.collapse-icon"
-                >
-                  <path d="m18 15-6-6-6 6" />
-                </svg>
-                收起
-              </button>
             </div>
           </div>
+        )}
+
+        {/* 右下角收起细节：灰色小箭头（向下）+ 静默点击热区，点击立即收起底栏 */}
+        {expanded && (
+          <button
+            type="button"
+            className="bottom-corner-collapse"
+            onClick={onToggle}
+            title="收起底栏"
+            aria-label="收起底栏"
+            data-name="main.bottom-bar.corner-collapse"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              data-name="main.bottom-bar.corner-collapse-icon"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
         )}
 
         {/* 抽屉红色短横手柄（始终可见，点击展开/收起） */}

@@ -434,7 +434,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  /* 底部留出一条空白带，供右下角收起细节落位，避免图标压到操作按钮 */
+  padding: var(--space-2) var(--space-3) var(--space-6);
   overflow-y: auto;
   min-height: 0;
 }
@@ -565,6 +566,38 @@
 .expanded-btn:hover {
   background: var(--input);
   border-color: var(--ring);
+}
+
+/* ===== 右下角收起细节：灰色小箭头（向下）+ 静默点击热区 ===== */
+/* 热区绝对定位于面板右下角，不占布局空间；图标平时低调，悬停时才完全显形 */
+.bottom-corner-collapse {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: calc(var(--space-10) * 1.8);
+  height: var(--space-6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  opacity: 0.5;
+  cursor: pointer;
+  z-index: 3;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.bottom-corner-collapse svg {
+  width: 15px;
+  height: 15px;
+}
+.bottom-corner-collapse:hover,
+.bottom-corner-collapse:focus-visible {
+  opacity: 1;
+  color: var(--foreground);
 }
 
 /* 抽屉手柄：居中 50% 宽度区域，收起态也始终可见（从底栏顶部伸出） */
@@ -812,7 +845,8 @@
   font-size: var(--text-xs);
 }
 .main-view[data-viewport="narrow"] .bottom-bar-expanded {
-  padding: var(--space-2);
+  /* 窄屏同样保留底部收起细节的落位空白 */
+  padding: var(--space-2) var(--space-2) var(--space-6);
   gap: var(--space-1);
 }
 .main-view[data-viewport="narrow"] .expanded-btn {
