@@ -50,6 +50,41 @@ export function getDirSize(dirPath: string): number {
   return size
 }
 
+/**
+ * 异步递归计算目录总体积（字节）。
+ *
+ * 与 getDirSize 同口径，但不在主线程做同步遍历：缓存统计会跑在启动路径上，
+ * 同步遍历会占住 Electron 主线程，把等待主进程 IPC 的渲染层初始化一起推迟。
+ */
+export async function getDirSizeAsync(dirPath: string): Promise<number> {
+  let entries: fs.Dirent[]
+  try {
+    entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  const fileSizes = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        try {
+          return (await fs.promises.stat(path.join(dirPath, entry.name))).size
+        } catch {
+          return 0
+        }
+      }),
+  )
+  const dirSizes = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => getDirSizeAsync(path.join(dirPath, entry.name))),
+  )
+  return (
+    fileSizes.reduce((total, size) => total + size, 0) +
+    dirSizes.reduce((total, size) => total + size, 0)
+  )
+}
+
 /** 获取数据目录路径 */
 export function getDataDir(): string {
   return getStoreCwd()

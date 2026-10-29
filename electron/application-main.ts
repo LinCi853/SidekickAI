@@ -418,6 +418,18 @@ app
     if (bootstrapWindow && !bootstrapWindow.isDestroyed())
       bootstrapWindow.once('ready-to-show', runAssetBootstrap)
     setTimeout(runAssetBootstrap, 5_000).unref?.()
+    // Cache sweep waits for the window as well: the tabs restored during startup hold
+    // their own cache directories, so sweeping at this point removes nothing and
+    // competes with the first paint. The cleanup itself runs off the main thread.
+    let cacheCleanScheduled = false
+    const runCacheClean = () => {
+      if (cacheCleanScheduled) return
+      cacheCleanScheduled = true
+      void maybeAutoCleanCache()
+    }
+    if (bootstrapWindow && !bootstrapWindow.isDestroyed())
+      bootstrapWindow.once('ready-to-show', runCacheClean)
+    setTimeout(runCacheClean, 5_000).unref?.()
     let pendingOnboarding = showGuideRequested
     try {
       if (!pendingOnboarding && !skipGuideRequested && !silentStartRequested) {
@@ -482,7 +494,6 @@ app
       return exportApplicationData(target, options, encrypt)
     })
     attachDownloadHandlersForAllProfiles()
-    void maybeAutoCleanCache()
     void sweepStaleRuntimeTemp(app.getPath('temp')).catch((error) =>
       console.warn('[temp] sweep failed:', error),
     )
