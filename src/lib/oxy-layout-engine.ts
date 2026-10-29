@@ -233,7 +233,7 @@ export function layoutToCssVars(layout: OxyLayout): Record<string, string> {
     '--sidebar-w': `calc(var(--titlebar-icon) * 9)`,
     '--chat-input-min-h': `calc(var(--titlebar-icon) * 1.4)`,
     '--app-grid-item-w': `calc(var(--titlebar-icon) * 2.6)`,
-    '--expanded-btn-w': `calc(var(--titlebar-icon) * 3.1)`,
+    '--expanded-btn-w': `calc(var(--titlebar-icon) * 3.4)`,
     '--panel-min-w': `calc(var(--titlebar-icon) * 11)`,
     '--panel-max-w': `${layout.panelMaxW}px`,
     '--page-margin-max': `${layout.pageMarginMax}px`,

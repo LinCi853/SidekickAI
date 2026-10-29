@@ -434,8 +434,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  /* 底部留出一条空白带，供右下角收起细节落位，避免图标压到操作按钮 */
-  padding: var(--space-2) var(--space-3) var(--space-6);
+  padding: var(--space-2) var(--space-3);
   overflow-y: auto;
   min-height: 0;
 }
@@ -558,9 +557,11 @@
   transition:
     background var(--duration-fast),
     border-color var(--duration-fast);
-  flex: 0 1 var(--expanded-btn-w);
-  min-width: calc(var(--expanded-btn-w) * 0.7);
+  flex: 0 0 auto;
+  /* 宽度由内容决定（下限 --expanded-btn-w），三枚按钮仍等宽且文字不再折行 */
+  min-width: var(--expanded-btn-w);
   max-width: calc(var(--expanded-btn-w) * 1.3);
+  white-space: nowrap;
   justify-content: center;
 }
 .expanded-btn:hover {
@@ -569,17 +570,17 @@
 }
 
 /* ===== 右下角收起细节：灰色小箭头（向下）+ 静默点击热区 ===== */
-/* 热区绝对定位于面板右下角，不占布局空间；图标平时低调，悬停时才完全显形 */
+/* 按钮本体只包住小箭头（不占布局空间）；伪元素向左上方扩展成易点的热区 */
 .bottom-corner-collapse {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: calc(var(--space-10) * 1.8);
-  height: var(--space-6);
+  width: 26px;
+  height: 24px;
   display: inline-flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-end;
-  padding-right: var(--space-3);
+  padding: 0 var(--space-2) var(--space-0-5) 0;
   border: 0;
   background: transparent;
   color: var(--muted-foreground);
@@ -590,14 +591,27 @@
     opacity var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
 }
+/* 可点热区：向左扩展 22px、向上 4px，视觉上不可见 */
+.bottom-corner-collapse::after {
+  content: "";
+  position: absolute;
+  left: -22px;
+  right: 0;
+  top: -4px;
+  bottom: 0;
+}
 .bottom-corner-collapse svg {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
 }
 .bottom-corner-collapse:hover,
 .bottom-corner-collapse:focus-visible {
   opacity: 1;
   color: var(--foreground);
+}
+.bottom-corner-collapse:focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: -1px;
 }
 
 /* 抽屉手柄：居中 50% 宽度区域，收起态也始终可见（从底栏顶部伸出） */
@@ -845,8 +859,7 @@
   font-size: var(--text-xs);
 }
 .main-view[data-viewport="narrow"] .bottom-bar-expanded {
-  /* 窄屏同样保留底部收起细节的落位空白 */
-  padding: var(--space-2) var(--space-2) var(--space-6);
+  padding: var(--space-2);
   gap: var(--space-1);
 }
 .main-view[data-viewport="narrow"] .expanded-btn {
