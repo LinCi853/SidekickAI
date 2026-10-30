@@ -3,10 +3,10 @@
   "runtime": "net-framework-4",
   "architecture": "anycpu",
   "executable": "SidekickStartup.exe",
-  "sha256": "62d3a40135707044608ef812c268abe66799ad56b0a94eb5c2d873f21cb6cf2a",
+  "sha256": "ae77195848709ecc07958532f1b4cc882296d9798458c6e82e45bc5fa061fb16",
   "configSha256": "894fbbdeb71840ee5de8685c45b71865fbeeac25525a6da4d4af2121e540780d",
   "compilerSha256": "eca02e6b15cde93009a59a3d129d5a77fb5008f2e1cf62cf573b6737c747ecc3",
-  "sourceSha256": "fa2a62c5e089870df9d3e96cb52d9941c65ce5ffa262468504475d4854eae99c",
+  "sourceSha256": "90d8a5f2c63f70fdb4eaf8016953ddefb1abcab6f51fd2520b7ec29467ef82ab",
   "sources": [
     {
       "path": "resources/windows/application-process.ps1",
@@ -26,7 +26,7 @@
     },
     {
       "path": "scripts/build-startup-helper.cjs",
-      "sha256": "7db6bd68f6bd6685bf2b14a0619c31eb640cc54e6e9e2133474ee19fb8ac9295"
+      "sha256": "835d0e0bc8444a14d05c8c0d8e21fcabb62235ffb1d7a44d750a09c88b7e0405"
     }
   ],
   "scripts": {
