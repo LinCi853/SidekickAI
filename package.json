@@ -90,7 +90,7 @@
     "buffer-crc32": "^1.0.0",
     "electron": "^43.7.9",
     "electron-builder": "^26.17.0",
-    "electron-vite": "^5.0.0",
+    "electron-vite": "^6.0.0",
     "esbuild": "0.25.12",
     "highlight.js": "^11.12.0",
     "js-yaml": "^5.5.0",
