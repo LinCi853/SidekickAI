@@ -27,7 +27,9 @@ function readProductDescriptor(root) {
     document.schemaVersion !== 1 ||
     document.productId !== 'sidekickai' ||
     !document.editions?.concept ||
-    document.icon !== 'resources/product-icon.ico'
+    document.icon !== 'resources/product-icon.ico' ||
+    (document.backupComponent !== undefined &&
+      document.backupComponent !== 'resources/host-backup/component.json')
   )
     throw new Error('Invalid application distribution product')
   return { document, sha256: u.hash(runtime.canonicalJson(document)), originalSha256: u.hash(raw) }

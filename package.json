@@ -61,7 +61,9 @@
     "versions:check": "node scripts/sync-versions.cjs --check",
     "test:tooling": "node --test scripts/workspace-menu.test.cjs scripts/shared-source.test.cjs scripts/sync-versions.test.cjs scripts/product-version.test.cjs scripts/local-build-config.test.cjs scripts/incremental-build.test.cjs scripts/build-distribution.test.cjs scripts/application-payload.test.cjs scripts/windows-packaging.test.cjs scripts/distribution-toolkit.test.cjs scripts/assemble-application.test.cjs scripts/clean-temp.test.cjs",
     "test:backup": "vitest run --root packages/backup-core",
-    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run format:check && npm run lint:check && npm run architecture:check && npm run deadcode:check && npm run typecheck && npm run test:tooling && npm run test:deadcode && npm test && npm run test:backup"
+    "test:host-backup": "node --test scripts/host-backup.test.cjs",
+    "build:host-backup": "npm run product:check && npm run shared:check && node scripts/build-host-backup.cjs",
+    "verify": "npm run product:check && npm run shared:check && npm run versions:check && npm run format:check && npm run lint:check && npm run architecture:check && npm run deadcode:check && npm run typecheck && npm run test:tooling && npm run test:deadcode && npm test && npm run test:backup && npm run test:host-backup"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

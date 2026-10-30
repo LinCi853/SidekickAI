@@ -109,6 +109,7 @@ scripts/poc/
 # 测试/测量/本地工具脚本不入库（源码仓只保留发布构建链）
 scripts/*.test.*
 !scripts/architecture-check.test.mjs
+!scripts/host-backup.test.cjs
 scripts/verify-*
 !scripts/verify-packaged-native.cjs
 scripts/measure-*

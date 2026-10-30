@@ -175,7 +175,7 @@ export async function exportOfflineBackup(request: OfflineBackupRequest): Promis
       version: () => request.version,
       deviceId: () => `${request.edition}-offline`,
       closeDatabases: async () => {},
-      collect: collectOfflineFiles,
+      collect: async (source, options) => collectOfflineFiles(source, options),
       validate: (source) => {
         assertOrdinaryPath(source, true)
       },

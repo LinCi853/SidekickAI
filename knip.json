@@ -5,6 +5,7 @@
   "ignore": [
     "src/lib/_empty.ts",
     "packages/resource-contract/service-origin.d.mts",
+    "packages/backup-core/component.ts",
     "scripts/build-backup-cli.cjs",
     "scripts/prepare-startup-helper.cjs",
     "scripts/verify-edition-coexistence.cjs",

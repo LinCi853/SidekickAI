@@ -138,6 +138,22 @@ function packApplicationPayload({
     throw new Error('Application payload output already exists')
   const before = application.applicationFingerprint(source)
   const verified = application.verifyRuntime(source, architecture, { edition, productVersion })
+  const componentDirectory = path.join(source, 'resources/host-backup')
+  const descriptorFile = path.join(source, 'resources/product-descriptor.json')
+  if (fs.existsSync(componentDirectory) || fs.existsSync(descriptorFile)) {
+    const component = require('./build-host-backup.cjs').verifyComponent(
+      componentDirectory,
+      architecture,
+    )
+    const product = JSON.parse(fs.readFileSync(descriptorFile, 'utf8'))
+    if (
+      component.edition !== edition ||
+      component.productVersion !== productVersion ||
+      product.backupComponent !== 'resources/host-backup/component.json' ||
+      product.productId !== component.productId
+    )
+      throw new Error('Application host backup identity or declaration mismatch')
+  }
   const nativeFiles = application.verifyNativeFiles(source, architecture)
   const iconPath = 'resources/product-icon.ico'
   const iconSource = path.resolve(__dirname, '../resources/icons/icon.ico')

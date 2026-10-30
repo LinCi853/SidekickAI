@@ -84,5 +84,5 @@
     "required": ["settings.db"],
     "anyOf": ["chat.db", "whiteboard.db", "notes.db", "injection-history.json"]
   },
-  "appExportHook": "--export-user-data"
+  "backupComponent": "resources/host-backup/component.json"
 }

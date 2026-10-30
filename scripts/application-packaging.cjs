@@ -93,6 +93,8 @@ function applicationPackageInputs() {
     'scripts/build-startup-helper.cjs',
     'scripts/prepare-startup-helper.cjs',
     'scripts/verify-startup-helper.cjs',
+    'scripts/build-host-backup.cjs',
+    'contracts/distribution-product.json',
     'tools/startup-helper',
     'build/License.txt',
     'LICENSE',
@@ -303,6 +305,18 @@ function verifyApplication(directory, arch) {
     { root: ROOT },
   )
   const expectedConfiguration = runtime.applicationConfiguration(ROOT)
+  require('./build-host-backup.cjs').verifyComponent(
+    path.join(directory, 'resources/host-backup'),
+    arch,
+  )
+  const descriptor = JSON.parse(
+    fs.readFileSync(path.join(directory, 'resources/product-descriptor.json'), 'utf8'),
+  )
+  if (
+    runtime.canonicalJson(descriptor) !==
+    runtime.canonicalJson(require('../contracts/distribution-product.json'))
+  )
+    throw new Error('Packaged application product descriptor mismatch')
   const keys = JSON.parse(
     fs.readFileSync(path.join(directory, 'resources/application-trust.json'), 'utf8'),
   )
