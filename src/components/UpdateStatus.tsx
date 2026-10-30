@@ -65,6 +65,8 @@ export default function UpdateStatus() {
         ? 'ZIP 已保存'
         : '向导已打开'
       : UPDATE_HINTS[state.phase]
+  const showOffer = !!state.offer && ['available', 'downloading'].includes(state.phase)
+  const hasDetail = showOffer || state.phase === 'ready'
   return (
     <>
       <span className="about-update" data-name="settings.about.updates">
@@ -117,45 +119,45 @@ export default function UpdateStatus() {
           </button>
         )}
       </span>
-      {state.offer && ['available', 'downloading'].includes(state.phase) && (
-        <div className="about-update-detail">
-          <p className="settings-section-hint">
-            新版本 {state.offer.version} · {(state.offer.sizeBytes / 1024 ** 2).toFixed(1)} MiB
-          </p>
-          {state.offer.notes && (
-            <p className="settings-section-hint about-update-notes">{state.offer.notes}</p>
+      {hasDetail && (
+        <div className="about-update-popover" data-name="settings.about.update-popover">
+          {showOffer && (
+            <div className="about-update-detail">
+              <p className="settings-section-hint">
+                新版本 {state.offer!.version} · {(state.offer!.sizeBytes / 1024 ** 2).toFixed(1)}{' '}
+                MiB
+              </p>
+              {state.offer!.notes && (
+                <p className="settings-section-hint about-update-notes">{state.offer!.notes}</p>
+              )}
+              {state.phase === 'available' && (
+                <button
+                  type="button"
+                  className="btn-outline btn-outline-sm"
+                  disabled={pending}
+                  onClick={() => void run(() => window.electron.updates.accept(state.offer!.id))}
+                >
+                  <Download size={14} />
+                  {state.offer!.kind === 'portable' ? '保存新版绿色 ZIP' : '下载并打开安装向导'}
+                </button>
+              )}
+              {state.phase === 'downloading' && (
+                <progress
+                  max={state.offer!.sizeBytes}
+                  value={state.downloadedBytes}
+                  aria-label="下载进度"
+                />
+              )}
+            </div>
           )}
-          {state.phase === 'available' && (
-            <button
-              type="button"
-              className="btn-outline btn-outline-sm"
-              disabled={pending}
-              onClick={() => void run(() => window.electron.updates.accept(state.offer!.id))}
-            >
-              <Download size={14} />
-              {state.offer.kind === 'portable' ? '保存新版绿色 ZIP' : '下载并打开安装向导'}
-            </button>
-          )}
-          {state.phase === 'downloading' && (
-            <progress
-              max={state.offer.sizeBytes}
-              value={state.downloadedBytes}
-              aria-label="下载进度"
-            />
+          {state.phase === 'ready' && (
+            <p className="about-update-detail settings-section-hint">
+              {state.offer?.kind === 'portable'
+                ? '新版 ZIP 已保存，现有资料保持原位置。'
+                : '安装向导已打开，等待维护操作。'}
+            </p>
           )}
         </div>
-      )}
-      {state.phase === 'ready' && (
-        <p className="settings-section-hint about-update-detail">
-          {state.offer?.kind === 'portable'
-            ? '新版 ZIP 已保存，现有资料保持原位置。'
-            : '安装向导已打开，等待维护操作。'}
-        </p>
-      )}
-      {state.error && (
-        <p className="settings-section-hint about-update-detail is-error" role="alert">
-          {state.error}
-        </p>
       )}
     </>
   )

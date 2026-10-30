@@ -329,6 +329,25 @@
   color: var(--muted-foreground);
 }
 
+.about-name-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+.about-name-link:hover,
+.about-name-link:focus-visible {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+.about-name-link:focus-visible {
+  outline: 1px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
 /* ===== 全局热键自定义 ===== */
 .hotkey-custom {
   display: flex;

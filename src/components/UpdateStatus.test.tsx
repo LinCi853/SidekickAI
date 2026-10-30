@@ -95,7 +95,9 @@ it('blocks repeated checks while a request is pending and presents one failure',
   expect(button('检查更新').props.disabled).toBe(true)
   pending.reject(new Error('Service unavailable'))
   await settle()
-  const alerts = elements(render()).filter((element) => element.props.role === 'alert')
-  expect(alerts).toHaveLength(1)
-  expect(alerts[0].props.children).toBe('Service unavailable')
+  // 更新详情已移入浮层，失败只在标题栏出现一次：状态徽标带出失败文案与原始错误。
+  const failures = elements(render()).filter((element) => element.props.role === 'status')
+  expect(failures).toHaveLength(1)
+  expect(failures[0].props.children).toBe('更新失败')
+  expect(failures[0].props.title).toBe('Service unavailable')
 })
