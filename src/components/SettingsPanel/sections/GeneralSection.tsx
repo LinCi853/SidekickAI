@@ -140,7 +140,10 @@ export default function GeneralSection({ general, onChange }: GeneralSectionProp
               setDraft({ autoLaunch: next })
             }
             try {
-              await updateAppSettings({ autoLaunch: next, silentStart: next ? undefined : false })
+              // 开启时不下发 silentStart：省略即"不修改"，传 undefined 会被严格校验判为非法值。
+              await updateAppSettings(
+                next ? { autoLaunch: next } : { autoLaunch: next, silentStart: false },
+              )
             } catch (e) {
               console.error('保存开机自启动设置失败:', e)
               setDraft({ autoLaunch: !next })

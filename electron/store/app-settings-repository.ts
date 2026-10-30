@@ -71,6 +71,9 @@ function validated(input: unknown, strict: boolean): Partial<AppSettings> {
   for (const key of Object.keys(defaults) as Array<keyof AppSettings>) {
     if (!Object.hasOwn(input, key)) continue
     const value = (input as Record<string, unknown>)[key]
+    // 显式的 undefined 表示"这一项不修改"，等同缺席：渲染层用 undefined 表达"保持原值"，
+    // 若当成非法值拒绝，会让本可成功的设置整体失败。
+    if (value === undefined) continue
     if (isValid(key, value, defaults)) result[key] = structuredClone(value)
     else if (strict) throw new Error(`应用设置值无效: ${key}`)
   }

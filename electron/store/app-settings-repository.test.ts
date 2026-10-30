@@ -104,4 +104,16 @@ describe('Application settings persistence', () => {
       expect(JSON.parse(data.raw!)).toEqual(getDefaultAppSettings(false))
     }
   })
+
+  it('treats an explicit undefined as "leave this setting unchanged"', () => {
+    // 渲染层用 undefined 表达"保持原值"；它不能被当成非法值，否则整次设置都会失败。
+    expect(validateAppSettingsPatch({ autoLaunch: true, silentStart: undefined })).toEqual({
+      autoLaunch: true,
+    })
+    expect(validateAppSettingsPatch({ silentStart: undefined })).toEqual({})
+    expect(validateAppSettingsPatch({ autoLaunch: false, silentStart: false })).toEqual({
+      autoLaunch: false,
+      silentStart: false,
+    })
+  })
 })
