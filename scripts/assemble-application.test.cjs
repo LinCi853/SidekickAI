@@ -310,6 +310,47 @@ test('a key file selects the official domain without leaking private material', 
     assert.equal(fs.readFileSync(path.join(path.dirname(assembled.resultFile), item.path)).includes(jwk.d), false)
 })
 
+test('official key sets select one key without assuming a literal id', async t => {
+  const value = await context(t, { payloads: true })
+  const jwk = () => crypto.generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' })
+  const first = 'admin_' + 'a'.repeat(32)
+  const second = 'admin_' + 'b'.repeat(32)
+  const keyFile = path.join(value.directory, 'publication-keys.json')
+  const writeSet = (document) => fs.writeFileSync(keyFile, JSON.stringify(document))
+  const entries = [{ id: first, privateKey: jwk() }, { id: second, privateKey: jwk() }]
+  const assembleWith = async (name, extra, domainKey) => {
+    const runner = mockAssembler({ domain: 'official:' + domainKey })
+    return assembly.assemble(optionsFor(value, runner.spawn, path.join(value.root, name), { keyFile, ...extra }))
+  }
+
+  writeSet({ formatVersion: 1, adminKeys: entries })
+  await assert.rejects(assembly.assemble(optionsFor(value, mockAssembler().spawn,
+    path.join(value.root, 'ambiguous'), { keyFile })), /多把 admin 钥/)
+  const explicit = await assembleWith('explicit', { keyId: second }, second)
+  assert.equal(explicit.result.issuerKeyId, second)
+  assert.equal(explicit.result.domain, 'official:' + second)
+
+  writeSet({ formatVersion: 1, adminKeyId: second, adminKeys: entries })
+  const designated = await assembleWith('designated', {}, second)
+  assert.equal(designated.result.issuerKeyId, second)
+
+  writeSet({ formatVersion: 1,
+    adminKeys: [{ ...entries[0] }, { ...entries[1], active: true }] })
+  const active = await assembleWith('active', {}, second)
+  assert.equal(active.result.issuerKeyId, second)
+
+  writeSet({ formatVersion: 1, adminKeys: entries })
+  await assert.rejects(assembly.assemble(optionsFor(value, mockAssembler().spawn,
+    path.join(value.root, 'unknown'), { keyFile, keyId: 'admin_' + 'c'.repeat(32) })), /缺少 admin_cccc/)
+  await assert.rejects(assembly.assemble(optionsFor(value, mockAssembler().spawn,
+    path.join(value.root, 'bad-id'), { keyFile, keyId: 'admin/with/slash' })), /id 格式不受支持/)
+
+  writeSet({ formatVersion: 1, adminKeys: [entries[0]] })
+  const single = await assembleWith('single', {}, first)
+  assert.equal(single.result.issuerKeyId, first)
+  assert.equal(single.result.domain, 'official:' + first)
+})
+
 test('verify-package-spec must attest the requested domain before assembly', async t => {
   const value = await context(t, { payloads: true })
   const runner = mockAssembler({ verify({ packageDir, respond }) {
@@ -398,7 +439,6 @@ test('application manifests project the product descriptor and installation defa
   assert.equal(manifest.app.icon, 'resources/product-icon.ico')
   assert.equal(manifest.app.entry, 'SidekickAI.exe')
   assert.equal(manifest.app.identityCarrier, 'electron-asar')
-  assert.equal(manifest.app.backupComponent, 'resources/host-backup/component.json')
   assert.equal(manifest.productVersion, '9.4.2')
   assert.deepEqual(manifest.payload.packages[0].requiredFiles,
     require('./application-packaging.cjs').REQUIRED_RUNTIME_FILES)

@@ -40,7 +40,6 @@ const EDITION_FIELDS = [
   'requiredFiles',
 ]
 const KEY_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/
-const OFFICIAL_KEY_ID = 'admin_c80c9c3f5a39429ba71bea5db45ff3cc'
 
 function readProductContract(root) {
   const file = path.join(root, ...PRODUCT_CONTRACT_PATH.split('/'))
@@ -63,7 +62,7 @@ function projectProduct(document, contract, edition) {
   }
   // The public contract predates 0.1.7 and does not carry every lifecycle identity field;
   // these remain part of the product descriptor and are projected verbatim.
-  for (const field of ['productId', 'identityCarrier', 'icon', 'executable', 'displayName', 'backupComponent']) {
+  for (const field of ['productId', 'identityCarrier', 'icon', 'executable', 'displayName']) {
     if (Object.hasOwn(document, field) && !Object.hasOwn(projected, field))
       projected[field] = structuredClone(document[field])
   }
@@ -191,7 +190,35 @@ function invoke(toolkit, args, options = {}) {
   return parseOutput(run.stdout)
 }
 
-function keyIdOf(value) {
+// A publication key set may hold several official keys for different publishers or product
+// lines. Selection never assumes a literal id: an explicit keyId (caller option or the set's
+// own designation) wins, a single usable key is accepted as-is, and otherwise one unique
+// active key must exist. The selected id still forms the official:<keyId> domain.
+function selectAdminKey(document, preferredKeyId) {
+  const entries = Array.isArray(document.adminKeys) ? document.adminKeys : []
+  const usable = entries.filter(
+    (entry) => entry && typeof entry === 'object' && typeof entry.id === 'string' && entry.privateKey,
+  )
+  const requested =
+    preferredKeyId ?? document.activeAdminKeyId ?? document.adminKeyId ?? document.keyId
+  if (requested !== undefined) {
+    if (typeof requested !== 'string' || !KEY_ID_PATTERN.test(requested))
+      throw new Error('指定的官方密钥 id 格式不受支持。')
+    const matched = usable.find((entry) => entry.id === requested)
+    if (!matched) throw new Error('官方密钥文件缺少 ' + requested + '。')
+    return matched
+  }
+  if (usable.length === 1) return usable[0]
+  const active = usable.filter((entry) => entry.active === true)
+  if (usable.length > 1 && active.length === 1) return active[0]
+  if (usable.length === 0) throw new Error('官方密钥文件不含可用的 admin 私钥。')
+  throw new Error(
+    '官方密钥文件包含多把 admin 钥，请指定 keyId。可用 id: ' +
+      usable.map((entry) => entry.id).join(', '),
+  )
+}
+
+function keyIdOf(value, preferredKeyId) {
   let document
   try {
     document = JSON.parse(fs.readFileSync(value, 'utf8'))
@@ -201,9 +228,7 @@ function keyIdOf(value) {
   // The publication key set stores admin keys with JWK material; a toolkit key file stores
   // one key directly. Both are accepted without ever writing the material to build output.
   if (Array.isArray(document.adminKeys)) {
-    const matched = document.adminKeys.find((entry) => entry?.id === OFFICIAL_KEY_ID)
-    if (!matched || !matched.privateKey)
-      throw new Error('官方密钥文件缺少 admin_c80c9c3f5a39429ba71bea5db45ff3cc。')
+    const matched = selectAdminKey(document, preferredKeyId)
     return {
       keyId: matched.id,
       privateKey: matched.privateKey,
@@ -220,11 +245,11 @@ function keyIdOf(value) {
   return { keyId: document.keyId, privateKey: document.privateKey }
 }
 
-function readSigningIdentity(keyFile, product) {
+function readSigningIdentity(keyFile, product, preferredKeyId) {
   if (!keyFile) return null
   const absolute = path.resolve(keyFile)
   u.assertFile(absolute)
-  const selected = keyIdOf(absolute)
+  const selected = keyIdOf(absolute, preferredKeyId)
   let privateObject
   try {
     privateObject = crypto.createPrivateKey({ key: selected.privateKey, format: 'jwk' })
@@ -599,6 +624,7 @@ async function assemble({
   toolkitOptions = {},
   invokeOptions = {},
   keyFile,
+  keyId,
 }) {
   toolkit ||= await preflight({ root, toolkitOptions, invokeOptions })
   const configuration = readInstallationConfiguration(root)
@@ -616,7 +642,7 @@ async function assemble({
     productDescriptorSha256: product.sha256,
     ...(configuration ? { installationConfigurationSha256: configuration.sha256 } : {}),
   }
-  const signing = readSigningIdentity(keyFile, product.document)
+  const signing = readSigningIdentity(keyFile, product.document, keyId)
   const directory = path.resolve(output, 'installers')
   if (fs.existsSync(directory)) throw new Error('Installer assembly output already exists')
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
