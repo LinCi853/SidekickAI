@@ -12,21 +12,36 @@ const u = require('./build-utils.cjs')
 const TRUSTED_RELEASE = require('./distribution-toolkit-release.cjs')
 
 const INTERFACE_VERSION = 1
-const MAX_MANIFEST_BYTES = 1024 * 1024
+const MAX_REFERENCE_BYTES = 1024 * 1024
 const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
 const MAX_EXPANDED_BYTES = 4 * 1024 * 1024 * 1024
-const MAX_FILES = 1024
-const VERSION =
-  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$(?![\s\S])/
-const ROLES = [
-  'assembler',
-  'wizard-template',
-  'uninstaller-template',
-  'recovery-template',
-  'backup-runtime',
-  'product-contract',
-  'license',
-]
+const MAX_FILES = 64
+const EDITIONS = ['concept', 'community']
+const ARCHITECTURES = ['x64', 'arm64']
+const EXECUTABLE = 'bin/AppLifecycleToolkit.exe'
+// Pinned toolkit 0.1.7 layout. The archive itself is pinned by size and SHA-256;
+// this inventory keeps cache reuse honest without trusting extracted directories.
+const INVENTORY = [
+  [EXECUTABLE, 93678080, 'b1eddab0ab232f11528ea20e9741865f45c6b92bb0b98d4b3051deb92483929b'],
+  ['README.md', 19075, '4fd78ab63abe005629934f8af40b71ca6ef977775816468d2d68d6793a561803'],
+  ['sample/app.manifest.jsonc', 986, '28ded50ffc6a016a3fcb59ad5f165e7862c0a2415e4e459415be5a2752df9303'],
+  ['extractor/concept/x64/setup.exe', 13905408, '7151639b9938c283bb140aba841cc2365235d7675c9c33a26010fe21f03d142a'],
+  ['extractor/concept/x64/wizard-manifest.json', 322, 'db4a168d7675cffe6fbff701d3516579ee6107e64abffafaf3a5cdeb178dd96b'],
+  ['extractor/concept/arm64/setup.exe', 12529664, '3ac7452c3dbc0901086b005f7475418680c924493bfdd70f16f3daef03b46785'],
+  ['extractor/concept/arm64/wizard-manifest.json', 324, '41509fef02ce84725c241c56f8079ee3e37447bbf03e31ad383db90baa67c324'],
+  ['extractor/community/x64/setup.exe', 13913600, '1a49ce05b78a78c16f97e4d70a574719dc610909544a72098c025a04f4a218d5'],
+  ['extractor/community/x64/wizard-manifest.json', 324, 'ae2d96eb7703b3bbdf0dc1e05ba943c5ddd1df951442f7421cc82d88a3756fa4'],
+  ['extractor/community/arm64/setup.exe', 12533760, '26a9099a9368f77dea2ced51c6572de6d3db9387e17c042a1ec80326a69aba14'],
+  ['extractor/community/arm64/wizard-manifest.json', 326, '3fe755b933660518dd4d76ac6377ccd625ad44434537a76d82b64562050df350'],
+  ['uninstallers/concept/x64/uninstall.exe', 9554944, 'e57b49bfe12db0a8cae3a3bcc13cd47ed50c800b2b70b8b99aaa3c8a57325ad5'],
+  ['uninstallers/concept/x64/uninstall-manifest.json', 321, '32975681ed86ce02125722ee5cc04d047865225dffad653e02c8a01fa733de7d'],
+  ['uninstallers/concept/arm64/uninstall.exe', 8610816, '9e2f4083ed61dbb2237a4ccf95055246d59f1da6aa5d6f25899f9ef329d64e47'],
+  ['uninstallers/concept/arm64/uninstall-manifest.json', 323, '56e896a8f9ac730c2b6dd2000b74d53f3274ebe8ceae05b56342f863619e528e'],
+  ['uninstallers/community/x64/uninstall.exe', 9554944, 'f0707c8a38780308d23d43f58868064cc1291192696b6478e7cb88c858c6e016'],
+  ['uninstallers/community/x64/uninstall-manifest.json', 323, 'b9efa521bcdf8ea8bb53c1503b1519fcfba983d8addfe93f789ec4ed46028ba5'],
+  ['uninstallers/community/arm64/uninstall.exe', 8610816, '9d91944fff54e1457acb18f89508c9a1d837d72a35c8d08336f4a1bf9c2ef587'],
+  ['uninstallers/community/arm64/uninstall-manifest.json', 325, 'd981d50977bb83c839c50d7c6d8bb9925d9a1531337340260cbda06746efdcb0'],
+].map(([filePath, size, sha256]) => ({ path: filePath, size, sha256 }))
 
 function fields(value, required, optional = []) {
   if (
@@ -40,29 +55,17 @@ function fields(value, required, optional = []) {
 }
 
 function validVersion(value) {
-  return typeof value === 'string' && value.length <= 64 && VERSION.test(value)
+  return (
+    typeof value === 'string' &&
+    value.length <= 64 &&
+    /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
+      value,
+    )
+  )
 }
 
 function digest(value) {
   return typeof value === 'string' && value.length === 64 && /^[a-f0-9]{64}$/.test(value)
-}
-
-function validatePublicIdentity(value) {
-  fields(value, ['id', 'publicKey'])
-  fields(value.publicKey, ['kty', 'crv', 'x'])
-  const key = value.publicKey
-  if (
-    typeof value.id !== 'string' ||
-    !/^[A-Za-z0-9._-]{1,128}$(?![\s\S])/.test(value.id) ||
-    key.kty !== 'OKP' ||
-    key.crv !== 'Ed25519' ||
-    typeof key.x !== 'string' ||
-    !/^[A-Za-z0-9_-]{43}$/.test(key.x) ||
-    Buffer.from(key.x, 'base64url').toString('base64url') !== key.x ||
-    value.id !== 'self-built-' + u.hash(runtime.canonicalJson(key))
-  )
-    throw new Error('Invalid distribution public identity')
-  return value
 }
 
 function location(value, allowLoopback = false) {
@@ -145,7 +148,7 @@ function readReference(root, options = {}) {
       '安装维护待组装包尚未配置；请提供发布清单 SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE。',
     )
   u.assertFile(file)
-  if (fs.statSync(file).size > MAX_MANIFEST_BYTES)
+  if (fs.statSync(file).size > MAX_REFERENCE_BYTES)
     throw new Error('Distribution toolkit reference exceeds its size limit')
   const bytes = fs.readFileSync(file)
   let reference
@@ -155,175 +158,6 @@ function readReference(root, options = {}) {
     throw new Error('Cannot parse distribution toolkit reference')
   }
   return { file, sha256: u.hash(bytes), reference: validateReference(reference, options) }
-}
-
-function validateManifest(manifest, reference) {
-  fields(
-    manifest,
-    [
-      'schemaVersion',
-      'kind',
-      'toolkitVersion',
-      'interfaceVersion',
-      'maintenanceComponentVersion',
-      'recoveryComponentVersion',
-      'host',
-      'assembler',
-      'capabilities',
-      'placeholderTrust',
-      'files',
-    ],
-    ['installationConfigurationVersion'],
-  )
-  validatePublicIdentity(manifest.placeholderTrust)
-  if (
-    manifest.schemaVersion !== 1 ||
-    manifest.kind !== 'sidekick-distribution-toolkit' ||
-    manifest.interfaceVersion !== INTERFACE_VERSION ||
-    manifest.toolkitVersion !== reference.toolkitVersion ||
-    !validVersion(manifest.maintenanceComponentVersion) ||
-    !validVersion(manifest.recoveryComponentVersion)
-  ) {
-    throw new Error('Distribution toolkit identity does not match its pinned reference')
-  }
-  if (
-    manifest.installationConfigurationVersion !== undefined &&
-    manifest.installationConfigurationVersion !== 1
-  ) {
-    throw new Error('Unsupported installation configuration interface')
-  }
-  fields(manifest.host, ['platform', 'architecture'])
-  if (
-    manifest.host.platform !== 'windows' ||
-    !['x64', 'arm64'].includes(manifest.host.architecture)
-  )
-    throw new Error('Unsupported distribution toolkit host')
-  runtime.validateRelativePath(manifest.assembler)
-  if (
-    !manifest.assembler.endsWith('.exe') ||
-    !Array.isArray(manifest.capabilities) ||
-    !manifest.capabilities.length
-  ) {
-    throw new Error('Distribution toolkit has no assembly capability')
-  }
-  const capabilities = new Set()
-  for (const capability of manifest.capabilities) {
-    fields(capability, ['mode', 'authority', 'architectures'], ['edition', 'capabilityGrants'])
-    if (
-      (capability.edition !== undefined &&
-        !['concept', 'community'].includes(capability.edition)) ||
-      !['offline', 'online'].includes(capability.mode) ||
-      !['official', 'self-built'].includes(capability.authority) ||
-      !Array.isArray(capability.architectures) ||
-      !capability.architectures.length ||
-      capability.architectures.length > 2 ||
-      capability.architectures.some((arch) => !['x64', 'arm64'].includes(arch)) ||
-      new Set(capability.architectures).size !== capability.architectures.length
-    )
-      throw new Error('Invalid distribution toolkit capability')
-    if (capability.capabilityGrants !== undefined) {
-      const bits = [
-        'backupExport',
-        'onlineChannel',
-        'startupTasks',
-        'systemRegistration',
-        'systemScope',
-      ]
-      fields(capability.capabilityGrants, bits)
-      if (
-        bits.some(
-          (bit) => capability.capabilityGrants[bit] !== (capability.authority === 'official'),
-        )
-      ) {
-        throw new Error('Toolkit capability grants conflict with its authority')
-      }
-    }
-    const key = [capability.edition || '*', capability.mode, capability.authority].join(':')
-    if (capabilities.has(key)) throw new Error('Duplicate distribution toolkit capability')
-    capabilities.add(key)
-  }
-  if (
-    !manifest.capabilities.some(
-      (capability) =>
-        (capability.edition === undefined || capability.edition === 'concept') &&
-        capability.mode === 'offline' &&
-        capability.authority === 'self-built' &&
-        ['x64', 'arm64'].every((arch) => capability.architectures.includes(arch)),
-    )
-  ) {
-    throw new Error(
-      'Distribution toolkit does not support dual-architecture self-built concept installers',
-    )
-  }
-  if (!Array.isArray(manifest.files) || !manifest.files.length || manifest.files.length > MAX_FILES)
-    throw new Error('Invalid distribution toolkit inventory')
-  const names = new Set()
-  let expanded = 0
-  for (const file of manifest.files) {
-    fields(file, ['path', 'role', 'architecture', 'size', 'sha256'], ['edition', 'authority'])
-    runtime.validateRelativePath(file.path)
-    if (file.path.toLowerCase() === 'toolkit-manifest.json' || names.has(file.path.toLowerCase()))
-      throw new Error('Duplicate distribution toolkit path')
-    names.add(file.path.toLowerCase())
-    if (
-      !ROLES.includes(file.role) ||
-      ![null, 'x64', 'arm64'].includes(file.architecture) ||
-      !Number.isSafeInteger(file.size) ||
-      file.size < 1 ||
-      file.size > MAX_ARCHIVE_BYTES ||
-      !digest(file.sha256) ||
-      (file.edition !== undefined && !['concept', 'community'].includes(file.edition)) ||
-      (file.authority !== undefined && !['official', 'self-built'].includes(file.authority))
-    )
-      throw new Error('Invalid distribution toolkit file identity')
-    expanded += file.size
-    if (!Number.isSafeInteger(expanded) || expanded > MAX_EXPANDED_BYTES)
-      throw new Error('Distribution toolkit exceeds its expanded size limit')
-  }
-  for (const name of names) {
-    const parts = name.split('/')
-    for (let count = 1; count < parts.length; count++)
-      if (names.has(parts.slice(0, count).join('/')))
-        throw new Error('Toolkit file conflicts with a directory')
-  }
-  const assemblers = manifest.files.filter((file) => file.role === 'assembler')
-  if (
-    assemblers.length !== 1 ||
-    assemblers[0].path !== manifest.assembler ||
-    assemblers[0].architecture !== manifest.host.architecture
-  ) {
-    throw new Error('Distribution toolkit assembler is not uniquely registered')
-  }
-  for (const role of ['product-contract', 'license']) {
-    if (!manifest.files.some((file) => file.role === role))
-      throw new Error('Distribution toolkit is missing its ' + role + ' resource')
-  }
-  for (const arch of ['x64', 'arm64']) {
-    for (const role of [
-      'wizard-template',
-      'uninstaller-template',
-      'recovery-template',
-      'backup-runtime',
-    ]) {
-      if (
-        !manifest.files.some(
-          (file) =>
-            file.role === role &&
-            file.architecture === arch &&
-            (file.edition === undefined || file.edition === 'concept') &&
-            (file.authority === undefined || file.authority === 'self-built'),
-        )
-      ) {
-        throw new Error(
-          'Distribution toolkit is missing a self-built maintenance component: ' +
-            arch +
-            '/' +
-            role,
-        )
-      }
-    }
-  }
-  return manifest
 }
 
 function projectArchive(root, reference) {
@@ -380,48 +214,6 @@ async function download(reference, destination, options = {}) {
     throw new Error('Toolkit archive does not match its pinned size and SHA-256')
 }
 
-async function readArchiveManifest(file, reference) {
-  const zip = await yauzl.openPromise(file, {
-    autoClose: false,
-    validateEntrySizes: true,
-    strictFileNames: true,
-  })
-  let bytes
-  try {
-    if (zip.entryCount > MAX_FILES * 2 + 1)
-      throw new Error('Distribution toolkit contains too many ZIP entries')
-    for await (const entry of zip.eachEntry()) {
-      if (entry.fileName !== 'toolkit-manifest.json') continue
-      if (bytes || entry.uncompressedSize > MAX_MANIFEST_BYTES)
-        throw new Error('Invalid toolkit manifest ZIP entry')
-      const chunks = []
-      let size = 0
-      for await (const chunk of await zip.openReadStreamPromise(entry)) {
-        size += chunk.length
-        if (size > MAX_MANIFEST_BYTES) throw new Error('Toolkit manifest exceeds its size limit')
-        chunks.push(chunk)
-      }
-      bytes = Buffer.concat(chunks)
-    }
-  } finally {
-    await archive.closeArchive(zip)
-  }
-  if (!bytes) throw new Error('Distribution toolkit manifest is missing')
-  let manifest
-  try {
-    manifest = JSON.parse(bytes.toString('utf8'))
-  } catch {
-    throw new Error('Cannot parse toolkit manifest')
-  }
-  validateManifest(manifest, reference)
-  const files = [
-    ...manifest.files.map(({ path: name, size, sha256 }) => ({ path: name, size, sha256 })),
-    { path: 'toolkit-manifest.json', size: bytes.length, sha256: u.hash(bytes) },
-  ]
-  await archive.verifyArchive(file, files)
-  return { manifest, files }
-}
-
 async function extract(file, directory) {
   fs.mkdirSync(directory)
   const zip = await yauzl.openPromise(file, {
@@ -449,49 +241,80 @@ async function extract(file, directory) {
   }
 }
 
-function verifyDirectory(directory, inventory) {
+function verifyDirectory(directory, inventory = INVENTORY) {
   if (!fs.lstatSync(directory).isDirectory() || fs.lstatSync(directory).isSymbolicLink())
     throw new Error('Toolkit root must be a regular directory')
   const files = u.listFiles(directory, new Set())
   const actual = files.map((file) => path.relative(directory, file).replaceAll('\\', '/')).sort()
-  const expected = inventory.files.map((file) => file.path).sort()
+  const expected = inventory.map((file) => file.path).sort()
   if (JSON.stringify(actual) !== JSON.stringify(expected))
     throw new Error('Extracted toolkit contains missing or unexpected files')
-  for (const file of inventory.files) {
+  for (const file of inventory) {
     const target = path.join(directory, ...file.path.split('/'))
     u.assertFile(target)
     if (fs.statSync(target).size !== file.size || u.sha256(target) !== file.sha256)
       throw new Error('Extracted toolkit file does not match its pinned identity: ' + file.path)
   }
-  for (const file of inventory.manifest.files.filter((file) =>
-    /\.(?:exe|dll|node)$/i.test(file.path),
-  )) {
-    if (
-      file.architecture === null ||
-      u.peInfo(fs.readFileSync(path.join(directory, ...file.path.split('/')))).arch !==
-        file.architecture
-    ) {
+  for (const file of inventory.filter((entry) => entry.path.endsWith('.exe'))) {
+    const expectedArch = file.path.split('/').includes('arm64') ? 'arm64' : 'x64'
+    if (u.peInfo(fs.readFileSync(path.join(directory, ...file.path.split('/')))).arch !== expectedArch)
       throw new Error('Distribution toolkit native architecture does not match its inventory')
-    }
   }
+  verifyComponentManifests(directory)
   return u.fingerprint(directory, files)
 }
 
+function verifyComponentManifests(directory) {
+  for (const edition of EDITIONS) {
+    for (const arch of ARCHITECTURES) {
+      for (const [kind, file, manifestFile] of [
+        ['extractor', 'setup.exe', 'wizard-manifest.json'],
+        ['uninstallers', 'uninstall.exe', 'uninstall-manifest.json'],
+      ]) {
+        const manifestPath = path.join(directory, kind, edition, arch, manifestFile)
+        const executablePath = path.join(directory, kind, edition, arch, file)
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+        if (
+          manifest.protocolVersion !== 3 ||
+          manifest.uninstallProtocolVersion !== 2 ||
+          manifest.edition !== edition ||
+          manifest.arch !== arch ||
+          manifest.size !== fs.statSync(executablePath).size ||
+          manifest.sha256 !== u.sha256(executablePath)
+        ) {
+          throw new Error(
+            'Distribution toolkit component manifest does not match its executable: ' +
+              kind +
+              '/' +
+              edition +
+              '/' +
+              arch,
+          )
+        }
+      }
+    }
+  }
+}
+
 async function prepareToolkit(root, options = {}) {
+  // `inventory` is a test seam: fixtures pin their own synthetic 0.1.7-shaped archive so the
+  // same layout and component checks run without redistributing the real 70 MB toolkit.
+  // Production callers never set it, so the published INVENTORY above stays authoritative.
+  const inventory = options.inventory || INVENTORY
   const selected = options.reference
     ? { reference: validateReference(options.reference, options), file: null }
     : readReference(root, options)
   const reference = selected.reference
   const projectRoot = Object.hasOwn(reference.archive, 'path') ? path.resolve(root) : null
   if (projectRoot) projectArchive(projectRoot, reference)
-  const parent = path.join(root, 'build/component-cache/distribution-toolkit')
+  const parent = path.join(root, 'build/component-cache/lifecycle-toolkit')
   fs.mkdirSync(parent, { recursive: true })
   const destination = path.join(parent, reference.archive.sha256)
   let directory = destination
   const reused = fs.existsSync(destination)
   if (!reused) {
     directory = fs.mkdtempSync(path.join(parent, 'download-'))
-    console.log('[toolkit] Downloading pinned maintenance components ' + reference.toolkitVersion)
+    console.log('[toolkit] Preparing pinned lifecycle toolkit ' + reference.toolkitVersion)
     await download(reference, path.join(directory, 'archive.zip'), { ...options, root })
   }
   const zip = path.join(directory, 'archive.zip')
@@ -501,7 +324,6 @@ async function prepareToolkit(root, options = {}) {
     u.sha256(zip) !== reference.archive.sha256
   )
     throw new Error('Cached toolkit does not match its pinned archive')
-  const inventory = await readArchiveManifest(zip, reference)
   const toolkitDirectory = path.join(directory, 'toolkit')
   if (!reused) await extract(zip, toolkitDirectory)
   const inputs = verifyDirectory(toolkitDirectory, inventory)
@@ -528,13 +350,25 @@ async function prepareToolkit(root, options = {}) {
     projectRoot,
     directory: path.join(destination, 'toolkit'),
     archive: path.join(destination, 'archive.zip'),
-    manifest: inventory.manifest,
-    files: inventory.files,
+    files: inventory,
     inputs,
     reused,
+    version: reference.toolkitVersion,
+    executable: EXECUTABLE,
   }
   assertUnchanged(toolkit)
   return toolkit
+}
+
+function componentPath(toolkit, kind, edition, arch) {
+  if (!EDITIONS.includes(edition) || !ARCHITECTURES.includes(arch))
+    throw new Error('Unsupported lifecycle component edition or architecture')
+  const tree = kind === 'extractor' ? 'extractor' : kind === 'uninstaller' ? 'uninstallers' : null
+  if (!tree) throw new Error('Unsupported lifecycle component kind')
+  const file = kind === 'extractor' ? 'setup.exe' : 'uninstall.exe'
+  const target = path.join(toolkit.directory, tree, edition, arch, file)
+  u.assertFile(target)
+  return target
 }
 
 function assertUnchanged(toolkit) {
@@ -551,21 +385,21 @@ function assertUnchanged(toolkit) {
   ) {
     throw new Error('Distribution toolkit archive changed during assembly')
   }
-  u.assertUnchanged(toolkit.inputs, verifyDirectory(toolkit.directory, toolkit))
+  u.assertUnchanged(toolkit.inputs, verifyDirectory(toolkit.directory, toolkit.files))
 }
 
 module.exports = {
   INTERFACE_VERSION,
-  MAX_MANIFEST_BYTES,
-  MAX_ARCHIVE_BYTES,
+  INVENTORY,
+  MAX_FILES,
+  MAX_REFERENCE_BYTES,
   fields,
   validVersion,
   digest,
-  validatePublicIdentity,
   validateReference,
   readReference,
-  validateManifest,
-  readArchiveManifest,
+  verifyDirectory,
   prepareToolkit,
+  componentPath,
   assertUnchanged,
 }
