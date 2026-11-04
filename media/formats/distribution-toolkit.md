@@ -12,13 +12,13 @@
 
 | 项       | 值                                                                 |
 | -------- | ------------------------------------------------------------------ |
-| 版本     | 0.1.7                                                              |
-| 归档字节 | 70,917,273                                                         |
-| SHA-256  | `6436ba549c25c0ab24d7ffd0773778714852d7dab3a8333709509b7c67a3a117` |
+| 版本     | 0.1.8                                                              |
+| 归档字节 | 70,910,166                                                         |
+| SHA-256  | `a9d8927a9821a7d0e997e66c16d50c3d878341d4d62e9ba6cb098f5651092485` |
 
 版本、大小与摘要同时固定在 `scripts/distribution-toolkit-release.cjs` 与 `contracts/distribution-toolkit.json`，不接受跳过固定值校验的开关。默认引用以 `archive.path` 指向工作区内的真实归档；`local/` 不纳入源码提交，公开检出需自行放置该固定归档。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，不改变版本、大小、摘要或信任锚。
 
-解压、缓存与每次运行前后都按固定清单核验：0.1.7 不再提供 `toolkit-manifest.json`，工具包以 19 个固定路径文件为准（`bin/AppLifecycleToolkit.exe`、`extractor/<edition>/<arch>/setup.exe` 与 `wizard-manifest.json`、`uninstallers/<edition>/<arch>/uninstall.exe` 与 `uninstall-manifest.json`、`sample/app.manifest.jsonc`、`README.md`），逐文件核对大小与 SHA-256，任一不符即停止。缓存位于 `build/component-cache/lifecycle-toolkit`，不含私钥。
+解压、缓存与每次运行前后都按固定清单核验：0.1.7 起不再提供 `toolkit-manifest.json`，工具包以 19 个固定路径文件为准（`bin/AppLifecycleToolkit.exe`、`extractor/<edition>/<arch>/setup.exe` 与 `wizard-manifest.json`、`uninstallers/<edition>/<arch>/uninstall.exe` 与 `uninstall-manifest.json`、`sample/app.manifest.jsonc`、`README.md`），逐文件核对大小与 SHA-256，任一不符即停止。缓存位于 `build/component-cache/lifecycle-toolkit`，不含私钥。
 
 ## 二进制调用
 
@@ -34,6 +34,8 @@ AppLifecycleToolkit.exe assemble --package-dir <绝对目录> --edition concept 
 - `verify-package-spec` 核对 `evidence.json` 全部条目、合同摘要、移除计划结构与载荷身份；给出 `--key-file` 时另做信封认证，输出 `{packageDir, domain, checks}`。
 - `assemble` 在复核通过后生成 SKSETUP3 容器：`[提取器][包 blob][元数据][68 字节 footer]`，输出 `{outFile, outputBytes, outputSha256, domain, productVersion, productId, edition, architectures, ...}`。`outputSha256` 可直接对外交付核对。
 - 安装器自带无界面预检 `--check`：退出码 0 表示当前系统可安装，输出逐项 `[通过]` 记录并标明包域；在线或不可信域报 `PACKAGE_UNTRUSTED`。
+
+0.1.8 起 `lifecycle-package.json` 新增 `payloadPackages`，按 `path` 升序列出每个载荷包的 `{path, sha256, sizeBytes}`，并与 `packages[]` 的归档一一对应；`packageSetDigest = sha256(canonicalJson(payloadPackages))`（对象键升序、无空白、UTF-8），写入包内签名信封声明，`verify-package-spec` 按声明复算比对。缺少 `payloadPackages` 的旧包会被 0.1.8 判为 `PAYLOAD_INVALID`，因此每个批次都必须用它构建时所用的工具包版本来复核；需要验收历史批次时，同时保留对应的旧版归档。
 
 `assemble` 只嵌入传入的包目录。每个架构必须使用只含该架构载荷的生命周期包：把两个架构都放进同一个包目录会让每份安装器都内嵌全部架构的载荷。本仓按架构分别构建包规格，x64 官方安装器因此保持约 203 MB，而不是把双架构载荷重复打包。
 
