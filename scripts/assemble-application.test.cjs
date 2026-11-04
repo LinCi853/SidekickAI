@@ -351,6 +351,51 @@ test('official key sets select one key without assuming a literal id', async t =
   assert.equal(single.result.domain, 'official:' + first)
 })
 
+test('official key ids follow the shared lowercase 8-80 rule', async t => {
+  const value = await context(t, { payloads: true })
+  const keyFile = path.join(value.directory, 'publication-key.json')
+  const jwk = crypto.generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' })
+  const write = (keyId) =>
+    fs.writeFileSync(keyFile, JSON.stringify({ schemaVersion: 1, keyId, privateKey: jwk }))
+  const accepted = [
+    'admin_c80c9c3f5a39429ba71bea5db45ff3cc',
+    'self-built-f5ce2fbf8ff2c8a61a7f52c969f9b5718d3bfdc35edb4a27dfc2d0d5a8f6041e',
+    'lifecycle-official-2026-10',
+  ]
+  for (const [index, keyId] of accepted.entries()) {
+    write(keyId)
+    const runner = mockAssembler({ domain: 'official:' + keyId })
+    const assembled = await assembly.assemble(
+      optionsFor(value, runner.spawn, path.join(value.root, 'accepted-' + index), { keyFile }),
+    )
+    assert.equal(assembled.result.issuerKeyId, keyId)
+    assert.equal(assembled.result.authority, 'official:' + keyId)
+    assert.equal(assembled.result.domain, 'official:' + keyId)
+  }
+  const rejected = [
+    'Admin_c80c9c3f5a39429ba71bea5db45ff3cc',
+    'admin.c80c9c3f5a39429ba71bea5db45ff3cc',
+    'admin01',
+    '-admin_c80c9c3f5a39429ba71bea5db45ff3',
+    'admin_c80c9c3f5a39429ba71bea5db45ff3_',
+    'a' + 'b'.repeat(80),
+  ]
+  for (const [index, keyId] of rejected.entries()) {
+    write(keyId)
+    await assert.rejects(
+      assembly.assemble(
+        optionsFor(value, mockAssembler().spawn, path.join(value.root, 'rejected-' + index), {
+          keyFile,
+        }),
+      ),
+      /密钥文件格式不受支持/,
+    )
+  }
+  assert.equal(assembly.isOfficialAuthority('official:' + accepted[0]), true)
+  assert.equal(assembly.isOfficialAuthority('official:' + rejected[0]), false)
+  assert.equal(assembly.isOfficialAuthority('self-built'), false)
+})
+
 test('verify-package-spec must attest the requested domain before assembly', async t => {
   const value = await context(t, { payloads: true })
   const runner = mockAssembler({ verify({ packageDir, respond }) {

@@ -39,7 +39,14 @@ const EDITION_FIELDS = [
   'packageKinds',
   'requiredFiles',
 ]
-const KEY_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/
+// One identity rule shared with the toolkit and the other workspaces: 8-80 characters,
+// lowercase letters, digits, underscores and hyphens, with an alphanumeric first and last
+// character. The 80-character ceiling keeps the 75-character self-built-<sha256> identities
+// valid, while dots and uppercase letters are no longer accepted.
+const KEY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{6,78}[a-z0-9]$/
+const OFFICIAL_AUTHORITY_PATTERN = new RegExp(
+  '^official:' + KEY_ID_PATTERN.source.slice(1, -1) + '$',
+)
 
 function readProductContract(root) {
   const file = path.join(root, ...PRODUCT_CONTRACT_PATH.split('/'))
@@ -139,7 +146,13 @@ function readInstallationConfiguration(root) {
     throw new Error('Invalid installation configuration')
   }
   const bytes = Buffer.from(runtime.canonicalJson(value) + '\n')
-  return { file, value, bytes, sha256: u.hash(bytes), originalSha256: u.hash(raw) }
+  return {
+    file,
+    value,
+    bytes,
+    sha256: u.hash(bytes),
+    originalSha256: u.hash(raw),
+  }
 }
 
 function assertConfigurationUnchanged(configuration, root, product) {
@@ -197,7 +210,8 @@ function invoke(toolkit, args, options = {}) {
 function selectAdminKey(document, preferredKeyId) {
   const entries = Array.isArray(document.adminKeys) ? document.adminKeys : []
   const usable = entries.filter(
-    (entry) => entry && typeof entry === 'object' && typeof entry.id === 'string' && entry.privateKey,
+    (entry) =>
+      entry && typeof entry === 'object' && typeof entry.id === 'string' && entry.privateKey,
   )
   const requested =
     preferredKeyId ?? document.activeAdminKeyId ?? document.adminKeyId ?? document.keyId
@@ -245,6 +259,10 @@ function keyIdOf(value, preferredKeyId) {
   return { keyId: document.keyId, privateKey: document.privateKey }
 }
 
+function isOfficialAuthority(value) {
+  return typeof value === 'string' && OFFICIAL_AUTHORITY_PATTERN.test(value)
+}
+
 function readSigningIdentity(keyFile, product, preferredKeyId) {
   if (!keyFile) return null
   const absolute = path.resolve(keyFile)
@@ -252,7 +270,10 @@ function readSigningIdentity(keyFile, product, preferredKeyId) {
   const selected = keyIdOf(absolute, preferredKeyId)
   let privateObject
   try {
-    privateObject = crypto.createPrivateKey({ key: selected.privateKey, format: 'jwk' })
+    privateObject = crypto.createPrivateKey({
+      key: selected.privateKey,
+      format: 'jwk',
+    })
   } catch {
     throw new Error('官方密钥文件缺少可用的私钥。')
   }
@@ -271,9 +292,7 @@ function readSigningIdentity(keyFile, product, preferredKeyId) {
       x: publicKey.x,
       ...(publicKey.y ? { y: publicKey.y } : {}),
     },
-    fingerprint: u.hash(
-      runtime.canonicalJson({ id: selected.keyId, publicKey: publicKey.x }),
-    ),
+    fingerprint: u.hash(runtime.canonicalJson({ id: selected.keyId, publicKey: publicKey.x })),
     publisher: product?.publisher || 'LinCi853',
     authority: 'official:' + selected.keyId,
   }
@@ -337,7 +356,10 @@ function inputIdentity(payloads, edition, productVersion) {
     )
       throw new Error('Assembly input identity does not match the application workspace')
     manifests[arch] = path.resolve(item.manifestPath)
-    inputs[arch] = { manifestSha256: u.hash(manifestBytes), archiveSha256: manifest.archive.sha256 }
+    inputs[arch] = {
+      manifestSha256: u.hash(manifestBytes),
+      archiveSha256: manifest.archive.sha256,
+    }
     files.push(path.resolve(item.manifestPath), path.resolve(item.path))
     expected.set(path.resolve(item.manifestPath), inputs[arch].manifestSha256)
     expected.set(path.resolve(item.path), inputs[arch].archiveSha256)
@@ -371,9 +393,7 @@ function appManifest({ product, edition, productVersion, payload, payloadManifes
       icon: descriptor.icon,
       entry: descriptor.executable,
       identityCarrier: descriptor.identityCarrier,
-      ...(descriptor.backupComponent
-        ? { backupComponent: descriptor.backupComponent }
-        : {}),
+      ...(descriptor.backupComponent ? { backupComponent: descriptor.backupComponent } : {}),
     },
     productVersion,
     payload: {
@@ -390,9 +410,7 @@ function appManifest({ product, edition, productVersion, payload, payloadManifes
     defaults: {
       directory: editionContract.directory,
       dataPolicy: 'keep',
-      ...(installation
-        ? { options: installation.options }
-        : {}),
+      ...(installation ? { options: installation.options } : {}),
     },
   }
   if (options.contract.licenses?.length && licenseBody) {
@@ -486,7 +504,7 @@ function validateResult(result, toolkit, output, identity) {
     result.toolkitVersion !== toolkit.reference.toolkitVersion ||
     result.edition !== identity.edition ||
     result.mode !== 'offline' ||
-    !(result.authority === 'self-built' || /^official:[A-Za-z0-9._-]{1,128}$/.test(result.authority)) ||
+    !(result.authority === 'self-built' || isOfficialAuthority(result.authority)) ||
     result.domain !== result.authority ||
     !KEY_ID_PATTERN.test(result.issuerKeyId) ||
     !toolkitApi.digest(result.issuerFingerprint) ||
@@ -591,7 +609,13 @@ function retainedInputs(directory, input) {
       u.assertFile(file)
       if (u.sha256(file) !== sha256)
         throw new Error('Retained assembly inputs do not match the original payloads')
-      files.push({ path: relative, file, architecture: arch, size: fs.statSync(file).size, sha256 })
+      files.push({
+        path: relative,
+        file,
+        architecture: arch,
+        size: fs.statSync(file).size,
+        sha256,
+      })
     }
   }
   if (input.installationConfigurationSha256 !== undefined) {
@@ -672,7 +696,8 @@ async function assemble({
         flag: 'wx',
       })
       const packageDirectory = path.resolve(output, 'packages', arch)
-      if (fs.existsSync(packageDirectory)) throw new Error('Installer package output already exists')
+      if (fs.existsSync(packageDirectory))
+        throw new Error('Installer package output already exists')
       withKeyFile(signing, (key) => {
         const args = [
           'build',
@@ -692,12 +717,23 @@ async function assemble({
         const built = invoke(toolkit, args, invokeOptions)
         const verified = invoke(
           toolkit,
-          ['verify-package-spec', '--package-dir', packageDirectory, ...(key ? ['--key-file', key] : [])],
+          [
+            'verify-package-spec',
+            '--package-dir',
+            packageDirectory,
+            ...(key ? ['--key-file', key] : []),
+          ],
           invokeOptions,
         )
         if (verified.domain !== expectedDomain)
-          throw new Error('Package spec reported ' + verified.domain + ' instead of ' + expectedDomain)
-        toolkitRuns.verify.push({ architecture: arch, domain: verified.domain, checks: verified.checks })
+          throw new Error(
+            'Package spec reported ' + verified.domain + ' instead of ' + expectedDomain,
+          )
+        toolkitRuns.verify.push({
+          architecture: arch,
+          domain: verified.domain,
+          checks: verified.checks,
+        })
         const setup = path.join(directory, installerName(productVersion, arch, expectedDomain))
         const assembled = invoke(
           toolkit,
@@ -722,9 +758,16 @@ async function assemble({
           !assembled.architectures.includes(arch)
         )
           throw new Error('Lifecycle assembly returned an unexpected installer identity')
-        toolkitRuns.assemble.push({ architecture: arch, domain: assembled.domain, outFile: setup })
+        toolkitRuns.assemble.push({
+          architecture: arch,
+          domain: assembled.domain,
+          outFile: setup,
+        })
         u.assertFile(setup)
-        if (fs.statSync(setup).size !== assembled.outputBytes || u.sha256(setup) !== assembled.outputSha256)
+        if (
+          fs.statSync(setup).size !== assembled.outputBytes ||
+          u.sha256(setup) !== assembled.outputSha256
+        )
           throw new Error('Lifecycle assembly output does not match its report')
         const hostArchitecture = process.arch === 'arm64' ? 'arm64' : 'x64'
         const check =
@@ -766,8 +809,17 @@ async function assemble({
       issuerKeyId: signing?.keyId || 'self-built',
       issuerFingerprint:
         signing?.fingerprint ||
-        u.hash(runtime.canonicalJson({ id: 'self-built', productId: product.document.productId })),
-      ...(signing ? { publicIdentity: { id: signing.keyId, publicKey: signing.publicKey } } : {}),
+        u.hash(
+          runtime.canonicalJson({
+            id: 'self-built',
+            productId: product.document.productId,
+          }),
+        ),
+      ...(signing
+        ? {
+            publicIdentity: { id: signing.keyId, publicKey: signing.publicKey },
+          }
+        : {}),
       productId: product.document.productId,
       productDescriptorSha256: product.sha256,
       ...(configuration ? { installationConfigurationSha256: configuration.sha256 } : {}),
@@ -778,7 +830,10 @@ async function assemble({
         interfaceVersion: toolkitApi.INTERFACE_VERSION,
         inventorySha256: toolkit.inputs.fingerprint,
         extractor: Object.fromEntries(
-          Object.keys(input.inputs).map((arch) => [arch, extractorEvidence(toolkit, edition, arch)]),
+          Object.keys(input.inputs).map((arch) => [
+            arch,
+            extractorEvidence(toolkit, edition, arch),
+          ]),
         ),
         verifications: toolkitRuns.verify,
         assemblies: toolkitRuns.assemble,
@@ -788,19 +843,22 @@ async function assemble({
     }
     validateResult(result, toolkit, directory, source)
     const resultFile = path.join(directory, 'assembly-result.json')
-    fs.writeFileSync(resultFile, JSON.stringify(result, null, 2) + '\n', { flag: 'wx' })
+    fs.writeFileSync(resultFile, JSON.stringify(result, null, 2) + '\n', {
+      flag: 'wx',
+    })
     const resultBytes = fs.readFileSync(resultFile)
-    if (resultBytes.length > MAX_RESULT_BYTES) throw new Error('Assembly result exceeds its size limit')
+    if (resultBytes.length > MAX_RESULT_BYTES)
+      throw new Error('Assembly result exceeds its size limit')
     // Retained inputs are copied from their source workspace to the assembly output.
     for (const [relative, content] of [
       [PRODUCT_PATH, Buffer.from(runtime.canonicalJson(product.document) + '\n')],
       ...Object.keys(input.inputs).flatMap((arch) => [
+        ['inputs/' + arch + '/application.manifest.json', fs.readFileSync(input.manifests[arch])],
         [
-          'inputs/' + arch + '/application.manifest.json',
-          fs.readFileSync(input.manifests[arch]),
-        ],
-        [
-          'inputs/' + arch + '/' + JSON.parse(fs.readFileSync(input.manifests[arch], 'utf8')).archive.file,
+          'inputs/' +
+            arch +
+            '/' +
+            JSON.parse(fs.readFileSync(input.manifests[arch], 'utf8')).archive.file,
           fs.readFileSync(payloads.find((entry) => entry.architecture === arch).path),
         ],
       ]),
@@ -843,12 +901,22 @@ async function assemble({
 
 function extractorEvidence(toolkit, edition, arch) {
   const file = toolkitApi.componentPath(toolkit, 'extractor', edition, arch)
-  return { path: path.relative(toolkit.directory, file).replaceAll('\\', '/'), size: fs.statSync(file).size, sha256: u.sha256(file) }
+  return {
+    path: path.relative(toolkit.directory, file).replaceAll('\\', '/'),
+    size: fs.statSync(file).size,
+    sha256: u.sha256(file),
+  }
 }
 
 function installerName(productVersion, arch, domain) {
   return (
-    'SidekickAI-Setup-' + productVersion + '-' + arch + '-' + (domain.startsWith('official:') ? 'official' : 'self-built') + '.exe'
+    'SidekickAI-Setup-' +
+    productVersion +
+    '-' +
+    arch +
+    '-' +
+    (domain.startsWith('official:') ? 'official' : 'self-built') +
+    '.exe'
   )
 }
 
@@ -870,15 +938,12 @@ function verifyCollected(assembled, directory, options = {}, collection = null) 
         }
       : {}),
     ...(assembled.result.installationConfigurationSha256 !== undefined
-      ? { installationConfigurationSha256: assembled.result.installationConfigurationSha256 }
+      ? {
+          installationConfigurationSha256: assembled.result.installationConfigurationSha256,
+        }
       : {}),
   }
-  const installers = validateResult(
-    assembled.result,
-    assembled.preparedToolkit,
-    directory,
-    source,
-  )
+  const installers = validateResult(assembled.result, assembled.preparedToolkit, directory, source)
   for (const installer of installers)
     checkInstaller(installer.path, assembled.result.domain, options)
   retainedInputs(directory, source)
@@ -898,4 +963,5 @@ module.exports = {
   verifyCollected,
   checkInstaller,
   installerName,
+  isOfficialAuthority,
 }

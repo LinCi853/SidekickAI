@@ -123,7 +123,11 @@ const defaults = {
   preflightToolkit: () => assembly.preflight({ root: ROOT }),
   assertToolkit: toolkitApi.assertUnchanged,
   buildInstallers: (options) =>
-    assembly.assemble({ root: ROOT, keyFile: options.keyFile ?? null, ...options }),
+    assembly.assemble({
+      root: ROOT,
+      keyFile: options.keyFile ?? null,
+      ...options,
+    }),
   probeInstallers: (options) => require('./installer-launch-smoke.cjs').probeInstallers(options),
 }
 
@@ -298,7 +302,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
       assembled.installers?.length !== architectures.length ||
       !(
         assembled.result.authority === 'self-built' ||
-        /^official:[A-Za-z0-9._-]{1,128}$/.test(assembled.result.authority || '')
+        assembly.isOfficialAuthority(assembled.result.authority)
       ) ||
       assembled.result.edition !== artifacts.edition ||
       assembled.result.productVersion !== artifacts.version
@@ -416,7 +420,9 @@ function collectCandidates(artifacts, output, root = ROOT) {
   const manifestBytes = JSON.stringify(manifest, null, 2) + '\n'
   const checksumBytes = files.map((file) => file.sha256 + '  ' + file.file).join('\n') + '\n'
   fs.writeFileSync(path.join(directory, 'release-manifest.json'), manifestBytes, { flag: 'wx' })
-  fs.writeFileSync(path.join(directory, 'SHA256SUMS.txt'), checksumBytes, { flag: 'wx' })
+  fs.writeFileSync(path.join(directory, 'SHA256SUMS.txt'), checksumBytes, {
+    flag: 'wx',
+  })
   const collectionFiles = utilities.listFiles(directory, new Set())
   const collectionFingerprint = utilities.fingerprint(directory, collectionFiles)
   const expected = new Map([
@@ -456,7 +462,11 @@ async function main(args = process.argv.slice(2)) {
       fs.writeFileSync(
         path.join(output, 'failure.json'),
         JSON.stringify(
-          { edition: options.edition, mode: options.mode, error: error.message },
+          {
+            edition: options.edition,
+            mode: options.mode,
+            error: error.message,
+          },
           null,
           2,
         ) + '\n',
