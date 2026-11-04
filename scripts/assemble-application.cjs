@@ -8,6 +8,7 @@ const { spawnSync } = require('node:child_process')
 const toolkitApi = require('./distribution-toolkit.cjs')
 const payloadApi = require('./application-payload.cjs')
 const runtime = require('./application-runtime.cjs')
+const { KEY_ID_PATTERN, KEY_ID_MESSAGE, isKeyId } = require('./key-id.cjs')
 const u = require('./build-utils.cjs')
 const MAX_RESULT_BYTES = 4 * 1024 * 1024
 const MAX_APPLICATION_MANIFEST_BYTES = 4 * 1024 * 1024
@@ -39,11 +40,7 @@ const EDITION_FIELDS = [
   'packageKinds',
   'requiredFiles',
 ]
-// One identity rule shared with the toolkit and the other workspaces: 8-80 characters,
-// lowercase letters, digits, underscores and hyphens, with an alphanumeric first and last
-// character. The 80-character ceiling keeps the 75-character self-built-<sha256> identities
-// valid, while dots and uppercase letters are no longer accepted.
-const KEY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{6,78}[a-z0-9]$/
+// Official identities derive their domain from the shared key id rule.
 const OFFICIAL_AUTHORITY_PATTERN = new RegExp(
   '^official:' + KEY_ID_PATTERN.source.slice(1, -1) + '$',
 )
@@ -216,8 +213,7 @@ function selectAdminKey(document, preferredKeyId) {
   const requested =
     preferredKeyId ?? document.activeAdminKeyId ?? document.adminKeyId ?? document.keyId
   if (requested !== undefined) {
-    if (typeof requested !== 'string' || !KEY_ID_PATTERN.test(requested))
-      throw new Error('指定的官方密钥 id 格式不受支持。')
+    if (!isKeyId(requested)) throw new Error(KEY_ID_MESSAGE)
     const matched = usable.find((entry) => entry.id === requested)
     if (!matched) throw new Error('官方密钥文件缺少 ' + requested + '。')
     return matched
@@ -250,12 +246,11 @@ function keyIdOf(value, preferredKeyId) {
   }
   if (
     document.schemaVersion !== 1 ||
-    typeof document.keyId !== 'string' ||
-    !KEY_ID_PATTERN.test(document.keyId) ||
     !document.privateKey ||
     typeof document.privateKey !== 'object'
   )
     throw new Error('官方密钥文件格式不受支持。')
+  if (!isKeyId(document.keyId)) throw new Error(KEY_ID_MESSAGE)
   return { keyId: document.keyId, privateKey: document.privateKey }
 }
 
@@ -506,7 +501,7 @@ function validateResult(result, toolkit, output, identity) {
     result.mode !== 'offline' ||
     !(result.authority === 'self-built' || isOfficialAuthority(result.authority)) ||
     result.domain !== result.authority ||
-    !KEY_ID_PATTERN.test(result.issuerKeyId) ||
+    (result.issuerKeyId !== undefined && !isKeyId(result.issuerKeyId)) ||
     !toolkitApi.digest(result.issuerFingerprint) ||
     result.productVersion !== identity.productVersion ||
     runtime.canonicalJson(result.inputs) !== runtime.canonicalJson(identity.inputs)

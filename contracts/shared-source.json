@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "8d33762c9b1577f554f07dedce1fdd88341874de81595583a6635b3c4e2bf2a3",
+  "revision": "85205f0d96dc9638ce5415daad3167a0af593ea35066918106161182fde15ab1",
   "files": {
     "electron.vite.config.ts": "0cc4bde54c1eee39b79cfc84202a45fec0d6580f9d99d7985deed490f2bdeda5",
     "electron/application-activation.ts": "538a8a4fd218906d5ceabbce3040c1c938f79b7de05ac72ca0ee58bbebf0eccf",
@@ -72,9 +72,10 @@
     "scripts/host-backup.test.cjs": "f79542a65a37ddf5903653ec6e9638759514ba982d88f1163c52a18563c434ae",
     "scripts/incremental-build.test.cjs": "2ebb652c5e317713acfa9066495591552ed4fdd3edb0b911b360591848f25427",
     "scripts/installer-launch-smoke.cjs": "7913d8d7cafac1a4d09dde3bc5692e1378e664bb9d216ce41cef489da7aaede7",
+    "scripts/key-id.cjs": "fab279a61288fd11d645c897e05eab1c6707ff14208edcb66e78081e28af6a0d",
     "scripts/local-build-config.cjs": "e23e06222e5d1f87e0ae818f58b61b72d8e4ed8ee1a9da794d95e61098bf7be6",
-    "scripts/local-build-config.test.cjs": "5fd9cf7df8f3f7e4c5776ec5bc670dd3cd7af0f4c1d9969cdcac76f1b593eb2a",
-    "scripts/oxy-build-config.cjs": "5ca2bc5385adf4723e89e949a8b289b27088aead50df49d1020c66184deb4702",
+    "scripts/local-build-config.test.cjs": "c05bd108330bcde0f9294c1ffd8f588b9f8c8f363e55a518e0e86fe629396a18",
+    "scripts/oxy-build-config.cjs": "9f8a44a014ec77361fcb04df67f9fe0478ec9044f34d997419fb2581131d6b77",
     "scripts/packaging-lock.cjs": "63f87383fdb13b6319b8684088dc8d18c6ea57ffffc04857bca9fb5aec06b56a",
     "scripts/prepare-startup-helper.cjs": "5f12bff275ecb76154d0047d04b22dcd5dc1071fe409562fd4d33eeca1edf746",
     "scripts/product-version.test.cjs": "b89132c1fbab0cc121f0cccdf9e333efd1f7bb9b8b07b3d2cbbe652aca19d690",

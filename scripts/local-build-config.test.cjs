@@ -91,6 +91,43 @@ test('public build configuration rejects private key material and invalid struct
   assert.throws(() => localBuildEnvironment(root, {}), /Cannot parse/)
 })
 
+test('trust key ids follow the shared lowercase 8-80 rule', (t) => {
+  const root = workspace(t)
+  const { config, file } = configure(root)
+  const { publicKey } = crypto.generateKeyPairSync('ed25519')
+  const jwk = publicKey.export({ format: 'jwk' })
+  const key = (id) => ({ id, publicKey: jwk })
+  const accepted = [
+    'admin_c80c9c3f5a39429ba71bea5db45ff3cc',
+    'plugin_85ef2b9c4d6e8f0a1b3c5d7e9f0a2b4c',
+    'lifecycle-official-2026-10',
+    'self-built-f5ce2fbf8ff2c8a61a7f52c969f9b5718d3bfdc35edb4a27dfc2d0d5a8f6041e',
+  ]
+  for (const id of accepted) {
+    config.publicConfiguration.resourceKeys = [key(id)]
+    config.publicConfiguration.distributionKeys = [key(id)]
+    fs.writeFileSync(file, JSON.stringify(config))
+    const cloud = cloudBuildEnvironment({}, path.join(root, 'resources/oxy-deployment.json'))
+    assert.equal(JSON.parse(cloud.SIDEKICK_RESOURCE_TRUST_KEYS_JSON)[0].id, id)
+    assert.equal(JSON.parse(cloud.SIDEKICK_DISTRIBUTION_TRUST_KEYS_JSON)[0].id, id)
+  }
+  for (const id of [
+    'Admin_c80c9c3f5a39429ba71bea5db45ff3cc',
+    'admin.c80c9c3f5a39429ba71bea5db45ff3cc',
+    'admin01',
+    '-admin_c80c9c3f5a39429ba71bea5db45ff3',
+    'admin_c80c9c3f5a39429ba71bea5db45ff3_',
+    'a' + 'b'.repeat(80),
+  ]) {
+    config.publicConfiguration.resourceKeys = [key(id)]
+    fs.writeFileSync(file, JSON.stringify(config))
+    assert.throws(
+      () => cloudBuildEnvironment({}, path.join(root, 'resources/oxy-deployment.json')),
+      /keyId 必须 8/,
+    )
+  }
+})
+
 test('tool directories preserve inherited search paths without duplicates', (t) => {
   const root = workspace(t)
   const { config, file } = configure(root)

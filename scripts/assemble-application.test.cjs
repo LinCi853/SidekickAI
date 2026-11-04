@@ -343,7 +343,7 @@ test('official key sets select one key without assuming a literal id', async t =
   await assert.rejects(assembly.assemble(optionsFor(value, mockAssembler().spawn,
     path.join(value.root, 'unknown'), { keyFile, keyId: 'admin_' + 'c'.repeat(32) })), /缺少 admin_cccc/)
   await assert.rejects(assembly.assemble(optionsFor(value, mockAssembler().spawn,
-    path.join(value.root, 'bad-id'), { keyFile, keyId: 'admin/with/slash' })), /id 格式不受支持/)
+    path.join(value.root, 'bad-id'), { keyFile, keyId: 'admin/with/slash' })), /keyId 必须 8/)
 
   writeSet({ formatVersion: 1, adminKeys: [entries[0]] })
   const single = await assembleWith('single', {}, first)
@@ -388,7 +388,7 @@ test('official key ids follow the shared lowercase 8-80 rule', async t => {
           keyFile,
         }),
       ),
-      /密钥文件格式不受支持/,
+      /keyId 必须 8/,
     )
   }
   assert.equal(assembly.isOfficialAuthority('official:' + accepted[0]), true)

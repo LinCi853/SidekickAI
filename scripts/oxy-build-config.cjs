@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { localBuildEnvironment } = require('./local-build-config.cjs')
 const { validateServiceOrigin } = require('../packages/resource-contract/service-origin.mjs')
+const { KEY_ID_MESSAGE, isKeyId } = require('./key-id.cjs')
 
 const CONFIG = path.resolve(__dirname, '../resources/oxy-deployment.json')
 
@@ -19,13 +20,17 @@ function cloudBuildEnvironment(env = process.env, file = CONFIG) {
     env.SIDEKICK_DISTRIBUTION_TRUST_KEYS_JSON ??
       JSON.stringify(config.distributionKeys ?? config.adminKeys ?? config.resourceKeys ?? []),
   )
+  for (const list of [keys, distributionKeys]) {
+    if (Array.isArray(list) && list.some((key) => !key || !isKeyId(key.id)))
+      throw new Error(KEY_ID_MESSAGE)
+  }
   if (
     !Array.isArray(keys) ||
     keys.length > 16 ||
     keys.some(
       (key) =>
         !key ||
-        !/^[A-Za-z0-9_-]{8,80}$/.test(key.id) ||
+        !isKeyId(key.id) ||
         key.publicKey?.kty !== 'OKP' ||
         key.publicKey?.crv !== 'Ed25519' ||
         !/^[A-Za-z0-9_-]{43}$/.test(key.publicKey?.x ?? '') ||
@@ -45,7 +50,7 @@ function cloudBuildEnvironment(env = process.env, file = CONFIG) {
     distributionKeys.some(
       (key) =>
         !key ||
-        !/^[A-Za-z0-9_-]{8,80}$/.test(key.id) ||
+        !isKeyId(key.id) ||
         key.publicKey?.kty !== 'OKP' ||
         key.publicKey?.crv !== 'Ed25519' ||
         !/^[A-Za-z0-9_-]{43}$/.test(key.publicKey?.x ?? '') ||
