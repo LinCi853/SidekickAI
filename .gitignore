@@ -120,7 +120,8 @@ scripts/startup-cost-fixture.cjs
 scripts/probe-*
 scripts/repro-*
 scripts/fixtures/*
-scripts/test-fixtures/
+# 只忽略该目录的内容，保证被已入库测试引用的夹具可以用文件级例外补回
+scripts/test-fixtures/*
 scripts/bootstrap/
 scripts/workspace-menu.cjs
 scripts/dev.mjs
@@ -161,6 +162,23 @@ scripts/windows-executable-signing.cjs
 # electron.vite.config.ts 直接 import 的构建插件，缺了它 CI 的 npm run build 会直接起不来
 !scripts/excalidraw-clipboard-feedback.ts
 !scripts/excalidraw-feedback.test.ts
+# 已入库测试与 npm 脚本直接引用的脚本/夹具随源码走，
+# 否则全新检出后 test:distribution、test:tooling、dev 等入口会因缺文件直接失败
+!scripts/application-payload.test.cjs
+!scripts/windows-packaging.test.cjs
+!scripts/clean-temp.test.cjs
+!scripts/sync-versions.test.cjs
+!scripts/deadcode-check.test.mjs
+!scripts/clean-temp.cjs
+!scripts/dev.mjs
+!scripts/gen-application-icon.cjs
+!scripts/verify-desktop.cjs
+!scripts/verify-resident-memory-ab.mjs
+!scripts/memory-state-contract.mjs
+!scripts/resident-memory-fixture.cjs
+!scripts/resident-browser-fixture.cjs
+!scripts/test-fixtures/application-runtime.cjs
+!scripts/test-fixtures/distribution-toolkit.cjs
 # 旧版分发工具包只保留本地；仓内只钉当前版
 vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.2-*.zip
 vendor/distribution/SidekickAI-Distribution-Toolkit-1.3.3-*.zip
