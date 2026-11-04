@@ -1,118 +1,54 @@
-# 二进制待组装包接口
+# 生命周期工具包接口
 
-应用侧 `contracts/distribution-product.json` 提供名称、发布者和图标引用，`contracts/installation-contract.json` 提供功能、选项、默认值、默认内容和指南文字，并通过本仓 `LICENSE` 读取应用许可正文。标准载荷导出为 `resources/installation-contract.json`，随载荷清单及正文签名保留；不需要修改私有平台源码。未提供协议的产品使用空协议列表，维护向导自动省去许可页面，缺失的项目内容不由模板代填。
+本仓通过固定版本的二进制工具包把标准应用载荷组装成概念版离线安装器。工具包自带 `concept`/`community` 两套版别、x64/arm64 两种架构的提取器与卸载器，按 `--edition` 自动取件，构建过程不向本仓补件。
 
-当前固定工具包为 1.3.5，应用合同必须随每份载荷提供，双架构内容一致。应用侧包装保留产品描述符、原始载荷和配置输入，成品移动后仍可通过同一二进制入口复验。
+概念版是单体应用，没有插件安装，也不作为插件宿主。**概念版无插件域，插件信任不适用**：应用载荷只携带 `resources/application-trust.json` 与 `resources/resource-trust.json`，两者仅登记官方发布者身份；不存在插件信任 JSON、`pluginKeys` 字段或插件验签路径，工具包契约也不要求该字段。
 
-本仓通过固定版本的二进制组件包生成完整安装包。组件包包含安装器、卸载器及独立恢复附件的待组装资源，并附带二进制组装入口；不要求使用者取得这些实现的私有源码、Rust 安装工程或官方签名密钥。用户也可自行开发安装维护实现，或只构建绿色版。
+## 应用侧输入
 
-软件构建提供双架构绿色 ZIP 和 x64、ARM64 标准应用载荷。完整包入口增加两份概念版离线安装器，使用本机独立自建身份；官方预构建安装包的发行身份与自建身份分别维护。开发与构建操作由 `launch.bat` 菜单提供。
+`contracts/distribution-product.json` 提供产品标识、名称、发布者、图标与备份组件引用，`contracts/installation-contract.json` 提供功能、选项、默认值和指南文字，许可正文取自本仓 `LICENSE`。标准载荷导出为 `resources/installation-contract.json`，随载荷清单及正文签名保留。未提供协议的产品使用空协议列表，向导自动省去许可页。可选的 `contracts/installation-configuration.json` 提供安装默认值。
 
-## 发布引用
+## 固定工具包
 
-组件包使用单个 ZIP，随固定版本的发布清单提供。引用 JSON 包含以下字段，不接受额外字段：
+| 项 | 值 |
+| --- | --- |
+| 版本 | 0.1.7 |
+| 归档字节 | 70,917,273 |
+| SHA-256 | `6436ba549c25c0ab24d7ffd0773778714852d7dab3a8333709509b7c67a3a117` |
 
-| 字段             | 类型       | 要求                                                                                                   |
-| ---------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
-| schemaVersion    | 整数       | 1                                                                                                      |
-| toolkitVersion   | 字符串     | 组件包版本，须与消费端代码内固定版本一致，独立于应用版本                                               |
-| interfaceVersion | 整数       | 1                                                                                                      |
-| archive.url      | 可选字符串 | 无凭据及片段的绝对 HTTPS URL；明确选择本地文件时可用 file URL，与 archive.path 二选一                  |
-| archive.path     | 可选字符串 | 相对于本工作区根目录的安全路径，使用 `/`；不得使用绝对路径、`..` 或文件系统链接，与 archive.url 二选一 |
-| archive.size     | 正整数     | ZIP 原始字节数，须与消费端代码内固定值一致                                                             |
-| archive.sha256   | 字符串     | ZIP 原始字节 SHA-256，小写十六进制 64 字符，须与消费端代码内固定值一致                                 |
+版本、大小与摘要同时固定在 `scripts/distribution-toolkit-release.cjs` 与 `contracts/distribution-toolkit.json`，不接受跳过固定值校验的开关。默认引用以 `archive.path` 指向工作区内的真实归档；`local/` 不纳入源码提交，公开检出需自行放置该固定归档。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，不改变版本、大小、摘要或信任锚。
 
-组件引用默认从 `contracts/distribution-toolkit.json` 读取。本地组件通过 `archive.path` 固定项目内归档位置；归档 ZIP 使用精确文件名的 Git LFS 属性跟踪，检出构建前须取得真实 LFS 对象。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，使同一归档可从明确的其他位置取得；版本、大小与摘要以消费端代码内固定值为准，环境变量不改变信任锚。任一身份字段不一致，都会在读取归档、下载、使用缓存或运行组件之前失败。缺少引用、组件归档或发布资源尚不可下载时，完整包入口停止。引用不能使用浮动 latest 地址、占位摘要或隐式私有工作区路径。
-
-当前消费端只接受 `scripts/distribution-toolkit-release.cjs` 固定的 1.3.5：121,634,222 字节，SHA-256 为 `68381b06de4fccffce7a9a4192d56b315149f52d36594954ce838fe4fec23b06`。接受新的组件发行版须审查并更新源码固定值及引用；不提供跳过固定值校验的开关。
-
-下载与缓存复用均核对 ZIP 大小、摘要、完整条目及逐文件内容。构建前后重新核对引用和组件字节。缓存位于 `build/component-cache/distribution-toolkit`，不包含自建私钥。
-
-## 组件清单
-
-ZIP 根目录的 `toolkit-manifest.json` 为 UTF-8 JSON，最多 1 MiB。顶层字段如下，未知字段应被拒绝：
-
-| 字段                             | 类型     | 要求                                              |
-| -------------------------------- | -------- | ------------------------------------------------- |
-| schemaVersion                    | 整数     | 1                                                 |
-| kind                             | 字符串   | sidekick-distribution-toolkit                     |
-| toolkitVersion                   | 字符串   | 与发布引用一致                                    |
-| interfaceVersion                 | 整数     | 1                                                 |
-| maintenanceComponentVersion      | 字符串   | 维护组件版本                                      |
-| installationConfigurationVersion | 可选整数 | 支持自定义安装默认值时为 1；旧工具包可省略        |
-| recoveryComponentVersion         | 字符串   | 独立恢复组件版本                                  |
-| host                             | 对象     | platform 为 windows，architecture 为 x64 或 arm64 |
-| assembler                        | 字符串   | 唯一组装器 EXE 的相对路径                         |
-| capabilities                     | 数组     | 明确支持的路线、包型、身份及架构                  |
-| placeholderTrust                 | 对象     | 模板内固定公开占位身份，不含私钥                  |
-| files                            | 数组     | 包内全部普通文件，最多 1,024 项；不包含清单自身   |
-
-`capabilities` 的元素为 `{ edition, mode, authority, architectures }`。edition 为 concept 或 community，mode 为 offline 或 online，authority 为 official 或 self-built，architectures 包含不重复的 x64/arm64。概念公开入口要求 concept、offline、self-built 同时支持两种架构；声明能力不授予官方签名身份。
-
-`placeholderTrust` 为 `{ id, publicKey: { kty: "OKP", crv: "Ed25519", x } }`。x 是 32 字节公钥的规范无填充 base64url，长度 43 字符。id 为 `self-built-` 加递归排序键名后的 publicKey JSON UTF-8 字节 SHA-256。此身份用于识别已核验模板的固定信任记录，最终成品使用构建者的独立公开身份。
-
-`files` 元素含 path、role、architecture、size、sha256，可选 edition、authority。path 是安全相对路径，使用 `/`，遵循 [标准应用载荷路径约束](SKSETUP3.md)；size 为正整数，sha256 为小写 64 位十六进制。architecture 为 x64、arm64 或 null。所有条目总大小最多 4 GiB。
-
-| role                 | 资源                                                            |
-| -------------------- | --------------------------------------------------------------- |
-| assembler            | 二进制组装和核验入口，仅一个，与 assembler 路径及 host 架构一致 |
-| wizard-template      | 对应架构安装向导模板                                            |
-| uninstaller-template | 对应架构卸载模板及部署描述                                      |
-| recovery-template    | 对应架构独立恢复模板                                            |
-| backup-runtime       | 对应架构恢复运行时及描述                                        |
-| product-contract     | 组件及产品契约                                                  |
-| license              | 使用许可与版权说明                                              |
-
-两种架构分别需要 wizard-template、uninstaller-template、recovery-template 和 backup-runtime，并且适用于概念版自建身份。ZIP 不得夹带链接、特殊文件、加密条目、重复及大小写冲突路径、目录逃逸或未登记内容。EXE、DLL 和 NODE 文件的 PE 架构须与清单一致。最终完整 Setup 不是可复用模板。
+解压、缓存与每次运行前后都按固定清单核验：0.1.7 不再提供 `toolkit-manifest.json`，工具包以 19 个固定路径文件为准（`bin/AppLifecycleToolkit.exe`、`extractor/<edition>/<arch>/setup.exe` 与 `wizard-manifest.json`、`uninstallers/<edition>/<arch>/uninstall.exe` 与 `uninstall-manifest.json`、`sample/app.manifest.jsonc`、`README.md`），逐文件核对大小与 SHA-256，任一不符即停止。缓存位于 `build/component-cache/lifecycle-toolkit`，不含私钥。
 
 ## 二进制调用
 
-组件组装器提供三个入口，成功退出 0，失败非零并写 stderr，不触发安装或卸载：
+工具包提供三个入口，成功退出 0，失败非零并写 stderr，均不触发安装或卸载：
 
 ```text
-SidekickDistribution.exe inspect --toolkit <absolute-directory>
-SidekickDistribution.exe assemble --request <absolute-request-json>
-SidekickDistribution.exe verify --toolkit <absolute-directory> --result <absolute-result-json>
+AppLifecycleToolkit.exe build --manifest <绝对路径> --payload-dir <绝对目录> --out <绝对目录> --edition concept --form offline [--key-file <绝对路径>]
+AppLifecycleToolkit.exe verify-package-spec --package-dir <绝对目录> [--key-file <绝对路径>]
+AppLifecycleToolkit.exe assemble --package-dir <绝对目录> --edition concept --arch <x64|arm64> --out <绝对路径.exe> [--key-file <绝对路径>]
 ```
 
-inspect 输出 JSON，包含 interfaceVersion、toolkitVersion、capabilities 和 verified: true，须与已核验组件清单完全一致。
+- `build` 生成可复核的包规格：`lifecycle-package.json`、签名信封 `envelope.json`、规范化清单与合同、移除计划、载荷副本和 `evidence.json`。它按清单声明的 `archive.file` 取用载荷，并按 `--edition` 自动把对应架构卸载器附挂进载荷归档。
+- `verify-package-spec` 核对 `evidence.json` 全部条目、合同摘要、移除计划结构与载荷身份；给出 `--key-file` 时另做信封认证，输出 `{packageDir, domain, checks}`。
+- `assemble` 在复核通过后生成 SKSETUP3 容器：`[提取器][包 blob][元数据][68 字节 footer]`，输出 `{outFile, outputBytes, outputSha256, domain, productVersion, productId, edition, architectures, ...}`。`outputSha256` 可直接对外交付核对。
+- 安装器自带无界面预检 `--check`：退出码 0 表示当前系统可安装，输出逐项 `[通过]` 记录并标明包域；在线或不可信域报 `PACKAGE_UNTRUSTED`。
 
-支持安装配置时，inspect 还返回 `installationConfigurationVersion: 1`，须与组件清单一致。
+`assemble` 只嵌入传入的包目录。每个架构必须使用只含该架构载荷的生命周期包：把两个架构都放进同一个包目录会让每份安装器都内嵌全部架构的载荷。本仓按架构分别构建包规格，x64 官方安装器因此保持约 203 MB，而不是把双架构载荷重复打包。
 
-assemble 的请求为以下对象，所有路径是绝对路径，outputDirectory 必须尚不存在：
+## 域与身份
 
-| 字段                             | 要求                                                                   |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| schemaVersion                    | 1                                                                      |
-| toolkitDirectory、toolkitVersion | 已核验组件目录和固定版本                                               |
-| edition、mode、authority         | concept、offline、self-built                                           |
-| payloads.x64、payloads.arm64     | 两份标准应用载荷清单路径；同目录提供清单指向的 ZIP                     |
-| identityStore                    | 本机独立身份存储路径，必须在输出目录之外                               |
-| outputDirectory                  | 成品目录                                                               |
-| installationConfiguration        | 可选对象：`{ schemaVersion: 1, edition: "concept", options: { ... } }` |
+有 `--key-file` 使用官方域 `official:<keyId>`，没有则为 `self-built`；默认行为是不带密钥即自建，构建入口不内置任何密钥路径。官方密钥文件为工具包格式 `{schemaVersion, keyId, publisher, privateKey}`；本仓从受控的官方发布密钥集读取对应 `adminKeys` 条目并写入临时文件，`finally` 删除，不记录路径或内容，构建证据只保留 keyId 与公钥。
 
-产品版本从两份一致的标准载荷取得，并与实际软件归档交叉核对；工具包版本不覆盖应用版本。标准载荷清单最多 4 MiB。输出正文包含对应架构卸载器、独立恢复程序及其运行时，由组装器核验、注入并生成本地证明。原始标准载荷保持不变。
+自建身份保存在忽略的 `local/self-build-identity.json`，含私钥，不能提交、打包或公开。自建域没有签名信封、仅支持离线，且与官方身份不能互相冒充或覆盖安装登记。
 
-工程可提供 `contracts/installation-configuration.json`，由调用包装传入二进制组件。格式见同目录的 `installation-configuration.example.json`。声明 `installationConfigurationVersion: 1` 的工具包支持覆盖 `autoLaunch`（布尔值）、`logLevel`（debug、info、warn、error）和 `usageTracking`（布尔值）的默认值；可只指定部分选项，最大 32 KiB。未知字段、选项和值均被拒绝。用户仍可在向导中调整最终值，修复时保留已有配置。
+## 本仓候选启动闸门
 
-配置接口在 1.2.0 中可省略；当前消费端仍只接受上述固定发行版。传入配置要求固定工具包声明兼容能力，不支持时须在编译应用前停止。新增选项、信任、身份或执行逻辑需要升级组件。应用版本及默认值的兼容调整可复用同一工具包，无需安装器源码。
+工具包的复核入口明确不执行 Setup，安装器能否显示首屏不在其契约内。本仓在候选收集前增加一次启动冒烟探针，作为准入条件：逐架构无参启动成品，等待非空标题窗口与已渲染内容子树（`rootLength` 非空），确认存在可用主按钮且没有错误对话框；超时或任一条件不满足即整批失败，不写出候选清单。探针按 PID 终止进程树，并按实际可执行路径核对无残留进程；不点击按钮、不进入安装、不触发提权。
 
-成功时 stdout 最后一行输出 `{ schemaVersion: 1, outputDirectory, resultFile }`；resultFile 固定为输出根的 `assembly-result.json`。该文件最多 4 MiB，含 schemaVersion、interfaceVersion、toolkitVersion、toolkitManifestSha256、edition、mode、productVersion、authority、issuerKeyId、issuerFingerprint、publicIdentity、inputs 和 artifacts。安装正文保留 `maintenance/LICENSE.txt` 和 `maintenance/THIRD-PARTY-NOTICES.txt`，与已核验工具包逐字节一致并纳入正文签名；单独分发最终 Setup 时仍保留维护组件许可。
+成功时 `release-manifest.json` 的每个离线安装器产物带 `launch` 段（attempted、ok、title、rootLength、durationMs、reason），`assembly` 段附逐架构汇总；`SHA256SUMS.txt` 仍是纯字节清单。可在无图形环境用 `--skip-launch-probe` 跳过，此时记录 `attempted=false`、`ok=null` 与原因，表示未探测而非通过。跨架构成品在非本机宿主无法启动，探针按失败记录，该架构不进入候选。
 
-publicIdentity 为 `{ id, publicKey: { kty, crv, x } }`，只含公开材料；issuerKeyId 与 id 相同。issuerFingerprint 为递归排序键名后的 publicIdentity JSON UTF-8 字节 SHA-256。inputs 为 `{ x64: { manifestSha256, archiveSha256 }, arm64: { manifestSha256, archiveSha256 } }`，对应原始标准载荷。artifacts 包含两项 `{ path, role: "offline-installer", architecture, size, sha256 }`，path 相对于输出根。
+## 发布批次
 
-输出根保留 `inputs/<architecture>/application.manifest.json` 及该清单指向的原始 ZIP，供成品复验。归档必须保留这些文件、assembly-result.json 及 artifacts 指向的相对路径；不能只移动 EXE 后声称完整输出可复验。
-
-自定义配置时，结果和 verify 输出还包含 `installationConfigurationSha256`。成品保留规范化 JSON 加换行的 `inputs/installation-configuration.json`，相同配置作为 `maintenance/installation-configuration.json` 纳入签名正文。复验重建双架构安装元数据并核对签名内配置，拒绝配置、摘要或默认值篡改。归档须保留配置输入；源配置在组装或复验期间出现、删除或变化均使构建失败。
-
-verify 读取真实成品，核对容器布局、模板、正文与恢复证明、维护附件、原生架构及保留输入，不执行 Setup。成功 JSON 含 verified: true，以及 interfaceVersion、toolkitVersion、edition、mode、productVersion、authority、issuerKeyId、issuerFingerprint、inputs、artifacts；它们须与结果文件和磁盘成品完全一致。公开调用包装在复制成品后再次运行 verify。
-
-结果和产物记录拒绝未声明字段；公开身份对象只接受声明的公钥字段，不得携带私钥或额外材料。
-
-## 自建身份
-
-首次组装由二进制入口生成本机独立 Ed25519 身份，默认保存在忽略的 `local/self-build-identity.json`，后续同身份构建复用它。该文件含私钥，不能提交、打包或公开；组件缓存与成品只保留公开身份和证明。删除或更换该文件会产生另一构建身份，不能直接覆盖原身份的安装。
-
-自建身份不代表官方背书。安装向导、修复、卸载、worker、恢复及维护收据须一致识别该身份；不同身份和官方身份不能互相冒充或覆盖安装登记。安装与维护，以及对归档成品的 verify，均不需要构建机上的 identityStore。
-
-Windows Authenticode、官方发行证明和自建 Ed25519 证明是不同的身份机制。自建证明只建立该构建者与成品的绑定，不宣称软件经过官方审查或 Windows 代码签名。
+构建中间产物与候选留在 `build`。验收后的安装器、`assembly-result.json`、保留输入与 `SHA256SUMS.txt` 归档到 `release/<产品版本>/<批次>/`，归档前后校验哈希，同名不同字节的既有批次不被覆盖。本地归档不代表已部署到下载服务或已上传远端。
