@@ -29,10 +29,13 @@ async function createArchive(directory, destination, request) {
       const stat = fs.lstatSync(source)
       if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.size)
         throw new Error('Archive input identity changed')
+      // Shipped payload and portable archives use the maximum deflate level so the
+      // delivered bytes stay as small as the format allows. The fixed mtime keeps the
+      // archive reproducible; only the compression level differs from earlier builds.
       zip.addFile(source, file.path, {
         mtime: new Date('2026-01-01T00:00:00.000Z'),
         mode: 0o100644,
-        compressionLevel: 5,
+        compressionLevel: 9,
       })
     }
     for (const name of request.emptyDirectories || []) {
