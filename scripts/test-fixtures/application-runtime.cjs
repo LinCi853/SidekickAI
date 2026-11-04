@@ -20,7 +20,11 @@ function pe(arch) {
   return bytes
 }
 
-async function createRuntime(root, arch, { edition = application.EDITION, productVersion = application.VERSION } = {}) {
+async function createRuntime(
+  root,
+  arch,
+  { edition = application.EDITION, productVersion = application.VERSION } = {},
+) {
   const directory = path.join(root, application.TARGETS[arch].directory)
   for (const name of application.REQUIRED_RUNTIME_FILES) {
     if (name === 'resources/app.asar') continue
@@ -31,12 +35,28 @@ async function createRuntime(root, arch, { edition = application.EDITION, produc
   const packageRoot = path.join(root, 'asar-' + arch)
   const loader = 'node_modules/node-gyp-build/node-gyp-build.js'
   fs.mkdirSync(path.dirname(path.join(packageRoot, loader)), { recursive: true })
-  fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
-    name: require('../../packages/product-contract/manifest.json').editions[edition].packageName, version: productVersion }))
-  fs.copyFileSync(require.resolve('node-gyp-build/node-gyp-build.js'), path.join(packageRoot, loader))
-  await require('node:stream/promises').finished(await require('@electron/asar').createPackage(packageRoot, path.join(directory, 'resources/app.asar')))
+  fs.writeFileSync(
+    path.join(packageRoot, 'package.json'),
+    JSON.stringify({
+      name: require('../../packages/product-contract/manifest.json').editions[edition].packageName,
+      version: productVersion,
+    }),
+  )
+  fs.copyFileSync(
+    require.resolve('node-gyp-build/node-gyp-build.js'),
+    path.join(packageRoot, loader),
+  )
+  await require('node:stream/promises').finished(
+    await require('@electron/asar').createPackage(
+      packageRoot,
+      path.join(directory, 'resources/app.asar'),
+    ),
+  )
   const native = path.join(directory, 'resources/app.asar.unpacked/node_modules')
-  for (const name of ['better-sqlite3/prebuilds/win32-' + arch + '.node', 'uiohook-napi/prebuilds/win32-' + arch + '/uiohook-napi.node']) {
+  for (const name of [
+    'better-sqlite3/prebuilds/win32-' + arch + '.node',
+    'uiohook-napi/prebuilds/win32-' + arch + '/uiohook-napi.node',
+  ]) {
     fs.mkdirSync(path.dirname(path.join(native, name)), { recursive: true })
     fs.writeFileSync(path.join(native, name), pe(arch))
   }

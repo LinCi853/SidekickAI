@@ -7,8 +7,9 @@
 
 const fs = require('node:fs')
 
-const files = process.argv.slice(2).filter(argument => !argument.startsWith('--'))
-if (files.length === 0) throw new Error('Usage: node scripts/audit-installer-footer.cjs <installer.exe> [...]')
+const files = process.argv.slice(2).filter((argument) => !argument.startsWith('--'))
+if (files.length === 0)
+  throw new Error('Usage: node scripts/audit-installer-footer.cjs <installer.exe> [...]')
 
 for (const file of files) {
   const buffer = fs.readFileSync(file)
@@ -34,8 +35,19 @@ for (const file of files) {
       }
     } else summary[key] = value
   }
-  console.log(JSON.stringify({
-    file, bytes: C, extractorBytes: W, payloadBlobBytes: P, reservedBytes: E, metadataBytes: M,
-    metadata: summary,
-  }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        file,
+        bytes: C,
+        extractorBytes: W,
+        payloadBlobBytes: P,
+        reservedBytes: E,
+        metadataBytes: M,
+        metadata: summary,
+      },
+      null,
+      2,
+    ),
+  )
 }

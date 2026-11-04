@@ -19,14 +19,16 @@ function fixtureRoot(t) {
   fs.mkdirSync(parent, { recursive: true })
   const root = fs.mkdtempSync(path.join(parent, 'distribution-toolkit-'))
   t.after(() => {
-    if (path.dirname(path.resolve(root)) !== parent) throw new Error('Fixture cleanup leaves its owned directory')
+    if (path.dirname(path.resolve(root)) !== parent)
+      throw new Error('Fixture cleanup leaves its owned directory')
     fs.rmSync(root, { recursive: true, force: true })
   })
   return root
 }
 
 function zipBytes(entries) {
-  const locals = [], centrals = []
+  const locals = [],
+    centrals = []
   let offset = 0
   for (const entry of entries) {
     const name = Buffer.from(entry.name)
@@ -67,7 +69,7 @@ function zipBytes(entries) {
 }
 
 // Mirrors the 0.1.7 toolkit: a fixed nineteen-file layout with no toolkit manifest. Archive
- // identity comes from the pinned reference; extracted content is bound to this inventory.
+// identity comes from the pinned reference; extracted content is bound to this inventory.
 function toolkitFixture() {
   const entries = []
   const inventory = []
@@ -86,10 +88,19 @@ function toolkitFixture() {
       ]) {
         const bytes = pe(arch)
         add(kind + '/' + edition + '/' + arch + '/' + executable, bytes)
-        add(kind + '/' + edition + '/' + arch + '/' + manifestName, Buffer.from(JSON.stringify({
-          protocolVersion: 3, uninstallProtocolVersion: 2, edition, arch,
-          size: bytes.length, sha256: u.hash(bytes),
-        }) + '\n'))
+        add(
+          kind + '/' + edition + '/' + arch + '/' + manifestName,
+          Buffer.from(
+            JSON.stringify({
+              protocolVersion: 3,
+              uninstallProtocolVersion: 2,
+              edition,
+              arch,
+              size: bytes.length,
+              sha256: u.hash(bytes),
+            }) + '\n',
+          ),
+        )
       }
     }
   }
@@ -101,37 +112,67 @@ function writeToolkit(root, fixture = toolkitFixture()) {
   const archive = path.join(root, 'toolkit.zip')
   fs.writeFileSync(archive, zipBytes(fixture.entries))
   const reference = {
-    schemaVersion: 1, toolkitVersion: fixture.version, interfaceVersion: 1,
-    archive: { url: pathToFileURL(archive).href, size: fs.statSync(archive).size, sha256: u.sha256(archive) },
+    schemaVersion: 1,
+    toolkitVersion: fixture.version,
+    interfaceVersion: 1,
+    archive: {
+      url: pathToFileURL(archive).href,
+      size: fs.statSync(archive).size,
+      sha256: u.sha256(archive),
+    },
   }
-  return { archive, reference, inventory: fixture.inventory,
-    toolkit: fixtureConsumer(reference, fixture.inventory) }
+  return {
+    archive,
+    reference,
+    inventory: fixture.inventory,
+    toolkit: fixtureConsumer(reference, fixture.inventory),
+  }
 }
 
 function fixtureConsumer(reference, inventory) {
   const filename = path.resolve(__dirname, '../distribution-toolkit.cjs')
   const load = createRequire(filename)
-  const release = Object.freeze({ toolkitVersion: reference.toolkitVersion, size: reference.archive.size,
-    sha256: reference.archive.sha256 })
+  const release = Object.freeze({
+    toolkitVersion: reference.toolkitVersion,
+    size: reference.archive.size,
+    sha256: reference.archive.sha256,
+  })
   const module = { exports: {} }
   const consumer = runInThisContext(wrap(fs.readFileSync(filename, 'utf8')), { filename })
-  consumer(module.exports, name => name === './distribution-toolkit-release.cjs' ? release : load(name),
-    module, filename, path.dirname(filename))
+  consumer(
+    module.exports,
+    (name) => (name === './distribution-toolkit-release.cjs' ? release : load(name)),
+    module,
+    filename,
+    path.dirname(filename),
+  )
   return {
     ...module.exports,
     // Fixtures carry a synthetic archive, so every preparation pins the fixture's own layout.
     prepareToolkit: (root, options = {}) =>
-      module.exports.prepareToolkit(root, { ...options, inventory: options.inventory || inventory }),
+      module.exports.prepareToolkit(root, {
+        ...options,
+        inventory: options.inventory || inventory,
+      }),
   }
 }
 
 async function createPayloads(root, productVersion = '9.4.2') {
   const payloads = []
   for (const architecture of ARCHITECTURES) {
-    const source = await createRuntime(path.join(root, 'applications'), architecture, { edition: 'concept', productVersion })
-    payloads.push(payloadApi.packApplicationPayload({
-      source, output: path.join(root, 'payloads'), architecture, edition: 'concept', productVersion,
-    }))
+    const source = await createRuntime(path.join(root, 'applications'), architecture, {
+      edition: 'concept',
+      productVersion,
+    })
+    payloads.push(
+      payloadApi.packApplicationPayload({
+        source,
+        output: path.join(root, 'payloads'),
+        architecture,
+        edition: 'concept',
+        productVersion,
+      }),
+    )
   }
   return payloads
 }
@@ -140,9 +181,7 @@ function keyIdFromArgs(args) {
   const index = args.indexOf('--key-file')
   if (index < 0) return 'self-built'
   const document = JSON.parse(fs.readFileSync(args[index + 1], 'utf8'))
-  const keyId = document.adminKeys
-    ? document.adminKeys[0]?.id
-    : document.keyId
+  const keyId = document.adminKeys ? document.adminKeys[0]?.id : document.keyId
   if (!keyId) throw new Error('Fixture key file lacks an identity')
   return 'official:' + keyId
 }
@@ -152,31 +191,51 @@ function keyIdFromArgs(args) {
 function mockAssembler(hooks = {}) {
   const calls = []
   let lastDomain = 'self-built'
-  const respond = value => ({ status: 0, stdout: JSON.stringify(value) + '\n', stderr: '' })
+  const respond = (value) => ({ status: 0, stdout: JSON.stringify(value) + '\n', stderr: '' })
   const spawn = (executable, args, options) => {
     calls.push({ executable, args: [...args], options })
     const command = args[0]
     if (command === '--check') {
       const domain = hooks.domain || lastDomain
-      return hooks.check?.({ executable, args, domain, respond }) ||
-        { status: 0, stdout: 'package: ' + executable + '\ndomain: ' + domain + '\ncheck: ok\n', stderr: '' }
+      return (
+        hooks.check?.({ executable, args, domain, respond }) || {
+          status: 0,
+          stdout: 'package: ' + executable + '\ndomain: ' + domain + '\ncheck: ok\n',
+          stderr: '',
+        }
+      )
     }
     const domain = hooks.domain || keyIdFromArgs(args)
     lastDomain = domain
     if (command === 'build') {
       const packageDir = args[args.indexOf('--out') + 1]
       fs.mkdirSync(packageDir, { recursive: true })
-      fs.writeFileSync(path.join(packageDir, 'lifecycle-package.json'), JSON.stringify({
-        schemaVersion: 1, edition: 'concept', form: 'offline', domain,
-      }) + '\n')
-      return hooks.build?.({ args, packageDir, domain, respond }) ||
+      fs.writeFileSync(
+        path.join(packageDir, 'lifecycle-package.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          edition: 'concept',
+          form: 'offline',
+          domain,
+        }) + '\n',
+      )
+      return (
+        hooks.build?.({ args, packageDir, domain, respond }) ||
         respond({ packageDir, domain, form: 'offline', built: true })
+      )
     }
     if (command === 'verify-package-spec') {
       const packageDir = args[args.indexOf('--package-dir') + 1]
-      return hooks.verify?.({ args, packageDir, domain, respond }) ||
-        respond({ packageDir, domain, form: 'offline', checks: [{ id: 'package', ok: true }],
-          configuration: {} })
+      return (
+        hooks.verify?.({ args, packageDir, domain, respond }) ||
+        respond({
+          packageDir,
+          domain,
+          form: 'offline',
+          checks: [{ id: 'package', ok: true }],
+          configuration: {},
+        })
+      )
     }
     if (command === 'assemble') {
       const outFile = path.resolve(args[args.indexOf('--out') + 1])
@@ -184,10 +243,18 @@ function mockAssembler(hooks = {}) {
       const bytes = pe(architecture)
       fs.mkdirSync(path.dirname(outFile), { recursive: true })
       if (!fs.existsSync(outFile)) fs.writeFileSync(outFile, bytes)
-      return hooks.assemble?.({ args, outFile, architecture, domain, bytes, respond }) ||
-        respond({ outFile, outputBytes: fs.statSync(outFile).size,
-          outputSha256: u.sha256(outFile), domain, architectures: [architecture],
-          edition: 'concept', form: 'offline' })
+      return (
+        hooks.assemble?.({ args, outFile, architecture, domain, bytes, respond }) ||
+        respond({
+          outFile,
+          outputBytes: fs.statSync(outFile).size,
+          outputSha256: u.sha256(outFile),
+          domain,
+          architectures: [architecture],
+          edition: 'concept',
+          form: 'offline',
+        })
+      )
     }
     throw new Error('Unexpected fixture assembler operation: ' + command)
   }
@@ -195,6 +262,13 @@ function mockAssembler(hooks = {}) {
 }
 
 module.exports = {
-  TOOLKIT_VERSION, EDITIONS, ARCHITECTURES,
-  fixtureRoot, zipBytes, toolkitFixture, writeToolkit, createPayloads, mockAssembler,
+  TOOLKIT_VERSION,
+  EDITIONS,
+  ARCHITECTURES,
+  fixtureRoot,
+  zipBytes,
+  toolkitFixture,
+  writeToolkit,
+  createPayloads,
+  mockAssembler,
 }

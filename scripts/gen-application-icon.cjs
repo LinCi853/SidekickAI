@@ -16,10 +16,15 @@ function genIco() {
   const entries = []
   for (const size of sizes) {
     if (size >= 256) {
-      const png = nativeImage.createFromPath(ICON_PNG).resize({ width: 256, height: 256, quality: 'best' }).toPNG()
+      const png = nativeImage
+        .createFromPath(ICON_PNG)
+        .resize({ width: 256, height: 256, quality: 'best' })
+        .toPNG()
       entries.push({ size, data: png, isPng: true })
     } else {
-      const img = nativeImage.createFromPath(ICON_PNG).resize({ width: size, height: size, quality: 'best' })
+      const img = nativeImage
+        .createFromPath(ICON_PNG)
+        .resize({ width: size, height: size, quality: 'best' })
       const w = size
       const h = size
       const src = img.getBitmap() // Premultiplied BGRA in top-down order.

@@ -8,7 +8,7 @@ export const STATES = Object.freeze({
 
 export function selectProcessTree(rows, rootPid) {
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0) throw new Error('Invalid root PID')
-  const byPid = new Map(rows.map(row => [Number(row.ProcessId), row]))
+  const byPid = new Map(rows.map((row) => [Number(row.ProcessId), row]))
   if (!byPid.has(rootPid)) throw new Error('Target root process is missing')
   const selected = new Set([rootPid])
   let changed = true
@@ -19,15 +19,17 @@ export function selectProcessTree(rows, rootPid) {
       const parentPid = Number(row.ParentProcessId)
       const parent = byPid.get(parentPid)
       // Windows can reuse the PID of an exited parent.
-      const predatesParent = row.CreatedAt && parent?.CreatedAt
-        && Date.parse(row.CreatedAt) < Date.parse(parent.CreatedAt)
+      const predatesParent =
+        row.CreatedAt &&
+        parent?.CreatedAt &&
+        Date.parse(row.CreatedAt) < Date.parse(parent.CreatedAt)
       if (!selected.has(pid) && selected.has(parentPid) && !predatesParent) {
         selected.add(pid)
         changed = true
       }
     }
   }
-  return [...selected].map(pid => {
+  return [...selected].map((pid) => {
     const row = byPid.get(pid)
     const bytes = Number(row.WorkingSetSize)
     if (!Number.isFinite(bytes) || bytes < 0 || row.WorkingSetSize == null) {
@@ -48,21 +50,37 @@ export function assessState(state, samples, checks = []) {
       continue
     }
     const inventory = sample.inventory
-    if (!inventory) { failures.push('Missing application inventory'); continue }
+    if (!inventory) {
+      failures.push('Missing application inventory')
+      continue
+    }
     if (inventory.windows !== contract.windows) failures.push('Wrong number of application windows')
-    if (inventory.browserWindows !== contract.browserWindows) failures.push('Wrong number of browser windows')
-    if (contract.guests !== undefined && inventory.guests !== contract.guests) failures.push('Wrong number of live webpages')
-    if (contract.browserGuests !== undefined && inventory.browserGuests !== contract.browserGuests) failures.push('Wrong number of live browser webpages')
-    if (state === 'browsers' && inventory.readyBrowserWindows !== 10) failures.push('Not all ten browser windows are ready')
-    if (state === 'minimum' && inventory.renderers !== 0) failures.push('Full application renderer remains resident')
-    if (contract.limitBytes !== null && (contract.exclusive
-      ? sample.totalBytes >= contract.limitBytes : sample.totalBytes > contract.limitBytes)) failures.push('Memory limit exceeded')
+    if (inventory.browserWindows !== contract.browserWindows)
+      failures.push('Wrong number of browser windows')
+    if (contract.guests !== undefined && inventory.guests !== contract.guests)
+      failures.push('Wrong number of live webpages')
+    if (contract.browserGuests !== undefined && inventory.browserGuests !== contract.browserGuests)
+      failures.push('Wrong number of live browser webpages')
+    if (state === 'browsers' && inventory.readyBrowserWindows !== 10)
+      failures.push('Not all ten browser windows are ready')
+    if (state === 'minimum' && inventory.renderers !== 0)
+      failures.push('Full application renderer remains resident')
+    if (
+      contract.limitBytes !== null &&
+      (contract.exclusive
+        ? sample.totalBytes >= contract.limitBytes
+        : sample.totalBytes > contract.limitBytes)
+    )
+      failures.push('Memory limit exceeded')
   }
-  const totals = samples.map(sample => sample.totalBytes).sort((a, b) => a - b)
+  const totals = samples.map((sample) => sample.totalBytes).sort((a, b) => a - b)
   return {
-    state, status: failures.length ? 'FAIL' : 'PASS',
-    failures: [...new Set(failures)], sampleCount: samples.length,
-    peakBytes: totals.at(-1), medianBytes: totals[Math.floor(totals.length / 2)],
+    state,
+    status: failures.length ? 'FAIL' : 'PASS',
+    failures: [...new Set(failures)],
+    sampleCount: samples.length,
+    peakBytes: totals.at(-1),
+    medianBytes: totals[Math.floor(totals.length / 2)],
     limitBytes: contract.limitBytes,
   }
 }

@@ -38,16 +38,18 @@ test('isWorkerDir covers the production uninstall root', () => {
   assert.ok(!isWorkerDir('SidekickAI-Extract-hash'))
 })
 
-test('collect lists managed entries and skips the rest', t => {
+test('collect lists managed entries and skips the rest', (t) => {
   const root = makeTempRoot(t)
   fs.mkdirSync(path.join(root, 'SidekickAI-Extract-old'))
   fs.mkdirSync(path.join(root, 'sidekickai-asset-a'))
   fs.mkdirSync(path.join(root, 'unrelated-app'))
-  const names = collect(root).map(entry => entry.name).sort()
+  const names = collect(root)
+    .map((entry) => entry.name)
+    .sort()
   assert.deepEqual(names, ['SidekickAI-Extract-old', 'sidekickai-asset-a'])
 })
 
-test('CLI removes stale managed entries and keeps recent ones', t => {
+test('CLI removes stale managed entries and keeps recent ones', (t) => {
   const root = makeTempRoot(t)
   const stale = path.join(root, 'sidekick-legacy-transaction-rollback-1')
   const fresh = path.join(root, 'sidekickai-asset-live')
@@ -70,7 +72,7 @@ test('CLI removes stale managed entries and keeps recent ones', t => {
   assert.ok(fs.existsSync(foreign), 'foreign dir must be kept')
 })
 
-test('CLI --dry-run reports without deleting', t => {
+test('CLI --dry-run reports without deleting', (t) => {
   const root = makeTempRoot(t)
   const stale = path.join(root, 'SidekickAI-Extract-dry')
   fs.mkdirSync(stale)
@@ -85,7 +87,7 @@ test('CLI --dry-run reports without deleting', t => {
   assert.match(result.stdout, /would remove SidekickAI-Extract-dry/)
 })
 
-test('CLI keeps SidekickAI-Uninstall until the worker grace period', t => {
+test('CLI keeps SidekickAI-Uninstall until the worker grace period', (t) => {
   const root = makeTempRoot(t)
   const worker = path.join(root, 'SidekickAI-Uninstall')
   const oldWorker = path.join(root, 'SidekickAI-Uninstall-old')

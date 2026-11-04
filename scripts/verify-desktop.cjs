@@ -24,7 +24,9 @@ function checkpoint(stage) {
   fs.writeFileSync(path.join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n')
 }
 
-fs.writeFileSync(bootstrap, `
+fs.writeFileSync(
+  bootstrap,
+  `
 const { app, dialog } = require('electron');
 const fs = require('node:fs');
 // Playwright prepends inspector switches to argv. Recovery helpers need the
@@ -57,7 +59,8 @@ app.on('session-created', session => {
   });
 });
 require(${JSON.stringify(path.join(root, 'out/main/index.cjs'))});
-`)
+`,
+)
 
 async function launch(profile, label) {
   checkpoint('launch ' + label)
@@ -70,7 +73,8 @@ async function launch(profile, label) {
     VERIFY_REQUEST_FILE: path.join(evidence, 'blocked-requests.log'),
     VERIFY_RECOVERY_FILE: path.join(evidence, `${label}-recovery.json`),
   }
-  for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'LIB', 'LIBPATH']) delete env[key]
+  for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'LIB', 'LIBPATH'])
+    delete env[key]
   const app = await electron.launch({
     executablePath: require('electron'),
     args: [bootstrap, '--skip-guide'],
@@ -81,9 +85,9 @@ async function launch(profile, label) {
   activeApp = app
   app.once('close', () => closedApps.add(app))
   const log = fs.createWriteStream(path.join(evidence, `${label}.log`))
-  app.process().stdout.on('data', data => log.write(data))
-  app.process().stderr.on('data', data => log.write(data))
-  app.on('window', page => page.on('pageerror', error => report.pageErrors.push(error.message)))
+  app.process().stdout.on('data', (data) => log.write(data))
+  app.process().stderr.on('data', (data) => log.write(data))
+  app.on('window', (page) => page.on('pageerror', (error) => report.pageErrors.push(error.message)))
   const page = await app.firstWindow()
   await page.waitForFunction(() => window.electron && document.body.innerText.length > 50)
   assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), profile)
@@ -100,7 +104,12 @@ async function close(app) {
   try {
     await Promise.race([
       app.close(),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Application cleanup exceeded 15 seconds')), 15000) }),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Application cleanup exceeded 15 seconds')),
+          15000,
+        )
+      }),
     ])
   } catch (error) {
     const child = app.process()
@@ -116,7 +125,7 @@ async function waitUntil(predicate, message, milliseconds = 10000) {
   const deadline = Date.now() + milliseconds
   while (Date.now() < deadline) {
     if (await predicate()) return
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(message)
 }
@@ -130,18 +139,21 @@ async function openAdvanced(app, page) {
 }
 
 async function readRecords(page, boardId) {
-  return page.evaluate(async id => ({
-    notes: await window.electron.notes.list(),
-    prompts: await window.electron.prompt.list(),
-    board: await window.electron.whiteboard.getSnapshot(id),
-    settings: await window.electron.appSettings.get(),
-  }), boardId)
+  return page.evaluate(
+    async (id) => ({
+      notes: await window.electron.notes.list(),
+      prompts: await window.electron.prompt.list(),
+      board: await window.electron.whiteboard.getSnapshot(id),
+      settings: await window.electron.appSettings.get(),
+    }),
+    boardId,
+  )
 }
 
 function assertRecords(records) {
-  assert.equal(records.notes.find(note => note.id === 'verification-note')?.content, content)
-  assert(records.prompts.some(prompt => prompt.id === 'verification-prompt'))
-  assert(JSON.parse(records.board).elements.some(element => element.type === 'rectangle'))
+  assert.equal(records.notes.find((note) => note.id === 'verification-note')?.content, content)
+  assert(records.prompts.some((prompt) => prompt.id === 'verification-prompt'))
+  assert(JSON.parse(records.board).elements.some((element) => element.type === 'rectangle'))
   assert.equal(records.settings.notesSidebarWidth, 203)
 }
 
@@ -149,9 +161,15 @@ async function verify() {
   let { app, page } = await launch(sourceProfile, 'source-write')
   const navigation = await page.evaluate(async () => {
     const api = window.electron
-    const browser = (await api.modules.list()).find(module => module.id === 'browser')
-    if (!browser || browser.enabled !== browser.defaultEnabled) throw new Error('A fresh browser module must match its declared default')
-    const entry = { id: 'verification-history', url: 'https://example.invalid/local', title: 'Local history', timestamp: 1 }
+    const browser = (await api.modules.list()).find((module) => module.id === 'browser')
+    if (!browser || browser.enabled !== browser.defaultEnabled)
+      throw new Error('A fresh browser module must match its declared default')
+    const entry = {
+      id: 'verification-history',
+      url: 'https://example.invalid/local',
+      title: 'Local history',
+      timestamp: 1,
+    }
     await api.navHistory.record('verification-profile', entry)
     for (const enabled of [true, false]) {
       const result = await api.modules.setEnabled('browser', enabled)
@@ -161,15 +179,29 @@ async function verify() {
     if (!cleared.ok) throw new Error(cleared.error)
     return api.navHistory.get('verification-profile')
   })
-  assert(navigation.some(entry => entry.url === 'https://example.invalid/local' && entry.title === 'Local history'))
+  assert(
+    navigation.some(
+      (entry) => entry.url === 'https://example.invalid/local' && entry.title === 'Local history',
+    ),
+  )
   report.checks.push('main navigation survives browser enable, disable and data clearing')
   const board = await page.evaluate(async () => {
     const api = window.electron
-    const note = await api.notes.save({ id: 'verification-note', title: 'Offline verification', content: 'Initial draft' })
+    const note = await api.notes.save({
+      id: 'verification-note',
+      title: 'Offline verification',
+      content: 'Initial draft',
+    })
     await api.notes.setActive(note.id)
     const board = await api.whiteboard.create('Offline drawing')
     await api.whiteboard.setActive(board.id)
-    await api.prompt.save({ id: 'verification-prompt', title: 'Offline prompt', content: 'A local prompt', createdAt: 1, updatedAt: 1 })
+    await api.prompt.save({
+      id: 'verification-prompt',
+      title: 'Offline prompt',
+      content: 'A local prompt',
+      createdAt: 1,
+      updatedAt: 1,
+    })
     await api.appSettings.update({ notesSidebarWidth: 203 })
     return board
   })
@@ -184,10 +216,14 @@ async function verify() {
   await advanced.mouse.down()
   await advanced.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.55, { steps: 5 })
   await advanced.mouse.up()
-  await waitUntil(() => page.evaluate(async id => {
-    const value = await window.electron.whiteboard.getSnapshot(id)
-    return value && JSON.parse(value).elements?.some(element => element.type === 'rectangle')
-  }, board.id), 'The whiteboard did not save the drawing')
+  await waitUntil(
+    () =>
+      page.evaluate(async (id) => {
+        const value = await window.electron.whiteboard.getSnapshot(id)
+        return value && JSON.parse(value).elements?.some((element) => element.type === 'rectangle')
+      }, board.id),
+    'The whiteboard did not save the drawing',
+  )
   await advanced.screenshot({ path: path.join(evidence, 'whiteboard.png') })
   await advanced.getByText('灵感笔记', { exact: true }).first().click()
   await advanced.locator('textarea').first().fill(content)
@@ -198,35 +234,61 @@ async function verify() {
   assertRecords(await readRecords(page, board.id))
   report.checks.push('notes, whiteboard, prompts and settings survive restart')
   report.assets = await page.evaluate(async () => {
-    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/V5kAAAAASUVORK5CYII='
-    return { note: await window.electron.notes.saveImage(png), board: await window.electron.whiteboard.saveImage(png) }
+    const png =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/V5kAAAAASUVORK5CYII='
+    return {
+      note: await window.electron.notes.saveImage(png),
+      board: await window.electron.whiteboard.saveImage(png),
+    }
   })
   checkpoint('exporting encrypted backup')
-  const exported = await page.evaluate(async input => window.electron.appSettings.exportData(input.backup,
-    { basicData: true, cookies: false, indexedDB: false, cache: false, voiceAssets: false }, { password: input.password }), { backup, password })
-    .catch(error => ({ success: false, error: error.message }))
+  const exported = await page
+    .evaluate(
+      async (input) =>
+        window.electron.appSettings.exportData(
+          input.backup,
+          { basicData: true, cookies: false, indexedDB: false, cache: false, voiceAssets: false },
+          { password: input.password },
+        ),
+      { backup, password },
+    )
+    .catch((error) => ({ success: false, error: error.message }))
   report.exported = exported
   checkpoint('encrypted export returned')
   if (!exported.success) {
     const resultFile = path.join(evidence, 'source-restart-recovery.json')
-    await waitUntil(() => fs.existsSync(resultFile), 'Encrypted export failed without a verified background result: ' + exported.error, 60000)
+    await waitUntil(
+      () => fs.existsSync(resultFile),
+      'Encrypted export failed without a verified background result: ' + exported.error,
+      60000,
+    )
     report.recoveryResult = JSON.parse(fs.readFileSync(resultFile, 'utf8'))
     assert.equal(report.recoveryResult.title, '备份已保存', report.recoveryResult.detail)
     assert(fs.existsSync(backup), 'Background export did not publish the archive')
-    await waitUntil(() => closedApps.has(app), 'Background export application did not exit after its result', 15000)
+    await waitUntil(
+      () => closedApps.has(app),
+      'Background export application did not exit after its result',
+      15000,
+    )
     activeApp = null
     ;({ app, page } = await launch(sourceProfile, 'source-after-export'))
   }
   assertRecords(await readRecords(page, board.id))
   report.checks.push('encrypted export completes and application stores remain usable')
-  const wrongPassword = await page.evaluate(file => window.electron.appSettings.importDataDecrypted(file, 'incorrect-password'), backup)
+  const wrongPassword = await page.evaluate(
+    (file) => window.electron.appSettings.importDataDecrypted(file, 'incorrect-password'),
+    backup,
+  )
   assert.equal(wrongPassword.success, false)
   assertRecords(await readRecords(page, board.id))
   const invalid = path.join(evidence, 'corrupt.zip')
   const zip = new AdmZip()
   zip.addFile('settings.db', Buffer.from('not a SQLite database'))
   zip.writeZip(invalid)
-  const rejected = await page.evaluate(file => window.electron.appSettings.importData(file), invalid)
+  const rejected = await page.evaluate(
+    (file) => window.electron.appSettings.importData(file),
+    invalid,
+  )
   assert.equal(rejected.success, false)
   assertRecords(await readRecords(page, board.id))
   report.checks.push('corrupt archives and incorrect passwords preserve current data')
@@ -234,12 +296,23 @@ async function verify() {
 
   checkpoint('restoring encrypted backup')
   ;({ app, page } = await launch(destinationProfile, 'restore'))
-  await page.evaluate(() => window.electron.notes.save({ id: 'destination-record', content: 'Original destination record' }))
+  await page.evaluate(() =>
+    window.electron.notes.save({
+      id: 'destination-record',
+      content: 'Original destination record',
+    }),
+  )
   const closed = app.waitForEvent('close', { timeout: 10000 })
-  const response = await app.evaluate(async ({ ipcMain, BrowserWindow }, input) => {
-    return ipcMain._invokeHandlers.get('app:importDataDecrypted')(
-      { sender: BrowserWindow.getAllWindows()[0].webContents }, input.backup, input.password)
-  }, { backup, password })
+  const response = await app.evaluate(
+    async ({ ipcMain, BrowserWindow }, input) => {
+      return ipcMain._invokeHandlers.get('app:importDataDecrypted')(
+        { sender: BrowserWindow.getAllWindows()[0].webContents },
+        input.backup,
+        input.password,
+      )
+    },
+    { backup, password },
+  )
   assert(response.success, response.error)
   await closed
   activeApp = null
@@ -254,34 +327,50 @@ async function verify() {
 
   for (const directory of ['notes-assets', 'whiteboard-assets']) {
     for (const file of fs.readdirSync(path.join(sourceProfile, directory))) {
-      assert.deepEqual(fs.readFileSync(path.join(sourceProfile, directory, file)), fs.readFileSync(path.join(destinationProfile, directory, file)))
+      assert.deepEqual(
+        fs.readFileSync(path.join(sourceProfile, directory, file)),
+        fs.readFileSync(path.join(destinationProfile, directory, file)),
+      )
     }
   }
-  for (const file of fs.readdirSync(destinationProfile).filter(file => file.endsWith('.db'))) {
+  for (const file of fs.readdirSync(destinationProfile).filter((file) => file.endsWith('.db'))) {
     const db = new Database(path.join(destinationProfile, file), { readonly: true })
-    try { assert.equal(db.pragma('integrity_check', { simple: true }), 'ok') }
-    finally { db.close() }
+    try {
+      assert.equal(db.pragma('integrity_check', { simple: true }), 'ok')
+    } finally {
+      db.close()
+    }
   }
   report.checks.push('restored assets match and all restored databases pass integrity checks')
 }
 
-verify().then(() => { report.ok = true }).catch(error => {
-  report.ok = false
-  report.error = error.stack
-  process.exitCode = 1
-}).finally(async () => {
-  checkpoint('verification complete; cleaning up')
-  if (activeApp) await close(activeApp).catch(error => {
-    report.cleanupError = error.stack
+verify()
+  .then(() => {
+    report.ok = true
+  })
+  .catch((error) => {
     report.ok = false
+    report.error = error.stack
     process.exitCode = 1
   })
-  for (const file of fs.readdirSync(evidence).filter(file => file.endsWith('-exception.log'))) {
-    report.uncaught.push(fs.readFileSync(path.join(evidence, file), 'utf8'))
-  }
-  const requests = path.join(evidence, 'blocked-requests.log')
-  if (fs.existsSync(requests)) report.blockedRequests = [...new Set(fs.readFileSync(requests, 'utf8').trim().split('\n'))]
-  if (report.pageErrors.length || report.uncaught.length) { report.ok = false; process.exitCode = 1 }
-  fs.writeFileSync(path.join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n')
-  console.log(JSON.stringify({ ...report, evidence }, null, 2))
-})
+  .finally(async () => {
+    checkpoint('verification complete; cleaning up')
+    if (activeApp)
+      await close(activeApp).catch((error) => {
+        report.cleanupError = error.stack
+        report.ok = false
+        process.exitCode = 1
+      })
+    for (const file of fs.readdirSync(evidence).filter((file) => file.endsWith('-exception.log'))) {
+      report.uncaught.push(fs.readFileSync(path.join(evidence, file), 'utf8'))
+    }
+    const requests = path.join(evidence, 'blocked-requests.log')
+    if (fs.existsSync(requests))
+      report.blockedRequests = [...new Set(fs.readFileSync(requests, 'utf8').trim().split('\n'))]
+    if (report.pageErrors.length || report.uncaught.length) {
+      report.ok = false
+      process.exitCode = 1
+    }
+    fs.writeFileSync(path.join(evidence, 'report.json'), JSON.stringify(report, null, 2) + '\n')
+    console.log(JSON.stringify({ ...report, evidence }, null, 2))
+  })

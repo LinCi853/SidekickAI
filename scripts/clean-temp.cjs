@@ -21,7 +21,7 @@ const PREFIXES = [
 ]
 
 function matches(name) {
-  return PREFIXES.some(prefix => name.startsWith(prefix))
+  return PREFIXES.some((prefix) => name.startsWith(prefix))
 }
 
 function isWorkerDir(name) {
@@ -30,15 +30,25 @@ function isWorkerDir(name) {
 
 function entrySize(target) {
   let total = 0
-  const walk = current => {
+  const walk = (current) => {
     let entries
-    try { entries = fs.readdirSync(current, { withFileTypes: true }) } catch { return }
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true })
+    } catch {
+      return
+    }
     for (const entry of entries) {
       const child = path.join(current, entry.name)
       // 不跟随重解析点：只把链接本身记 0 字节，避免把别的目录算进来。
       if (entry.isSymbolicLink()) continue
       if (entry.isDirectory()) walk(child)
-      else if (entry.isFile()) { try { total += fs.statSync(child).size } catch { /* raced */ } }
+      else if (entry.isFile()) {
+        try {
+          total += fs.statSync(child).size
+        } catch {
+          /* raced */
+        }
+      }
     }
   }
   try {
@@ -46,7 +56,9 @@ function entrySize(target) {
     if (stat.isSymbolicLink()) return 0
     if (stat.isFile()) return stat.size
     if (stat.isDirectory()) walk(target)
-  } catch { return 0 }
+  } catch {
+    return 0
+  }
   return total
 }
 
@@ -72,18 +84,22 @@ function collect(tempRoot) {
     return []
   }
   return entries
-    .filter(entry => matches(entry.name))
-    .map(entry => {
+    .filter((entry) => matches(entry.name))
+    .map((entry) => {
       const target = path.join(tempRoot, entry.name)
       let mtimeMs = 0
-      try { mtimeMs = fs.lstatSync(target).mtimeMs } catch { /* raced */ }
+      try {
+        mtimeMs = fs.lstatSync(target).mtimeMs
+      } catch {
+        /* raced */
+      }
       return { name: entry.name, target, mtimeMs, isDirectory: entry.isDirectory() }
     })
 }
 
 function main(args) {
   const dryRun = args.includes('--dry-run')
-  const maxAgeFlag = args.find(arg => arg.startsWith('--max-age-hours='))
+  const maxAgeFlag = args.find((arg) => arg.startsWith('--max-age-hours='))
   const maxAgeMs = maxAgeFlag
     ? Math.max(0, Number(maxAgeFlag.slice('--max-age-hours='.length)) * 3600 * 1000)
     : DEFAULT_MAX_AGE_MS
@@ -98,9 +114,7 @@ function main(args) {
 
   for (const entry of entries) {
     // 统一 --max-age-hours；卸载 Worker 目录额外加长到至少 24h，避免误伤进行中的卸载。
-    const requiredAge = isWorkerDir(entry.name)
-      ? Math.max(maxAgeMs, WORKER_MAX_AGE_MS)
-      : maxAgeMs
+    const requiredAge = isWorkerDir(entry.name) ? Math.max(maxAgeMs, WORKER_MAX_AGE_MS) : maxAgeMs
     if (now - entry.mtimeMs < requiredAge) {
       skipped++
       continue
@@ -109,15 +123,19 @@ function main(args) {
     if (removeEntry(entry.target, dryRun)) {
       removed++
       freed += size
-      console.log(`[temp] ${dryRun ? 'would remove' : 'removed'} ${entry.name} (${(size / 1024).toFixed(1)} KiB)`)
+      console.log(
+        `[temp] ${dryRun ? 'would remove' : 'removed'} ${entry.name} (${(size / 1024).toFixed(1)} KiB)`,
+      )
     } else {
       failed++
       console.warn(`[temp] failed to remove ${entry.name}`)
     }
   }
 
-  const gib = bytes => (bytes / 1024 ** 3).toFixed(2) + ' GiB'
-  console.log(`[temp] ${dryRun ? 'dry-run: ' : ''}matched ${entries.length}, ${dryRun ? 'would free' : 'freed'} ${gib(freed)}, skipped recent ${skipped}, failed ${failed}`)
+  const gib = (bytes) => (bytes / 1024 ** 3).toFixed(2) + ' GiB'
+  console.log(
+    `[temp] ${dryRun ? 'dry-run: ' : ''}matched ${entries.length}, ${dryRun ? 'would free' : 'freed'} ${gib(freed)}, skipped recent ${skipped}, failed ${failed}`,
+  )
   // 单项删除失败不升级为构建阻断；只在完全无法读取 temp 时已有错误日志。
   if (failed > 0 && removed === 0 && !dryRun) process.exitCode = 1
 }
