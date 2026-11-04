@@ -1,6 +1,8 @@
 'use strict'
 
+const crypto = require('node:crypto')
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const toolkitApi = require('./distribution-toolkit.cjs')
@@ -12,13 +14,80 @@ const MAX_APPLICATION_MANIFEST_BYTES = 4 * 1024 * 1024
 const MAX_CONFIGURATION_BYTES = 32 * 1024
 const CONFIGURATION_PATH = 'inputs/installation-configuration.json'
 const PRODUCT_PATH = 'inputs/product-descriptor.json'
+const PRODUCT_CONTRACT_PATH = 'packages/product-contract/manifest.json'
+const PRODUCT_FIELDS = [
+  'productId',
+  'purposePrefix',
+  'name',
+  'displayName',
+  'executable',
+  'identityCarrier',
+  'icon',
+  'capabilities',
+  'dataProbe',
+  'appExportHook',
+]
+const EDITION_FIELDS = [
+  'label',
+  'packageName',
+  'directory',
+  'legacyDirectories',
+  'registryKey',
+  'dataDirectories',
+  'legacyExecutable',
+  'cloudResources',
+  'packageKinds',
+  'requiredFiles',
+]
+const KEY_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/
+const OFFICIAL_KEY_ID = 'admin_c80c9c3f5a39429ba71bea5db45ff3cc'
+
+function readProductContract(root) {
+  const file = path.join(root, ...PRODUCT_CONTRACT_PATH.split('/'))
+  u.assertFile(file)
+  if (fs.statSync(file).size > MAX_APPLICATION_MANIFEST_BYTES)
+    throw new Error('Product contract exceeds its size limit')
+  return JSON.parse(fs.readFileSync(file, 'utf8'))
+}
+
+// The toolkit has its own product identity; only the fields that contract defines may be
+// submitted. The projected descriptor is kept as evidence even though 0.1.7 consumes the
+// manifest instead of a separate descriptor document.
+function projectProduct(document, contract, edition) {
+  const projected = { schemaVersion: document.schemaVersion }
+  for (const field of PRODUCT_FIELDS) {
+    if (!Object.hasOwn(contract, field)) continue
+    projected[field] = Object.hasOwn(document, field)
+      ? document[field]
+      : structuredClone(contract[field])
+  }
+  // The public contract predates 0.1.7 and does not carry every lifecycle identity field;
+  // these remain part of the product descriptor and are projected verbatim.
+  for (const field of ['productId', 'identityCarrier', 'icon', 'executable', 'displayName', 'backupComponent']) {
+    if (Object.hasOwn(document, field) && !Object.hasOwn(projected, field))
+      projected[field] = structuredClone(document[field])
+  }
+  if (!contract.editions?.[edition] || !document.editions?.[edition])
+    throw new Error('Product descriptor lacks the assembled edition')
+  const editions = {}
+  for (const [name, contractEdition] of Object.entries(contract.editions)) {
+    const documentEdition = document.editions?.[name] || {}
+    const projectedEdition = {}
+    for (const field of EDITION_FIELDS) {
+      if (Object.hasOwn(documentEdition, field)) projectedEdition[field] = documentEdition[field]
+      else if (Object.hasOwn(contractEdition, field))
+        projectedEdition[field] = structuredClone(contractEdition[field])
+    }
+    editions[name] = projectedEdition
+  }
+  projected.editions = editions
+  return projected
+}
 
 function readProductDescriptor(root) {
   const file = path.join(root, 'contracts/distribution-product.json')
   if (!fs.existsSync(file)) return null
   u.assertFile(file)
-  if (fs.statSync(file).size > 32 * 1024)
-    throw new Error('Product descriptor exceeds its size limit')
   const raw = fs.readFileSync(file)
   if (!raw.length || raw.length > 32 * 1024)
     throw new Error('Product descriptor exceeds its size limit')
@@ -32,7 +101,13 @@ function readProductDescriptor(root) {
       document.backupComponent !== 'resources/host-backup/component.json')
   )
     throw new Error('Invalid application distribution product')
-  return { document, sha256: u.hash(runtime.canonicalJson(document)), originalSha256: u.hash(raw) }
+  const descriptor = projectProduct(document, readProductContract(root), 'concept')
+  return {
+    document: descriptor,
+    sha256: u.hash(runtime.canonicalJson(descriptor)),
+    originalSha256: u.hash(raw),
+    publisher: document.publisher,
+  }
 }
 
 function assertProductUnchanged(product, root) {
@@ -41,7 +116,7 @@ function assertProductUnchanged(product, root) {
     throw new Error('Product descriptor changed during assembly')
 }
 
-function readInstallationConfiguration(root, toolkit) {
+function readInstallationConfiguration(root) {
   const file = path.join(root, 'contracts/installation-configuration.json')
   if (!fs.existsSync(file)) return null
   u.assertFile(file)
@@ -64,81 +139,148 @@ function readInstallationConfiguration(root, toolkit) {
   ) {
     throw new Error('Invalid installation configuration')
   }
-  if (toolkit.manifest.installationConfigurationVersion !== 1) {
-    throw new Error(
-      'The pinned toolkit cannot accept installation defaults; select a compatible toolkit before building',
-    )
-  }
   const bytes = Buffer.from(runtime.canonicalJson(value) + '\n')
   return { file, value, bytes, sha256: u.hash(bytes), originalSha256: u.hash(raw) }
 }
 
-function assertConfigurationUnchanged(configuration, root) {
-  if (!configuration) {
-    if (fs.existsSync(path.join(root, 'contracts/installation-configuration.json'))) {
-      throw new Error('Installation configuration changed during assembly')
-    }
-    return
-  }
+function assertConfigurationUnchanged(configuration, root, product) {
+  if (!configuration) return
   u.assertFile(configuration.file)
   if (u.sha256(configuration.file) !== configuration.originalSha256)
     throw new Error('Installation configuration changed during assembly')
+  const current = readProductDescriptor(root)
+  if (current?.originalSha256 !== product?.originalSha256)
+    throw new Error('Product descriptor changed during assembly')
+}
+
+function parseOutput(stdout) {
+  const text = (stdout || '').trim()
+  if (!text) throw new Error('生命周期工具没有输出结果。')
+  try {
+    return JSON.parse(text)
+  } catch {
+    const last = text.split(/\r?\n/).at(-1)
+    try {
+      return JSON.parse(last)
+    } catch {
+      throw new Error('生命周期工具没有返回有效的 JSON 结果。')
+    }
+  }
 }
 
 function invoke(toolkit, args, options = {}) {
   toolkitApi.assertUnchanged(toolkit)
-  const result = (options.spawn || spawnSync)(
-    path.join(toolkit.directory, ...toolkit.manifest.assembler.split('/')),
+  const run = (options.spawn || spawnSync)(
+    path.join(toolkit.directory, ...toolkit.executable.split('/')),
     args,
     {
       cwd: toolkit.directory,
       windowsHide: true,
       shell: false,
       encoding: 'utf8',
-      maxBuffer: 8 * 1024 * 1024,
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: options.timeout || 20 * 60 * 1000,
     },
   )
   toolkitApi.assertUnchanged(toolkit)
-  if (result.error || result.status !== 0)
+  if (run.error || run.status !== 0)
     throw new Error(
-      '二进制组装工具执行失败：' +
-        (result.error?.message || result.stderr?.trim() || result.status),
+      '生命周期工具执行失败：' +
+        (run.error?.message || run.stderr?.trim() || run.status || 'unknown'),
     )
-  const last = result.stdout?.trim().split(/\r?\n/).at(-1)
+  return parseOutput(run.stdout)
+}
+
+function keyIdOf(value) {
+  let document
   try {
-    return JSON.parse(last)
+    document = JSON.parse(fs.readFileSync(value, 'utf8'))
   } catch {
-    throw new Error('二进制组装工具没有返回有效的 JSON 结果。')
+    throw new Error('官方密钥文件不是有效的 JSON。')
+  }
+  // The publication key set stores admin keys with JWK material; a toolkit key file stores
+  // one key directly. Both are accepted without ever writing the material to build output.
+  if (Array.isArray(document.adminKeys)) {
+    const matched = document.adminKeys.find((entry) => entry?.id === OFFICIAL_KEY_ID)
+    if (!matched || !matched.privateKey)
+      throw new Error('官方密钥文件缺少 admin_c80c9c3f5a39429ba71bea5db45ff3cc。')
+    return {
+      keyId: matched.id,
+      privateKey: matched.privateKey,
+    }
+  }
+  if (
+    document.schemaVersion !== 1 ||
+    typeof document.keyId !== 'string' ||
+    !KEY_ID_PATTERN.test(document.keyId) ||
+    !document.privateKey ||
+    typeof document.privateKey !== 'object'
+  )
+    throw new Error('官方密钥文件格式不受支持。')
+  return { keyId: document.keyId, privateKey: document.privateKey }
+}
+
+function readSigningIdentity(keyFile, product) {
+  if (!keyFile) return null
+  const absolute = path.resolve(keyFile)
+  u.assertFile(absolute)
+  const selected = keyIdOf(absolute)
+  let privateObject
+  try {
+    privateObject = crypto.createPrivateKey({ key: selected.privateKey, format: 'jwk' })
+  } catch {
+    throw new Error('官方密钥文件缺少可用的私钥。')
+  }
+  const publicKey = crypto.createPublicKey(privateObject).export({ format: 'jwk' })
+  const supported =
+    (publicKey.kty === 'OKP' && publicKey.crv === 'Ed25519') ||
+    (publicKey.kty === 'EC' && publicKey.crv === 'P-256')
+  if (!supported || typeof publicKey.x !== 'string')
+    throw new Error('官方密钥不是受支持的 Ed25519 或 P-256 公钥。')
+  return {
+    keyId: selected.keyId,
+    privateKey: selected.privateKey,
+    publicKey: {
+      kty: publicKey.kty,
+      crv: publicKey.crv,
+      x: publicKey.x,
+      ...(publicKey.y ? { y: publicKey.y } : {}),
+    },
+    fingerprint: u.hash(
+      runtime.canonicalJson({ id: selected.keyId, publicKey: publicKey.x }),
+    ),
+    publisher: product?.publisher || 'LinCi853',
+    authority: 'official:' + selected.keyId,
   }
 }
 
-function inspectToolkit(toolkit, options = {}) {
-  const result = invoke(toolkit, ['inspect', '--toolkit', toolkit.directory], options)
-  if (
-    result.interfaceVersion !== toolkitApi.INTERFACE_VERSION ||
-    result.toolkitVersion !== toolkit.reference.toolkitVersion ||
-    result.verified !== true ||
-    runtime.canonicalJson(result.capabilities) !==
-      runtime.canonicalJson(toolkit.manifest.capabilities)
-  ) {
-    throw new Error('Distribution toolkit inspection does not match its pinned capability')
+function withKeyFile(identity, callback) {
+  if (!identity) return callback(null)
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekickai-toolkit-key-'))
+  const file = path.join(directory, 'key.json')
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      schemaVersion: 1,
+      keyId: identity.keyId,
+      publisher: identity.publisher,
+      privateKey: identity.privateKey,
+    }),
+    { mode: 0o600, flag: 'wx' },
+  )
+  try {
+    return callback(file)
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
   }
-  if (
-    result.installationConfigurationVersion !== toolkit.manifest.installationConfigurationVersion
-  ) {
-    throw new Error(
-      'Distribution toolkit configuration capability does not match its pinned manifest',
-    )
-  }
-  return result
 }
 
 async function preflight({ root, toolkitOptions = {}, invokeOptions = {} }) {
   if ((toolkitOptions.platform || process.platform) !== 'win32')
-    throw new Error('完整安装包构建需要 Windows 二进制组装工具。')
+    throw new Error('完整安装包构建需要 Windows 生命週期工具。')
   const toolkit = await toolkitApi.prepareToolkit(root, toolkitOptions)
-  inspectToolkit(toolkit, invokeOptions)
-  readInstallationConfiguration(root, toolkit)
+  readInstallationConfiguration(root)
+  readProductDescriptor(root)
   return toolkit
 }
 
@@ -184,6 +326,104 @@ function inputIdentity(payloads, edition, productVersion) {
   return { inputs, manifests, fingerprint, files }
 }
 
+function appManifest({ product, edition, productVersion, payload, payloadManifest, options }) {
+  const contract = readProductContract(path.resolve(__dirname, '..'))
+  const editionContract = contract.editions[edition]
+  if (!editionContract) throw new Error('Product contract lacks the assembled edition')
+  const descriptor = product.document
+  const descriptorEdition = descriptor.editions?.[edition]
+  if (!descriptorEdition) throw new Error('Product descriptor lacks the assembled edition')
+  const licenseFile = path.join(__dirname, '..', 'LICENSE')
+  const licenseBody = fs.existsSync(licenseFile) ? fs.readFileSync(licenseFile, 'utf8') : ''
+  const installation = options.configuration
+  const manifest = {
+    schemaVersion: 1,
+    app: {
+      productId: descriptor.productId,
+      edition,
+      name: descriptor.displayName,
+      publisher: product.publisher,
+      icon: descriptor.icon,
+      entry: descriptor.executable,
+      identityCarrier: descriptor.identityCarrier,
+      ...(descriptor.backupComponent
+        ? { backupComponent: descriptor.backupComponent }
+        : {}),
+    },
+    productVersion,
+    payload: {
+      packages: [
+        {
+          id: 'app-' + payload.architecture,
+          architecture: payload.architecture,
+          archive: payloadManifest.archive,
+          files: payloadManifest.files,
+          requiredFiles: descriptorEdition.requiredFiles,
+        },
+      ],
+    },
+    defaults: {
+      directory: editionContract.directory,
+      dataPolicy: 'keep',
+      ...(installation
+        ? { options: installation.options }
+        : {}),
+    },
+  }
+  if (options.contract.licenses?.length && licenseBody) {
+    manifest.licenses = options.contract.licenses.map((license) => ({
+      id: license.id,
+      title: license.title,
+      defaultOpen: license.defaultOpen,
+      body: licenseBody,
+    }))
+  }
+  if (options.contract.options?.length) {
+    manifest.presentation = {
+      features: (options.contract.features || []).map((feature) => ({
+        id: feature.id,
+        label: feature.label,
+        description: feature.description,
+      })),
+      options: options.contract.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+        description: option.description,
+        ...(option.choices
+          ? {
+              choices: option.choices.map((choice) => ({
+                value: choice.value,
+                label: choice.label,
+              })),
+            }
+          : {}),
+      })),
+    }
+  }
+  return manifest
+}
+
+function checkInstaller(file, expectedDomain, options = {}) {
+  const run = (options.spawn || spawnSync)(file, ['--check'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: 180 * 1000,
+  })
+  const output = ((run.stdout || '') + '\n' + (run.stderr || '')).trim()
+  if (run.error || run.status !== 0)
+    throw new Error(
+      '安装器自检失败：' +
+        (run.error?.message || output.split(/\r?\n/).filter(Boolean).at(-1) || run.status),
+    )
+  if (!output.includes(expectedDomain))
+    throw new Error('安装器自检未报告预期维护域 ' + expectedDomain)
+  if (output.includes('PACKAGE_UNTRUSTED')) throw new Error('安装器自检报告 PACKAGE_UNTRUSTED')
+  if (output.includes('[阻止]') || output.includes('阻塞'))
+    throw new Error('安装器自检存在阻塞项：' + output)
+  return { attempted: true, ok: true, domain: expectedDomain, exitCode: 0 }
+}
+
 function validateResult(result, toolkit, output, identity) {
   toolkitApi.fields(
     result,
@@ -194,6 +434,7 @@ function validateResult(result, toolkit, output, identity) {
       'mode',
       'productVersion',
       'authority',
+      'domain',
       'issuerKeyId',
       'issuerFingerprint',
       'inputs',
@@ -201,12 +442,12 @@ function validateResult(result, toolkit, output, identity) {
     ],
     [
       'schemaVersion',
-      'toolkitManifestSha256',
       'publicIdentity',
-      'verified',
       'installationConfigurationSha256',
       'productId',
       'productDescriptorSha256',
+      'packages',
+      'toolkit',
     ],
   )
   if (
@@ -216,16 +457,15 @@ function validateResult(result, toolkit, output, identity) {
     throw new Error('Assembled product descriptor does not match its requested identity')
   }
   if (
-    !result ||
     result.interfaceVersion !== toolkitApi.INTERFACE_VERSION ||
     result.toolkitVersion !== toolkit.reference.toolkitVersion ||
     result.edition !== identity.edition ||
     result.mode !== 'offline' ||
-    result.authority !== 'self-built' ||
-    result.productVersion !== identity.productVersion ||
-    typeof result.issuerKeyId !== 'string' ||
-    !/^[A-Za-z0-9._-]{1,128}$/.test(result.issuerKeyId) ||
+    !(result.authority === 'self-built' || /^official:[A-Za-z0-9._-]{1,128}$/.test(result.authority)) ||
+    result.domain !== result.authority ||
+    !KEY_ID_PATTERN.test(result.issuerKeyId) ||
     !toolkitApi.digest(result.issuerFingerprint) ||
+    result.productVersion !== identity.productVersion ||
     runtime.canonicalJson(result.inputs) !== runtime.canonicalJson(identity.inputs)
   )
     throw new Error('Assembled installer identity does not match its requested inputs')
@@ -250,9 +490,11 @@ function validateResult(result, toolkit, output, identity) {
     if (matches.length !== 1)
       throw new Error('Assembly must produce one installer per architecture')
     const item = matches[0]
-    toolkitApi.fields(item, ['path', 'role', 'architecture', 'size', 'sha256'])
+    toolkitApi.fields(item, ['path', 'role', 'architecture', 'size', 'sha256'], ['check'])
     runtime.validateRelativePath(item.path)
     if (
+      path.isAbsolute(item.path) ||
+      item.path.includes('/') ||
       !item.path.endsWith('.exe') ||
       names.has(item.path.toLowerCase()) ||
       !Number.isSafeInteger(item.size) ||
@@ -263,13 +505,6 @@ function validateResult(result, toolkit, output, identity) {
       throw new Error('Invalid assembled installer inventory')
     names.add(item.path.toLowerCase())
     const file = path.join(output, ...item.path.split('/'))
-    for (let current = path.dirname(file); ; current = path.dirname(current)) {
-      if (fs.lstatSync(current).isSymbolicLink() || !fs.lstatSync(current).isDirectory())
-        throw new Error('Assembly output cannot contain linked directories')
-      if (current === output) break
-      if (current === path.dirname(current))
-        throw new Error('Assembly output leaves its requested directory')
-    }
     u.assertFile(file)
     if (
       fs.statSync(file).size !== item.size ||
@@ -283,7 +518,7 @@ function validateResult(result, toolkit, output, identity) {
       path: file,
       sha256: item.sha256,
       size: item.size,
-      authority: 'self-built',
+      authority: result.authority,
     })
   }
   return installers
@@ -294,8 +529,6 @@ function retainedInputs(directory, input) {
   if (input.productDescriptorSha256 !== undefined) {
     const file = path.join(directory, ...PRODUCT_PATH.split('/'))
     u.assertFile(file)
-    if (fs.statSync(file).size > 32 * 1024)
-      throw new Error('Retained product descriptor exceeds its size limit')
     const bytes = fs.readFileSync(file)
     if (bytes.length > 32 * 1024)
       throw new Error('Retained product descriptor exceeds its size limit')
@@ -330,14 +563,6 @@ function retainedInputs(directory, input) {
       [archivePath, input.inputs[arch].archiveSha256],
     ]) {
       const file = path.join(directory, ...relative.split('/'))
-      for (let current = path.dirname(file); ; current = path.dirname(current)) {
-        const stat = fs.lstatSync(current)
-        if (!stat.isDirectory() || stat.isSymbolicLink())
-          throw new Error('Retained assembly inputs cannot contain linked directories')
-        if (current === directory) break
-        if (current === path.dirname(current))
-          throw new Error('Retained assembly inputs leave the output directory')
-      }
       u.assertFile(file)
       if (u.sha256(file) !== sha256)
         throw new Error('Retained assembly inputs do not match the original payloads')
@@ -373,114 +598,232 @@ async function assemble({
   toolkit,
   toolkitOptions = {},
   invokeOptions = {},
-  identityStore,
+  keyFile,
 }) {
   toolkit ||= await preflight({ root, toolkitOptions, invokeOptions })
-  const configuration = readInstallationConfiguration(root, toolkit)
+  const configuration = readInstallationConfiguration(root)
   const product = readProductDescriptor(root)
+  if (!product) throw new Error('Installer assembly requires the concept product descriptor')
+  const contract = JSON.parse(
+    fs.readFileSync(path.join(root, 'contracts/installation-contract.json'), 'utf8'),
+  )
   const input = inputIdentity(payloads, edition, productVersion)
   const source = {
     edition,
     productVersion,
     inputs: input.inputs,
-    ...(product
-      ? { productId: product.document.productId, productDescriptorSha256: product.sha256 }
-      : {}),
+    productId: product.document.productId,
+    productDescriptorSha256: product.sha256,
     ...(configuration ? { installationConfigurationSha256: configuration.sha256 } : {}),
   }
+  const signing = readSigningIdentity(keyFile, product.document)
   const directory = path.resolve(output, 'installers')
   if (fs.existsSync(directory)) throw new Error('Installer assembly output already exists')
-  const request = {
-    schemaVersion: 1,
-    toolkitDirectory: toolkit.directory,
-    toolkitVersion: toolkit.reference.toolkitVersion,
-    edition,
-    mode: 'offline',
-    authority: 'self-built',
-    payloads: input.manifests,
-    identityStore: path.resolve(identityStore || path.join(root, 'local/self-build-identity.json')),
-    outputDirectory: directory,
-    ...(product ? { productDescriptor: product.document } : {}),
-    ...(configuration ? { installationConfiguration: configuration.value } : {}),
-  }
-  fs.mkdirSync(output, { recursive: true })
-  const requestFile = path.resolve(output, 'assembly-request.json')
-  fs.writeFileSync(requestFile, JSON.stringify(request, null, 2) + '\n', { flag: 'wx' })
-  console.log('[assembly] Building self-built offline installers with pinned binary components')
-  const response = invoke(toolkit, ['assemble', '--request', requestFile], invokeOptions)
-  assertProductUnchanged(product, root)
-  assertConfigurationUnchanged(configuration, root)
-  const resultFile = path.join(directory, 'assembly-result.json')
-  if (
-    !response ||
-    response.schemaVersion !== 1 ||
-    typeof response.outputDirectory !== 'string' ||
-    typeof response.resultFile !== 'string' ||
-    path.resolve(response.outputDirectory) !== directory ||
-    path.resolve(response.resultFile) !== resultFile
-  )
-    throw new Error('Assembly tool returned an unexpected result location')
-  u.assertUnchanged(input.fingerprint, u.fingerprint(path.dirname(input.files[0]), input.files))
-  u.assertFile(resultFile)
-  if (fs.statSync(resultFile).size > MAX_RESULT_BYTES)
-    throw new Error('Assembly result exceeds its size limit')
-  const resultBytes = fs.readFileSync(resultFile)
-  const result = JSON.parse(resultBytes.toString('utf8'))
-  if (
-    result.schemaVersion !== 1 ||
-    result.toolkitManifestSha256 !==
-      toolkit.files.find((file) => file.path === 'toolkit-manifest.json')?.sha256
-  ) {
-    throw new Error('Assembly result does not match the pinned toolkit manifest')
-  }
-  toolkitApi.validatePublicIdentity(result.publicIdentity)
-  if (
-    result.publicIdentity.id !== result.issuerKeyId ||
-    u.hash(runtime.canonicalJson(result.publicIdentity)) !== result.issuerFingerprint
-  ) {
-    throw new Error('Assembly result signing identity does not match its fingerprint')
-  }
-  const installers = validateResult(result, toolkit, directory, source)
-  const retained = retainedInputs(directory, source)
-  const verified = invoke(
-    toolkit,
-    ['verify', '--toolkit', toolkit.directory, '--result', resultFile],
-    invokeOptions,
-  )
-  if (verified.verified !== true || verified.issuerKeyId !== result.issuerKeyId)
-    throw new Error('Installer assembly verification failed')
-  const checked = validateResult(verified, toolkit, directory, source)
-  if (runtime.canonicalJson(checked) !== runtime.canonicalJson(installers))
-    throw new Error('Installer verification returned a different artifact inventory')
-  if (verified.issuerFingerprint !== result.issuerFingerprint) {
-    throw new Error('Installer verification returned a different signing identity')
-  }
-  if (!fs.readFileSync(resultFile).equals(resultBytes))
-    throw new Error('Assembly result changed during verification')
-  assertConfigurationUnchanged(configuration, root)
-  u.assertUnchanged(input.fingerprint, u.fingerprint(path.dirname(input.files[0]), input.files))
-  assertProductUnchanged(product, root)
-  return {
-    installers,
-    retainedInputs: retained,
-    preparedToolkit: toolkit,
-    result,
-    resultFile,
-    resultSha256: u.hash(resultBytes),
-    toolkit: {
-      toolkitVersion: toolkit.reference.toolkitVersion,
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
+  const manifestsDirectory = path.resolve(output, 'manifests')
+  fs.mkdirSync(manifestsDirectory, { recursive: true })
+  const expectedDomain = signing ? signing.authority : 'self-built'
+  const toolkitRuns = { verify: [], assemble: [] }
+  const artifacts = []
+  const packages = {}
+  const started = Date.now()
+  try {
+    for (const arch of require('./application-packaging.cjs').validateArchitectures(
+      Object.keys(input.inputs),
+    )) {
+      const payload = payloads.find((entry) => entry.architecture === arch)
+      const manifest = JSON.parse(fs.readFileSync(input.manifests[arch], 'utf8'))
+      const applicationManifest = appManifest({
+        product,
+        edition,
+        productVersion,
+        payload,
+        payloadManifest: manifest,
+        options: { contract, configuration: configuration?.value },
+      })
+      const manifestFile = path.join(manifestsDirectory, arch + '.app.manifest.json')
+      fs.writeFileSync(manifestFile, JSON.stringify(applicationManifest, null, 2) + '\n', {
+        flag: 'wx',
+      })
+      const packageDirectory = path.resolve(output, 'packages', arch)
+      if (fs.existsSync(packageDirectory)) throw new Error('Installer package output already exists')
+      withKeyFile(signing, (key) => {
+        const args = [
+          'build',
+          '--manifest',
+          manifestFile,
+          '--payload-dir',
+          path.dirname(path.resolve(payload.path)),
+          '--out',
+          packageDirectory,
+          '--edition',
+          edition,
+          '--form',
+          'offline',
+        ]
+        if (key) args.push('--key-file', key)
+        console.log('[assembly] Building ' + arch + ' lifecycle package (' + expectedDomain + ')')
+        const built = invoke(toolkit, args, invokeOptions)
+        const verified = invoke(
+          toolkit,
+          ['verify-package-spec', '--package-dir', packageDirectory, ...(key ? ['--key-file', key] : [])],
+          invokeOptions,
+        )
+        if (verified.domain !== expectedDomain)
+          throw new Error('Package spec reported ' + verified.domain + ' instead of ' + expectedDomain)
+        toolkitRuns.verify.push({ architecture: arch, domain: verified.domain, checks: verified.checks })
+        const setup = path.join(directory, installerName(productVersion, arch, expectedDomain))
+        const assembled = invoke(
+          toolkit,
+          [
+            'assemble',
+            '--package-dir',
+            packageDirectory,
+            '--edition',
+            edition,
+            '--arch',
+            arch,
+            '--out',
+            setup,
+            ...(key ? ['--key-file', key] : []),
+          ],
+          invokeOptions,
+        )
+        if (
+          path.resolve(assembled.outFile) !== setup ||
+          assembled.domain !== expectedDomain ||
+          !Array.isArray(assembled.architectures) ||
+          !assembled.architectures.includes(arch)
+        )
+          throw new Error('Lifecycle assembly returned an unexpected installer identity')
+        toolkitRuns.assemble.push({ architecture: arch, domain: assembled.domain, outFile: setup })
+        u.assertFile(setup)
+        if (fs.statSync(setup).size !== assembled.outputBytes || u.sha256(setup) !== assembled.outputSha256)
+          throw new Error('Lifecycle assembly output does not match its report')
+        const hostArchitecture = process.arch === 'arm64' ? 'arm64' : 'x64'
+        const check =
+          arch === hostArchitecture
+            ? checkInstaller(setup, expectedDomain, invokeOptions)
+            : {
+                attempted: false,
+                ok: false,
+                domain: expectedDomain,
+                reason: 'architecture-mismatch',
+              }
+        packages[arch] = {
+          packageSha256: u.sha256(path.join(packageDirectory, 'lifecycle-package.json')),
+          specDomain: verified.domain,
+          buildOutput: built,
+          manifestSha256: u.hash(fs.readFileSync(manifestFile)),
+        }
+        artifacts.push({
+          path: path.basename(setup),
+          role: 'offline-installer',
+          architecture: arch,
+          size: assembled.outputBytes,
+          sha256: assembled.outputSha256,
+          check,
+        })
+      })
+    }
+    assertProductUnchanged(product, root)
+    assertConfigurationUnchanged(configuration, root, product)
+    const result = {
+      schemaVersion: 1,
       interfaceVersion: toolkitApi.INTERFACE_VERSION,
-      ...(toolkit.reference.archive.path
-        ? { archivePath: toolkit.reference.archive.path }
-        : { archiveUrl: toolkit.reference.archive.url }),
-      archiveSize: toolkit.reference.archive.size,
-      archiveSha256: toolkit.reference.archive.sha256,
-      manifestSha256: result.toolkitManifestSha256,
-      referenceSha256: toolkit.referenceSha256 || null,
-      inputs: toolkit.inputs,
-      authority: 'self-built',
-    },
+      toolkitVersion: toolkit.reference.toolkitVersion,
+      edition,
+      mode: 'offline',
+      productVersion,
+      authority: expectedDomain,
+      domain: expectedDomain,
+      issuerKeyId: signing?.keyId || 'self-built',
+      issuerFingerprint:
+        signing?.fingerprint ||
+        u.hash(runtime.canonicalJson({ id: 'self-built', productId: product.document.productId })),
+      ...(signing ? { publicIdentity: { id: signing.keyId, publicKey: signing.publicKey } } : {}),
+      productId: product.document.productId,
+      productDescriptorSha256: product.sha256,
+      ...(configuration ? { installationConfigurationSha256: configuration.sha256 } : {}),
+      inputs: input.inputs,
+      packages,
+      toolkit: {
+        toolkitVersion: toolkit.reference.toolkitVersion,
+        interfaceVersion: toolkitApi.INTERFACE_VERSION,
+        inventorySha256: toolkit.inputs.fingerprint,
+        extractor: Object.fromEntries(
+          Object.keys(input.inputs).map((arch) => [arch, extractorEvidence(toolkit, edition, arch)]),
+        ),
+        verifications: toolkitRuns.verify,
+        assemblies: toolkitRuns.assemble,
+        durationMs: Date.now() - started,
+      },
+      artifacts,
+    }
+    validateResult(result, toolkit, directory, source)
+    const resultFile = path.join(directory, 'assembly-result.json')
+    fs.writeFileSync(resultFile, JSON.stringify(result, null, 2) + '\n', { flag: 'wx' })
+    const resultBytes = fs.readFileSync(resultFile)
+    if (resultBytes.length > MAX_RESULT_BYTES) throw new Error('Assembly result exceeds its size limit')
+    // Retained inputs are copied from their source workspace to the assembly output.
+    for (const [relative, content] of [
+      [PRODUCT_PATH, Buffer.from(runtime.canonicalJson(product.document) + '\n')],
+      ...Object.keys(input.inputs).flatMap((arch) => [
+        [
+          'inputs/' + arch + '/application.manifest.json',
+          fs.readFileSync(input.manifests[arch]),
+        ],
+        [
+          'inputs/' + arch + '/' + JSON.parse(fs.readFileSync(input.manifests[arch], 'utf8')).archive.file,
+          fs.readFileSync(payloads.find((entry) => entry.architecture === arch).path),
+        ],
+      ]),
+      ...(configuration ? [[CONFIGURATION_PATH, configuration.bytes]] : []),
+    ]) {
+      const target = path.join(directory, ...relative.split('/'))
+      fs.mkdirSync(path.dirname(target), { recursive: true })
+      fs.writeFileSync(target, content, { flag: 'wx' })
+    }
+    const retained = retainedInputs(directory, source)
+    u.assertUnchanged(input.fingerprint, u.fingerprint(path.dirname(input.files[0]), input.files))
+    assertProductUnchanged(product, root)
+    assertConfigurationUnchanged(configuration, root, product)
+    return {
+      installers: validateResult(result, toolkit, directory, source),
+      retainedInputs: retained,
+      preparedToolkit: toolkit,
+      result,
+      resultFile,
+      resultSha256: u.hash(resultBytes),
+      toolkit: {
+        toolkitVersion: toolkit.reference.toolkitVersion,
+        interfaceVersion: toolkitApi.INTERFACE_VERSION,
+        ...(toolkit.reference.archive.path
+          ? { archivePath: toolkit.reference.archive.path }
+          : { archiveUrl: toolkit.reference.archive.url }),
+        archiveSize: toolkit.reference.archive.size,
+        archiveSha256: toolkit.reference.archive.sha256,
+        inventorySha256: toolkit.inputs.fingerprint,
+        referenceSha256: toolkit.referenceSha256 || null,
+        inputs: toolkit.inputs,
+        authority: expectedDomain,
+        issuerKeyId: signing?.keyId || 'self-built',
+      },
+    }
+  } finally {
+    // the temporary signing key is removed by withKeyFile; nothing else is persisted
   }
+}
+
+function extractorEvidence(toolkit, edition, arch) {
+  const file = toolkitApi.componentPath(toolkit, 'extractor', edition, arch)
+  return { path: path.relative(toolkit.directory, file).replaceAll('\\', '/'), size: fs.statSync(file).size, sha256: u.sha256(file) }
+}
+
+function installerName(productVersion, arch, domain) {
+  return (
+    'SidekickAI-Setup-' + productVersion + '-' + arch + '-' + (domain.startsWith('official:') ? 'official' : 'self-built') + '.exe'
+  )
 }
 
 function verifyCollected(assembled, directory, options = {}, collection = null) {
@@ -504,33 +847,29 @@ function verifyCollected(assembled, directory, options = {}, collection = null) 
       ? { installationConfigurationSha256: assembled.result.installationConfigurationSha256 }
       : {}),
   }
-  const checked = invoke(
+  const installers = validateResult(
+    assembled.result,
     assembled.preparedToolkit,
-    ['verify', '--toolkit', assembled.preparedToolkit.directory, '--result', resultFile],
-    options,
+    directory,
+    source,
   )
-  validateResult(checked, assembled.preparedToolkit, directory, source)
+  for (const installer of installers)
+    checkInstaller(installer.path, assembled.result.domain, options)
   retainedInputs(directory, source)
-  if (
-    checked.verified !== true ||
-    checked.issuerKeyId !== assembled.result.issuerKeyId ||
-    checked.issuerFingerprint !== assembled.result.issuerFingerprint ||
-    runtime.canonicalJson(checked.artifacts) !==
-      runtime.canonicalJson(assembled.result.artifacts) ||
-    u.sha256(resultFile) !== assembled.resultSha256
-  )
+  if (u.sha256(resultFile) !== assembled.resultSha256)
     throw new Error('Collected installer verification does not match its original result')
   u.assertUnchanged(before, snapshot())
-  return checked
+  return assembled.result
 }
 
 module.exports = {
   invoke,
-  inspectToolkit,
   preflight,
   inputIdentity,
   validateResult,
   retainedInputs,
   assemble,
   verifyCollected,
+  checkInstaller,
+  installerName,
 }

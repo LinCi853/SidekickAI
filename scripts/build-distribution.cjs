@@ -24,11 +24,16 @@ function parseArguments(args, identity = productIdentity()) {
     mode: 'all',
     architectures: ['x64', 'arm64'],
     preflightOnly: false,
+    launchProbe: true,
     outputRoot: null,
+    keyFile: null,
   }
   for (let index = 0; index < args.length; index++) {
     if (args[index] === '--preflight') options.preflightOnly = true
+    else if (args[index] === '--skip-launch-probe') options.launchProbe = false
     else if (args[index] === '--no-publish') continue
+    else if (args[index] === '--key-file' && args[index + 1] && !args[index + 1].startsWith('--'))
+      options.keyFile = path.resolve(args[++index])
     else if (
       args[index] === '--mode' &&
       ['portable', 'payload', 'all', 'installer', 'complete'].includes(args[index + 1])
@@ -41,7 +46,7 @@ function parseArguments(args, identity = productIdentity()) {
       options.outputRoot = path.resolve(args[++index])
     else
       throw new Error(
-        'Usage: build-distribution.cjs [--mode portable|payload|all|installer|complete] [--arch x64|arm64|all] [--preflight] [--output <directory>]',
+        'Usage: build-distribution.cjs [--mode portable|payload|all|installer|complete] [--arch x64|arm64|all] [--key-file <file>] [--preflight] [--skip-launch-probe] [--output <directory>]',
       )
   }
   modePackages(options.mode, identity.edition)
@@ -117,7 +122,9 @@ const defaults = {
   buildPortable: (options) => require('./pack-portable.cjs').packPortable(options),
   preflightToolkit: () => assembly.preflight({ root: ROOT }),
   assertToolkit: toolkitApi.assertUnchanged,
-  buildInstallers: (options) => assembly.assemble({ root: ROOT, ...options }),
+  buildInstallers: (options) =>
+    assembly.assemble({ root: ROOT, keyFile: options.keyFile ?? null, ...options }),
+  probeInstallers: (options) => require('./installer-launch-smoke.cjs').probeInstallers(options),
 }
 
 async function buildCandidates(options, output, dependencies = defaults) {
@@ -167,7 +174,13 @@ async function buildCandidates(options, output, dependencies = defaults) {
       payloads: artifacts.payloads,
       edition: options.edition,
       productVersion: options.version,
+      keyFile: options.keyFile,
       toolkit,
+    })
+    guard()
+    artifacts.launch = await dependencies.probeInstallers({
+      installers: artifacts.assembly.installers || [],
+      skip: !options.launchProbe,
     })
     guard()
   }
@@ -184,7 +197,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
   const directory = path.join(output, artifacts.edition)
   fs.mkdirSync(directory)
   const files = []
-  const add = (source, name, role, architecture, expectedSha256) => {
+  const add = (source, name, role, architecture, expectedSha256, launch) => {
     if (!source) throw new Error('Invalid candidate artifact')
     require('./application-runtime.cjs').validateRelativePath(name)
     if (files.some((file) => file.file.toLowerCase() === name.toLowerCase()))
@@ -211,6 +224,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
         : name.endsWith('.exe')
           ? 'application/vnd.microsoft.portable-executable'
           : 'application/zip',
+      ...(launch ? { launch } : {}),
     })
   }
   if (packages.payload) {
@@ -275,17 +289,52 @@ function collectCandidates(artifacts, output, root = ROOT) {
   let assemblyEvidence
   if (packages.installer) {
     const assembled = artifacts.assembly
+    const launchProbe = artifacts.launch
     if (
       !assembled?.result ||
       !assembled.toolkit ||
       !assembled.resultFile ||
       !assembled.resultSha256 ||
       assembled.installers?.length !== architectures.length ||
-      assembled.result.authority !== 'self-built' ||
+      !(
+        assembled.result.authority === 'self-built' ||
+        /^official:[A-Za-z0-9._-]{1,128}$/.test(assembled.result.authority || '')
+      ) ||
       assembled.result.edition !== artifacts.edition ||
       assembled.result.productVersion !== artifacts.version
     ) {
-      throw new Error('Distribution requires verified self-built installer candidates')
+      throw new Error('Distribution requires verified installer candidates')
+    }
+    if (!launchProbe)
+      throw new Error('Distribution requires a launch probe result for installer candidates')
+    // A failed probe blocks admission: a Setup that cannot show its first screen must
+    // never be registered as a deliverable candidate.
+    const launchFor = (architecture, source) => {
+      if (!launchProbe.attempted)
+        return {
+          attempted: false,
+          ok: null,
+          title: '',
+          rootLength: 0,
+          durationMs: 0,
+          reason: launchProbe.reason || 'not attempted',
+        }
+      const result = launchProbe.results?.find((item) => item.architecture === architecture)
+      if (!result) throw new Error('Installer launch probe is missing ' + architecture)
+      if (result.file && path.resolve(result.file) !== path.resolve(source))
+        throw new Error('Installer launch probe result does not match its artifact')
+      if (!result.ok)
+        throw new Error(
+          'Installer launch probe failed for ' + architecture + ': ' + (result.reason || 'unknown'),
+        )
+      return {
+        attempted: true,
+        ok: true,
+        title: result.title,
+        rootLength: result.rootLength,
+        durationMs: result.durationMs,
+        reason: result.reason || '',
+      }
     }
     if (utilities.sha256(assembled.resultFile) !== assembled.resultSha256)
       throw new Error('Assembly result changed before candidate collection')
@@ -298,7 +347,7 @@ function collectCandidates(artifacts, output, root = ROOT) {
         (item) => item.architecture === arch && item.role === 'offline-installer',
       )
       if (!entry) throw new Error('Assembly result is missing an installer artifact')
-      add(file.path, entry.path, 'offline-installer', arch, file.sha256)
+      add(file.path, entry.path, 'offline-installer', arch, file.sha256, launchFor(arch, file.path))
     }
     const configurationSha256 = assembled.result.installationConfigurationSha256
     const productDescriptorSha256 = assembled.result.productDescriptorSha256
@@ -319,12 +368,26 @@ function collectCandidates(artifacts, output, root = ROOT) {
       assembled.resultSha256,
     )
     assemblyEvidence = {
-      authority: 'self-built',
+      authority: assembled.result.authority,
+      domain: assembled.result.domain,
       issuerKeyId: assembled.result.issuerKeyId,
       issuerFingerprint: assembled.result.issuerFingerprint,
       inputs: assembled.result.inputs,
       resultSha256: assembled.resultSha256,
       toolkit: assembled.toolkit,
+      launchProbe: {
+        attempted: launchProbe.attempted,
+        reason: launchProbe.reason || '',
+        results: (launchProbe.results || []).map((item) => ({
+          architecture: item.architecture,
+          attempted: item.attempted,
+          ok: item.ok,
+          title: item.title,
+          rootLength: item.rootLength,
+          durationMs: item.durationMs,
+          reason: item.reason,
+        })),
+      },
       ...(productDescriptorSha256 === undefined
         ? {}
         : { productId: assembled.result.productId, productDescriptorSha256 }),

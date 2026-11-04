@@ -76,6 +76,11 @@ function dependencies() {
       calls.push('installers')
       return { installers: [] }
     },
+    probeInstallers: async ({ skip }) => {
+      assert.equal(skip, false)
+      calls.push('launch')
+      return { attempted: true, results: [] }
+    },
   }
 }
 
@@ -89,8 +94,11 @@ test('public distribution modes do not depend on descriptive installer policy', 
   }
   for (const mode of ['installer', 'complete']) {
     assert.equal(build.parseArguments(['--mode', mode], concept).mode, mode)
+    assert.equal(build.parseArguments(['--mode', mode], concept).launchProbe, true)
     assert.throws(() => build.parseArguments(['--mode', mode], community), /concept offline/)
   }
+  const skipped = build.parseArguments(['--skip-launch-probe'], concept)
+  assert.equal(skipped.launchProbe, false)
 })
 
 test('public packages share a single awaited application build and metadata baseline', async () => {
@@ -109,7 +117,7 @@ test('public packages share a single awaited application build and metadata base
       'applications',
       ...(packages.payload ? ['payload'] : []),
       ...(packages.portable ? ['portable'] : []),
-      ...(packages.installer ? ['installers'] : []),
+      ...(packages.installer ? ['installers', 'launch'] : []),
     ])
     assert.equal(artifacts.inputs.fingerprint, 'reviewed')
   }
@@ -257,6 +265,7 @@ test('candidates retain both native payload manifests, one green archive per arc
     payloads,
     portable: Object.values(portableZips),
   }
+  const skippedLaunch = { attempted: false, reason: 'not attempted in unit test' }
   const result = build.collectCandidates(candidates, root, root)
   assert.equal(result.manifest.status, 'candidate')
   assert.equal(result.files.length, 6)
@@ -344,6 +353,7 @@ test('candidates retain both native payload manifests, one green archive per arc
         retainedInputs,
         toolkit: { toolkitVersion: '1.2.0' },
       },
+      launch: skippedLaunch,
     },
     completeRoot,
     root,
@@ -366,6 +376,64 @@ test('candidates retain both native payload manifests, one green archive per arc
       .filter((file) => file.role === 'offline-installer')
       .every((file) => file.contentType === 'application/vnd.microsoft.portable-executable'),
   )
+  assert.ok(
+    complete.files
+      .filter((file) => file.role === 'offline-installer')
+      .every(
+        (file) =>
+          file.launch.attempted === false &&
+          file.launch.ok === null &&
+          file.launch.reason === 'not attempted in unit test',
+      ),
+  )
+  assert.equal(complete.manifest.assembly.launchProbe.attempted, false)
+  const launchGateRoot = path.join(root, 'launch-gate')
+  fs.mkdirSync(launchGateRoot)
+  assert.throws(
+    () =>
+      build.collectCandidates(
+        {
+          ...candidates,
+          mode: 'complete',
+          assembly: {
+            installers,
+            result: assemblyResult,
+            resultFile,
+            resultSha256: u.sha256(resultFile),
+            retainedInputs,
+            toolkit: { toolkitVersion: '1.2.0' },
+          },
+          launch: {
+            attempted: true,
+            results: [
+              {
+                architecture: 'x64',
+                file: installers[0].path,
+                attempted: true,
+                ok: false,
+                title: '',
+                rootLength: 0,
+                durationMs: 1200,
+                reason: 'window-missing',
+              },
+              {
+                architecture: 'arm64',
+                file: installers[1].path,
+                attempted: true,
+                ok: true,
+                title: 'Setup',
+                rootLength: 12,
+                durationMs: 900,
+                reason: '',
+              },
+            ],
+          },
+        },
+        launchGateRoot,
+        root,
+      ),
+    /launch probe failed for x64: window-missing/,
+  )
   const modifiedRoot = path.join(root, 'changed-result')
   fs.mkdirSync(modifiedRoot)
   fs.appendFileSync(resultFile, ' ')
@@ -383,6 +451,7 @@ test('candidates retain both native payload manifests, one green archive per arc
             retainedInputs,
             toolkit: {},
           },
+          launch: skippedLaunch,
         },
         modifiedRoot,
         root,
@@ -406,6 +475,7 @@ test('candidates retain both native payload manifests, one green archive per arc
             retainedInputs,
             toolkit: {},
           },
+          launch: skippedLaunch,
         },
         changedInputRoot,
         root,
@@ -448,4 +518,23 @@ test('public source fingerprints cover application configuration and ignore priv
     '{"icon":"resources/product-icon.ico"}',
   )
   assert.notEqual(build.captureInputs(root).fingerprint, configured.fingerprint)
+})
+
+test('skipped launch probe is recorded as not attempted instead of passing', () => {
+  const probe = require('./installer-launch-smoke.cjs')
+  const result = probe.probeInstallers({
+    installers: [
+      { architecture: 'x64', path: 'setup-x64.exe' },
+      { architecture: 'arm64', path: 'setup-arm64.exe' },
+    ],
+    skip: true,
+  })
+  assert.equal(result.attempted, false)
+  assert.equal(result.reason, 'skipped by --skip-launch-probe')
+  assert.equal(result.results.length, 2)
+  for (const item of result.results) {
+    assert.equal(item.attempted, false)
+    assert.equal(item.ok, null)
+    assert.equal(item.reason, 'skipped by --skip-launch-probe')
+  }
 })
