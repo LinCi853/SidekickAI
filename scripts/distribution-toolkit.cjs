@@ -19,11 +19,11 @@ const MAX_FILES = 64
 const EDITIONS = ['concept', 'community']
 const ARCHITECTURES = ['x64', 'arm64']
 const EXECUTABLE = 'bin/AppLifecycleToolkit.exe'
-// Pinned toolkit 0.1.7 layout. The archive itself is pinned by size and SHA-256;
+// Pinned toolkit 0.1.8 layout. The archive itself is pinned by size and SHA-256;
 // this inventory keeps cache reuse honest without trusting extracted directories.
 const INVENTORY = [
-  [EXECUTABLE, 93678080, 'b1eddab0ab232f11528ea20e9741865f45c6b92bb0b98d4b3051deb92483929b'],
-  ['README.md', 19075, '4fd78ab63abe005629934f8af40b71ca6ef977775816468d2d68d6793a561803'],
+  [EXECUTABLE, 93680128, '0b2c10314bc4312f4f385dc1e3d53b9aa45fe47917635a7609d7db40efcc1d4b'],
+  ['README.md', 20169, '771503d14ac35f3c7ec9fe98db36133262712539d53e4ae98ec73c409c026a51'],
   [
     'sample/app.manifest.jsonc',
     986,
@@ -31,43 +31,43 @@ const INVENTORY = [
   ],
   [
     'extractor/concept/x64/setup.exe',
-    13905408,
-    '7151639b9938c283bb140aba841cc2365235d7675c9c33a26010fe21f03d142a',
+    13898752,
+    '07d93aaf992182b5867a58efcefb621054030c1ad2271e242debe8bc5c0ba200',
   ],
   [
     'extractor/concept/x64/wizard-manifest.json',
     322,
-    'db4a168d7675cffe6fbff701d3516579ee6107e64abffafaf3a5cdeb178dd96b',
+    '06bda2ed9e852dc6d2cc156d20f259c6542f96c8a8764ec4fdc01d724ffcb116',
   ],
   [
     'extractor/concept/arm64/setup.exe',
-    12529664,
-    '3ac7452c3dbc0901086b005f7475418680c924493bfdd70f16f3daef03b46785',
+    12517888,
+    '594adbd406bf414ad1fe0079f6ed1b8e5a509deca92d88e936cc58d87bc24227',
   ],
   [
     'extractor/concept/arm64/wizard-manifest.json',
     324,
-    '41509fef02ce84725c241c56f8079ee3e37447bbf03e31ad383db90baa67c324',
+    'd213a4a69bf92105947d4995c392f086ca42048e3fa048f6b99714efb23e0cc5',
   ],
   [
     'extractor/community/x64/setup.exe',
-    13913600,
-    '1a49ce05b78a78c16f97e4d70a574719dc610909544a72098c025a04f4a218d5',
+    13906944,
+    '3151be52c3dc5c916bb5c2d696cb0da42a6ce69c0c4abec52220f3c84fd4b75a',
   ],
   [
     'extractor/community/x64/wizard-manifest.json',
     324,
-    'ae2d96eb7703b3bbdf0dc1e05ba943c5ddd1df951442f7421cc82d88a3756fa4',
+    '37bd0d8bd9ab2fd57a47144ee15abe7f0dd1e435d82171f7c5e0c5f25a3504ff',
   ],
   [
     'extractor/community/arm64/setup.exe',
-    12533760,
-    '26a9099a9368f77dea2ced51c6572de6d3db9387e17c042a1ec80326a69aba14',
+    12526080,
+    'a266fa081b7c84193824199c513719179d133c9ebc4ba9d176eea0c0e1fff5c7',
   ],
   [
     'extractor/community/arm64/wizard-manifest.json',
     326,
-    '3fe755b933660518dd4d76ac6377ccd625ad44434537a76d82b64562050df350',
+    '2266cd3097d12f6ad114772a5f672ee647e606a6c2191a0836dff6992a48caae',
   ],
   [
     'uninstallers/concept/x64/uninstall.exe',

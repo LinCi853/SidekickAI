@@ -1,7 +1,7 @@
 'use strict'
 
 module.exports = Object.freeze({
-  toolkitVersion: '0.1.7',
-  size: 70917273,
-  sha256: '6436ba549c25c0ab24d7ffd0773778714852d7dab3a8333709509b7c67a3a117',
+  toolkitVersion: '0.1.8',
+  size: 70910166,
+  sha256: 'a9d8927a9821a7d0e997e66c16d50c3d878341d4d62e9ba6cb098f5651092485',
 })
