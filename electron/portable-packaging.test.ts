@@ -138,6 +138,9 @@ describe('portable archive boundaries', () => {
   it('accepts the bundled uninstaller only at the application root', () => {
     expect(packer.validatePortablePath('SidekickAI/uninstall.exe')).toBe('SidekickAI/uninstall.exe')
     expect(packer.validatePortablePath('uninstall-manifest.json')).toBe('uninstall-manifest.json')
+    expect(packer.validatePortablePath('SidekickAI/product-edition.json')).toBe(
+      'SidekickAI/product-edition.json',
+    )
     expect(() => packer.validatePortablePath('SidekickAI/resources/uninstall.exe')).toThrow()
     expect(() => packer.validatePortablePath('SidekickAI/maintenance/uninstall.exe')).toThrow()
   })

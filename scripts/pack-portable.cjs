@@ -21,16 +21,17 @@ const LAYOUT = product.portable
 // 单架构便携包：应用目录即包根，数据目录位于应用目录内（应用原生单目录便携模式）
 const SINGLE_MARKER = 'AI Window Portable Mode Marker\n'
 const MIN_ZIP_BYTES = 90 * 1024 * 1024
-const UNINSTALLER_FILES = ['uninstall.exe', 'uninstall-manifest.json']
-// A portable user has no installation record, so the archive ships its own uninstaller at the
-// application root to remove data, cache and registry residue. It is a required component, not
-// installation-flow metadata.
+const UNINSTALLER_FILES = ['uninstall.exe', 'uninstall-manifest.json', 'product-edition.json']
+// A portable user has no installation record, so the archive ships its own uninstaller triple
+// (program, manifest and edition selection) at the application root to remove data, cache and
+// registry residue. It is a required component, not installation-flow metadata.
 const REQUIRED_ENTRIES = [
   `${DIRECTORY_NAME}/${product.executable}`,
   `${DIRECTORY_NAME}/resources/app.asar`,
   `${DIRECTORY_NAME}/portable.txt`,
   `${DIRECTORY_NAME}/uninstall.exe`,
   `${DIRECTORY_NAME}/uninstall-manifest.json`,
+  `${DIRECTORY_NAME}/product-edition.json`,
 ]
 // Installation-flow metadata would make the green package depend on an installation record.
 const INSTALLATION_METADATA = [
@@ -46,7 +47,7 @@ function validatePortablePath(name) {
   const relative = normalized.startsWith(`${DIRECTORY_NAME}/`)
     ? normalized.slice(DIRECTORY_NAME.length + 1)
     : normalized
-  // Only the application-root uninstaller pair is accepted; every other path keeps the general
+  // Only the application-root uninstaller triple is accepted; every other path keeps the general
   // rules, so maintenance tools, install receipts and runtime user data stay rejected.
   if (UNINSTALLER_FILES.includes(relative)) return normalized
   return runtime.validateSoftwarePath(normalized)
@@ -252,8 +253,10 @@ function portableUninstaller(toolkit, arch) {
   const directory = path.join(toolkit.directory, 'uninstallers', selection.edition, arch)
   const executable = path.join(directory, 'uninstall.exe')
   const manifestPath = path.join(directory, 'uninstall-manifest.json')
+  const editionPath = path.join(directory, 'product-edition.json')
   u.assertFile(executable)
   u.assertFile(manifestPath)
+  u.assertFile(editionPath)
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   if (
     manifest.protocolVersion !== 3 ||
@@ -263,6 +266,8 @@ function portableUninstaller(toolkit, arch) {
     throw new Error('Portable uninstaller manifest does not match this edition and architecture')
   if (manifest.size !== fs.statSync(executable).size || manifest.sha256 !== u.sha256(executable))
     throw new Error('Portable uninstaller does not match its manifest')
+  if (JSON.parse(fs.readFileSync(editionPath, 'utf8')).edition !== selection.edition)
+    throw new Error('Portable uninstaller edition selection does not match this edition')
   return directory
 }
 
@@ -284,7 +289,7 @@ function packPortableArchitecture({ output, applications, arch, minimumZipBytes,
     architectures: [arch],
     packageKind: 'portable',
     contents: {
-      uninstaller: '绿色包自带卸载器，用于清理数据目录、缓存与注册表残留',
+      uninstaller: '绿色包自带卸载器（程序、清单与版别选择），用于清理数据目录、缓存与注册表残留',
       excludedMaintenanceRuntime:
         'resources/host-backup 是维护期运行时，仅安装/卸载流程使用，不随绿色包分发',
     },

@@ -37,6 +37,10 @@ function toolkitFixture(root) {
         inputFingerprint: u.hash('fixture'),
       }),
     )
+    fs.writeFileSync(
+      path.join(source, 'product-edition.json'),
+      JSON.stringify({ edition: 'concept' }, null, 2) + '\n',
+    )
   }
   return { directory }
 }
@@ -71,9 +75,10 @@ test('each green archive carries one native runtime without recovery, installati
       .map((entry) => entry.entryName)
     assert.ok(names.includes('SidekickAI/SidekickAI.exe'))
     assert.ok(names.includes('SidekickAI/resources/app.asar'))
-    // 便携用户没有安装登记，绿色包自带卸载器清理数据目录、缓存与注册表残留
+    // 便携用户没有安装登记，绿色包自带卸载器三元组清理数据目录、缓存与注册表残留
     assert.ok(names.includes('SidekickAI/uninstall.exe'))
     assert.ok(names.includes('SidekickAI/uninstall-manifest.json'))
+    assert.ok(names.includes('SidekickAI/product-edition.json'))
     assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
     const marker = zip.readFile('SidekickAI/portable.txt').toString('utf8')
     assert.equal(
@@ -164,6 +169,7 @@ test('portable paths reject configuration secrets, maintenance tools and runtime
     'uninstall.exe',
     'SidekickAI/uninstall.exe',
     'SidekickAI/uninstall-manifest.json',
+    'SidekickAI/product-edition.json',
   ])
     assert.equal(portable.validatePortablePath(name), name)
   for (const name of ['resources/uninstall.exe', 'maintenance/uninstall.exe'])
@@ -219,8 +225,9 @@ test('green archive drops the maintenance runtime and carries the bundled uninst
   const files = JSON.parse(zip.readFile('SidekickAI/portable-manifest.json').toString()).files
   assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
   assert.ok(names.includes('SidekickAI/uninstall.exe'))
-  // 源目录多出 6 个维护期运行时文件，包内不计入；新增 2 个卸载器文件与 portable.txt
-  assert.equal(files.length, u.listFiles(source, new Set()).length - 6 + 3)
+  assert.ok(names.includes('SidekickAI/product-edition.json'))
+  // 源目录多出 6 个维护期运行时文件，包内不计入；新增 3 个卸载器文件与 portable.txt
+  assert.equal(files.length, u.listFiles(source, new Set()).length - 6 + 4)
   assert.equal(files.length, baseline.length)
 })
 
