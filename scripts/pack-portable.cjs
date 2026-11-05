@@ -146,6 +146,21 @@ function verifyZip(zipPath, minimumSize = MIN_ZIP_BYTES) {
   return { size, entries: entries.length, sha256: u.sha256(zipPath) }
 }
 
+function assertNoInstallerElements(directory) {
+  // A portable archive ships the source build as-is. Installer-owned files would make the
+  // green package depend on the installation flow, so their presence is a hard failure.
+  for (const relative of [
+    'uninstall.exe',
+    'uninstall-manifest.json',
+    'lifecycle-package.json',
+    'maintenance/installation-configuration.json',
+    'resources/installation-contract.json',
+  ]) {
+    if (fs.existsSync(path.join(directory, ...relative.split('/'))))
+      throw new Error(`Portable source contains installer-owned file: ${relative}`)
+  }
+}
+
 function stagePortableApplication(source, destination, arch) {
   validateArchitectures([arch])
   const relative = path.relative(path.resolve(source), path.resolve(destination))
@@ -159,6 +174,7 @@ function stagePortableApplication(source, destination, arch) {
   const applicationInputs = applicationFingerprint(source)
   const { native } = verifyRuntime(source, arch, { allowPortable: true })
   verifyNativeFiles(source, arch)
+  assertNoInstallerElements(source)
   const existingMarker = path.join(source, 'portable.txt')
   if (fs.existsSync(existingMarker)) {
     u.assertFile(existingMarker)
