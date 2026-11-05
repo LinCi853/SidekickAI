@@ -22,7 +22,7 @@ const EXECUTABLE = 'bin/AppLifecycleToolkit.exe'
 // Pinned toolkit 0.1.10 layout. The archive itself is pinned by size and SHA-256;
 // this inventory keeps cache reuse honest without trusting extracted directories.
 const INVENTORY = [
-  [EXECUTABLE, 93672448, '8c1140ef15ecaf89b91e821bf992ee6135933ea4a4ba8b7f0f7a0affe17e77b3'],
+  [EXECUTABLE, 93672960, 'd0e7fb4cc7fddaf3162b3472c03bc69a0a0ad15e9d08efc1336733491f5ae021'],
   ['README.md', 21996, '076e606dae5c78f37fe21f68d95920e2c5fd621af7744c7694759ff00c989741'],
   [
     'sample/app.manifest.jsonc',

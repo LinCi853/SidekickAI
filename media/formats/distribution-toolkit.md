@@ -13,8 +13,8 @@
 | 项       | 值                                                                 |
 | -------- | ------------------------------------------------------------------ |
 | 版本     | 0.1.10                                                             |
-| 归档字节 | 70,985,542                                                         |
-| SHA-256  | `8c2e4607ad0952e6454f14b5ba3f31ff7fc35f9c2ee1a9c3502b1e6bb1d675f3` |
+| 归档字节 | 70,985,685                                                         |
+| SHA-256  | `c2bc5cc2f9413adb64b103c55e9a6495499a056283ee1dcc0b212e0897bf56bd` |
 
 版本、大小与摘要同时固定在 `scripts/distribution-toolkit-release.cjs` 与 `contracts/distribution-toolkit.json`，不接受跳过固定值校验的开关。默认引用以 `archive.path` 指向工作区内的真实归档；`local/` 不纳入源码提交，公开检出需自行放置该固定归档。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，不改变版本、大小、摘要或信任锚。
 
