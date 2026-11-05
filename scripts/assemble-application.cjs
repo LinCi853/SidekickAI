@@ -441,7 +441,27 @@ function appManifest({ product, edition, productVersion, payload, payloadManifes
   return manifest
 }
 
+const HOST_ARCHITECTURE = process.arch === 'arm64' ? 'arm64' : 'x64'
+
 function checkInstaller(file, expectedDomain, options = {}) {
+  // Windows cannot execute an installer built for another architecture. The static checks in
+  // validateResult still apply; only the runtime self-check is skipped and reported as such.
+  if (options.architecture && options.architecture !== HOST_ARCHITECTURE && !options.spawn) {
+    console.log(
+      '[assembly] Skipped ' +
+        options.architecture +
+        ' installer self-check (host is ' +
+        HOST_ARCHITECTURE +
+        ')',
+    )
+    return {
+      attempted: false,
+      ok: null,
+      domain: expectedDomain,
+      exitCode: null,
+      reason: 'architecture not runnable on this host',
+    }
+  }
   const run = (options.spawn || spawnSync)(file, ['--check'], {
     encoding: 'utf8',
     windowsHide: true,
@@ -940,7 +960,10 @@ function verifyCollected(assembled, directory, options = {}, collection = null) 
   }
   const installers = validateResult(assembled.result, assembled.preparedToolkit, directory, source)
   for (const installer of installers)
-    checkInstaller(installer.path, assembled.result.domain, options)
+    checkInstaller(installer.path, assembled.result.domain, {
+      ...options,
+      architecture: installer.architecture,
+    })
   retainedInputs(directory, source)
   if (u.sha256(resultFile) !== assembled.resultSha256)
     throw new Error('Collected installer verification does not match its original result')
