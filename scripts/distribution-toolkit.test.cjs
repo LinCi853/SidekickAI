@@ -450,7 +450,7 @@ test('download responses cannot change an HTTPS reference to an unapproved trans
   )
 })
 
-test('the published inventory is the fixed nineteen-file 0.1.7 layout without a manifest', () => {
+test('the published inventory is the fixed twenty-three-file 0.1.11 layout without a manifest', () => {
   const expected = [
     'bin/AppLifecycleToolkit.exe',
     'README.md',
@@ -461,12 +461,13 @@ test('the published inventory is the fixed nineteen-file 0.1.7 layout without a 
         'extractor/' + edition + '/' + arch + '/wizard-manifest.json',
         'uninstallers/' + edition + '/' + arch + '/uninstall.exe',
         'uninstallers/' + edition + '/' + arch + '/uninstall-manifest.json',
+        'uninstallers/' + edition + '/' + arch + '/product-edition.json',
       ]),
     ),
   ].sort()
   const paths = toolkit.INVENTORY.map((file) => file.path).sort()
   assert.deepEqual(paths, expected)
-  assert.equal(toolkit.INVENTORY.length, 19)
+  assert.equal(toolkit.INVENTORY.length, 23)
   for (const retired of ['toolkit-manifest.json', 'bin/SidekickDistribution.exe', 'LICENSE.txt']) {
     assert.equal(paths.includes(retired), false, retired)
   }

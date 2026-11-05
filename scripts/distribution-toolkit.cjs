@@ -19,11 +19,16 @@ const MAX_FILES = 64
 const EDITIONS = ['concept', 'community']
 const ARCHITECTURES = ['x64', 'arm64']
 const EXECUTABLE = 'bin/AppLifecycleToolkit.exe'
-// Pinned toolkit 0.1.10 layout. The archive itself is pinned by size and SHA-256;
+// Pinned toolkit 0.1.11 layout. The archive itself is pinned by size and SHA-256;
 // this inventory keeps cache reuse honest without trusting extracted directories.
+// Each uninstaller is a triple: executable, manifest and edition selection.
 const INVENTORY = [
-  [EXECUTABLE, 93672960, 'd0e7fb4cc7fddaf3162b3472c03bc69a0a0ad15e9d08efc1336733491f5ae021'],
-  ['README.md', 21996, '076e606dae5c78f37fe21f68d95920e2c5fd621af7744c7694759ff00c989741'],
+  [
+    'bin/AppLifecycleToolkit.exe',
+    93673472,
+    '8223e30596b2b3cdeeea5f23960b40da2703cd668abacb9e054bdd90aeecbd8f',
+  ],
+  ['README.md', 24685, '2c2ec55bdbf38edad378734878b5986d97ed1dc00c99dd65bf98be20bd5e66d5'],
   [
     'sample/app.manifest.jsonc',
     986,
@@ -31,83 +36,103 @@ const INVENTORY = [
   ],
   [
     'extractor/concept/x64/setup.exe',
-    13941248,
-    'e6b95d19ca5083911885e0a7c719b0fd4340eeb4af9f0ec5f883b5850ee7111f',
+    13961728,
+    '983a3a9c59fd73644a6609979310514859edad22c87fd16e870e79f238f9f443',
   ],
   [
     'extractor/concept/x64/wizard-manifest.json',
     322,
-    '33fdd2ad540b2af5030efdcbc6798cddd6dcba1e452f85c72a4837134effd77a',
+    'b28849bdbaf4ed4d12d160cdf2706527ede4452924bd05cfa146492679fbe023',
   ],
   [
     'extractor/concept/arm64/setup.exe',
-    12556800,
-    'b9264867449dffe4bc893584ddc3946a0c89add3b357b51b460dda125cea3f13',
+    12574720,
+    'f99930798d5cfb6ee8ba348b32b2a4fdf8744ff747aa289479fab781b983b84c',
   ],
   [
     'extractor/concept/arm64/wizard-manifest.json',
     324,
-    '10c99a5c48b1895f4625edf2889a27fcdf082add95ef46ad6ac0c95f4aee3667',
+    'c3576c1d8317772715536a858dc1b65eae1c12b34a4ad024040fae604b11e12f',
   ],
   [
     'extractor/community/x64/setup.exe',
-    13963264,
-    'd2049c4330c35a9006d1b9d882ca5febd80871c3e37ef708ed5344291c039308',
+    13969920,
+    '2243c9dc90ec0044ced2b74bab7d54891cf54e55fb5ca8cb82b8ad3f2ebfdf3c',
   ],
   [
     'extractor/community/x64/wizard-manifest.json',
     324,
-    'e6b9b87b8afd0c00ef64554690acd9192606d3703503fa7ade1721ce80c88340',
+    '9144c7722bdac0bb7f489741c7b49382bc4b11da72bb4f7277b4befddd63499d',
   ],
   [
     'extractor/community/arm64/setup.exe',
-    12577280,
-    '0b1b3e0293618abe69c91a83c35364be2baa01bf7e962c65a23eef21b2317fdc',
+    12582912,
+    'd7b4b87943ba4b2d8e6ff2d9e0896419388c2e44efd9997b376562ca1c7876a5',
   ],
   [
     'extractor/community/arm64/wizard-manifest.json',
     326,
-    '4df34fed337b462f5031735d5da8d5a5e53287675e33f3b917e4ca8a530da424',
+    'f97f9405b8569a615aaf41573d63264bc3307504d6c54f995f8efee08ce51b42',
   ],
   [
     'uninstallers/concept/x64/uninstall.exe',
-    9568768,
-    '6eb6f671d8d0e3dc642e4bb5ec0a851136f9e2d5841ece8508ba94b7da133f6f',
+    9569792,
+    'f53032d6b80b46889cbbb9261f77412c5822fdcfec7ada95dafa2c468938ba08',
   ],
   [
     'uninstallers/concept/x64/uninstall-manifest.json',
     321,
-    '898d09b8dcaf4f438da91e6bb646b83f9acfadcd97d258372d404febb3aad695',
+    '78d143da093377c4e31b945e849988ba51931576a9e8ec0e603a3b15de28f44d',
+  ],
+  [
+    'uninstallers/concept/x64/product-edition.json',
+    27,
+    'a40d9494581dc4f530367d14a8de28de1f459dfd945c510cb188df42f6e6c752',
   ],
   [
     'uninstallers/concept/arm64/uninstall.exe',
-    8623616,
-    '70f3722dba9ec176d1cdaa218a3a2501100c7f22f746770fcf3e2aef48eaf4ab',
+    8625152,
+    '990e911ff237d4b47cf6277d8169407d9377fc2de6b79e803cc59bc45681ede9',
   ],
   [
     'uninstallers/concept/arm64/uninstall-manifest.json',
     323,
-    '4c5e10fc177d17d4eec1102a667ff0230ac349fe107d2f39459525aa990874ab',
+    'b04ad12f82717131339283090bed2a59da797cc6a17f4d22f0dbead22fbc342c',
+  ],
+  [
+    'uninstallers/concept/arm64/product-edition.json',
+    27,
+    'a40d9494581dc4f530367d14a8de28de1f459dfd945c510cb188df42f6e6c752',
   ],
   [
     'uninstallers/community/x64/uninstall.exe',
-    9568768,
-    'c5321b359cf959951a128b156ee3128a0d91f32b6fcd7f56e33ac257a628ed69',
+    9569792,
+    '8104437a270a3bf9eef75eeb8552305af1e6245209363335f5edf6498468aca0',
   ],
   [
     'uninstallers/community/x64/uninstall-manifest.json',
     323,
-    'ba6c983a30f423fe0613ba497210421113f48d04b5b63c3905e5a347d62ee9f1',
+    'dd45dbea7837a9a75677986b6f8d5283ead44e385347b4ee700048529f454770',
+  ],
+  [
+    'uninstallers/community/x64/product-edition.json',
+    29,
+    'd71fd200816f188f80853192e8261c3df04ef476e018d94a0e6bf5e8f61d2189',
   ],
   [
     'uninstallers/community/arm64/uninstall.exe',
-    8623616,
-    '512bdd1fe3a2dd99e1b1216384aefdcb45fc6a46f370e509d8706380adf2d1c6',
+    8625152,
+    '1d22cb0a424442ff3dc76550973d444f11741b8dd0a77377a93fe46cfe7ff435',
   ],
   [
     'uninstallers/community/arm64/uninstall-manifest.json',
     325,
-    '3203646b1b85a6fa9eded69a1e686011fb3056676b6a20fe8630740921d4a68e',
+    '15d15a35bb7d3dae7ecae0b98b008b9f7cacaa5b577604a710f379205d92e4a3',
+  ],
+  [
+    'uninstallers/community/arm64/product-edition.json',
+    29,
+    'd71fd200816f188f80853192e8261c3df04ef476e018d94a0e6bf5e8f61d2189',
   ],
 ].map(([filePath, size, sha256]) => ({ path: filePath, size, sha256 }))
 

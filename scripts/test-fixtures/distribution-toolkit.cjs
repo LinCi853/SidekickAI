@@ -68,7 +68,7 @@ function zipBytes(entries) {
   return Buffer.concat([...locals, central, end])
 }
 
-// Mirrors the 0.1.7 toolkit: a fixed nineteen-file layout with no toolkit manifest. Archive
+// Mirrors the 0.1.11 toolkit: a fixed twenty-three-file layout with no toolkit manifest. Archive
 // identity comes from the pinned reference; extracted content is bound to this inventory.
 function toolkitFixture() {
   const entries = []
@@ -102,6 +102,10 @@ function toolkitFixture() {
           ),
         )
       }
+      add(
+        'uninstallers/' + edition + '/' + arch + '/product-edition.json',
+        Buffer.from(JSON.stringify({ edition: edition }, null, 2) + '\n'),
+      )
     }
   }
   return { version: TOOLKIT_VERSION, inventory, entries }
