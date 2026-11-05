@@ -74,6 +74,7 @@ test('each green archive carries one native runtime without recovery, installati
     // 便携用户没有安装登记，绿色包自带卸载器清理数据目录、缓存与注册表残留
     assert.ok(names.includes('SidekickAI/uninstall.exe'))
     assert.ok(names.includes('SidekickAI/uninstall-manifest.json'))
+    assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
     const marker = zip.readFile('SidekickAI/portable.txt').toString('utf8')
     assert.equal(
       marker.replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0],
@@ -94,6 +95,7 @@ test('each green archive carries one native runtime without recovery, installati
     const manifest = JSON.parse(zip.readFile('SidekickAI/portable-manifest.json').toString())
     assert.deepEqual(manifest.architectures, [arch])
     assert.match(manifest.contents.uninstaller, /卸载器/)
+    assert.match(manifest.contents.excludedMaintenanceRuntime, /host-backup/)
     for (const file of manifest.files) {
       const bytes = zip.readFile('SidekickAI/' + file.path)
       assert.equal(bytes.length, file.size)
@@ -170,6 +172,56 @@ test('portable paths reject configuration secrets, maintenance tools and runtime
     portable.validatePortablePath('resources/oxy-service.json'),
     'resources/oxy-service.json',
   )
+})
+
+test('green archive drops the maintenance runtime and carries the bundled uninstaller', async (t) => {
+  const root = fixture(t)
+  const applications = path.join(root, 'applications')
+  const source = await createRuntime(applications, 'x64')
+  const toolkit = toolkitFixture(root)
+  const plain = path.join(root, 'green-plain')
+  await portable.packPortable({
+    output: plain,
+    applications,
+    architectures: ['x64'],
+    minimumZipBytes: 1,
+    toolkit,
+  })
+  const baseline = JSON.parse(
+    new AdmZip(path.join(plain, `SidekickAI-Portable-${build.VERSION}-x64-win.zip`))
+      .readFile('SidekickAI/portable-manifest.json')
+      .toString(),
+  ).files
+  const hostBackup = path.join(source, 'resources', 'host-backup')
+  fs.mkdirSync(hostBackup, { recursive: true })
+  for (const [name, bytes] of Object.entries({
+    'node.exe': pe('x64'),
+    'backup-component.cjs': Buffer.from('fixture backup component'),
+    'LICENSE.node.txt': Buffer.from('node license'),
+    'LICENSE.application.txt': Buffer.from('application license'),
+    'THIRD-PARTY-NOTICES.txt': Buffer.from('notices'),
+    'component.json': Buffer.from('{}'),
+  }))
+    fs.writeFileSync(path.join(hostBackup, name), bytes)
+  const output = path.join(root, 'green')
+  await portable.packPortable({
+    output,
+    applications,
+    architectures: ['x64'],
+    minimumZipBytes: 1,
+    toolkit,
+  })
+  const zip = new AdmZip(path.join(output, `SidekickAI-Portable-${build.VERSION}-x64-win.zip`))
+  const names = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => entry.entryName)
+  const files = JSON.parse(zip.readFile('SidekickAI/portable-manifest.json').toString()).files
+  assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
+  assert.ok(names.includes('SidekickAI/uninstall.exe'))
+  // 源目录多出 6 个维护期运行时文件，包内不计入；新增 2 个卸载器文件与 portable.txt
+  assert.equal(files.length, u.listFiles(source, new Set()).length - 6 + 3)
+  assert.equal(files.length, baseline.length)
 })
 
 test('Windows architectures reject duplicates and unsupported values', () => {

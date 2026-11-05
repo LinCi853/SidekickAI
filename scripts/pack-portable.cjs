@@ -38,6 +38,9 @@ const INSTALLATION_METADATA = [
   'maintenance/installation-configuration.json',
   'resources/installation-contract.json',
 ]
+// Maintenance-period runtime: used only by the install/uninstall flow through the product
+// descriptor, so the green package does not distribute it.
+const MAINTENANCE_RUNTIME = 'resources/host-backup'
 function validatePortablePath(name) {
   const normalized = name.replaceAll('\\', '/').replace(/\/$/, '')
   const relative = normalized.startsWith(`${DIRECTORY_NAME}/`)
@@ -175,6 +178,15 @@ function assertNoInstallerElements(directory) {
   }
 }
 
+function isMaintenanceRuntime(relative) {
+  return relative === MAINTENANCE_RUNTIME || relative.startsWith(MAINTENANCE_RUNTIME + '/')
+}
+
+function withoutMaintenanceRuntime(fingerprint) {
+  const entries = fingerprint.entries.filter((entry) => !isMaintenanceRuntime(entry.path))
+  return { fingerprint: u.hash(JSON.stringify(entries)), entries }
+}
+
 function stagePortableApplication(source, destination, arch, { uninstaller } = {}) {
   validateArchitectures([arch])
   const relative = path.relative(path.resolve(source), path.resolve(destination))
@@ -200,8 +212,19 @@ function stagePortableApplication(source, destination, arch, { uninstaller } = {
     )
       throw new Error('Unexpected source portable marker')
   }
-  fs.cpSync(source, destination, { recursive: true, errorOnExist: true, force: false })
-  u.assertUnchanged(applicationInputs, applicationFingerprint(destination))
+  fs.cpSync(source, destination, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+    filter: (file) => {
+      const relative = path.relative(source, file).replaceAll('\\', '/')
+      return !relative || !isMaintenanceRuntime(relative)
+    },
+  })
+  u.assertUnchanged(
+    withoutMaintenanceRuntime(applicationInputs),
+    applicationFingerprint(destination),
+  )
   if (uninstaller) {
     for (const name of UNINSTALLER_FILES)
       fs.copyFileSync(
@@ -262,6 +285,8 @@ function packPortableArchitecture({ output, applications, arch, minimumZipBytes,
     packageKind: 'portable',
     contents: {
       uninstaller: '绿色包自带卸载器，用于清理数据目录、缓存与注册表残留',
+      excludedMaintenanceRuntime:
+        'resources/host-backup 是维护期运行时，仅安装/卸载流程使用，不随绿色包分发',
     },
     files: runtime.fileInventory(directory, { validate: validatePortablePath }),
   }
