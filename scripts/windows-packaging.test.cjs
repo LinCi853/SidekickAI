@@ -8,13 +8,37 @@ const path = require('node:path')
 const AdmZip = require('adm-zip')
 const build = require('./application-packaging.cjs')
 const portable = require('./pack-portable.cjs')
-const { createRuntime } = require('./test-fixtures/application-runtime.cjs')
+const { createRuntime, pe } = require('./test-fixtures/application-runtime.cjs')
 const u = require('./build-utils.cjs')
 
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-windows-package-test-'))
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   return directory
+}
+
+function toolkitFixture(root) {
+  const directory = path.join(root, 'toolkit')
+  for (const arch of ['x64', 'arm64']) {
+    const source = path.join(directory, 'uninstallers', 'concept', arch)
+    fs.mkdirSync(source, { recursive: true })
+    const executable = path.join(source, 'uninstall.exe')
+    fs.writeFileSync(executable, pe(arch))
+    fs.writeFileSync(
+      path.join(source, 'uninstall-manifest.json'),
+      JSON.stringify({
+        protocolVersion: 3,
+        edition: 'concept',
+        componentVersion: 'fixture',
+        uninstallProtocolVersion: 2,
+        arch,
+        sha256: u.sha256(executable),
+        size: fs.statSync(executable).size,
+        inputFingerprint: u.hash('fixture'),
+      }),
+    )
+  }
+  return { directory }
 }
 
 test('each green archive carries one native runtime without recovery, installation state or official proofs', async (t) => {
@@ -24,7 +48,12 @@ test('each green archive carries one native runtime without recovery, installati
   for (const arch of ['x64', 'arm64'])
     before[arch] = build.applicationFingerprint(await createRuntime(applications, arch))
   const output = path.join(root, 'green')
-  const artifacts = portable.packPortable({ output, applications, minimumZipBytes: 1 })
+  const artifacts = await portable.packPortable({
+    output,
+    applications,
+    minimumZipBytes: 1,
+    toolkit: toolkitFixture(root),
+  })
   assert.deepEqual(
     artifacts.map((artifact) => artifact.arch),
     ['x64', 'arm64'],
@@ -42,6 +71,9 @@ test('each green archive carries one native runtime without recovery, installati
       .map((entry) => entry.entryName)
     assert.ok(names.includes('SidekickAI/SidekickAI.exe'))
     assert.ok(names.includes('SidekickAI/resources/app.asar'))
+    // 便携用户没有安装登记，绿色包自带卸载器清理数据目录、缓存与注册表残留
+    assert.ok(names.includes('SidekickAI/uninstall.exe'))
+    assert.ok(names.includes('SidekickAI/uninstall-manifest.json'))
     const marker = zip.readFile('SidekickAI/portable.txt').toString('utf8')
     assert.equal(
       marker.replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0],
@@ -53,7 +85,7 @@ test('each green archive carries one native runtime without recovery, installati
     )
     assert.ok(
       !names.some((name) =>
-        /(?:recover\.exe|uninstall|maintenance|proof\.json|backup-runtime\.zip|install-receipt|Start-SidekickAI\.cmd|portable-layout\.json)/i.test(
+        /(?:recover\.exe|maintenance|lifecycle-package|installation-contract|proof\.json|backup-runtime\.zip|install-receipt|Start-SidekickAI\.cmd|portable-layout\.json)/i.test(
           name,
         ),
       ),
@@ -61,6 +93,7 @@ test('each green archive carries one native runtime without recovery, installati
     assert.ok(!names.some((name) => /^SidekickAI\/data\/.+/.test(name)))
     const manifest = JSON.parse(zip.readFile('SidekickAI/portable-manifest.json').toString())
     assert.deepEqual(manifest.architectures, [arch])
+    assert.match(manifest.contents.uninstaller, /卸载器/)
     for (const file of manifest.files) {
       const bytes = zip.readFile('SidekickAI/' + file.path)
       assert.equal(bytes.length, file.size)
@@ -78,8 +111,13 @@ test('each green archive carries one native runtime without recovery, installati
       before[arch],
     )
   }
-  assert.throws(
-    () => portable.packPortable({ output, applications, minimumZipBytes: 1 }),
+  await assert.rejects(
+    portable.packPortable({
+      output,
+      applications,
+      minimumZipBytes: 1,
+      toolkit: toolkitFixture(root),
+    }),
     /already exists/,
   )
 })
@@ -89,11 +127,12 @@ test('portable packaging can produce a single architecture archive on demand', a
   const applications = path.join(root, 'applications')
   await createRuntime(applications, 'x64')
   const output = path.join(root, 'green')
-  const artifacts = portable.packPortable({
+  const artifacts = await portable.packPortable({
     output,
     applications,
     architectures: ['x64'],
     minimumZipBytes: 1,
+    toolkit: toolkitFixture(root),
   })
   assert.equal(artifacts.length, 1)
   assert.equal(artifacts[0].arch, 'x64')
@@ -119,6 +158,14 @@ test('portable paths reject configuration secrets, maintenance tools and runtime
   ]) {
     assert.throws(() => portable.validatePortablePath(name), /non-distributable|user data/)
   }
+  for (const name of [
+    'uninstall.exe',
+    'SidekickAI/uninstall.exe',
+    'SidekickAI/uninstall-manifest.json',
+  ])
+    assert.equal(portable.validatePortablePath(name), name)
+  for (const name of ['resources/uninstall.exe', 'maintenance/uninstall.exe'])
+    assert.throws(() => portable.validatePortablePath(name), /non-distributable/)
   assert.equal(
     portable.validatePortablePath('resources/oxy-service.json'),
     'resources/oxy-service.json',

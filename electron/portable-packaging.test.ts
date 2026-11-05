@@ -135,6 +135,12 @@ describe('portable archive boundaries', () => {
     const target = zip([`SidekickAI/${name}`])
     expect(() => packer.verifyZip(target, 0)).toThrow()
   })
+  it('accepts the bundled uninstaller only at the application root', () => {
+    expect(packer.validatePortablePath('SidekickAI/uninstall.exe')).toBe('SidekickAI/uninstall.exe')
+    expect(packer.validatePortablePath('uninstall-manifest.json')).toBe('uninstall-manifest.json')
+    expect(() => packer.validatePortablePath('SidekickAI/resources/uninstall.exe')).toThrow()
+    expect(() => packer.validatePortablePath('SidekickAI/maintenance/uninstall.exe')).toThrow()
+  })
   it('rejects corruption even with an intact central directory', () => {
     const target = zip()
     const bytes = fs.readFileSync(target)
@@ -153,10 +159,10 @@ describe('portable archive boundaries', () => {
       expect(() => packer.validatePortablePath(name)).toThrow()
     },
   )
-  it('rejects an empty architecture list before packaging', () => {
-    expect(() =>
+  it('rejects an empty architecture list before packaging', async () => {
+    await expect(
       packer.packPortable({ output: directory, applications: directory, architectures: [] }),
-    ).toThrow(/architectures/)
+    ).rejects.toThrow(/architectures/)
   })
 })
 
