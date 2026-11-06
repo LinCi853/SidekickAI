@@ -37,10 +37,13 @@ export interface ComponentIdentity {
 }
 export function componentMetadata(identity: ComponentIdentity) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     protocolVersion: 1,
     ...identity,
-    executable: 'node.exe',
+    runtime: {
+      executable: 'SidekickAI.exe',
+      environment: { ELECTRON_RUN_AS_NODE: '1' },
+    },
     arguments: ['backup-component.cjs'],
     operations,
     formats,

@@ -201,9 +201,7 @@ test('green archive drops the maintenance runtime and carries the bundled uninst
   const hostBackup = path.join(source, 'resources', 'host-backup')
   fs.mkdirSync(hostBackup, { recursive: true })
   for (const [name, bytes] of Object.entries({
-    'node.exe': pe('x64'),
     'backup-component.cjs': Buffer.from('fixture backup component'),
-    'LICENSE.node.txt': Buffer.from('node license'),
     'LICENSE.application.txt': Buffer.from('application license'),
     'THIRD-PARTY-NOTICES.txt': Buffer.from('notices'),
     'component.json': Buffer.from('{}'),
@@ -226,8 +224,8 @@ test('green archive drops the maintenance runtime and carries the bundled uninst
   assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
   assert.ok(names.includes('SidekickAI/uninstall.exe'))
   assert.ok(names.includes('SidekickAI/product-edition.json'))
-  // 源目录多出 6 个维护期运行时文件，包内不计入；新增 3 个卸载器文件与 portable.txt
-  assert.equal(files.length, u.listFiles(source, new Set()).length - 6 + 4)
+  // 源目录多出 4 个维护期组件文件，包内不计入；新增 3 个卸载器文件与 portable.txt
+  assert.equal(files.length, u.listFiles(source, new Set()).length - 4 + 4)
   assert.equal(files.length, baseline.length)
 })
 

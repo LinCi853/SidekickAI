@@ -3,8 +3,6 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { builtinModules } = require('node:module')
-const { pipeline } = require('node:stream/promises')
-const { Readable } = require('node:stream')
 const esbuild = require('esbuild')
 const u = require('./build-utils.cjs')
 const root = path.resolve(__dirname, '..')
@@ -91,61 +89,15 @@ function bundledNotices(metadata) {
     .join('\n----------------------------------------\n\n')
 }
 
-function verifyNode(file, architecture) {
-  u.assertFile(file)
-  const contract = require('../packages/backup-core/runtime-manifest.json')
-  if (
-    u.sha256(file) !== contract.architectures[architecture] ||
-    u.peInfo(fs.readFileSync(file)).arch !== architecture
-  )
-    throw new Error('Pinned host backup Node runtime mismatch')
-}
-
-async function runtime(architecture, cacheRoot = process.env.SIDEKICK_BACKUP_RUNTIME_CACHE) {
-  const contract = require('../packages/backup-core/runtime-manifest.json')
-  const local = path.join(root, 'build/host-backup-runtime', architecture)
-  const candidates = [cacheRoot && path.resolve(cacheRoot, architecture), local].filter(Boolean)
-  for (const directory of candidates) {
-    const file = path.join(directory, 'node.exe')
-    if (!fs.existsSync(file)) continue
-    verifyNode(file, architecture)
-    const license = path.join(directory, 'LICENSE.txt')
-    u.assertFile(license)
-    return { executable: file, license }
-  }
-  fs.mkdirSync(local, { recursive: true })
-  const executable = path.join(local, 'node.exe')
-  const temporary = executable + '.download'
-  try {
-    const response = await fetch(
-      `https://nodejs.org/dist/v${contract.nodeVersion}/win-${architecture}/node.exe`,
-    )
-    if (!response.ok || !response.body)
-      throw new Error('Cannot download pinned host backup runtime')
-    await pipeline(
-      Readable.fromWeb(response.body),
-      fs.createWriteStream(temporary, { flags: 'wx' }),
-    )
-    verifyNode(temporary, architecture)
-    const licenseResponse = await fetch(
-      `https://raw.githubusercontent.com/nodejs/node/v${contract.nodeVersion}/LICENSE`,
-    )
-    if (!licenseResponse.ok) throw new Error('Cannot obtain Node redistribution license')
-    const license = path.join(local, 'LICENSE.txt')
-    fs.writeFileSync(license, await licenseResponse.text(), { flag: 'wx' })
-    fs.renameSync(temporary, executable)
-    return { executable, license }
-  } finally {
-    fs.rmSync(temporary, { force: true })
-  }
-}
-
 function descriptorMetadata(architecture) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     protocolVersion: 1,
     ...identity(architecture),
-    executable: 'node.exe',
+    runtime: {
+      executable: 'SidekickAI.exe',
+      environment: { ELECTRON_RUN_AS_NODE: '1' },
+    },
     arguments: ['backup-component.cjs'],
     operations: ['describe', 'export', 'verify', 'decrypt', 'restore'],
     formats: [
@@ -181,9 +133,7 @@ function verifyComponent(directory, architecture) {
   )
     throw new Error('Invalid host backup descriptor')
   const expected = new Set([
-    'node.exe',
     'backup-component.cjs',
-    'LICENSE.node.txt',
     'LICENSE.application.txt',
     'THIRD-PARTY-NOTICES.txt',
   ])
@@ -197,21 +147,13 @@ function verifyComponent(directory, architecture) {
   }
   if (expected.size || u.listFiles(directory, new Set()).length !== files.length + 1)
     throw new Error('Incomplete host backup closure')
-  verifyNode(path.join(directory, 'node.exe'), architecture)
   return descriptor
 }
 
-async function buildComponent(directory, architecture, settings = {}) {
-  const binaries = await runtime(architecture, settings.runtimeCache)
+async function buildComponent(directory, architecture) {
   const output = await bundle(architecture)
   if (fs.existsSync(directory)) throw new Error('Host backup output already exists')
   fs.mkdirSync(directory, { recursive: true })
-  fs.copyFileSync(binaries.executable, path.join(directory, 'node.exe'), fs.constants.COPYFILE_EXCL)
-  fs.copyFileSync(
-    binaries.license,
-    path.join(directory, 'LICENSE.node.txt'),
-    fs.constants.COPYFILE_EXCL,
-  )
   fs.copyFileSync(
     path.join(root, 'LICENSE'),
     path.join(directory, 'LICENSE.application.txt'),

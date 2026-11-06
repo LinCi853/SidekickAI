@@ -26,7 +26,7 @@ function request(operation, fields = {}) {
     ...fields,
   }
 }
-function invoke(raw, executable = process.execPath, entry = script) {
+function invoke(raw, executable = process.execPath, entry = script, environment = {}) {
   const result = spawnSync(executable, [entry], {
     input: typeof raw === 'string' ? raw : JSON.stringify(raw),
     cwd: base,
@@ -34,7 +34,7 @@ function invoke(raw, executable = process.execPath, entry = script) {
     encoding: 'utf8',
     maxBuffer: 17 * 1024 * 1024,
     timeout: 60000,
-    env: { ...process.env, NODE_OPTIONS: '', ELECTRON_RUN_AS_NODE: '' },
+    env: { ...process.env, NODE_OPTIONS: '', ELECTRON_RUN_AS_NODE: '', ...environment },
   })
   assert.ifError(result.error)
   const response = JSON.parse(result.stdout)
@@ -337,17 +337,25 @@ test('builtins guard rejects external dependencies', () => {
   )
 })
 
-test('packaged component closes runtime inventory, executes pinned x64 Node, and rejects changed closure', {
-  skip: !process.env.SIDEKICK_BACKUP_RUNTIME_CACHE,
-}, async () => {
+test('packaged component closes its script closure, declares the in-place host and rejects changed closure', async () => {
   for (const architecture of ['x64', 'arm64']) {
     const directory = path.join(base, `component-${architecture}`)
     const descriptor = await builder.buildComponent(directory, architecture)
+    assert.equal(descriptor.schemaVersion, 2)
+    assert.equal(descriptor.executable, undefined)
+    assert.deepEqual(descriptor.runtime, {
+      executable: 'SidekickAI.exe',
+      environment: { ELECTRON_RUN_AS_NODE: '1' },
+    })
     assert.equal(
       descriptor.files.some((file) => file.path === 'component.json'),
       false,
     )
-    assert.equal(descriptor.files.length, 5)
+    assert.equal(
+      descriptor.files.some((file) => /\.exe$/i.test(file.path)),
+      false,
+    )
+    assert.equal(descriptor.files.length, 3)
     assert.deepEqual(descriptor, builder.verifyComponent(directory, architecture))
     if (architecture === 'x64') {
       const application = await require('./test-fixtures/application-runtime.cjs').createRuntime(
@@ -376,21 +384,16 @@ test('packaged component closes runtime inventory, executes pinned x64 Node, and
         artifact.path,
         artifact.manifest,
       )
-      const result = invoke(
-        request('describe'),
-        path.join(directory, 'node.exe'),
-        path.join(directory, 'backup-component.cjs'),
-      )
+      // The installed host is not present in a source checkout; the same script
+      // is exercised through the current Node with the declared environment.
+      const entry = path.join(directory, 'backup-component.cjs')
+      const environment = descriptor.runtime.environment
+      const result = invoke(request('describe'), process.execPath, entry, environment)
       const { files, ...expected } = descriptor
       assert.deepEqual(result.result, expected)
       const target = fixture()
       const { directory: unused, ...input } = target
-      const native = (value) =>
-        invoke(
-          value,
-          path.join(directory, 'node.exe'),
-          path.join(directory, 'backup-component.cjs'),
-        )
+      const native = (value) => invoke(value, process.execPath, entry, environment)
       const captured = native(
         request('export', { ...input, format: 'sabackup', password: 'native-fixture-password' }),
       )
