@@ -27,10 +27,6 @@ export const bootstrapApi = {
     ipcRenderer.on(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.SETTINGS_WINDOW_NAVIGATE, handler)
   },
-  /** 打开历史记录与下载管理独立窗口（单例） */
-  openHistoryDownloadWindow: () => {
-    return ipcRenderer.invoke(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN)
-  },
   /** 打开 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话） */
   openAdvancedPanelWindow: (providerId?: string) => {
     return ipcRenderer.invoke(IPC_CHANNELS.ADVANCED_PANEL_OPEN, providerId)

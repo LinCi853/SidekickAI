@@ -12,7 +12,6 @@ import {
 } from '../platform/window/containers/popup-windows.js'
 import { showOnboardingWindow } from '../platform/window/containers/onboarding-window.js'
 import { createBrowserWindow } from '../browser/browser-window.js'
-import { showHistoryDownloadWindow } from '../browser/history-download-window.js'
 import { browserWindowStore } from '../browser/browser-window-store.js'
 
 type EditorOptions = { platformId?: string; profileId?: string; mode?: 'edit' | 'create' }
@@ -41,7 +40,6 @@ const singletonKeys = [
   'onboardingWindow',
   'dataExportWindow',
   'settingsWindow',
-  'historyDownloadWindow',
 ] as const
 
 function targetFor(window: BrowserWindow): Target | null {
@@ -156,9 +154,6 @@ async function openTarget(target: Target): Promise<BrowserWindow | null> {
           : (target.editor.profileId ?? target.editor.platformId ?? 'default')
       return windowState.aiAppEditorWindows.get(key) ?? null
     }
-    case 'historyDownloadWindow':
-      showHistoryDownloadWindow()
-      return windowState.historyDownloadWindow
     case 'browser': {
       if (typeof target.id !== 'string' || typeof target.profileId !== 'string')
         throw new Error('Invalid browser recovery target')

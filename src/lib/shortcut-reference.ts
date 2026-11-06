@@ -25,7 +25,6 @@ export type ShortcutPageId =
   | 'data-export'
   | 'settings'
   | 'browser'
-  | 'history-download'
 
 /**
  * 从 URL 推导当前页面 ID（与 App.tsx 的路由判定顺序保持一致）。
@@ -47,7 +46,6 @@ export function getShortcutPageId(search?: string): ShortcutPageId {
   if (mode === 'data-export') return 'data-export'
   if (mode === 'settings') return 'settings'
   if (mode === 'browser') return 'browser'
-  if (mode === 'history-download') return 'history-download'
   return windowId === 'main' ? 'main' : 'standalone'
 }
 
@@ -66,7 +64,6 @@ export const SHORTCUT_PAGE_TITLES: Record<ShortcutPageId, string> = {
   'data-export': '数据导出',
   settings: '设置',
   browser: '浏览器',
-  'history-download': '历史与下载',
 }
 
 /** 全局热键展示元信息（实际键位运行时从主进程 getHotkeys() 读取） */

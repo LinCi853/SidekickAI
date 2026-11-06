@@ -38,11 +38,6 @@
       "kind": "dynamic"
     },
     {
-      "from": "electron/browser/history-download-window.ts",
-      "to": "electron/platform/window/helpers.ts",
-      "kind": "value"
-    },
-    {
       "from": "electron/browser/profile-store.ts",
       "to": "electron/browser/download-handler.ts",
       "kind": "dynamic"

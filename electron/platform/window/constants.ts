@@ -13,5 +13,3 @@ export const PROMPT_WINDOW_ID = 'prompts'
 export const ADVANCED_PANEL_WINDOW_ID = 'advanced-panel'
 // 引导独立窗口（单例，首次启动或「使用指南」入口）
 export const ONBOARDING_WINDOW_ID = 'onboarding'
-// 历史记录与下载管理独立窗口（单例，导航历史 + 下载管理）
-export const HISTORY_DOWNLOAD_WINDOW_ID = 'history-download'

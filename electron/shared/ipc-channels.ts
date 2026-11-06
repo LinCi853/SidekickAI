@@ -342,8 +342,6 @@ export const IPC_CHANNELS = {
   // 主进程 → 设置窗口渲染：单例窗口复用时通知切换到指定分类
   // 载荷：{ category: SettingsCategory }
   SETTINGS_WINDOW_NAVIGATE: 'settings-window:navigate',
-  // 历史记录与下载管理独立窗口（单例）
-  HISTORY_DOWNLOAD_OPEN: 'history-download:open',
   // 进阶面板（单例，承载内置 AI/自定义供应商/自定义对话）
   ADVANCED_PANEL_OPEN: 'advancedPanel:open',
   ADVANCED_PANEL_TOGGLE: 'advancedPanel:toggle',

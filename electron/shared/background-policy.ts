@@ -42,7 +42,7 @@ export const BROWSER_WINDOW_RETIREMENT_SECONDS = RETIRE_BROWSER_SECONDS
  */
 export function windowRetirementSeconds(windowId: string, lowMemoryMode = false): number {
   let base: number
-  if (['history', 'prompts', 'history-download'].includes(windowId)) {
+  if (['history', 'prompts'].includes(windowId)) {
     base = RETIRE_LIGHTWEIGHT_SECONDS
   } else if (windowId === 'main') {
     base = RETIRE_MAIN_SECONDS

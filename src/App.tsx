@@ -57,7 +57,6 @@ const DataExportWindow = lazy(() => import('./pages/DataExportWindow'))
 const OnboardingView = lazy(() => import('./pages/OnboardingView'))
 const SettingsView = lazy(() => import('./pages/SettingsView'))
 const BrowserView = lazy(() => import('./pages/BrowserView'))
-const HistoryDownloadView = lazy(() => import('./pages/HistoryDownloadView'))
 
 /* =====================================================================
    ErrorBoundary —— 已抽离到 components/AppErrorBoundary.tsx：
@@ -160,7 +159,6 @@ export default function App() {
   const isDataExport = mode === 'data-export'
   const isSettings = mode === 'settings'
   const isBrowser = mode === 'browser'
-  const isHistoryDownload = mode === 'history-download'
 
   // chat/preview/history/prompts/ai-app-editor/advanced-panel/onboarding/data-export 窗口无需初始化 TabStore/ProfileStore，直接渲染
   // 设置窗口需要加载 ProfileStore（AI 应用卡片依赖），但不需 TabStore
@@ -175,8 +173,7 @@ export default function App() {
       isOnboarding ||
       isDataExport ||
       isSettings ||
-      isBrowser ||
-      isHistoryDownload
+      isBrowser
     ) {
       // 模块状态先行加载（路由门控与进阶面板 tab 依赖），就绪后才 ready，保证首帧即有状态
       void useModuleStore
@@ -310,7 +307,6 @@ export default function App() {
     isDataExport,
     isSettings,
     isBrowser,
-    isHistoryDownload,
   ])
 
   // 录音指示器窗口：添加透明背景类
@@ -527,14 +523,6 @@ export default function App() {
       </AppErrorBoundary>
     )
   }
-  if (isHistoryDownload && !moduleEnabled('browser')) {
-    return (
-      <AppErrorBoundary>
-        <div style={{ height: '100vh' }} />
-      </AppErrorBoundary>
-    )
-  }
-
   if (isRecordIndicator)
     return (
       <AppErrorBoundary>
@@ -612,14 +600,6 @@ export default function App() {
       <AppErrorBoundary>
         <Suspense fallback={<LoadingScreen />}>
           <BrowserView />
-        </Suspense>
-      </AppErrorBoundary>
-    )
-  if (isHistoryDownload)
-    return (
-      <AppErrorBoundary>
-        <Suspense fallback={<LoadingScreen />}>
-          <HistoryDownloadView />
         </Suspense>
       </AppErrorBoundary>
     )

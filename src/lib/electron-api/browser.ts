@@ -268,12 +268,6 @@ export async function clearAllNavHistory(profileId?: string): Promise<void> {
   return api.navHistory.clearAll(profileId)
 }
 
-/** 打开历史记录与下载管理独立窗口（单例） */
-export async function openHistoryDownloadWindow(): Promise<void> {
-  const api = requireElectron()
-  return api.openHistoryDownloadWindow()
-}
-
 /** 浏览器窗口关闭时，将当前标签迁移回主窗口 */
 export function browserTabMigrateBack(payload: {
   profileId: string

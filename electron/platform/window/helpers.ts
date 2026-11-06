@@ -33,7 +33,6 @@ export {
   PROMPT_WINDOW_ID,
   ADVANCED_PANEL_WINDOW_ID,
   ONBOARDING_WINDOW_ID,
-  HISTORY_DOWNLOAD_WINDOW_ID,
 } from './constants.js'
 
 // —— 路径 ——

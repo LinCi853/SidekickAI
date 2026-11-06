@@ -9,7 +9,6 @@ import { registerBrowserIpc } from '../../../browser/browser-ipc.js'
 import { registerBrowserTabAudioIpc } from '../../../browser/browser-tab-audio-ipc.js'
 import { registerCursorIpc } from '../../../browser/cursor.js'
 import { createBrowserWindow } from '../../../browser/browser-window.js'
-import { showHistoryDownloadWindow } from '../../../browser/history-download-window.js'
 import {
   searchHistoryStore,
   closeSearchHistoryStore,
@@ -41,9 +40,6 @@ export async function initBrowserModule(): Promise<void> {
   )
   registerBrowserTabAudioIpc({})
   registerCursorIpc(scope)
-  scope.ipcHandle(IPC_CHANNELS.HISTORY_DOWNLOAD_OPEN, () => {
-    showHistoryDownloadWindow()
-  })
 }
 
 export async function teardownBrowserModule(): Promise<void> {

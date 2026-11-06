@@ -12,7 +12,6 @@ import {
   PROMPT_WINDOW_ID,
   ADVANCED_PANEL_WINDOW_ID,
   ONBOARDING_WINDOW_ID,
-  HISTORY_DOWNLOAD_WINDOW_ID,
 } from './constants.js'
 
 /**
@@ -53,7 +52,6 @@ export function findWindowIdByWin(win: BrowserWindow): string | null {
   if (win === windowState.promptWindow) return PROMPT_WINDOW_ID
   if (win === windowState.advancedPanelWindow) return ADVANCED_PANEL_WINDOW_ID
   if (win === windowState.onboardingWindow) return ONBOARDING_WINDOW_ID
-  if (win === windowState.historyDownloadWindow) return HISTORY_DOWNLOAD_WINDOW_ID
   if (win === windowState.previewWindow) return 'preview'
   for (const [id, w] of windowState.detachedWindows) {
     if (w === win) return id

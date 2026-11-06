@@ -35,7 +35,6 @@ vi.mock('../platform/window/containers/onboarding-window.js', () => ({
   showOnboardingWindow: vi.fn(),
 }))
 vi.mock('../browser/browser-window.js', () => ({ createBrowserWindow: test.createBrowser }))
-vi.mock('../browser/history-download-window.js', () => ({ showHistoryDownloadWindow: vi.fn() }))
 vi.mock('../browser/browser-window-store.js', () => ({
   browserWindowStore: { get: () => test.browserState },
 }))

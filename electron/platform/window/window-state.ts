@@ -35,8 +35,6 @@ export const windowState = {
   dataExportWindow: null as BrowserWindow | null,
   // 设置独立窗口（单例，左导航+右内容布局）
   settingsWindow: null as BrowserWindow | null,
-  // 历史记录与下载管理独立窗口（单例，左导航+右内容布局）
-  historyDownloadWindow: null as BrowserWindow | null,
   // AI 应用编辑独立窗口（按 platformId 多例）：platformId -> BrowserWindow
   aiAppEditorWindows: new Map<string, BrowserWindow>(),
   // 后台语音录音指示器（Alt+V 录音时显示的 32x32 红点）

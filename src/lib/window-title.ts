@@ -10,7 +10,6 @@ const windowNames: Record<string, string> = {
   'data-export': '数据迁移',
   onboarding: '使用指南',
   browser: '浏览器',
-  'history-download': '历史记录与下载管理',
 }
 
 export function formatWindowTitle(value?: string | null): string {

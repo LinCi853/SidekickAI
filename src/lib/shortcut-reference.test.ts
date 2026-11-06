@@ -20,7 +20,6 @@ describe('getShortcutPageId', () => {
     expect(getShortcutPageId('?windowId=s1&mode=settings')).toBe('settings')
     expect(getShortcutPageId('?windowId=s1&mode=browser')).toBe('browser')
     expect(getShortcutPageId('?windowId=s1&mode=advanced-panel')).toBe('advanced-panel')
-    expect(getShortcutPageId('?windowId=s1&mode=history-download')).toBe('history-download')
   })
 
   it('gives every page id a display title', () => {
