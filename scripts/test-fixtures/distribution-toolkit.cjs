@@ -68,7 +68,7 @@ function zipBytes(entries) {
   return Buffer.concat([...locals, central, end])
 }
 
-// Mirrors the 0.1.13 toolkit: a fixed twenty-three-file layout with no toolkit manifest. Archive
+// Mirrors the 0.1.15 toolkit: a fixed twenty-three-file layout with no toolkit manifest. Archive
 // identity comes from the pinned reference; extracted content is bound to this inventory.
 function toolkitFixture() {
   const entries = []

@@ -12,9 +12,9 @@
 
 | 项       | 值                                                                 |
 | -------- | ------------------------------------------------------------------ |
-| 版本     | 0.1.13                                                             |
-| 归档字节 | 71,042,293                                                         |
-| SHA-256  | `06d9476a118f886210825254f71c65dad41141dbf59dcd8dd97a1f9652dab6b1` |
+| 版本     | 0.1.15                                                             |
+| 归档字节 | 71,064,585                                                         |
+| SHA-256  | `86f3aa8418e356c6b9c8aebcddda7862a6cb0df025b1b574a35e605411e096f9` |
 
 版本、大小与摘要同时固定在 `scripts/distribution-toolkit-release.cjs` 与 `contracts/distribution-toolkit.json`，不接受跳过固定值校验的开关。默认引用以 `archive.path` 指向工作区内的真实归档；`local/` 不纳入源码提交，公开检出需自行放置该固定归档。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，不改变版本、大小、摘要或信任锚。
 
@@ -37,7 +37,7 @@ AppLifecycleToolkit.exe assemble --package-dir <绝对目录> --edition concept 
 
 0.1.8 起 `lifecycle-package.json` 新增 `payloadPackages`，按 `path` 升序列出每个载荷包的 `{path, sha256, sizeBytes}`，并与 `packages[]` 的归档一一对应；`packageSetDigest = sha256(canonicalJson(payloadPackages))`（对象键升序、无空白、UTF-8），写入包内签名信封声明，`verify-package-spec` 按声明复算比对。缺少 `payloadPackages` 的旧包会被 0.1.8 判为 `PAYLOAD_INVALID`，因此每个批次都必须用它构建时所用的工具包版本来复核；需要验收历史批次时，同时保留对应的旧版归档。
 
-`assemble` 只嵌入传入的包目录。每个架构必须使用只含该架构载荷的生命周期包：把两个架构都放进同一个包目录会让每份安装器都内嵌全部架构的载荷。本仓按架构分别构建包规格，x64 官方安装器因此保持约 203 MB，而不是把双架构载荷重复打包。
+`assemble` 只嵌入传入的包目录。每个架构必须使用只含该架构载荷的生命周期包：把两个架构都放进同一个包目录会让每份安装器都内嵌全部架构的载荷。本仓按架构分别构建包规格，备份组件改为调用应用本体后，x64 官方安装器约 167 MB，而不是把双架构载荷重复打包。
 
 ## 域与身份
 
