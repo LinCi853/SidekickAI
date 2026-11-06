@@ -450,7 +450,7 @@ test('download responses cannot change an HTTPS reference to an unapproved trans
   )
 })
 
-test('the published inventory is the fixed twenty-three-file 0.1.11 layout without a manifest', () => {
+test('the published inventory is the fixed twenty-three-file 0.1.13 layout without a manifest', () => {
   const expected = [
     'bin/AppLifecycleToolkit.exe',
     'README.md',
