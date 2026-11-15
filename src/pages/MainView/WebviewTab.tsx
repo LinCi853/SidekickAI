@@ -16,7 +16,7 @@ import { useEnterToSendFlag } from './hooks/useEnterToSendFlag'
 
 /* =====================================================================
    WebviewTab —— 单个标签的 webview（自管理指纹注入与导航）
-   webview 首次选中时加载，此后保持挂载，仅切换可见性以保留运行状态。
+   webview 首次选中时加载，此后保持挂载，仅切换 display 以保留运行状态。
    具体职责已拆分至 src/pages/MainView/hooks/ 下的独立 hook。
    ===================================================================== */
 
@@ -177,8 +177,11 @@ export function WebviewTab({
         border: 'none',
         outline: 'none',
         boxShadow: 'none',
-        display: 'flex',
-        visibility: active ? 'visible' : 'hidden',
+        // 后台标签不能只用 visibility:hidden：guest 合成表面仍在，其 CSS 动画时钟会冻结。
+        // 站点在后台弹出的对话框会永远停在起始帧，只剩遮罩层，切回后也只看到整页变色。
+        // display:none 会拆掉合成表面，重新显示时重建并立即恢复出帧；guest 进程、DOM、
+        // 存储与定时器保持不变。
+        display: active ? 'flex' : 'none',
         position: 'absolute',
         inset: 0,
         width: '100%',
