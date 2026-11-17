@@ -8,28 +8,32 @@ export interface RuntimePaths {
   portableRoot?: string
 }
 
-export function portableRoot(executable: string): string | undefined {
-  const directory = path.dirname(executable)
-  const marker = path.join(directory, 'portable.txt')
-  const parent = path.dirname(directory)
-  const layoutPath = path.join(parent, 'portable-layout.json')
-  const hasLayout =
-    Object.values(product.portable.runtimes).includes(path.basename(directory)) &&
-    existsSync(layoutPath)
-  if (!existsSync(marker)) {
-    if (hasLayout) throw new Error('Portable runtime marker is missing')
-    return undefined
-  }
-  if (!lstatSync(marker).isFile()) throw new Error('Invalid portable runtime marker')
-  const markerTitle = readFileSync(marker, 'utf8')
+// 绿色包标记：包根 portable.txt 的内容固定为 portable。
+const PORTABLE_MARKER = 'portable'
+// 旧绿色包使用的标记标题仍被接受，保证已发布的绿色包继续按便携模式运行。
+const LEGACY_MARKERS = new Set([
+  'AI Window Portable Mode Marker',
+  'SidekickAI Dual Architecture Portable Marker',
+])
+
+function markerTitle(file: string): string {
+  if (!lstatSync(file).isFile()) throw new Error('Invalid portable runtime marker')
+  return readFileSync(file, 'utf8')
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/, 1)[0]
-  const dualArchitecture = markerTitle === 'SidekickAI Dual Architecture Portable Marker'
-  if (!dualArchitecture && markerTitle !== 'AI Window Portable Mode Marker') {
-    throw new Error('Invalid portable runtime marker')
+    .trim()
+}
+
+function assertMarker(title: string, layoutPresent: boolean): void {
+  if (title === 'SidekickAI Dual Architecture Portable Marker') {
+    if (!layoutPresent) throw new Error('Portable layout is missing')
+    return
   }
-  if (dualArchitecture && !hasLayout) throw new Error('Portable layout is missing')
-  if (!hasLayout) return directory
+  if (title !== PORTABLE_MARKER && !LEGACY_MARKERS.has(title))
+    throw new Error('Invalid portable runtime marker')
+}
+
+function assertLayout(layoutPath: string): void {
   if (!lstatSync(layoutPath).isFile()) throw new Error('Invalid portable layout file')
   const layout = JSON.parse(readFileSync(layoutPath, 'utf8'))
   const expected = product.portable
@@ -44,7 +48,36 @@ export function portableRoot(executable: string): string | undefined {
   ) {
     throw new Error('Portable layout does not match this application')
   }
-  return parent
+}
+
+export function portableRoot(executable: string): string | undefined {
+  const directory = path.dirname(executable)
+  const parent = path.dirname(directory)
+  const knownRuntime = Object.values(product.portable.runtimes).includes(path.basename(directory))
+  const layoutPath = path.join(parent, 'portable-layout.json')
+  const hasLayout = knownRuntime && existsSync(layoutPath)
+  const marker = path.join(directory, 'portable.txt')
+  const packagedMarker = path.join(parent, 'portable.txt')
+
+  if (existsSync(marker)) {
+    const title = markerTitle(marker)
+    assertMarker(title, hasLayout)
+    if (!hasLayout) return directory
+    assertLayout(layoutPath)
+    return parent
+  }
+
+  // 双架构绿色包把标记放在包根。只有已知运行目录才回退到包根查找，
+  // 避免安装版把用户目录里的同名文件当成便携标记。
+  if (knownRuntime && existsSync(packagedMarker)) {
+    const title = markerTitle(packagedMarker)
+    assertMarker(title, hasLayout)
+    if (hasLayout) assertLayout(layoutPath)
+    return parent
+  }
+
+  if (hasLayout) throw new Error('Portable runtime marker is missing')
+  return undefined
 }
 
 export function resolveRuntimePaths(options: {

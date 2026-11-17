@@ -167,6 +167,7 @@ scripts/windows-executable-signing.cjs
 !scripts/application-payload.test.cjs
 !scripts/assemble-application.test.cjs
 !scripts/distribution-toolkit.test.cjs
+!scripts/portable-uninstall-contract.test.cjs
 !scripts/windows-packaging.test.cjs
 !scripts/clean-temp.test.cjs
 !scripts/sync-versions.test.cjs

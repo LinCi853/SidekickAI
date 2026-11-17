@@ -94,6 +94,22 @@ describe('runtime data boundaries', () => {
     expect(runtime.paths.userData).toBe(path.join(directory, 'data'))
   })
 
+  it('accepts the green package marker of a single architecture package', async () => {
+    fs.writeFileSync(path.join(directory, 'portable.txt'), 'portable')
+    await import('./runtime-environment')
+    expect(runtime.paths.userData).toBe(path.join(directory, 'data'))
+    expect(runtime.paths.sessionData).toBe(runtime.paths.userData)
+  })
+
+  it('accepts the package root marker of a dual architecture green package', async () => {
+    const executableDirectory = path.join(directory, product.portable.runtimes.x64)
+    fs.mkdirSync(executableDirectory, { recursive: true })
+    fs.writeFileSync(path.join(directory, 'portable.txt'), 'portable')
+    runtime.paths.exe = path.join(executableDirectory, 'SidekickAI.exe')
+    await import('./runtime-environment')
+    expect(runtime.paths.userData).toBe(path.join(directory, 'data'))
+  })
+
   it('accepts an explicit absolute disposable profile', async () => {
     const fixture = path.join(directory, 'fixture')
     vi.stubEnv('SIDEKICK_DATA_DIR', fixture)

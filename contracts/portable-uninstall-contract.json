@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "portable-uninstall-contract",
+  "marker": {
+    "path": "portable.txt",
+    "content": "portable"
+  },
+  "manifest": {
+    "path": "maintenance/portable.json",
+    "schemaVersion": 1,
+    "kind": "portable-manifest"
+  },
+  "product": {
+    "productId": "sidekickai-opensource"
+  },
+  "rootOwned": true,
+  "dataRoots": [{ "scope": "install-root", "path": "data", "recursive": true }],
+  "registrations": []
+}

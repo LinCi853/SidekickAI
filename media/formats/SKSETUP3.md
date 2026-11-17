@@ -34,7 +34,7 @@ ZIP 旁边的 `.manifest.json` 是无 BOM 的 UTF-8 JSON，使用以下字段；
 | size           | 非负整数 | 解压后的文件字节数；单文件及全部文件总和均不超过 8,589,934,592 字节（8 GiB） |
 | sha256         | 字符串   | 文件原始字节的 SHA-256，小写十六进制 64 字符                                 |
 
-长度和文件数量均使用可精确表示的整数。路径拒绝反斜杠、冒号、控制字符、`< > " | ? *`、空路径段、`.`、`..`、以点或空格结尾的路径段及 Windows 保留设备名；文件路径不能同时充当另一文件的目录。不得以 SidekickAI、win-unpacked 或 win-arm64-unpacked 增加外层目录，也不得混入 portable.txt、portable-layout.json 或 portable-manifest.json。
+长度和文件数量均使用可精确表示的整数。路径拒绝反斜杠、冒号、控制字符、`< > " | ? *`、空路径段、`.`、`..`、以点或空格结尾的路径段及 Windows 保留设备名；文件路径不能同时充当另一文件的目录。不得以 SidekickAI、win-unpacked 或 win-arm64-unpacked 增加外层目录，也不得混入 portable.txt、portable-layout.json、portable-manifest.json 或 maintenance/portable.json。
 
 读取者先检查清单的格式、产品身份、版本和架构，再检查 ZIP 大小与摘要。随后在隔离目录内按相对路径核对全部条目；必须拒绝绝对路径、目录逃逸、重名或大小写冲突、符号链接与其他特殊文件、未声明文件、缺失文件以及大小或摘要不符的文件。目录条目只能表示清单中文件所需的祖先目录，不能夹带其他空目录。清单本身放在 ZIP 外部，不作为 ZIP 内应用文件的一部分；组装输入的清单文件不得超过 4,194,304 字节。
 

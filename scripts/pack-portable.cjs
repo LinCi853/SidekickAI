@@ -15,23 +15,23 @@ const {
 const product = require('../packages/product-contract/manifest.json')
 const selection = require('../product-edition.json')
 const runtime = require('./application-runtime.cjs')
+const portableContract = require('./portable-uninstall-contract.cjs')
 
 const DIRECTORY_NAME = product.name
 const LAYOUT = product.portable
 // 单架构便携包：应用目录即包根，数据目录位于应用目录内（应用原生单目录便携模式）
-const SINGLE_MARKER = 'AI Window Portable Mode Marker\n'
 const MIN_ZIP_BYTES = 90 * 1024 * 1024
-const UNINSTALLER_FILES = ['uninstall.exe', 'uninstall-manifest.json', 'product-edition.json']
-// A portable user has no installation record, so the archive ships its own uninstaller triple
-// (program, manifest and edition selection) at the application root to remove data, cache and
-// registry residue. It is a required component, not installation-flow metadata.
+// 绿色包不自带卸载器：卸载由通用卸载器按包内契约执行，包内只保留契约文件。
+const CONTRACT = portableContract.loadContract(ROOT)
+const MARKER_PATH = CONTRACT.marker.path
+const MANIFEST_PATH = CONTRACT.manifest.path
+// 旧绿色包使用的标记标题仍被运行时接受，构建时遇到即视为已知来源。
+const LEGACY_MARKER = 'AI Window Portable Mode Marker'
 const REQUIRED_ENTRIES = [
   `${DIRECTORY_NAME}/${product.executable}`,
   `${DIRECTORY_NAME}/resources/app.asar`,
-  `${DIRECTORY_NAME}/portable.txt`,
-  `${DIRECTORY_NAME}/uninstall.exe`,
-  `${DIRECTORY_NAME}/uninstall-manifest.json`,
-  `${DIRECTORY_NAME}/product-edition.json`,
+  `${DIRECTORY_NAME}/${MARKER_PATH}`,
+  `${DIRECTORY_NAME}/${MANIFEST_PATH}`,
 ]
 // Installation-flow metadata would make the green package depend on an installation record.
 const INSTALLATION_METADATA = [
@@ -47,9 +47,9 @@ function validatePortablePath(name) {
   const relative = normalized.startsWith(`${DIRECTORY_NAME}/`)
     ? normalized.slice(DIRECTORY_NAME.length + 1)
     : normalized
-  // Only the application-root uninstaller triple is accepted; every other path keeps the general
-  // rules, so maintenance tools, install receipts and runtime user data stay rejected.
-  if (UNINSTALLER_FILES.includes(relative)) return normalized
+  // 便携卸载契约文件是绿色包的必需组成；其余路径保持通用规则，
+  // 维护工具、安装凭据和运行期用户数据继续拒绝。
+  if (relative === MANIFEST_PATH) return normalized
   return runtime.validateSoftwarePath(normalized)
 }
 
@@ -172,7 +172,7 @@ function verifyZip(zipPath, minimumSize = MIN_ZIP_BYTES) {
 function assertNoInstallerElements(directory) {
   // A portable archive ships the source build as-is. Installation-flow metadata would make the
   // green package depend on an installation record, so its presence is a hard failure. The
-  // bundled uninstaller is injected from the lifecycle toolkit and is not part of this check.
+  // portable uninstall contract is written separately and is not part of this check.
   for (const relative of INSTALLATION_METADATA) {
     if (fs.existsSync(path.join(directory, ...relative.split('/'))))
       throw new Error(`Portable source contains installation metadata: ${relative}`)
@@ -188,7 +188,7 @@ function withoutMaintenanceRuntime(fingerprint) {
   return { fingerprint: u.hash(JSON.stringify(entries)), entries }
 }
 
-function stagePortableApplication(source, destination, arch, { uninstaller } = {}) {
+function stagePortableApplication(source, destination, arch) {
   validateArchitectures([arch])
   const relative = path.relative(path.resolve(source), path.resolve(destination))
   if (
@@ -202,15 +202,14 @@ function stagePortableApplication(source, destination, arch, { uninstaller } = {
   const { native } = verifyRuntime(source, arch, { allowPortable: true })
   verifyNativeFiles(source, arch)
   assertNoInstallerElements(source)
-  const existingMarker = path.join(source, 'portable.txt')
+  const existingMarker = path.join(source, MARKER_PATH)
   if (fs.existsSync(existingMarker)) {
     u.assertFile(existingMarker)
-    if (
-      fs
-        .readFileSync(existingMarker, 'utf8')
-        .replace(/^\uFEFF/, '')
-        .split(/\r?\n/, 1)[0] !== 'AI Window Portable Mode Marker'
-    )
+    const title = fs
+      .readFileSync(existingMarker, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/, 1)[0]
+    if (title !== CONTRACT.marker.content && title !== LEGACY_MARKER)
       throw new Error('Unexpected source portable marker')
   }
   fs.cpSync(source, destination, {
@@ -226,15 +225,8 @@ function stagePortableApplication(source, destination, arch, { uninstaller } = {
     withoutMaintenanceRuntime(applicationInputs),
     applicationFingerprint(destination),
   )
-  if (uninstaller) {
-    for (const name of UNINSTALLER_FILES)
-      fs.copyFileSync(
-        path.join(uninstaller, name),
-        path.join(destination, name),
-        fs.constants.COPYFILE_EXCL,
-      )
-  }
-  fs.writeFileSync(path.join(destination, 'portable.txt'), SINGLE_MARKER)
+  // 契约文件随包写入：包根标记与包内清单，缺一即不是可验证的绿色包。
+  portableContract.writePackageContract(destination, { contract: CONTRACT, version: VERSION })
   u.assertUnchanged(applicationInputs, applicationFingerprint(source))
   return {
     source,
@@ -245,33 +237,7 @@ function stagePortableApplication(source, destination, arch, { uninstaller } = {
   }
 }
 
-// 待后统一：工具包尚无便携包专用接口，这里直接读取既有的按版本/架构卸载器目录；
-// 工具包结构本身不做改动，后续统一入口时再替换这段读取。
-function portableUninstaller(toolkit, arch) {
-  if (!toolkit || !toolkit.directory)
-    throw new Error('Portable packaging requires the prepared lifecycle toolkit')
-  const directory = path.join(toolkit.directory, 'uninstallers', selection.edition, arch)
-  const executable = path.join(directory, 'uninstall.exe')
-  const manifestPath = path.join(directory, 'uninstall-manifest.json')
-  const editionPath = path.join(directory, 'product-edition.json')
-  u.assertFile(executable)
-  u.assertFile(manifestPath)
-  u.assertFile(editionPath)
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-  if (
-    manifest.protocolVersion !== 3 ||
-    manifest.edition !== selection.edition ||
-    manifest.arch !== arch
-  )
-    throw new Error('Portable uninstaller manifest does not match this edition and architecture')
-  if (manifest.size !== fs.statSync(executable).size || manifest.sha256 !== u.sha256(executable))
-    throw new Error('Portable uninstaller does not match its manifest')
-  if (JSON.parse(fs.readFileSync(editionPath, 'utf8')).edition !== selection.edition)
-    throw new Error('Portable uninstaller edition selection does not match this edition')
-  return directory
-}
-
-function packPortableArchitecture({ output, applications, arch, minimumZipBytes, uninstaller }) {
+function packPortableArchitecture({ output, applications, arch, minimumZipBytes }) {
   const staging = path.join(output, 'portable-staging', arch)
   const directory = path.join(staging, DIRECTORY_NAME)
   const zip = path.join(output, `SidekickAI-Portable-${VERSION}-${arch}-win.zip`)
@@ -279,8 +245,13 @@ function packPortableArchitecture({ output, applications, arch, minimumZipBytes,
     if (fs.existsSync(target)) throw new Error('Portable output already exists: ' + target)
   }
   const source = path.join(applications, LAYOUT.runtimes[arch])
-  const staged = stagePortableApplication(source, directory, arch, { uninstaller })
+  const staged = stagePortableApplication(source, directory, arch)
   fs.mkdirSync(path.join(directory, LAYOUT.dataDirectory), { recursive: true })
+  // 契约文件是包根的必需组成：写入后立即核对字节，导入后不得被改写或丢弃。
+  const uninstallContract = portableContract.verifyPackageContract(directory, {
+    contract: CONTRACT,
+    version: VERSION,
+  })
   const manifest = {
     schemaVersion: 1,
     edition: selection.edition,
@@ -289,7 +260,8 @@ function packPortableArchitecture({ output, applications, arch, minimumZipBytes,
     architectures: [arch],
     packageKind: 'portable',
     contents: {
-      uninstaller: '绿色包自带卸载器（程序、清单与版别选择），用于清理数据目录、缓存与注册表残留',
+      uninstallContract:
+        '包根 portable.txt 标记与 maintenance/portable.json 清单，供通用卸载器识别绿色包并按清单删除',
       excludedMaintenanceRuntime:
         'resources/host-backup 是维护期运行时，仅安装/卸载流程使用，不随绿色包分发',
     },
@@ -318,6 +290,7 @@ function packPortableArchitecture({ output, applications, arch, minimumZipBytes,
     path: zip,
     ...verification,
     directory,
+    uninstallContract,
     applicationInputs: staged.applicationInputs,
     inputs,
   }
@@ -328,7 +301,6 @@ async function packPortable({
   applications,
   architectures = ['x64', 'arm64'],
   minimumZipBytes = MIN_ZIP_BYTES,
-  toolkit,
 }) {
   validateArchitectures(architectures)
   if (!output || !applications)
@@ -339,7 +311,6 @@ async function packPortable({
     throw new Error(
       'Portable output already exists: ' + path.join(output, 'portable-evidence.json'),
     )
-  const prepared = toolkit || (await require('./distribution-toolkit.cjs').prepareToolkit(ROOT))
   const applicationInputs = {}
   const artifacts = []
   for (const arch of architectures) {
@@ -348,7 +319,6 @@ async function packPortable({
       applications,
       arch,
       minimumZipBytes,
-      uninstaller: portableUninstaller(prepared, arch),
     })
     applicationInputs[arch] = artifact.applicationInputs
     artifacts.push(artifact)

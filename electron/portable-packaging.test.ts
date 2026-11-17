@@ -135,13 +135,17 @@ describe('portable archive boundaries', () => {
     const target = zip([`SidekickAI/${name}`])
     expect(() => packer.verifyZip(target, 0)).toThrow()
   })
-  it('accepts the bundled uninstaller only at the application root', () => {
-    expect(packer.validatePortablePath('SidekickAI/uninstall.exe')).toBe('SidekickAI/uninstall.exe')
-    expect(packer.validatePortablePath('uninstall-manifest.json')).toBe('uninstall-manifest.json')
-    expect(packer.validatePortablePath('SidekickAI/product-edition.json')).toBe(
-      'SidekickAI/product-edition.json',
+  it('accepts the portable uninstall contract only at the package root', () => {
+    expect(packer.validatePortablePath('SidekickAI/maintenance/portable.json')).toBe(
+      'SidekickAI/maintenance/portable.json',
     )
-    expect(() => packer.validatePortablePath('SidekickAI/resources/uninstall.exe')).toThrow()
+    expect(packer.validatePortablePath('maintenance/portable.json')).toBe(
+      'maintenance/portable.json',
+    )
+    expect(() =>
+      packer.validatePortablePath('SidekickAI/resources/maintenance/portable.json'),
+    ).toThrow()
+    expect(() => packer.validatePortablePath('SidekickAI/uninstall.exe')).toThrow()
     expect(() => packer.validatePortablePath('SidekickAI/maintenance/uninstall.exe')).toThrow()
   })
   it('rejects corruption even with an intact central directory', () => {
@@ -203,9 +207,19 @@ describe('portable application staging', () => {
         arch,
       )
       expect(staged.native.arch).toBe(arch)
-      expect(fs.readFileSync(path.join(staged.directory, 'portable.txt'), 'utf8')).toBe(
-        'AI Window Portable Mode Marker\n',
-      )
+      expect(fs.readFileSync(path.join(staged.directory, 'portable.txt'), 'utf8')).toBe('portable')
+      expect(
+        JSON.parse(
+          fs.readFileSync(path.join(staged.directory, 'maintenance/portable.json'), 'utf8'),
+        ),
+      ).toEqual({
+        schemaVersion: 1,
+        kind: 'portable-manifest',
+        product: { productId: 'sidekickai-opensource', version: workspace.version },
+        rootOwned: true,
+        dataRoots: [{ scope: 'install-root', path: 'data', recursive: true }],
+        registrations: [],
+      })
       expect(u.fingerprint(source, u.listFiles(source, new Set()))).toEqual(before)
     },
   )

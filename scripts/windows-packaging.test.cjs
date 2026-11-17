@@ -8,41 +8,13 @@ const path = require('node:path')
 const AdmZip = require('adm-zip')
 const build = require('./application-packaging.cjs')
 const portable = require('./pack-portable.cjs')
-const { createRuntime, pe } = require('./test-fixtures/application-runtime.cjs')
+const { createRuntime } = require('./test-fixtures/application-runtime.cjs')
 const u = require('./build-utils.cjs')
 
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sidekick-windows-package-test-'))
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   return directory
-}
-
-function toolkitFixture(root) {
-  const directory = path.join(root, 'toolkit')
-  for (const arch of ['x64', 'arm64']) {
-    const source = path.join(directory, 'uninstallers', 'concept', arch)
-    fs.mkdirSync(source, { recursive: true })
-    const executable = path.join(source, 'uninstall.exe')
-    fs.writeFileSync(executable, pe(arch))
-    fs.writeFileSync(
-      path.join(source, 'uninstall-manifest.json'),
-      JSON.stringify({
-        protocolVersion: 3,
-        edition: 'concept',
-        componentVersion: 'fixture',
-        uninstallProtocolVersion: 2,
-        arch,
-        sha256: u.sha256(executable),
-        size: fs.statSync(executable).size,
-        inputFingerprint: u.hash('fixture'),
-      }),
-    )
-    fs.writeFileSync(
-      path.join(source, 'product-edition.json'),
-      JSON.stringify({ edition: 'concept' }, null, 2) + '\n',
-    )
-  }
-  return { directory }
 }
 
 test('each green archive carries one native runtime without recovery, installation state or official proofs', async (t) => {
@@ -56,7 +28,6 @@ test('each green archive carries one native runtime without recovery, installati
     output,
     applications,
     minimumZipBytes: 1,
-    toolkit: toolkitFixture(root),
   })
   assert.deepEqual(
     artifacts.map((artifact) => artifact.arch),
@@ -75,31 +46,44 @@ test('each green archive carries one native runtime without recovery, installati
       .map((entry) => entry.entryName)
     assert.ok(names.includes('SidekickAI/SidekickAI.exe'))
     assert.ok(names.includes('SidekickAI/resources/app.asar'))
-    // 便携用户没有安装登记，绿色包自带卸载器三元组清理数据目录、缓存与注册表残留
-    assert.ok(names.includes('SidekickAI/uninstall.exe'))
-    assert.ok(names.includes('SidekickAI/uninstall-manifest.json'))
-    assert.ok(names.includes('SidekickAI/product-edition.json'))
+    // 绿色包不带卸载器：卸载由通用卸载器按包内契约执行
+    assert.ok(!names.some((name) => /uninstall/i.test(name)))
     assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
-    const marker = zip.readFile('SidekickAI/portable.txt').toString('utf8')
-    assert.equal(
-      marker.replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0],
-      'AI Window Portable Mode Marker',
+    // 包根标记内容固定为 portable，通用卸载器据此识别绿色包
+    assert.equal(zip.readFile('SidekickAI/portable.txt').toString('utf8'), 'portable')
+    // 包内清单声明产品身份、安装根归属与数据根，卸载范围以此为准
+    const contract = JSON.parse(
+      zip.readFile('SidekickAI/maintenance/portable.json').toString('utf8'),
     )
+    assert.deepEqual(contract, {
+      schemaVersion: 1,
+      kind: 'portable-manifest',
+      product: { productId: 'sidekickai-opensource', version: build.VERSION },
+      rootOwned: true,
+      dataRoots: [{ scope: 'install-root', path: 'data', recursive: true }],
+      registrations: [],
+    })
     // 单架构包内只有本架构运行目录，不再有并列目录、启动器或布局契约文件
     assert.ok(
       !names.some((name) => name.startsWith('SidekickAI/' + build.TARGETS[arch].directory + '/')),
     )
     assert.ok(
       !names.some((name) =>
-        /(?:recover\.exe|maintenance|lifecycle-package|installation-contract|proof\.json|backup-runtime\.zip|install-receipt|Start-SidekickAI\.cmd|portable-layout\.json)/i.test(
+        /(?:recover\.exe|lifecycle-package|installation-contract|proof\.json|backup-runtime\.zip|install-receipt|Start-SidekickAI\.cmd|portable-layout\.json)/i.test(
           name,
         ),
+      ),
+    )
+    // 除契约清单外，包内不得混入其它维护期文件
+    assert.ok(
+      !names.some(
+        (name) => name.includes('/maintenance/') && name !== 'SidekickAI/maintenance/portable.json',
       ),
     )
     assert.ok(!names.some((name) => /^SidekickAI\/data\/.+/.test(name)))
     const manifest = JSON.parse(zip.readFile('SidekickAI/portable-manifest.json').toString())
     assert.deepEqual(manifest.architectures, [arch])
-    assert.match(manifest.contents.uninstaller, /卸载器/)
+    assert.match(manifest.contents.uninstallContract, /portable\.txt/)
     assert.match(manifest.contents.excludedMaintenanceRuntime, /host-backup/)
     for (const file of manifest.files) {
       const bytes = zip.readFile('SidekickAI/' + file.path)
@@ -123,7 +107,6 @@ test('each green archive carries one native runtime without recovery, installati
       output,
       applications,
       minimumZipBytes: 1,
-      toolkit: toolkitFixture(root),
     }),
     /already exists/,
   )
@@ -139,7 +122,6 @@ test('portable packaging can produce a single architecture archive on demand', a
     applications,
     architectures: ['x64'],
     minimumZipBytes: 1,
-    toolkit: toolkitFixture(root),
   })
   assert.equal(artifacts.length, 1)
   assert.equal(artifacts[0].arch, 'x64')
@@ -165,13 +147,17 @@ test('portable paths reject configuration secrets, maintenance tools and runtime
   ]) {
     assert.throws(() => portable.validatePortablePath(name), /non-distributable|user data/)
   }
+  // 绿色包只保留契约文件：卸载器三元组不再随包分发
   for (const name of [
     'uninstall.exe',
     'SidekickAI/uninstall.exe',
     'SidekickAI/uninstall-manifest.json',
-    'SidekickAI/product-edition.json',
   ])
-    assert.equal(portable.validatePortablePath(name), name)
+    assert.throws(() => portable.validatePortablePath(name), /non-distributable/)
+  assert.equal(
+    portable.validatePortablePath('SidekickAI/maintenance/portable.json'),
+    'SidekickAI/maintenance/portable.json',
+  )
   for (const name of ['resources/uninstall.exe', 'maintenance/uninstall.exe'])
     assert.throws(() => portable.validatePortablePath(name), /non-distributable/)
   assert.equal(
@@ -180,18 +166,16 @@ test('portable paths reject configuration secrets, maintenance tools and runtime
   )
 })
 
-test('green archive drops the maintenance runtime and carries the bundled uninstaller', async (t) => {
+test('green archive drops the maintenance runtime and carries the uninstall contract', async (t) => {
   const root = fixture(t)
   const applications = path.join(root, 'applications')
   const source = await createRuntime(applications, 'x64')
-  const toolkit = toolkitFixture(root)
   const plain = path.join(root, 'green-plain')
   await portable.packPortable({
     output: plain,
     applications,
     architectures: ['x64'],
     minimumZipBytes: 1,
-    toolkit,
   })
   const baseline = JSON.parse(
     new AdmZip(path.join(plain, `SidekickAI-Portable-${build.VERSION}-x64-win.zip`))
@@ -213,7 +197,6 @@ test('green archive drops the maintenance runtime and carries the bundled uninst
     applications,
     architectures: ['x64'],
     minimumZipBytes: 1,
-    toolkit,
   })
   const zip = new AdmZip(path.join(output, `SidekickAI-Portable-${build.VERSION}-x64-win.zip`))
   const names = zip
@@ -222,10 +205,10 @@ test('green archive drops the maintenance runtime and carries the bundled uninst
     .map((entry) => entry.entryName)
   const files = JSON.parse(zip.readFile('SidekickAI/portable-manifest.json').toString()).files
   assert.ok(!names.some((name) => name.startsWith('SidekickAI/resources/host-backup/')))
-  assert.ok(names.includes('SidekickAI/uninstall.exe'))
-  assert.ok(names.includes('SidekickAI/product-edition.json'))
-  // 源目录多出 4 个维护期组件文件，包内不计入；新增 3 个卸载器文件与 portable.txt
-  assert.equal(files.length, u.listFiles(source, new Set()).length - 4 + 4)
+  assert.ok(names.includes('SidekickAI/maintenance/portable.json'))
+  assert.ok(names.includes('SidekickAI/portable.txt'))
+  // 源目录多出 4 个维护期组件文件，包内不计入；包内新增标记与契约清单两个文件
+  assert.equal(files.length, u.listFiles(source, new Set()).length - 4 + 2)
   assert.equal(files.length, baseline.length)
 })
 

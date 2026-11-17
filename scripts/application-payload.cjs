@@ -26,7 +26,8 @@ function validatePayloadPath(value) {
   runtime.validateSoftwarePath(value)
   if (
     /^(?:SidekickAI|win-unpacked|win-arm64-unpacked)(?:\/|$)/i.test(value) ||
-    /(?:^|\/)(?:portable\.txt|portable-layout\.json|portable-manifest\.json)$/i.test(value)
+    /(?:^|\/)(?:portable\.txt|portable-layout\.json|portable-manifest\.json)$/i.test(value) ||
+    /^maintenance\/portable\.json$/i.test(value)
   ) {
     throw new Error('Application payload must contain a normal application runtime')
   }
