@@ -12,11 +12,11 @@
 
 | 项       | 值                                                                 |
 | -------- | ------------------------------------------------------------------ |
-| 版本     | 0.1.15                                                             |
-| 归档字节 | 71,064,585                                                         |
-| SHA-256  | `86f3aa8418e356c6b9c8aebcddda7862a6cb0df025b1b574a35e605411e096f9` |
+| 版本     | 0.1.17                                                             |
+| 归档字节 | 71,447,846                                                         |
+| SHA-256  | `70d45e344e329291857e99097e1cef5f75ed431a7fc5922fcad8da0575235d42` |
 
-版本、大小与摘要同时固定在 `scripts/distribution-toolkit-release.cjs` 与 `contracts/distribution-toolkit.json`，不接受跳过固定值校验的开关。默认引用以 `archive.path` 指向工作区内的真实归档；`local/` 不纳入源码提交，公开检出需自行放置该固定归档。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，不改变版本、大小、摘要或信任锚。
+版本、大小与摘要同时固定在 `scripts/distribution-toolkit-release.cjs` 与 `contracts/distribution-toolkit.json`，不接受跳过固定值校验的开关。默认引用以 `archive.path` 指向本仓内的真实归档；`local/` 不纳入源码提交，公开检出需自行放置该固定归档。`SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE` 只指定引用 JSON 的位置，不改变版本、大小、摘要或信任锚。
 
 解压、缓存与每次运行前后都按固定清单核验：0.1.7 起不再提供 `toolkit-manifest.json`，工具包以 23 个固定路径文件为准（`bin/AppLifecycleToolkit.exe`、`extractor/<edition>/<arch>/setup.exe` 与 `wizard-manifest.json`、`uninstallers/<edition>/<arch>/uninstall.exe`、`uninstall-manifest.json` 与 `product-edition.json`、`sample/app.manifest.jsonc`、`README.md`），逐文件核对大小与 SHA-256，任一不符即停止。0.1.11 起卸载器是同目录三元组（程序、清单、版别选择），装配时随卸载器一起落入目标目录。缓存位于 `build/component-cache/lifecycle-toolkit`，不含私钥。
 

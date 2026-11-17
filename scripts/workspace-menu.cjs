@@ -199,7 +199,7 @@ function help(context) {
     'build-release 生成绿色版与标准载荷；preflight-release 检查软件构建条件。',
     ...(context.editionId === 'concept'
       ? [
-          'installer 和 complete 使用已固定版本与摘要的待组装组件，无需私有源码或官方密钥。',
+          'installer 和 complete 使用本仓固定版本与摘要的待组装组件，无需额外源码或官方密钥。',
           '完整包使用本机自建身份；local/self-build-identity.json 用于后续同身份构建，请保留且勿公开。',
           'SIDEKICK_DISTRIBUTION_TOOLKIT_REFERENCE 只选择引用 JSON 位置；版本、大小与摘要以代码内固定值为准，环境变量不改变信任锚。',
           '完整包构建不会执行安装。',
