@@ -3,7 +3,7 @@
 // Cross-process packaging mutex.
 //
 // One lock file protects every entry point that writes shared build resources
-// (release orchestration, the Tauri installer/Setup build, portable packing and
+// (release orchestration, the installer assembly, portable packing and
 // the plugin build). The lock is held for the complete asynchronous lifetime of
 // the protected work, not merely until the first promise is returned.
 //

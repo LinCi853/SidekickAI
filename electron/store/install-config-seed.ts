@@ -1,6 +1,6 @@
 // electron/store/install-config-seed.ts — 安装期配置播种
 //
-// 安装向导（installer/）在安装阶段把用户选择写入 install-config.json，拷贝到 $INSTDIR
+// 安装器（二进制组件）在安装阶段把用户选择写入 install-config.json，拷贝到 $INSTDIR
 // （exe 同级）。本模块在应用启动时读取它，把：
 //   1. 功能开关（modules）→ 模块启用状态（module_state 表）
 //   2. 应用选项（options）→ 全局设置（app_settings 表）

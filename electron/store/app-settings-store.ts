@@ -51,9 +51,9 @@ export function updateAppSettings(patch: Partial<AppSettings>): AppSettings {
 
 /**
  * 应用安装期选项到 AppSettings（首次启动播种 install-config.json 时调用）。
- * 将安装向导的 optionId 映射到 AppSettings 字段，复用 updateAppSettings 的
- * 合并 + autoLaunch 系统同步逻辑。optionId 与 installer/src/shared/install-manifest.ts
- * 的 INSTALL_OPTIONS 保持一致。
+ * 将安装期选项的 optionId 映射到 AppSettings 字段，复用 updateAppSettings 的
+ * 合并 + autoLaunch 系统同步逻辑。optionId 与 contracts/installation-contract.json
+ * 的 options 保持一致。
  */
 export function applyInstallConfigOptions(options: Record<string, boolean | string>): void {
   const patch: Partial<AppSettings> = {}
