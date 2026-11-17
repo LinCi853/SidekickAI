@@ -1,0 +1,72 @@
+/* =====================================================================
+   components/SaveDialogHost.css —— 应用自建保存弹窗样式
+   复用全局设计令牌（颜色 / 圆角 / 间距），与设置面板观感一致。
+   ===================================================================== */
+
+.save-dialog-modal {
+  min-width: 420px;
+  max-width: 560px;
+}
+
+.save-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.save-dialog-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.save-dialog-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.save-dialog-input:focus {
+  border-color: var(--primary);
+}
+
+.save-dialog-directory-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.save-dialog-directory {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--muted);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-dialog-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.save-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

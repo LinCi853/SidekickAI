@@ -36,7 +36,6 @@ import { trackFullscreen, isTrackedFullscreen } from '../platform/window/fullscr
 import { buildWindowConfig } from '../platform/window/window-config-builder.js'
 import { AI_PLATFORMS } from '../shared/presets/ai-platforms.js'
 import { detachProfileToBrowserWindow } from './detach-profile.js'
-import { registerBrowserDownloads } from './browser-downloads.js'
 
 /** app 是否正在退出（云电脑模式 close 保护的放行条件） */
 let appQuitting = false
@@ -183,8 +182,9 @@ export function createBrowserWindow(windowId: string, profileId: string): Browse
 
   loadRenderer(win, windowId, 'browser', { profileId })
 
-  // 注册下载处理
-  registerBrowserDownloads(profileId)
+  // 注册下载处理（每个 partition 只会有一个 will-download 监听）：
+  // 由 download-handler 在启动时按 profile 批量挂载，新建 profile 时由 profile-store 挂载，
+  // 此处不重复引入该模块，避免与 profile-store 形成依赖环。
 
   win.once('ready-to-show', () => {
     win.show()

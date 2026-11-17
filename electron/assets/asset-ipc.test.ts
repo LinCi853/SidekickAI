@@ -50,6 +50,12 @@ vi.mock('electron', () => ({
     fromId: (id: number) => (id === state.guest?.id ? state.guest : undefined),
   },
 }))
+vi.mock('../browser/save-dialog.js', () => ({
+  showSaveDialog: vi.fn(async () => ({ action: 'cancel', remember: false })),
+}))
+vi.mock('../store/default-save-location.js', () => ({
+  defaultSaveDirectory: () => 'E:/fixture/downloads',
+}))
 vi.mock('../store/chat-store.js', () => ({
   getChatStore: () => ({
     cleanupInvalidConversations: () => {},
@@ -122,7 +128,7 @@ vi.mock('../platform/security/public-request.js', () => ({
 }))
 
 import { OriginalVault } from './original-vault'
-import { dialog, shell } from 'electron'
+import { shell } from 'electron'
 import {
   registerAiAssetIpc,
   hasWebOriginalTransfers,
@@ -130,6 +136,7 @@ import {
   stopAssetRetention,
 } from './asset-ipc'
 import { IPC_CHANNELS as ipc } from '../shared/ipc-channels'
+import { showSaveDialog } from '../browser/save-dialog'
 
 const bytes = Buffer.from('verified original')
 const input = {
@@ -252,24 +259,19 @@ describe('asset original admission and recovery', () => {
   it('uses the same safe extension for export and folder access without changing the saved name', async () => {
     state.record.name = 'C:\\private\\report'
     state.record.mimeType = 'application/pdf'
-    const save = vi.spyOn(dialog, 'showSaveDialog')
-    try {
-      expect(await call(ipc.ASSET_ATTACHMENT_EXPORT, viewerEvent, 'file-a')).toEqual({
-        ok: false,
-        canceled: true,
-      })
-      expect(save).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ defaultPath: 'report.pdf' }),
-      )
-      expect(await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).toEqual({ ok: true })
-      expect(path.basename(vi.mocked(shell.showItemInFolder).mock.calls.at(-1)![0])).toBe(
-        'report.pdf',
-      )
-      expect(state.record.name).toBe('C:\\private\\report')
-    } finally {
-      save.mockRestore()
-    }
+    expect(await call(ipc.ASSET_ATTACHMENT_EXPORT, viewerEvent, 'file-a')).toEqual({
+      ok: false,
+      canceled: true,
+    })
+    expect(vi.mocked(showSaveDialog)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fileName: 'report.pdf' }),
+    )
+    expect(await call(ipc.ASSET_ATTACHMENT_OPEN, viewerEvent, 'file-a')).toEqual({ ok: true })
+    expect(path.basename(vi.mocked(shell.showItemInFolder).mock.calls.at(-1)![0])).toBe(
+      'report.pdf',
+    )
+    expect(state.record.name).toBe('C:\\private\\report')
   })
   it('rejects file access from a webpage or child frame', async () => {
     for (const event of [guestEvent, { ...viewerEvent, senderFrame: {} }]) {

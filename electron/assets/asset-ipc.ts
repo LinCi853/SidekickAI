@@ -2,7 +2,6 @@ import {
   app,
   BrowserWindow,
   clipboard,
-  dialog,
   ipcMain,
   session,
   shell,
@@ -12,6 +11,9 @@ import {
 import { copyFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { defaultSaveDirectory } from '../store/default-save-location.js'
+import { showSaveDialog } from '../browser/save-dialog.js'
+import { rememberDownloadDefault } from '../browser/download-settings.js'
 import { getChatStore } from '../store/chat-store.js'
 import { profileStore } from '../browser/profile-store.js'
 import { isModuleEnabled, observeModuleState } from '../modules/registry.js'
@@ -824,12 +826,16 @@ export function registerAiAssetIpc(): void {
     return accessing(async () => {
       try {
         const { item, file } = await verifiedAttachment(id)
-        const result = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender)!, {
+        const outcome = await showSaveDialog(BrowserWindow.fromWebContents(event.sender) ?? null, {
           title: '导出资料原件',
-          defaultPath: attachmentFileName(item),
+          fileName: attachmentFileName(item),
+          directory: defaultSaveDirectory(),
         })
-        if (result.canceled || !result.filePath) return { ok: false, canceled: true }
-        await copyFile(file, result.filePath)
+        if (outcome.action !== 'save' || !outcome.filePath) return { ok: false, canceled: true }
+        if (outcome.remember) {
+          await rememberDownloadDefault({}, path.dirname(outcome.filePath))
+        }
+        await copyFile(file, outcome.filePath)
         return { ok: true }
       } catch (error) {
         return { ok: false, error: String(error) }

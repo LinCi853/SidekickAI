@@ -5,6 +5,12 @@ export default defineConfig({
   resolve: {
     // 与 electron.vite.config.ts / tsconfig paths 保持一致（渲染层测试会从 src/ 导入共享常量）
     alias: {
+      '@': resolve(__dirname, 'src'),
+      '@components': resolve(__dirname, 'src/components'),
+      '@hooks': resolve(__dirname, 'src/hooks'),
+      '@lib': resolve(__dirname, 'src/lib'),
+      '@store': resolve(__dirname, 'src/store'),
+      '@styles': resolve(__dirname, 'src/styles'),
       '@shared': resolve(__dirname, 'electron/shared'),
     },
   },

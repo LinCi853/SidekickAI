@@ -23,6 +23,7 @@ vi.mock('../platform/security/trusted-renderer.js', () => ({
     if (!event?.trusted) throw new Error('Untrusted renderer')
   },
 }))
+vi.mock('./default-save-location.js', () => ({ defaultSavePath: (name: string) => name }))
 vi.mock('./module-state-store.js', () => ({
   createSqliteJsonStore: () => ({ get: () => [], set() {} }),
 }))

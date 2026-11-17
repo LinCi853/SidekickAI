@@ -281,6 +281,12 @@ export const IPC_CHANNELS = {
   APP_OPEN_LOGS_FOLDER: 'app:openLogsFolder',
   // 主→渲染：下载完成通知（filename + path）
   APP_DOWNLOAD_DONE: 'app:downloadDone',
+  // 主→渲染：应用自建保存弹窗请求（在发起窗口弹出应用内保存弹窗）
+  SAVE_DIALOG_REQUEST: 'saveDialog:request',
+  // 渲染→主：应用自建保存弹窗结果（用户确认后的文件名、目录与“记住默认”标记）
+  SAVE_DIALOG_RESULT: 'saveDialog:result',
+  // 渲染→主：当前窗口已挂载自建保存弹窗（主进程据此决定用自建弹窗还是系统对话框）
+  SAVE_DIALOG_HOST_READY: 'saveDialog:hostReady',
   // 渲染→主：webview 文件拖拽导入（传递文件路径数组，返回 data URL 数组）
   WEBVIEW_FILE_DROP: 'webview:fileDrop',
   LOCAL_FILE_DROP_PREPARE: 'localFileDrop:prepare',

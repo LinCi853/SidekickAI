@@ -13,6 +13,7 @@ import {
   listBlockRules,
   selectDownloadDir,
   openDownloadDir,
+  onAppSettingsChanged,
   listPresets,
   startHotkeyRecording,
   stopHotkeyRecording,
@@ -86,6 +87,12 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
     setCurrentDesktopPresetId(platform?.defaultDesktopPreset ?? 'win-chrome-125')
   }, [profile.aiPlatformUrl, profile.aiPlatformId])
 
+  // 跟随主应用默认时，主应用改动下载设置要实时同步到这里
+  useEffect(() => {
+    const off = onAppSettingsChanged((next) => setSettings(next))
+    return () => off()
+  }, [])
+
   // G1：根据当前设置同步搜索引擎下拉模式（匹配预设则显示预设名，否则为自定义）
   useEffect(() => {
     const se = settings?.defaultSearchEngine
@@ -120,13 +127,66 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
     setProxyState((s) => ({ ...s, ...patch }))
   }, [])
 
+  // ===== 下载与保存位置（绑定当前 AI 应用，默认跟随主应用设置） =====
+  // 生效值：独立设置用本应用配置，跟随时用主应用全局配置（全局变更由 APP_SETTINGS_CHANGED 实时同步）。
+  const profileDownload = liveProfile.downloadSettings
+  const downloadMode: 'default' | 'custom' =
+    profileDownload?.mode === 'custom' ? 'custom' : 'default'
+  const effectiveDownloadDir =
+    downloadMode === 'custom'
+      ? profileDownload?.downloadDir || settings?.downloadDir || ''
+      : settings?.downloadDir || ''
+  const effectiveDownloadBehavior =
+    downloadMode === 'custom'
+      ? profileDownload?.downloadBehavior || settings?.downloadBehavior || 'ask'
+      : settings?.downloadBehavior || 'ask'
+
+  /** 切换设置来源：跟随主应用默认 / 本应用独立设置 */
+  const handleDownloadModeChange = useCallback(
+    (mode: 'default' | 'custom') => {
+      if (mode === 'custom') {
+        void updateProfile(profile.id, {
+          downloadSettings: {
+            mode: 'custom',
+            downloadDir: profileDownload?.downloadDir || settings?.downloadDir || '',
+            downloadBehavior:
+              profileDownload?.downloadBehavior || settings?.downloadBehavior || 'ask',
+          },
+        })
+        return
+      }
+      // 回到跟随主应用：清掉本应用的独立设置
+      void updateProfile(profile.id, { downloadSettings: undefined })
+    },
+    [profile.id, profileDownload, settings, updateProfile],
+  )
+
+  /** 独立设置下切换下载行为 */
+  const handleDownloadBehaviorChange = useCallback(
+    (behavior: 'ask' | 'auto') => {
+      void updateProfile(profile.id, {
+        downloadSettings: {
+          mode: 'custom',
+          downloadDir: effectiveDownloadDir,
+          downloadBehavior: behavior,
+        },
+      })
+    },
+    [profile.id, effectiveDownloadDir, updateProfile],
+  )
+
+  /** 独立设置下更换保存目录 */
   const handleSelectDownloadDir = useCallback(async () => {
     const dir = await selectDownloadDir()
-    if (dir) {
-      void updateAppSettings({ downloadDir: dir })
-      setSettings((s) => (s ? { ...s, downloadDir: dir } : s))
-    }
-  }, [])
+    if (!dir) return
+    void updateProfile(profile.id, {
+      downloadSettings: {
+        mode: 'custom',
+        downloadDir: dir,
+        downloadBehavior: effectiveDownloadBehavior,
+      },
+    })
+  }, [profile.id, effectiveDownloadBehavior, updateProfile])
 
   // ===== 浏览器窗口脱离/回归快捷键（每应用独立，默认无快捷键） =====
   // 草稿值：从 liveProfile.browserWindowShortcut 初始化（undefined=无快捷键）
@@ -409,23 +469,40 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
           </FormRow>
         </section>
 
-        {/* Download Section */}
+        {/* Download Section —— 绑定当前 AI 应用：默认跟随主应用设置，可改为本应用独立设置 */}
         <section className="browser-settings-card" data-name="browser.settings.download-section">
           <SectionTitle>下载设置</SectionTitle>
+          <FormRow label="设置来源">
+            <select
+              className="input-underline browser-settings-select"
+              value={downloadMode}
+              onChange={(e) => handleDownloadModeChange(e.target.value as 'default' | 'custom')}
+              data-name="browser.settings.download-mode-select"
+            >
+              <option value="default" data-name="browser.settings.download-mode-option-default">
+                跟随主应用默认
+              </option>
+              <option value="custom" data-name="browser.settings.download-mode-option-custom">
+                本应用独立设置
+              </option>
+            </select>
+          </FormRow>
           <FormRow label="下载目录">
             <code className="browser-settings-dir" data-name="browser.settings.download-dir-value">
-              {settings.downloadDir || '默认下载目录'}
+              {effectiveDownloadDir || '默认下载目录'}
             </code>
+            {downloadMode === 'custom' && (
+              <Button
+                variant="outline"
+                onClick={() => void handleSelectDownloadDir()}
+                data-name="browser.settings.download-dir-change"
+              >
+                更改
+              </Button>
+            )}
             <Button
               variant="outline"
-              onClick={() => void handleSelectDownloadDir()}
-              data-name="browser.settings.download-dir-change"
-            >
-              更改
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => void openDownloadDir()}
+              onClick={() => void openDownloadDir(effectiveDownloadDir)}
               data-name="browser.settings.download-dir-open"
             >
               打开
@@ -434,12 +511,9 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
           <FormRow label="下载行为">
             <select
               className="input-underline browser-settings-select"
-              value={settings.downloadBehavior || 'auto'}
-              onChange={(e) => {
-                const behavior = e.target.value as 'auto' | 'ask'
-                void updateAppSettings({ downloadBehavior: behavior })
-                setSettings((s) => (s ? { ...s, downloadBehavior: behavior } : s))
-              }}
+              value={effectiveDownloadBehavior}
+              onChange={(e) => handleDownloadBehaviorChange(e.target.value as 'auto' | 'ask')}
+              disabled={downloadMode === 'default'}
               data-name="browser.settings.download-behavior-select"
             >
               <option value="auto" data-name="browser.settings.download-behavior-option-auto">
@@ -450,6 +524,11 @@ export default function BrowserSettingsTab({ profile }: BrowserSettingsTabProps)
               </option>
             </select>
           </FormRow>
+          <p className="browser-settings-hint" data-name="browser.settings.download-hint">
+            {downloadMode === 'default'
+              ? '当前跟随主应用设置（设置 → 高级 → 下载与保存）里的默认位置与行为，主应用改动后这里会同步更新。'
+              : '本应用使用自己的保存位置与行为，不影响其他 AI 应用。'}
+          </p>
         </section>
 
         {/* Tab Persistence Section */}

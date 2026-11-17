@@ -9,6 +9,7 @@
 
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
+import SaveDialogHost from './components/SaveDialogHost'
 // 首屏关键组件：同步导入，避免 CSS 异步加载导致布局紊乱
 import MainView from './pages/MainView'
 import { useProfileStore } from './store/useProfileStore'
@@ -141,6 +142,16 @@ function LoadingScreen() {
 }
 
 export default function App() {
+  return (
+    <>
+      {/* 应用自建保存弹窗宿主：所有窗口共用，主进程发起保存请求时在此弹出 */}
+      <SaveDialogHost />
+      <AppContent />
+    </>
+  )
+}
+
+function AppContent() {
   const [ready, setReady] = useState(false)
 
   // 从 URL 获取当前窗口 id 与模式

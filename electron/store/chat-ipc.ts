@@ -14,8 +14,12 @@
 
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { writeFile, readFile } from 'fs/promises'
+import path from 'node:path'
 import { getChatStore } from './chat-store.js'
 import { getAppSettings } from './app-settings-repository.js'
+import { defaultSaveDirectory } from './default-save-location.js'
+import { showSaveDialog } from '../browser/save-dialog.js'
+import { rememberDownloadDefault } from '../browser/download-settings.js'
 import { showNotification } from '../notify.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { registerAiAssetIpc } from '../assets/asset-ipc.js'
@@ -111,23 +115,27 @@ export function registerBaseChatIpc(): void {
     ipc.CHAT_EXPORT_CONVERSATION,
     async (e, conversationId: string, format: 'md' | 'json') => {
       const content = getChatStore().exportConversation(conversationId, format)
-      const win = BrowserWindow.fromWebContents(e.sender) || undefined
+      const win = BrowserWindow.fromWebContents(e.sender) || null
       const defaultName = `conversation-${conversationId.slice(0, 8)}.${format}`
       const ext = format === 'md' ? 'Markdown' : 'JSON'
-      const { canceled, filePath } = await dialog.showSaveDialog(win!, {
+      const outcome = await showSaveDialog(win, {
         title: `导出对话为 ${ext}`,
-        defaultPath: defaultName,
+        fileName: defaultName,
+        directory: defaultSaveDirectory(),
         filters: [
           { name: ext, extensions: [format] },
           { name: '所有文件', extensions: ['*'] },
         ],
       })
-      if (canceled || !filePath) {
+      if (outcome.action !== 'save' || !outcome.filePath) {
         return { ok: false, canceled: true }
       }
-      await writeFile(filePath, content, 'utf-8')
-      showNotification('导出成功', `已保存到 ${filePath}`)
-      return { ok: true, filePath }
+      if (outcome.remember) {
+        await rememberDownloadDefault({}, path.dirname(outcome.filePath))
+      }
+      await writeFile(outcome.filePath, content, 'utf-8')
+      showNotification('导出成功', `已保存到 ${outcome.filePath}`)
+      return { ok: true, filePath: outcome.filePath }
     },
   )
   ipcMain.handle(

@@ -25,6 +25,10 @@ vi.mock('electron', () => ({
   screen: {},
 }))
 vi.mock('./browser-window-store.js', () => ({ browserWindowStore: {} }))
+vi.mock('./save-dialog.js', () => ({ showSaveDialog: state.showSave }))
+vi.mock('../store/default-save-location.js', () => ({
+  defaultSaveDirectory: () => state.temporary,
+}))
 vi.mock('./bookmark-store.js', () => ({ bookmarkStore: {} }))
 vi.mock('../store/window-store.js', () => ({ windowStore: {}, MAIN_WINDOW_ID: 'main' }))
 vi.mock('../platform/window/window-state.js', () => ({ windowState: {} }))
@@ -87,24 +91,24 @@ it('opens only validated web links from the trusted host', async () => {
   expect(state.openExternal).toHaveBeenCalledWith('https://example.com/path')
 })
 
-it('refuses raw PDF paths for save and delete without touching unrelated bytes', () => {
+it('refuses raw PDF paths for save and delete without touching unrelated bytes', async () => {
   const file = path.join(state.temporary, 'sidekick-print-unrelated.pdf')
   fs.writeFileSync(file, 'unrelated')
-  expect(invoke(ipc.BROWSER_SAVE_PDF_AS, file)).toMatchObject({ ok: false })
+  expect(await invoke(ipc.BROWSER_SAVE_PDF_AS, file)).toMatchObject({ ok: false })
   expect(invoke(ipc.BROWSER_DELETE_TEMP_PDF, file)).toEqual({ ok: false })
   expect(state.showSave).not.toHaveBeenCalled()
   expect(fs.readFileSync(file, 'utf8')).toBe('unrelated')
 })
 
-it('creates, saves and deletes a registered PDF using native destination selection', async () => {
+it('creates, saves and deletes a registered PDF using the selected destination', async () => {
   const result = await invoke(ipc.BROWSER_PRINT_PREVIEW, 7, 'Title')
   expect(result.ok).toBe(true)
   expect(path.isAbsolute(result.filePath)).toBe(false)
   const bytes = readPdfPreview(result.filePath, event.sender)
   const target = path.join(state.temporary, 'saved.pdf')
   fs.writeFileSync(target, 'an older longer file whose tail must be removed')
-  state.showSave.mockReturnValue(target)
-  expect(invoke(ipc.BROWSER_SAVE_PDF_AS, result.filePath, 'Title')).toEqual({ ok: true })
+  state.showSave.mockResolvedValue({ action: 'save', filePath: target, remember: false })
+  expect(await invoke(ipc.BROWSER_SAVE_PDF_AS, result.filePath, 'Title')).toEqual({ ok: true })
   expect(fs.readFileSync(target)).toEqual(bytes)
   expect(invoke(ipc.BROWSER_DELETE_TEMP_PDF, result.filePath)).toEqual({ ok: true })
   expect(() => readPdfPreview(result.filePath, event.sender)).toThrow()
@@ -113,7 +117,7 @@ it('creates, saves and deletes a registered PDF using native destination selecti
 it('binds previews and source reads to their caller and excludes local URL schemes', async () => {
   const other = new EventEmitter()
   const token = createPdfPreview(Buffer.from('%PDF-other'), other as any)
-  expect(invoke(ipc.BROWSER_SAVE_PDF_AS, token)).toMatchObject({ ok: false })
+  expect(await invoke(ipc.BROWSER_SAVE_PDF_AS, token)).toMatchObject({ ok: false })
   expect(invoke(ipc.BROWSER_DELETE_TEMP_PDF, token)).toEqual({ ok: false })
   other.emit('destroyed')
   expect((await invoke(ipc.BROWSER_PRINT_PREVIEW, 8)).ok).toBe(false)

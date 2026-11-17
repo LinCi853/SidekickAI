@@ -51,6 +51,7 @@ const PROFILE_FIELDS = [
   'aiSendSelector',
   'popupWhitelist',
   'browserWindowShortcut',
+  'downloadSettings',
 ]
 const PRESET_FIELDS = [
   'id',

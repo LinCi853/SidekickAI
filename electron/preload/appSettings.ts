@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import type { LogExportOptions } from '../shared/log-export.js'
 import { IPC_CHANNELS, type AppSettings } from '../shared/types.js'
 import type { LocalFilesDroppedEvent } from '../shared/api/settings.api.js'
+import type { SaveDialogReply, SaveDialogRequest } from '../shared/save-dialog.types.js'
 import { readDroppedFiles, openDroppedFiles } from './file-drop.js'
 
 export const appSettingsApi = {
@@ -54,7 +55,8 @@ export const appSettingsApi = {
     // 下载：选择下载目录（弹出系统目录选择对话框）
     selectDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_SELECT_DOWNLOAD_DIR),
     // 下载：在系统文件管理器中打开下载目录
-    openDownloadDir: () => ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR),
+    openDownloadDir: (directory?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR, directory),
     openLogsFolder: (options?: LogExportOptions) =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_LOGS_FOLDER, options),
     dropFiles: readDroppedFiles,
@@ -70,6 +72,17 @@ export const appSettingsApi = {
       ipcRenderer.on(IPC_CHANNELS.APP_DOWNLOAD_DONE, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_DOWNLOAD_DONE, handler)
     },
+    // 主→渲染：应用自建保存弹窗请求
+    onSaveDialogRequest: (callback: (request: SaveDialogRequest) => void) => {
+      const handler = (_e: unknown, request: SaveDialogRequest) => callback(request)
+      ipcRenderer.on(IPC_CHANNELS.SAVE_DIALOG_REQUEST, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SAVE_DIALOG_REQUEST, handler)
+    },
+    // 渲染→主：回执自建保存弹窗的结果
+    respondSaveDialog: (requestId: string, reply: SaveDialogReply) =>
+      ipcRenderer.invoke(IPC_CHANNELS.SAVE_DIALOG_RESULT, requestId, reply),
+    // 渲染→主：声明当前窗口已挂载自建保存弹窗
+    markSaveDialogHostReady: () => ipcRenderer.invoke(IPC_CHANNELS.SAVE_DIALOG_HOST_READY),
   },
   // 平台能力查询（设置页显示权限状态）
   platformCapabilities: {

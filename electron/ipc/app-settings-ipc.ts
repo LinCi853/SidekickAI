@@ -202,9 +202,9 @@ export function registerAppSettingsIPC(
   })
 
   // 下载：在系统文件管理器中打开下载目录（无配置时打开系统下载目录）
-  ipcMain.handle(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR, async () => {
+  ipcMain.handle(IPC_CHANNELS.APP_OPEN_DOWNLOAD_DIR, async (_e, directory?: string) => {
     const settings = getAppSettings()
-    const dir = settings.downloadDir || app.getPath('downloads')
+    const dir = directory || settings.downloadDir || app.getPath('downloads')
     try {
       await shell.openPath(dir)
     } catch (err) {

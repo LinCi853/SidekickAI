@@ -9,6 +9,7 @@ import type {
   CustomAIProvider,
   CustomAIProviderInput,
 } from '../../../electron/shared/types'
+import type { SaveDialogReply, SaveDialogRequest } from '../../../electron/shared/save-dialog.types'
 import { requireElectron } from './core'
 
 /* =====================================================================
@@ -190,10 +191,28 @@ export async function selectDownloadDir(): Promise<string | null> {
   return api.appSettings.selectDownloadDir()
 }
 
-/** 在系统文件管理器中打开下载目录 */
-export async function openDownloadDir(): Promise<void> {
+/** 在系统文件管理器中打开下载目录（可指定目录，缺省用当前生效的默认目录） */
+export async function openDownloadDir(directory?: string): Promise<void> {
   const api = requireElectron()
-  return api.appSettings.openDownloadDir()
+  return api.appSettings.openDownloadDir(directory)
+}
+
+/** 订阅主进程发起的应用自建保存弹窗请求 */
+export function onSaveDialogRequest(callback: (request: SaveDialogRequest) => void): () => void {
+  const api = requireElectron()
+  return api.appSettings.onSaveDialogRequest(callback)
+}
+
+/** 回执应用自建保存弹窗的结果 */
+export async function respondSaveDialog(requestId: string, reply: SaveDialogReply): Promise<void> {
+  const api = requireElectron()
+  await api.appSettings.respondSaveDialog(requestId, reply)
+}
+
+/** 声明当前窗口已挂载应用自建保存弹窗 */
+export async function markSaveDialogHostReady(): Promise<void> {
+  const api = requireElectron()
+  await api.appSettings.markSaveDialogHostReady()
 }
 
 export async function openLogsFolder(options?: LogExportOptions): Promise<LogExportResult> {

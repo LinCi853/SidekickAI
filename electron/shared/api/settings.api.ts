@@ -4,6 +4,7 @@ import type { LogExportOptions, LogExportResult } from '../log-export.js'
 
 import type { BlockRule } from '../block-rules.types.js'
 import type { PlatformCapabilities } from '../../platform/platform-info.js'
+import type { SaveDialogReply, SaveDialogRequest } from '../save-dialog.types.js'
 
 // re-export 供渲染进程通过 shared/types 桶导出使用
 export type { PlatformCapabilities }
@@ -216,8 +217,8 @@ export interface AppSettingsAPI {
   estimateCacheSize(): Promise<number>
   /** 选择下载目录（弹出系统目录选择对话框），返回选中路径或 null */
   selectDownloadDir(): Promise<string | null>
-  /** 在系统文件管理器中打开下载目录 */
-  openDownloadDir(): Promise<void>
+  /** 在系统文件管理器中打开下载目录（可指定目录，缺省用当前生效的默认目录） */
+  openDownloadDir(directory?: string): Promise<void>
   /** Export persisted software logs and open the dated export directory. */
   openLogsFolder(options?: LogExportOptions): Promise<LogExportResult>
   /** Consumes the latest native drop captured in the isolated preload. */
@@ -226,6 +227,12 @@ export interface AppSettingsAPI {
   onLocalFilesDropped(callback: (info: LocalFilesDroppedEvent) => void): () => void
   /** 监听下载完成事件（主进程 → 渲染层：filename + path） */
   onDownloadDone(callback: (info: { filename: string; path: string }) => void): () => void
+  /** 监听应用自建保存弹窗请求（主进程 → 渲染层） */
+  onSaveDialogRequest(callback: (request: SaveDialogRequest) => void): () => void
+  /** 回执自建保存弹窗结果（渲染层 → 主进程） */
+  respondSaveDialog(requestId: string, reply: SaveDialogReply): Promise<unknown>
+  /** 声明当前窗口已挂载自建保存弹窗（主进程据此选择自建弹窗或系统对话框） */
+  markSaveDialogHostReady(): Promise<unknown>
 }
 
 /** 引导 API（首次启动引导窗 + 重新查看入口） */

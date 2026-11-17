@@ -161,8 +161,11 @@ export default function StorageSection() {
         </p>
       )}
 
-      <SectionTitle className="section-title-spacer">下载</SectionTitle>
-      <FormRow label="下载目录">
+      <SectionTitle className="section-title-spacer">下载与保存</SectionTitle>
+      <FormRow
+        label="默认保存位置"
+        hint="所有 AI 应用默认跟随此处；单个应用可在浏览器设置里改为独立设置"
+      >
         <span
           className="settings-storage-dir-value"
           title={downloadDir || '系统下载目录'}
@@ -188,7 +191,7 @@ export default function StorageSection() {
           打开目录
         </button>
       </FormRow>
-      <FormRow label="下载行为">
+      <FormRow label="下载行为" hint="每次询问会弹出应用内保存弹窗，自动保存直接落盘不再询问">
         <SegmentedControl
           value={downloadBehavior}
           options={[

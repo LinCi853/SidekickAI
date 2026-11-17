@@ -3,6 +3,7 @@
 
 import type { FingerprintConfig } from './fingerprint.types.js'
 import type { ProfileProxyConfig } from './proxy.types.js'
+import type { ProfileDownloadSettings } from './download-settings.types.js'
 
 /** 平台类型：桌面端 / 移动端 */
 export type PlatformType = 'desktop' | 'mobile'
@@ -162,6 +163,13 @@ export interface Profile {
    * - 注册为系统级全局快捷键（globalShortcut），应用未聚焦也生效。
    */
   browserWindowShortcut?: string
+  /**
+   * 该 AI 应用独立的下载与保存位置设置。
+   * - mode='default'（默认/未定义）：跟随主应用设置里的全局默认位置与行为。
+   * - mode='custom'：使用本应用自己的目录与行为，不影响其他 AI 应用。
+   * 在浏览器窗口设置标签页中编辑。
+   */
+  downloadSettings?: ProfileDownloadSettings
 }
 
 // ============================================================================

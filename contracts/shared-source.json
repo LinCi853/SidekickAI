@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "32d4679c81e0706367157563503b68b830f3ecd76929917ba0d55f68a21f7940",
+  "revision": "3334b0c76d670fc30ba03f2c162896c22c66f2aa85a8b3e3b744e9994fc4f1c4",
   "files": {
     "electron.vite.config.ts": "0cc4bde54c1eee39b79cfc84202a45fec0d6580f9d99d7985deed490f2bdeda5",
     "electron/application-activation.ts": "538a8a4fd218906d5ceabbce3040c1c938f79b7de05ac72ca0ee58bbebf0eccf",
@@ -36,7 +36,7 @@
     "packages/backup-core/sessions.ts": "42ba0d3dc0b7ee6bc72164f8b1b404af13d4c0630f555b8c37e6ccb8c1ef79ee",
     "packages/backup-core/stream-archive.ts": "bf3f8759f267c8ebfd9fd8429356a04f1d39cb91bb152283c97b65aeff12b47c",
     "packages/backup-core/transaction.ts": "36aa56c490e82bdfb74d11c6b1309359d837b871708ad2795dbb902756df0fd9",
-    "packages/backup-core/transfer.ts": "ec28e5f3b4664c7d246883fe4824111870a16239a328c4e435a865c7b5097f84",
+    "packages/backup-core/transfer.ts": "f4b6da4e768a79386afbd92357cd778f098935d67060cb3b7e65717b90afc190",
     "packages/backup-core/types.ts": "8e0a0bcf37f502d2e7bcc3d1e21a5a9bb0d6d44ae92de77ecef74157cf6ddc57",
     "packages/desktop-common/application-process.ts": "d402317b84c970c14f123ff1d642a15c869182d3875843d966f269cbac33742b",
     "packages/desktop-common/edition-session.ts": "4871fa4d32506e7efcb62d6fd9bdb46a67b0c054feff21af1a4e6fe0585f2d05",
@@ -90,7 +90,7 @@
     "scripts/verify-packaged-ui.cjs": "1436fa98d8c082377fdb2fdeb1f54720a81d9e1b250efec7a532ee05ddcbcf10",
     "scripts/verify-startup-helper.cjs": "38c1906d1fa512bb5a3ddafe275f46590cef11d3d898a0b943a3f02fa935fc9a",
     "scripts/windows-executable-signing.cjs": "16721acbbc4baf2ee57a019bccc719ac6f348ee01471a6f359586fed7ff1dd9b",
-    "scripts/workspace-menu.cjs": "10772bc33d2545055eb4675003a4f05037049dbe18494396c0bb7c58b87bd1fb",
+    "scripts/workspace-menu.cjs": "fa3385859dec00b50be8103a15912f45b4e936079942640dbe522e7520228bdc",
     "scripts/workspace-menu.test.cjs": "1c88c0e1ee86769c490b45b5bcc9b4effc0f579b2a0cfb69d9d821ee53976a0d",
     "tools/startup-helper/ForegroundBridge.cs": "35be7234e6fa7d57be17078986a3c58de654e99475f68c69b48e781ffa814a4f",
     "tools/startup-helper/NativeInventory.cs": "eab984da2c282915ca0f7c244ff35670ca6d2ac7e81e58e6f180e1997bd79cf3",

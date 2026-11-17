@@ -26,6 +26,7 @@ import {
 } from './platform/hotkey/browser-hotkey-fallback.js'
 import { applyAutoLaunchSetting, updateAppSettings } from './store/app-settings-store.js'
 import { registerAppSettingsIPC } from './ipc/app-settings-ipc.js'
+import { registerSaveDialogIpc } from './browser/save-dialog.js'
 import { getAppSettings } from './store/app-settings-repository.js'
 import { setNativeThemeSource } from './theme/native-theme-source.js'
 import { seedFromInstallConfig } from './store/install-config-seed.js'
@@ -493,6 +494,7 @@ app
       const { exportApplicationData } = await import('./store/backup-recovery.js')
       return exportApplicationData(target, options, encrypt)
     })
+    registerSaveDialogIpc()
     attachDownloadHandlersForAllProfiles()
     void sweepStaleRuntimeTemp(app.getPath('temp')).catch((error) =>
       console.warn('[temp] sweep failed:', error),

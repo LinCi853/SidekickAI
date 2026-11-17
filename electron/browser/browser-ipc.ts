@@ -7,16 +7,21 @@
 //
 // 已迁移到统一注入管线：使用 EffectScope 管理 IPC handler 生命周期。
 
-import { ipcMain, shell, BrowserWindow, dialog, screen, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, shell, BrowserWindow, screen, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
-import { markAskSavePath } from './ask-save-path.js'
 import { enterCloudPc, exitCloudPc } from './cloud-pc.js'
 import fs from 'fs'
+import path from 'node:path'
 import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import { ownedProfileSession, ownedWebContents } from '../platform/security/webview-owner.js'
 import { httpUrl, withPublicResponse } from '../platform/security/public-request.js'
 import { createPdfPreview, readPdfPreview, deletePdfPreview } from './pdf-protocol.js'
 import { openNativeFile } from '../platform/security/native-file.js'
+import { defaultSaveDirectory } from '../store/default-save-location.js'
+import { showSaveDialog } from './save-dialog.js'
+import { rememberDownloadDefault } from './download-settings.js'
+import { profileStore } from './profile-store.js'
+import { getRecordByWebContentsId } from './webview-registry.js'
 
 import type {
   BrowserWindowState,
@@ -54,6 +59,26 @@ export interface BrowserIpcDeps {
 /** 获取调用方所在的 BrowserWindow */
 function getSenderWindow(e: IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(e.sender)
+}
+
+/**
+ * 保存弹窗勾选“以后保存到此位置”时的写回：
+ * 属于某个 AI 应用就写回该应用的独立设置，没有归属则写回主应用全局设置。
+ */
+async function rememberSaveLocation(
+  profileId: string | null | undefined,
+  filePath: string,
+): Promise<void> {
+  const override = profileId ? profileStore.get(profileId)?.downloadSettings : undefined
+  await rememberDownloadDefault(
+    {
+      override,
+      saveOverride: profileId
+        ? (next) => profileStore.update(profileId, { downloadSettings: next })
+        : undefined,
+    },
+    path.dirname(filePath),
+  )
 }
 
 /**
@@ -189,17 +214,24 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
       if (!defaultName) defaultName = 'page'
       if (!/\.[a-z0-9]{1,5}$/i.test(defaultName)) defaultName += '.html'
 
-      const result = dialog.showSaveDialogSync(win, {
+      const outcome = await showSaveDialog(win, {
         title: '另存为',
-        defaultPath: defaultName,
+        fileName: defaultName,
+        directory: defaultSaveDirectory(),
         filters: [
           { name: 'HTML 文件', extensions: ['html', 'htm'] },
           { name: '所有文件', extensions: ['*'] },
         ],
       })
-      if (!result) return { ok: false, canceled: true }
+      if (outcome.action !== 'save' || !outcome.filePath) return { ok: false, canceled: true }
+      if (outcome.remember) {
+        await rememberSaveLocation(
+          getRecordByWebContentsId(webContentsId)?.profileId,
+          outcome.filePath,
+        )
+      }
       try {
-        await wc.savePage(result, 'HTMLComplete')
+        await wc.savePage(outcome.filePath, 'HTMLComplete')
         return { ok: true }
       } catch (err) {
         return { ok: false, error: String(err) }
@@ -207,20 +239,17 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
     },
   )
 
-  // 另存为链接/图片：标记一次性「询问保存路径」后触发下载，will-download 中弹保存对话框
+  // 另存为链接/图片：触发下载，落盘位置与弹窗由该 AI 应用的下载行为设置决定
   // partition 为 webview 的 session 分区（persist:profileId），与下载记录注册的 session 一致
   handle(
     IPC_CHANNELS.BROWSER_DOWNLOAD_AS,
     (event, partition: string, url: string, _suggestedFilename?: string) => {
       if (!/^(https?:|data:|blob:)/i.test(url)) return { ok: false, error: 'invalid url' }
-      let cancelSaveIntent: (() => void) | undefined
       try {
         const initiatingSession = ownedProfileSession(event, partition)
-        cancelSaveIntent = markAskSavePath(initiatingSession, url)
         initiatingSession.downloadURL(url)
         return { ok: true }
       } catch (err) {
-        cancelSaveIntent?.()
         return { ok: false, error: String(err) }
       }
     },
@@ -275,7 +304,7 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
     },
   )
 
-  handle(IPC_CHANNELS.BROWSER_SAVE_PDF_AS, (event, token: string, suggestedName?: string) => {
+  handle(IPC_CHANNELS.BROWSER_SAVE_PDF_AS, async (event, token: string, suggestedName?: string) => {
     try {
       assertTrustedRenderer(event)
       const bytes = readPdfPreview(token, event.sender)
@@ -285,16 +314,20 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
           .trim()
           .replace(/[\\/:*?"<>|]/g, '_')
           .slice(0, 60) + '.pdf'
-      const selected = dialog.showSaveDialogSync(win, {
+      const outcome = await showSaveDialog(win, {
         title: '另存为 PDF',
-        defaultPath: defaultName,
+        fileName: defaultName,
+        directory: defaultSaveDirectory(),
         filters: [
           { name: 'PDF 文件', extensions: ['pdf'] },
           { name: '所有文件', extensions: ['*'] },
         ],
       })
-      if (!selected) return { ok: false, canceled: true }
-      const file = openNativeFile(selected, true)
+      if (outcome.action !== 'save' || !outcome.filePath) return { ok: false, canceled: true }
+      if (outcome.remember) {
+        await rememberDownloadDefault({}, path.dirname(outcome.filePath))
+      }
+      const file = openNativeFile(outcome.filePath, true)
       try {
         fs.writeFileSync(file.descriptor, bytes)
         fs.ftruncateSync(file.descriptor, bytes.length)
@@ -318,7 +351,7 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
   })
   // ===== 网页截图 =====
   // 保存截图 PNG（渲染层 capturePage 的 dataURL）到用户指定路径
-  handle(IPC_CHANNELS.BROWSER_SAVE_CAPTURE, (e, dataUrl: string, suggestedName?: string) => {
+  handle(IPC_CHANNELS.BROWSER_SAVE_CAPTURE, async (e, dataUrl: string, suggestedName?: string) => {
     if (!dataUrl || !dataUrl.startsWith('data:image/'))
       return { ok: false, error: 'invalid image data' }
     const win = getSenderWindow(e as IpcMainInvokeEvent)
@@ -328,18 +361,22 @@ export function registerBrowserIpc(deps: BrowserIpcDeps, scope?: EffectScope): v
         .trim()
         .replace(/[\\/:*?"<>|]/g, '_')
         .slice(0, 60) + '.png'
-    const result = dialog.showSaveDialogSync(win, {
+    const outcome = await showSaveDialog(win, {
       title: '保存截图',
-      defaultPath: defaultName,
+      fileName: defaultName,
+      directory: defaultSaveDirectory(),
       filters: [
         { name: 'PNG 图片', extensions: ['png'] },
         { name: '所有文件', extensions: ['*'] },
       ],
     })
-    if (!result) return { ok: false, canceled: true }
+    if (outcome.action !== 'save' || !outcome.filePath) return { ok: false, canceled: true }
+    if (outcome.remember) {
+      await rememberDownloadDefault({}, path.dirname(outcome.filePath))
+    }
     try {
       const base64 = dataUrl.split(',')[1] || ''
-      fs.writeFileSync(result, Buffer.from(base64, 'base64'))
+      fs.writeFileSync(outcome.filePath, Buffer.from(base64, 'base64'))
       return { ok: true }
     } catch (err) {
       return { ok: false, error: String(err) }

@@ -17,6 +17,7 @@ import { assertTrustedRenderer } from '../platform/security/trusted-renderer.js'
 import type { CustomAIProvider, CustomAIProviderInput } from '../shared/types.js'
 import { IPC_CHANNELS } from '../shared/types.js'
 import { createSqliteJsonStore } from './module-state-store.js'
+import { defaultSavePath } from './default-save-location.js'
 import { isSafeStorageAvailable, xorDecrypt } from '../platform/security/permission-manager.js'
 import {
   encryptString,
@@ -484,7 +485,7 @@ export function registerAIProviderIPC(scope?: EffectScope): void {
     const frame = event.senderFrame
     const result = await dialog.showSaveDialog({
       filters: [{ name: 'Sidekick AI Providers', extensions: ['sapp'] }],
-      defaultPath: `ai-providers-${new Date().toISOString().slice(0, 10)}.sapp`,
+      defaultPath: defaultSavePath(`ai-providers-${new Date().toISOString().slice(0, 10)}.sapp`),
     })
     if (result.canceled || !result.filePath) return null
     assertTrustedRenderer(event)
