@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useToast } from '../../../hooks/useToast'
-import { dropFiles, onDownloadDone } from '../../../lib/electron-api'
+import { dropFiles, onAiFilesDropped, onDownloadDone } from '../../../lib/electron-api'
 import { useTabStore } from '../../../store/useTabStore'
 import { useProfileStore } from '../../../store/useProfileStore'
 import { buildFileDropScript, type DroppedFileInfo } from '../file-drop-script'
@@ -28,6 +28,18 @@ export function describeFileDropFailure(error?: string): string {
   }
 }
 
+/** The guest that received the drop stays the import target even if the user switches tabs. */
+function findWebviewByGuestId(guestId: number): WebviewElement | null {
+  for (const element of Array.from(document.querySelectorAll<WebviewElement>('webview'))) {
+    try {
+      if (element.getWebContentsId() === guestId) return element
+    } catch {
+      /* A webview that is not attached yet cannot report its guest id. */
+    }
+  }
+  return null
+}
+
 /**
  * Manages file drag-and-drop import from OS into the active webview,
  * plus download-done toast notifications.
@@ -40,6 +52,54 @@ export function useFileDragDrop(platforms: AIPlatform[]) {
     platformsRef.current = platforms
   }, [platforms])
   const { toast: downloadToast, showToast: showDownloadToast } = useToast(3000)
+
+  const importIntoWebview = useCallback(
+    async (wv: WebviewElement, fileInfos: DroppedFileInfo[]) => {
+      const tabId = wv.getAttribute('data-tab-id')
+      const tabNow = useTabStore.getState().tabs.find((t) => t.id === tabId)
+      const profileNow = tabNow
+        ? useProfileStore.getState().profiles.find((p) => p.id === tabNow.profileId)
+        : null
+      const platformNow = profileNow
+        ? platformsRef.current.find(
+            (p) => p.id === profileNow.aiPlatformId || p.url === profileNow.aiPlatformUrl,
+          )
+        : null
+      const dropOptions = platformNow
+        ? {
+            fileInputSelector: platformNow.fileInputSelector,
+            dropZoneSelector: platformNow.dropZoneSelector,
+          }
+        : undefined
+      const script = buildFileDropScript(fileInfos, dropOptions)
+      try {
+        // 脚本返回 Promise<{success, method|error}>；executeJavaScript 会等待它，
+        // 因此「派发失败」不会再被当成「已导入」。
+        const result = (await wv.executeJavaScript(script)) as FileDropResult | undefined
+        if (result?.success) {
+          showDownloadToast(`已导入 ${fileInfos.length} 个文件到当前应用`)
+        } else {
+          showDownloadToast(describeFileDropFailure(result?.error))
+        }
+      } catch (err) {
+        console.error('[MainView] 文件拖拽导入失败:', err)
+        showDownloadToast('导入失败')
+      }
+    },
+    [showDownloadToast],
+  )
+
+  // 拖到网页区域内时事件由 guest 接收；页面不处理时由主进程把文件交回这里兜底导入。
+  useEffect(() => {
+    return onAiFilesDropped(({ guestId, files }) => {
+      const wv = findWebviewByGuestId(guestId)
+      if (!wv) {
+        showDownloadToast('未找到接收文件的页面')
+        return
+      }
+      void importIntoWebview(wv, files)
+    })
+  }, [importIntoWebview, showDownloadToast])
 
   // File drag-drop listeners
   useEffect(() => {
@@ -89,30 +149,7 @@ export function useFileDragDrop(platforms: AIPlatform[]) {
           showDownloadToast('读取文件失败')
           return
         }
-        const activeTabNow = useTabStore.getState().tabs.find((t) => t.id === activeTabIdNow)
-        const profileNow = activeTabNow
-          ? useProfileStore.getState().profiles.find((p) => p.id === activeTabNow.profileId)
-          : null
-        const platformNow = profileNow
-          ? platformsRef.current.find(
-              (p) => p.id === profileNow.aiPlatformId || p.url === profileNow.aiPlatformUrl,
-            )
-          : null
-        const dropOptions = platformNow
-          ? {
-              fileInputSelector: platformNow.fileInputSelector,
-              dropZoneSelector: platformNow.dropZoneSelector,
-            }
-          : undefined
-        const script = buildFileDropScript(fileInfos, dropOptions)
-        // 脚本返回 Promise<{success, method|error}>；executeJavaScript 会等待它，
-        // 因此「派发失败」不会再被当成「已导入」。
-        const result = (await wv.executeJavaScript(script)) as FileDropResult | undefined
-        if (result?.success) {
-          showDownloadToast(`已导入 ${fileInfos.length} 个文件到当前应用`)
-        } else {
-          showDownloadToast(describeFileDropFailure(result?.error))
-        }
+        await importIntoWebview(wv, fileInfos)
       } catch (err) {
         console.error('[MainView] 文件拖拽导入失败:', err)
         showDownloadToast('导入失败')
@@ -129,7 +166,7 @@ export function useFileDragDrop(platforms: AIPlatform[]) {
       document.removeEventListener('dragleave', onDragLeave)
       document.removeEventListener('drop', onDrop)
     }
-  }, [showDownloadToast])
+  }, [importIntoWebview, showDownloadToast])
 
   // Download done toast
   useEffect(() => {

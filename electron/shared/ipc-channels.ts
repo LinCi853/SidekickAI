@@ -292,7 +292,13 @@ export const IPC_CHANNELS = {
   LOCAL_FILE_DROP_PREPARE: 'localFileDrop:prepare',
   LOCAL_FILE_DROP_CAPTURE: 'localFileDrop:capture',
   LOCAL_FILE_DROP_OPEN: 'localFileDrop:open',
+  // guest→主：查询当前宿主窗口对拖放的处理方式（预览、导入或忽略）
+  LOCAL_FILE_DROP_CAPABILITIES: 'localFileDrop:capabilities',
+  // guest→主：网页未处理拖放时，把文件交给宿主应用导入当前网页
+  LOCAL_FILE_DROP_IMPORT: 'localFileDrop:import',
   LOCAL_FILES_DROPPED: 'localFileDrop:files',
+  // 主→渲染：主窗口网页内完成原生拖放，携带可直接派发的文件内容
+  AI_FILES_DROPPED: 'localFileDrop:aiFiles',
   // 主→渲染：UI 比例变化广播（设置面板修改 uiScale 后，各窗口重新计算最小尺寸）
   UI_SCALE_CHANGED: 'app:uiScaleChanged',
   // 主→渲染：应用设置变更广播（任意窗口修改设置后，通知所有窗口同步更新）

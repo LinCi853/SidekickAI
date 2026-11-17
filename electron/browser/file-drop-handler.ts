@@ -84,6 +84,23 @@ function canOpen(source: Owner): boolean {
   return !!window && [...windowState.browserWindowsByProfile.values()].includes(window)
 }
 
+/** Main-window guests fall back to importing into the active AI page when the page ignores the drop. */
+function canImport(source: Owner): boolean {
+  if (source.sender === source.host) return false
+  const window = BrowserWindow.fromWebContents(source.host)
+  return !!window && window === windowState.mainWindow
+}
+
+/** The guest preload asks once per document load how its host handles native drops. */
+export function fileDropCapabilities(event: IpcMainInvokeEvent): {
+  route: 'preview' | 'import' | 'none'
+} {
+  const source = owner(event)
+  if (canOpen(source)) return { route: 'preview' }
+  if (canImport(source)) return { route: 'import' }
+  return { route: 'none' }
+}
+
 /** This challenge is visible only to the isolated native-drop listener. */
 export function prepareFileDrop(event: IpcMainInvokeEvent): {
   nonce: string
@@ -153,8 +170,8 @@ function take(event: IpcMainInvokeEvent, input: unknown): Captured {
   return value
 }
 
-export function readDroppedFiles(event: IpcMainInvokeEvent, input: unknown): DroppedFile[] {
-  return take(event, input).files.map(({ name, bytes }) => {
+function droppedFiles(files: Captured['files']): DroppedFile[] {
+  return files.map(({ name, bytes }) => {
     const mime = guessMime(path.extname(name).slice(1).toLowerCase())
     return {
       filename: name,
@@ -162,6 +179,21 @@ export function readDroppedFiles(event: IpcMainInvokeEvent, input: unknown): Dro
       mime,
       size: bytes.length,
     }
+  })
+}
+
+export function readDroppedFiles(event: IpcMainInvokeEvent, input: unknown): DroppedFile[] {
+  return droppedFiles(take(event, input).files)
+}
+
+/** Hand a guest drop back to the main window so it can import into the active AI page. */
+export function importDroppedFiles(event: IpcMainInvokeEvent, input: unknown): void {
+  const value = take(event, input)
+  if (!canImport(value)) throw new Error('此窗口不接收文件导入。')
+  if (value.host.isDestroyed()) throw new Error('拖放窗口已关闭。')
+  value.host.send(IPC_CHANNELS.AI_FILES_DROPPED, {
+    guestId: value.sender.id,
+    files: droppedFiles(value.files),
   })
 }
 

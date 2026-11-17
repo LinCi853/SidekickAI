@@ -132,6 +132,12 @@ export interface LocalFilesDroppedEvent {
   files: Array<{ name: string; url: string; kind: 'pdf' | 'file' }>
 }
 
+/** A guest drop the page ignored, handed back to the main window for AI-page import. */
+export interface AiFilesDroppedEvent {
+  guestId: number
+  files: Array<{ filename: string; dataUrl: string; mime: string; size: number }>
+}
+
 /** 应用全局设置 API */
 export interface AppSettingsAPI {
   /** 读取应用全局设置 */
@@ -225,6 +231,8 @@ export interface AppSettingsAPI {
   dropFiles(): Promise<Array<{ filename: string; dataUrl: string; mime: string; size: number }>>
   openDroppedFiles(): Promise<void>
   onLocalFilesDropped(callback: (info: LocalFilesDroppedEvent) => void): () => void
+  /** 监听主窗口网页内被页面忽略的拖放，由应用兜底导入。 */
+  onAiFilesDropped(callback: (info: AiFilesDroppedEvent) => void): () => void
   /** 监听下载完成事件（主进程 → 渲染层：filename + path） */
   onDownloadDone(callback: (info: { filename: string; path: string }) => void): () => void
   /** 监听应用自建保存弹窗请求（主进程 → 渲染层） */

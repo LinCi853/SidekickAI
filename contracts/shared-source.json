@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "3334b0c76d670fc30ba03f2c162896c22c66f2aa85a8b3e3b744e9994fc4f1c4",
+  "revision": "ca9604571845d2b49b4886f60daa12deb1b2869333c9cc138d2472967cf03c7d",
   "files": {
     "electron.vite.config.ts": "0cc4bde54c1eee39b79cfc84202a45fec0d6580f9d99d7985deed490f2bdeda5",
     "electron/application-activation.ts": "538a8a4fd218906d5ceabbce3040c1c938f79b7de05ac72ca0ee58bbebf0eccf",
@@ -75,7 +75,7 @@
     "scripts/local-build-config.cjs": "e23e06222e5d1f87e0ae818f58b61b72d8e4ed8ee1a9da794d95e61098bf7be6",
     "scripts/local-build-config.test.cjs": "c05bd108330bcde0f9294c1ffd8f588b9f8c8f363e55a518e0e86fe629396a18",
     "scripts/oxy-build-config.cjs": "9f8a44a014ec77361fcb04df67f9fe0478ec9044f34d997419fb2581131d6b77",
-    "scripts/packaging-lock.cjs": "63f87383fdb13b6319b8684088dc8d18c6ea57ffffc04857bca9fb5aec06b56a",
+    "scripts/packaging-lock.cjs": "3d961455867dcba1bb8140b6d594a88061d486afd9658def25620f55c9a0ad5f",
     "scripts/prepare-startup-helper.cjs": "5f12bff275ecb76154d0047d04b22dcd5dc1071fe409562fd4d33eeca1edf746",
     "scripts/product-version.test.cjs": "b89132c1fbab0cc121f0cccdf9e333efd1f7bb9b8b07b3d2cbbe652aca19d690",
     "scripts/renderer-security.ts": "fd4629f08a3aa2f059236c2ba8412fc6aa7661222cf4f8059e8705681fc4785c",

@@ -235,6 +235,12 @@ export function registerAppSettingsIPC(
   ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_OPEN, async (event, input: unknown) =>
     (await import('../browser/file-drop-handler.js')).openDroppedFiles(event, input),
   )
+  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_CAPABILITIES, async (event) =>
+    (await import('../browser/file-drop-handler.js')).fileDropCapabilities(event),
+  )
+  ipcMain.handle(IPC_CHANNELS.LOCAL_FILE_DROP_IMPORT, async (event, input: unknown) =>
+    (await import('../browser/file-drop-handler.js')).importDroppedFiles(event, input),
+  )
 
   // ===== 每应用浏览器窗口脱离/回归快捷键 =====
   // 保存/清除指定 Profile 的浏览器窗口快捷键，并重注册全局快捷键

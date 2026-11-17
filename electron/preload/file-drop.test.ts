@@ -57,8 +57,7 @@ function drop(
 async function settle() {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
-async function allowGuestFallback() {
-  window.dispatch(drop([], { type: 'dragenter' }))
+async function loadGuestRoute() {
   await settle()
   electron.invoke.mockClear()
 }
@@ -77,6 +76,7 @@ beforeEach(() => {
     file.name === 'generated.txt' ? '' : `E:/controlled/${file.name}`,
   )
   electron.invoke.mockImplementation(async (channel: string) => {
+    if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_CAPABILITIES) return { route: 'preview' }
     if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE)
       return { nonce: 'private-nonce', fallbackAllowed: true }
     if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE) return { token: 'private-token' }
@@ -186,7 +186,7 @@ describe('isolated native drop capture', () => {
 
   it('opens an unhandled guest drop after the page has observed the original event', async () => {
     dispose = installFileDropCapture('guest')
-    await allowGuestFallback()
+    await loadGuestRoute()
     const event = drop()
     window.dispatch(event, (current) => {
       expect(current.defaultPrevented).toBe(false)
@@ -194,6 +194,7 @@ describe('isolated native drop capture', () => {
     })
     expect(event.defaultPrevented).toBe(true)
     await settle()
+    expect(electron.invoke).toHaveBeenCalledWith(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE)
     expect(electron.invoke).toHaveBeenCalledWith(IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE, {
       nonce: 'private-nonce',
       paths: ['E:/controlled/report.pdf'],
@@ -204,11 +205,28 @@ describe('isolated native drop capture', () => {
     await expect(readDroppedFiles()).rejects.toThrow('native file drop')
   })
 
+  it('imports a page-ignored drop into the main window when the host routes it to AI import', async () => {
+    electron.invoke.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_CAPABILITIES) return { route: 'import' }
+      if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE)
+        return { nonce: 'main-window-nonce', fallbackAllowed: false }
+      if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE) return { token: 'main-window-token' }
+    })
+    dispose = installFileDropCapture('guest')
+    await loadGuestRoute()
+    window.dispatch(drop())
+    await settle()
+    expect(electron.invoke).toHaveBeenLastCalledWith(IPC_CHANNELS.LOCAL_FILE_DROP_IMPORT, {
+      token: 'main-window-token',
+    })
+  })
+
   it('preserves a page upload handler and a native file input', async () => {
     dispose = installFileDropCapture('guest')
-    await allowGuestFallback()
+    await loadGuestRoute()
     window.dispatch(drop(), (event) => event.preventDefault())
-    await allowGuestFallback()
+    await settle()
+    expect(electron.invoke).not.toHaveBeenCalled()
     const inputDrop = drop(undefined, { path: [new Input('file')] })
     window.dispatch(inputDrop)
     expect(inputDrop.defaultPrevented).toBe(false)
@@ -218,38 +236,37 @@ describe('isolated native drop capture', () => {
 
   it('cleans deferred listeners when the page stops propagation or the preload is disposed', async () => {
     dispose = installFileDropCapture('guest')
-    await allowGuestFallback()
+    await loadGuestRoute()
     window.dispatch(drop(), () => {}, false)
     await vi.runOnlyPendingTimersAsync()
     expect(electron.invoke).not.toHaveBeenCalled()
     expect(window.listeners.get('drop')).toHaveLength(1)
-    await allowGuestFallback()
     window.dispatch(drop(undefined, { type: 'dragover' }), () => {}, false)
     dispose()
     expect(vi.getTimerCount()).toBe(0)
     expect([...window.listeners.values()].flat()).toHaveLength(0)
   })
 
-  it('preserves guest defaults until the actual browser host authorizes local viewing', async () => {
+  it('leaves drops alone when the host has no file-drop route', async () => {
+    electron.invoke.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.LOCAL_FILE_DROP_CAPABILITIES) return { route: 'none' }
+    })
     dispose = installFileDropCapture('guest')
-    const unprepared = drop()
-    window.dispatch(unprepared)
-    expect(unprepared.defaultPrevented).toBe(false)
-    electron.invoke.mockResolvedValueOnce({ nonce: 'main-window-nonce', fallbackAllowed: false })
-    await allowGuestFallback()
-    const mainWindowDrop = drop(),
-      dragover = drop([], { type: 'dragover' })
+    await loadGuestRoute()
+    const dragover = drop([], { type: 'dragover' })
+    const dropped = drop()
     window.dispatch(dragover)
-    window.dispatch(mainWindowDrop)
+    window.dispatch(dropped)
     expect(dragover.defaultPrevented).toBe(false)
-    expect(mainWindowDrop.defaultPrevented).toBe(false)
+    expect(dropped.defaultPrevented).toBe(false)
+    await settle()
     expect(electron.invoke).not.toHaveBeenCalled()
   })
 
-  it('requires a fresh browser authorization before converting a drop to file viewing', async () => {
+  it('requires fresh drop authorization before converting a drop to a route', async () => {
     dispose = installFileDropCapture('guest')
-    await allowGuestFallback()
-    electron.invoke.mockResolvedValueOnce({ nonce: 'revoked-nonce', fallbackAllowed: false })
+    await loadGuestRoute()
+    electron.invoke.mockRejectedValueOnce(new Error('authorization revoked'))
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       window.dispatch(drop())

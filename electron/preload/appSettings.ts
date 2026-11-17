@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { LogExportOptions } from '../shared/log-export.js'
 import { IPC_CHANNELS, type AppSettings } from '../shared/types.js'
-import type { LocalFilesDroppedEvent } from '../shared/api/settings.api.js'
+import type { AiFilesDroppedEvent, LocalFilesDroppedEvent } from '../shared/api/settings.api.js'
 import type { SaveDialogReply, SaveDialogRequest } from '../shared/save-dialog.types.js'
 import { readDroppedFiles, openDroppedFiles } from './file-drop.js'
 
@@ -65,6 +65,11 @@ export const appSettingsApi = {
       const handler = (_event: unknown, info: LocalFilesDroppedEvent) => callback(info)
       ipcRenderer.on(IPC_CHANNELS.LOCAL_FILES_DROPPED, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.LOCAL_FILES_DROPPED, handler)
+    },
+    onAiFilesDropped: (callback: (info: AiFilesDroppedEvent) => void) => {
+      const handler = (_event: unknown, info: AiFilesDroppedEvent) => callback(info)
+      ipcRenderer.on(IPC_CHANNELS.AI_FILES_DROPPED, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.AI_FILES_DROPPED, handler)
     },
     // 主→渲染：下载完成通知（filename + path）
     onDownloadDone: (callback: (info: { filename: string; path: string }) => void) => {

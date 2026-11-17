@@ -2,7 +2,9 @@ import { ipcRenderer, webUtils } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels.js'
 
 const DROP_LIFETIME_MS = 60_000
+type DropRoute = 'preview' | 'import' | 'none'
 let pendingDrop: { token: Promise<string>; capturedAt: number } | null = null
+let guestRoute: DropRoute = 'none'
 let installed = false
 
 function nativePaths(event: DragEvent): string[] {
@@ -20,12 +22,10 @@ function nativePaths(event: DragEvent): string[] {
   return paths
 }
 
-async function capture(paths: string[], requireFallback = false): Promise<string> {
+async function capture(paths: string[]): Promise<string> {
   const prepared = await ipcRenderer.invoke(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE)
   if (!prepared || typeof prepared.nonce !== 'string' || !prepared.nonce)
     throw new Error('File drop authorization is unavailable')
-  if (requireFallback && prepared.fallbackAllowed !== true)
-    throw new Error('File viewing is unavailable in this window')
   const captured = await ipcRenderer.invoke(IPC_CHANNELS.LOCAL_FILE_DROP_CAPTURE, {
     nonce: prepared.nonce,
     paths,
@@ -33,6 +33,28 @@ async function capture(paths: string[], requireFallback = false): Promise<string
   if (!captured || typeof captured.token !== 'string' || !captured.token)
     throw new Error('File drop authorization was refused')
   return captured.token
+}
+
+/** Ask the host once per document load; the answer decides whether page-ignored drops are handled. */
+async function loadGuestRoute(): Promise<void> {
+  try {
+    const value = await ipcRenderer.invoke(IPC_CHANNELS.LOCAL_FILE_DROP_CAPABILITIES)
+    guestRoute =
+      value?.route === 'preview' || value?.route === 'import' ? (value.route as DropRoute) : 'none'
+  } catch {
+    guestRoute = 'none'
+  }
+}
+
+/** The page declined the drop: preview in a browser window, otherwise import into the AI page. */
+async function routeGuestDrop(paths: string[]): Promise<void> {
+  const route = guestRoute
+  if (route === 'none') throw new Error('File drop is unavailable in this window')
+  const token = await capture(paths)
+  await ipcRenderer.invoke(
+    route === 'preview' ? IPC_CHANNELS.LOCAL_FILE_DROP_OPEN : IPC_CHANNELS.LOCAL_FILE_DROP_IMPORT,
+    { token },
+  )
 }
 
 async function consume(): Promise<string> {
@@ -57,20 +79,8 @@ export async function openDroppedFiles(): Promise<void> {
 export function installFileDropCapture(mode: 'host' | 'guest'): () => void {
   if (installed || window.top !== window) return () => {}
   installed = true
+  if (mode === 'guest') void loadGuestRoute()
   const finishers = new Set<() => void>()
-  let fallbackAllowed = false,
-    preparation = 0
-  const dragenter = (event: DragEvent) => {
-    if (mode !== 'guest' || !event.isTrusted || !event.dataTransfer?.types.includes('Files')) return
-    const current = ++preparation
-    fallbackAllowed = false
-    void ipcRenderer
-      .invoke(IPC_CHANNELS.LOCAL_FILE_DROP_PREPARE)
-      .then((prepared) => {
-        if (current === preparation) fallbackAllowed = prepared?.fallbackAllowed === true
-      })
-      .catch(() => {})
-  }
   const afterPageHandlers = (event: DragEvent, handler: () => void) => {
     const finish = (current: Event) => {
       if (current === event) {
@@ -87,10 +97,21 @@ export function installFileDropCapture(mode: 'host' | 'guest'): () => void {
     const timer = setTimeout(cleanup, 0)
     finishers.add(cleanup)
   }
+  const dragenter = (event: DragEvent) => {
+    if (
+      mode !== 'guest' ||
+      guestRoute !== 'none' ||
+      !event.isTrusted ||
+      !event.dataTransfer?.types.includes('Files')
+    )
+      return
+    // The initial capability query may have raced the first drag; retry once it is needed.
+    void loadGuestRoute()
+  }
   const dragover = (event: DragEvent) => {
     if (
       mode !== 'guest' ||
-      !fallbackAllowed ||
+      guestRoute === 'none' ||
       !event.isTrusted ||
       !event.dataTransfer?.types.includes('Files')
     )
@@ -111,10 +132,7 @@ export function installFileDropCapture(mode: 'host' | 'guest'): () => void {
       void token.catch(() => {})
       return
     }
-    const allowedForDrop = fallbackAllowed
-    fallbackAllowed = false
-    preparation++
-    if (!allowedForDrop) return
+    if (guestRoute === 'none') return
     afterPageHandlers(event, () => {
       if (
         event.defaultPrevented ||
@@ -124,9 +142,9 @@ export function installFileDropCapture(mode: 'host' | 'guest'): () => void {
       )
         return
       event.preventDefault()
-      void capture(paths, true)
-        .then((token) => ipcRenderer.invoke(IPC_CHANNELS.LOCAL_FILE_DROP_OPEN, { token }))
-        .catch((error) => console.warn('[file-drop] Unable to open dropped files:', error))
+      void routeGuestDrop(paths).catch((error) =>
+        console.warn('[file-drop] Unable to route dropped files:', error),
+      )
     })
   }
   window.addEventListener('dragenter', dragenter, true)
@@ -138,8 +156,7 @@ export function installFileDropCapture(mode: 'host' | 'guest'): () => void {
     window.removeEventListener('drop', drop, true)
     for (const cleanup of finishers) cleanup()
     pendingDrop = null
-    fallbackAllowed = false
-    preparation++
+    guestRoute = 'none'
     installed = false
   }
 }

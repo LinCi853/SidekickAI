@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: (sender: any) => sender.window },
 }))
 vi.mock('../platform/window/window-state.js', () => ({
-  windowState: { browserWindowsByProfile: windows },
+  windowState: { browserWindowsByProfile: windows, mainWindow: null as any },
 }))
 vi.mock('../platform/security/trusted-renderer.js', () => ({
   assertTrustedRenderer: (event: any) => {
@@ -34,7 +34,10 @@ import {
   captureFileDrop,
   readDroppedFiles,
   openDroppedFiles,
+  importDroppedFiles,
+  fileDropCapabilities,
 } from './file-drop-handler.js'
+import { windowState } from '../platform/window/window-state.js'
 
 let root: string
 const contents: any[] = []
@@ -63,6 +66,7 @@ function select(event: any) {
 }
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-drop-'))
+  windowState.mainWindow = null
 })
 afterEach(() => {
   for (const item of contents.splice(0)) item.emit('destroyed')
@@ -133,12 +137,36 @@ it('emits a guest snapshot only to its owning host and rejects symlinks', () => 
   ).toThrow()
 })
 
-it('keeps local viewing disabled in the application main window', () => {
+it('routes page-ignored drops in the application main window to AI import', () => {
   const host = source()
   windows.clear()
+  windowState.mainWindow = host.sender.window
   const guest = source(host.sender)
+  expect(fileDropCapabilities(guest)).toEqual({ route: 'import' })
   const { input } = select(guest)
   expect(input.fallbackAllowed).toBe(false)
-  expect(() => openDroppedFiles(guest, captureFileDrop(guest, input))).toThrow('不提供')
-  expect(host.sender.send).not.toHaveBeenCalled()
+  const token = captureFileDrop(guest, input)
+  importDroppedFiles(guest, token)
+  expect(host.sender.send).toHaveBeenCalledWith('localFileDrop:aiFiles', {
+    guestId: guest.sender.id,
+    files: [
+      {
+        filename: 'selected.txt',
+        dataUrl: `data:text/plain;base64,${Buffer.from('selected bytes').toString('base64')}`,
+        mime: 'text/plain',
+        size: 14,
+      },
+    ],
+  })
+  expect(() => readDroppedFiles(guest, token)).toThrow('失效')
+})
+
+it('advertises preview, import or no handling per host', () => {
+  const main = source()
+  windows.clear()
+  windowState.mainWindow = main.sender.window
+  expect(fileDropCapabilities(main)).toEqual({ route: 'none' })
+  expect(fileDropCapabilities(source(main.sender))).toEqual({ route: 'import' })
+  windows.set('browser', main.sender.window)
+  expect(fileDropCapabilities(source(main.sender))).toEqual({ route: 'preview' })
 })

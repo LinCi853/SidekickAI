@@ -227,6 +227,17 @@ export async function dropFiles(): Promise<
   return api.appSettings.dropFiles()
 }
 
+/** 监听主窗口网页内被页面忽略的拖放（主进程读取文件后交给渲染层兜底导入） */
+export function onAiFilesDropped(
+  callback: (info: {
+    guestId: number
+    files: Array<{ filename: string; dataUrl: string; mime: string; size: number }>
+  }) => void,
+): () => void {
+  const api = requireElectron()
+  return api.appSettings.onAiFilesDropped(callback)
+}
+
 /** 监听下载完成事件（主进程 → 渲染层：filename + path）。返回取消监听函数 */
 export function onDownloadDone(
   callback: (info: { filename: string; path: string }) => void,
