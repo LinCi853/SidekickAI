@@ -134,6 +134,7 @@ export default function BrowserWebviewTab({
     setRemountKey,
     tab,
     profile,
+    active,
     handlers: {
       handleDomReady,
       handleNavigate,

@@ -4,12 +4,37 @@
    Owns page recovery, guest identity registration, DevTools and dropped files.
    ===================================================================== */
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { BrowserTabState, Profile } from '../../../lib/electron-api'
 import { registerWebview } from '../../../lib/electron-api'
 import type { WebviewElement } from '../../../lib/webview.js'
+import { safeReloadWebview } from '../../../lib/webview.js'
 import { useBrowserTabStore } from '../../../store/useBrowserTabStore.js'
 import { leaseWebviewLifecycle } from '../../../lib/webview-lifecycle'
+import { BLANK_PAGE_PROBE_SCRIPT } from '../webview-scripts.js'
+
+/** 加载结束后的白屏探测延迟，给站点首屏脚本留出渲染时间 */
+const BLANK_PROBE_DELAY_MS = 1500
+/** 切回标签时的探测延迟，给隐藏页面重绘留出时间 */
+const BLANK_ACTIVATION_DELAY_MS = 600
+/** 同一 URL 连续自动刷新上限 */
+const BLANK_AUTO_RETRY_LIMIT = 2
+/** 两次刷新之间的最小间隔，避免探测与事件重复触发连续刷新 */
+const BLANK_RELOAD_DEDUPE_MS = 1000
+
+interface BlankProbeResult {
+  readyState?: string
+  textLen?: number
+  elementCount?: number
+  htmlLen?: number
+}
+
+/** 只把“没有任何文本、元素几乎为空”的页面判为白屏，避免误伤骨架屏与纯画布页面 */
+function isBlankPage(info: BlankProbeResult | null): boolean {
+  if (!info) return false
+  if (info.readyState !== 'complete' && info.readyState !== 'interactive') return false
+  return (info.textLen ?? 0) === 0 && (info.elementCount ?? 0) <= 2 && (info.htmlLen ?? 0) <= 200
+}
 
 export interface UseWebviewLifecycleHandlers {
   handleDomReady: () => Promise<void>
@@ -32,6 +57,8 @@ export interface UseWebviewLifecycleParams {
   setRemountKey: React.Dispatch<React.SetStateAction<number>>
   tab: BrowserTabState
   profile: Profile
+  /** 标签是否为当前可见标签，用于切回时补做白屏检查 */
+  active: boolean
   handlers: UseWebviewLifecycleHandlers
 }
 
@@ -42,6 +69,7 @@ export function useWebviewLifecycle({
   setRemountKey,
   tab,
   profile,
+  active,
   handlers,
 }: UseWebviewLifecycleParams) {
   const {
@@ -255,4 +283,66 @@ export function useWebviewLifecycle({
       webview.removeEventListener('dom-ready', domReadyReg as EventListener)
     }
   }, [tab.id, profile.id, remountKey])
+
+  // 白屏看门狗：代理瞬断或站点脚本失败时，guest 会停在纯白页面且没有任何可见错误。
+  // 加载结束与切回标签时各探测一次文档结构，确认是空页则刷新；同一 URL 最多自动刷新两次，
+  // 之后保留给用户手动刷新，避免与站点故障形成刷新循环。
+  const blankGuardRef = useRef({ url: '', autoRetries: 0, lastReloadAt: 0, probing: false })
+  useEffect(() => {
+    const webview = webviewRef.current
+    if (!webview) return
+    const lifecycle = leaseWebviewLifecycle(webview, () => webviewRef.current)
+    const guard = (source: 'load' | 'activate') => {
+      const page = lifecycle.capture()
+      if (!page.isCurrent()) return
+      const state = blankGuardRef.current
+      if (state.probing) return
+      state.probing = true
+      void webview
+        .executeJavaScript(BLANK_PAGE_PROBE_SCRIPT)
+        .then((raw) => {
+          state.probing = false
+          if (!page.isCurrent()) return
+          const info = raw && typeof raw === 'object' ? (raw as BlankProbeResult) : null
+          if (!isBlankPage(info)) {
+            // 只有完成渲染且确有内容的页面才清零计数，避免加载中页面误重置
+            if (info?.readyState === 'complete' || info?.readyState === 'interactive') {
+              state.autoRetries = 0
+            }
+            return
+          }
+          const url = page.url || tab.url
+          if (!/^https?:\/\//i.test(url)) return
+          if (state.url !== url) {
+            state.url = url
+            state.autoRetries = 0
+          }
+          if (source === 'load' && state.autoRetries >= BLANK_AUTO_RETRY_LIMIT) {
+            console.warn('[BrowserView] 白屏自动刷新已达上限，等待手动刷新:', url)
+            return
+          }
+          const now = Date.now()
+          if (now - state.lastReloadAt < BLANK_RELOAD_DEDUPE_MS) return
+          state.autoRetries += 1
+          state.lastReloadAt = now
+          console.warn(
+            `[BrowserView] 检测到白屏（${source === 'activate' ? '切回标签' : '加载完成'}），第 ${state.autoRetries} 次刷新: ${url}`,
+          )
+          safeReloadWebview(webview, url, domReadyRef.current)
+        })
+        .catch(() => {
+          state.probing = false
+        })
+    }
+    const onStopped = () => {
+      lifecycle.delay(() => guard('load'), BLANK_PROBE_DELAY_MS)
+    }
+    webview.addEventListener('did-stop-loading', onStopped)
+    // 切回已加载但空白的标签时没有加载事件，需要单独补一次探测
+    if (active) lifecycle.delay(() => guard('activate'), BLANK_ACTIVATION_DELAY_MS)
+    return () => {
+      webview.removeEventListener('did-stop-loading', onStopped)
+      lifecycle.dispose()
+    }
+  }, [active, tab.id, tab.url, remountKey])
 }

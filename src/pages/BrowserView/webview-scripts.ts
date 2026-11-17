@@ -7,6 +7,26 @@
 /** 读取页面标题（executeJavaScript 直传脚本） */
 export const GET_TITLE_SCRIPT = 'document.title'
 
+/**
+ * 白屏探测：统计 guest 文档可见文本、元素数量与 HTML 长度。
+ * 加载失败（如 ERR_PROXY_CONNECTION_FAILED）时 body 通常为空，
+ * 据此区分“真白屏”和“有结构的骨架屏/画布页”。
+ */
+export const BLANK_PAGE_PROBE_SCRIPT = `(function() {
+  try {
+    var body = document.body;
+    if (!body) return { readyState: document.readyState, textLen: 0, elementCount: 0, htmlLen: 0 };
+    return {
+      readyState: document.readyState,
+      textLen: (body.innerText || '').trim().length,
+      elementCount: body.querySelectorAll('*').length,
+      htmlLen: (body.innerHTML || '').length,
+    };
+  } catch (e) {
+    return { readyState: 'unknown', textLen: 1, elementCount: 1, htmlLen: 1 };
+  }
+})()`
+
 /** 空间导航开关脚本：开启手柄/键盘空间导航 */
 export const SPATIAL_NAV_ENABLE_SCRIPT =
   'window.__ai_spatial_nav__ && window.__ai_spatial_nav__.toggle(true)'

@@ -37,6 +37,7 @@ vi.mock('../../../lib/electron-api', () => ({
 vi.mock('../../../lib/webview.js', () => ({
   injectViewportAndPopupGuard: async () => {},
   safeLoadURLWebview: vi.fn(),
+  safeReloadWebview: (view: { reload: () => void }) => view.reload(),
 }))
 vi.mock('../../../lib/injection-manager.js', () => ({
   injectionManager: { injectAll: state.inject, disposeWebview: state.cleanup },
@@ -54,6 +55,7 @@ vi.mock('../../../lib/webview-spatial-nav.js', () => ({ buildSpatialNavScript: (
 vi.mock('../utils/favicon-placeholder.js', () => ({ extractThemeColor: async () => null }))
 vi.mock('../webview-scripts.js', () => ({
   GET_TITLE_SCRIPT: 'title',
+  BLANK_PAGE_PROBE_SCRIPT: 'blank',
   SPATIAL_NAV_ENABLE_SCRIPT: 'enable',
   buildFaviconToDataUrlScript: () => 'favicon',
   buildImageUrlToDataUrlScript: () => 'favicon',
@@ -96,6 +98,7 @@ function fixture() {
     view,
     webviewRef: { current: view as WebviewElement | null },
     domReadyRef: { current: true },
+    active: false,
     emit,
     remountKey: 0,
     tab,
@@ -288,5 +291,55 @@ describe('browser webview page ownership', () => {
     expect(state.store.updateTabFavicon).not.toHaveBeenCalled()
     harness.unmount()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('refreshes a blank page after it stops loading', async () => {
+    const parameters = fixture()
+    vi.mocked(parameters.view.executeJavaScript).mockResolvedValue({
+      readyState: 'complete',
+      textLen: 0,
+      elementCount: 0,
+      htmlLen: 0,
+    })
+    harness.mount(() =>
+      useWebviewLifecycle({ ...parameters, setRemountKey: vi.fn(), handlers: lifecycleHandlers() }),
+    )
+    parameters.emit('did-stop-loading')
+    await vi.advanceTimersByTimeAsync(1600)
+    expect(parameters.view.reload).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a page that still has content alone', async () => {
+    const parameters = fixture()
+    vi.mocked(parameters.view.executeJavaScript).mockResolvedValue({
+      readyState: 'complete',
+      textLen: 24,
+      elementCount: 40,
+      htmlLen: 900,
+    })
+    harness.mount(() =>
+      useWebviewLifecycle({ ...parameters, setRemountKey: vi.fn(), handlers: lifecycleHandlers() }),
+    )
+    parameters.emit('did-stop-loading')
+    await vi.advanceTimersByTimeAsync(1600)
+    expect(parameters.view.reload).not.toHaveBeenCalled()
+  })
+
+  it('caps automatic refreshes for the same blank URL', async () => {
+    const parameters = fixture()
+    vi.mocked(parameters.view.executeJavaScript).mockResolvedValue({
+      readyState: 'complete',
+      textLen: 0,
+      elementCount: 0,
+      htmlLen: 0,
+    })
+    harness.mount(() =>
+      useWebviewLifecycle({ ...parameters, setRemountKey: vi.fn(), handlers: lifecycleHandlers() }),
+    )
+    for (const round of [1, 2, 3]) {
+      parameters.emit('did-stop-loading')
+      await vi.advanceTimersByTimeAsync(1600)
+      expect(parameters.view.reload).toHaveBeenCalledTimes(Math.min(round, 2))
+    }
   })
 })
