@@ -11,6 +11,7 @@ export interface RuntimePaths {
 // 绿色包标记：包根 portable.txt 的内容固定为 portable。
 const PORTABLE_MARKER = 'portable'
 // 旧绿色包使用的标记标题仍被接受，保证已发布的绿色包继续按便携模式运行。
+// 当前包型是每架构单目录（包根即安装根），下面的双架构分支只服务历史包。
 const LEGACY_MARKERS = new Set([
   'AI Window Portable Mode Marker',
   'SidekickAI Dual Architecture Portable Marker',
@@ -67,8 +68,8 @@ export function portableRoot(executable: string): string | undefined {
     return parent
   }
 
-  // 双架构绿色包把标记放在包根。只有已知运行目录才回退到包根查找，
-  // 避免安装版把用户目录里的同名文件当成便携标记。
+  // 历史双架构绿色包把标记放在运行目录内或包根。只有已知运行目录才回退到
+  // 包根查找，避免安装版把用户目录里的同名文件当成便携标记。
   if (knownRuntime && existsSync(packagedMarker)) {
     const title = markerTitle(packagedMarker)
     assertMarker(title, hasLayout)

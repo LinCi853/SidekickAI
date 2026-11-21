@@ -89,7 +89,10 @@ describe('runtime data boundaries', () => {
   )
 
   it('preserves the data location of a legacy single architecture portable', async () => {
-    fs.copyFileSync(path.resolve('resources/portable.txt'), path.join(directory, 'portable.txt'))
+    fs.copyFileSync(
+      path.resolve('resources/portable-legacy-marker.txt'),
+      path.join(directory, 'portable.txt'),
+    )
     await import('./runtime-environment')
     expect(runtime.paths.userData).toBe(path.join(directory, 'data'))
   })

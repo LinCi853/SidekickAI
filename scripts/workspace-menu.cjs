@@ -162,7 +162,7 @@ function menuEntries(context, menu) {
     ]
   if (menu === 'build') {
     const labels = {
-      portable: '绿色 ZIP（双架构）',
+      portable: '绿色 ZIP（x64、ARM64）',
       payload: '标准应用载荷 ZIP（x64、ARM64）',
       all: '绿色版与标准载荷',
       installer: '安装器（调用二进制组件）',

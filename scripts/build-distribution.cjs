@@ -88,6 +88,7 @@ function captureInputs(root = ROOT) {
     'contracts/distribution-product.json',
     'contracts/installation-contract.json',
     'contracts/installation-configuration.json',
+    'contracts/portable-uninstall-contract.json',
     'build/License.txt',
   ]
   const excluded = new Set(['node_modules', 'target', 'dist', 'gen', '.git'])

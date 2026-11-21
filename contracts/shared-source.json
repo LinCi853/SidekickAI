@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "concept",
-  "revision": "ca9604571845d2b49b4886f60daa12deb1b2869333c9cc138d2472967cf03c7d",
+  "revision": "643f67849af8c3c1ffb9c109b990e4378fc23da8305f7f497c225071ab7100e5",
   "files": {
     "electron.vite.config.ts": "0cc4bde54c1eee39b79cfc84202a45fec0d6580f9d99d7985deed490f2bdeda5",
     "electron/application-activation.ts": "538a8a4fd218906d5ceabbce3040c1c938f79b7de05ac72ca0ee58bbebf0eccf",
@@ -58,7 +58,7 @@
     "scripts/backup-snapshot-runtime.test.cjs": "6d074c95df315a93d0cfec7b5c5dcc31bd99bdbcb590ac03ac76a6a8e879a92c",
     "scripts/build-backup-cli.cjs": "0468515eb033a508689bffe0bcdb2c3a8e02973234b43a221a1c37ef86152da3",
     "scripts/build-cache.cjs": "3e4069a4d1da787b7ab409ced4acc055b9cf279e6c6071e65e8aa4262911449f",
-    "scripts/build-distribution.cjs": "9289a64f610a170e5879cc3ae87428ccc258d18fabfdb202bee2798b09084566",
+    "scripts/build-distribution.cjs": "e7b3f0b7a9b71f76c2257a6a48465c49ca9a5ff372c27589a5dea2eaa077f5f0",
     "scripts/build-distribution.test.cjs": "6baa7d9e6352e1f27e1c29fed9f5b0172000b69b5178675439fba548713045e9",
     "scripts/build-evidence.cjs": "d54b96f534e10cbba8aac3fb1a885941ab2d1254920e8c5eaf75043288b9964d",
     "scripts/build-host-backup.cjs": "c6d371e6f0b2f9deb16488d3bf213c748a85db1af0c30d4e7d6e965a54576c7b",
@@ -90,7 +90,7 @@
     "scripts/verify-packaged-ui.cjs": "1436fa98d8c082377fdb2fdeb1f54720a81d9e1b250efec7a532ee05ddcbcf10",
     "scripts/verify-startup-helper.cjs": "38c1906d1fa512bb5a3ddafe275f46590cef11d3d898a0b943a3f02fa935fc9a",
     "scripts/windows-executable-signing.cjs": "16721acbbc4baf2ee57a019bccc719ac6f348ee01471a6f359586fed7ff1dd9b",
-    "scripts/workspace-menu.cjs": "fa3385859dec00b50be8103a15912f45b4e936079942640dbe522e7520228bdc",
+    "scripts/workspace-menu.cjs": "7df2114e1e4d5b6ba60d0694b3ed2c1520e62458426890881f2952ac911e53b3",
     "scripts/workspace-menu.test.cjs": "1c88c0e1ee86769c490b45b5bcc9b4effc0f579b2a0cfb69d9d821ee53976a0d",
     "tools/startup-helper/ForegroundBridge.cs": "35be7234e6fa7d57be17078986a3c58de654e99475f68c69b48e781ffa814a4f",
     "tools/startup-helper/NativeInventory.cs": "eab984da2c282915ca0f7c244ff35670ca6d2ac7e81e58e6f180e1997bd79cf3",

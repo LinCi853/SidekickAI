@@ -28,7 +28,7 @@
 
 产品版本以当前工作区 package.json 为准；共用品牌与路线身份由 packages/product-contract 管理。涉及共享软件代码时，核对 contracts/shared-source.json，并通过已有产品和共享检查；不要覆盖其他工作区的修改。
 
-本仓构建双架构绿色版和逐架构标准应用载荷 ZIP，载荷随附文件清单、大小与 SHA-256。完整包入口通过固定版本与摘要的二进制待组装包生成 x64、ARM64 离线安装器，为与自建版本区分，官方发布采用密钥加密软件；自建版本的具体操作由 launch.bat 菜单提供，接口见 [二进制组件说明](media/formats/distribution-toolkit.md)。自行构建身份保留在忽略的本地目录，不能提交或公开；安装、卸载与恢复不依赖构建机上的身份文件。
+本仓构建逐架构绿色 ZIP 和逐架构标准应用载荷 ZIP，载荷随附文件清单、大小与 SHA-256。绿色 ZIP 携带便携卸载契约（包根 `portable.txt` 与包内 `maintenance/portable.json`），公开格式见 [绿色包便携卸载契约](media/formats/portable-uninstall.md)。完整包入口通过固定版本与摘要的二进制待组装包生成 x64、ARM64 离线安装器，为与自建版本区分，官方发布采用密钥加密软件；自建版本的具体操作由 launch.bat 菜单提供，接口见 [二进制组件说明](media/formats/distribution-toolkit.md)。自行构建身份保留在忽略的本地目录，不能提交或公开；安装、卸载与恢复不依赖构建机上的身份文件。
 
 官方预构建产物和校验和从发布页取得。官方发行的信任根和公众自行构建身份分别维护，不能互相冒充或直接覆盖安装；第三方也可自行开发安装维护实现，公开依据是 [SKSETUP3 纯格式说明](media/formats/SKSETUP3.md)。安装、卸载与独立恢复的实现源码不纳入本仓。
 
